@@ -340,6 +340,25 @@ proc executeOperatorOnRange*(
   of OpSwapCase:
     return err("Operator " & $operatorType & " not yet implemented")
 
+proc applyOperatorOverMotion*(
+    ctx: CommandContext,
+    operatorType: OperatorType,
+    operatorCount: int,
+    startPos, endPos: BufferPosition,
+    motion: Motion,
+): Result[(), string] =
+  ## Apply an operator over a motion's span: build the [startPos, endPos] range,
+  ## open any folds it covers (vim keeps folds closed for a pure yank), then run
+  ## the operator. Shared by the generic operator+motion path, the find/till
+  ## path and the `.` repeat so all three calculate the range and handle folds
+  ## identically. The caller owns clearing pendingOperator and recording the
+  ## command for `.`.
+  let range = calculateOperatorRange(ctx.buffer, startPos, endPos, motion)
+  if operatorType != OpYank and
+      ctx.buffer.foldState.openFoldsInRange(range.start.line, range.endPos.line):
+    ctx.state.windowDisplay.needsFullRedraw = true
+  executeOperatorOnRange(ctx, operatorType, range, operatorCount)
+
 ## Operator command helpers
 ## Use setPendingOperator() for all operators to save viewport position
 ## before motion execution. This prevents unwanted scrolling.

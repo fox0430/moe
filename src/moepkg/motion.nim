@@ -906,6 +906,10 @@ proc calculateNewPosition*(
     e.movePreviousLineFirstNonBlank(currentPos, cmd.count)
   of Motion.MatchBracket:
     e.moveToMatchingBracket(currentPos)
+  of Motion.RepeatFind, Motion.RepeatFindReverse:
+    # Resolved to a concrete find/till motion before reaching here (see
+    # command_registry.executeFindCharMotion); never executed directly.
+    currentPos
 
 proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
@@ -2175,14 +2179,431 @@ proc findMatchingParen(
       )
     )
 
-proc calculateTextObjectRange*(
+proc lineRunesNoNl(buffer: TextBuffer, line: int): seq[Rune] =
+  ## The line's runes with any trailing newline stripped. Out-of-range lines
+  ## yield an empty seq (via lineContentNoNewline's bounds check).
+  lineContentNoNewline(buffer, line).toRunes()
+
+proc findParagraphBoundaries(
+    buffer: TextBuffer, cursor: BufferPosition, inner: bool
+): Result[TextObjectRange, string] =
+  ## Paragraph text object (ip/ap). A paragraph is a run of non-blank lines
+  ## delimited by blank lines; the object is linewise.
+  if buffer.len == 0:
+    return err("Empty buffer")
+  if cursor.line < 0 or cursor.line >= buffer.len:
+    return err("Cursor position out of bounds")
+
+  let onBlank = isBlankLine(buffer.getLine(cursor.line))
+
+  # Extend over the run of lines of the same kind (blank vs non-blank).
+  var startLine = cursor.line
+  while startLine > 0 and isBlankLine(buffer.getLine(startLine - 1)) == onBlank:
+    startLine.dec
+  var endLine = cursor.line
+  while endLine < buffer.len - 1 and isBlankLine(buffer.getLine(endLine + 1)) == onBlank:
+    endLine.inc
+
+  if not inner:
+    # Around: also take the following run of the opposite kind, or the preceding
+    # run when there is nothing after (matches vim's ap).
+    let prevEnd = endLine
+    while endLine < buffer.len - 1 and
+        isBlankLine(buffer.getLine(endLine + 1)) != onBlank:
+      endLine.inc
+    if endLine == prevEnd:
+      while startLine > 0 and isBlankLine(buffer.getLine(startLine - 1)) != onBlank:
+        startLine.dec
+
+  return ok(
+    TextObjectRange(
+      start: BufferPosition(line: startLine, column: 0),
+      endPos: BufferPosition(
+        line: endLine, column: max(0, lineRunesNoNl(buffer, endLine).len - 1)
+      ),
+      isLinewise: true,
+    )
+  )
+
+proc findSentenceBoundaries(
+    buffer: TextBuffer, cursor: BufferPosition, inner: bool
+): Result[TextObjectRange, string] =
+  ## Sentence text object (is/as). A sentence ends at . ! ? (optionally followed
+  ## by closing quotes/brackets) then whitespace or end of line, and never
+  ## crosses a blank line. Charwise. Whitespace ownership follows vim: `is` on a
+  ## space is the whitespace run; `as` keeps trailing whitespace or, for the last
+  ## sentence, the leading whitespace. Trailing whitespace across a line break
+  ## (the newline itself) is not pulled in.
+  if buffer.len == 0 or cursor.line < 0 or cursor.line >= buffer.len:
+    return err("Cursor position out of bounds")
+  if isBlankLine(buffer.getLine(cursor.line)):
+    return err("No sentence on a blank line")
+
+  # Paragraph bounds — sentences never cross blank lines.
+  var paraStart = cursor.line
+  while paraStart > 0 and not isBlankLine(buffer.getLine(paraStart - 1)):
+    paraStart.dec
+  var paraEnd = cursor.line
+  while paraEnd < buffer.len - 1 and not isBlankLine(buffer.getLine(paraEnd + 1)):
+    paraEnd.inc
+
+  # Flatten the paragraph into runes; inter-line breaks become a single space
+  # separator. Instead of a BufferPosition per rune, keep per-line start offsets
+  # (O(lines)) and map flat indices back on demand.
+  let numLines = paraEnd - paraStart + 1
+  var
+    flat: seq[Rune]
+    segStart = newSeq[int](numLines)
+    lineLens = newSeq[int](numLines)
+  for ln in paraStart .. paraEnd:
+    let k = ln - paraStart
+    segStart[k] = flat.len
+    let lr = lineRunesNoNl(buffer, ln)
+    lineLens[k] = lr.len
+    for c in 0 ..< lr.len:
+      flat.add lr[c]
+    if ln < paraEnd:
+      flat.add Rune(' ') # synthetic line-break separator
+
+  if flat.len == 0:
+    return err("Empty sentence")
+
+  proc segmentOf(idx: int): int =
+    ## Paragraph line (0-based) whose flat segment contains idx.
+    var lo = 0
+    var hi = numLines - 1
+    while lo < hi:
+      let mid = (lo + hi + 1) div 2
+      if segStart[mid] <= idx:
+        lo = mid
+      else:
+        hi = mid - 1
+    lo
+
+  proc flatToPos(idx: int): BufferPosition =
+    let k = segmentOf(idx)
+    BufferPosition(line: paraStart + k, column: idx - segStart[k])
+
+  proc isSynthetic(idx: int): bool =
+    ## True for a synthetic line-break separator (the cell right after a
+    ## non-last line's content).
+    let k = segmentOf(idx)
+    k < numLines - 1 and idx - segStart[k] == lineLens[k]
+
+  # Cursor index within the flattened paragraph, clamping a column past
+  # end-of-line to the line's last index rather than snapping onto the next.
+  var cursorIdx =
+    if cursor.line < paraStart:
+      0
+    elif cursor.line > paraEnd:
+      flat.len - 1
+    else:
+      let k = cursor.line - paraStart
+      let maxCol =
+        if k < numLines - 1:
+          lineLens[k] # may land on the synthetic separator
+        else:
+          max(0, lineLens[k] - 1)
+      segStart[k] + min(max(0, cursor.column), maxCol)
+
+  proc isEnd(r: Rune): bool =
+    let c = r.int32
+    c == '.'.int32 or c == '!'.int32 or c == '?'.int32
+
+  proc isCloser(r: Rune): bool =
+    let c = r.int32
+    c == ')'.int32 or c == ']'.int32 or c == '"'.int32 or c == '\''.int32
+
+  # Sentence start indices within the paragraph.
+  var starts = @[0]
+  var i = 0
+  while i < flat.len:
+    if isEnd(flat[i]):
+      var k = i + 1
+      while k < flat.len and isCloser(flat[k]):
+        k.inc
+      if k < flat.len and isWhitespace(flat[k]):
+        while k < flat.len and isWhitespace(flat[k]):
+          k.inc
+        if k < flat.len:
+          starts.add k
+        i = k
+        continue
+    i.inc
+
+  # The sentence containing the cursor spans [s, nextStart - 1]. `starts` is
+  # increasing, so a single pass finds both the last start <= cursor and the
+  # first start past it.
+  var s = 0
+  var nextStart = flat.len
+  for st in starts:
+    if st <= cursorIdx:
+      s = st
+    else:
+      nextStart = st
+      break
+
+  # Last non-whitespace char of this sentence (its terminator).
+  var textEnd = nextStart - 1
+  while textEnd > s and isWhitespace(flat[textEnd]):
+    textEnd.dec
+
+  # A cursor sitting on the whitespace run *between* two sentences is its own
+  # object in vim: `is` is the whitespace, `as` is the whitespace plus the
+  # following sentence. (Leading whitespace of the first sentence is part of its
+  # text -- s is 0 there -- so this only fires between sentences. A synthetic
+  # line break is excluded so a cursor clamped past end-of-line still selects
+  # the sentence on its own line.)
+  if cursorIdx > textEnd and nextStart < flat.len and not isSynthetic(cursorIdx):
+    let wsStart = textEnd + 1
+    if inner:
+      var wsEnd = nextStart - 1
+      while wsEnd > wsStart and isSynthetic(wsEnd):
+        wsEnd.dec
+      return ok(
+        TextObjectRange(
+          start: flatToPos(wsStart), endPos: flatToPos(wsEnd), isLinewise: false
+        )
+      )
+    else:
+      # Around: whitespace + the next sentence's text (without its own trailing).
+      var nextEnd = flat.len - 1
+      for st in starts:
+        if st > nextStart:
+          nextEnd = st - 1
+          break
+      while nextEnd > nextStart and isWhitespace(flat[nextEnd]):
+        nextEnd.dec
+      return ok(
+        TextObjectRange(
+          start: flatToPos(wsStart), endPos: flatToPos(nextEnd), isLinewise: false
+        )
+      )
+
+  var endIdx = nextStart - 1
+  if inner:
+    # Inner drops trailing whitespace (and the synthetic line separators).
+    while endIdx > s and isWhitespace(flat[endIdx]):
+      endIdx.dec
+  else:
+    # Around keeps trailing whitespace but not a synthetic line-break edge.
+    while endIdx > s and isSynthetic(endIdx):
+      endIdx.dec
+    # vim's `as`: when the last sentence has no trailing whitespace, include the
+    # *leading* whitespace instead. Stay on the same line (skip synthetics).
+    if endIdx == textEnd and nextStart == flat.len:
+      while s > 0 and not isSynthetic(s - 1) and isWhitespace(flat[s - 1]):
+        s.dec
+  if endIdx < s:
+    endIdx = s
+
+  return ok(
+    TextObjectRange(start: flatToPos(s), endPos: flatToPos(endIdx), isLinewise: false)
+  )
+
+proc findTagBoundaries(
+    buffer: TextBuffer, cursor: BufferPosition, inner: bool
+): Result[TextObjectRange, string] =
+  ## Tag text object (it/at). Matches the innermost <tag>…</tag> pair enclosing
+  ## the cursor, honouring nesting, multi-line tags and quotes within a tag.
+  ## Self-closing tags do not enclose. Note: inner content trims boundary
+  ## newlines, so `dit` on multi-line tags removes the inner text but keeps the
+  ## surrounding line breaks.
+  if buffer.len == 0:
+    return err("Empty buffer")
+
+  # Flatten the whole buffer into runes (newlines kept so tags may span lines).
+  # `flat` is O(runes); the position map, though, is only per-line start offsets
+  # (O(lines)) with flat indices mapped back on demand -- avoiding a
+  # BufferPosition per rune.
+  var
+    flat: seq[Rune]
+    lineStart = newSeq[int](buffer.len + 1)
+  for ln in 0 ..< buffer.len:
+    lineStart[ln] = flat.len
+    let lr = lineRunesNoNl(buffer, ln)
+    for c in 0 ..< lr.len:
+      flat.add lr[c]
+    flat.add Rune('\n')
+  lineStart[buffer.len] = flat.len
+
+  proc flatToPos(idx: int): BufferPosition =
+    # Largest line whose start offset is <= idx; column is the remainder. The
+    # trailing newline of line ln maps to column == line length (as before).
+    var lo = 0
+    var hi = buffer.len - 1
+    while lo < hi:
+      let mid = (lo + hi + 1) div 2
+      if lineStart[mid] <= idx:
+        lo = mid
+      else:
+        hi = mid - 1
+    BufferPosition(line: lo, column: idx - lineStart[lo])
+
+  proc isNameChar(r: Rune): bool =
+    let c = r.int32
+    isWordChar(r) or c == '-'.ord or c == ':'.ord or c == '.'.ord
+
+  type
+    TagKind = enum
+      tkOpen
+      tkClose
+
+    Tag = object
+      kind: TagKind
+      name: string
+      ltIdx: int # index of '<'
+      gtIdx: int # index of '>'
+
+  # Collect tag tokens.
+  var tags: seq[Tag]
+  let n = flat.len
+  var i = 0
+  while i < n:
+    if flat[i].int32 == '<'.ord and i + 1 < n:
+      let ltIdx = i
+      var j = i + 1
+      var kind = tkOpen
+      if flat[j].int32 == '/'.ord:
+        kind = tkClose
+        j.inc
+      elif flat[j].int32 == '!'.ord or flat[j].int32 == '?'.ord:
+        # <!-- comment -->, <!doctype …>, <? … ?>: skip to '>' and ignore.
+        while j < n and flat[j].int32 != '>'.ord:
+          j.inc
+        i = j + 1
+        continue
+      # Read the tag name. A '<' not followed by a tag name (a '<' used as a
+      # less-than operator, or a lone '</') is not a tag -- treat it as a
+      # literal char so it never swallows the real markup that follows.
+      var name = ""
+      while j < n and isNameChar(flat[j]):
+        name.add $flat[j]
+        j.inc
+      if name.len == 0:
+        i = ltIdx + 1
+        continue
+      # Scan to '>' honouring quotes; track self-closing.
+      var selfClose = false
+      while j < n and flat[j].int32 != '>'.ord:
+        let c = flat[j].int32
+        if c == '"'.ord or c == '\''.ord:
+          j.inc
+          while j < n and flat[j].int32 != c:
+            j.inc
+          if j < n:
+            j.inc
+        elif c == '/'.ord:
+          selfClose = true
+          j.inc
+        else:
+          if c != ' '.ord and c != '\t'.ord and c != '\n'.ord:
+            selfClose = false
+          j.inc
+      if j >= n:
+        # Unterminated tag (e.g. an unclosed quote ran to end of buffer):
+        # recover by treating the '<' as a literal instead of dropping every
+        # tag collected after it.
+        i = ltIdx + 1
+        continue
+      let gtIdx = j
+      if name.len > 0 and not selfClose:
+        tags.add Tag(kind: kind, name: name, ltIdx: ltIdx, gtIdx: gtIdx)
+      i = gtIdx + 1
+    else:
+      i.inc
+
+  # Cursor index within the flattened buffer. Column is clamped to the line's
+  # last *content* index (not its newline) so a position at/past end-of-line
+  # never snaps onto the next line yet still falls inside a tag that ends the
+  # line -- e.g. it/at with the cursor on the closing '>'.
+  var cursorIdx =
+    if cursor.line < 0:
+      0
+    elif cursor.line >= buffer.len:
+      n - 1
+    else:
+      let contentLen = lineStart[cursor.line + 1] - lineStart[cursor.line] - 1
+      lineStart[cursor.line] + min(max(0, cursor.column), max(0, contentLen - 1))
+
+  # Match open/close pairs with a stack; the first popped pair that encloses the
+  # cursor is the innermost (closers pop inner pairs before outer ones).
+  var stack: seq[Tag]
+  var bestOpen, bestClose: Tag
+  var found = false
+  block matchTags:
+    for t in tags:
+      if t.kind == tkOpen:
+        stack.add t
+      else:
+        # Find the nearest matching open. A stray closer (no matching open, e.g.
+        # an orphan </br>) is ignored rather than discarding the still-open
+        # enclosing tags; only the inner unmatched opens above a real match are
+        # dropped (improperly nested markup).
+        var matchIdx = -1
+        for k in countdown(stack.high, 0):
+          if stack[k].name == t.name:
+            matchIdx = k
+            break
+        if matchIdx < 0:
+          continue
+        let mOpen = stack[matchIdx]
+        stack.setLen(matchIdx)
+        if mOpen.ltIdx <= cursorIdx and cursorIdx <= t.gtIdx:
+          bestOpen = mOpen
+          bestClose = t
+          found = true
+          break matchTags
+  if not found:
+    return err("Cursor is not inside a tag")
+
+  if not inner:
+    return ok(
+      TextObjectRange(
+        start: flatToPos(bestOpen.ltIdx),
+        endPos: flatToPos(bestClose.gtIdx),
+        isLinewise: false,
+      )
+    )
+  else:
+    # Inner: between the open tag's '>' and the close tag's '<'.
+    let rawS = bestOpen.gtIdx + 1
+    let rawE = bestClose.ltIdx - 1
+    if rawS > rawE:
+      return err("Empty tag")
+    # When the content occupies whole lines -- the open '>' is immediately
+    # followed by a newline and the close '</' immediately preceded by one --
+    # vim's `it` is linewise and `dit` removes the content lines rather than
+    # leaving them blank.
+    let wholeLines = flat[rawS].int32 == '\n'.ord and flat[rawE].int32 == '\n'.ord
+    # Trim the boundary newlines so single-line content maps exactly.
+    var s = rawS
+    var e = rawE
+    while s <= e and flat[s].int32 == '\n'.ord:
+      s.inc
+    while e >= s and flat[e].int32 == '\n'.ord:
+      e.dec
+    if s > e:
+      return err("Empty tag")
+    if wholeLines:
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: flatToPos(s).line, column: 0),
+          endPos: flatToPos(e),
+          isLinewise: true,
+        )
+      )
+    return
+      ok(TextObjectRange(start: flatToPos(s), endPos: flatToPos(e), isLinewise: false))
+
+proc calculateBaseTextObjectRange(
     buffer: TextBuffer,
     cursor: BufferPosition,
     kind: TextObjectKind,
     modifier: TextObjectModifier,
 ): Result[TextObjectRange, string] =
-  ## Calculate the range of a text object
-  ## Returns TextObjectRange with start and end positions
+  ## Range of a single text object (no count extension). See
+  ## calculateTextObjectRange for the counted entry point.
 
   let inner = (modifier == tomInner)
 
@@ -2205,5 +2626,122 @@ proc calculateTextObjectRange*(
     return findMatchingParen(buffer, cursor, '{', '}', inner)
   of toAngleBracket:
     return findMatchingParen(buffer, cursor, '<', '>', inner)
+  of toSentence:
+    return findSentenceBoundaries(buffer, cursor, inner)
+  of toParagraph:
+    return findParagraphBoundaries(buffer, cursor, inner)
+  of toTag:
+    return findTagBoundaries(buffer, cursor, inner)
+
+proc nextObjectProbe(
+    buffer: TextBuffer, fromLine, fromCol: int
+): Option[BufferPosition] =
+  ## Cursor position one cell past (fromLine, fromCol), wrapping to the next
+  ## line's start at end of line. none() when that runs past the buffer.
+  var line = fromLine
+  var col = fromCol + 1
+  if col >= buffer.getLine(line).toRunes().len:
+    line.inc
+    col = 0
+  if line >= buffer.len:
+    return none(BufferPosition)
+  some(BufferPosition(line: line, column: col))
+
+proc posBeforeTagOpen(buffer: TextBuffer, pos: BufferPosition): Option[BufferPosition] =
+  ## Position one cell before pos, wrapping to the previous line's last column.
+  ## none() at the very start of the buffer. Steps just outside the current tag
+  ## so the enclosing tag is matched for the counted it/at object.
+  if pos.column > 0:
+    return some(BufferPosition(line: pos.line, column: pos.column - 1))
+  if pos.line > 0:
+    let prevLen = buffer.getLine(pos.line - 1).charLen
+    return some(BufferPosition(line: pos.line - 1, column: max(0, prevLen - 1)))
+  none(BufferPosition)
+
+proc calculateTextObjectRange*(
+    buffer: TextBuffer,
+    cursor: BufferPosition,
+    kind: TextObjectKind,
+    modifier: TextObjectModifier,
+    count: int = 1,
+): Result[TextObjectRange, string] =
+  ## Range of a text object, extended over `count` objects (d2iw, 2dap, d3is,
+  ## 2dat). `count <= 1` is a single object. Counts are honoured for word/WORD,
+  ## paragraph, sentence and tag; the bracket/quote kinds ignore it.
+  let base = calculateBaseTextObjectRange(buffer, cursor, kind, modifier)
+  if base.isErr or count <= 1:
+    return base
+  var toRange = base.value
+
+  case kind
+  of toWord, toWideWord:
+    # Word/WORD model the gap (whitespace run) as its own counted object, so
+    # stepping one cell past the current end lands in the next object. Inner for
+    # the intermediate objects, the original modifier for the last.
+    for i in 1 ..< count:
+      let probe = nextObjectProbe(buffer, toRange.endPos.line, toRange.endPos.column)
+      if probe.isNone:
+        break
+      let m = if i == count - 1: modifier else: tomInner
+      let nextResult = calculateBaseTextObjectRange(buffer, probe.get, kind, m)
+      if nextResult.isErr:
+        break
+      toRange.endPos = nextResult.value.endPos
+  of toParagraph:
+    # Each count selects one more whole paragraph of the SAME modifier (Nap = N
+    # paragraphs incl. their trailing blank runs; Nip = N alternating runs).
+    for i in 1 ..< count:
+      let probe = nextObjectProbe(buffer, toRange.endPos.line, toRange.endPos.column)
+      if probe.isNone:
+        break
+      let nextResult = calculateBaseTextObjectRange(buffer, probe.get, kind, modifier)
+      if nextResult.isErr:
+        break
+      toRange.endPos = nextResult.value.endPos
+  of toTag:
+    # Tags nest, so each count selects the tag one level out (2at = the tag and
+    # its parent). Re-probe from just before the current tag's '<'.
+    for i in 1 ..< count:
+      let around = calculateBaseTextObjectRange(buffer, toRange.start, kind, tomAround)
+      if around.isErr:
+        break
+      let outer = posBeforeTagOpen(buffer, around.value.start)
+      if outer.isNone:
+        break
+      let m = if i == count - 1: modifier else: tomAround
+      let nextResult = calculateBaseTextObjectRange(buffer, outer.get, kind, m)
+      if nextResult.isErr:
+        break
+      toRange = nextResult.value
+  of toSentence:
+    # A sentence owns its trailing whitespace, so walk forward by each segment's
+    # *around* extent (one finder call per step); for an inner request, recompute
+    # only the final segment as inner.
+    var endAround = toRange.endPos
+    var lastStart = toRange.start
+    block:
+      let firstAround =
+        calculateBaseTextObjectRange(buffer, toRange.start, kind, tomAround)
+      if firstAround.isErr:
+        break
+      endAround = firstAround.value.endPos
+      var reached = 1
+      while reached < count:
+        let probe = nextObjectProbe(buffer, endAround.line, endAround.column)
+        if probe.isNone:
+          break
+        let nextA = calculateBaseTextObjectRange(buffer, probe.get, kind, tomAround)
+        if nextA.isErr:
+          break
+        endAround = nextA.value.endPos
+        lastStart = nextA.value.start
+        reached.inc
+      if modifier == tomInner:
+        let lastInner = calculateBaseTextObjectRange(buffer, lastStart, kind, tomInner)
+        toRange.endPos = if lastInner.isOk: lastInner.value.endPos else: endAround
+      else:
+        toRange.endPos = endAround
   else:
-    return err("Text object " & $kind & " not yet implemented")
+    discard # bracket/quote kinds: count is not supported
+
+  return ok(toRange)

@@ -202,18 +202,8 @@ proc handleVisualModeKey*(
   # This handles viw, va", vi( etc. in Visual mode
   if state.editState.pendingTextObject.isSome:
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-      let textObjectCommandId =
-        case keyCombo.char
-        of "w": "textobject.word"
-        of "W": "textobject.wideword"
-        of "\"": "textobject.quote.double"
-        of "'": "textobject.quote.single"
-        of "`": "textobject.quote.backtick"
-        of "(", ")", "b": "textobject.paren"
-        of "[", "]": "textobject.bracket"
-        of "{", "}": "textobject.brace"
-        of "<", ">": "textobject.angle"
-        else: ""
+      # Map key to text object kind command (shared with the Normal handler)
+      let textObjectCommandId = textObjectCommandIdFor(keyCombo.char)
 
       if textObjectCommandId.len > 0:
         let ctx = CommandContext(
@@ -232,8 +222,12 @@ proc handleVisualModeKey*(
         else:
           return VisualModeResult(kind: vmrError, errorMessage: cmdResult.error)
       else:
-        # Unknown text object kind - cancel pending state
+        # Not a text object key - cancel pending state with feedback. Clear the
+        # pending operator too (matching the Normal handler) so no stale operator
+        # is left armed.
         state.editState.pendingTextObject = none(PendingTextObject)
+        state.editState.pendingOperator = none(PendingOperator)
+        state.statusMessage = "Not a text object: " & keyCombo.char
         return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
     else:
       # Special key or key with modifiers - cancel pending state

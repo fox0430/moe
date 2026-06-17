@@ -31,6 +31,25 @@ import
     completion, signature_help, lsp_integration,
   ]
 
+proc textObjectCommandIdFor*(ch: string): string =
+  ## Map a text-object key (the char after i/a) to its registered command id,
+  ## or "" when the key is not a text object. Shared by the Normal and Visual
+  ## handlers so the mapping lives in one place.
+  case ch
+  of "w": "textobject.word"
+  of "W": "textobject.wideword"
+  of "\"": "textobject.quote.double"
+  of "'": "textobject.quote.single"
+  of "`": "textobject.quote.backtick"
+  of "(", ")", "b": "textobject.paren"
+  of "[", "]": "textobject.bracket"
+  of "{", "}": "textobject.brace"
+  of "<", ">": "textobject.angle"
+  of "t": "textobject.tag"
+  of "s": "textobject.sentence"
+  of "p": "textobject.paragraph"
+  else: ""
+
 type
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController

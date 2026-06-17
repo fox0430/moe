@@ -66,6 +66,8 @@ const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("paragraph-forward", "Move to next paragraph", Motion.ParagraphForward),
   ("paragraph-backward", "Move to previous paragraph", Motion.ParagraphBackward),
   ("match-bracket", "Jump to matching bracket (%)", Motion.MatchBracket),
+  ("repeat-find", "Repeat last f/F/t/T", Motion.RepeatFind),
+  ("repeat-find-reverse", "Repeat last f/F/t/T reversed", Motion.RepeatFindReverse),
 ]
 
 const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[

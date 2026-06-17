@@ -600,6 +600,247 @@ suite "calculateTextObjectRange":
     check range.start.column == 0
     check range.endPos.column == 5
 
+suite "Text Objects - Paragraph":
+  test "inner paragraph is the non-blank run":
+    let buffer = newTextBuffer("aaa\nbbb\n\nccc")
+    let cursor = BufferPosition(line: 0, column: 1)
+    let result = calculateTextObjectRange(buffer, cursor, toParagraph, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isLinewise
+    check (range.start.line, range.start.column) == (0, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 2)
+
+  test "around paragraph includes trailing blank lines":
+    let buffer = newTextBuffer("aaa\nbbb\n\nccc")
+    let cursor = BufferPosition(line: 0, column: 1)
+    let result = calculateTextObjectRange(buffer, cursor, toParagraph, tomAround)
+    check result.isOk
+    let range = result.get
+    check range.isLinewise
+    check (range.start.line, range.start.column) == (0, 0)
+    check range.endPos.line == 2
+
+  test "around paragraph on a blank line selects the following paragraph":
+    let buffer = newTextBuffer("aaa\n\nbbb")
+    let cursor = BufferPosition(line: 1, column: 0) # on the blank line
+    let result = calculateTextObjectRange(buffer, cursor, toParagraph, tomAround)
+    check result.isOk
+    let range = result.get
+    check range.isLinewise
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (2, 2)
+
+  test "around paragraph on a trailing blank line selects the previous paragraph":
+    let buffer = newTextBuffer("aaa\n\n")
+    let cursor = BufferPosition(line: 1, column: 0) # on the trailing blank line
+    let result = calculateTextObjectRange(buffer, cursor, toParagraph, tomAround)
+    check result.isOk
+    let range = result.get
+    check range.isLinewise
+    check (range.start.line, range.start.column) == (0, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 0)
+
+suite "Text Objects - Sentence":
+  test "inner sentence stops at the period":
+    let buffer = newTextBuffer("Hello world. Foo bar! Baz.")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.line, range.start.column) == (0, 0)
+    check (range.endPos.line, range.endPos.column) == (0, 11)
+
+  test "around sentence keeps trailing space":
+    let buffer = newTextBuffer("Hello world. Foo bar! Baz.")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomAround)
+    check result.isOk
+    let range = result.get
+    check (range.endPos.line, range.endPos.column) == (0, 12)
+
+  test "sentence spans lines within a paragraph":
+    let buffer = newTextBuffer("One two.\nThree four.")
+    let cursor = BufferPosition(line: 1, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 10)
+
+  test "cursor column past end of line stays on the cursor's line":
+    let buffer = newTextBuffer("One.\nTwo.")
+    let cursor = BufferPosition(line: 0, column: 5) # past "One." (len 4)
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.line, range.start.column) == (0, 0)
+    check (range.endPos.line, range.endPos.column) == (0, 3)
+
+  test "cursor column past end of last line clamps to last sentence":
+    let buffer = newTextBuffer("One.\nTwo.")
+    let cursor = BufferPosition(line: 1, column: 5) # past "Two." (len 4)
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 3)
+
+  test "inner sentence on inter-sentence whitespace is the whitespace run":
+    # vim: `dis` with the cursor on the space deletes only the space (One.Two.)
+    let buffer = newTextBuffer("One. Two.")
+    let cursor = BufferPosition(line: 0, column: 4) # the space
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (4, 4)
+
+  test "inner sentence whitespace covers a multi-space run":
+    let buffer = newTextBuffer("One.  Two.")
+    let cursor = BufferPosition(line: 0, column: 4) # first of two spaces
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (4, 5)
+
+  test "around sentence on whitespace takes whitespace plus next sentence":
+    # vim: `das` on the space deletes " Two." leaving "One."
+    let buffer = newTextBuffer("One. Two.")
+    let cursor = BufferPosition(line: 0, column: 4)
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomAround)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (4, 8)
+
+  test "around last sentence with no trailing whitespace takes leading space":
+    # vim: `das` in "Three" deletes " Three." leaving "One. Two."
+    let buffer = newTextBuffer("One. Two. Three.")
+    let cursor = BufferPosition(line: 0, column: 12) # inside "Three"
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomAround)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (9, 15)
+
+  test "inner of the first sentence includes the line's leading indentation":
+    # Verified in vim/neovim: `dis` on "   Hello world." deletes the whole line
+    # including the leading indentation, so the first sentence's `is` spans from
+    # column 0. (Do not "fix" this to exclude the indent -- it matches vim.)
+    let buffer = newTextBuffer("   Hello world.")
+    let cursor = BufferPosition(line: 0, column: 5) # inside "Hello"
+    let result = calculateTextObjectRange(buffer, cursor, toSentence, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (0, 14)
+
+suite "Text Objects - Tag":
+  test "inner tag is the content":
+    let buffer = newTextBuffer("<a>hello</a>")
+    let cursor = BufferPosition(line: 0, column: 4)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (3, 7)
+
+  test "around tag includes the tags":
+    let buffer = newTextBuffer("<a>hello</a>")
+    let cursor = BufferPosition(line: 0, column: 4)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomAround)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (0, 11)
+
+  test "nested inner tag picks the innermost":
+    let buffer = newTextBuffer("<div><p>x</p></div>")
+    let cursor = BufferPosition(line: 0, column: 8)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (8, 8)
+
+  test "cursor on outer open tag selects outer pair":
+    let buffer = newTextBuffer("<div><p>x</p></div>")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (5, 12)
+
+  test "multi-line inner tag is linewise (content on its own lines)":
+    let buffer = newTextBuffer("<div>\n  hi\n</div>")
+    let cursor = BufferPosition(line: 1, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    # vim's `it` is linewise here, so `dit` removes the whole content line.
+    check range.isLinewise
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 3)
+
+  test "empty tag inner returns error":
+    let buffer = newTextBuffer("<a></a>")
+    let cursor = BufferPosition(line: 0, column: 1)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isErr
+
+  test "stray closing tag does not break the enclosing match":
+    # An orphan </br> must be ignored, not discard the still-open <div>.
+    let buffer = newTextBuffer("<div>a</br>b</div>")
+    let cursor = BufferPosition(line: 0, column: 11) # on 'b'
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    # inner of <div>...</div> == "a</br>b" -> cols 5..11
+    check (range.start.column, range.endPos.column) == (5, 11)
+
+  test "around tag with a stray closer selects the whole div":
+    let buffer = newTextBuffer("<div>a</br>b</div>")
+    let cursor = BufferPosition(line: 0, column: 11)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomAround)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (0, 17)
+
+  test "less-than in content does not swallow the closing tag":
+    # A bare '<' used as a comparison must be treated as a literal, not a
+    # comment/directive that skips to the next '>'.
+    let buffer = newTextBuffer("<p>a < b here</p>")
+    let cursor = BufferPosition(line: 0, column: 5) # inside content
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    # inner of <p>...</p> == "a < b here" -> cols 3..12
+    check (range.start.column, range.endPos.column) == (3, 12)
+
+  test "less-than in mixed code/markup content":
+    let buffer = newTextBuffer("if a < b: t = \"<x>hi</x>\"")
+    let cursor = BufferPosition(line: 0, column: 18) # inside "hi"
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (18, 19)
+
+  test "unterminated quote does not disable tags after it":
+    # An unclosed quote must not abort all tag collection; the well-formed tag
+    # after it stays selectable.
+    let buffer = newTextBuffer("<a title=\"oops>x</a>\n<p>real</p>")
+    let cursor = BufferPosition(line: 1, column: 4) # inside "real"
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check (range.start.line, range.start.column) == (1, 3)
+    check (range.endPos.line, range.endPos.column) == (1, 6)
+
+  test "cursor at/past end-of-line still finds a tag that ends the line":
+    # A column clamped to (or past) end-of-line must not fall off the closing
+    # tag: it/at should still resolve the enclosing pair.
+    let buffer = newTextBuffer("<p>hello</p>") # cols 0..11, '>' of </p> at 11
+    let result = calculateTextObjectRange(
+      buffer, BufferPosition(line: 0, column: 12), toTag, tomInner
+    )
+    check result.isOk
+    let range = result.get
+    check (range.start.column, range.endPos.column) == (3, 7)
+
 suite "deleteRange":
   test "deleteRange single line":
     let buffer = newTextBuffer("hello world")

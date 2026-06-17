@@ -925,6 +925,233 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     # With pending operator, highlight should not be set
     check ctx.state.ui.findCharMatches.len == 0
 
+suite "; / , repeat last find":
+  proc createFindTestContext(buffer: TextBuffer): CommandContext =
+    let state = EditorState(activeWindow: EditorWindow())
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.mode = EditorMode.Normal
+    state.registers = initRegisters()
+
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let motionController = newMotionController(buffer, state, viewport)
+
+    result = CommandContext(
+      buffer: buffer,
+      state: state,
+      motionController: motionController,
+      clipboardConfig: ClipboardConfig(enable: false),
+      keyBindingRegistry: newKeyBindingRegistry(),
+    )
+
+  let findA = Command(
+    name: "find-char",
+    description: "Find character forward",
+    kind: ctOperatorPending,
+    operatorType: "find",
+    reverse: false,
+    targetChar: "a",
+    count: 1,
+  )
+  let repeatFind =
+    Command(name: "repeat-find", kind: ctMotion, motion: Motion.RepeatFind, count: 1)
+  let repeatFindReverse = Command(
+    name: "repeat-find-reverse",
+    kind: ctMotion,
+    motion: Motion.RepeatFindReverse,
+    count: 1,
+  )
+
+  test "; repeats the last find forward":
+    let buffer = newTextBuffer("abacada") # 'a' at 0,2,4,6
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    check registry.executeCommand(ctx, findA).isOk
+    check ctx.cursor.column == 2
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check ctx.cursor.column == 4
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check ctx.cursor.column == 6
+
+  test ", repeats the last find reversed":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    # Seed last find by finding 'a' forward (no match after col 6, cursor stays).
+    check registry.executeCommand(ctx, findA).isOk
+    check registry.executeCommand(ctx, repeatFindReverse).isOk
+    check ctx.cursor.column == 4
+
+  test "; keeps the match highlight":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    check registry.executeCommand(ctx, findA).isOk
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check ctx.state.ui.findCharMatches == @[0, 2, 4, 6]
+    check ctx.state.ui.findCharMatchLine == 0
+
+  test "d; deletes through the repeated find":
+    let buffer = newTextBuffer("abacada") # 'c' at 3
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    # Seed last find with 'c', then reset cursor and delete via d;.
+    let findC = Command(
+      name: "find-char",
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: false,
+      targetChar: "c",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, findC).isOk
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: BufferPosition(line: 0, column: 0),
+      )
+    )
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check buffer.getLine(0) == "ada"
+
+  test "; with no previous find is a no-op with feedback":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check ctx.cursor.column == 0
+    check ctx.state.statusMessage == "No previous find"
+
+  test "; after t advances past the adjacent match":
+    let buffer = newTextBuffer("abzcz") # 'z' at cols 2 and 4
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let tillZ = Command(
+      name: "till-char",
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: false,
+      targetChar: "z",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, tillZ).isOk
+    check ctx.cursor.column == 1 # just before the first z
+    # ; skips the z it is parked before and lands before the next z.
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check ctx.cursor.column == 3
+    # No further z: ; stays put rather than getting stuck in a loop.
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check ctx.cursor.column == 3
+
+  test "d; repeating a till skips the adjacent match like a bare ;":
+    let buffer = newTextBuffer("ab,cd,ef") # commas at cols 2 and 5
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let tillComma = Command(
+      name: "till-char",
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: false,
+      targetChar: ",",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, tillComma).isOk
+    check ctx.cursor.column == 1 # parked before the first comma
+    # d; must advance past the adjacent comma and delete through to just before
+    # the next one (b,cd), not collapse to a single char.
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check buffer.getLine(0) == "a,ef"
+
+  test "2df, deletes through the second occurrence":
+    let buffer = newTextBuffer("a,b,c,d") # commas at cols 1, 3, 5
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    # 2df, == d2f, : the operator count must fold into the find count.
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+    let findComma = Command(
+      name: "find-char",
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: false,
+      targetChar: ",",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, findComma).isOk
+    check buffer.getLine(0) == "c,d"
+
+  test "; repeating a till at end-of-line with no target ahead stays put":
+    let buffer = newTextBuffer("a.b") # '.' at col 1
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let tillDot = Command(
+      name: "till-char",
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: false,
+      targetChar: ".",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, tillDot).isOk
+    check ctx.cursor.column == 0 # parked before the only '.'
+    # Move to the last column, where no '.' lies ahead; ; must not jump.
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check ctx.cursor.column == 2
+
+  test "d; repeating a till at end-of-line deletes nothing":
+    let buffer = newTextBuffer("a.b")
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let tillDot = Command(
+      name: "till-char",
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: false,
+      targetChar: ".",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, tillDot).isOk
+    # Cursor at the last column with the operator armed: the missing target
+    # must leave the buffer untouched, not delete a spurious range.
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: BufferPosition(line: 0, column: 2),
+      )
+    )
+    check registry.executeCommand(ctx, repeatFind).isOk
+    check buffer.getLine(0) == "a.b"
+
 suite "CommandRegistry - Git conflict navigation (]x / [x)":
   const ConflictContent =
     "before\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\nmiddle\n" &

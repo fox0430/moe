@@ -611,19 +611,8 @@ proc handleNormalModeKey*(
   # so that ci" works correctly (the " is the text object, not a register selection)
   if state.editState.pendingTextObject.isSome:
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-      # Map key to text object kind command
-      let textObjectCommandId =
-        case keyCombo.char
-        of "w": "textobject.word"
-        of "W": "textobject.wideword"
-        of "\"": "textobject.quote.double"
-        of "'": "textobject.quote.single"
-        of "`": "textobject.quote.backtick"
-        of "(", ")", "b": "textobject.paren"
-        of "[", "]": "textobject.bracket"
-        of "{", "}": "textobject.brace"
-        of "<", ">": "textobject.angle"
-        else: ""
+      # Map key to text object kind command (shared with the Visual handler)
+      let textObjectCommandId = textObjectCommandIdFor(keyCombo.char)
 
       if textObjectCommandId.len > 0:
         let ctx = CommandContext(
@@ -643,10 +632,11 @@ proc handleNormalModeKey*(
         else:
           return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
       else:
-        # Unknown text object kind - cancel pending state
+        # Not a text object key - cancel pending state with feedback (no silent
+        # drop of the pending operator).
         state.editState.pendingTextObject = none(PendingTextObject)
         state.editState.pendingOperator = none(PendingOperator)
-        state.statusMessage = ""
+        state.statusMessage = "Not a text object: " & keyCombo.char
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Special key or key with modifiers - cancel pending state
