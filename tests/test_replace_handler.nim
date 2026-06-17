@@ -515,7 +515,8 @@ suite "ReplaceModeHandler - Key Handling":
     let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
-    check state.cursor.column == 4
+    # In Replace mode End lands at end of line (one past the last character)
+    check state.cursor.column == 5
 
   test "Handle regular character":
     let buf = newTextBuffer()

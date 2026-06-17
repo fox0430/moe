@@ -770,6 +770,20 @@ suite "InsertModeHandler - Motion":
     check result.kind == imrHandled
     check state.cursor.column == 1
 
+  test "Right motion reaches end of line in Insert mode":
+    # Regression: moving right in Insert mode must reach the end-of-line column
+    # (one past the last character), not stop on the last character.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    for _ in 0 ..< 5:
+      discard handler.handleMotion(buf, state, Motion.Right)
+
+    check state.cursor.column == 5
+
   test "Handle up motion":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "line1")
@@ -988,8 +1002,8 @@ suite "InsertModeHandler - Key Handling":
     let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
-    # Motion.End moves to last character position (Normal mode behavior)
-    check state.cursor.column == 4
+    # In Insert mode End lands at end of line (one past the last character)
+    check state.cursor.column == 5
 
 suite "InsertModeHandler - Ctrl Key Combinations":
   test "Handle Ctrl+W (delete word backward)":
