@@ -83,6 +83,13 @@ proc executeOperatorOnRange*(
       $range.endPos & ", linewise=" & $range.isLinewise,
   )
 
+  if range.isEmpty and operatorType != OpChange:
+    # Empty object (e.g. yit/dit on <a></a>, gUi" on "", >i( on ()): the range
+    # spans no characters, so every operator is a no-op and the registers stay
+    # untouched. Only `c` still acts -- it drops into Insert between the
+    # delimiters -- so OpChange falls through to its branch below.
+    return ok(())
+
   case operatorType
   of OpYank:
     # Yank (copy) the range
@@ -153,8 +160,10 @@ proc executeOperatorOnRange*(
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system (respects pendingRegister)
-    storeDeletedText(ctx, text, range.isLinewise)
+    if not range.isEmpty:
+      # Store in register system (respects pendingRegister). An empty object
+      # (e.g. cit on <a></a>) removes nothing, so leave the registers untouched.
+      storeDeletedText(ctx, text, range.isLinewise)
 
     # Begin transaction for all change operations (delete + insert mode input)
     let transactionResult = ctx.buffer.beginTransaction("Change operation")

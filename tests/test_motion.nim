@@ -564,13 +564,17 @@ suite "Text Objects - Parenthesis":
     check range.endPos.column == 8
 
   test "findMatchingParen multi-line":
+    # Close delimiter on its own line: the inner ends at the previous line's
+    # end-of-content column (just past "  arg") so deleting through it joins the
+    # lines and collapses the block to `()` instead of yielding a negative end.
     let buffer = newTextBuffer("func(\n  arg\n)")
     let cursor = BufferPosition(line: 1, column: 2)
     let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
     check result.isOk
     let range = result.get
-    check range.start.line == 0
-    check range.endPos.line == 2
+    check not range.isEmpty
+    check (range.start.line, range.start.column) == (0, 5)
+    check (range.endPos.line, range.endPos.column) == (1, 5)
 
 suite "calculateTextObjectRange":
   test "word text object":
@@ -599,6 +603,119 @@ suite "calculateTextObjectRange":
     let range = result.get
     check range.start.column == 0
     check range.endPos.column == 5
+
+  test "empty double quoted string inner is an empty range between quotes":
+    # vim's `ci"` on "" still enters Insert mode between the quotes.
+    let buffer = newTextBuffer("x \"\" y")
+    let cursor = BufferPosition(line: 0, column: 3)
+    let result = calculateTextObjectRange(buffer, cursor, toQuotedDouble, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check not range.isLinewise
+    check (range.start.line, range.start.column) == (0, 3)
+    check (range.endPos.line, range.endPos.column) == (0, 3)
+
+  test "empty single quoted string inner is an empty range between quotes":
+    let buffer = newTextBuffer("x '' y")
+    let cursor = BufferPosition(line: 0, column: 3)
+    let result = calculateTextObjectRange(buffer, cursor, toQuotedSingle, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check (range.start.line, range.start.column) == (0, 3)
+    check (range.endPos.line, range.endPos.column) == (0, 3)
+
+  test "empty parenthesis inner is an empty range between delimiters":
+    # vim's `ci(` on () still enters Insert mode between the delimiters.
+    let buffer = newTextBuffer("x () y")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toParenthesis, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check not range.isLinewise
+    # Position is the closing delimiter, so typing inserts between ( and ).
+    check (range.start.line, range.start.column) == (0, 3)
+    check (range.endPos.line, range.endPos.column) == (0, 3)
+
+  test "empty bracket inner is an empty range between delimiters":
+    let buffer = newTextBuffer("x [] y")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toBracket, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check (range.start.line, range.start.column) == (0, 3)
+    check (range.endPos.line, range.endPos.column) == (0, 3)
+
+  test "empty brace inner is an empty range between delimiters":
+    let buffer = newTextBuffer("x {} y")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toBrace, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check (range.start.line, range.start.column) == (0, 3)
+    check (range.endPos.line, range.endPos.column) == (0, 3)
+
+  test "multi-line paren inner spans from after open to end of the content line":
+    # `(\n  bar\n)`: the close sits at column 0, so the inner ends at the content
+    # line's end-of-content column (deleting through it joins the lines). A naive
+    # endCol-1 would be -1 and the delete would fail.
+    let buffer = newTextBuffer("(\n  bar\n)")
+    let cursor = BufferPosition(line: 0, column: 0)
+    let result = calculateTextObjectRange(buffer, cursor, toParenthesis, tomInner)
+    check result.isOk
+    let range = result.get
+    check not range.isEmpty
+    check not range.isLinewise
+    check (range.start.line, range.start.column) == (0, 1)
+    # column 5 == charLen("  bar"), i.e. just past the content (the newline).
+    check (range.endPos.line, range.endPos.column) == (1, 5)
+
+  test "multi-line paren inner with empty middle lines stays a valid range":
+    let buffer = newTextBuffer("(\n\n)")
+    let cursor = BufferPosition(line: 0, column: 0)
+    let result = calculateTextObjectRange(buffer, cursor, toParenthesis, tomInner)
+    check result.isOk
+    let range = result.get
+    check not range.isEmpty
+    check (range.start.line, range.start.column) == (0, 1)
+    check (range.endPos.line, range.endPos.column) == (1, 0)
+
+  test "multi-line paren inner with content not at column 0 is unchanged":
+    let buffer = newTextBuffer("(abc\ndef)")
+    let cursor = BufferPosition(line: 0, column: 0)
+    let result = calculateTextObjectRange(buffer, cursor, toParenthesis, tomInner)
+    check result.isOk
+    let range = result.get
+    check not range.isEmpty
+    check (range.start.line, range.start.column) == (0, 1)
+    check (range.endPos.line, range.endPos.column) == (1, 2)
+
+  test "multi-line empty paren inner is an empty range at the close delimiter":
+    # `(\n)`: only the boundary newline lies between the delimiters, so the range
+    # is an empty no-op positioned at the close delimiter (ci( still inserts).
+    let buffer = newTextBuffer("(\n)")
+    let cursor = BufferPosition(line: 0, column: 0)
+    let result = calculateTextObjectRange(buffer, cursor, toParenthesis, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check not range.isLinewise
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 0)
+
+  test "multi-line empty brace inner is an empty range at the close delimiter":
+    let buffer = newTextBuffer("{\n}")
+    let cursor = BufferPosition(line: 0, column: 0)
+    let result = calculateTextObjectRange(buffer, cursor, toBrace, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 0)
 
 suite "Text Objects - Paragraph":
   test "inner paragraph is the non-blank run":
@@ -776,11 +893,53 @@ suite "Text Objects - Tag":
     check (range.start.line, range.start.column) == (1, 0)
     check (range.endPos.line, range.endPos.column) == (1, 3)
 
-  test "empty tag inner returns error":
+  test "empty tag inner is an empty range between the tags":
+    # vim's `cit` on <a></a> still works: an empty (no-op) object positioned
+    # right after the open tag's '>', so a change drops into Insert mode there.
     let buffer = newTextBuffer("<a></a>")
     let cursor = BufferPosition(line: 0, column: 1)
     let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
-    check result.isErr
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check not range.isLinewise
+    # Position is the close tag's '<' (one past the open tag's '>').
+    check (range.start.line, range.start.column) == (0, 3)
+    check (range.endPos.line, range.endPos.column) == (0, 3)
+
+  test "nested empty inner tag picks the innermost empty pair":
+    let buffer = newTextBuffer("<div><p></p></div>")
+    let cursor = BufferPosition(line: 0, column: 6) # on the inner <p>
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    # Innermost <p></p>, not <div>: position is the '<' of </p> (column 8).
+    check (range.start.line, range.start.column) == (0, 8)
+    check (range.endPos.line, range.endPos.column) == (0, 8)
+
+  test "multi-line empty tag inner is an empty range at the closing tag":
+    # <a>\n</a>: the inner content is only a newline. vim's `cit` still works,
+    # so return an empty (no-op) range positioned at the closing tag's '<'.
+    let buffer = newTextBuffer("<a>\n</a>")
+    let cursor = BufferPosition(line: 0, column: 1)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check not range.isLinewise
+    check (range.start.line, range.start.column) == (1, 0)
+    check (range.endPos.line, range.endPos.column) == (1, 0)
+
+  test "multi-line empty tag with blank lines is an empty range":
+    let buffer = newTextBuffer("<a>\n\n</a>")
+    let cursor = BufferPosition(line: 1, column: 0)
+    let result = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.isEmpty
+    check (range.start.line, range.start.column) == (2, 0)
+    check (range.endPos.line, range.endPos.column) == (2, 0)
 
   test "stray closing tag does not break the enclosing match":
     # An orphan </br> must be ignored, not discard the still-open <div>.

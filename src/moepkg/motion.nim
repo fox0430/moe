@@ -1483,6 +1483,10 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
   ## Extract text from the given range
   ## Used for yank operations
 
+  if range.isEmpty:
+    # An empty range (e.g. the inner of <a></a>) spans no characters.
+    return ""
+
   var text = ""
 
   if range.isLinewise:
@@ -1498,14 +1502,18 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
     if range.start.line == range.endPos.line:
       # Single line extraction
       let line = buffer.getLine(range.start.line)
-      let startCol = min(range.start.column, line.charLen)
-      let endCol = min(range.endPos.column, line.charLen)
-      if startCol < line.charLen:
-        let runes = line.toRunes()
-        # Use inclusive range to match buffer.deleteRange behavior
-        for i in startCol .. min(endCol, runes.len - 1):
-          if i < runes.len:
-            text.add($runes[i])
+      let lineLen = line.charLen
+      let startCol = min(range.start.column, lineLen)
+      let endCol = min(range.endPos.column, lineLen)
+      if endCol >= lineLen:
+        # Range reaches the line end: include the trailing newline so the yanked
+        # text matches what buffer.deleteRange removes (it joins the next line).
+        if startCol < lineLen:
+          text.add(line.runeSubStr(startCol))
+        text.add("\n")
+      elif startCol < lineLen:
+        # Inclusive range to match buffer.deleteRange behavior.
+        text.add(line.runeSubStr(startCol, endCol - startCol + 1))
     else:
       # Multi-line extraction
       for lineIdx in range.start.line .. range.endPos.line:
@@ -1519,13 +1527,16 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
                 text.add($runes[i])
             text.add("\n")
           elif lineIdx == range.endPos.line:
-            # Last line: from start to endCol (inclusive)
-            let runes = line.toRunes()
-            let endCol = min(range.endPos.column, runes.len - 1)
-            # Use inclusive range to match buffer.deleteRange behavior
-            for i in 0 .. endCol:
-              if i < runes.len:
-                text.add($runes[i])
+            # Last line: from start to endPos.column (inclusive). When the range
+            # reaches the line end, include the trailing newline so the yanked
+            # text matches what buffer.deleteRange removes (it joins the lines).
+            let lineLen = line.charLen
+            let endCol = min(range.endPos.column, lineLen)
+            if endCol >= lineLen:
+              text.add(line)
+              text.add("\n")
+            else:
+              text.add(line.runeSubStr(0, endCol + 1))
           else:
             # Middle lines: entire line
             text.add(line)
@@ -1537,6 +1548,10 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
 proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
   ## Delete text in the given range
   ## Used for delete and change operations
+
+  if range.isEmpty:
+    # An empty range deletes nothing (e.g. `cit`/`dit` on <a></a>).
+    return ok(())
 
   if range.isLinewise:
     # Delete entire lines
@@ -2040,9 +2055,17 @@ proc findQuotedBoundaries(
 
   if inner:
     # Inner: content only (exclude quotes)
-    # For empty quotes like "", there's nothing to select
     if endCol <= startCol + 1:
-      return err("Empty quoted string")
+      # Empty quotes like "": vim's `ci"` still enters Insert mode between
+      # the quotes, so return an empty (no-op) range there.
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol + 1),
+          endPos: BufferPosition(line: cursor.line, column: startCol + 1),
+          isLinewise: false,
+          isEmpty: true,
+        )
+      )
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol + 1),
@@ -2159,16 +2182,44 @@ proc findMatchingParen(
 
   if inner:
     # Inner: content only (exclude delimiters)
-    # If start and end are on the same line and adjacent or empty, nothing to delete
-    if startLine == endLine and endCol <= startCol + 1:
-      return err("Empty delimited content")
-    return ok(
-      TextObjectRange(
-        start: BufferPosition(line: startLine, column: startCol + 1),
-        endPos: BufferPosition(line: endLine, column: endCol - 1),
-        isLinewise: false,
+    let startPos = BufferPosition(line: startLine, column: startCol + 1)
+    if startLine == endLine:
+      if endCol <= startCol + 1:
+        # Empty delimiters like (): vim's `ci(` still enters Insert mode between
+        # the delimiters, so return an empty (no-op) range there.
+        return ok(
+          TextObjectRange(
+            start: startPos, endPos: startPos, isLinewise: false, isEmpty: true
+          )
+        )
+      return ok(
+        TextObjectRange(
+          start: startPos,
+          endPos: BufferPosition(line: endLine, column: endCol - 1),
+          isLinewise: false,
+        )
       )
-    )
+    # Multi-line inner. When the close delimiter sits at column 0 the inner
+    # content ends with the line break before it, so the inclusive end is the
+    # previous line's end-of-content column -- deleting through that position
+    # also consumes the trailing newline and joins the lines, collapsing a block
+    # like `(\n  x\n)` to `()`. A naive `endCol - 1` here would be -1 and the
+    # delete would fail. Otherwise the close shares a line with content and the
+    # end is `endCol - 1` as usual.
+    if endCol == 0 and startLine + 1 == endLine and
+        startCol + 1 >= buffer.getLine(startLine).charLen:
+      # Only the boundary newline lies between the delimiters (e.g. `(\n)`); the
+      # inclusive range can't delete just that newline without clipping a
+      # delimiter, so return an empty (no-op) range -- `ci(` still inserts here.
+      let pos = BufferPosition(line: endLine, column: endCol)
+      return
+        ok(TextObjectRange(start: pos, endPos: pos, isLinewise: false, isEmpty: true))
+    let endPos =
+      if endCol == 0:
+        BufferPosition(line: endLine - 1, column: buffer.getLine(endLine - 1).charLen)
+      else:
+        BufferPosition(line: endLine, column: endCol - 1)
+    return ok(TextObjectRange(start: startPos, endPos: endPos, isLinewise: false))
   else:
     # Around: content + delimiters (deleteRange is inclusive, so endCol is correct)
     return ok(
@@ -2570,7 +2621,12 @@ proc findTagBoundaries(
     let rawS = bestOpen.gtIdx + 1
     let rawE = bestClose.ltIdx - 1
     if rawS > rawE:
-      return err("Empty tag")
+      # Empty tag like <a></a>: no inner content. vim's `cit` still works --
+      # it drops the cursor between the tags and enters Insert mode -- so return
+      # an empty (no-op) range at that position rather than failing the object.
+      let pos = flatToPos(bestClose.ltIdx)
+      return
+        ok(TextObjectRange(start: pos, endPos: pos, isLinewise: false, isEmpty: true))
     # When the content occupies whole lines -- the open '>' is immediately
     # followed by a newline and the close '</' immediately preceded by one --
     # vim's `it` is linewise and `dit` removes the content lines rather than
@@ -2584,7 +2640,11 @@ proc findTagBoundaries(
     while e >= s and flat[e].int32 == '\n'.ord:
       e.dec
     if s > e:
-      return err("Empty tag")
+      # Multi-line empty tag like <a>\n</a>: the inner content is only
+      # newlines. Treat it the same as <a></a> so `cit`/`dit`/`yit` work.
+      let pos = flatToPos(bestClose.ltIdx)
+      return
+        ok(TextObjectRange(start: pos, endPos: pos, isLinewise: false, isEmpty: true))
     if wholeLines:
       return ok(
         TextObjectRange(

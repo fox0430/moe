@@ -2111,7 +2111,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
         # Convert TextObjectRange to OperatorRange
         let opRange = OperatorRange(
-          start: toRange.start, endPos: toRange.endPos, isLinewise: toRange.isLinewise
+          start: toRange.start,
+          endPos: toRange.endPos,
+          isLinewise: toRange.isLinewise,
+          isEmpty: toRange.isEmpty,
         )
 
         # Check if we have a pending operator
@@ -2122,6 +2125,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
           # Execute operator on text object
           return executeOperatorOnRange(ctx, op.operatorType, opRange, op.operatorCount)
         elif isVisualAllMode(ctx.state.mode):
+          if toRange.isEmpty:
+            # Empty object (e.g. vit on <a></a>): nothing to select, so leave
+            # the current selection untouched like vim.
+            return ok(())
           # In Visual mode - update selection to text object range
           ctx.state.visualSelection.start = toRange.start
           ctx.state.visualSelection.current = toRange.endPos
