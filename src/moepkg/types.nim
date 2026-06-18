@@ -464,6 +464,7 @@ type
     start*: BufferPosition
     endPos*: BufferPosition
     isLinewise*: bool # Whether the operation affects entire lines
+    isEmpty*: bool # No-op range (e.g. inner of an empty tag): delete/yank affect nothing
 
   PendingOperator* = object
     ## Represents an operator waiting for a motion or text object
@@ -495,6 +496,8 @@ type
     start*: BufferPosition
     endPos*: BufferPosition
     isLinewise*: bool # Whether this is a linewise text object
+    isEmpty*: bool
+      # Empty object (e.g. inner of <a></a>): operators are no-ops, but `cit` still inserts
 
   PendingTextObject* = object
     ## Represents a text object selection waiting for the object type

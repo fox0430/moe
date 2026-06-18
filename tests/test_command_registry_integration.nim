@@ -1969,6 +1969,310 @@ suite "Handler - Text Object operations":
     check registry.execute(ctx, custom("textobject.tag")).isOk
     check buffer[0] == "xy"
 
+  test "textobject tag (cit) on empty tag enters Insert mode between the tags":
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1) # on the open tag
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    # Nothing deleted, cursor between the tags, ready to type.
+    check buffer[0] == "<a></a>"
+    check ctx.state.mode == EditorMode.Insert
+    check (ctx.cursor.line, ctx.cursor.column) == (0, 3)
+
+  test "textobject tag (dit) on empty tag is a no-op":
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check buffer[0] == "<a></a>"
+    check ctx.state.mode == EditorMode.Normal
+
+  test "textobject tag (yit) on empty tag leaves registers untouched":
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Seed the unnamed register; an empty yank must not clobber it.
+    ctx.state.registers.setYankedRegister("PREV", false)
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "PREV"
+
+  test "textobject tag (dit) on empty tag leaves registers untouched":
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # An empty delete removes nothing, so a previously yanked value survives.
+    ctx.state.registers.setYankedRegister("PREV", false)
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "PREV"
+
+  test "textobject tag (gUit) on empty tag is a no-op, not a corruption":
+    # Regression: case operators must honor the empty range. Previously this
+    # deleted the closing tag's '<' (<a></a> -> <a>/a>).
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check buffer[0] == "<a></a>"
+
+  test "textobject tag (guit) on empty tag is a no-op":
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check buffer[0] == "<a></a>"
+
+  test "textobject tag (>it) on empty tag does not indent the line":
+    # Regression: indent operators must honor the empty range (was <a></a> ->
+    # \t<a></a>).
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check buffer[0] == "<a></a>"
+
+  test "textobject quote (gUi\") on empty quotes is a no-op":
+    let buffer = newTextBuffer("x \"\" y")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.quote.double")).isOk
+    check buffer[0] == "x \"\" y"
+
+  test "textobject paren (>i() on empty parens does not indent the line":
+    let buffer = newTextBuffer("x () y")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    check buffer[0] == "x () y"
+
+  test "textobject tag (vit) on empty tag leaves the selection untouched":
+    # Visual mode must not turn an empty object into a zero-width selection.
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection.start = BufferPosition(line: 0, column: 1)
+    ctx.state.visualSelection.current = BufferPosition(line: 0, column: 1)
+    ctx.state.visualSelection.active = true
+    let registry = createTestRegistry()
+
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check buffer[0] == "<a></a>"
+    # Cursor and selection stay put (no jump to the close tag's '<').
+    check (ctx.cursor.line, ctx.cursor.column) == (0, 1)
+    check (
+      ctx.state.visualSelection.current.line, ctx.state.visualSelection.current.column
+    ) == (0, 1)
+
+  test "textobject paren (di() on a multi-line block collapses to ()":
+    # Regression: a closing delimiter at column 0 used to yield a negative end
+    # column and fail with `Column positions cannot be negative`.
+    let buffer = newTextBuffer("foo(\n  bar\n)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3) # on the open paren
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    check buffer.len == 1
+    check buffer[0] == "foo()"
+
+  test "textobject paren (ci() on a multi-line block collapses and enters Insert":
+    let buffer = newTextBuffer("(\n  bar\n)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    check buffer.len == 1
+    check buffer[0] == "()"
+    check ctx.state.mode == EditorMode.Insert
+    # Cursor lands between the delimiters, ready to type.
+    check (ctx.cursor.line, ctx.cursor.column) == (0, 1)
+
+  test "textobject brace (di{) on a multi-line block collapses to {}":
+    let buffer = newTextBuffer("{\n  x\n}")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.brace")).isOk
+    check buffer.len == 1
+    check buffer[0] == "{}"
+
+  test "textobject paren (yi() on a multi-line block yanks the inner content":
+    let buffer = newTextBuffer("(\n  bar\n)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    # Buffer is untouched and the register holds the full inner content,
+    # including the trailing newline that a delete would consume (matching
+    # buffer.deleteRange / getTextInRange).
+    check buffer[0] == "("
+    check ctx.state.registers.getNoNamedRegister().getContent() == "\n  bar\n"
+
+  test "textobject paren (di() on a multi-line block stores the deleted text verbatim":
+    # Regression: the yank register must match what the delete removed. The
+    # collapse range ends at the content line's end-of-content column, so the
+    # register has to include the trailing newline deleteRange consumes.
+    let buffer = newTextBuffer("foo(\n  bar\n)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3) # on the open paren
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    check buffer.len == 1
+    check buffer[0] == "foo()"
+    # di( then p must round-trip: register == removed text == "\n  bar\n".
+    check ctx.state.registers.getNoNamedRegister().getContent() == "\n  bar\n"
+
+  test "textobject paren (di() on a single content line collapses and stores it":
+    # `(x\n)`: the close sits at column 0 on the next line, so the inner range is
+    # single-line ending at charLen("(x"); the register must carry the newline.
+    let buffer = newTextBuffer("(x\n)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    check buffer.len == 1
+    check buffer[0] == "()"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "x\n"
+
+  test "textobject paren (ci() on a multi-line empty pair is a no-op insert":
+    # `(\n)` has only the boundary newline between the delimiters: no content to
+    # delete, but `ci(` still drops into Insert mode between them.
+    let buffer = newTextBuffer("(\n)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    # Nothing deleted; cursor sits just before the close delimiter.
+    check buffer.len == 2
+    check buffer[0] == "("
+    check buffer[1] == ")"
+    check ctx.state.mode == EditorMode.Insert
+    check (ctx.cursor.line, ctx.cursor.column) == (1, 0)
+
+  test "textobject paren (di() on a multi-line empty pair is a no-op":
+    let buffer = newTextBuffer("(\n)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    check buffer.len == 2
+    check buffer[0] == "("
+    check buffer[1] == ")"
+    check ctx.state.mode == EditorMode.Normal
+
   test "textobject paragraph (dap) deletes the paragraph linewise":
     let buffer = newTextBuffer("aaa\nbbb\n\nccc")
     let ctx = createTestContext(buffer)
@@ -3663,9 +3967,14 @@ suite "Handler - Visual mode text object selection":
     # { - brace text object
     check registry.execute(ctx, custom("textobject.brace")).isOk
     check ctx.state.visualSelection.active == true
-    # Selection should span from after { to before }
-    check ctx.state.visualSelection.start.line == 0
-    check ctx.state.visualSelection.current.line == 3
+    # Selection spans from after { (end of line 0) to before } (end of "world",
+    # the last content line). The close brace sits at column 0, so the end is the
+    # previous line's end-of-content column, not a negative column on line 3.
+    check (ctx.state.visualSelection.start.line, ctx.state.visualSelection.start.column) ==
+      (0, 9)
+    check (
+      ctx.state.visualSelection.current.line, ctx.state.visualSelection.current.column
+    ) == (2, 5)
 
   test "textobject.inner in Visual mode does not enter Insert mode":
     let buffer = newTextBuffer("hello world")
