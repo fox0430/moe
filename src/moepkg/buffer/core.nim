@@ -460,6 +460,24 @@ proc getLine*(b: TextBuffer, lineIndex: int): string =
   of PieceTable:
     b.pieceTable.getLine(lineIndex)
 
+iterator lines*(b: TextBuffer): string =
+  ## Yield every line in order with a single backend traversal.
+  ## Prefer this over `for i in 0 ..< b.len: b.getLine(i)`, which is O(n log n)
+  ## for tree-based backends (Rope/PieceTable).
+  case b.backendKind
+  of GapBuffer:
+    for line in b.gapBuffer.lines:
+      yield line
+  of SqrtDecomp:
+    for line in b.sqrtDecomp.lines:
+      yield line
+  of Rope:
+    for line in b.rope.lines:
+      yield line
+  of PieceTable:
+    for line in b.pieceTable.lines:
+      yield line
+
 proc newTextBuffer*(
     content: sink string = "",
     filePath: Option[string] = none(string),
@@ -505,9 +523,9 @@ proc newTextBuffer*(
   if skipHighlightInit:
     result.highlight = initHighlight()
   else:
-    var runesBuffer = newSeq[Runes](lineCount)
-    for i in 0 ..< lineCount:
-      runesBuffer[i] = result.getLine(i).toRunes()
+    var runesBuffer = newSeqOfCap[Runes](lineCount)
+    for line in result.lines:
+      runesBuffer.add(line.toRunes())
     result.highlight = initHighlight(runesBuffer)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =

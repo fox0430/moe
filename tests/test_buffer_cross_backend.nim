@@ -59,6 +59,33 @@ suite "CrossBackend - Basic Operations":
       check b.getLineLen(0) == 5
       check b.getLineLen(1) == 3
 
+    test "lines iterator matches getLine [" & $be & "]":
+      for content in [
+        "", "single", "Line1\nLine2\nLine3", "Hello\nあいう\n日本語",
+        "trailing\n\n\n", "\n\nleading",
+      ]:
+        let b = buf(content, be)
+        var collected = newSeq[string]()
+        for line in b.lines:
+          collected.add(line)
+        check collected.len == b.len
+        for i in 0 ..< b.len:
+          check collected[i] == b.getLine(i)
+
+    test "lines iterator matches getLine after edits [" & $be & "]":
+      # Edits fragment tree/block backends into multiple pieces, exercising
+      # the iterator's multi-segment traversal rather than the fresh-buffer path.
+      let b = buf("Line1\nLine2\nLine3", be)
+      discard b.insertText(BufferPosition(line: 1, column: 5), "あ\ninserted")
+      discard b.deleteLine(0)
+      discard b.insertText(BufferPosition(line: 0, column: 0), "head ")
+      var collected = newSeq[string]()
+      for line in b.lines:
+        collected.add(line)
+      check collected.len == b.len
+      for i in 0 ..< b.len:
+        check collected[i] == b.getLine(i)
+
     test "getTextString [" & $be & "]":
       let b = buf("Hello\nWorld", be)
       let text = b.getTextString()

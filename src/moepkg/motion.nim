@@ -310,14 +310,17 @@ proc findChar(
   ## Find next occurrence of character on current line
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let line = e.buffer.getLine(currentPos.y)
-    let lineCharLen = line.charLen
+    let targetRunes = targetChar.toRunes
+    if targetRunes.len != 1:
+      return
+    let
+      target = targetRunes[0]
+      runes = e.buffer.getLine(currentPos.y).toRunes
     var found = 0
-    # Search character by character, not byte by byte
-    for charIdx in currentPos.x + 1 ..< lineCharLen:
-      # Get the character at this character position
-      let (rune, _) = getCharAtPos(line, charIdx)
-      if toUTF8(rune) == targetChar:
+    # Index a one-time rune copy of the line instead of rescanning from the
+    # start per column (avoids O(n^2) on long lines).
+    for charIdx in currentPos.x + 1 ..< runes.len:
+      if runes[charIdx] == target:
         found.inc
         if found == count:
           result.x = charIdx
@@ -329,13 +332,15 @@ proc findCharBackward(
   ## Find previous occurrence of character on current line
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let line = e.buffer.getLine(currentPos.y)
+    let targetRunes = targetChar.toRunes
+    if targetRunes.len != 1:
+      return
+    let
+      target = targetRunes[0]
+      runes = e.buffer.getLine(currentPos.y).toRunes
     var found = 0
-    # Search character by character backward, not byte by byte
-    for charIdx in countdown(currentPos.x - 1, 0):
-      # Get the character at this character position
-      let (rune, _) = getCharAtPos(line, charIdx)
-      if toUTF8(rune) == targetChar:
+    for charIdx in countdown(min(currentPos.x - 1, runes.len - 1), 0):
+      if runes[charIdx] == target:
         found.inc
         if found == count:
           result.x = charIdx
@@ -722,23 +727,13 @@ proc moveToMatchingBracket(
     var colIdx = currentPos.x + 1
 
     while lineIdx < e.buffer.len:
-      let line = e.buffer.getLine(lineIdx)
-      var charPos = 0
-      var bytePos = 0
+      # Index a one-time rune copy of the line instead of a skip scan plus a
+      # sliced toRunes copy per line.
+      let runes = e.buffer.getLine(lineIdx).toRunes
+      var charPos = if lineIdx == currentPos.y: colIdx else: 0
 
-      # Skip to starting column if on the same line
-      if lineIdx == currentPos.y:
-        for r in line.runes:
-          if charPos >= colIdx:
-            break
-          bytePos += r.size
-          charPos += 1
-      else:
-        charPos = 0
-        bytePos = 0
-
-      # Search for matching bracket
-      for r in line.toRunes[charPos ..^ 1]:
+      while charPos < runes.len:
+        let r = runes[charPos]
         if r == currentRune:
           depth += 1
         elif r == closeBracket:
@@ -759,23 +754,17 @@ proc moveToMatchingBracket(
     var colIdx = currentPos.x - 1
 
     while lineIdx >= 0:
-      let line = e.buffer.getLine(lineIdx)
-      let lineCharLen = line.charLen
+      # Index a one-time rune copy of the line instead of rescanning from the
+      # start per column (avoids O(n^2) on long lines).
+      let runes = e.buffer.getLine(lineIdx).toRunes
 
       # Set starting column
       if lineIdx != currentPos.y:
-        colIdx = lineCharLen - 1
+        colIdx = runes.len - 1
 
       # Search backward for matching bracket
       while colIdx >= 0:
-        var charPos = 0
-        var targetRune: Rune
-        for r in line.runes:
-          if charPos == colIdx:
-            targetRune = r
-            break
-          charPos += 1
-
+        let targetRune = runes[colIdx]
         if targetRune == currentRune:
           depth += 1
         elif targetRune == openBracket:

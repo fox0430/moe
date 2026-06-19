@@ -152,7 +152,7 @@ proc createDiffTextBuffer*(state: DiffViewerState): TextBuffer =
   result.readOnly = true
 
   # Initialize syntax highlighting for diff language
-  var runesBuffer: seq[seq[Rune]] = @[]
-  for i in 0 ..< result.len:
-    runesBuffer.add(result.getLine(i).toRunes())
+  var runesBuffer = newSeqOfCap[seq[Rune]](result.len)
+  for line in result.lines:
+    runesBuffer.add(line.toRunes())
   result.highlight = initHighlight(runesBuffer, @[], langDiff)
