@@ -1443,9 +1443,9 @@ proc startSubstitutePreview*(e: Editor) =
     return
 
   let buffer = e.activeBuffer()
-  e.state.ui.substitutePreview.originalLines = @[]
-  for i in 0 ..< buffer.len:
-    e.state.ui.substitutePreview.originalLines.add(buffer.getLine(i))
+  e.state.ui.substitutePreview.originalLines = newSeqOfCap[string](buffer.len)
+  for line in buffer.lines:
+    e.state.ui.substitutePreview.originalLines.add(line)
   e.state.ui.substitutePreview.isActive = true
   e.state.ui.substitutePreview.lastPattern = ""
   e.state.ui.substitutePreview.lastReplacement = ""

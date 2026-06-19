@@ -216,9 +216,11 @@ proc updateHighlight*(b: TextBuffer) =
       else:
         # Cache invalid or first time - parse once with incremental
         if b.len > 0:
-          var lines = newSeq[string](b.len)
-          for i in 0 ..< b.len:
-            lines[i] = b.getLine(i)
+          # Single backend traversal instead of b.len getLine calls, which
+          # are O(n log n) total for tree-based backends.
+          var lines = newSeqOfCap[string](b.len)
+          for line in b.lines:
+            lines.add(line)
 
           let (segments, lineStates) = initHighlightIncremental(
             lines,

@@ -19,7 +19,7 @@
 
 ## Tests for motion.nim
 
-import std/unittest
+import std/[unittest, strutils]
 
 import pkg/results
 
@@ -305,6 +305,60 @@ suite "Find/Till Char Backward":
     let result = executor.tillCharBackward(currentPos, "c", 1)
     check result.x == 3 # One after 'c'
 
+suite "Find/Till Char - Unicode and long lines":
+  test "findChar uses character positions past multibyte runes":
+    # 日(0) 本(1) x(2) y(3) 語(4) x(5)
+    let buffer = newTextBuffer("日本xy語x")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    check executor.findChar(currentPos, "x", 1).x == 2
+    check executor.findChar(currentPos, "x", 2).x == 5
+
+  test "findCharBackward uses character positions past multibyte runes":
+    # x(0) 本(1) x(2) 語(3)
+    let buffer = newTextBuffer("x本x語")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 3, y: 0)
+    check executor.findCharBackward(currentPos, "x", 1).x == 2
+    check executor.findCharBackward(currentPos, "x", 2).x == 0
+
+  test "findChar leaves cursor unchanged when target is absent":
+    let buffer = newTextBuffer("abcdef")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    check executor.findChar(currentPos, "z", 1).x == 0
+
+  test "findChar finds target at end of a long line":
+    let buffer = newTextBuffer("a".repeat(5000) & "x")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    check executor.findChar(currentPos, "x", 1).x == 5000
+
+  test "findChar/findCharBackward find a multibyte target rune":
+    # 語(0) a(1) 語(2) b(3) 語(4)
+    let buffer = newTextBuffer("語a語b語")
+    let executor = newMotionExecutor(buffer)
+    check executor.findChar(CursorPosition(x: 0, y: 0), "語", 1).x == 2
+    check executor.findChar(CursorPosition(x: 0, y: 0), "語", 2).x == 4
+    check executor.findCharBackward(CursorPosition(x: 4, y: 0), "語", 1).x == 2
+    check executor.findCharBackward(CursorPosition(x: 4, y: 0), "語", 2).x == 0
+
+  test "tillChar/tillCharBackward stop adjacent to a target past multibyte runes":
+    # a(0) 語(1) b(2) y(3)
+    let buffer = newTextBuffer("a語by")
+    let executor = newMotionExecutor(buffer)
+    check executor.tillChar(CursorPosition(x: 0, y: 0), "y", 1).x == 2
+    check executor.tillCharBackward(CursorPosition(x: 3, y: 0), "a", 1).x == 1
+
+  test "findChar leaves cursor unchanged for empty or multi-rune targets":
+    let buffer = newTextBuffer("abc")
+    let executor = newMotionExecutor(buffer)
+    let pos = CursorPosition(x: 0, y: 0)
+    check executor.findChar(pos, "", 1).x == 0
+    check executor.findChar(pos, "bc", 1).x == 0
+    check executor.findCharBackward(CursorPosition(x: 2, y: 0), "", 1).x == 2
+    check executor.findCharBackward(CursorPosition(x: 2, y: 0), "ab", 1).x == 2
+
 suite "Paragraph Motion":
   test "moveParagraphForward to blank line":
     let buffer = newTextBuffer("line1\nline2\n\nline4")
@@ -371,6 +425,79 @@ suite "Matching Bracket":
     let currentPos = CursorPosition(x: 0, y: 0)
     let result = executor.moveToMatchingBracket(currentPos)
     check result.x == 6
+
+  test "moveToMatchingBracket forward past multibyte runes":
+    # ((0) 日(1) 本(2) 語(3) )(4)
+    let buffer = newTextBuffer("(日本語)")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveToMatchingBracket(CursorPosition(x: 0, y: 0))
+    check result.x == 4
+
+  test "moveToMatchingBracket forward across lines with multibyte runes":
+    let buffer = newTextBuffer("(日本\n語x)")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveToMatchingBracket(CursorPosition(x: 0, y: 0)) # the '('
+    check result.y == 1
+    check result.x == 2
+
+  test "moveToMatchingBracket forward on a long line":
+    let buffer = newTextBuffer("(" & "a".repeat(5000) & ")")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveToMatchingBracket(CursorPosition(x: 0, y: 0)) # the '('
+    check result.x == 5001
+
+  test "moveToMatchingBracket forward respects nesting depth":
+    # ((inner)) : ( 0 ( 1 ... ) 7 ) 8
+    let buffer = newTextBuffer("((inner))")
+    let executor = newMotionExecutor(buffer)
+    check executor.moveToMatchingBracket(CursorPosition(x: 1, y: 0)).x == 7 # inner '('
+    check executor.moveToMatchingBracket(CursorPosition(x: 0, y: 0)).x == 8 # outer '('
+
+  test "moveToMatchingBracket backward past multibyte runes":
+    # ((0) 日(1) 本(2) 語(3) )(4)
+    let buffer = newTextBuffer("(日本語)")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 4, y: 0)
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.x == 0
+
+  test "moveToMatchingBracket backward across lines with multibyte runes":
+    let buffer = newTextBuffer("(日本\n語x)")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 2, y: 1) # the ')'
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.y == 0
+    check result.x == 0
+
+  test "moveToMatchingBracket backward on a long line":
+    let buffer = newTextBuffer("(" & "a".repeat(5000) & ")")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 5001, y: 0) # the ')'
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.x == 0
+
+  test "moveToMatchingBracket backward respects nesting depth":
+    # ((inner)) : ( 0 ( 1 ... ) 7 ) 8
+    let buffer = newTextBuffer("((inner))")
+    let executor = newMotionExecutor(buffer)
+    check executor.moveToMatchingBracket(CursorPosition(x: 7, y: 0)).x == 1 # inner ')'
+    check executor.moveToMatchingBracket(CursorPosition(x: 8, y: 0)).x == 0 # outer ')'
+
+  test "moveToMatchingBracket backward across lines respects nesting":
+    let buffer = newTextBuffer("(a\n(b)\nc)")
+    let executor = newMotionExecutor(buffer)
+    # outer ')' at line 2 col 1 -> matching '(' at line 0 col 0
+    let result = executor.moveToMatchingBracket(CursorPosition(x: 1, y: 2))
+    check result.y == 0
+    check result.x == 0
+
+  test "moveToMatchingBracket leaves cursor unchanged when unbalanced":
+    let buffer = newTextBuffer("abc)")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 3, y: 0) # ')' with no opening '('
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.y == 0
+    check result.x == 3
 
 suite "Text Objects - Word":
   test "findWordBoundaries inner word":
