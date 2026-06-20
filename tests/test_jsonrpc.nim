@@ -251,6 +251,16 @@ suite "Header Parsing - parseFrameHeaders (readFrame block)":
     check r.isErr
     check r.error.contains("Invalid Content-Length")
 
+  test "Content-Length at the limit is accepted":
+    let r = parseFrameHeaders("Content-Length: " & $MaxContentLength)
+    check r.isOk
+    check r.get == MaxContentLength
+
+  test "Content-Length above the limit is rejected":
+    let r = parseFrameHeaders("Content-Length: " & $(MaxContentLength + 1))
+    check r.isErr
+    check r.error.contains("exceeds limit")
+
 suite "Message Parsing - parseJsonRpcMessage":
   test "parses request message":
     let body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"""

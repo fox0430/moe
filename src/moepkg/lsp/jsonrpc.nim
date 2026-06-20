@@ -324,6 +324,14 @@ type
     input*: InputStream
     output*: OutputStream
 
+const
+  ## Sanity limits on incoming frames. A malicious or buggy server can
+  ## otherwise force unbounded allocation: an endless header block with no
+  ## "\r\n\r\n" terminator, or a huge Content-Length that `read` would try to
+  ## allocate up front. Both ceilings sit far above any legitimate LSP message.
+  MaxHeaderBlockLen* = 8 * 1024 # 8 KiB of headers is already absurd
+  MaxContentLength* = 256 * 1024 * 1024 # 256 MiB body ceiling
+
 proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
   s.find("utf-8", valueStart) == -1 and s.find("utf8", valueStart) == -1
 
@@ -362,6 +370,10 @@ proc parseFrameHeaders*(headerBlock: string): Result[int, string] =
 
   if contentLen < 0:
     return Result[int, string].err("Missing Content-Length header")
+  if contentLen > MaxContentLength:
+    return Result[int, string].err(
+      "Content-Length exceeds limit: " & $contentLen & " > " & $MaxContentLength
+    )
   Result[int, string].ok(contentLen)
 
 proc readFrame(s: AsyncStreamReader): Future[Result[string, string]] {.async.} =
@@ -369,12 +381,16 @@ proc readFrame(s: AsyncStreamReader): Future[Result[string, string]] {.async.} =
 
   let buf =
     try:
-      await s.readLine(sep = "\r\n\r\n")
+      await s.readLine(limit = MaxHeaderBlockLen, sep = "\r\n\r\n")
     except CatchableError as e:
       return Result[string, string].err("readLine failed: " & e.msg)
 
   if buf.len == 0:
     return Result[string, string].err("readLine: empty")
+
+  if buf.len >= MaxHeaderBlockLen:
+    # readLine stopped at the limit without finding the header terminator.
+    return Result[string, string].err("LSP header block exceeds limit")
 
   # `buf` is the whole header block (readLine consumed up to the blank line)
   let headers = parseFrameHeaders(buf)
