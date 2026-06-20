@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils, monotimes, times, json]
+import std/[unittest, options, strutils, monotimes, times, json, os]
 
 import pkg/celina
 
@@ -197,16 +197,109 @@ suite "Completion - collectBufferWords":
     check "hello" notin words # Excluded
     check "world" in words
 
-  test "Returns sorted unique words":
+  test "Returns unique words":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello foo")
 
     let words = collectBufferWords(buf, BufferPosition(line: 0, column: 100))
 
-    check words.len == 3 # hello, world, foo (unique)
-    check words[0] == "foo" # Sorted alphabetically
-    check words[1] == "hello"
-    check words[2] == "world"
+    # Deduplicated; order is unspecified (callers rank by match score).
+    check words.len == 3
+    check "hello" in words
+    check "world" in words
+    check "foo" in words
+
+suite "Completion - word cache invalidation":
+  # The buffer-word scan is cached against each source buffer's monotonic
+  # contentVersion. These guard the cases a changeSeq-based key would miss:
+  # undo+re-edit and reload both reuse old changeSeq values for new content.
+
+  test "Empty-prefix completion lists words alphabetically":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard
+      buf.insertText(BufferPosition(line: 0, column: 0), "delta alpha charlie bravo\n")
+
+    # Cursor on the empty trailing line -> empty prefix -> every word offered.
+    mgr.triggerCompletion(buf, 1, 0)
+
+    check mgr.menu.prefix == ""
+    var words: seq[string] = @[]
+    for e in mgr.menu.entries:
+      words.add(e.word)
+    check words == @["alpha", "bravo", "charlie", "delta"]
+
+  test "Undo then a new edit does not serve stale cached words":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\n")
+
+    mgr.triggerCompletion(buf, 1, 0)
+    check "alpha" in mgr.allWords
+    let cachedSeq = buf.changeSeq
+
+    # Roll the edit back, then make a different edit. insertText of an equal-shape
+    # string from the same start lands changeSeq on the cached value (the ABA a
+    # changeSeq key cannot tell apart); contentVersion still advances.
+    discard buf.undo(100)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "gamma\n")
+    check buf.changeSeq == cachedSeq # same changeSeq, different content
+
+    mgr.triggerCompletion(buf, 1, 0)
+    check "gamma" in mgr.allWords
+    check "alpha" notin mgr.allWords
+
+  test "Reloading a file does not serve stale cached words":
+    let mgr = newCompletionManager()
+    let path = getTempDir() / "moe_test_completion_reload.txt"
+    writeFile(path, "alpha beta\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    let seqAfterLoad = buf.changeSeq
+    mgr.triggerCompletion(buf, 1, 0)
+    check "alpha" in mgr.allWords
+
+    # Replace the file and reload into the SAME buffer: loadFile resets changeSeq
+    # back to its post-load value, so a changeSeq key would collide.
+    writeFile(path, "gamma delta\n")
+    check buf.reloadFile().isOk
+    check buf.changeSeq == seqAfterLoad # both loads reset changeSeq identically
+
+    mgr.triggerCompletion(buf, 1, 0)
+    check "gamma" in mgr.allWords
+    check "alpha" notin mgr.allWords
+
+  test "Editing an other-buffer is reflected on the next trigger":
+    let mgr = newCompletionManager()
+    let active = newTextBuffer()
+    discard active.insertText(BufferPosition(line: 0, column: 0), "mainword\n")
+    let other = newTextBuffer()
+    discard other.insertText(BufferPosition(line: 0, column: 0), "firstother")
+    mgr.otherBuffers = @[other]
+
+    mgr.triggerCompletion(active, 1, 0)
+    check "firstother" in mgr.allWords
+    check "secondother" notin mgr.allWords
+
+    discard other.insertText(BufferPosition(line: 0, column: 10), " secondother")
+    mgr.triggerCompletion(active, 1, 0)
+    check "secondother" in mgr.allWords
+
+  test "Same buffer in two windows is scanned once":
+    let mgr = newCompletionManager()
+    let active = newTextBuffer()
+    discard active.insertText(BufferPosition(line: 0, column: 0), "mainword\n")
+    let other = newTextBuffer()
+    discard other.insertText(BufferPosition(line: 0, column: 0), "otherword")
+    # The same buffer object listed twice (split windows) must not break the scan.
+    mgr.otherBuffers = @[other, other]
+
+    mgr.triggerCompletion(active, 1, 0)
+    check "otherword" in mgr.allWords
+    check "mainword" in mgr.allWords
 
 suite "Completion - triggerCompletion":
   test "Trigger completion with prefix":

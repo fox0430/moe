@@ -212,6 +212,12 @@ type
     changeSeq*: int # Current change sequence number
     savedSeq*: int # Sequence number when file was last saved
 
+    contentVersion*: int
+      ## Monotonic content generation. Bumped on every content-changing op and
+      ## never reset or rolled back, so unlike `changeSeq` (which undo restores
+      ## and reload resets to 0) it uniquely identifies a buffer's content across
+      ## its lifetime. Use this, not `changeSeq`, as a cache-invalidation key.
+
     # Transaction support
     currentTransaction*: Option[BufferTransaction]
     inTransaction*: bool
@@ -753,6 +759,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # which collapse N inc'd changes into a single undo entry.
   let preSeq = b.changeSeq
   b.changeSeq.inc
+  b.contentVersion.inc # monotonic, never rolled back (see field docs)
   let postSeq = b.changeSeq
 
   # Mark highlight as needing update and track changed range
