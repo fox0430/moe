@@ -99,7 +99,17 @@ type
     needsRedraw*: bool
     title*: string
 
-const DefaultMaxScrollback* = 10000
+const
+  # Maximum number of scrolled-off lines retained for scrollback.
+  DefaultMaxScrollback* = 10000
+  # Cap the OSC payload buffer. Without a terminator (BEL/ST) the buffer would
+  # grow unboundedly on hostile PTY output; abort to apsNormal past this size
+  # to bound memory (DoS guard). Far above any realistic title/hyperlink length.
+  MaxOscLength* = 8192
+  # Cap the CSI parameter buffer for the same reason as MaxOscLength: a flood of
+  # parameter/intermediate bytes (\x20-\x3f) with no final byte would grow the
+  # buffer unboundedly. Realistic CSI sequences are tiny, so abort well below it.
+  MaxCsiLength* = 1024
 
 proc defaultColor*(): TerminalColor =
   TerminalColor(kind: ckDefault)
@@ -924,9 +934,19 @@ proc processOutput*(grid: TerminalGrid, data: string) =
         grid.parserState = apsNormal
       elif ch >= '\x20' and ch <= '\x3f':
         # Parameter or intermediate byte
-        grid.escapeBuffer.add(ch)
+        if grid.escapeBuffer.len >= MaxCsiLength:
+          # Oversized (likely unterminated) CSI: abort to bound memory (DoS guard).
+          # This byte is valid payload, so reprocess it as normal output instead
+          # of dropping it (dec i is undone by the loop's trailing inc).
+          grid.escapeBuffer = ""
+          grid.parserState = apsNormal
+          dec i
+        else:
+          grid.escapeBuffer.add(ch)
       else:
-        # Invalid CSI sequence, abort
+        # Invalid CSI sequence, abort. The byte is not valid CSI grammar, so
+        # (unlike the cap abort) drop it rather than reprocess it.
+        grid.escapeBuffer = ""
         grid.parserState = apsNormal
     of apsOsc:
       if ch == '\x07' or ch == '\x1b':
@@ -942,6 +962,13 @@ proc processOutput*(grid: TerminalGrid, data: string) =
           if i + 1 < actualData.len and actualData[i + 1] == '\\':
             i += 1
         grid.parserState = apsNormal
+      elif grid.escapeBuffer.len >= MaxOscLength:
+        # Oversized (likely unterminated) OSC: abort to bound memory (DoS guard).
+        # This byte is valid payload, so reprocess it as normal output instead
+        # of dropping it (dec i is undone by the loop's trailing inc).
+        grid.escapeBuffer = ""
+        grid.parserState = apsNormal
+        dec i
       else:
         grid.escapeBuffer.add(ch)
     of apsStringSeq:

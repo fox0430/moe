@@ -950,3 +950,93 @@ suite "TerminalGrid - Insert/Delete line clamps large counts":
     check grid.cells[0][1].ch == "0" # rows outside the region untouched
     check grid.cells[4][1].ch == "4"
     check grid.cells[5][1].ch == "5"
+
+suite "TerminalGrid - OSC sequences":
+  test "OSC 0 sets the window title (BEL terminated)":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]0;my title\x07")
+    check grid.title == "my title"
+    check grid.parserState == apsNormal
+
+  test "OSC 2 sets the window title (ST terminated)":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]2;another\x1b\\")
+    check grid.title == "another"
+    check grid.parserState == apsNormal
+
+  test "unterminated OSC past the cap aborts to normal and frees the buffer":
+    let grid = newTerminalGrid(20, 3)
+    # OSC introducer then a flood with no terminator (BEL/ST).
+    grid.processOutput("\x1b]0;" & repeat('A', MaxOscLength * 2))
+    check grid.parserState == apsNormal
+    check grid.escapeBuffer.len == 0 # bounded, not grown to the flood size
+
+  test "oversized OSC does not commit a title":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]0;" & repeat('A', MaxOscLength + 16) & "\x07")
+    # Aborted before the terminator, so no title is set; the overflowing byte
+    # and tail are processed as normal output rather than the OSC payload.
+    check grid.title == ""
+    check grid.parserState == apsNormal
+
+  test "the byte that overflows the OSC cap is reprocessed, not dropped":
+    let grid = newTerminalGrid(20, 3)
+    # Sized so the very last 'A' is the byte that trips the cap. With the buffer
+    # holding "0;", MaxOscLength-1 more bytes fill it and trigger on the last.
+    grid.processOutput("\x1b]0;" & repeat('A', MaxOscLength - 1))
+    check grid.parserState == apsNormal
+    check grid.cursorCol == 1 # the overflowing 'A' was painted, not lost
+    check grid.cells[0][0].ch == "A"
+
+  test "unterminated OSC stays bounded across PTY reads":
+    # The real DoS vector: escapeBuffer/parserState persist across processOutput
+    # calls, so a flood split over many reads must stay capped, not accumulate.
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]0;") # OSC introducer in its own read
+    let chunk = repeat('A', 256)
+    var reads = 0
+    while grid.parserState == apsOsc and reads < 1000:
+      grid.processOutput(chunk) # each read is a separate PTY chunk
+      check grid.escapeBuffer.len <= MaxOscLength # never grows past the cap
+      inc reads
+    check grid.parserState == apsNormal # aborted once the payload crossed the cap
+    check grid.escapeBuffer.len == 0
+
+suite "TerminalGrid - CSI sequences":
+  test "unterminated CSI past the cap aborts to normal and frees the buffer":
+    let grid = newTerminalGrid(20, 3)
+    # CSI introducer then a flood of parameter bytes with no final byte.
+    grid.processOutput("\x1b[" & repeat(';', MaxCsiLength * 2))
+    check grid.parserState == apsNormal
+    check grid.escapeBuffer.len == 0 # bounded, not grown to the flood size
+
+  test "a valid CSI still parses after the buffer was capped":
+    let grid = newTerminalGrid(20, 3)
+    # Flood aborts the first sequence; a following well-formed CSI must work.
+    grid.processOutput("\x1b[" & repeat(';', MaxCsiLength * 2) & "\x1b[31m")
+    check grid.parserState == apsNormal
+    check grid.currentFg.kind == ckIndexed
+    check grid.currentFg.index == 1 # SGR 31 -> red
+
+  test "the byte that overflows the CSI cap is reprocessed, not dropped":
+    let grid = newTerminalGrid(20, 3)
+    # MaxCsiLength bytes fill the buffer; the next ';' trips the cap and, being
+    # a printable parameter byte, must land as normal text rather than vanish.
+    grid.processOutput("\x1b[" & repeat(';', MaxCsiLength + 1))
+    check grid.parserState == apsNormal
+    check grid.cursorCol == 1 # the overflowing ';' was painted, not lost
+    check grid.cells[0][0].ch == ";"
+
+  test "unterminated CSI stays bounded across PTY reads":
+    # Same DoS vector as OSC: a parameter-byte flood split over many reads must
+    # stay capped because escapeBuffer/parserState carry over between reads.
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b[") # CSI introducer in its own read
+    let chunk = repeat(';', 256)
+    var reads = 0
+    while grid.parserState == apsCsi and reads < 1000:
+      grid.processOutput(chunk) # each read is a separate PTY chunk
+      check grid.escapeBuffer.len <= MaxCsiLength # never grows past the cap
+      inc reads
+    check grid.parserState == apsNormal # aborted once the payload crossed the cap
+    check grid.escapeBuffer.len == 0
