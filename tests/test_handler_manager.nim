@@ -2511,6 +2511,17 @@ suite "HandlerManager - [count]i/a/o insert replay":
       KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {}),
     )
 
+  proc typeLeft(
+      manager: HandlerManager,
+      buffer: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ) =
+    discard manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
+      KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {}),
+    )
+
   proc escape(
       manager: HandlerManager,
       buffer: TextBuffer,
@@ -2633,3 +2644,19 @@ suite "HandlerManager - [count]i/a/o insert replay":
     check buffer.getLine(0) == "X"
     check buffer.getLine(1) == "YX"
     check buffer.getLine(2) == "Yabc"
+
+  test "cursor movement during counted insert cancels the replay":
+    # Moving the cursor mid-insert invalidates the [insertModeStartPos, cursor)
+    # range the replay derives the typed text from, so the count repeat is
+    # dropped (Vim-like) instead of re-inserting a garbled partial range.
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+    manager.digit(buffer, state, viewport, "3")
+    manager.enterInsert(buffer, state, viewport, "i")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.typeChar(buffer, state, viewport, "Y")
+    manager.typeLeft(buffer, state, viewport)
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "XYabc"

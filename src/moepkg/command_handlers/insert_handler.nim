@@ -280,6 +280,9 @@ proc handleMotion*(
   if r.isErr:
     return InsertModeResult(kind: imrError, errorMessage: r.error)
   state.cursor = r.value
+  # Cursor movement invalidates the [count]i/a/o replay range; cancel it.
+  state.editState.insertReplayCount = 0
+  state.editState.insertReplayLineEntry = false
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleModeSwitch*(
