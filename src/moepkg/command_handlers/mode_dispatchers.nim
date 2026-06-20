@@ -87,6 +87,68 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
       sb.add(extractInsertedText(nestedTransaction))
   return sb.toString()
 
+proc typedTextInRange(buffer: TextBuffer, startPos, endPos: BufferPosition): string =
+  ## Text typed in the half-open range [startPos, endPos), where endPos is the
+  ## cursor sitting one rune past the last inserted character. Returns "" when
+  ## the cursor is not strictly ahead of startPos (e.g. everything backspaced).
+  if endPos.line < startPos.line or
+      (endPos.line == startPos.line and endPos.column <= startPos.column):
+    return ""
+  # getTextInRange is inclusive on both ends, so step the end back one rune.
+  let endIncl =
+    if endPos.column > 0:
+      BufferPosition(line: endPos.line, column: endPos.column - 1)
+    else:
+      # Cursor at column 0: the last typed rune is the newline that ended the
+      # previous line; getTextInRange includes it when endCol reaches line end.
+      BufferPosition(
+        line: endPos.line - 1, column: buffer.getLine(endPos.line - 1).charLen
+      )
+  buffer.getTextInRange(startPos, endIncl)
+
+proc advancePastText(pos: BufferPosition, text: string): BufferPosition =
+  ## Cursor position after inserting `text` at `pos` (column is a rune index).
+  result = pos
+  for r in text.runes:
+    if r == Rune('\n'):
+      result.line.inc
+      result.column = 0
+    else:
+      result.column.inc
+
+proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
+  ## Replay the just-typed text (count - 1) more times for [count]i/a/I/A/o/O,
+  ## matching Vim. Runs while the Insert transaction is still open so every
+  ## repeat shares one undo group, and before the cursor is pulled back into
+  ## Normal mode. No-op for substitute inserts (s/S/cc), which use the count to
+  ## drive their own delete and never set insertReplayCount. Visual-block insert
+  ## likewise never carries a replay count, and its context is already cleared by
+  ## the caller before we run, so no guard for it is needed here.
+  let count = state.editState.insertReplayCount
+  if count <= 1 or state.editState.insertModeStartPos.isNone or
+      state.editState.substituteContext.isSome:
+    return
+
+  let startPos = state.editState.insertModeStartPos.get
+  var cursor = state.cursor
+  let typed = typedTextInRange(buffer, startPos, cursor)
+  if typed.len == 0:
+    return
+
+  var unit = typed
+  if state.editState.insertReplayLineEntry:
+    # o/O opened the first line already; each repeat opens another line that
+    # carries the entry line's indentation.
+    let entryLine = buffer.getLine(startPos.line)
+    let indentLen = min(startPos.column, entryLine.charLen)
+    unit = "\n" & entryLine.runeSubStr(0, indentLen) & typed
+
+  for _ in 1 ..< count:
+    if buffer.insertText(cursor, unit).isErr:
+      break
+    cursor = advancePastText(cursor, unit)
+  state.cursor = cursor
+
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
@@ -160,8 +222,15 @@ proc handleInsertMode*(
               )
             )
 
+        # [count]i/a/o/O: replay the typed text the remaining count-1 times.
+        # Done before clearing insertModeStartPos and before commit so the
+        # repeats join the same undo group.
+        replayCountedInsert(buffer, state)
+
         # Clear insert position tracking and substitute context
         state.editState.insertModeStartPos = none(BufferPosition)
+        state.editState.insertReplayCount = 0
+        state.editState.insertReplayLineEntry = false
         state.editState.substituteContext = none(types.SubstituteContext)
 
       # Commit the transaction when leaving Insert mode

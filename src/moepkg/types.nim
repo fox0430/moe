@@ -229,6 +229,12 @@ type
     visualBlockInsertContext*: Option[VisualBlockInsertContext]
       # Context for visual block insert/append/change replication
     autoIndentedLine*: Option[tuple[line: int, indent: string]]
+    insertReplayCount*: int
+      # [count] prefix for [count]i/a/I/A/o/O. On Insert-mode exit the typed
+      # text is replayed (count - 1) more times to match Vim. <= 1 means none.
+    insertReplayLineEntry*: bool
+      # True when Insert was entered via o/O, so each replay opens a fresh line
+      # (newline + the entry line's indent) instead of inserting inline.
 
   DisplaySettings* = object ## Display and UI settings grouped together
     showTabLine*: bool # Whether to show the tab line
