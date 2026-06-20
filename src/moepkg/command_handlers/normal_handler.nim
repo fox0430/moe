@@ -302,7 +302,6 @@ proc searchMatchAndOperate(
       else:
         state.cursor.column = 0
 
-
     if op.operatorType == OpChange:
       return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

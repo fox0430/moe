@@ -83,9 +83,7 @@ proc createTestState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    windowDisplay: WindowDisplayState(
-      viewportReservedLines: steadyBottomAreaHeight()
-    ),
+    windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
     macroState: MacroState(
       isRecording: false,
       register: '\0',

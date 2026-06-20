@@ -591,7 +591,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           elif newLine >= window.viewport.topLine + viewportHeight:
             window.viewport.topLine = newLine - viewportHeight + 1
 
-
       return true
 
     return true

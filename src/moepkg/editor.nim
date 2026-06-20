@@ -544,7 +544,6 @@ proc toggleGitDiff*(e: Editor) =
   if e.state.display.showGitDiff:
     discard updateBufferWithGitDiff(e.activeBuffer)
 
-
 proc setGitDiffVisible*(e: Editor, visible: bool) =
   ## Set git diff indicators visibility in sidebar
   e.state.display.showGitDiff = visible
@@ -552,7 +551,6 @@ proc setGitDiffVisible*(e: Editor, visible: bool) =
   # Update git diff information when enabled
   if visible:
     discard updateBufferWithGitDiff(e.activeBuffer)
-
 
 proc toggleSyntaxChecker*(e: Editor) =
   ## Toggle syntax checker results in sidebar
