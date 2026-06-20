@@ -810,8 +810,11 @@ proc wordCacheSignature(
     if ob.id notin seen:
       result.add((ob.id, ob.contentVersion))
       seen.incl(ob.id)
-  result.sort do(a, b: (BufferId, int)) -> int:
-    cmp(a[0].int, b[0].int)
+  # Sort so a pure window reorder does not force a rescan. Skip it for the common
+  # single-buffer case, where there is nothing to reorder.
+  if result.len > 1:
+    result.sort do(a, b: (BufferId, int)) -> int:
+      cmp(a[0].int, b[0].int)
 
 proc refreshBufferWords(
     mgr: CompletionManager,

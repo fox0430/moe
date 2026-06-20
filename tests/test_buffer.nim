@@ -1721,3 +1721,486 @@ suite "Buffer - CRLF Line Ending Handling":
     discard buf.saveFile(path)
     let saved = readFile(path)
     check saved == "aaa\rnew\rbbb\r"
+
+suite "Buffer - contentVersion monotonicity":
+  # contentVersion is the completion cache's invalidation key. Unlike changeSeq
+  # (restored by undo, reset to 0 by reload) it must only ever increase, so a
+  # reverted or reloaded buffer is never mistaken for an older cached state.
+
+  test "NoUndo line mutators advance contentVersion":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\nbeta\n")
+    var v = buf.contentVersion
+
+    buf.replaceLineNoUndo(0, "gamma")
+    check buf.contentVersion > v
+    v = buf.contentVersion
+
+    buf.insertLineNoUndo(1, "delta")
+    check buf.contentVersion > v
+    v = buf.contentVersion
+
+    buf.deleteLineNoUndo(1)
+    check buf.contentVersion > v
+
+  test "Undo and redo never roll contentVersion back":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\n")
+    let vEdit = buf.contentVersion
+
+    check buf.undo().isOk
+    check buf.changeSeq == 0 # changeSeq restored to the saved value
+    check buf.contentVersion > vEdit # contentVersion kept climbing
+    let vUndo = buf.contentVersion
+
+    check buf.redo().isOk
+    check buf.contentVersion > vUndo
+
+  test "Reload across a backend swap keeps contentVersion monotonic":
+    # Pin the backend choice so the swap branch is taken regardless of any
+    # global config left over from other tests, and restore it afterwards.
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+    defer:
+      setAutoBackendMode(false)
+      setConfiguredBackend(GapBuffer)
+
+    let path = getTempDir() / "moe_test_contentversion_swap.txt"
+    writeFile(path, "alpha beta\n") # small file -> GapBuffer
+    defer:
+      removeFile(path)
+
+    # Start on PieceTable so loadFile takes the backend-swap branch
+    # (b[] = newBuffer[]), which historically reset contentVersion to 0.
+    let buf = newTextBuffer(backend = PieceTable)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa\n")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "bbb\n")
+    let vBefore = buf.contentVersion
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+    check buf.changeSeq == 0 # reload resets changeSeq
+    check buf.contentVersion > vBefore # but contentVersion only advances
+
+suite "Buffer - reload preserves identity across a backend swap":
+  # loadFile's swap branch does `b[] = newBuffer[]`, replacing the whole object
+  # with newTextBuffer defaults. Identity and content-derived fields must survive
+  # it; only backend-specific state (undo stacks) is reset.
+
+  setup:
+    # Pin the backend choice so a PieceTable buffer reliably swaps to GapBuffer.
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  teardown:
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  test "id, bookmarks, displayName and readOnly survive the swap":
+    let path = getTempDir() / "moe_test_identity_swap.txt"
+    writeFile(path, "one\ntwo\nthree\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "x\ny\nz\n")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(2)
+    buf.displayName = some("scratch")
+    buf.readOnly = true
+    let idBefore = buf.id
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    check buf.id == idBefore # was reset to a fresh genBufferId() before the fix
+    check buf.bookmarks == @[1, 2]
+    check buf.displayName == some("scratch")
+    check buf.readOnly
+
+  test "detected CRLF line ending survives the swap":
+    let path = getTempDir() / "moe_test_crlf_swap.txt"
+    writeFile(path, "aaa\r\nbbb\r\n") # CRLF file
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    # The swap must not clobber the freshly detected CRLF back to LF: a save
+    # round-trips CRLF rather than silently converting the whole file to LF.
+    discard buf.saveFile(path)
+    check readFile(path) == "aaa\r\nbbb\r\n"
+
+  test "reservedWords survive the swap":
+    # reservedWords is config-derived (TODO/NOTE highlighting). A same-backend
+    # reload keeps it; the swap path must not silently empty it, or TODO/NOTE
+    # highlighting would stop until the next full config reload.
+    let path = getTempDir() / "moe_test_reservedwords_swap.txt"
+    writeFile(path, "code\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    buf.setReservedWords(
+      @[ReservedWord(word: "TODO", color: EditorColorPairIndex.default)]
+    )
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    check buf.reservedWords.len == 1
+    check buf.reservedWords[0].word == "TODO"
+
+  test "manual folds survive the swap":
+    let path = getTempDir() / "moe_test_folds_swap.txt"
+    writeFile(path, "a\nb\nc\nd\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "1\n2\n3\n4\n")
+    check buf.foldState.addFold(0, 2)
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 0
+    check buf.foldState.folds[0].endLine == 2
+
+  test "diagnostics are cleared on reload (not part of identity)":
+    # Diagnostics are NOT identity: their line positions go stale when the content
+    # is replaced, and a reload sends no didChange for the server to re-publish.
+    # loadFile clears them on both paths; without that, updateHighlight would
+    # re-apply stale undercurls at the old positions after the next edit.
+    let path = getTempDir() / "moe_test_diagnostics_swap.txt"
+    writeFile(path, "x\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsError,
+        message: "boom",
+      )
+    ]
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    check buf.diagnostics.len == 0
+
+  test "conflictBlocks are cleared on reload (not part of identity)":
+    # conflictBlocks holds line ranges into the OLD content, so a reload makes them
+    # stale; like diagnostics they are cleared on both paths and the caller
+    # re-scans. Without the clear, a same-backend reload would keep stale ranges
+    # while the swap path wiped them — a backend-dependent result.
+    let path = getTempDir() / "moe_test_conflicts_swap.txt"
+    writeFile(path, "clean\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    buf.conflictBlocks = @[
+      ConflictBlock(
+        startLine: 0,
+        baseMarkerLine: none(int),
+        separatorLine: 1,
+        endLine: 2,
+        oursLabel: "HEAD",
+        theirsLabel: "branch",
+      )
+    ]
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    check buf.conflictBlocks.len == 0
+
+  test "changelist is cleared on reload (not part of identity)":
+    # The changelist holds positions into the OLD content, and undo (which it
+    # parallels) is dropped on reload, so it is cleared on both paths — matching
+    # vim, which resets the changelist on :e!.
+    let path = getTempDir() / "moe_test_changelist_swap.txt"
+    writeFile(path, "y\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    buf.changeList = @[BufferPosition(line: 1, column: 2)]
+    buf.changeListIndex = 0
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    check buf.changeList.len == 0
+    check buf.changeListIndex == 0
+
+  test "editorConfig and isUtilityBuffer survive the swap":
+    let path = getTempDir() / "moe_test_editorconfig_swap.txt"
+    writeFile(path, "z\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    buf.editorConfig = some(BufferEditorConfig(tabStop: some(8)))
+    buf.isUtilityBuffer = true
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop == some(8)
+    check buf.isUtilityBuffer
+
+  test "detected missing trailing newline survives the swap":
+    let path = getTempDir() / "moe_test_eol_swap.txt"
+    writeFile(path, "abc") # no trailing newline
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = PieceTable)
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # the swap happened
+
+    # endOfLine was detected as false; the swap must not reset it to the default,
+    # or saving would append a spurious trailing newline.
+    check not buf.endOfLine
+    discard buf.saveFile(path)
+    check readFile(path) == "abc"
+
+suite "Buffer - reload resets stale content-keyed state":
+  # A reload replaces the content wholesale. State keyed on the OLD content (the
+  # char->byte cursor cache, undo/redo history) is stale and must be reset on BOTH
+  # the backend-swap and same-backend paths, so a reload's result never depends on
+  # whether the file size happened to cross the backend threshold.
+
+  setup:
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  teardown:
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  test "same-backend reload invalidates the cursor cache":
+    # charToBytePosCached keys on (line, charPos, changeSeq) and returns the cached
+    # bytePos WITHOUT re-reading the line. loadFile resets changeSeq to 0, so a hit
+    # recorded at changeSeq 0 (the first edit after a load) must not survive a
+    # reload, or it would return a byte offset computed from the OLD content and
+    # corrupt the edit when a multibyte char shifts column.
+    let path = getTempDir() / "moe_test_cursorcache_reload.txt"
+    writeFile(path, "world héllo\n") # multibyte (é) before column 7
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    check buf.loadFile(path).isOk
+    # First post-load edit at column>0 records a cache entry at changeSeq 0.
+    discard buf.deleteChar(BufferPosition(line: 0, column: 7))
+    check buf.cursorCache.line != -1 # cache populated
+
+    # Reload a DIFFERENT content where char 7 sits at another byte offset.
+    writeFile(path, "héllo world\n") # é now before column 7, 'o' at char 7
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # same-backend path, no swap
+    check buf.cursorCache.line == -1 # cache invalidated by the reload
+    check buf.cursorCache.changeSeq == -1
+
+    # A fresh edit must read the NEW content's byte layout, not the stale offset.
+    discard buf.deleteChar(BufferPosition(line: 0, column: 7))
+    check buf.getLine(0) == "héllo wrld" # char 7 ('o') removed cleanly
+
+  test "reload clears undo and redo history":
+    # Undo entries store positions into the OLD content, so a reload invalidates
+    # them. The backend-swap path cleared them via newTextBuffer; the same-backend
+    # path must too, or `u` after a reload replays a change against mismatched
+    # content.
+    let path = getTempDir() / "moe_test_undo_reload.txt"
+    writeFile(path, "ground truth\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "scratch\n")
+    discard buf.deleteChar(BufferPosition(line: 0, column: 0))
+    check buf.undo().isOk # there is undo history before the reload
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # same-backend path, no swap
+    check buf.getLine(0) == "ground truth"
+
+    # Undo/redo must be no-ops now: the history was discarded with the old content.
+    check buf.undo().isErr
+    check buf.redo().isErr
+
+  test "same-backend reload clears stale diagnostics":
+    # The same-backend path previously kept diagnostics (loadFile never reset
+    # them), so updateHighlight would re-apply them at stale line positions after
+    # the next edit. loadFile now clears them on this path too.
+    let path = getTempDir() / "moe_test_diagnostics_sameback.txt"
+    writeFile(path, "code\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsError,
+        message: "stale",
+      )
+    ]
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # same-backend path, no swap
+    check buf.diagnostics.len == 0
+
+  test "same-backend reload keeps contentVersion monotonic":
+    # The swap path advances contentVersion via restoreIdentity; the same-backend
+    # path advances it directly. Both must keep it strictly increasing.
+    let path = getTempDir() / "moe_test_contentversion_sameback.txt"
+    writeFile(path, "fresh\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "edit\n")
+    let vBefore = buf.contentVersion
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # no swap
+    check buf.changeSeq == 0 # reload resets changeSeq
+    check buf.contentVersion > vBefore # but contentVersion only advances
+
+  test "same-backend reload clears stale conflictBlocks":
+    # conflictBlocks holds line ranges into the OLD content; the swap path cleared
+    # them via newTextBuffer, so the same-backend path must too, or g]/[ conflict
+    # navigation would point into content that no longer exists.
+    let path = getTempDir() / "moe_test_conflicts_sameback.txt"
+    writeFile(path, "clean\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    buf.conflictBlocks = @[
+      ConflictBlock(
+        startLine: 0,
+        baseMarkerLine: none(int),
+        separatorLine: 1,
+        endLine: 2,
+        oursLabel: "HEAD",
+        theirsLabel: "branch",
+      )
+    ]
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # same-backend path, no swap
+    check buf.conflictBlocks.len == 0
+
+  test "same-backend reload resets lastChangedLines":
+    # lastChangedLines seeds the next incremental-highlight pass. After an edit at
+    # a higher line it points there; the swap path resets it to 0 via newTextBuffer,
+    # so the same-backend path must too, or the highlight seed would depend on the
+    # backend swap.
+    let path = getTempDir() / "moe_test_lastchanged_sameback.txt"
+    writeFile(path, "seed\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    discard buf.insertText(BufferPosition(line: 3, column: 0), "X")
+    check buf.lastChangedLines > 0 # the edit moved the seed off line 0
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # same-backend path, no swap
+    check buf.lastChangedLines == 0
+
+  test "same-backend reload clears the changelist":
+    # The changelist parallels undo (cleared on reload) and holds positions into
+    # the old content, so the same-backend path drops it too — g;/g, start fresh.
+    let path = getTempDir() / "moe_test_changelist_sameback.txt"
+    writeFile(path, "fresh\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\n")
+    check buf.changeList.len > 0 # edits recorded changelist entries
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # same-backend path, no swap
+    check buf.changeList.len == 0
+    check buf.changeListIndex == 0
+
+  test "shrinking reload clamps stale folds and bookmarks":
+    # Folds and bookmarks survive a reload (identity), but a reload that shrinks
+    # the buffer must not leave them referencing lines that no longer exist: a
+    # fold extending past the new end is clamped, one starting past it is dropped,
+    # and out-of-range bookmarks are removed.
+    let path = getTempDir() / "moe_test_clamp_reload.txt"
+    writeFile(path, "a\nb\nc\nd\ne\n") # 5 lines
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    check buf.loadFile(path).isOk
+    check buf.foldState.addFold(1, 3) # partial: clamped after the shrink
+    check buf.foldState.addFold(4, 4) # fully past the new end: dropped
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(4)
+
+    # Reload a 2-line version (lines 0,1 only); same-backend path.
+    writeFile(path, "x\ny\n")
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # no swap
+
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 1
+    check buf.foldState.folds[0].endLine == 1 # clamped from 3 to len-1
+    check buf.bookmarks == @[0, 1] # 4 dropped, 0 and 1 kept
+
+  test "same-backend reload preserves identity fields":
+    # The swap suite covers identity survival across a backend swap; this is the
+    # positive coverage for the common same-backend path, where loadFile must
+    # leave these untouched (it neither captures/restores nor resets them).
+    let path = getTempDir() / "moe_test_identity_sameback.txt"
+    writeFile(path, "one\ntwo\nthree\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    check buf.loadFile(path).isOk
+    let idBefore = buf.id
+    buf.toggleBookmark(1)
+    buf.displayName = some("scratch")
+    buf.readOnly = true
+    buf.setReservedWords(
+      @[ReservedWord(word: "TODO", color: EditorColorPairIndex.default)]
+    )
+    buf.editorConfig = some(BufferEditorConfig(tabStop: some(4)))
+    buf.isUtilityBuffer = true
+
+    check buf.loadFile(path).isOk
+    check buf.backendKind == GapBuffer # same-backend path, no swap
+
+    check buf.id == idBefore
+    check buf.bookmarks == @[1]
+    check buf.displayName == some("scratch")
+    check buf.readOnly
+    check buf.reservedWords.len == 1
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop == some(4)
+    check buf.isUtilityBuffer

@@ -97,14 +97,21 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   let newBackend = chooseBackendForFile(fileSize)
 
   if b.backendKind != newBackend:
-    # Reinitialize with new backend. Use newTextBuffer to handle the object
-    # variant discriminant change, but pass skipHighlightInit=true to avoid
-    # building a full runesBuffer (O(n) per line) that loadFile overwrites.
+    # Backend swap: newTextBuffer resets the WHOLE object to newTextBuffer
+    # defaults (it handles the object-variant discriminant change), so snapshot
+    # the identity/session/detected state first and re-apply it after. Capture
+    # now — after line-ending/encoding detection — so the freshly detected values
+    # survive. skipHighlightInit=true avoids building a full runesBuffer (O(n) per
+    # line) that loadFile overwrites below.
+    let identity = b.captureIdentity()
     let newBuffer = newTextBuffer(
       move content, some(path), backend = newBackend, skipHighlightInit = true
     )
     b[] = newBuffer[]
+    b.restoreIdentity(identity) # re-applies identity and advances contentVersion
   else:
+    # Same-backend reload keeps every persistent field untouched; only the content
+    # is replaced, so just advance the monotonic content version.
     case b.backendKind
     of GapBuffer:
       b.gapBuffer = newGapBuffer(move content)
@@ -114,6 +121,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.rope = newRope(move content)
     of PieceTable:
       b.pieceTable = newPieceTable(move content)
+    b.advanceContentVersion()
 
   b.filePath = some(path)
 
@@ -130,7 +138,33 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   # Reset change tracking - file was just loaded
   b.changeSeq = 0
   b.savedSeq = 0
-  b.contentVersion.inc # content replaced; bump the monotonic version
+
+  # A reload replaces the content, so state keyed on the OLD content is stale and
+  # must be dropped on BOTH paths (the swap path already cleared it via
+  # newTextBuffer) — otherwise a reload's result would depend on the backend swap:
+  #   - the char->byte cursor cache would return wrong byte offsets,
+  #   - undo/redo history would replay changes against mismatched content,
+  #   - LSP diagnostics would render at stale line positions (reload sends no
+  #     didChange, so the server never re-publishes against the new content),
+  #   - conflict-marker ranges would point into the replaced content,
+  #   - lastChangedLines would seed the next incremental-highlight pass from a
+  #     line that no longer maps to the same content, and
+  #   - the changelist would point g;/g, at positions in the replaced content
+  #     (vim drops the changelist on :e! too), now stale since undo was cleared.
+  b.resetCursorCache()
+  b.clearUndoRedoState()
+  b.diagnostics.setLen(0) # diagnostic line markers go via the lineMarkers reset below
+  b.conflictBlocks.setLen(0) # stale ranges into the old content; reload re-scans
+  b.lastChangedLines = 0
+  b.changeList.setLen(0)
+  b.changeListIndex = 0 # matches a fresh load (newTextBuffer default)
+
+  # Folds and bookmarks survive a reload (identity), but a shrinking reload can
+  # leave them referencing lines that no longer exist; clamp to the new content.
+  # bookmarks are sorted ascending, so the out-of-range ones are a trailing run.
+  b.foldState.clampFoldsToLineCount(b.len)
+  while b.bookmarks.len > 0 and b.bookmarks[^1] >= b.len:
+    b.bookmarks.setLen(b.bookmarks.len - 1)
 
   # Reset markers and modification tracking for new file content
   b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.len)
