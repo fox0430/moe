@@ -515,32 +515,26 @@ proc setEncodingVisible*(e: Editor, visible: bool) =
 proc toggleLineWrap*(e: Editor) =
   ## Toggle line wrapping
   e.state.display.lineWrap = not e.state.display.lineWrap
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc setLineWrap*(e: Editor, enabled: bool) =
   ## Set line wrapping
   e.state.display.lineWrap = enabled
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleMultiStatusLine*(e: Editor) =
   ## Toggle between single status line (at bottom) and multi status lines (per window)
   e.state.display.multiStatusLine = not e.state.display.multiStatusLine
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc setMultiStatusLine*(e: Editor, enabled: bool) =
   ## Set multi status line mode
   e.state.display.multiStatusLine = enabled
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleSidebar*(e: Editor) =
   ## Toggle the visibility of the sidebar
   e.state.display.showSidebar = not e.state.display.showSidebar
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc setSidebarVisible*(e: Editor, visible: bool) =
   ## Set the visibility of the sidebar
   e.state.display.showSidebar = visible
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleGitDiff*(e: Editor) =
   ## Toggle git diff indicators in sidebar
@@ -550,7 +544,6 @@ proc toggleGitDiff*(e: Editor) =
   if e.state.display.showGitDiff:
     discard updateBufferWithGitDiff(e.activeBuffer)
 
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc setGitDiffVisible*(e: Editor, visible: bool) =
   ## Set git diff indicators visibility in sidebar
@@ -560,17 +553,14 @@ proc setGitDiffVisible*(e: Editor, visible: bool) =
   if visible:
     discard updateBufferWithGitDiff(e.activeBuffer)
 
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleSyntaxChecker*(e: Editor) =
   ## Toggle syntax checker results in sidebar
   e.state.display.showSyntaxChecker = not e.state.display.showSyntaxChecker
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc setSyntaxCheckerVisible*(e: Editor, visible: bool) =
   ## Set syntax checker results visibility in sidebar
   e.state.display.showSyntaxChecker = visible
-  e.state.windowDisplay.needsFullRedraw = true
 
 const MinNewWindowWidth* = 10
   ## Minimum width (in columns) required when spawning a new split window.
@@ -694,7 +684,6 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
     e.setActiveWindowScreenCursor(e.activeWindow)
 
-  e.state.windowDisplay.needsFullRedraw = true
   ok(())
 
 proc openAdditionalStartupFiles*(
@@ -837,7 +826,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         bracketSplit: editorConfig.standard.bracketSplit,
       ),
       windowDisplay: WindowDisplayState(
-        needsFullRedraw: true, # Initial render needs full draw
         viewportReservedLines: steadyBottomAreaHeight(), # Status+command share same row
         savedViewportTopLine: 0, # Saved viewport position for operators
       ),
@@ -1189,7 +1177,6 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   if reloadResult.isOk:
     e.clampCursorAfterReload(activeBuffer)
     e.state.statusMessage = "File reloaded: " & filePath
-    e.state.windowDisplay.needsFullRedraw = true
     # Update git diff after reload
     e.refreshGitDiff(useBuffer = false)
     # Rescan conflict markers against the newly loaded content
@@ -1212,7 +1199,6 @@ proc reloadCurrentFile*(e: Editor): Result[void, string] =
 
   e.clampCursorAfterReload(activeBuffer)
   e.state.statusMessage = "File reloaded: " & filePath
-  e.state.windowDisplay.needsFullRedraw = true
   e.refreshGitDiff(useBuffer = false)
   activeBuffer.refreshConflicts()
   e.state.timing.lastConflictScan = getMonoTime()
@@ -1402,7 +1388,6 @@ proc maybeReloadConfig*(e: Editor) =
   e.state.timing.lastConfigModTime = currentModTime
 
   e.state.statusMessage = "Configuration reloaded"
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc maybeUpdateConflicts*(e: Editor) =
   ## Rescan the active buffer for git conflict markers when it has been
@@ -1415,14 +1400,9 @@ proc maybeUpdateConflicts*(e: Editor) =
   let threshold = initDuration(milliseconds = e.state.timing.conflictScanInterval)
   if now - e.state.timing.lastConflictScan < threshold:
     return
-  let prevBlocks = activeBuffer.conflictBlocks
   activeBuffer.refreshConflicts()
   e.state.timing.lastConflictScan = now
   e.state.timing.lastConflictScanSeq = activeBuffer.changeSeq
-  # Only force a full redraw when the block structure actually changed —
-  # per-line edits already trigger their own redraws.
-  if activeBuffer.conflictBlocks != prevBlocks:
-    e.state.windowDisplay.needsFullRedraw = true
 
 proc enterRecentFileMode*(e: Editor): Result[void, string] =
   ## Enter Recent File mode in a vertical split window
@@ -1490,7 +1470,6 @@ proc cancelSubstitutePreview*(e: Editor) =
   e.activeWindow.viewport.leftColumn = e.state.ui.substitutePreview.originalLeftColumn
   e.state.ui.substitutePreview.isActive = false
   e.state.ui.substitutePreview.originalLines = @[]
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc commitSubstitutePreview*(e: Editor) =
   ## Commit substitute preview (discard snapshot, keep current changes)
@@ -1518,7 +1497,6 @@ proc updateSubstitutePreview*(
   e.state.ui.substitutePreview.lastReplacement = replacement
 
   if pattern.len == 0:
-    e.state.windowDisplay.needsFullRedraw = true
     return
 
   # Process escape sequences in replacement using common utility
@@ -1554,7 +1532,6 @@ proc updateSubstitutePreview*(
       buffer.replaceLineNoUndo(lineIdx, newLine)
 
   buffer.highlightNeedsUpdate = true
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
@@ -1696,7 +1673,6 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     # Update the reference in state
     e.state.windowDisplay.debugBuffer = newDebugBuffer
   e.state.timing.lastDebugUpdate = now
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   ## Send a notification. Routes to popup or status line based on config.
@@ -1864,9 +1840,6 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
       # unit; the cursor must not roam its hidden content).
       e.activeWindow.cursor.line = collapsedFold.get.startLine
       e.activeWindow.cursor.column = 0
-
-  if e.state.windowDisplay.needsFullRedraw:
-    e.state.windowDisplay.needsFullRedraw = false
 
   # Update highlight state (skip for debug buffer)
   let isDebugBuffer =

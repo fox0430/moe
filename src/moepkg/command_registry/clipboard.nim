@@ -64,7 +64,6 @@ proc handleClipboardPaste*(ctx: CommandContext): Result[(), string] =
   # Note: For simplicity, we'll keep cursor at original position for now
   # A more sophisticated implementation would move cursor to end of paste
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleClipboardCut*(ctx: CommandContext): Result[(), string] =

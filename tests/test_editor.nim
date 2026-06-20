@@ -527,7 +527,6 @@ suite "Editor - Display toggle functions":
     let initial = e.state.display.lineWrap
     e.toggleLineWrap()
     check e.state.display.lineWrap == not initial
-    check e.state.windowDisplay.needsFullRedraw == true
 
   test "Set line wrap":
     let e = createTestEditor()

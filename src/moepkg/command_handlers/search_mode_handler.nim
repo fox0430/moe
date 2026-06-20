@@ -69,7 +69,6 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
   ## - Updates cursor position if match found
   ## - Updates viewport to follow cursor
   ## - Sets status message (success or failure)
-  ## - Sets needsFullRedraw flag
   let shouldIgnoreCase = shouldIgnoreCase(
     e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
   )
@@ -91,7 +90,6 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
     e.cursor = pos
     e.updateViewportForCursor(pos)
     e.state.statusMessage = "Found: " & e.state.search.text
-    e.state.windowDisplay.needsFullRedraw = true
     return true
   else:
     e.state.statusMessage = "Pattern not found: " & e.state.search.text
@@ -139,12 +137,10 @@ proc finalizeSearch(e: Editor) =
       cfg.setSearchQuery(e.state.search.text)
       let forward = e.state.search.direction == Forward
       discard cfg.searchItems(e.state.search.text, cfg.searchStartIndex, forward)
-      e.state.windowDisplay.needsFullRedraw = true
     else:
       # If incsearch is enabled, cursor is already at the found position
       if e.state.search.incsearch:
         e.updateViewportForCursor(e.cursor)
-        e.state.windowDisplay.needsFullRedraw = true
       else:
         # If incsearch is disabled, perform search now
         discard e.executeSearchFromCurrentPosition()
@@ -181,7 +177,6 @@ proc cancelSearch(e: Editor) =
     # Config mode: restore the selection that was active before the search.
     if e.state.search.incsearch:
       cfg.selectedIndex = cfg.searchStartIndex
-      e.state.windowDisplay.needsFullRedraw = true
   elif e.state.search.incsearch:
     e.cursor = e.state.search.startPos
     e.syncHelpViewerIndex(e.state.search.startPos.line)
@@ -221,7 +216,6 @@ proc performIncrementalSearch(e: Editor) =
     else:
       let forward = e.state.search.direction == Forward
       discard cfg.searchItems(e.state.search.text, cfg.searchStartIndex, forward)
-    e.state.windowDisplay.needsFullRedraw = true
     return
 
   if e.state.search.text.len == 0:
@@ -258,7 +252,6 @@ proc performIncrementalSearch(e: Editor) =
     e.updateViewportForCursor(pos)
 
     e.state.statusMessage = "Found: " & e.state.search.text
-    e.state.windowDisplay.needsFullRedraw = true
   else:
     # No match found, restore to start position
     e.cursor = e.state.search.startPos
@@ -281,7 +274,6 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
     e.state.search.text[0 ..< bytePos] & ch & e.state.search.text[bytePos ..^ 1]
   e.state.search.cursor += ch.runeLen
   e.performIncrementalSearch()
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc insertPastedTextInSearch*(e: Editor, text: string) =
   ## Insert pasted text at the cursor position in the search text.
@@ -303,7 +295,6 @@ proc insertPastedTextInSearch*(e: Editor, text: string) =
     e.state.search.text[0 ..< bytePos] & insertText & e.state.search.text[bytePos ..^ 1]
   e.state.search.cursor += insertText.runeLen
   e.performIncrementalSearch()
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc handleSearchBackspace(e: Editor) =
   ## Handle Backspace key in Search mode
@@ -319,7 +310,6 @@ proc handleSearchBackspace(e: Editor) =
     e.state.search.text = e.state.search.text.deleteCharAt(e.state.search.cursor - 1)
     e.state.search.cursor -= 1
     e.performIncrementalSearch()
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc handleSearchModeEvent*(e: Editor, event: Event): bool =
   ## Handle Search mode events - main event dispatcher
@@ -395,7 +385,6 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
           let cfg = e.activeConfigState()
           if cfg != nil:
             cfg.selectedIndex = cfg.searchStartIndex
-            e.state.windowDisplay.needsFullRedraw = true
           else:
             e.cursor = e.state.search.startPos
             e.syncHelpViewerIndex(e.state.search.startPos.line)
@@ -405,26 +394,22 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
   if keyCombo.isSpecial and keyCombo.special == skLeft:
     if e.state.search.cursor > 0:
       e.state.search.cursor -= 1
-      e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Right arrow: Move cursor right within search text
   if keyCombo.isSpecial and keyCombo.special == skRight:
     if e.state.search.cursor < e.state.search.text.runeLen:
       e.state.search.cursor += 1
-      e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Home: Move cursor to start of search text
   if keyCombo.isSpecial and keyCombo.special == skHome:
     e.state.search.cursor = 0
-    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # End: Move cursor to end of search text
   if keyCombo.isSpecial and keyCombo.special == skEnd:
     e.state.search.cursor = e.state.search.text.runeLen
-    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Delete: Remove character at cursor position
@@ -434,7 +419,6 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
       e.state.search.historyIndex = -1
       e.state.search.text = e.state.search.text.deleteCharAt(e.state.search.cursor)
       e.performIncrementalSearch()
-      e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Backspace: Remove last character and re-search

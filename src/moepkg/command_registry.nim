@@ -237,8 +237,8 @@ proc executeCommand*(
       cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
       cmd.commandId in EditCommandIds
     )
-  if isEditCommand and ctx.buffer.foldState.openFold(ctx.cursor.line):
-    ctx.state.windowDisplay.needsFullRedraw = true
+  if isEditCommand:
+    discard ctx.buffer.foldState.openFold(ctx.cursor.line)
 
   # Visual-mode edits operate on a line range that may span several folds; open
   # every collapsed fold the selection touches before the edit.
@@ -255,8 +255,7 @@ proc executeCommand*(
       selHi = max(
         ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line
       )
-    if ctx.buffer.foldState.openFoldsInRange(selLo, selHi):
-      ctx.state.windowDisplay.needsFullRedraw = true
+    discard ctx.buffer.foldState.openFoldsInRange(selLo, selHi)
 
   case cmd.kind
   of ctMotion:
@@ -506,7 +505,6 @@ proc executeCommand*(
       # Move cursor to the last replaced character (Vim behavior)
       ctx.cursor.column += charsToReplace - 1
 
-      ctx.state.windowDisplay.needsFullRedraw = true
       return ok(())
     of "visual-replace":
       # Execute visual replace action (r command in visual mode)

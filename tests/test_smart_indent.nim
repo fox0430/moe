@@ -53,7 +53,7 @@ proc createSmartIndentState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    windowDisplay: WindowDisplayState(needsFullRedraw: false, viewportReservedLines: 2),
+    windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
       register: '\0',

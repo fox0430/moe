@@ -245,7 +245,7 @@ suite "dispatchSubStateMode - Config search highlight clear":
   test "Config double-Escape disables the global hlsearch gate":
     # Regression: a highlight clear in Config mode must propagate to every
     # window/mode via the shared EditorState.search gate, not just the active
-    # Config window. Previously the dispatcher only set needsFullRedraw, so
+    # Config window. Previously the dispatcher only forced a redraw, so
     # buffer/Help windows kept their highlight.
     let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Config)
     editor.activeWindow.modeState =
