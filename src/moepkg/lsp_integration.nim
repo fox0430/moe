@@ -914,6 +914,36 @@ proc hasDocumentHighlightSupport*(lsp: LspIntegration, buffer: TextBuffer): bool
   let langId = requireLangId(lsp, buffer)
   langId.isSome and lsp.service.hasDocumentHighlightSupport(langId.get)
 
+proc hasHoverSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if hover is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasHoverSupport(langId.get)
+
+proc hasDefinitionSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if go to definition is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasDefinitionSupport(langId.get)
+
+proc hasDeclarationSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if go to declaration is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasDeclarationSupport(langId.get)
+
+proc hasReferencesSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if find references is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasReferencesSupport(langId.get)
+
+proc hasTypeDefinitionSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if go to type definition is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasTypeDefinitionSupport(langId.get)
+
+proc hasImplementationSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if go to implementation is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasImplementationSupport(langId.get)
+
 proc startDocumentHighlightRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =

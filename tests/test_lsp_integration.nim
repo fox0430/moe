@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import
-  std/[unittest, json, options, tables, times, strutils, importutils, deques, random]
+  std/
+    [unittest, json, options, os, tables, times, strutils, importutils, deques, random]
 
 import pkg/results
 
@@ -904,6 +905,76 @@ suite "LspIntegration - Completion/SignatureHelp capability gating":
     lsp.service.capabilities["nim"] =
       ServerCapabilities(signatureHelpProvider: some(SignatureHelpOptions()))
     check lsp.hasSignatureHelpSupport(buffer)
+
+suite "LspIntegration - Goto/References/Hover capability gating":
+  privateAccess(LspService)
+
+  let path = getTempDir() / "test.nim"
+
+  test "hasHoverSupport returns false when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasHoverSupport(buffer)
+
+  test "hasHoverSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    # Enabled (the default) but the server has not advertised hover yet.
+    check not lsp.hasHoverSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(hoverProvider: some(newJBool(true)))
+    check lsp.hasHoverSupport(buffer)
+
+  test "hasDefinitionSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasDefinitionSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(definitionProvider: some(newJBool(true)))
+    check lsp.hasDefinitionSupport(buffer)
+
+  test "hasDeclarationSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasDeclarationSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(declarationProvider: some(newJBool(true)))
+    check lsp.hasDeclarationSupport(buffer)
+
+  test "hasReferencesSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasReferencesSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(referencesProvider: some(newJBool(true)))
+    check lsp.hasReferencesSupport(buffer)
+
+  test "hasTypeDefinitionSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasTypeDefinitionSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(typeDefinitionProvider: some(newJBool(true)))
+    check lsp.hasTypeDefinitionSupport(buffer)
+
+  test "hasImplementationSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasImplementationSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(implementationProvider: some(newJBool(true)))
+    check lsp.hasImplementationSupport(buffer)
+
+  test "a literal `false` provider counts as unsupported":
+    # A server may advertise `"definitionProvider": false` to disable the
+    # feature; the gate must report it unsupported so we never fire a request
+    # that only fails after the response timeout.
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(definitionProvider: some(newJBool(false)))
+    check not lsp.hasDefinitionSupport(buffer)
 
 suite "LspIntegration - Shutdown":
   privateAccess(LspIntegration)
