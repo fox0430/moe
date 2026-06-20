@@ -1674,17 +1674,11 @@ proc findWordBoundaries(
             )
           )
 
-        # Fallback: select whitespace on current line only
-        var startCol = cursorCol
-        while startCol > 0 and isWhitespace(runes[startCol - 1]):
-          startCol.dec
-        return ok(
-          TextObjectRange(
-            start: BufferPosition(line: cursor.line, column: startCol),
-            endPos: BufferPosition(line: cursor.line, column: runes.len - 1),
-            isLinewise: false,
-          )
-        )
+        # No word/WORD anywhere ahead: Vim's "aw"/"aW" needs a word to anchor the
+        # surrounding whitespace, so it fails (no-op) here rather than selecting
+        # the surrounding whitespace on its own. ("iw"/"iW" on whitespace still
+        # selects the run via the inner branch above.)
+        return err("No word for text object after whitespace")
 
       # Found word on same line after whitespace
       var endCol = wordStart
@@ -1892,17 +1886,11 @@ proc findWideWordBoundaries(
             )
           )
 
-        # Fallback: select whitespace on current line only
-        var startCol = cursorCol
-        while startCol > 0 and isWhitespace(runes[startCol - 1]):
-          startCol.dec
-        return ok(
-          TextObjectRange(
-            start: BufferPosition(line: cursor.line, column: startCol),
-            endPos: BufferPosition(line: cursor.line, column: runes.len - 1),
-            isLinewise: false,
-          )
-        )
+        # No word/WORD anywhere ahead: Vim's "aw"/"aW" needs a word to anchor the
+        # surrounding whitespace, so it fails (no-op) here rather than selecting
+        # the surrounding whitespace on its own. ("iw"/"iW" on whitespace still
+        # selects the run via the inner branch above.)
+        return err("No word for text object after whitespace")
 
       # Found WORD on same line after whitespace
       var endCol = wordStart
