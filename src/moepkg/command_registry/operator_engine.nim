@@ -88,6 +88,9 @@ proc executeOperatorOnRange*(
     # spans no characters, so every operator is a no-op and the registers stay
     # untouched. Only `c` still acts -- it drops into Insert between the
     # delimiters -- so OpChange falls through to its branch below.
+    # The operator command still completes, so consume any pending register
+    # prefix (e.g. `"ayit`) rather than leaking it into the next command.
+    ctx.state.pendingRegister = none(char)
     return ok(())
 
   case operatorType
@@ -163,6 +166,11 @@ proc executeOperatorOnRange*(
       # Store in register system (respects pendingRegister). An empty object
       # (e.g. cit on <a></a>) removes nothing, so leave the registers untouched.
       storeDeletedText(ctx, text, range.isLinewise)
+    else:
+      # Empty change still completes the operator command (it drops into Insert
+      # between the delimiters), so consume any pending register prefix rather
+      # than leaking it into the next command.
+      ctx.state.pendingRegister = none(char)
 
     # Begin transaction for all change operations (delete + insert mode input)
     let transactionResult = ctx.buffer.beginTransaction("Change operation")
