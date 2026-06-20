@@ -25,7 +25,7 @@
 import std/[unicode, tables]
 import pkg/celina
 
-export buffer.runeWidth
+export buffer.runeWidth, buffer.displayWidth
 
 proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
   ## Write a single rune at (x, y) and the wide-char continuation cell when
@@ -94,12 +94,6 @@ proc deleteCharAt*(text: string, charPos: int): string =
     return text
 
   text[0 ..< bytePos] & text[bytePos + size ..^ 1]
-
-proc displayWidth*(text: string): int =
-  ## Calculate the display width of a string
-  ## Accounts for East Asian Wide/Fullwidth characters (width 2)
-  for rune in text.runes:
-    result += runeWidth(rune)
 
 proc displayWidthSubstr*(text: string, startChar: int, maxWidth: int): (int, int) =
   ## Calculate how many characters fit within maxWidth display columns

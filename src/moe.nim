@@ -152,12 +152,12 @@ proc runEditor(
   ## Async entry point for the editor main loop
 
   {.cast(gcsafe).}:
-    app.onEventAsync proc(e: Event, app: AsyncApp): Future[bool] {.async.} =
+    app.onEventAsync proc(e: Event, app: AsyncApp): Future[EventResult] {.async.} =
       editorCallback(editor, cmdLineConfig, log):
         if e.kind == EventKind.Resize:
           # Special handling for resize events to force screen clear
           editor.handleResize
-          return true
+          return erContinue
 
         let shouldContinue = editor.handleEvent(e)
 
@@ -176,19 +176,19 @@ proc runEditor(
         elif routerTimeout == 0 and app.getApplicationTimeout() > 0:
           app.setApplicationTimeout(0)
 
-        return shouldContinue
+        return if shouldContinue: erContinue else: erQuit
 
-    app.onTimeoutAsync proc(app: AsyncApp): Future[bool] {.async.} =
+    app.onTimeoutAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
       editorCallback(editor, cmdLineConfig, log):
         let shouldContinue = editor.handleKeyMappingTimeout()
         app.setApplicationTimeout(0) # One-shot: disable until next prefix match
-        return shouldContinue
+        return if shouldContinue: trContinue else: trQuit
 
-    app.onTickAsync proc(app: AsyncApp): Future[bool] {.async.} =
+    app.onTickAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
       editorCallback(editor, cmdLineConfig, log):
         editor.lsp.poll(0)
         editor.lsp.cleanupStaleProgress()
-      return true
+      return trContinue
 
     app.onRenderAsync proc(buffer: var Buffer) =
       editorCallback(editor, cmdLineConfig, log):
