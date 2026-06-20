@@ -149,7 +149,6 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: false))
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -255,7 +254,6 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: true))
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -302,7 +300,6 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
         if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
           ctx.cursor.column = updatedLineLen - 1
 
-        ctx.state.windowDisplay.needsFullRedraw = true
         return Result[(), string].ok ()
     except CatchableError:
       # If auto-delete fails, fall through to normal delete
@@ -361,7 +358,6 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
   if newLineLen > 0 and ctx.cursor.column >= newLineLen:
     ctx.cursor.column = newLineLen - 1
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -406,7 +402,6 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
         storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol - 1), false)
         ctx.cursor.column = cursorCol - 1
 
-        ctx.state.windowDisplay.needsFullRedraw = true
         return Result[(), string].ok ()
     except CatchableError:
       # If auto-delete fails, fall through to normal delete
@@ -466,7 +461,6 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
     )
   )
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -524,7 +518,6 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skChar, deleteCount: charsToDelete))
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   ctx.state.statusMessage = "-- INSERT --"
   return Result[(), string].ok ()
 
@@ -606,7 +599,6 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
   ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skLine, deleteCount: lineCount))
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   ctx.state.statusMessage = "-- INSERT --"
   return Result[(), string].ok ()
 
@@ -681,7 +673,6 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecToggleCase, toggleCaseCount: charsToToggle))
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -754,7 +745,6 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: actualCount))
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   # Delete screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
       ctx.notificationConfig.deleteScreenNotify:
@@ -832,7 +822,6 @@ proc handleJoinLines*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecJoinLines, joinLinesCount: actualCount))
 
-  ctx.state.windowDisplay.needsFullRedraw = true
   let totalLines = actualCount + 1
   ctx.state.statusMessage = "Joined " & $totalLines & " line(s)"
   return Result[(), string].ok ()
@@ -1490,7 +1479,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
       # Move cursor to first non-blank character
       ctx.cursor.column = prevIndent
-      ctx.state.windowDisplay.needsFullRedraw = true
 
       return Result[(), string].ok (),
     0,
@@ -1753,7 +1741,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
             if ctx.cursor.column > 0:
               ctx.cursor.column -= 1 # Stay on last inserted character
 
-          ctx.state.windowDisplay.needsFullRedraw = true
           return ok(())
         of skLine:
           # Repeat S or cc command - delete lines then insert text
@@ -1811,7 +1798,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
             # Position cursor on last character (or at column 0 if empty)
             ctx.cursor.column = max(0, lastCmd.substituteText.charLen - 1)
 
-          ctx.state.windowDisplay.needsFullRedraw = true
           return ok(())
       of lecInsertText:
         # Repeat insert text
@@ -1838,7 +1824,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
               ctx.cursor.column -= 1
           # If empty string, cursor stays at current position
 
-        ctx.state.windowDisplay.needsFullRedraw = true
         return ok(())
       of lecReplaceChar:
         # Repeat replace character (r command)
@@ -1878,7 +1863,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
         # Move cursor to the last replaced character
         ctx.cursor.column += charsToReplace - 1
-        ctx.state.windowDisplay.needsFullRedraw = true
         return ok(())
       of lecJoinLines:
         # Repeat join lines (J command)
@@ -2134,7 +2118,6 @@ proc registerEditCommands*(registry: CommandRegistry) =
           ctx.state.visualSelection.current = toRange.endPos
           ctx.state.visualSelection.active = true
           ctx.cursor = toRange.endPos
-          ctx.state.windowDisplay.needsFullRedraw = true
           return ok(())
         else:
           return err("Text objects require an operator or Visual mode"),

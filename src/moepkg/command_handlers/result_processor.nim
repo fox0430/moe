@@ -75,7 +75,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
             0
           else:
             min(targetCol, max(0, lineCharLen - 1))
-      e.state.windowDisplay.needsFullRedraw = true
       e.updateViewportForCursor(e.cursor)
     else:
       # Buffer was deleted since the jump was recorded
@@ -178,7 +177,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         e.state.statusMessage = "Error: " & openResult.error
       else:
         e.state.statusMessage = "Opened: " & r.fileTreeFilePath
-    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrFileTreeQuit:
     # Close file tree window
@@ -190,7 +188,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       if enewResult.isErr:
         logError("handler", "Enew failed after file tree quit: " & enewResult.error)
         e.state.statusMessage = "Error: " & enewResult.error
-    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrFilerDeleteFile:
     # Delete file/directory from filer
@@ -616,7 +613,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
           # buffer's git-diff gutter and conflict markers (it is shown in
           # another split) the same way the reload paths do.
           e.refreshBufferGitAndConflicts(srcBuf)
-          e.state.windowDisplay.needsFullRedraw = true
           # Restore screen notification (controlled by config)
           if e.config.notification.screenNotifications and
               e.config.notification.restoreScreenNotify:
@@ -727,7 +723,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       word, e.activeWindow.cursor.line, e.activeWindow.cursor.column
     )
     e.state.statusMessage = ""
-    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrLspSelectionRange:
     discard e.requestLspSelectionRange()

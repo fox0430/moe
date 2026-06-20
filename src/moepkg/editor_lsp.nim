@@ -40,7 +40,6 @@ proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic
   for buf in e.buffers:
     if buf.filePath.isSome and buf.filePath.get.absolutePath() == path:
       applyDiagnosticsToBuffer(buf, diagnostics)
-      e.state.windowDisplay.needsFullRedraw = true
       return
   # No matching open buffer: drop. The server only publishes for documents
   # we opened (didOpen), so this is the closed-in-the-meantime case.
@@ -52,7 +51,6 @@ proc clearAllDiagnostics*(e: Editor) =
   ## already applied has to be removed explicitly.
   for buf in e.buffers:
     applyDiagnosticsToBuffer(buf, @[])
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
   ## didChange a buffer we just rewrote so the server's copy doesn't go stale.
@@ -144,7 +142,6 @@ proc applyWorkspaceEditFromServer*(
             e.syncBufferAfterEdit(buf, "applyEdit")
       # A partial apply may have shrunk already-committed buffers.
       e.clampAllWindowCursors()
-      e.state.windowDisplay.needsFullRedraw = true
       e.state.statusMessage = "Failed to apply server edit: " & applyResult.error
       return (applied: false, failureReason: some(applyResult.error))
 
@@ -153,7 +150,6 @@ proc applyWorkspaceEditFromServer*(
       e.syncBufferAfterEdit(e.buffers[bufferIdx], "applyEdit")
 
     e.clampAllWindowCursors()
-    e.state.windowDisplay.needsFullRedraw = true
     let modifiedCount = applyResult.get.modifiedCount
     e.state.statusMessage =
       "Applied server edit (" & $modifiedCount & " file" &
@@ -229,7 +225,6 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
 
       e.state.statusMessage =
         "Formatted (" & $edits.len & " edit" & (if edits.len > 1: "s" else: "") & ")"
-      e.state.windowDisplay.needsFullRedraw = true
       return true
     except CancelledError as err:
       raise err
@@ -279,7 +274,6 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
         "Folded " & $count & " region(s)"
       else:
         "No foldable regions"
-    e.state.windowDisplay.needsFullRedraw = true
   except CancelledError:
     discard
 
@@ -353,7 +347,6 @@ proc requestLspRename*(
       e.state.statusMessage =
         "Renamed '" & e.state.renameState.originalWord & "' to '" & newName & "' (" &
         $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
-      e.state.windowDisplay.needsFullRedraw = true
     except CancelledError:
       discard
     except Exception as err:

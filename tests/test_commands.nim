@@ -60,9 +60,7 @@ proc createTestState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    windowDisplay: WindowDisplayState(
-      needsFullRedraw: false, viewportReservedLines: steadyBottomAreaHeight()
-    ),
+    windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
   )
 
 proc createTestViewport(): ViewPort =

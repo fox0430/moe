@@ -317,14 +317,6 @@ suite "syncActiveWindow":
     check e.executer.motionController.viewportManager.viewport.topLine == 15
     check e.executer.motionController.viewportManager.viewport.leftColumn == 8
 
-  test "sets needsFullRedraw":
-    let e = createTestEditor()
-    e.state.windowDisplay.needsFullRedraw = false
-
-    e.syncActiveWindow()
-
-    check e.state.windowDisplay.needsFullRedraw
-
   test "binds wrapCountCache to active window's cache":
     let e = createTestEditor()
     e.syncActiveWindow()

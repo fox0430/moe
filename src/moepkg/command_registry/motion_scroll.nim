@@ -119,7 +119,7 @@ proc handleScrollCursorBottom*(
 proc handleFoldOpen*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Open fold at cursor position (zo command)
   if ctx.buffer.foldState.openFold(ctx.cursor.line):
-    ctx.state.windowDisplay.needsFullRedraw = true
+    discard
   elif ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
     # Distinguish "no fold here" from "fold already open" (the latter is a
     # silent no-op, matching vim).
@@ -129,7 +129,6 @@ proc handleFoldOpen*(ctx: CommandContext, args: seq[string]): Result[(), string]
 proc handleFoldClose*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close fold at cursor position (zc command)
   if ctx.buffer.foldState.closeFold(ctx.cursor.line):
-    ctx.state.windowDisplay.needsFullRedraw = true
     # Ensure cursor is not on a hidden line after closing
     if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
       ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
@@ -145,7 +144,6 @@ proc handleFoldClose*(ctx: CommandContext, args: seq[string]): Result[(), string
 proc handleFoldToggle*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Toggle fold at cursor position (za command)
   if ctx.buffer.foldState.toggleFold(ctx.cursor.line):
-    ctx.state.windowDisplay.needsFullRedraw = true
     # Ensure cursor is not on a hidden line after closing
     if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
       ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
@@ -159,13 +157,11 @@ proc handleFoldToggle*(ctx: CommandContext, args: seq[string]): Result[(), strin
 proc handleFoldOpenAll*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Open all folds (zR command)
   ctx.buffer.foldState.openAllFolds()
-  ctx.state.windowDisplay.needsFullRedraw = true
   return ok(())
 
 proc handleFoldCloseAll*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close all folds (zM command)
   ctx.buffer.foldState.closeAllFolds()
-  ctx.state.windowDisplay.needsFullRedraw = true
   # Ensure cursor is not on a hidden line
   if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
     ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
@@ -189,7 +185,6 @@ proc handleFoldCreate*(ctx: CommandContext, args: seq[string]): Result[(), strin
 
   if ctx.buffer.foldState.addFold(startLine, endLine):
     ctx.state.statusMessage = "Fold created"
-    ctx.state.windowDisplay.needsFullRedraw = true
     # Exit visual mode
     ctx.state.visualSelection.active = false
     ctx.state.mode = EditorMode.Normal
@@ -202,7 +197,6 @@ proc handleFoldDelete*(ctx: CommandContext, args: seq[string]): Result[(), strin
   ## Delete fold at cursor position (zd command)
   if ctx.buffer.foldState.deleteFold(ctx.cursor.line):
     ctx.state.statusMessage = "Fold deleted"
-    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   else:
     ctx.state.statusMessage = "No fold found"
@@ -214,7 +208,6 @@ proc handleFoldDeleteAll*(ctx: CommandContext, args: seq[string]): Result[(), st
   if foldCount > 0:
     ctx.buffer.foldState.deleteAllFolds()
     ctx.state.statusMessage = $foldCount & " fold(s) deleted"
-    ctx.state.windowDisplay.needsFullRedraw = true
   else:
     ctx.state.statusMessage = "No folds to delete"
   return ok(())

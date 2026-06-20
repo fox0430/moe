@@ -91,7 +91,6 @@ type
     debugBuffer*: TextBuffer # Debug buffer for auto-refresh (nil if none)
     viewportReservedLines*: int
       # Reserved lines for viewport calculations (for split windows)
-    needsFullRedraw*: bool # Whether a full screen redraw is needed
     scrollAnimation*: ScrollAnimation # Current scroll animation state
     savedViewportTopLine*: int # Viewport position saved when operator starts
 

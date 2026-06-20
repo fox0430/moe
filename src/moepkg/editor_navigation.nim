@@ -195,7 +195,6 @@ proc jumpToLspLocation*(
     e.state.statusMessage = resultKind & " in " & path
 
   # Update viewport to follow cursor
-  e.state.windowDisplay.needsFullRedraw = true
   return true
 
 proc handleLspLocations*(
@@ -284,7 +283,6 @@ proc openFileAndJumpTo*(
     e.moveCursorToLspPosition(e.activeBuffer(), line, column)
 
   # Update viewport to follow cursor
-  e.state.windowDisplay.needsFullRedraw = true
   return true
 
 proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =

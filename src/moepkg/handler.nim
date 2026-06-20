@@ -90,7 +90,6 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
     e.state.statusMessage = "Rename cancelled"
-    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Enter: Execute rename
@@ -113,7 +112,6 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
       e.state.exitOverlay()
       e.setMode(e.state.mode) # Sync window mode
       asyncSpawn e.requestLspRename(newName)
-    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Backspace: Remove last character (Unicode-aware)
@@ -169,14 +167,12 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     e.setMode(EditorMode.Normal)
     discard e.closeWindow
     e.state.statusMessage = ""
-    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrRecentFileOpenFile:
     let filePath = r.recentFilePath
     if not fileExists(filePath):
       logError("handler", "File not found: " & filePath)
       e.state.statusMessage = "File not found: " & filePath
-      e.state.windowDisplay.needsFullRedraw = true
       return true
     # Close the split window first
     activeWin.clearModeState(EditorMode.RecentFile)
@@ -196,7 +192,6 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       e.state.statusMessage = "Error: " & editResult.error
     else:
       e.state.statusMessage = "Opened: " & filePath
-    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrHandled, hrUnhandled:
     discard # Fall through to overlay/mode transition handling
@@ -252,7 +247,6 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     e.state.previousMode = e.state.mode
     e.setMode(modeTransition.get)
 
-  e.state.windowDisplay.needsFullRedraw = true
   return true
 
 proc handleDebugModeEvent(e: Editor, event: Event): bool =
@@ -281,10 +275,8 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
   case r.kind
   of dvrEnterCommand:
     e.state.enterCommandOverlay()
-    e.state.windowDisplay.needsFullRedraw = true
     return true
   of dvrHandled, dvrUnhandled, dvrError:
-    e.state.windowDisplay.needsFullRedraw = true
     return true
 
 proc handlePasteEvent*(e: Editor, event: Event): bool =
@@ -344,7 +336,6 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
 
     if ownTransaction:
       discard activeBuffer.commitTransaction()
-    e.state.windowDisplay.needsFullRedraw = true
   else:
     # For other modes, just show a message
     e.state.statusMessage = "Paste not supported in this mode"
@@ -515,7 +506,6 @@ proc middleClickPaste(e: Editor) =
 
   if ownTransaction:
     discard activeBuffer.commitTransaction()
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc handleMouseEvent(e: Editor, event: Event): bool =
   ## Handle mouse events for cursor movement
@@ -558,7 +548,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             filerState.topLine = filerState.selectedIndex
           elif filerState.selectedIndex >= filerState.topLine + viewportHeight:
             filerState.topLine = filerState.selectedIndex - viewportHeight + 1
-        e.state.windowDisplay.needsFullRedraw = true
       return true
 
     # Handle text editing modes
@@ -602,8 +591,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           elif newLine >= window.viewport.topLine + viewportHeight:
             window.viewport.topLine = newLine - viewportHeight + 1
 
-        e.state.windowDisplay.needsFullRedraw = true
-
       return true
 
     return true
@@ -637,7 +624,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
                   w.active = (j == i)
                 e.syncActiveWindow()
               e.switchToWindowBuffer(tabIdx)
-              e.state.windowDisplay.needsFullRedraw = true
               return true
 
       for i, window in e.windowManager.windows:
@@ -671,7 +657,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           e.cursor = pos
           if mouse.button == mouse_logic.MouseButton.Middle:
             e.middleClickPaste()
-          e.state.windowDisplay.needsFullRedraw = true
           return true
 
       return false
@@ -690,7 +675,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
         hitTestTabLine(buffersToShow, e.state.mode, 0, e.viewport.width, mouse.x)
       if tabIdx >= 0:
         e.switchToWindowBuffer(tabIdx)
-        e.state.windowDisplay.needsFullRedraw = true
         return true
 
     let
@@ -717,7 +701,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     e.cursor = pos
     if mouse.button == mouse_logic.MouseButton.Middle:
       e.middleClickPaste()
-    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Handle mouse click in Filer mode
@@ -733,7 +716,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       let clickedIndex = filerState.topLine + adjustedMouseY
       if clickedIndex >= 0 and clickedIndex < filerState.entries.len:
         filerState.selectedIndex = clickedIndex
-        e.state.windowDisplay.needsFullRedraw = true
         return true
 
   return false
@@ -866,7 +848,6 @@ proc dismissTempMessages(e: Editor, event: Event): bool =
     return false
   let keyCombo = keyComboOpt.get
   e.state.ui.tempMessages = @[]
-  e.state.windowDisplay.needsFullRedraw = true
 
   # If ":" was pressed, enter command overlay
   if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == ":":
@@ -1044,7 +1025,6 @@ proc handleEscapeCancellation(e: Editor, event: Event): bool =
     if e.state.lastKeyWasEscape:
       # Second Escape press - clear highlight
       e.state.search.hlsearchTempDisabled = true
-      e.state.windowDisplay.needsFullRedraw = true
       e.state.lastKeyWasEscape = false
     else:
       # First Escape press - just mark it
@@ -1225,7 +1205,6 @@ proc runSyntaxCheckAsync(
             "Syntax check: " & $errorCount & " error(s), " & $warnCount & " warning(s)"
         else:
           editor.state.statusMessage = "Syntax check: OK"
-      editor.state.windowDisplay.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "Syntax check error: " & ex.msg
 
@@ -1256,7 +1235,6 @@ proc runBuildAsync(
           if editor.config.notification.screenNotifications and
               editor.config.notification.buildOnSaveScreenNotify:
             editor.notify("Build completed: " & info.path)
-      editor.state.windowDisplay.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "Build error: " & ex.msg
 
@@ -1297,7 +1275,6 @@ proc runQuickRunAsync(
             if editor.config.notification.screenNotifications and
                 editor.config.notification.quickRunScreenNotify:
               editor.notify("QuickRun completed: " & qrProcess.filePath)
-      editor.state.windowDisplay.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "QuickRun error: " & ex.msg
 
@@ -1328,7 +1305,6 @@ proc handlePendingAsyncOperationsImpl(
       stdout.flushFile()
       discard stdin.readLine()
       await e.app.resumeAsync()
-      e.state.windowDisplay.needsFullRedraw = true
 
     # Handle man page display
     if e.state.pending.manPage.len > 0:
@@ -1344,7 +1320,6 @@ proc handlePendingAsyncOperationsImpl(
       stdout.flushFile()
       discard stdin.readLine()
       await e.app.resumeAsync()
-      e.state.windowDisplay.needsFullRedraw = true
 
     # Handle background suspend
     if e.state.pending.background:
@@ -1355,7 +1330,6 @@ proc handlePendingAsyncOperationsImpl(
       stdout.flushFile()
       discard stdin.readLine()
       await e.app.resumeAsync()
-      e.state.windowDisplay.needsFullRedraw = true
 
     # Handle pending build - spawn as background task
     if e.state.pending.buildOnSave.path.len > 0:
@@ -1452,5 +1426,4 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
           if r.kind == hrError:
             break
 
-  e.state.windowDisplay.needsFullRedraw = true
   return shouldContinue

@@ -227,7 +227,6 @@ proc searchMatchAndSelect(
   state.visualSelection.start = pos
   state.visualSelection.current = matchEnd
   state.cursor = matchEnd
-  state.windowDisplay.needsFullRedraw = true
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
 
 proc searchMatchAndOperate(
@@ -303,15 +302,12 @@ proc searchMatchAndOperate(
       else:
         state.cursor.column = 0
 
-    state.windowDisplay.needsFullRedraw = true
-
     if op.operatorType == OpChange:
       return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   of OpYank:
     # Yank only - no deletion, move cursor to match start
     state.cursor = pos
-    state.windowDisplay.needsFullRedraw = true
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   else:
     # Unsupported operator for search match
@@ -434,8 +430,7 @@ proc handleInsertModeEntry*(
   ## Handle different types of insert mode entry (i, a, o, O, etc.)
   # Expand a collapsed fold at the cursor so inserted text is never hidden
   # behind a fold marker.
-  if buffer.foldState.openFold(state.cursor.line):
-    state.windowDisplay.needsFullRedraw = true
+  discard buffer.foldState.openFold(state.cursor.line)
   case insertType
   of "insert":
     # Simple insert at cursor

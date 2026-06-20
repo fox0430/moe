@@ -56,7 +56,6 @@ proc syncActiveWindow*(e: Editor) =
   # window-switch / split / close paths automatically refresh the Jump List
   # anchor without each call site having to remember to update it.
   e.state.windowDisplay.currentBufferId = e.activeWindow.buffer.id
-  e.state.windowDisplay.needsFullRedraw = true
 
   # Apply per-buffer EditorConfig overrides to display settings
   applyBufferEditorConfig(e.state.display, e.activeWindow.buffer, e.config)

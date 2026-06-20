@@ -154,7 +154,6 @@ proc executeOperatorOnRange*(
       # Restore to saved position
       ctx.motionController.viewportManager.viewport.topLine = restoredTopLine
 
-    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpChange:
     # Change the range (delete and enter insert mode)
@@ -205,7 +204,6 @@ proc executeOperatorOnRange*(
 
     # Enter insert mode (transaction remains open for insert mode input)
     ctx.state.mode = EditorMode.Insert
-    ctx.state.windowDisplay.needsFullRedraw = true
 
     return ok(())
   of OpIndent:
@@ -246,7 +244,6 @@ proc executeOperatorOnRange*(
         else:
           break
 
-    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpOutdent:
     # Dedent lines in the range (same line adjustment as indent)
@@ -288,7 +285,6 @@ proc executeOperatorOnRange*(
         else:
           break
 
-    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpLowerCase:
     # Convert text in range to lowercase
@@ -316,7 +312,6 @@ proc executeOperatorOnRange*(
     discard ctx.buffer.commitTransaction()
 
     ctx.cursor = range.start
-    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpUpperCase:
     # Convert text in range to uppercase
@@ -344,7 +339,6 @@ proc executeOperatorOnRange*(
     discard ctx.buffer.commitTransaction()
 
     ctx.cursor = range.start
-    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpSwapCase:
     return err("Operator " & $operatorType & " not yet implemented")
@@ -363,9 +357,8 @@ proc applyOperatorOverMotion*(
   ## identically. The caller owns clearing pendingOperator and recording the
   ## command for `.`.
   let range = calculateOperatorRange(ctx.buffer, startPos, endPos, motion)
-  if operatorType != OpYank and
-      ctx.buffer.foldState.openFoldsInRange(range.start.line, range.endPos.line):
-    ctx.state.windowDisplay.needsFullRedraw = true
+  if operatorType != OpYank:
+    discard ctx.buffer.foldState.openFoldsInRange(range.start.line, range.endPos.line)
   executeOperatorOnRange(ctx, operatorType, range, operatorCount)
 
 ## Operator command helpers

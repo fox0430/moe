@@ -241,7 +241,6 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
     e.windowManager.equalizeWidthsInGroup(group, totalWidth, startX)
 
   e.syncActiveWindow()
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc findFirstSubstituteMatch*(
     lines: seq[string], pattern: string
@@ -294,12 +293,9 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
         # Pattern-only state: restore buffer (in case a replacement preview was
         # previously applied) but keep the preview active for cursor tracking.
         e.restoreFromPreview()
-        e.state.windowDisplay.needsFullRedraw = true
       e.jumpToFirstSubstituteMatch(pattern)
     elif e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
-    else:
-      e.state.windowDisplay.needsFullRedraw = true
 
 proc enterTerminalInActiveWindow*(e: Editor, command: string) =
   ## Open a new Terminal session as its own tab in the active window.
@@ -356,7 +352,6 @@ proc insertPastedTextInCommand*(e: Editor, text: string) =
 
   e.state.commandCompletionManager.cancelCompletion()
   e.updateSubstitutePreviewIfNeeded()
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc handleCommandModeEvent*(e: Editor, event: Event): bool =
   ## Handle Command mode events (special handling for text input)
@@ -770,11 +765,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         of bsoHighlightGitConflict:
           e.config.highlight.gitConflict = val
           e.state.statusMessage = "highlightgitconflict = " & $val
-          e.state.windowDisplay.needsFullRedraw = true
         of bsoHighlightGitConflictTwoColor:
           e.config.highlight.gitConflictTwoColor = val
           e.state.statusMessage = "highlightgitconflicttwocolor = " & $val
-          e.state.windowDisplay.needsFullRedraw = true
         of bsoMultipleStatusLine:
           e.setMultiStatusLine(val)
         of bsoIgnoreCase:
@@ -807,7 +800,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.scrollbar = val
           e.state.display.scrollbar = val
           e.state.statusMessage = "scrollbar = " & $val
-        e.state.windowDisplay.needsFullRedraw = true
       of hrSetIntOption:
         # Handle integer option setting
         let opt = r.intOption
@@ -829,7 +821,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.scrollbarWidth = val
           e.state.display.scrollbarWidth = val
           e.state.statusMessage = "scrollbarwidth = " & $val
-        e.state.windowDisplay.needsFullRedraw = true
       of hrSetFloatOption:
         # Handle float option setting
         let opt = r.floatOption
@@ -841,11 +832,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         of fsoScrollAirDrag:
           e.config.smoothScroll.airDrag = val
           e.state.statusMessage = "scrollairdrag = " & $val
-        e.state.windowDisplay.needsFullRedraw = true
       of hrClearSearchHighlight:
         # Handle clear search highlight (:noh)
         e.state.search.hlsearch = false
-        e.state.windowDisplay.needsFullRedraw = true
       of hrShellCommand:
         # Set pending shell command to be executed by handleEventAsync
         e.state.pending.shellCommand = r.shellCommand
@@ -952,7 +941,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         if count > 0:
           e.state.statusMessage =
             "Stripped trailing whitespace from " & $count & " lines"
-          e.state.windowDisplay.needsFullRedraw = true
         else:
           e.state.statusMessage = "No trailing whitespace found"
       of hrQuickRun:
@@ -1003,7 +991,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         # Handle substitute result - display count
         let count = r.hrSubstituteCount
         e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
-        e.state.windowDisplay.needsFullRedraw = true
         # Return to Normal mode - exit overlay first
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
@@ -1015,7 +1002,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         let count = r.hrDeletedLineCount
         e.state.statusMessage =
           $count & " line" & (if count == 1: "" else: "s") & " deleted"
-        e.state.windowDisplay.needsFullRedraw = true
         # Clamp cursor to valid buffer range
         let maxLine = e.activeBuffer().len - 1
         if e.activeWindow.cursor.line > maxLine:
@@ -1297,7 +1283,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
               marker & ($jumpNum).align(4) & " " & ($lineNum).align(5) & " " &
                 ($colNum).align(4) & "  " & fileName
             )
-          e.state.windowDisplay.needsFullRedraw = true
         # Return to Normal mode (not to previous Command mode) - exit overlay first
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
@@ -1337,7 +1322,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
             curMarker & "0".align(4) & " " & ($(w.cursor.line + 1)).align(5) & " " &
               ($(w.cursor.column + 1)).align(4) & "  "
           )
-          e.state.windowDisplay.needsFullRedraw = true
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
       of hrConflictNext:
@@ -1406,7 +1390,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
               e.state.statusMessage = "Failed to load theme: " & themeResult.error
           else:
             e.state.statusMessage = "Theme not found: " & themeName
-        e.state.windowDisplay.needsFullRedraw = true
         # Exit overlay first, then set Normal mode
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)

@@ -50,11 +50,8 @@ proc pollTerminalWindows*(e: Editor) =
         if expectedCols != termState.grid.cols or expectedRows != termState.grid.rows:
           if expectedCols > 0 and expectedRows > 0:
             termState.resize(expectedCols, expectedRows)
-            e.state.windowDisplay.needsFullRedraw = true
 
-        let updated = termState.pollOutput()
-        if updated:
-          e.state.windowDisplay.needsFullRedraw = true
+        discard termState.pollOutput()
 
         if termState.exitCode.isSome:
           # The session always runs as a persistent interactive shell (even
@@ -62,7 +59,6 @@ proc pollTerminalWindows*(e: Editor) =
           # so an exit only happens when the user quits the shell itself.
           # Tear down the tab in every case.
           e.closeTerminalBuffer(window.buffer.id)
-          e.state.windowDisplay.needsFullRedraw = true
           return
 
 proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
@@ -98,7 +94,6 @@ proc handleResize(e: Editor) =
   # Physically clear the terminal screen to remove artifacts
   terminal.clearScreen()
   # Set the editor's full redraw flag
-  e.state.windowDisplay.needsFullRedraw = true
 
 proc emergencySaveAndQuit(
     editor: Editor, e: ref Exception, cmdLineConfig: CmdLineConfig, log: Logger

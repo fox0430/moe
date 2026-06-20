@@ -51,10 +51,7 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ##              If false, compare disk file with working tree (saved only)
   if e.state.display.showGitDiff:
     let activeBuffer = e.activeBuffer()
-    let diffResult = updateBufferWithGitDiff(activeBuffer, useBuffer)
-
-    if diffResult.isOk:
-      e.state.windowDisplay.needsFullRedraw = true
+    discard updateBufferWithGitDiff(activeBuffer, useBuffer)
 
 template isPersistCursorPositionFile(lang: SourceLanguage): bool =
   lang notin {SourceLanguage.langGitRebaseTodo, SourceLanguage.langCommitEditMsg}

@@ -83,9 +83,7 @@ proc createTestState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    windowDisplay: WindowDisplayState(
-      needsFullRedraw: false, viewportReservedLines: steadyBottomAreaHeight()
-    ),
+    windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -1106,16 +1104,6 @@ suite "handleMouseEvent - Wheel Scroll":
     check e.windowManager.windows[0].cursor.line == 3
     # "ab" has 2 chars, so max column is 1
     check e.windowManager.windows[0].cursor.column == 1
-
-  test "Wheel event sets needsFullRedraw":
-    let e =
-      createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
-    e.state.windowDisplay.needsFullRedraw = false
-
-    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
-    discard e.handleMouseEvent(event)
-
-    check e.state.windowDisplay.needsFullRedraw == true
 
   test "WheelDown updates viewport topLine when cursor goes below viewport":
     # Create a buffer with many lines and a small viewport (height=5)

@@ -54,7 +54,6 @@ proc visualMoveLeft*(buffer: TextBuffer, state: EditorState) =
   if state.cursor.column > 0:
     state.cursor.column -= 1
     state.visualSelection.current = state.cursor
-    state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveRight*(buffer: TextBuffer, state: EditorState) =
   ## Move right in visual mode and update selection
@@ -62,7 +61,6 @@ proc visualMoveRight*(buffer: TextBuffer, state: EditorState) =
   if state.cursor.column < lineLen:
     state.cursor.column += 1
     state.visualSelection.current = state.cursor
-    state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveUp*(buffer: TextBuffer, state: EditorState) =
   ## Move up in visual mode and update selection
@@ -79,7 +77,6 @@ proc visualMoveUp*(buffer: TextBuffer, state: EditorState) =
     if state.cursor.column > newLineLen:
       state.cursor.column = newLineLen
     state.visualSelection.current = state.cursor
-    state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveDown*(buffer: TextBuffer, state: EditorState) =
   ## Move down in visual mode and update selection
@@ -97,7 +94,6 @@ proc visualMoveDown*(buffer: TextBuffer, state: EditorState) =
       if state.cursor.column > newLineLen:
         state.cursor.column = newLineLen
       state.visualSelection.current = state.cursor
-      state.windowDisplay.needsFullRedraw = true
 
 proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
   ## Get text from a block (rectangular) selection
@@ -178,7 +174,6 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
 
     # Clear selection and return to previous mode
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -325,7 +320,6 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
         state.cursor.column = 0
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     if deleteError.len > 0:
       state.statusMessage = "Error: " & deleteError
     else:
@@ -364,7 +358,6 @@ proc visualIndent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -399,7 +392,6 @@ proc visualDedent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -483,7 +475,6 @@ proc visualLowercase*(buffer: TextBuffer, state: EditorState) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -567,7 +558,6 @@ proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -651,7 +641,6 @@ proc visualToggleCase*(buffer: TextBuffer, state: EditorState) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -732,7 +721,6 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -750,7 +738,6 @@ proc visualJoinLines*(buffer: TextBuffer, state: EditorState) =
     if startLine == endLine:
       # Only one line selected, nothing to join
       state.visualSelection.active = false
-      state.windowDisplay.needsFullRedraw = true
       state.statusMessage = ""
       state.mode = state.previousMode
       return
@@ -770,7 +757,6 @@ proc visualJoinLines*(buffer: TextBuffer, state: EditorState) =
     state.cursor.column = 0
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.mode = state.previousMode
 
 # Visual mode movement commands using motion executor
@@ -779,7 +765,6 @@ proc visualMoveHome*(buffer: TextBuffer, state: EditorState) =
   ## Move to beginning of line (0/Home) and update selection
   state.cursor.column = 0
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveEnd*(buffer: TextBuffer, state: EditorState) =
   ## Move to end of line ($) and update selection.
@@ -789,7 +774,6 @@ proc visualMoveEnd*(buffer: TextBuffer, state: EditorState) =
   let lineLen = buffer.getLine(state.cursor.line).charLen
   state.cursor.column = lineLen
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveFirstNonBlank*(buffer: TextBuffer, state: EditorState) =
   ## Move to first non-whitespace character (^) and update selection
@@ -800,14 +784,12 @@ proc visualMoveFirstNonBlank*(buffer: TextBuffer, state: EditorState) =
   state.cursor.line = newPos.y
   state.cursor.column = newPos.x
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveFirstLine*(buffer: TextBuffer, state: EditorState) =
   ## Move to first line (gg) and update selection
   state.cursor.line = 0
   state.cursor.column = 0
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveLastLine*(buffer: TextBuffer, state: EditorState, count: int = 0) =
   ## Move to last line (G) or specific line number and update selection
@@ -819,7 +801,6 @@ proc visualMoveLastLine*(buffer: TextBuffer, state: EditorState, count: int = 0)
     state.cursor.line = max(0, buffer.len - 1)
   state.cursor.column = 0
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveWord*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   ## Move to next word (w) and update selection
@@ -830,7 +811,6 @@ proc visualMoveWord*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   state.cursor.line = newPos.y
   state.cursor.column = newPos.x
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveWordBack*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   ## Move to previous word (b) and update selection
@@ -841,7 +821,6 @@ proc visualMoveWordBack*(buffer: TextBuffer, state: EditorState, count: int = 1)
   state.cursor.line = newPos.y
   state.cursor.column = newPos.x
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveWordEnd*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   ## Move to end of word (e) and update selection
@@ -852,7 +831,6 @@ proc visualMoveWordEnd*(buffer: TextBuffer, state: EditorState, count: int = 1) 
   state.cursor.line = newPos.y
   state.cursor.column = newPos.x
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveWordEndBackward*(
     buffer: TextBuffer, state: EditorState, count: int = 1
@@ -865,7 +843,6 @@ proc visualMoveWordEndBackward*(
   state.cursor.line = newPos.y
   state.cursor.column = newPos.x
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveParagraphForward*(
     buffer: TextBuffer, state: EditorState, count: int = 1
@@ -878,7 +855,6 @@ proc visualMoveParagraphForward*(
   state.cursor.line = newPos.y
   state.cursor.column = newPos.x
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualMoveParagraphBackward*(
     buffer: TextBuffer, state: EditorState, count: int = 1
@@ -891,7 +867,6 @@ proc visualMoveParagraphBackward*(
   state.cursor.line = newPos.y
   state.cursor.column = newPos.x
   state.visualSelection.current = state.cursor
-  state.windowDisplay.needsFullRedraw = true
 
 proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
   ## Switch from visual mode to insert mode (I command)
@@ -924,7 +899,6 @@ proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
 
   # Clear visual selection
   state.visualSelection.active = false
-  state.windowDisplay.needsFullRedraw = true
 
   # Save current mode for returning with ESC
   state.previousMode = state.mode
@@ -957,7 +931,6 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
 
     # Clear visual selection
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
 
     # Save current mode for returning with ESC
     state.previousMode = state.mode
@@ -1027,7 +1000,6 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
 
     # Clear selection and enter insert mode
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
     state.mode = EditorMode.Insert
 
@@ -1038,7 +1010,6 @@ proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
     state.visualSelection.start = state.visualSelection.current
     state.visualSelection.current = temp
     state.cursor = state.visualSelection.current
-    state.windowDisplay.needsFullRedraw = true
 
 proc visualPaste*(buffer: TextBuffer, state: EditorState) =
   ## Delete selection and paste register content (p/P command)
@@ -1055,7 +1026,6 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
     if pasteText.len == 0:
       # Nothing to paste, just exit visual mode
       state.visualSelection.active = false
-      state.windowDisplay.needsFullRedraw = true
       state.pendingRegister = none(char)
       state.mode = state.previousMode
       return
@@ -1125,7 +1095,6 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
 
@@ -1200,6 +1169,5 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
     discard buffer.commitTransaction()
 
     state.visualSelection.active = false
-    state.windowDisplay.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode

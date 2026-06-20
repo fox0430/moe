@@ -108,7 +108,6 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
     lineNumOffset,
     ctx.state.display.tabStop,
   )
-  ctx.state.windowDisplay.needsFullRedraw = true
 
 proc registerMiscCommands*(registry: CommandRegistry) =
   ## Register mode/insert/quickrun/search/git navigation/motion.match.bracket
@@ -277,7 +276,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       )
 
       ctx.state.statusMessage = "Found: " & searchText
-      ctx.state.windowDisplay.needsFullRedraw = true
       return Result[(), string].ok ()
     else:
       ctx.state.statusMessage = "Pattern not found: " & searchText
@@ -618,7 +616,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
           )
 
           ctx.state.statusMessage = "Found: " & info.word
-          ctx.state.windowDisplay.needsFullRedraw = true
           return Result[(), string].ok ()
 
         # Continue searching from after this match
@@ -699,7 +696,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
           )
 
           ctx.state.statusMessage = "Found: " & info.word
-          ctx.state.windowDisplay.needsFullRedraw = true
           return Result[(), string].ok ()
 
         # Continue searching from before this match
