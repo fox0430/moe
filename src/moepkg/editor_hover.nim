@@ -38,12 +38,19 @@ proc startLspHover*(e: Editor): bool =
     e.state.statusMessage = "LSP hover is disabled"
     return false
 
+  let activeBuffer = e.activeBuffer()
+
+  # Guard against unsupported servers so we report "not supported" immediately
+  # instead of issuing a request that only fails after the response timeout.
+  if not e.lsp.hasHoverSupport(activeBuffer):
+    e.state.statusMessage = "LSP hover is not supported by the language server"
+    return false
+
   # Cancel any pending hover request
   if e.state.lspCache.pendingHoverRequestId != 0:
     e.lsp.cancelRequest(e.state.lspCache.pendingHoverRequestId)
     e.state.lspCache.pendingHoverRequestId = 0
 
-  let activeBuffer = e.activeBuffer()
   let reqResult = e.lsp.startHoverRequest(
     activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
   )

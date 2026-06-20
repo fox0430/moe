@@ -313,13 +313,35 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
     e.state.statusMessage = "LSP " & kindName & " is disabled"
     return false
 
+  let activeBuffer = e.activeBuffer()
+
+  # Guard against unsupported servers so we report "not supported" immediately
+  # instead of issuing a request that only fails after the response timeout.
+  let supported =
+    case kind
+    of lrkDefinition:
+      e.lsp.hasDefinitionSupport(activeBuffer)
+    of lrkDeclaration:
+      e.lsp.hasDeclarationSupport(activeBuffer)
+    of lrkReferences:
+      e.lsp.hasReferencesSupport(activeBuffer)
+    of lrkTypeDefinition:
+      e.lsp.hasTypeDefinitionSupport(activeBuffer)
+    of lrkImplementation:
+      e.lsp.hasImplementationSupport(activeBuffer)
+    of lrkNone:
+      false
+  if not supported:
+    e.state.statusMessage =
+      "LSP " & kindName & " is not supported by the language server"
+    return false
+
   # Cancel any pending location request
   if e.state.lspCache.pendingLocationRequestId != 0:
     e.lsp.cancelRequest(e.state.lspCache.pendingLocationRequestId)
     e.state.lspCache.pendingLocationRequestId = 0
   e.state.lspCache.pendingLocationRequestKind = lrkNone
 
-  let activeBuffer = e.activeBuffer()
   let line = e.activeWindow.cursor.line
   let col = e.activeWindow.cursor.column
 
