@@ -643,6 +643,36 @@ suite "Text Objects - Word":
     check range.endPos.line == 2
     check range.endPos.column == 4
 
+  test "findWordBoundaries aw on trailing whitespace with no word ahead fails":
+    # Vim's "daw" on trailing whitespace at end of buffer is a no-op: there is
+    # no word to anchor the surrounding whitespace, so the object fails.
+    let buffer = newTextBuffer("word   ")
+    let cursor = BufferPosition(line: 0, column: 5)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isErr
+
+  test "findWordBoundaries aw on whitespace-only line fails":
+    let buffer = newTextBuffer("    ")
+    let cursor = BufferPosition(line: 0, column: 1)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isErr
+
+  test "findWideWordBoundaries aW on trailing whitespace with no word ahead fails":
+    let buffer = newTextBuffer("word   ")
+    let cursor = BufferPosition(line: 0, column: 5)
+    let result = findWideWordBoundaries(buffer, cursor, inner = false)
+    check result.isErr
+
+  test "findWordBoundaries iw on trailing whitespace still selects the run":
+    # Unlike "aw", "iw" on whitespace selects just the whitespace run.
+    let buffer = newTextBuffer("word   ")
+    let cursor = BufferPosition(line: 0, column: 5)
+    let result = findWordBoundaries(buffer, cursor, inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 4
+    check range.endPos.column == 6
+
 suite "Text Objects - Quoted":
   test "findQuotedBoundaries inner double quote":
     let buffer = newTextBuffer("say \"hello\" world")
