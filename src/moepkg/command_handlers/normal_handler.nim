@@ -52,6 +52,10 @@ type
     of nmrHandled:
       modeTransition*: Option[EditorMode]
       overlayTransition*: Option[OverlayKind]
+      insertReplayCount*: int
+        # [count] for [count]i/a/I/A/o/O text replay; 0/1 mean no replay.
+        # Carried to handler_manager, which stores it on the Insert transition.
+      insertReplayLineEntry*: bool # entered via o/O (replay opens a new line)
     of nmrUnhandled:
       discard
     of nmrError:
@@ -350,11 +354,17 @@ proc handleModeSwitch*(
     state: EditorState,
     buffer: TextBuffer,
     commandName: string = "",
+    count: int = 1,
 ): NormalModeResult =
   ## Handle mode switching commands
   case targetMode
   of EditorMode.Insert:
-    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
+    # Plain `i`: honour a [count] prefix by replaying the typed text on exit.
+    return NormalModeResult(
+      kind: nmrHandled,
+      modeTransition: some(EditorMode.Insert),
+      insertReplayCount: max(1, count),
+    )
   of EditorMode.Visual:
     # Initialize visual selection at current cursor position (character-wise)
     state.initSelection(buffer, vskChar)
@@ -426,8 +436,11 @@ proc handleInsertModeEntry*(
     buffer: TextBuffer,
     state: EditorState,
     insertType: string,
+    count: int = 1,
 ): NormalModeResult =
   ## Handle different types of insert mode entry (i, a, o, O, etc.)
+  ## `count` is the numeric prefix for [count]a/[count]o etc.; the typed text is
+  ## replayed (count - 1) more times when Insert mode is left.
   # Expand a collapsed fold at the cursor so inserted text is never hidden
   # behind a fold marker.
   discard buffer.foldState.openFold(state.cursor.line)
@@ -471,7 +484,12 @@ proc handleInsertModeEntry*(
       kind: nmrError, errorMessage: "Unknown insert type: " & insertType
     )
 
-  return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
+  return NormalModeResult(
+    kind: nmrHandled,
+    modeTransition: some(EditorMode.Insert),
+    insertReplayCount: max(1, count),
+    insertReplayLineEntry: insertType in ["open-below", "open-above"],
+  )
 
 # All text manipulation (delete, yank, change) is now handled by the
 # operator+motion system in command_registry.nim
@@ -670,7 +688,7 @@ proc handleNormalModeKey*(
     else:
       return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctModeSwitch:
-    return handler.handleModeSwitch(cmd.targetMode, state, buffer, cmd.name)
+    return handler.handleModeSwitch(cmd.targetMode, state, buffer, cmd.name, cmd.count)
   of ctOverlaySwitch:
     return handler.handleModeSwitchToOverlay(cmd.targetOverlay, state, cmd.name)
   of ctAction:
@@ -690,15 +708,17 @@ proc handleNormalModeKey*(
     # Handle various actions based on command ID
     case cmd.commandId
     of "insert.append":
-      return handler.handleInsertModeEntry(buffer, state, "append")
+      return handler.handleInsertModeEntry(buffer, state, "append", cmd.count)
     of "insert.append.end":
-      return handler.handleInsertModeEntry(buffer, state, "append-end")
+      return handler.handleInsertModeEntry(buffer, state, "append-end", cmd.count)
     of "insert.first.non.blank":
-      return handler.handleInsertModeEntry(buffer, state, "insert-first-non-blank")
+      return handler.handleInsertModeEntry(
+        buffer, state, "insert-first-non-blank", cmd.count
+      )
     of "insert.line.below":
-      return handler.handleInsertModeEntry(buffer, state, "open-below")
+      return handler.handleInsertModeEntry(buffer, state, "open-below", cmd.count)
     of "insert.line.above":
-      return handler.handleInsertModeEntry(buffer, state, "open-above")
+      return handler.handleInsertModeEntry(buffer, state, "open-above", cmd.count)
     # dd, yy, cc are handled by operator doubling in command_registry
     of "edit.undo":
       let r = buffer.undo()

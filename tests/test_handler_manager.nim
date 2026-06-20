@@ -2452,3 +2452,184 @@ suite "HandlerManager - Replace mode fold auto-expand":
     check r.kind == hrHandled
     check r.modeTransition == some(EditorMode.Replace)
     check buffer.foldState.folds[0].collapsed == false
+
+suite "HandlerManager - [count]i/a/o insert replay":
+  # Drives the full Normal->Insert->type->Escape flow so the [count] prefix is
+  # carried onto the Insert session and the typed text is replayed on exit,
+  # matching Vim's "3ihello", "2ahello", "3ohello", etc.
+  proc digit(
+      manager: HandlerManager,
+      buffer: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+      d: string,
+  ) =
+    discard manager.handleNormalMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
+      KeyCombo(isSpecial: false, char: d, modifiers: {}),
+    )
+
+  proc enterInsert(
+      manager: HandlerManager,
+      buffer: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+      key: string,
+  ) =
+    let r = manager.handleNormalMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
+      KeyCombo(isSpecial: false, char: key, modifiers: {}),
+    )
+    check r.kind == hrHandled
+    # i/a enter Insert by setting state.mode directly (no modeTransition); the
+    # explicit insert commands (A/o/O) return a modeTransition instead.
+    check (
+      r.modeTransition == some(EditorMode.Insert) or state.mode == EditorMode.Insert
+    )
+    state.mode = EditorMode.Insert
+
+  proc typeChar(
+      manager: HandlerManager,
+      buffer: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+      ch: string,
+  ) =
+    discard manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
+      KeyCombo(isSpecial: false, char: ch, modifiers: {}),
+    )
+
+  proc typeEnter(
+      manager: HandlerManager,
+      buffer: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ) =
+    discard manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
+      KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {}),
+    )
+
+  proc escape(
+      manager: HandlerManager,
+      buffer: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ) =
+    discard manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
+      KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {}),
+    )
+
+  test "3iX repeats inserted text three times at cursor":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.digit(buffer, state, viewport, "3")
+    manager.enterInsert(buffer, state, viewport, "i")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "XXXabc"
+
+  test "3aX appends repeated text after the cursor":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.digit(buffer, state, viewport, "3")
+    manager.enterInsert(buffer, state, viewport, "a")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "aXXXbc"
+
+  test "3AX appends repeated text at end of line":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.digit(buffer, state, viewport, "3")
+    manager.enterInsert(buffer, state, viewport, "A")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "abcXXX"
+
+  test "1iX inserts once (count 1, no replay)":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.digit(buffer, state, viewport, "1")
+    manager.enterInsert(buffer, state, viewport, "i")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "Xabc"
+
+  test "iX without count inserts once":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.enterInsert(buffer, state, viewport, "i")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "Xabc"
+
+  test "3IX repeats text at first non-blank, preserving leading indent":
+    # I moves to the first non-blank via a motion, so it needs a fully wired
+    # MotionController (createTestManager()'s stub one would segfault).
+    let buffer = newTextBuffer("  abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+    manager.digit(buffer, state, viewport, "3")
+    manager.enterInsert(buffer, state, viewport, "I")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "  XXXabc"
+
+  test "3oX opens three lines each with the typed text":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.digit(buffer, state, viewport, "3")
+    manager.enterInsert(buffer, state, viewport, "o")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "abc"
+    check buffer.getLine(1) == "X"
+    check buffer.getLine(2) == "X"
+    check buffer.getLine(3) == "X"
+    check buffer.len == 4
+
+  test "3OX opens three lines above each with the typed text":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.digit(buffer, state, viewport, "3")
+    manager.enterInsert(buffer, state, viewport, "O")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "X"
+    check buffer.getLine(1) == "X"
+    check buffer.getLine(2) == "X"
+    check buffer.getLine(3) == "abc"
+    check buffer.len == 4
+
+  test "2i with a newline replays the multi-line unit":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("abc")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    manager.digit(buffer, state, viewport, "2")
+    manager.enterInsert(buffer, state, viewport, "i")
+    manager.typeChar(buffer, state, viewport, "X")
+    manager.typeEnter(buffer, state, viewport)
+    manager.typeChar(buffer, state, viewport, "Y")
+    manager.escape(buffer, state, viewport)
+    check buffer.getLine(0) == "X"
+    check buffer.getLine(1) == "YX"
+    check buffer.getLine(2) == "Yabc"

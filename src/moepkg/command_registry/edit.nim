@@ -1065,8 +1065,10 @@ proc handleOperatorUpperCase*(ctx: CommandContext, count: int = 1): Result[(), s
 
 ## Text object command handlers
 
-proc handleTextObjectInner*(ctx: CommandContext): Result[(), string] =
-  ## Handle inner text object (iw, i", i(, etc.) or enter Insert mode
+proc handleTextObjectInner*(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Handle inner text object (iw, i", i(, etc.) or enter Insert mode.
+  ## `count` is the [count] prefix; when this resolves to plain `i` it requests
+  ## the typed text be replayed (count - 1) more times on Insert-mode exit.
 
   # Check if we have a pending operator
   if ctx.state.editState.pendingOperator.isSome:
@@ -1090,11 +1092,18 @@ proc handleTextObjectInner*(ctx: CommandContext): Result[(), string] =
       let transactionResult = ctx.buffer.beginTransaction("Insert mode edit")
       if transactionResult.isErr:
         return err("Failed to begin transaction: " & transactionResult.error)
+    # Track the insert origin and [count] so the typed text can be replayed
+    # (count - 1) more times when Insert mode is left, matching Vim's [count]i.
+    ctx.state.editState.insertModeStartPos = some(ctx.cursor)
+    ctx.state.editState.insertReplayCount = max(1, count)
+    ctx.state.editState.insertReplayLineEntry = false
     ctx.state.statusMessage = "-- INSERT --"
     return ok(())
 
-proc handleTextObjectAround*(ctx: CommandContext): Result[(), string] =
-  ## Handle around text object (aw, a", a(, etc.) or enter Append mode
+proc handleTextObjectAround*(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Handle around text object (aw, a", a(, etc.) or enter Append mode.
+  ## `count` is the [count] prefix; when this resolves to plain `a` it requests
+  ## the typed text be replayed (count - 1) more times on Insert-mode exit.
 
   # Check if we have a pending operator
   if ctx.state.editState.pendingOperator.isSome:
@@ -1125,6 +1134,11 @@ proc handleTextObjectAround*(ctx: CommandContext): Result[(), string] =
       let transactionResult = ctx.buffer.beginTransaction("Append mode edit")
       if transactionResult.isErr:
         return err("Failed to begin transaction: " & transactionResult.error)
+    # Track the append origin and [count] so the typed text can be replayed
+    # (count - 1) more times when Insert mode is left, matching Vim's [count]a.
+    ctx.state.editState.insertModeStartPos = some(ctx.cursor)
+    ctx.state.editState.insertReplayCount = max(1, count)
+    ctx.state.editState.insertReplayLineEntry = false
     ctx.state.statusMessage = "-- INSERT --"
     return ok(())
 
@@ -2044,9 +2058,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Inner Text Object",
     "Select inner text object (iw, i\", i(, etc.) or enter Insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleTextObjectInner(ctx),
+      # When `i` resolves to Insert mode, args[0] (present for count > 1) carries
+      # the [count] prefix for replay; as a text object the count is ignored.
+      handleTextObjectInner(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   registry.register(
@@ -2054,9 +2070,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Around Text Object",
     "Select around text object (aw, a\", a(, etc.) or enter Append mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      handleTextObjectAround(ctx),
+      handleTextObjectAround(ctx, parseCount(args)),
     0,
-    0,
+    1,
   )
 
   # Text object kind commands (w, ", (, etc.)

@@ -270,6 +270,8 @@ proc applyNormalModePostProcessing(
           clearAutoIndentIfUnedited(buffer, state)
           discard buffer.commitTransaction()
         state.editState.insertModeStartPos = none(BufferPosition)
+        state.editState.insertReplayCount = 0
+        state.editState.insertReplayLineEntry = false
         state.editState.substituteContext = none(types.SubstituteContext)
         let newMode = normalResult.modeTransition.get
         if newMode == EditorMode.Replace:
@@ -284,6 +286,8 @@ proc applyNormalModePostProcessing(
       clearAutoIndentIfUnedited(buffer, state)
       discard buffer.commitTransaction()
     state.editState.insertModeStartPos = none(BufferPosition)
+    state.editState.insertReplayCount = 0
+    state.editState.insertReplayLineEntry = false
     state.editState.substituteContext = none(types.SubstituteContext)
 
   return normalResult
@@ -320,6 +324,9 @@ proc handleNormalMode*(
         # Don't reset if transaction is already active (e.g. returning from insert-normal)
         if state.editState.insertModeStartPos.isNone:
           state.editState.insertModeStartPos = some(state.cursor)
+          # Carry the [count]i/a/o/O replay request onto the Insert session.
+          state.editState.insertReplayCount = r.insertReplayCount
+          state.editState.insertReplayLineEntry = r.insertReplayLineEntry
       elif targetMode == EditorMode.Replace:
         # Reveal a collapsed fold at the cursor so Replace never overtypes text
         # hidden behind a fold marker (mirrors the Insert-mode entry behaviour).
