@@ -239,6 +239,11 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
       minLine = min(minLine, getChangePosition(ch).line)
     if minLine != int.high:
       b.lastChangedLines = minLine
+  else:
+    # Zero-change transaction: beginTransaction captured a pending snapshot that
+    # no undo entry consumes here. Discard it so the next edit's ckSnapshot
+    # doesn't reuse this stale base and desync markers / folds on undo.
+    b.discardPendingSnapshot()
 
   return ok(())
 

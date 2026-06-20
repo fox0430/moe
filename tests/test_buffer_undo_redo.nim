@@ -1045,6 +1045,35 @@ suite "Buffer - Pending Snapshot Cleanup":
     check b.getLine(0) == "hello"
     check not b.isModified
 
+  test "PieceTable: zero-change transaction does not leak pendingSnapshot":
+    # Regression: an empty transaction captured a pending snapshot that commit
+    # never discarded, so a later edit reused that stale base and undo restored
+    # the old fold/marker state.
+    setConfiguredBackend(PieceTable)
+    defer:
+      setConfiguredBackend(GapBuffer)
+    let b = newTextBuffer("aaa\nbbb\nccc\nddd")
+
+    # Empty transaction: captures a pending snapshot, makes no change, commits.
+    check b.beginTransaction("noop").isOk
+    check b.commitTransaction().isOk
+
+    # Fold and marker state established AFTER the (now-leaked) snapshot.
+    check b.foldState.addFold(1, 2)
+    b.setLineMarker(0, SessionModified)
+
+    # A real edit must capture the current fold/marker state, not the stale one.
+    discard b.insertText(BufferPosition(line: 0, column: 3), "X")
+    check b.getLine(0) == "aaaX"
+
+    # Undo restores the pre-edit text; folds and markers must come back intact.
+    discard b.undo()
+    check b.getLine(0) == "aaa"
+    check b.foldState.folds.len == 1
+    check b.foldState.folds[0].startLine == 1
+    check b.foldState.folds[0].endLine == 2
+    check b.getLineMarker(0) == some(SessionModified)
+
 suite "Buffer - Transaction Partial Failure Recovery":
   # These tests verify that the roll-forward / roll-back paths added in
   # undo.nim for ckTransaction actually restore the buffer to the pre-call
