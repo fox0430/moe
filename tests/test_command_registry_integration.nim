@@ -2035,6 +2035,55 @@ suite "Handler - Text Object operations":
     check registry.execute(ctx, custom("textobject.tag")).isOk
     check ctx.state.registers.getNoNamedRegister().getContent() == "PREV"
 
+  test "textobject tag (\"ayit) on empty tag consumes the pending register":
+    # Regression: an empty yank is a no-op, but the operator command still
+    # completes -- the `"a` register prefix must be consumed, not leaked into
+    # the next command.
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('a')
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check ctx.state.pendingRegister.isNone
+
+  test "textobject tag (\"adit) on empty tag consumes the pending register":
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('a')
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check ctx.state.pendingRegister.isNone
+
+  test "textobject tag (\"acit) on empty tag consumes the pending register":
+    let buffer = newTextBuffer("<a></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('a')
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check ctx.state.mode == EditorMode.Insert
+    check ctx.state.pendingRegister.isNone
+
   test "textobject tag (gUit) on empty tag is a no-op, not a corruption":
     # Regression: case operators must honor the empty range. Previously this
     # deleted the closing tag's '<' (<a></a> -> <a>/a>).
@@ -2404,6 +2453,23 @@ suite "Handler - Text Object operations":
     ).isOk
     check buffer.len == 2
     check buffer[0] == "hello world"
+
+  test "failed text object (\"adit outside a tag) consumes the pending register":
+    # Regression: a failed text object aborts the operator, but the `"a`
+    # register prefix must be consumed too, not leaked into the next command.
+    let buffer = newTextBuffer("hello world\nsecond line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('a')
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isErr
+    check ctx.state.pendingRegister.isNone
 
 suite "Handler - Clipboard operations":
   test "clipboard copy when disabled returns error":

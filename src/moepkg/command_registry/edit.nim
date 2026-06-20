@@ -2104,7 +2104,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
           # The object could not be resolved (e.g. dit outside a tag, dis on a
           # blank line). Discard the pending operator too so a following motion
           # is not silently consumed by a still-armed operator (a stray delete).
+          # Also drop any pending register prefix (e.g. `"adit`) rather than
+          # leaking it into the next command.
           ctx.state.editState.pendingOperator = none(PendingOperator)
+          ctx.state.pendingRegister = none(char)
           return err(rangeResult.error)
 
         let toRange = rangeResult.value
