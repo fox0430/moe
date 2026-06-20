@@ -130,6 +130,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   # Reset change tracking - file was just loaded
   b.changeSeq = 0
   b.savedSeq = 0
+  b.contentVersion.inc # content replaced; bump the monotonic version
 
   # Reset markers and modification tracking for new file content
   b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.len)

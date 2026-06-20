@@ -83,7 +83,12 @@ type
     menu*: CompletionMenu
     docPanel*: DocPanel ## Documentation panel for selected item
     allWords*: seq[string] ## All collected words from buffer
-    currentLanguage*: SourceLanguage ## Current buffer's language
+    wordCache: HashSet[string]
+      ## Buffer/other-buffer words from the last scan (no cursor exclusion,
+      ## no keywords). Reused while `wordCacheSig` still matches the sources.
+    wordCacheSig: seq[(BufferId, int)]
+      ## (id, contentVersion) of every scanned buffer; empty until the first
+      ## scan, so an unmodified buffer skips re-scanning on the next trigger.
     lspRequestId*: Option[int] ## Pending LSP request ID
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
     otherBuffers*: seq[TextBuffer]
@@ -262,38 +267,43 @@ proc extractPathPrefixBeforeCursor*(line: string, col: int): string =
   else:
     return ""
 
+proc collectWordSet(
+    buffer: TextBuffer, otherBuffers: seq[TextBuffer]
+): HashSet[string] =
+  ## Unique words from `buffer` and every distinct buffer in `otherBuffers`.
+  ## The word under the cursor is not excluded here — callers drop it from the
+  ## returned set when they need to.
+  result = initHashSet[string]()
+  var seen = initHashSet[BufferId]()
+  seen.incl(buffer.id)
+  for lineIdx in 0 ..< buffer.len:
+    for word in extractWords(buffer.getLine(lineIdx)):
+      result.incl(word)
+
+  # Collect words from other open FileEditMode buffers, scanning each distinct
+  # buffer once (the same buffer can appear in multiple split windows).
+  for otherBuf in otherBuffers:
+    if otherBuf.id in seen:
+      continue
+    seen.incl(otherBuf.id)
+    for lineIdx in 0 ..< otherBuf.len:
+      for word in extractWords(otherBuf.getLine(lineIdx)):
+        result.incl(word)
+
 proc collectBufferWords*(
     buffer: TextBuffer, excludePos: BufferPosition, otherBuffers: seq[TextBuffer] = @[]
 ): seq[string] =
   ## Collect all unique words from the current buffer and other open buffers.
-  ## Excludes the word at the current cursor position.
-  var wordSet = initHashSet[string]()
+  ## Excludes the word at the current cursor position. Order is unspecified;
+  ## callers rank the entries by match score downstream.
+  var wordSet = collectWordSet(buffer, otherBuffers)
 
-  for lineIdx in 0 ..< buffer.len:
-    let line = buffer.getLine(lineIdx)
-    let words = extractWords(line)
-
-    for word in words:
-      wordSet.incl(word)
-
-  # Collect words from other open FileEditMode buffers
-  for otherBuf in otherBuffers:
-    if otherBuf == buffer:
-      continue
-    for lineIdx in 0 ..< otherBuf.len:
-      let line = otherBuf.getLine(lineIdx)
-      let words = extractWords(line)
-      for word in words:
-        wordSet.incl(word)
-
-  # Get the word at cursor position to exclude it
-  let currentLine = buffer.getLine(excludePos.line)
-  let currentWord = extractWordAtPosition(currentLine, excludePos.column)
+  let currentWord =
+    extractWordAtPosition(buffer.getLine(excludePos.line), excludePos.column)
   if currentWord.len > 0:
     wordSet.excl(currentWord)
 
   result = wordSet.toSeq
-  result.sort()
 
 # Completion menu operations
 
@@ -311,7 +321,6 @@ proc newCompletionManager*(): CompletionManager =
       triggerCol: 0,
     ),
     allWords: @[],
-    currentLanguage: langNone,
     lspRequestId: none(int),
     lspItems: @[],
     isPathCompletion: false,
@@ -592,9 +601,10 @@ func displayText*(entry: CompletionEntry): string =
   if entry.label.len > 0: entry.label else: entry.word
 
 proc bufferWordEntries(mgr: CompletionManager, prefix: string): seq[CompletionEntry] =
-  ## Buffer/keyword completion entries for `prefix`, scored and sorted by match
-  ## score (descending). With an empty prefix every collected word is offered
-  ## alphabetically (as collected); otherwise only words that match are kept.
+  ## Buffer/keyword completion entries for `prefix`, sorted by match score
+  ## (descending) and then alphabetically. With an empty prefix every collected
+  ## word is offered (alphabetically, since all scores tie at 0); otherwise only
+  ## words that match are kept.
   result = @[]
   if prefix.len == 0:
     for word in mgr.allWords:
@@ -624,7 +634,10 @@ proc bufferWordEntries(mgr: CompletionManager, prefix: string): seq[CompletionEn
         )
 
   result.sort do(a, b: CompletionEntry) -> int:
-    b.matchScore - a.matchScore
+    if a.matchScore != b.matchScore:
+      b.matchScore - a.matchScore
+    else:
+      cmp(a.word, b.word)
 
 func prefixMatchTier(entry: CompletionEntry, prefix: string): int =
   ## Ranking tier by how well the entry matches the typed prefix, so prefix
@@ -782,6 +795,58 @@ proc triggerPathCompletion*(
   else:
     mgr.state = csIdle
 
+proc wordCacheSignature(
+    buffer: TextBuffer, otherBuffers: seq[TextBuffer]
+): seq[(BufferId, int)] =
+  ## Identity + content version of every distinct buffer the word scan reads, so
+  ## an edit/undo/reload of any of them invalidates the cache. `contentVersion`
+  ## (not `changeSeq`) is the key: it is monotonic, so it never collides across
+  ## an undo+re-edit or a reload that resets `changeSeq`. The result is deduped
+  ## by id and sorted, so a pure window reorder does not force a needless rescan.
+  var seen = initHashSet[BufferId]()
+  result = @[(buffer.id, buffer.contentVersion)]
+  seen.incl(buffer.id)
+  for ob in otherBuffers:
+    if ob.id notin seen:
+      result.add((ob.id, ob.contentVersion))
+      seen.incl(ob.id)
+  result.sort do(a, b: (BufferId, int)) -> int:
+    cmp(a[0].int, b[0].int)
+
+proc refreshBufferWords(
+    mgr: CompletionManager,
+    buffer: TextBuffer,
+    cursorLine, cursorCol: int,
+    language: SourceLanguage,
+) =
+  ## Rebuild `mgr.allWords` (buffer/other-buffer words plus language keywords)
+  ## for the cursor position. The buffer scan is cached against the source
+  ## buffers' content versions, so an unmodified buffer reuses the prior scan.
+  let sig = wordCacheSignature(buffer, mgr.otherBuffers)
+  if mgr.wordCacheSig != sig:
+    mgr.wordCache = collectWordSet(buffer, mgr.otherBuffers)
+    mgr.wordCacheSig = sig
+
+  # Build allWords straight from the cached set (no full-set copy on a cache
+  # hit): drop the word under the cursor, then append language keywords that are
+  # not already offered as a buffer word.
+  let currentWord = extractWordAtPosition(buffer.getLine(cursorLine), cursorCol)
+  mgr.allWords = newSeqOfCap[string](mgr.wordCache.len)
+  for word in mgr.wordCache:
+    if word != currentWord:
+      mgr.allWords.add(word)
+
+  var addedKeywords = initHashSet[string]()
+  for keyword in getLanguageKeywords(language):
+    # The excluded cursor word is re-admitted if it is also a keyword; otherwise
+    # skip keywords already present as buffer words. Dedup the keyword list too.
+    if keyword != currentWord and keyword in mgr.wordCache:
+      continue
+    if keyword in addedKeywords:
+      continue
+    mgr.allWords.add(keyword)
+    addedKeywords.incl(keyword)
+
 proc triggerCompletion*(
     mgr: CompletionManager,
     buffer: TextBuffer,
@@ -793,18 +858,8 @@ proc triggerCompletion*(
   let line = buffer.getLine(cursorLine)
   let prefix = extractPrefixBeforeCursor(line, cursorCol)
 
-  # Collect words from current buffer and other open buffers
-  mgr.allWords = collectBufferWords(
-    buffer, BufferPosition(line: cursorLine, column: cursorCol), mgr.otherBuffers
-  )
-
-  # Add language keywords to allWords if not already present
-  mgr.currentLanguage = language
-  var wordSet = mgr.allWords.toHashSet
-  for keyword in getLanguageKeywords(language):
-    if keyword notin wordSet:
-      mgr.allWords.add(keyword)
-      wordSet.incl(keyword)
+  # Collect words (cached against the source buffers' change sequences)
+  mgr.refreshBufferWords(buffer, cursorLine, cursorCol, language)
 
   # Set trigger position
   mgr.menu.triggerLine = cursorLine
@@ -1277,18 +1332,8 @@ proc triggerLspCompletion*(
   let line = buffer.getLine(cursorLine)
   let prefix = extractPrefixBeforeCursor(line, cursorCol)
 
-  # Collect words from current buffer and other open buffers as fallback
-  mgr.allWords = collectBufferWords(
-    buffer, BufferPosition(line: cursorLine, column: cursorCol), mgr.otherBuffers
-  )
-
-  # Add language keywords to allWords if not already present
-  mgr.currentLanguage = language
-  var wordSet = mgr.allWords.toHashSet
-  for keyword in getLanguageKeywords(language):
-    if keyword notin wordSet:
-      mgr.allWords.add(keyword)
-      wordSet.incl(keyword)
+  # Collect words as fallback (cached against the source buffers' change seqs)
+  mgr.refreshBufferWords(buffer, cursorLine, cursorCol, language)
 
   # Set trigger position
   mgr.menu.triggerLine = cursorLine
