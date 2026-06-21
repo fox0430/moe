@@ -21,7 +21,7 @@ import std/[unittest, os, options, json, strutils, sequtils]
 
 import ../src/moepkg/[editor, editor_window, buffer, config, config_loader, emergency]
 
-const TestRecoveryDir = "/tmp/moe_test_crash_recovery"
+let TestRecoveryDir = getTempDir() / "moe_test_crash_recovery"
 
 proc cleanupTestDir() =
   if dirExists(TestRecoveryDir):
@@ -43,7 +43,7 @@ suite "emergency - emergencySaveBuffers":
     let e = createTestEditor()
 
     # Load a file and modify its buffer
-    let testFile = "/tmp/moe_test_emergency.txt"
+    let testFile = getTempDir() / "moe_test_emergency.txt"
     writeFile(testFile, "original content")
     defer:
       removeFile(testFile)
@@ -71,7 +71,7 @@ suite "emergency - emergencySaveBuffers":
   test "Skip unmodified buffer":
     let e = createTestEditor()
 
-    let testFile = "/tmp/moe_test_emergency_unmod.txt"
+    let testFile = getTempDir() / "moe_test_emergency_unmod.txt"
     writeFile(testFile, "unmodified content")
     defer:
       removeFile(testFile)
@@ -98,8 +98,8 @@ suite "emergency - emergencySaveBuffers":
   test "Save multiple modified buffers":
     let e = createTestEditor()
 
-    let testFile1 = "/tmp/moe_test_emergency_multi1.txt"
-    let testFile2 = "/tmp/moe_test_emergency_multi2.txt"
+    let testFile1 = getTempDir() / "moe_test_emergency_multi1.txt"
+    let testFile2 = getTempDir() / "moe_test_emergency_multi2.txt"
     writeFile(testFile1, "content 1")
     writeFile(testFile2, "content 2")
     defer:
@@ -122,7 +122,7 @@ suite "emergency - emergencySaveBuffers":
   test "Deduplicate same buffer in multiple windows":
     let e = createTestEditor()
 
-    let testFile = "/tmp/moe_test_emergency_dedup.txt"
+    let testFile = getTempDir() / "moe_test_emergency_dedup.txt"
     writeFile(testFile, "shared content")
     defer:
       removeFile(testFile)
@@ -140,8 +140,8 @@ suite "emergency - emergencySaveBuffers":
   test "Handle duplicate filenames from different paths":
     let e = createTestEditor()
 
-    let dir1 = "/tmp/moe_test_dup_dir1"
-    let dir2 = "/tmp/moe_test_dup_dir2"
+    let dir1 = getTempDir() / "moe_test_dup_dir1"
+    let dir2 = getTempDir() / "moe_test_dup_dir2"
     createDir(dir1)
     createDir(dir2)
     let file1 = dir1 / "same.txt"
@@ -170,8 +170,8 @@ suite "emergency - emergencySaveBuffers":
   test "Mixed modified and unmodified buffers":
     let e = createTestEditor()
 
-    let testFile1 = "/tmp/moe_test_emergency_mix1.txt"
-    let testFile2 = "/tmp/moe_test_emergency_mix2.txt"
+    let testFile1 = getTempDir() / "moe_test_emergency_mix1.txt"
+    let testFile2 = getTempDir() / "moe_test_emergency_mix2.txt"
     writeFile(testFile1, "modified content")
     writeFile(testFile2, "unmodified content")
     defer:

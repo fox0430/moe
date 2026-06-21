@@ -2020,7 +2020,7 @@ suite "Highlight - Progressive Initial Highlighting":
     var buf = newTextBuffer()
 
     # Create a temp file with 2500 lines of Rust code
-    let path = "/tmp/test_progressive_highlight.rs"
+    let path = getTempDir() / "test_progressive_highlight.rs"
     var content = ""
     for i in 0 ..< 2500:
       content.add("let v" & $i & " = " & $i & ";\n")
@@ -2100,7 +2100,7 @@ suite "Highlight - URI Underline on Load":
   test "loadFile applies URI underlines in initial chunk":
     var buf = newTextBuffer()
 
-    let path = "/tmp/test_uri_highlight_initial.rs"
+    let path = getTempDir() / "test_uri_highlight_initial.rs"
     var content = ""
     for i in 0 ..< 10:
       if i == 5:
@@ -2119,7 +2119,7 @@ suite "Highlight - URI Underline on Load":
   test "loadFile applies URI underlines for plain text":
     var buf = newTextBuffer()
 
-    let path = "/tmp/test_uri_highlight_plain.txt"
+    let path = getTempDir() / "test_uri_highlight_plain.txt"
     var content = ""
     for i in 0 ..< 10:
       if i == 3:
@@ -2138,7 +2138,7 @@ suite "Highlight - URI Underline on Load":
     var buf = newTextBuffer()
 
     # Create file with URI beyond line 1000
-    let path = "/tmp/test_uri_highlight_progressive.rs"
+    let path = getTempDir() / "test_uri_highlight_progressive.rs"
     var content = ""
     for i in 0 ..< 1500:
       if i == 1200:
@@ -2167,7 +2167,7 @@ suite "Highlight - URI Underline on Load":
     var buf = newTextBuffer()
 
     # Create plain text file with URI beyond line 1000
-    let path = "/tmp/test_uri_highlight_plain_progressive.txt"
+    let path = getTempDir() / "test_uri_highlight_plain_progressive.txt"
     var content = ""
     for i in 0 ..< 1500:
       if i == 1200:
@@ -2194,7 +2194,7 @@ suite "Highlight - URI Underline on Load":
     var buf = newTextBuffer()
 
     # Create file with URIs at line 5 and line 1500
-    let path = "/tmp/test_uri_restore_before_edit.rs"
+    let path = getTempDir() / "test_uri_restore_before_edit.rs"
     var content = ""
     for i in 0 ..< 2000:
       if i == 5:
@@ -2237,7 +2237,7 @@ suite "Highlight - URI Underline on Load":
     var buf = newTextBuffer()
 
     # Create file with no URIs, 1500 lines
-    let path = "/tmp/test_uri_scan_no_uri.rs"
+    let path = getTempDir() / "test_uri_scan_no_uri.rs"
     var content = ""
     for i in 0 ..< 1500:
       content.add("let x = " & $i & ";\n")
@@ -2255,7 +2255,7 @@ suite "Highlight - URI Underline on Load":
   test "updateHighlight applies URI underlines after edit":
     var buf = newTextBuffer()
 
-    let path = "/tmp/test_uri_highlight_update.rs"
+    let path = getTempDir() / "test_uri_highlight_update.rs"
     var content = "let x = 1;\nlet y = 2;\nlet z = 3;\n"
     writeFile(path, content)
     discard buf.loadFile(path)

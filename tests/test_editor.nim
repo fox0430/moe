@@ -39,7 +39,7 @@ proc createTestEditor(): Editor =
 suite "Editor - findBufferByPath":
   test "Find buffer by absolute path":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_find_buffer.txt"
+    let testFile = getTempDir() / "moe_test_find_buffer.txt"
 
     # Create a test file
     writeFile(testFile, "test content")
@@ -71,8 +71,8 @@ suite "Editor - currentBufferIndex":
 
   test "Returns correct index after adding buffers":
     let e = createTestEditor()
-    let testFile1 = "/tmp/moe_test_index1.txt"
-    let testFile2 = "/tmp/moe_test_index2.txt"
+    let testFile1 = getTempDir() / "moe_test_index1.txt"
+    let testFile2 = getTempDir() / "moe_test_index2.txt"
 
     writeFile(testFile1, "content1")
     writeFile(testFile2, "content2")
@@ -90,7 +90,7 @@ suite "Editor - currentBufferIndex":
 suite "Editor - switchToBufferByIndex":
   test "Switch to valid buffer index":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch.txt"
+    let testFile = getTempDir() / "moe_test_switch.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -123,7 +123,7 @@ suite "Editor - switchToBufferByIndex":
 suite "Editor - switchToNextBuffer and switchToPrevBuffer":
   test "Switch to next buffer":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_next.txt"
+    let testFile = getTempDir() / "moe_test_next.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -137,7 +137,7 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 
   test "Switch to next buffer wraps around":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_wrap.txt"
+    let testFile = getTempDir() / "moe_test_wrap.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -151,7 +151,7 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 
   test "Switch to prev buffer":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_prev.txt"
+    let testFile = getTempDir() / "moe_test_prev.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -165,7 +165,7 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 
   test "Switch to prev buffer wraps around":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_prev_wrap.txt"
+    let testFile = getTempDir() / "moe_test_prev_wrap.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -189,8 +189,8 @@ suite "Editor - switchToNextBuffer and switchToPrevBuffer":
 suite "Editor - switchToFirstBuffer and switchToLastBuffer":
   test "Switch to first buffer":
     let e = createTestEditor()
-    let testFile1 = "/tmp/moe_test_first1.txt"
-    let testFile2 = "/tmp/moe_test_first2.txt"
+    let testFile1 = getTempDir() / "moe_test_first1.txt"
+    let testFile2 = getTempDir() / "moe_test_first2.txt"
 
     writeFile(testFile1, "content1")
     writeFile(testFile2, "content2")
@@ -209,8 +209,8 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer":
 
   test "Switch to last buffer":
     let e = createTestEditor()
-    let testFile1 = "/tmp/moe_test_last1.txt"
-    let testFile2 = "/tmp/moe_test_last2.txt"
+    let testFile1 = getTempDir() / "moe_test_last1.txt"
+    let testFile2 = getTempDir() / "moe_test_last2.txt"
 
     writeFile(testFile1, "content1")
     writeFile(testFile2, "content2")
@@ -229,7 +229,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer":
 
   test "Already at first buffer message":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_already_first.txt"
+    let testFile = getTempDir() / "moe_test_already_first.txt"
 
     writeFile(testFile, "content")
     defer:
@@ -243,7 +243,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer":
 
   test "Already at last buffer message":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_already_last.txt"
+    let testFile = getTempDir() / "moe_test_already_last.txt"
 
     writeFile(testFile, "content")
     defer:
@@ -258,7 +258,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer":
 suite "Editor - switchToBuffer":
   test "Switch to buffer by number":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch_num.txt"
+    let testFile = getTempDir() / "moe_test_switch_num.txt"
 
     writeFile(testFile, "content")
     defer:
@@ -274,7 +274,7 @@ suite "Editor - switchToBuffer":
 
   test "Switch to buffer by filename":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch_name.txt"
+    let testFile = getTempDir() / "moe_test_switch_name.txt"
 
     writeFile(testFile, "content")
     defer:
@@ -289,7 +289,7 @@ suite "Editor - switchToBuffer":
 
   test "Switch to buffer by partial path":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch_partial.txt"
+    let testFile = getTempDir() / "moe_test_switch_partial.txt"
 
     writeFile(testFile, "content")
     defer:
@@ -343,7 +343,7 @@ suite "Editor - isBufferShared":
 suite "Editor - editFile":
   test "Edit existing file":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_edit_existing.txt"
+    let testFile = getTempDir() / "moe_test_edit_existing.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -357,7 +357,7 @@ suite "Editor - editFile":
 
   test "Edit new file (file does not exist)":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_edit_new.txt"
+    let testFile = getTempDir() / "moe_test_edit_new.txt"
 
     # Ensure file does not exist
     if fileExists(testFile):
@@ -371,7 +371,7 @@ suite "Editor - editFile":
 
   test "Edit new file detects language from extension":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_new_lang.nim"
+    let testFile = getTempDir() / "moe_test_new_lang.nim"
 
     if fileExists(testFile):
       removeFile(testFile)
@@ -384,14 +384,14 @@ suite "Editor - editFile":
     let e = createTestEditor()
 
     let cases = [
-      ("/tmp/moe_test_new.py", SourceLanguage.langPython),
-      ("/tmp/moe_test_new.rs", SourceLanguage.langRust),
-      ("/tmp/moe_test_new.js", SourceLanguage.langJavaScript),
-      ("/tmp/moe_test_new.ts", SourceLanguage.langTypeScript),
-      ("/tmp/moe_test_new.c", SourceLanguage.langC),
-      ("/tmp/moe_test_new.cpp", SourceLanguage.langCpp),
-      ("/tmp/moe_test_new.md", SourceLanguage.langMarkdown),
-      ("/tmp/moe_test_new.sh", SourceLanguage.langShell),
+      (getTempDir() / "moe_test_new.py", SourceLanguage.langPython),
+      (getTempDir() / "moe_test_new.rs", SourceLanguage.langRust),
+      (getTempDir() / "moe_test_new.js", SourceLanguage.langJavaScript),
+      (getTempDir() / "moe_test_new.ts", SourceLanguage.langTypeScript),
+      (getTempDir() / "moe_test_new.c", SourceLanguage.langC),
+      (getTempDir() / "moe_test_new.cpp", SourceLanguage.langCpp),
+      (getTempDir() / "moe_test_new.md", SourceLanguage.langMarkdown),
+      (getTempDir() / "moe_test_new.sh", SourceLanguage.langShell),
     ]
 
     for (path, expectedLang) in cases:
@@ -403,7 +403,7 @@ suite "Editor - editFile":
 
   test "Edit new file with unknown extension has langNone":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_new.xyz"
+    let testFile = getTempDir() / "moe_test_new.xyz"
 
     if fileExists(testFile):
       removeFile(testFile)
@@ -414,7 +414,7 @@ suite "Editor - editFile":
 
   test "Edit existing file also detects language":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_existing_lang.nim"
+    let testFile = getTempDir() / "moe_test_existing_lang.nim"
 
     writeFile(testFile, "echo \"hello\"")
     defer:
@@ -426,7 +426,7 @@ suite "Editor - editFile":
 
   test "Switch to existing buffer if already loaded":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_edit_switch.txt"
+    let testFile = getTempDir() / "moe_test_edit_switch.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -796,7 +796,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "editFile adds buffer to window's bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_window_edit.txt"
+    let testFile = getTempDir() / "moe_test_window_edit.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -809,7 +809,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "windowBufferIndex returns correct index":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_window_index.txt"
+    let testFile = getTempDir() / "moe_test_window_index.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -824,7 +824,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "switchToWindowBuffer switches within window's bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch_window.txt"
+    let testFile = getTempDir() / "moe_test_switch_window.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -837,7 +837,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "switchToNextBuffer cycles through window's bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_next_window.txt"
+    let testFile = getTempDir() / "moe_test_next_window.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -854,7 +854,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "switchToPrevBuffer cycles through window's bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_prev_window.txt"
+    let testFile = getTempDir() / "moe_test_prev_window.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -871,7 +871,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 suite "Editor - Window bufferIds with splits":
   test "vsplit creates new window with only current buffer":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_vsplit_buflist.txt"
+    let testFile = getTempDir() / "moe_test_vsplit_buflist.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -889,7 +889,7 @@ suite "Editor - Window bufferIds with splits":
 
   test "hsplit creates new window with only current buffer":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_hsplit_buflist.txt"
+    let testFile = getTempDir() / "moe_test_hsplit_buflist.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -904,8 +904,8 @@ suite "Editor - Window bufferIds with splits":
 
   test "Windows have independent bufferIds":
     let e = createTestEditor()
-    let testFile1 = "/tmp/moe_test_indep1.txt"
-    let testFile2 = "/tmp/moe_test_indep2.txt"
+    let testFile1 = getTempDir() / "moe_test_indep1.txt"
+    let testFile2 = getTempDir() / "moe_test_indep2.txt"
 
     writeFile(testFile1, "content1")
     writeFile(testFile2, "content2")
@@ -939,7 +939,7 @@ suite "Editor - enew with window bufferIds":
 suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferIds":
   test "switchToFirstBuffer uses window's bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_first_buflist.txt"
+    let testFile = getTempDir() / "moe_test_first_buflist.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -953,7 +953,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferIds":
 
   test "switchToLastBuffer uses window's bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_last_buflist.txt"
+    let testFile = getTempDir() / "moe_test_last_buflist.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -983,7 +983,7 @@ suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferIds":
 suite "Editor - switchToBufferByIndex adds to window bufferIds":
   test "switchToBufferByIndex adds buffer id to window's bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch_add.txt"
+    let testFile = getTempDir() / "moe_test_switch_add.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -1004,7 +1004,7 @@ suite "Editor - switchToBufferByIndex adds to window bufferIds":
 
   test "switchToBufferByIndex does not duplicate in bufferIds":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch_nodup.txt"
+    let testFile = getTempDir() / "moe_test_switch_nodup.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -1730,7 +1730,7 @@ suite "Editor - openFileInNewRightWindow":
     let e = setupLoneFileTree(termWidth, termHeight)
     let ftWidth = e.config.fileTree.width
 
-    let testFile = "/tmp/moe_test_open_right.txt"
+    let testFile = getTempDir() / "moe_test_open_right.txt"
     writeFile(testFile, "hello right window")
     defer:
       removeFile(testFile)
@@ -1766,7 +1766,7 @@ suite "Editor - openFileInNewRightWindow":
   test "reuses existing buffer when file is already loaded":
     let e = setupLoneFileTree()
 
-    let testFile = "/tmp/moe_test_open_right_reuse.txt"
+    let testFile = getTempDir() / "moe_test_open_right_reuse.txt"
     writeFile(testFile, "reused")
     defer:
       removeFile(testFile)
@@ -1789,7 +1789,7 @@ suite "Editor - openFileInNewRightWindow":
   test "creates new file buffer when path does not exist":
     let e = setupLoneFileTree()
 
-    let newPath = "/tmp/moe_test_open_right_new_file_does_not_exist.txt"
+    let newPath = getTempDir() / "moe_test_open_right_new_file_does_not_exist.txt"
     # Ensure it really doesn't exist
     if fileExists(newPath):
       removeFile(newPath)
@@ -1809,7 +1809,7 @@ suite "Editor - openFileInNewRightWindow":
     # Default single window is Normal mode
     check e.activeWindow.mode == EditorMode.Normal
 
-    let r = e.openFileInNewRightWindow("/tmp/moe_test_open_right_not_ft.txt")
+    let r = e.openFileInNewRightWindow(getTempDir() / "moe_test_open_right_not_ft.txt")
     check r.isErr
     # Still only one window
     check e.windowManager.windows.len == 1
@@ -1822,7 +1822,7 @@ suite "Editor - openFileInNewRightWindow":
     # there's no space left on the right
     ftWin.fixedWidth = some(ftWin.viewport.width)
 
-    let testFile = "/tmp/moe_test_open_right_nospace.txt"
+    let testFile = getTempDir() / "moe_test_open_right_nospace.txt"
     writeFile(testFile, "nospace")
     defer:
       removeFile(testFile)
@@ -1836,7 +1836,7 @@ suite "Editor - BufferId":
     let e = createTestEditor()
     let initialId = e.buffers[0].id
 
-    let testFile = "/tmp/moe_test_bufferid_unique.txt"
+    let testFile = getTempDir() / "moe_test_bufferid_unique.txt"
     writeFile(testFile, "x")
     defer:
       removeFile(testFile)
@@ -1864,8 +1864,8 @@ suite "Editor - BufferId":
 suite "Editor - Per-window :bnext / :bprev wrapping":
   test ":bnext wraps around at end of window tab list":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bnext_wrap1.txt"
-    let f2 = "/tmp/moe_test_bnext_wrap2.txt"
+    let f1 = getTempDir() / "moe_test_bnext_wrap1.txt"
+    let f2 = getTempDir() / "moe_test_bnext_wrap2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -1880,7 +1880,7 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
 
   test ":bprev wraps around at beginning of window tab list":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bprev_wrap1.txt"
+    let f1 = getTempDir() / "moe_test_bprev_wrap1.txt"
     writeFile(f1, "1")
     defer:
       removeFile(f1)
@@ -1897,8 +1897,8 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
     # index 1 because the wrap formula did `(max(-1,0)+1) mod len`. The fix
     # now jumps to index 0, mirroring switchToPrevBuffer's wrap-to-last.
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bnext_orphan1.txt"
-    let f2 = "/tmp/moe_test_bnext_orphan2.txt"
+    let f1 = getTempDir() / "moe_test_bnext_orphan1.txt"
+    let f2 = getTempDir() / "moe_test_bnext_orphan2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -1918,8 +1918,8 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
 
   test ":bprev wraps to last tab when active buffer isn't in tab list":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bprev_orphan1.txt"
-    let f2 = "/tmp/moe_test_bprev_orphan2.txt"
+    let f1 = getTempDir() / "moe_test_bprev_orphan1.txt"
+    let f2 = getTempDir() / "moe_test_bprev_orphan2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -1968,7 +1968,7 @@ suite "Editor - bufferIdIndex synchronization":
 
   test "bufferIdIndex stays consistent after editFile + delete cycle":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_bufferIdIndex_cycle.txt"
+    let testFile = getTempDir() / "moe_test_bufferIdIndex_cycle.txt"
     writeFile(testFile, "x")
     defer:
       removeFile(testFile)
@@ -1984,7 +1984,7 @@ suite "Editor - bufferIdIndex synchronization":
 
   test "bufferById returns the same TextBuffer as a linear scan":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_bufferById_match.txt"
+    let testFile = getTempDir() / "moe_test_bufferById_match.txt"
     writeFile(testFile, "x")
     defer:
       removeFile(testFile)
@@ -2002,8 +2002,8 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
     # (Ctrl-o/Ctrl-i) compares against currentBufferId, so a stale value
     # silently mis-routes future jumps.
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bmgrdel_currentid_1.txt"
-    let f2 = "/tmp/moe_test_bmgrdel_currentid_2.txt"
+    let f1 = getTempDir() / "moe_test_bmgrdel_currentid_1.txt"
+    let f2 = getTempDir() / "moe_test_bmgrdel_currentid_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2025,8 +2025,8 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
 
   test "state.windowDisplay.currentBufferId is left alone when a non-current buffer is deleted":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bmgrdel_unrelated_1.txt"
-    let f2 = "/tmp/moe_test_bmgrdel_unrelated_2.txt"
+    let f1 = getTempDir() / "moe_test_bmgrdel_unrelated_1.txt"
+    let f2 = getTempDir() / "moe_test_bmgrdel_unrelated_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2051,8 +2051,8 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     # Regression: :bd used to call closeWindow, closing the window even when
     # other buffers were still in the buffer list.
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bd_multi_1.txt"
-    let f2 = "/tmp/moe_test_bd_multi_2.txt"
+    let f1 = getTempDir() / "moe_test_bd_multi_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_multi_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2089,8 +2089,8 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
 
   test "leaves other windows showing different buffers untouched":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bd_otherwin_1.txt"
-    let f2 = "/tmp/moe_test_bd_otherwin_2.txt"
+    let f1 = getTempDir() / "moe_test_bd_otherwin_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_otherwin_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2118,8 +2118,8 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
 
   test "switches every window showing the deleted buffer to a survivor":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bd_shared_1.txt"
-    let f2 = "/tmp/moe_test_bd_shared_2.txt"
+    let f1 = getTempDir() / "moe_test_bd_shared_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_shared_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2145,8 +2145,8 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
 
   test "prunes the deleted buffer's id from every window's bufferIds":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bd_prune_1.txt"
-    let f2 = "/tmp/moe_test_bd_prune_2.txt"
+    let f1 = getTempDir() / "moe_test_bd_prune_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_prune_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2167,8 +2167,8 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     # Mirrors the BufferManager-delete regression: a stale currentBufferId
     # silently mis-routes the Jump List (Ctrl-o/Ctrl-i).
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bd_currentid_1.txt"
-    let f2 = "/tmp/moe_test_bd_currentid_2.txt"
+    let f1 = getTempDir() / "moe_test_bd_currentid_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_currentid_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2189,8 +2189,8 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
   test "processResult(hrBufferDelete) routes through deleteCurrentBuffer":
     # Regression: hrBufferDelete used to call closeWindow() directly.
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bd_wired_1.txt"
-    let f2 = "/tmp/moe_test_bd_wired_2.txt"
+    let f1 = getTempDir() / "moe_test_bd_wired_1.txt"
+    let f2 = getTempDir() / "moe_test_bd_wired_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2221,8 +2221,8 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
   # and the command-line parser dispatch wiring.
   test "processResult(hrExecCommand bdelete) deletes a clean buffer":
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bridge_clean_1.txt"
-    let f2 = "/tmp/moe_test_bridge_clean_2.txt"
+    let f1 = getTempDir() / "moe_test_bridge_clean_1.txt"
+    let f2 = getTempDir() / "moe_test_bridge_clean_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:
@@ -2253,8 +2253,8 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
     # "buffer destroyed despite unsaved edits" if a future refactor short-
     # circuited the command-line parser path.
     let e = createTestEditor()
-    let f1 = "/tmp/moe_test_bridge_dirty_1.txt"
-    let f2 = "/tmp/moe_test_bridge_dirty_2.txt"
+    let f1 = getTempDir() / "moe_test_bridge_dirty_1.txt"
+    let f2 = getTempDir() / "moe_test_bridge_dirty_2.txt"
     writeFile(f1, "1")
     writeFile(f2, "2")
     defer:

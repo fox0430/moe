@@ -48,7 +48,7 @@ suite "Buffer - Trailing Empty Lines":
     check buf[2] == ""
 
   test "Save and load preserves trailing empty lines":
-    let testFile = "/tmp/moe_test_trailing.txt"
+    let testFile = getTempDir() / "moe_test_trailing.txt"
 
     # Create buffer with trailing empty lines
     let buf1 = newTextBuffer()
@@ -76,7 +76,7 @@ suite "Buffer - Trailing Empty Lines":
     removeFile(testFile)
 
   test "endOfLine flag controls trailing newline on save":
-    let testFile = "/tmp/moe_test_endofline.txt"
+    let testFile = getTempDir() / "moe_test_endofline.txt"
 
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello\n\n")
@@ -924,14 +924,14 @@ suite "Buffer - Unicode":
 suite "Buffer - File Operations":
   test "loadFile non-existent creates empty buffer":
     let buf = newTextBuffer()
-    let testFile = "/tmp/moe_test_nonexistent_" & $epochTime() & ".txt"
+    let testFile = getTempDir() / "moe_test_nonexistent_" & $epochTime() & ".txt"
     let result = buf.loadFile(testFile)
     check result.isOk
     check buf.len == 1
     check buf[0] == ""
 
   test "saveFile and loadFile roundtrip":
-    let testFile = "/tmp/moe_test_roundtrip.txt"
+    let testFile = getTempDir() / "moe_test_roundtrip.txt"
 
     let buf1 = newTextBuffer()
     discard buf1.insertText(
@@ -949,7 +949,7 @@ suite "Buffer - File Operations":
     removeFile(testFile)
 
   test "isModified false after save":
-    let testFile = "/tmp/moe_test_modified.txt"
+    let testFile = getTempDir() / "moe_test_modified.txt"
     let buf = newTextBuffer("Hello")
     discard buf.insertText(BufferPosition(line: 0, column: 5), " World")
     check buf.isModified == true
@@ -978,12 +978,12 @@ suite "Buffer - isExternallyModified":
     check not buf.isExternallyModified()
 
   test "Returns false when file does not exist":
-    let buf = newTextBuffer("hello", some("/tmp/nonexistent_test_file_12345"))
+    let buf = newTextBuffer("hello", some(getTempDir() / "nonexistent_test_file_12345"))
     buf.lastFileModTime = some(getTime())
     check not buf.isExternallyModified()
 
   test "Returns false when lastFileModTime is none":
-    let path = "/tmp/test_isExternallyModified_none.txt"
+    let path = getTempDir() / "test_isExternallyModified_none.txt"
     writeFile(path, "hello")
     defer:
       removeFile(path)
@@ -993,7 +993,7 @@ suite "Buffer - isExternallyModified":
     check not buf.isExternallyModified()
 
   test "Returns false when file has not been modified":
-    let path = "/tmp/test_isExternallyModified_unmodified.txt"
+    let path = getTempDir() / "test_isExternallyModified_unmodified.txt"
     writeFile(path, "hello")
     defer:
       removeFile(path)
@@ -1003,7 +1003,7 @@ suite "Buffer - isExternallyModified":
     check not buf.isExternallyModified()
 
   test "Returns true when file is modified externally":
-    let path = "/tmp/test_isExternallyModified_modified.txt"
+    let path = getTempDir() / "test_isExternallyModified_modified.txt"
     writeFile(path, "hello")
     defer:
       removeFile(path)
@@ -1080,7 +1080,7 @@ suite "Buffer - reloadFile":
     check res.isErr
 
   test "Reloads file content from disk":
-    let path = "/tmp/test_reloadFile.txt"
+    let path = getTempDir() / "test_reloadFile.txt"
     writeFile(path, "original")
     defer:
       removeFile(path)
@@ -1095,7 +1095,7 @@ suite "Buffer - reloadFile":
     check buf[0] == "updated"
 
   test "Updates lastFileModTime after reload":
-    let path = "/tmp/test_reloadFile_modtime.txt"
+    let path = getTempDir() / "test_reloadFile_modtime.txt"
     writeFile(path, "v1")
     defer:
       removeFile(path)
@@ -1113,7 +1113,7 @@ suite "Buffer - reloadFile":
 
 suite "Buffer - externalModWarned":
   test "externalModWarned does not affect isExternallyModified":
-    let path = "/tmp/test_externalModWarned_doesnt_mask.txt"
+    let path = getTempDir() / "test_externalModWarned_doesnt_mask.txt"
     writeFile(path, "hello")
     defer:
       removeFile(path)
@@ -1130,7 +1130,7 @@ suite "Buffer - externalModWarned":
     check buf.isExternallyModified()
 
   test "loadFile resets externalModWarned":
-    let path = "/tmp/test_externalModWarned_load.txt"
+    let path = getTempDir() / "test_externalModWarned_load.txt"
     writeFile(path, "hello")
     defer:
       removeFile(path)
@@ -1141,7 +1141,7 @@ suite "Buffer - externalModWarned":
     check buf.externalModWarned == false
 
   test "saveFile resets externalModWarned":
-    let path = "/tmp/test_externalModWarned_save.txt"
+    let path = getTempDir() / "test_externalModWarned_save.txt"
     defer:
       removeFile(path)
 

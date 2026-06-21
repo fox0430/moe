@@ -37,7 +37,7 @@ proc createTestEditorWithConfig(config: EditorConfig): Editor =
 suite "Editor - loadFile":
   test "Load existing file":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_load.txt"
+    let testFile = getTempDir() / "moe_test_load.txt"
 
     writeFile(testFile, "Hello World\nLine 2")
     defer:
@@ -53,7 +53,7 @@ suite "Editor - loadFile":
 
   test "Load file resets cursor position":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_load_cursor.txt"
+    let testFile = getTempDir() / "moe_test_load_cursor.txt"
 
     writeFile(testFile, "Line 1\nLine 2\nLine 3")
     defer:
@@ -69,7 +69,7 @@ suite "Editor - loadFile":
 
   test "Load file resets viewport":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_load_viewport.txt"
+    let testFile = getTempDir() / "moe_test_load_viewport.txt"
 
     writeFile(testFile, "Content")
     defer:
@@ -90,7 +90,7 @@ suite "Editor - loadFile":
     # loadFile returns error for directories or permission issues,
     # but may succeed for non-existent files (creating empty buffer)
     # Check that file path is set even for non-existent file
-    let result = e.loadFile("/tmp/moe_nonexistent_test_file_12345.txt")
+    let result = e.loadFile(getTempDir() / "moe_nonexistent_test_file_12345.txt")
     # The behavior depends on buffer.loadFile implementation
     # If it creates an empty buffer for new files, it returns ok
     # If it strictly requires file to exist, it returns error
@@ -105,7 +105,7 @@ suite "Editor - loadFile":
     var config = newEditorConfig()
     config.persist.cursorPosition = true
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_load_persist.txt"
+    let testFile = getTempDir() / "moe_test_load_persist.txt"
 
     writeFile(testFile, "Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
     defer:
@@ -124,7 +124,7 @@ suite "Editor - loadFile":
     var config = newEditorConfig()
     config.persist.cursorPosition = true
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_load_clamp.txt"
+    let testFile = getTempDir() / "moe_test_load_clamp.txt"
 
     writeFile(testFile, "Short")
     defer:
@@ -300,7 +300,7 @@ suite "Editor - multi-file startup (auto-split)":
 suite "Editor - saveFile":
   test "Save file to existing path":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_save.txt"
+    let testFile = getTempDir() / "moe_test_save.txt"
 
     # Load a file first
     writeFile(testFile, "Original content")
@@ -322,7 +322,7 @@ suite "Editor - saveFile":
 
   test "Save file with explicit path":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_save_explicit.txt"
+    let testFile = getTempDir() / "moe_test_save_explicit.txt"
     defer:
       if fileExists(testFile):
         removeFile(testFile)
@@ -351,7 +351,7 @@ suite "Editor - saveFile":
 
   test "Save file force overwrites externally modified file":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_save_force.txt"
+    let testFile = getTempDir() / "moe_test_save_force.txt"
 
     writeFile(testFile, "Original content")
     defer:
@@ -396,7 +396,7 @@ suite "Editor - saveBufferCursorPosition":
     var config = newEditorConfig()
     config.persist.cursorPosition = true
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_cursor_pos.txt"
+    let testFile = getTempDir() / "moe_test_cursor_pos.txt"
 
     writeFile(testFile, "Content")
     defer:
@@ -420,7 +420,7 @@ suite "Editor - saveBufferCursorPosition":
     var config = newEditorConfig()
     config.persist.cursorPosition = false
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_cursor_no_persist.txt"
+    let testFile = getTempDir() / "moe_test_cursor_no_persist.txt"
 
     writeFile(testFile, "Content")
     defer:
@@ -453,12 +453,12 @@ suite "Editor - saveBufferCursorPosition":
     var config = newEditorConfig()
     config.persist.cursorPosition = true
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_COMMIT_EDITMSG/COMMIT_EDITMSG"
+    let testFile = getTempDir() / "moe_test_COMMIT_EDITMSG/COMMIT_EDITMSG"
 
-    createDir("/tmp/moe_test_COMMIT_EDITMSG")
+    createDir(getTempDir() / "moe_test_COMMIT_EDITMSG")
     writeFile(testFile, "commit message")
     defer:
-      removeDir("/tmp/moe_test_COMMIT_EDITMSG")
+      removeDir(getTempDir() / "moe_test_COMMIT_EDITMSG")
 
     discard e.loadFile(testFile)
     e.cursor = BufferPosition(line: 0, column: 3)
@@ -472,12 +472,12 @@ suite "Editor - saveBufferCursorPosition":
     var config = newEditorConfig()
     config.persist.cursorPosition = true
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_rebase/git-rebase-todo"
+    let testFile = getTempDir() / "moe_test_rebase/git-rebase-todo"
 
-    createDir("/tmp/moe_test_rebase")
+    createDir(getTempDir() / "moe_test_rebase")
     writeFile(testFile, "pick abc123 some commit")
     defer:
-      removeDir("/tmp/moe_test_rebase")
+      removeDir(getTempDir() / "moe_test_rebase")
 
     discard e.loadFile(testFile)
     e.cursor = BufferPosition(line: 0, column: 5)
@@ -491,12 +491,12 @@ suite "Editor - saveBufferCursorPosition":
     var config = newEditorConfig()
     config.persist.cursorPosition = true
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_COMMIT_EDITMSG2/COMMIT_EDITMSG"
+    let testFile = getTempDir() / "moe_test_COMMIT_EDITMSG2/COMMIT_EDITMSG"
 
-    createDir("/tmp/moe_test_COMMIT_EDITMSG2")
+    createDir(getTempDir() / "moe_test_COMMIT_EDITMSG2")
     writeFile(testFile, "commit message content")
     defer:
-      removeDir("/tmp/moe_test_COMMIT_EDITMSG2")
+      removeDir(getTempDir() / "moe_test_COMMIT_EDITMSG2")
 
     # Pre-populate cursor positions with a saved position for this file
     let absPath = absolutePath(testFile)
@@ -512,12 +512,12 @@ suite "Editor - saveBufferCursorPosition":
     var config = newEditorConfig()
     config.persist.cursorPosition = true
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_rebase2/git-rebase-todo"
+    let testFile = getTempDir() / "moe_test_rebase2/git-rebase-todo"
 
-    createDir("/tmp/moe_test_rebase2")
+    createDir(getTempDir() / "moe_test_rebase2")
     writeFile(testFile, "pick abc123 some commit")
     defer:
-      removeDir("/tmp/moe_test_rebase2")
+      removeDir(getTempDir() / "moe_test_rebase2")
 
     # Pre-populate cursor positions with a saved position for this file
     let absPath = absolutePath(testFile)
@@ -637,7 +637,7 @@ suite "Editor - autoSave":
     var config = newEditorConfig()
     config.autoSave.enable = false
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_autosave_disabled.txt"
+    let testFile = getTempDir() / "moe_test_autosave_disabled.txt"
 
     writeFile(testFile, "Original")
     defer:
@@ -661,7 +661,7 @@ suite "Editor - autoSave":
     config.autoSave.enable = true
     config.autoSave.interval = 60 # 60 minutes
     let e = createTestEditorWithConfig(config)
-    let testFile = "/tmp/moe_test_autosave_interval.txt"
+    let testFile = getTempDir() / "moe_test_autosave_interval.txt"
 
     writeFile(testFile, "Original")
     defer:

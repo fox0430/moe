@@ -771,7 +771,7 @@ suite "FileTreeState":
     check matchCount == 2
 
   test "revealPath expands ancestors when rootPath is /":
-    # Create a temp dir structure under /tmp
+    # Create a temp dir structure under the system temp dir
     let tmpDir = createTempDir("moe_test_", "_rootreveal")
     defer:
       removeDir(tmpDir)

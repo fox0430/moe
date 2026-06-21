@@ -30,7 +30,7 @@ var testFileCounter {.global.} = 0
 # Helper proc to load config from a TOML string using a temp file
 proc loadFromTomlString(tomlStr: string): (EditorConfig, ValidationResult) =
   inc testFileCounter
-  let testFile = "/tmp/moe_test_config_" & $testFileCounter & ".toml"
+  let testFile = getTempDir() / "moe_test_config_" & $testFileCounter & ".toml"
   writeFile(testFile, tomlStr)
   defer:
     removeFile(testFile)
@@ -107,7 +107,8 @@ timeoutlen = 1000
   test "All StandardConfig fields round-trip through save/load":
     ## Set every field to a non-default value, save, reload, and verify.
     inc testFileCounter
-    let testFile = "/tmp/moe_test_standard_roundtrip_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_standard_roundtrip_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -638,7 +639,7 @@ colorMode = "invalid"
 
 suite "Config Loading - Integration":
   test "loadConfigFromToml with valid config":
-    let testFile = "/tmp/moe_test_valid_config.toml"
+    let testFile = getTempDir() / "moe_test_valid_config.toml"
     writeFile(
       testFile,
       """
@@ -666,7 +667,7 @@ tool = "xsel"
     check config.clipboard.tool == cbtXsel
 
   test "loadConfigFromToml with invalid values uses defaults":
-    let testFile = "/tmp/moe_test_invalid_config.toml"
+    let testFile = getTempDir() / "moe_test_invalid_config.toml"
     writeFile(
       testFile,
       """
@@ -1307,7 +1308,7 @@ suite "Config - loadThemeFromToml":
 
   test "Invalid TOML returns error with 'parse'":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_invalid_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_invalid_" & $testFileCounter & ".toml"
     writeFile(testFile, "this is not valid = = = toml [[[")
     defer:
       removeFile(testFile)
@@ -1318,7 +1319,7 @@ suite "Config - loadThemeFromToml":
 
   test "Missing [Colors] section returns error":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_nocolor_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_nocolor_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Other]\nkey = \"value\"\n")
     defer:
       removeFile(testFile)
@@ -1329,7 +1330,7 @@ suite "Config - loadThemeFromToml":
 
   test "Valid [Colors] section returns Ok":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_valid_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_valid_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nforeground = \"#ff0000\"\n")
     defer:
       removeFile(testFile)
@@ -1339,7 +1340,7 @@ suite "Config - loadThemeFromToml":
 
   test "Foreground color override":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_fg_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_fg_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nforeground = \"#ff0000\"\n")
     defer:
       removeFile(testFile)
@@ -1353,7 +1354,7 @@ suite "Config - loadThemeFromToml":
 
   test "Background color override":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_bg_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_bg_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nbackground = \"#00ff00\"\n")
     defer:
       removeFile(testFile)
@@ -1365,7 +1366,7 @@ suite "Config - loadThemeFromToml":
 
   test "Keyword foreground via inline table":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_kw_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_kw_" & $testFileCounter & ".toml"
     writeFile(
       testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = { fg = \"#0000ff\" }\n"
     )
@@ -1380,7 +1381,7 @@ suite "Config - loadThemeFromToml":
 
   test "Keyword background-only via inline table":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_kwbg_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_kwbg_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nkeyword = { bg = \"#112233\" }\n")
     defer:
       removeFile(testFile)
@@ -1394,7 +1395,7 @@ suite "Config - loadThemeFromToml":
 
   test "Inline table with fg and bg":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_pair_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_pair_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nlineNum = { fg = \"#aabbcc\", bg = \"#112233\" }\n")
     defer:
       removeFile(testFile)
@@ -1413,7 +1414,7 @@ suite "Config - loadThemeFromToml":
     # The bg-only enum `currentLineBg` is keyed as `currentLine` in TOML
     # because the new inline-table format expresses bg explicitly.
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_curln_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_curln_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\ncurrentLine = { bg = \"#3e4452\" }\n")
     defer:
       removeFile(testFile)
@@ -1427,7 +1428,7 @@ suite "Config - loadThemeFromToml":
 
   test "currentColumn sets background of currentColumnBg enum":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_curcol_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_curcol_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\ncurrentColumn = { bg = \"#3e4452\" }\n")
     defer:
       removeFile(testFile)
@@ -1441,7 +1442,7 @@ suite "Config - loadThemeFromToml":
 
   test "configModePopup sets both fg and bg of configModePopupBg enum":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_cmpop_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_cmpop_" & $testFileCounter & ".toml"
     writeFile(
       testFile, "[Colors]\nconfigModePopup = { fg = \"#ffffff\", bg = \"#323232\" }\n"
     )
@@ -1457,7 +1458,7 @@ suite "Config - loadThemeFromToml":
   test "Bare string for non-default entry is rejected":
     # Pre-rewrite themes used `key = "#hex"`; the new parser requires inline tables.
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_bare_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_bare_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nkeyword = \"#0000ff\"\n")
     defer:
       removeFile(testFile)
@@ -1471,7 +1472,7 @@ suite "Config - loadThemeFromToml":
 
   test "Unknown sub-key inside inline table is reported":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_unksub_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_unksub_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nkeyword = { fg = \"#0000ff\", bogus = \"x\" }\n")
     defer:
       removeFile(testFile)
@@ -1491,7 +1492,7 @@ suite "Config - loadThemeFromToml":
     # always a typo; surface it as an invalid value rather than silently
     # accepting it.
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_empty_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_empty_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nkeyword = {}\n")
     defer:
       removeFile(testFile)
@@ -1506,7 +1507,7 @@ suite "Config - loadThemeFromToml":
 
   test "Non-string sub-value is reported":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_nonstr_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_nonstr_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nkeyword = { fg = 123 }\n")
     defer:
       removeFile(testFile)
@@ -1523,7 +1524,7 @@ suite "Config - loadThemeFromToml":
 
   test "termDefault color is processed (rgb.red == -1)":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_td_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_td_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nforeground = \"termDefault\"\n")
     defer:
       removeFile(testFile)
@@ -1535,7 +1536,7 @@ suite "Config - loadThemeFromToml":
 
   test "Unknown color key is ignored and returns Ok":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_unk_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_unk_" & $testFileCounter & ".toml"
     writeFile(
       testFile, "[Colors]\nforeground = \"#ffffff\"\nnonExistentKey = \"#123456\"\n"
     )
@@ -1547,7 +1548,7 @@ suite "Config - loadThemeFromToml":
 
   test "Unknown color key is reported in ValidationResult":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_unk_vr_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_unk_vr_" & $testFileCounter & ".toml"
     writeFile(
       testFile, "[Colors]\nforeground = \"#ffffff\"\nnonExistentKey = \"#123456\"\n"
     )
@@ -1564,7 +1565,8 @@ suite "Config - loadThemeFromToml":
 
   test "Invalid color value is reported in ValidationResult":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_badcolor_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_theme_badcolor_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nkeyword = { fg = \"notacolor\" }\n")
     defer:
       removeFile(testFile)
@@ -1580,7 +1582,7 @@ suite "Config - loadThemeFromToml":
 
   test "Invalid foreground/background values are reported":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_badfgbg_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_theme_badfgbg_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nforeground = \"badfg\"\nbackground = \"badbg\"\n")
     defer:
       removeFile(testFile)
@@ -1595,7 +1597,8 @@ suite "Config - loadThemeFromToml":
 
   test "Valid theme produces no validation errors":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_valid_vr_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_theme_valid_vr_" & $testFileCounter & ".toml"
     writeFile(
       testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = { fg = \"#0000ff\" }\n"
     )
@@ -1618,7 +1621,7 @@ suite "Config - loadTheme":
 
   test "tkConfig with valid file returns Ok":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_loadtheme_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_loadtheme_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nforeground = \"#aabbcc\"\n")
     defer:
       removeFile(testFile)
@@ -1659,7 +1662,7 @@ suite "Config - initTheme":
 
   test "Invalid keys in theme file are reported via initTheme":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_inittheme_bad_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_inittheme_bad_" & $testFileCounter & ".toml"
     writeFile(testFile, "[Colors]\nforeground = \"#ffffff\"\nbogusKey = \"#abcdef\"\n")
     defer:
       removeFile(testFile)
@@ -1676,7 +1679,7 @@ suite "Config - initTheme":
 suite "Config - saveConfigToToml":
   test "Save default config to file":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1689,7 +1692,7 @@ suite "Config - saveConfigToToml":
 
   test "Saved config is valid TOML and can be reloaded":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_reload_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_reload_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1704,7 +1707,7 @@ suite "Config - saveConfigToToml":
 
   test "tabStop value round-trips":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_tabstop_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_tabstop_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1723,7 +1726,7 @@ suite "Config - saveConfigToToml":
 
   test "shiftWidth value round-trips":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_sw_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_sw_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1742,7 +1745,7 @@ suite "Config - saveConfigToToml":
 
   test "softTabStop value round-trips":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_sts_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_sts_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1761,7 +1764,7 @@ suite "Config - saveConfigToToml":
 
   test "Boolean setting round-trips":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_bool_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_bool_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1782,7 +1785,7 @@ suite "Config - saveConfigToToml":
 
   test "Parent directory is created automatically":
     inc testFileCounter
-    let testDir = "/tmp/moe_test_save_dir_" & $testFileCounter
+    let testDir = getTempDir() / "moe_test_save_dir_" & $testFileCounter
     let testFile = testDir / "subdir" / "config.toml"
     defer:
       removeDir(testDir)
@@ -1796,7 +1799,7 @@ suite "Config - saveConfigToToml":
 
   test "Output contains expected section headers":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_sections_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_sections_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1817,7 +1820,7 @@ suite "Config - saveConfigToToml":
 
   test "bookmarkMarker containing a double quote round-trips":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_quote_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_quote_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1836,7 +1839,8 @@ suite "Config - saveConfigToToml":
 
   test "bookmarkMarker containing a backslash round-trips":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_backslash_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_save_backslash_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1855,7 +1859,7 @@ suite "Config - saveConfigToToml":
 
   test "bookmarkMarker containing a newline and tab round-trips":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_newline_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_newline_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1874,7 +1878,7 @@ suite "Config - saveConfigToToml":
 
   test "Saved config with special chars in string is still valid TOML":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_special_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_special_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -1945,7 +1949,7 @@ suite "Config - saveConfigToToml round-trip completeness":
 
   test "All config fields round-trip through save/load":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_roundtrip_all_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_roundtrip_all_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2240,7 +2244,7 @@ splitType = "vertical"
 suite "Config - saveThemeToToml":
   test "Save DefaultColors to file":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_theme_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2250,7 +2254,8 @@ suite "Config - saveThemeToToml":
 
   test "Saved theme file contains [Colors] section":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_section_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_save_theme_section_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2264,7 +2269,8 @@ suite "Config - saveThemeToToml":
 
   test "Saved theme can be reloaded":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_reload_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_save_theme_reload_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2276,7 +2282,7 @@ suite "Config - saveThemeToToml":
 
   test "Color values round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_rt_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_theme_rt_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2294,7 +2300,8 @@ suite "Config - saveThemeToToml":
 
   test "Custom colors round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_custom_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_save_theme_custom_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2318,7 +2325,7 @@ suite "Config - saveThemeToToml":
 
   test "termDefault color round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_td_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_save_theme_td_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2342,7 +2349,7 @@ suite "Config - saveThemeToToml":
 
   test "Parent directory is created automatically":
     inc testFileCounter
-    let testDir = "/tmp/moe_test_save_theme_dir_" & $testFileCounter
+    let testDir = getTempDir() / "moe_test_save_theme_dir_" & $testFileCounter
     let testFile = testDir / "subdir" / "theme.toml"
     defer:
       removeDir(testDir)
@@ -2353,7 +2360,8 @@ suite "Config - saveThemeToToml":
 
   test "Backup file is created when original exists":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_bac_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_save_theme_bac_" & $testFileCounter & ".toml"
     let backupFile = testFile & ".bac"
     defer:
       removeFile(testFile)
@@ -2383,7 +2391,8 @@ suite "Config - saveThemeToToml":
 
   test "No backup file when original does not exist":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_save_theme_nobac_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_save_theme_nobac_" & $testFileCounter & ".toml"
     let backupFile = testFile & ".bac"
     defer:
       removeFile(testFile)
@@ -2398,8 +2407,10 @@ suite "Config - saveThemeToToml":
 suite "Config - saveConfigToToml saves theme file":
   test "Theme file is saved when kind is tkConfig with path":
     inc testFileCounter
-    let configFile = "/tmp/moe_test_save_cfg_theme_" & $testFileCounter & ".toml"
-    let themeFile = "/tmp/moe_test_save_cfg_theme_colors_" & $testFileCounter & ".toml"
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_theme_" & $testFileCounter & ".toml"
+    let themeFile =
+      getTempDir() / "moe_test_save_cfg_theme_colors_" & $testFileCounter & ".toml"
     defer:
       removeFile(configFile)
       removeFile(themeFile)
@@ -2421,9 +2432,10 @@ suite "Config - saveConfigToToml saves theme file":
 
   test "Theme file is not saved when kind is tkDefault":
     inc testFileCounter
-    let configFile = "/tmp/moe_test_save_cfg_no_theme_" & $testFileCounter & ".toml"
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_no_theme_" & $testFileCounter & ".toml"
     let themeFile =
-      "/tmp/moe_test_save_cfg_no_theme_colors_" & $testFileCounter & ".toml"
+      getTempDir() / "moe_test_save_cfg_no_theme_colors_" & $testFileCounter & ".toml"
     defer:
       removeFile(configFile)
       if fileExists(themeFile):
@@ -2439,7 +2451,8 @@ suite "Config - saveConfigToToml saves theme file":
 
   test "Theme file is not saved when path is empty":
     inc testFileCounter
-    let configFile = "/tmp/moe_test_save_cfg_empty_path_" & $testFileCounter & ".toml"
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_empty_path_" & $testFileCounter & ".toml"
     defer:
       removeFile(configFile)
 
@@ -2949,7 +2962,7 @@ number = true
 suite "Config - saveConfigToToml with KeyMapping":
   test "KeyMapping round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_keymap_save_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_keymap_save_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -2982,7 +2995,8 @@ suite "Config - saveConfigToToml with KeyMapping":
 
   test "KeyMapping.All round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_keymap_all_save_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_keymap_all_save_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3006,7 +3020,8 @@ suite "Config - saveConfigToToml with KeyMapping":
 
   test "VisualAll/VisualLine/VisualBlock round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_keymap_visual_save_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_keymap_visual_save_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3036,7 +3051,8 @@ suite "Config - saveConfigToToml with KeyMapping":
 
   test "Special mode KeyMapping round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_keymap_special_save_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_keymap_special_save_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3081,7 +3097,8 @@ suite "Config - saveConfigToToml with KeyMapping":
 
   test "Empty KeyMapping not saved":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_keymap_empty_save_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_keymap_empty_save_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3252,7 +3269,7 @@ cmd = { command = "Make -C /opt/project BUILD_TYPE=Release" }
 suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
   test "CommandAliases round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_aliases_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_aliases_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3275,7 +3292,7 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
 
   test "CommandAliases round-trip with description":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_aliases_desc_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_aliases_desc_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3297,7 +3314,7 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
 
   test "ShellCommands round-trip":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_shellcmds_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_shellcmds_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3320,7 +3337,8 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
 
   test "ShellCommands round-trip with description":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_shellcmds_desc_" & $testFileCounter & ".toml"
+    let testFile =
+      getTempDir() / "moe_test_shellcmds_desc_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 
@@ -3342,7 +3360,7 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
 
   test "Empty CommandAliases and ShellCommands not saved":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_empty_cmds_" & $testFileCounter & ".toml"
+    let testFile = getTempDir() / "moe_test_empty_cmds_" & $testFileCounter & ".toml"
     defer:
       removeFile(testFile)
 

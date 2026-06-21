@@ -1546,7 +1546,7 @@ suite "handleCommandModeEvent - exitOverlay on self-managed branches":
     e.state.commandCursor = 6
 
     let origHome = getEnv("HOME")
-    putEnv("HOME", "/tmp/moe_test_nonexistent_home")
+    putEnv("HOME", getTempDir() / "moe_test_nonexistent_home")
     defer:
       putEnv("HOME", origHome)
 
@@ -1635,7 +1635,8 @@ suite "handleCommandModeEvent - :putconfigfile":
   test "Theme file saved when kind is tkConfig":
     var themeFileCounter {.global.} = 0
     inc themeFileCounter
-    let themeFile = "/tmp/moe_test_putconfigfile_theme_" & $themeFileCounter & ".toml"
+    let themeFile =
+      getTempDir() / "moe_test_putconfigfile_theme_" & $themeFileCounter & ".toml"
     defer:
       removeFile(themeFile)
 
