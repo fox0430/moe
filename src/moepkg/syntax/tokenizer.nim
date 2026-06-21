@@ -333,6 +333,82 @@ proc generalStrLit*(g: var GeneralTokenizer, position: int): int =
         inc(pos)
   result = pos
 
+template peek*(g: GeneralTokenizer, pos: int, offset: int = 1): char =
+  ## Look ahead `offset` bytes from `pos` without advancing. A replacement for
+  ## the raw `g.buf[pos + N]` lookahead scattered across the tokenizers.
+  ##
+  ## NUL-safe like every other read here: the buffer is NUL-terminated, so an
+  ## offset that reaches past the end just yields another `'\0'`. It is the
+  ## caller's job not to peek so far ahead that it skips an intervening `'\0'`
+  ## — the same contract the inline lookahead already relied on.
+  g.buf[pos + offset]
+
+proc scanStringBody*(g: var GeneralTokenizer, position: int, quote: char): int =
+  ## Scan the body of a single-line string literal, starting at `position`
+  ## (just past the opening `quote`) with `g.kind` already set to the token
+  ## class to emit (`gtStringLit`, `gtKey`, ...). Returns the position after the
+  ## token. This is the line-bounded, escape-parks variant shared by the C-like,
+  ## shell, and JSON tokenizers:
+  ##
+  ## - the matching `quote` ends and is consumed by the token;
+  ## - a line boundary or EOF (`'\0' '\r' '\n'`) ends the token *without*
+  ##   consuming the terminator — the string is line-bounded so a multi-line
+  ##   string never becomes one token whose interior boundary state breaks the
+  ##   incremental tokenizer's per-line resume;
+  ## - a backslash parks `g.state = g.kind` and breaks so the next call resumes
+  ##   into the language's own escape handling.
+  result = position
+  while true:
+    let c = g.buf[result]
+    if c in {'\0', '\r', '\n'}:
+      break
+    elif c == '\\':
+      g.state = g.kind
+      break
+    elif c == quote:
+      inc(result)
+      break
+    else:
+      inc(result)
+
+proc scanRadixNumber*(g: var GeneralTokenizer, position: int): int =
+  ## Scan a numeric literal beginning at a digit and set `g.kind`. A leading
+  ## `0` followed by `b`/`B`, `x`/`X`, or an octal digit selects
+  ## bin/hex/oct and consumes exactly those radix digits; everything else falls
+  ## through to `generalNumber` (decimal / float / exponent). Trailing
+  ## type-suffix letters are deliberately left in place — callers differ on
+  ## whether a suffix is a single letter or a run — so the caller applies its
+  ## own suffix policy afterwards. Byte-equivalent to the inline radix dispatch
+  ## previously duplicated across the C-like and shell tokenizers.
+  const
+    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
+    octChars = {'0' .. '7'}
+    binChars = {'0' .. '1'}
+  result = position
+  if g.buf[result] == '0':
+    case g.peek(result)
+    of 'b', 'B':
+      g.kind = gtBinNumber
+      inc(result, 2)
+      while g.buf[result] in binChars:
+        inc(result)
+      return
+    of 'x', 'X':
+      g.kind = gtHexNumber
+      inc(result, 2)
+      while g.buf[result] in hexChars:
+        inc(result)
+      return
+    of '0' .. '7':
+      g.kind = gtOctNumber
+      inc(result, 2)
+      while g.buf[result] in octChars:
+        inc(result)
+      return
+    else:
+      discard
+  result = generalNumber(g, result)
+
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 

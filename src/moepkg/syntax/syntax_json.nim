@@ -166,18 +166,7 @@ proc jsonLikeNextToken*(g: var GeneralTokenizer, allowComments: bool) =
         g.kind = gtKey
       else:
         g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0', '\r', '\n':
-          break
-        of '\"':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc(pos)
+      pos = g.scanStringBody(pos, '\"')
     of '{', '}', '[', ']':
       inc(pos)
       g.kind = gtPunctuation

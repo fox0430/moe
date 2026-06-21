@@ -46,8 +46,6 @@ proc clikeNextToken*(
 ) =
   const
     hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
-    octChars = {'0' .. '7'}
-    binChars = {'0' .. '1'}
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
@@ -180,36 +178,8 @@ proc clikeNextToken*(
         g.kind = gtKeyword
       else:
         g.kind = gtIdentifier
-    of '0':
-      inc(pos)
-      case g.buf[pos]
-      of 'b', 'B':
-        g.kind = gtBinNumber
-        inc(pos)
-        while g.buf[pos] in binChars:
-          inc(pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      of 'x', 'X':
-        g.kind = gtHexNumber
-        inc(pos)
-        while g.buf[pos] in hexChars:
-          inc(pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      of '0' .. '7':
-        g.kind = gtOctNumber
-        inc(pos)
-        while g.buf[pos] in octChars:
-          inc(pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      else:
-        pos = generalNumber(g, pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-    of '1' .. '9':
-      pos = generalNumber(g, pos)
+    of '0' .. '9':
+      pos = g.scanRadixNumber(pos)
       while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
         inc(pos)
     of '\'':
@@ -233,18 +203,7 @@ proc clikeNextToken*(
     of '\"':
       inc(pos)
       g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0', '\r', '\n':
-          break
-        of '\"':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc(pos)
+      pos = g.scanStringBody(pos, '\"')
     of '(', ')', '[', ']', '{', '}', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation

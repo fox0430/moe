@@ -125,21 +125,10 @@ proc fishNextToken*(g: var GeneralTokenizer) =
     of '\"':
       inc(pos)
       g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0', '\r', '\n':
-          # Line-bounded: the resume path also ends the string at EOL, so a
-          # multi-line string never becomes one token whose interior line
-          # boundary state (gtNone) breaks incremental resume.
-          break
-        of '\"':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc(pos)
+      # Line-bounded: the resume path also ends the string at EOL, so a
+      # multi-line string never becomes one token whose interior line boundary
+      # state (gtNone) breaks incremental resume.
+      pos = g.scanStringBody(pos, '\"')
     of '\'':
       # Fish single-quoted strings do not support escape sequences.
       inc pos

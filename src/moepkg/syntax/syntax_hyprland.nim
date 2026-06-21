@@ -108,18 +108,7 @@ proc hyprlandNextToken*(g: var GeneralTokenizer) =
     of '\"':
       inc(pos)
       g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0', '\r', '\n':
-          break
-        of '\"':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc(pos)
+      pos = g.scanStringBody(pos, '\"')
     of '=':
       g.kind = gtOperator
       inc(pos)
