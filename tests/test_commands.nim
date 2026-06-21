@@ -247,27 +247,6 @@ suite "CommandExecutor - Motion Execution":
 
     check exec.cursor.line == 2
 
-suite "CommandExecutor - Compatibility Wrappers":
-  test "clampCursor does not crash":
-    let buf = newTextBuffer()
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    let exec = newCommandExecutor(buf, state, viewport)
-
-    # Should not crash (compatibility wrapper, does nothing)
-    exec.clampCursor()
-
-  test "updateViewport does not crash":
-    let buf = newTextBuffer()
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    let exec = newCommandExecutor(buf, state, viewport)
-
-    # Should not crash (compatibility wrapper, does nothing)
-    exec.updateViewport()
-
 suite "CommandExecutor - Execute Command String":
   test "Execute unknown command returns error":
     let buf = newTextBuffer()

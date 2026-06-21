@@ -887,7 +887,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       lastKeyWasEscape: false, # Track double-Escape for clearing highlight
       # Edit operation state (grouped in EditState)
       editState: EditState(
-        lastMotion: none(Motion),
         lastEditCommand: none(LastEditCommand),
         pendingOperator: none(PendingOperator),
         pendingTextObject: none(PendingTextObject),
