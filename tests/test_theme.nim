@@ -22,6 +22,25 @@ import std/unittest
 import ../src/moepkg/color
 import ../src/moepkg/theme {.all.}
 
+# Declared first so it observes the global state established purely by module
+# initialization, before any later suite mutates it.
+suite "theme - global seed (regression: all-black dark.toml)":
+  test "themeColors is seeded with DefaultColors at module load":
+    ## `color.nim` zero-initializes the `themeColors` global (every channel 0,
+    ## i.e. all-black #000000) because it cannot reference `DefaultColors`
+    ## without an import cycle. `theme.nim` seeds the global with `DefaultColors`
+    ## at module load so any save path that runs before
+    ## `initTheme`/`setThemeColors` (e.g. a tool/test using a default
+    ## `EditorConfig`, whose `theme.path` points at the real
+    ## ~/.config/moe/themes/dark.toml) writes a valid dark theme instead of
+    ## overwriting that file with all-black. Removing the seed makes this fail.
+    check themeColors == DefaultColors
+
+    # Discriminate against the zero-initialized (all-black) state: the default
+    # foreground in DefaultColors is #dadada (red 218), never 0.
+    check themeColors[EditorColorPairIndex.default].foreground.rgb.red == 218
+    check themeColors[EditorColorPairIndex.default].foreground.rgb != rgb("#000000")
+
 suite "theme - makeColorPair helper":
   test "makeColorPair creates valid ColorPair":
     let pair = makeColorPair("#ff0000", "#00ff00")
