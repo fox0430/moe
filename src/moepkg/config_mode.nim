@@ -218,8 +218,10 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.lsp.timeout,
     intSet: proc(c: EditorConfig, v: int) =
       c.lsp.timeout = v,
-    intMin: 1000,
-    intMax: 60000,
+    # Only correctness matters: forbid <= 0 (applied live), no upper bound.
+    # Matches the TOML loader, which likewise only rejects non-positive values.
+    intMin: 1,
+    intMax: int.high,
   )
 
 # Global descriptor table (built once)
