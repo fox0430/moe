@@ -21,7 +21,7 @@ import std/[unittest, os, tables, json, options, strutils]
 import pkg/results
 import ../src/moepkg/persist
 
-const TestPersistDir = "/tmp/moe_test_persist"
+let TestPersistDir = getTempDir() / "moe_test_persist"
 
 proc cleanupTestDir() =
   if dirExists(TestPersistDir):

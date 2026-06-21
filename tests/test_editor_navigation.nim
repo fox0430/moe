@@ -101,7 +101,7 @@ suite "editor_navigation - pollLspLocationRequest":
 suite "editor_navigation - openFileAndJumpTo":
   test "Jumps to location in same file":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_jump_same.txt"
+    let testFile = getTempDir() / "moe_test_jump_same.txt"
 
     writeFile(testFile, "line 0\nline 1\nline 2\n")
     defer:
@@ -117,7 +117,7 @@ suite "editor_navigation - openFileAndJumpTo":
 
   test "Adds to jump list before jumping":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_jump_list.txt"
+    let testFile = getTempDir() / "moe_test_jump_list.txt"
 
     writeFile(testFile, "line 0\nline 1\nline 2\n")
     defer:
@@ -132,8 +132,8 @@ suite "editor_navigation - openFileAndJumpTo":
 
   test "Opens different file and jumps to location":
     let e = createTestEditor()
-    let testFile1 = "/tmp/moe_test_jump1.txt"
-    let testFile2 = "/tmp/moe_test_jump2.txt"
+    let testFile1 = getTempDir() / "moe_test_jump1.txt"
+    let testFile2 = getTempDir() / "moe_test_jump2.txt"
 
     writeFile(testFile1, "file 1\n")
     writeFile(testFile2, "line 0\nline 1\nline 2\n")
@@ -152,7 +152,7 @@ suite "editor_navigation - openFileAndJumpTo":
     # moe treats nonexistent files as new files (no error)
     let e = createTestEditor()
 
-    let result = e.openFileAndJumpTo("/tmp/moe_test_new_file.txt", 0, 0)
+    let result = e.openFileAndJumpTo(getTempDir() / "moe_test_new_file.txt", 0, 0)
 
     # Should succeed as new file creation
     check result
@@ -162,7 +162,7 @@ suite "editor_navigation - openFileAndJumpTo":
 suite "editor_navigation - Jump list":
   test "Jump list does not add duplicate positions":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_jump_dup.txt"
+    let testFile = getTempDir() / "moe_test_jump_dup.txt"
 
     writeFile(testFile, "line 0\nline 1\n")
     defer:
@@ -182,7 +182,7 @@ suite "editor_navigation - Jump list":
 
   test "Jump list respects maximum size":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_jump_max.txt"
+    let testFile = getTempDir() / "moe_test_jump_max.txt"
 
     var content = ""
     for i in 0 ..< 150:
@@ -212,7 +212,7 @@ suite "editor_navigation - handleLspLocations":
 
   test "Jumps directly when single location in same file":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_handle_loc.txt"
+    let testFile = getTempDir() / "moe_test_handle_loc.txt"
 
     writeFile(testFile, "line 0\nline 1\nline 2\n")
     defer:
@@ -237,7 +237,7 @@ suite "editor_navigation - handleLspLocations":
 
   test "Enters References mode when multiple locations":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_multi_loc.txt"
+    let testFile = getTempDir() / "moe_test_multi_loc.txt"
 
     writeFile(testFile, "line 0\nline 1\nline 2\n")
     defer:
@@ -286,7 +286,7 @@ suite "editor_navigation - switchToBufferForLsp":
 
   test "Switches to valid buffer index":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_switch_lsp.txt"
+    let testFile = getTempDir() / "moe_test_switch_lsp.txt"
 
     writeFile(testFile, "test content")
     defer:
@@ -309,7 +309,7 @@ suite "editor_navigation - switchToBufferForLsp":
 suite "editor_navigation - addToJumpList":
   test "Adds position to jump list":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_add_jump.txt"
+    let testFile = getTempDir() / "moe_test_add_jump.txt"
 
     writeFile(testFile, "line 0\nline 1\n")
     defer:
@@ -328,7 +328,7 @@ suite "editor_navigation - addToJumpList":
 
   test "Does not add duplicate of last position":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_add_jump_dup.txt"
+    let testFile = getTempDir() / "moe_test_add_jump_dup.txt"
 
     writeFile(testFile, "line 0\nline 1\n")
     defer:
@@ -356,7 +356,7 @@ suite "editor_navigation - addToJumpList":
 suite "editor_navigation - jumpToLspLocation":
   test "Jumps to location in same file":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_jump_lsp_loc.txt"
+    let testFile = getTempDir() / "moe_test_jump_lsp_loc.txt"
 
     writeFile(testFile, "line 0\nline 1\nline 2\n")
     defer:
@@ -380,8 +380,8 @@ suite "editor_navigation - jumpToLspLocation":
 
   test "Opens different file and jumps":
     let e = createTestEditor()
-    let testFile1 = "/tmp/moe_test_jump_lsp1.txt"
-    let testFile2 = "/tmp/moe_test_jump_lsp2.txt"
+    let testFile1 = getTempDir() / "moe_test_jump_lsp1.txt"
+    let testFile2 = getTempDir() / "moe_test_jump_lsp2.txt"
 
     writeFile(testFile1, "file 1")
     writeFile(testFile2, "line 0\nline 1\nline 2\n")
@@ -406,8 +406,8 @@ suite "editor_navigation - jumpToLspLocation":
 
   test "Switches to existing buffer instead of reloading":
     let e = createTestEditor()
-    let testFile1 = "/tmp/moe_test_jump_existing1.txt"
-    let testFile2 = "/tmp/moe_test_jump_existing2.txt"
+    let testFile1 = getTempDir() / "moe_test_jump_existing1.txt"
+    let testFile2 = getTempDir() / "moe_test_jump_existing2.txt"
 
     writeFile(testFile1, "file 1")
     writeFile(testFile2, "line 0\nline 1\n")

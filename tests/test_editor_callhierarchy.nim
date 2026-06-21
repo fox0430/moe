@@ -291,7 +291,7 @@ suite "editor_callhierarchy - requestCallHierarchyOutgoingForItem":
 suite "editor_callhierarchy - jumpToCallHierarchyItem":
   test "Jumps to item location in same file":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_call_hierarchy.txt"
+    let testFile = getTempDir() / "moe_test_call_hierarchy.txt"
 
     writeFile(testFile, "line 0\nline 1\nline 2\n")
     defer:

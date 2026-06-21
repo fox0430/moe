@@ -2,7 +2,7 @@ import std/[unittest, os, options, json, strutils]
 import pkg/results
 import ../src/moepkg/[backup, buffer, config]
 
-const TestBackupDir = "/tmp/moe_test_backup"
+let TestBackupDir = getTempDir() / "moe_test_backup"
 
 proc cleanupTestDir() =
   if dirExists(TestBackupDir):
@@ -178,7 +178,7 @@ suite "backup - backupBuffer":
     check result.error == "No file path"
 
   test "Successfully backup buffer with file path":
-    let testSourceFile = "/tmp/moe_test_source.txt"
+    let testSourceFile = getTempDir() / "moe_test_source.txt"
     writeFile(testSourceFile, "original content")
 
     let buf = newTextBuffer()
@@ -199,42 +199,42 @@ suite "backup - backupBuffer":
     removeFile(testSourceFile)
 
   test "Return error when directory is excluded":
-    let testSourceFile = "/tmp/excluded/test.txt"
-    createDir("/tmp/excluded")
+    let testSourceFile = getTempDir() / "excluded/test.txt"
+    createDir(getTempDir() / "excluded")
     writeFile(testSourceFile, "content")
 
     let buf = newTextBuffer()
     discard buf.loadFile(testSourceFile)
 
-    let config = createTestConfig(dirToExclude = @["/tmp/excluded"])
+    let config = createTestConfig(dirToExclude = @[getTempDir() / "excluded"])
     let result = backupBuffer(buf.filePath, buf.getTextString(), config)
 
     check result.isErr
     check result.error == "Directory excluded from backup"
 
     removeFile(testSourceFile)
-    removeDir("/tmp/excluded")
+    removeDir(getTempDir() / "excluded")
 
   test "Return error when subdirectory is excluded":
-    let testSourceFile = "/tmp/excluded/subdir/test.txt"
-    createDir("/tmp/excluded/subdir")
+    let testSourceFile = getTempDir() / "excluded/subdir/test.txt"
+    createDir(getTempDir() / "excluded/subdir")
     writeFile(testSourceFile, "content")
 
     let buf = newTextBuffer()
     discard buf.loadFile(testSourceFile)
 
-    let config = createTestConfig(dirToExclude = @["/tmp/excluded"])
+    let config = createTestConfig(dirToExclude = @[getTempDir() / "excluded"])
     let result = backupBuffer(buf.filePath, buf.getTextString(), config)
 
     check result.isErr
     check result.error == "Directory excluded from backup"
 
     removeFile(testSourceFile)
-    removeDir("/tmp/excluded/subdir")
-    removeDir("/tmp/excluded")
+    removeDir(getTempDir() / "excluded/subdir")
+    removeDir(getTempDir() / "excluded")
 
   test "Do not backup when content unchanged":
-    let testSourceFile = "/tmp/moe_test_unchanged.txt"
+    let testSourceFile = getTempDir() / "moe_test_unchanged.txt"
     writeFile(testSourceFile, "same content")
 
     let buf = newTextBuffer()
@@ -254,7 +254,7 @@ suite "backup - backupBuffer":
     removeFile(testSourceFile)
 
   test "Create new backup when content changed":
-    let testSourceFile = "/tmp/moe_test_changed.txt"
+    let testSourceFile = getTempDir() / "moe_test_changed.txt"
     writeFile(testSourceFile, "initial")
 
     let buf = newTextBuffer()
@@ -280,7 +280,7 @@ suite "backup - backupBuffer":
     removeFile(testSourceFile)
 
   test "Reuse existing backup directory for same source file":
-    let testSourceFile = "/tmp/moe_test_reuse.txt"
+    let testSourceFile = getTempDir() / "moe_test_reuse.txt"
     writeFile(testSourceFile, "content v1")
 
     let buf = newTextBuffer()
@@ -308,18 +308,18 @@ suite "backup - backupBuffer":
 
   test "Exclude pattern should not match partial directory names":
     # Excluding /etc should not exclude /etcfoo
-    let testSourceFile = "/tmp/etcfoo/test.txt"
-    createDir("/tmp/etcfoo")
+    let testSourceFile = getTempDir() / "etcfoo/test.txt"
+    createDir(getTempDir() / "etcfoo")
     writeFile(testSourceFile, "content")
 
     let buf = newTextBuffer()
     discard buf.loadFile(testSourceFile)
 
-    let config = createTestConfig(dirToExclude = @["/tmp/etc"])
+    let config = createTestConfig(dirToExclude = @[getTempDir() / "etc"])
     let result = backupBuffer(buf.filePath, buf.getTextString(), config)
 
     # Should succeed because /tmp/etcfoo is not /tmp/etc
     check result.isOk
 
     removeFile(testSourceFile)
-    removeDir("/tmp/etcfoo")
+    removeDir(getTempDir() / "etcfoo")

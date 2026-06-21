@@ -466,7 +466,7 @@ suite "CrossBackend - Matching Paren":
 suite "CrossBackend - File Operations":
   for be in BufferBackend:
     test "saveFile and loadFile roundtrip [" & $be & "]":
-      let testFile = "/tmp/moe_test_cross_" & $be & "_roundtrip.txt"
+      let testFile = getTempDir() / "moe_test_cross_" & $be & "_roundtrip.txt"
       defer:
         removeFile(testFile)
 
@@ -483,7 +483,7 @@ suite "CrossBackend - File Operations":
       check b2[1] == "With multiple lines"
 
     test "loadFile [" & $be & "]":
-      let testFile = "/tmp/moe_test_cross_" & $be & "_load.txt"
+      let testFile = getTempDir() / "moe_test_cross_" & $be & "_load.txt"
       defer:
         removeFile(testFile)
       writeFile(testFile, "Hello\nWorld\nTest\n")

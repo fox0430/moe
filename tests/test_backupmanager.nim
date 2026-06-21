@@ -21,7 +21,7 @@ import std/[unittest, os, options, json, times, posix]
 
 import ../src/moepkg/backup_manager
 
-const TestBackupDir = "/tmp/moe_test_backup_manager"
+let TestBackupDir = getTempDir() / "moe_test_backup_manager"
 
 proc cleanupTestDir() =
   if dirExists(TestBackupDir):

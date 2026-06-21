@@ -474,18 +474,18 @@ suite "QuickRunUtils - quickRunBufferIndex":
 
 suite "QuickRunUtils - prepareQuickRun":
   test "Prepare QuickRun for Nim file with path":
-    var buffer = newTextBuffer("echo \"hello\"", some("/tmp/test.nim"))
+    var buffer = newTextBuffer("echo \"hello\"", some(getTempDir() / "test.nim"))
     buffer.language = SourceLanguage.langNim
 
     # Create temp file
-    writeFile("/tmp/test.nim", "echo \"hello\"")
+    writeFile(getTempDir() / "test.nim", "echo \"hello\"")
     defer:
-      removeFile("/tmp/test.nim")
+      removeFile(getTempDir() / "test.nim")
 
     let config = newEditorConfig()
     let result = prepareQuickRun(buffer, config)
     check result.isOk
-    check result.get.filePath == "/tmp/test.nim"
+    check result.get.filePath == getTempDir() / "test.nim"
     check result.get.isTempFile == false
     check result.get.command.cmd == "nim"
 
@@ -516,20 +516,20 @@ suite "QuickRunUtils - prepareQuickRun":
     check "Unknown language" in result.error or "Unsupported language" in result.error
 
   test "Prepare QuickRun with saveBufferWhenQuickRun disabled":
-    var buffer = newTextBuffer("echo \"hello\"", some("/tmp/test_nosave.nim"))
+    var buffer = newTextBuffer("echo \"hello\"", some(getTempDir() / "test_nosave.nim"))
     buffer.language = SourceLanguage.langNim
 
     # Create file first
-    writeFile("/tmp/test_nosave.nim", "echo \"original\"")
+    writeFile(getTempDir() / "test_nosave.nim", "echo \"original\"")
     defer:
-      removeFile("/tmp/test_nosave.nim")
+      removeFile(getTempDir() / "test_nosave.nim")
 
     var config = newEditorConfig()
     config.quickRun.saveBufferWhenQuickRun = false
 
     let result = prepareQuickRun(buffer, config)
     check result.isOk
-    check result.get.filePath == "/tmp/test_nosave.nim"
+    check result.get.filePath == getTempDir() / "test_nosave.nim"
     check result.get.isTempFile == false
 
   test "Prepare QuickRun with nonexistent file path uses temp file":
@@ -774,7 +774,7 @@ suite "QuickRunUtils - cleanupTempFiles":
     check not fileExists(tempPath)
 
   test "No cleanup when isTempFile is false":
-    const tempPath = "/tmp/quickrun_test_no_cleanup.nim"
+    const tempPath = "quickruntemp_no_cleanup.nim"
     writeFile(tempPath, "echo \"test\"")
     defer:
       if fileExists(tempPath):
