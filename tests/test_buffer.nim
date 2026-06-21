@@ -1770,8 +1770,8 @@ suite "Buffer - contentVersion monotonicity":
     defer:
       removeFile(path)
 
-    # Start on PieceTable so loadFile takes the backend-swap branch
-    # (b[] = newBuffer[]), which historically reset contentVersion to 0.
+    # Start on PieceTable so the reload swaps the backend to GapBuffer; the swap
+    # must still keep contentVersion monotonic rather than reset it.
     let buf = newTextBuffer(backend = PieceTable)
     discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa\n")
     discard buf.insertText(BufferPosition(line: 0, column: 0), "bbb\n")
@@ -1783,9 +1783,9 @@ suite "Buffer - contentVersion monotonicity":
     check buf.contentVersion > vBefore # but contentVersion only advances
 
 suite "Buffer - reload preserves identity across a backend swap":
-  # loadFile's swap branch does `b[] = newBuffer[]`, replacing the whole object
-  # with newTextBuffer defaults. Identity and content-derived fields must survive
-  # it; only backend-specific state (undo stacks) is reset.
+  # A reload that changes the backend reassigns only TextBuffer.storage, leaving
+  # every sibling field in place. Identity and detected state must survive the
+  # swap; only content-keyed state (undo stacks, etc.) is reset, on both paths.
 
   setup:
     # Pin the backend choice so a PieceTable buffer reliably swaps to GapBuffer.
@@ -1978,9 +1978,9 @@ suite "Buffer - reload preserves identity across a backend swap":
 
 suite "Buffer - reload resets stale content-keyed state":
   # A reload replaces the content wholesale. State keyed on the OLD content (the
-  # char->byte cursor cache, undo/redo history) is stale and must be reset on BOTH
-  # the backend-swap and same-backend paths, so a reload's result never depends on
-  # whether the file size happened to cross the backend threshold.
+  # char->byte cursor cache, undo/redo history) is stale and is reset on loadFile's
+  # single reload path, so a reload's result never depends on whether the file size
+  # happened to cross the backend-swap threshold.
 
   setup:
     setAutoBackendMode(false)
@@ -2020,9 +2020,8 @@ suite "Buffer - reload resets stale content-keyed state":
 
   test "reload clears undo and redo history":
     # Undo entries store positions into the OLD content, so a reload invalidates
-    # them. The backend-swap path cleared them via newTextBuffer; the same-backend
-    # path must too, or `u` after a reload replays a change against mismatched
-    # content.
+    # them. loadFile clears them on its single reload path (clearUndoRedoState),
+    # or `u` after a reload replays a change against mismatched content.
     let path = getTempDir() / "moe_test_undo_reload.txt"
     writeFile(path, "ground truth\n")
     defer:
@@ -2067,8 +2066,8 @@ suite "Buffer - reload resets stale content-keyed state":
     check buf.diagnostics.len == 0
 
   test "same-backend reload keeps contentVersion monotonic":
-    # The swap path advances contentVersion via restoreIdentity; the same-backend
-    # path advances it directly. Both must keep it strictly increasing.
+    # loadFile advances contentVersion once on its single reload path; a reload
+    # must keep it strictly increasing even though changeSeq resets to 0.
     let path = getTempDir() / "moe_test_contentversion_sameback.txt"
     writeFile(path, "fresh\n")
     defer:
@@ -2084,9 +2083,9 @@ suite "Buffer - reload resets stale content-keyed state":
     check buf.contentVersion > vBefore # but contentVersion only advances
 
   test "same-backend reload clears stale conflictBlocks":
-    # conflictBlocks holds line ranges into the OLD content; the swap path cleared
-    # them via newTextBuffer, so the same-backend path must too, or g]/[ conflict
-    # navigation would point into content that no longer exists.
+    # conflictBlocks holds line ranges into the OLD content; loadFile clears them
+    # on its single reload path, or g]/[ conflict navigation would point into
+    # content that no longer exists.
     let path = getTempDir() / "moe_test_conflicts_sameback.txt"
     writeFile(path, "clean\n")
     defer:
@@ -2110,9 +2109,8 @@ suite "Buffer - reload resets stale content-keyed state":
 
   test "same-backend reload resets lastChangedLines":
     # lastChangedLines seeds the next incremental-highlight pass. After an edit at
-    # a higher line it points there; the swap path resets it to 0 via newTextBuffer,
-    # so the same-backend path must too, or the highlight seed would depend on the
-    # backend swap.
+    # a higher line it points there; loadFile resets it to 0 on its single reload
+    # path, or the highlight seed would carry over from the replaced content.
     let path = getTempDir() / "moe_test_lastchanged_sameback.txt"
     writeFile(path, "seed\n")
     defer:
@@ -2204,3 +2202,103 @@ suite "Buffer - reload resets stale content-keyed state":
     check buf.editorConfig.isSome
     check buf.editorConfig.get.tabStop == some(4)
     check buf.isUtilityBuffer
+
+suite "Buffer - reload path convergence":
+  # Path-independence guard: a backend-swap reload and a same-backend reload must
+  # leave the buffer in the SAME state field-by-field. Since the backend variant
+  # now lives in the embedded `storage` field, loadFile reassigns only that field
+  # and runs one reset/recompute tail unconditionally, so the two paths are
+  # structurally identical. fieldPairs walks every TextBuffer field, so a new
+  # persistent field is covered automatically — re-introduce a swap-only split and
+  # this fails. It checks convergence, not the correctness of each field's chosen
+  # behavior; keep the targeted per-field tests above for that.
+
+  setup:
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  teardown:
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  test "swap and same-backend reload converge field-by-field":
+    let path = getTempDir() / "moe_test_reload_converge.txt"
+    writeFile(path, "alpha\nbeta\n")
+    defer:
+      removeFile(path)
+
+    proc populate(b: TextBuffer) =
+      discard b.insertText(BufferPosition(line: 0, column: 0), "x\ny\nz\n")
+      b.toggleBookmark(0)
+      discard b.foldState.addFold(0, 1)
+      b.displayName = some("n")
+      b.readOnly = true
+
+    let same = newTextBuffer(backend = GapBuffer)
+    same.populate()
+    let swap = newTextBuffer(backend = PieceTable)
+    swap.populate()
+
+    check same.loadFile(path).isOk # same-backend path (GapBuffer -> GapBuffer)
+    check swap.loadFile(path).isOk # swap path (PieceTable -> GapBuffer)
+    check same.backendKind == swap.backendKind
+
+    # CowSeq's default `==` compares the underlying node by reference, so two
+    # logically-equal markers arrays never compare equal; compare by content.
+    proc sameContent(a, b: CowSeq[Option[LineMarkerKind]]): bool =
+      if a.len != b.len:
+        return false
+      for i in 0 ..< a.len:
+        if a[i] != b[i]:
+          return false
+      true
+
+    check sameContent(same.lineMarkers, swap.lineMarkers)
+    check sameContent(same.pendingSnapshotMarkers, swap.pendingSnapshotMarkers)
+
+    # Deque[BufferChange] and Option[BufferTransaction] have no usable structural
+    # `==`, so the generic walk below cannot compare them. A reload clears all
+    # three via clearUndoRedoState, so assert convergence on their emptiness — the
+    # realistic regression is one path forgetting to clear them.
+    check same.undoStack.len == swap.undoStack.len
+    check same.redoStack.len == swap.redoStack.len
+    check same.currentTransaction.isSome == swap.currentTransaction.isSome
+
+    # Fields deliberately not compared by the generic `==` walk below. Each is
+    # excluded for a stated reason; the walk additionally fails (via `uncomparable`)
+    # on any NON-excluded field whose `==` does not compile, so a silent gap can't
+    # reopen:
+    #   - id: a fresh genBufferId() per buffer, so it legitimately differs;
+    #   - storage: holds the backend (refs/by-ref `==`), covered by the per-backend
+    #     tests above;
+    #   - highlight / incrementalHighlight: content-derived (one a ref);
+    #   - lineMarkers / pendingSnapshotMarkers: CowSeq has a by-reference `==`, so
+    #     they are compared by content via `sameContent` above instead;
+    #   - undoStack / redoStack / currentTransaction: no usable `==`, compared by
+    #     emptiness above.
+    const Excluded = [
+      "id", "storage", "highlight", "incrementalHighlight", "lineMarkers",
+      "pendingSnapshotMarkers", "undoStack", "redoStack", "currentTransaction",
+    ]
+    # Walk every TextBuffer field. A non-excluded field whose type has no usable
+    # `==` would otherwise be skipped silently by `when compiles`, leaving a hole
+    # in the guard; collect those in `uncomparable` and fail, forcing a new field
+    # to be either compared here or added to `Excluded` with a reason.
+    var diverged, uncomparable: seq[string]
+    for name, va, vb in fieldPairs(same[], swap[]):
+      # `fields` loops forbid `continue`, so gate on the exclusion instead.
+      if name notin Excluded:
+        when compiles(va == vb):
+          if va != vb:
+            diverged.add(name)
+        else:
+          uncomparable.add(name)
+    if diverged.len > 0:
+      checkpoint("diverged fields: " & $diverged)
+    if uncomparable.len > 0:
+      checkpoint(
+        "uncomparable, uncovered fields (compare by content or exclude): " &
+          $uncomparable
+      )
+    check diverged.len == 0
+    check uncomparable.len == 0

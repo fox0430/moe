@@ -183,9 +183,26 @@ type
     startSeq*: int # changeSeq at the start of transaction
     cursorPos*: Option[BufferPosition] # Cursor position before the transaction
 
+  BufferStorage* = object
+    ## The text backend, held by value on TextBuffer. Keeping the variant
+    ## discriminant here instead of directly on TextBuffer makes a backend swap a
+    ## single whole-field reassignment (`b.storage = BufferStorage(kind: …)`) that
+    ## resets only the backend branch — no FieldDefect, and no whole-object rebuild
+    ## that would clobber every sibling field. Embedded by value, so
+    ## `b.storage.gapBuffer` costs the same as a direct field access (no extra
+    ## pointer chase on the insert/delete/charAt hot path).
+    case kind*: BufferBackend
+    of GapBuffer:
+      gapBuffer*: GapBuffer
+    of SqrtDecomp:
+      sqrtDecomp*: sqrt_decomp.SqrtDecomp
+    of Rope:
+      rope*: rope.Rope
+    of PieceTable:
+      pieceTable*: piece_table.PieceTable
+
   TextBuffer* = ref object
     id*: BufferId # Unique buffer identifier
-    backend*: BufferBackend
     filePath*: Option[string]
     displayName*: Option[string]
       # Overrides the tab label when set (used for Terminal buffers, etc.).
@@ -268,63 +285,18 @@ type
     # Per-buffer EditorConfig overrides
     editorConfig*: Option[BufferEditorConfig]
 
-    # Backend storage
-    case backendKind*: BufferBackend
-    of GapBuffer:
-      gapBuffer*: GapBuffer
-    of SqrtDecomp:
-      sqrtDecomp*: sqrt_decomp.SqrtDecomp
-    of Rope:
-      rope*: rope.Rope
-    of PieceTable:
-      pieceTable*: piece_table.PieceTable
-
-  BufferIdentity* = object
-    ## Identity, session, and detected state that must survive `loadFile`'s
-    ## backend-swap branch (`b[] = newBuffer[]`), which otherwise replaces the
-    ## whole object with `newTextBuffer` defaults. Snapshot before the swap with
-    ## `captureIdentity`, re-apply after with `restoreIdentity`.
-    ##
-    ## Invariant: whether the backend swaps (which only depends on the file size
-    ## crossing `AutoBackendLargeFileThreshold` in auto mode) is an implementation
-    ## detail and must NOT change any user-visible state beyond the content. So
-    ## every field a same-backend reload keeps — which is everything `loadFile`
-    ## does not explicitly reset — belongs here, EXCEPT:
-    ##   - content-derived state `loadFile` recomputes from the new content anyway
-    ##     (highlight, incrementalHighlight, lineMarkers, modifiedLines, language);
-    ##     and
-    ##   - state keyed on the OLD content that a reload makes stale, so `loadFile`
-    ##     explicitly resets it on BOTH paths (not just the swap): the char->byte
-    ##     cursor cache via `resetCursorCache`; the undo/redo stacks, in-flight
-    ##     transaction and pending PieceTable snapshots via `clearUndoRedoState`;
-    ##     LSP diagnostics (their line positions go stale on a content change, and
-    ##     a reload sends no didChange for the server to re-publish against);
-    ##     conflictBlocks (line ranges into the replaced content; the caller
-    ##     re-scans); lastChangedLines (the incremental-highlight seed line); and
-    ##     the changelist (`changeList`/`changeListIndex`, positions into the
-    ##     replaced content — discarded with the undo history, matching vim `:e!`).
-    ## A new persistent TextBuffer field that is none of those belongs here, or it
-    ## will silently vanish on a backend-swap reload while surviving a normal one.
-    id: BufferId
-    contentVersion: int
-    lineEnding: LineEnding
-    encoding: CharacterEncoding
-    endOfLine: bool
-    bookmarks: seq[int]
-    editorConfig: Option[BufferEditorConfig]
-    displayName: Option[string]
-    readOnly: bool
-    isUtilityBuffer: bool
-    reservedWords: seq[ReservedWord]
-    foldState: FoldState
+    # Backend storage. Reassigning this whole field swaps the backend in place
+    # (see BufferStorage); read the active kind via the `backendKind` accessor.
+    storage*: BufferStorage
 
 const
   AutoBackendLargeFileThreshold* = 10 * 1024 * 1024
     # 10 MB
     ## In auto-backend mode, a file at or above this size loads into PieceTable
-    ## instead of GapBuffer (`chooseBackendForFile`). Crossing it is also the only
-    ## thing that makes `loadFile` take the backend-swap branch, so the swap must
-    ## not change any user-visible state beyond the content (see `BufferIdentity`).
+    ## instead of GapBuffer (`chooseBackendForFile`). Crossing it is the only thing
+    ## that makes a reload change the backend; the swap reassigns only
+    ## `TextBuffer.storage` (see `BufferStorage`), leaving every other field
+    ## untouched, so a reload's result never depends on whether the size crossed it.
   InvalidCursorPosCache =
     CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1)
   ## Sentinel for "no cached position"; line=-1 forces a recompute on first lookup.
@@ -339,6 +311,12 @@ var autoBackendMode: bool = false
 proc `==`*(a, b: BufferId): bool {.borrow.}
 proc `$`*(id: BufferId): string {.borrow.}
 proc hash*(id: BufferId): Hash {.borrow.}
+
+template backendKind*(b: TextBuffer): BufferBackend =
+  ## The active backend of `b`. Reads the discriminant out of `b.storage`, so the
+  ## ~26 `case b.backendKind` dispatch sites keep their spelling after the backend
+  ## variant moved off TextBuffer into the embedded `storage` field.
+  b.storage.kind
 
 proc genBufferId(): BufferId =
   result = BufferId(nextBufferId)
@@ -502,21 +480,21 @@ proc markSaved*(b: TextBuffer) {.inline.} =
 proc getTextString*(b: TextBuffer): string =
   case b.backendKind
   of GapBuffer:
-    $b.gapBuffer
+    $b.storage.gapBuffer
   of SqrtDecomp:
-    $b.sqrtDecomp
+    $b.storage.sqrtDecomp
   of Rope:
-    $b.rope
+    $b.storage.rope
   of PieceTable:
-    $b.pieceTable
+    $b.storage.pieceTable
 
 proc len*(b: TextBuffer): int =
   ## Get number of lines in buffer
   case b.backendKind
-  of GapBuffer: b.gapBuffer.len
-  of SqrtDecomp: b.sqrtDecomp.len
-  of Rope: b.rope.len
-  of PieceTable: b.pieceTable.len
+  of GapBuffer: b.storage.gapBuffer.len
+  of SqrtDecomp: b.storage.sqrtDecomp.len
+  of Rope: b.storage.rope.len
+  of PieceTable: b.storage.pieceTable.len
 
 proc charLen*(text: string): int =
   ## Get character length (not byte length)
@@ -525,13 +503,13 @@ proc charLen*(text: string): int =
 proc getLine*(b: TextBuffer, lineIndex: int): string =
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.getLine(lineIndex)
+    b.storage.gapBuffer.getLine(lineIndex)
   of SqrtDecomp:
-    b.sqrtDecomp.getLine(lineIndex)
+    b.storage.sqrtDecomp.getLine(lineIndex)
   of Rope:
-    b.rope.getLine(lineIndex)
+    b.storage.rope.getLine(lineIndex)
   of PieceTable:
-    b.pieceTable.getLine(lineIndex)
+    b.storage.pieceTable.getLine(lineIndex)
 
 iterator lines*(b: TextBuffer): string =
   ## Yield every line in order with a single backend traversal.
@@ -539,43 +517,42 @@ iterator lines*(b: TextBuffer): string =
   ## for tree-based backends (Rope/PieceTable).
   case b.backendKind
   of GapBuffer:
-    for line in b.gapBuffer.lines:
+    for line in b.storage.gapBuffer.lines:
       yield line
   of SqrtDecomp:
-    for line in b.sqrtDecomp.lines:
+    for line in b.storage.sqrtDecomp.lines:
       yield line
   of Rope:
-    for line in b.rope.lines:
+    for line in b.storage.rope.lines:
       yield line
   of PieceTable:
-    for line in b.pieceTable.lines:
+    for line in b.storage.pieceTable.lines:
       yield line
+
+proc newBufferStorage*(backend: BufferBackend, content: sink string): BufferStorage =
+  ## Build a fresh backend value of `backend` from `content` (consumed exactly
+  ## once). Assigning the whole result to `TextBuffer.storage` both constructs a
+  ## new buffer's backend and swaps an existing one in place — the single
+  ## construction shared by `newTextBuffer` and `loadFile`.
+  case backend
+  of GapBuffer:
+    BufferStorage(kind: GapBuffer, gapBuffer: newGapBuffer(move content))
+  of SqrtDecomp:
+    BufferStorage(kind: SqrtDecomp, sqrtDecomp: newSqrtDecomp(move content))
+  of Rope:
+    BufferStorage(kind: Rope, rope: newRope(move content))
+  of PieceTable:
+    BufferStorage(kind: PieceTable, pieceTable: newPieceTable(move content))
 
 proc newTextBuffer*(
     content: sink string = "",
     filePath: Option[string] = none(string),
     backend: BufferBackend = chooseBackend(),
-    skipHighlightInit: bool = false,
 ): TextBuffer =
-  var c = move content
-
-  # Construct the object variant. Only the discriminant and the matching
-  # backend-storage field can be set here; all other fields are populated
-  # below in a single block to avoid per-backend duplication.
-  result =
-    case backend
-    of GapBuffer:
-      TextBuffer(backendKind: GapBuffer, gapBuffer: newGapBuffer(move c))
-    of SqrtDecomp:
-      TextBuffer(backendKind: SqrtDecomp, sqrtDecomp: newSqrtDecomp(move c))
-    of Rope:
-      TextBuffer(backendKind: Rope, rope: newRope(move c))
-    of PieceTable:
-      TextBuffer(backendKind: PieceTable, pieceTable: newPieceTable(move c))
+  result = TextBuffer(storage: newBufferStorage(backend, move content))
 
   let lineCount = result.len
   result.id = genBufferId()
-  result.backend = backend
   result.filePath = filePath
   result.lineEnding = LF
   result.encoding = utf8
@@ -589,16 +566,11 @@ proc newTextBuffer*(
   result.foldState = initFoldState()
   result.editorConfig = none(BufferEditorConfig)
 
-  # Build initial plain-text highlight. Callers like loadFile pass
-  # skipHighlightInit=true because they'll rebuild highlighting themselves;
-  # skipping avoids an O(n) runesBuffer construction that would be thrown away.
-  if skipHighlightInit:
-    result.highlight = initHighlight()
-  else:
-    var runesBuffer = newSeqOfCap[Runes](lineCount)
-    for line in result.lines:
-      runesBuffer.add(line.toRunes())
-    result.highlight = initHighlight(runesBuffer)
+  # Build initial plain-text highlight from the freshly constructed backend.
+  var runesBuffer = newSeqOfCap[Runes](lineCount)
+  for line in result.lines:
+    runesBuffer.add(line.toRunes())
+  result.highlight = initHighlight(runesBuffer)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =
   ## Bracket operator for accessing lines by index
@@ -730,13 +702,13 @@ proc estimateMemoryUsage*(buffer: TextBuffer): int =
 
   case buffer.backendKind
   of GapBuffer:
-    result += buffer.gapBuffer.estimateMemoryUsage()
+    result += buffer.storage.gapBuffer.estimateMemoryUsage()
   of SqrtDecomp:
-    result += buffer.sqrtDecomp.estimateMemoryUsage()
+    result += buffer.storage.sqrtDecomp.estimateMemoryUsage()
   of Rope:
-    result += buffer.rope.estimateMemoryUsage()
+    result += buffer.storage.rope.estimateMemoryUsage()
   of PieceTable:
-    result += buffer.pieceTable.estimateMemoryUsage()
+    result += buffer.storage.pieceTable.estimateMemoryUsage()
 
 proc getPerformanceStats*(
     buffer: TextBuffer
@@ -782,7 +754,7 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
   ## For PieceTable: captures full snapshot for O(1) undo/redo.
   ## For all backends: captures modifiedLines once per undo entry.
   if b.backendKind == PieceTable and b.pendingSnapshot.isNone:
-    b.pendingSnapshot = some(b.pieceTable.takeSnapshot())
+    b.pendingSnapshot = some(b.storage.pieceTable.takeSnapshot())
     # COW-share markers: snapshots that don't touch lineMarkers reference one
     # frozen array (O(1)). A line-count-changing edit resizes lineMarkers right
     # after this and clones once; same-line edits never clone.
@@ -810,16 +782,15 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
 proc resetCursorCache*(b: TextBuffer) {.inline.} =
   ## Invalidate the char->byte position cache (line=-1 forces a recompute on the
   ## next lookup). A reload replaces the content, so any cached
-  ## (line, charPos)->bytePos mapping is stale. The backend-swap path resets this
-  ## via newTextBuffer; this matches it on the same-backend path.
+  ## (line, charPos)->bytePos mapping is stale; loadFile calls this on its single
+  ## reload path regardless of whether the backend swapped.
   b.cursorCache = InvalidCursorPosCache
 
 proc clearUndoRedoState*(b: TextBuffer) =
   ## Drop all undo/redo history, the in-flight transaction and any pending
   ## snapshot. A reload replaces the content wholesale, so every recorded change
-  ## (and the positions it stores) is invalid against the new content. The
-  ## backend-swap path clears these via newTextBuffer; this matches it on the
-  ## same-backend path.
+  ## (and the positions it stores) is invalid against the new content; loadFile
+  ## calls this on its single reload path regardless of the backend swap.
   b.undoStack.clear()
   b.redoStack.clear()
   b.inTransaction = false
@@ -832,43 +803,6 @@ proc advanceContentVersion*(b: TextBuffer) {.inline.} =
   ## mutators that bypass `changeSeq`. It only ever increases, so it stays a
   ## safe cache-invalidation key. See the `contentVersion` field doc.
   b.contentVersion.inc
-
-proc captureIdentity*(b: TextBuffer): BufferIdentity =
-  ## Snapshot the fields a backend swap would otherwise clobber. Take this AFTER
-  ## line-ending/encoding detection so the freshly detected values are captured.
-  BufferIdentity(
-    id: b.id,
-    contentVersion: b.contentVersion,
-    lineEnding: b.lineEnding,
-    encoding: b.encoding,
-    endOfLine: b.endOfLine,
-    bookmarks: b.bookmarks,
-    editorConfig: b.editorConfig,
-    displayName: b.displayName,
-    readOnly: b.readOnly,
-    isUtilityBuffer: b.isUtilityBuffer,
-    reservedWords: b.reservedWords,
-    foldState: b.foldState,
-  )
-
-proc restoreIdentity*(b: TextBuffer, s: BufferIdentity) =
-  ## Re-apply identity after a backend swap reset it to newTextBuffer defaults.
-  ## contentVersion is restored to its pre-reload value then advanced, keeping it
-  ## monotonic across the reload (see advanceContentVersion). A no-op on the
-  ## same-backend path, where the swap never ran.
-  b.id = s.id
-  b.lineEnding = s.lineEnding
-  b.encoding = s.encoding
-  b.endOfLine = s.endOfLine
-  b.bookmarks = s.bookmarks
-  b.editorConfig = s.editorConfig
-  b.displayName = s.displayName
-  b.readOnly = s.readOnly
-  b.isUtilityBuffer = s.isUtilityBuffer
-  b.reservedWords = s.reservedWords
-  b.foldState = s.foldState
-  b.contentVersion = s.contentVersion
-  b.advanceContentVersion()
 
 proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
