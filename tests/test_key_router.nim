@@ -47,7 +47,7 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
 
     check route.kind == rrExecuteRuntimeKeySequence
     check route.targetKeys == @["<Escape>"]
-    check router.hasRuntimeMappingPending() == false
+    check router.dispatchState.keys.len == 0
 
   test "multi-key prefix waits, then fires on exact match":
     let router = newRouter()
@@ -56,12 +56,12 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
     let first = router.feedKey(EditorMode.Insert, toKeyCombo('j'))
     check first.kind == rrWaiting
     check first.waitsForTimeout == true
-    check router.hasRuntimeMappingPending() == true
+    check router.dispatchState.keys.len > 0
 
     let second = router.feedKey(EditorMode.Insert, toKeyCombo('j'))
     check second.kind == rrExecuteRuntimeKeySequence
     check second.targetKeys == @["<Escape>"]
-    check router.hasRuntimeMappingPending() == false
+    check router.dispatchState.keys.len == 0
 
   test "non-prefix key in middle of sequence flushes accumulator":
     let router = newRouter()
@@ -74,7 +74,7 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
     check route.keys.len == 2
     check route.keys[0] == toKeyCombo('j')
     check route.keys[1] == toKeyCombo('k')
-    check router.hasRuntimeMappingPending() == false
+    check router.dispatchState.keys.len == 0
 
   test "key with no mapping passes through (rrUnhandled)":
     let router = newRouter()
@@ -89,7 +89,7 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
     # 'x' is not a prefix of "jj" so it passes through with accumulator len==1
     let route = router.feedKey(EditorMode.Insert, toKeyCombo('x'))
     check route.kind == rrUnhandled
-    check router.hasRuntimeMappingPending() == false
+    check router.dispatchState.keys.len == 0
 
 suite "KeyRouter - feedKey mode separation":
   test "Insert mode mapping does not fire in Normal mode":
@@ -127,7 +127,7 @@ suite "KeyRouter - flushTimeout":
     let route = router.flushTimeout(EditorMode.Insert)
     check route.kind == rrExecuteRuntimeKeySequence
     check route.targetKeys == @["<Escape>"]
-    check router.hasRuntimeMappingPending() == false
+    check router.dispatchState.keys.len == 0
 
   test "no exact match returns rrUnhandledBatch":
     let router = newRouter()
@@ -137,7 +137,7 @@ suite "KeyRouter - flushTimeout":
     let route = router.flushTimeout(EditorMode.Insert)
     check route.kind == rrUnhandledBatch
     check route.keys == @[toKeyCombo('j')]
-    check router.hasRuntimeMappingPending() == false
+    check router.dispatchState.keys.len == 0
 
 suite "KeyRouter - cancel and accessors":
   test "cancel clears the built-in sequence accumulator":

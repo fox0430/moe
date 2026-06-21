@@ -896,9 +896,12 @@ proc calculateNewPosition*(
   of Motion.MatchBracket:
     e.moveToMatchingBracket(currentPos)
   of Motion.RepeatFind, Motion.RepeatFindReverse:
-    # Resolved to a concrete find/till motion before reaching here (see
-    # command_registry.executeFindCharMotion); never executed directly.
-    currentPos
+    # Dispatch concepts, not real motions: executeCommand resolves these to a
+    # concrete find/till motion before the motion path reaches here (see
+    # command_registry.executeFindCharMotion). Arriving here means a caller
+    # bypassed that resolution, so fail loudly instead of silently returning
+    # currentPos (the former silent no-op masked such wiring mistakes).
+    raiseAssert "RepeatFind must be resolved before calculateNewPosition"
 
 proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
@@ -1338,9 +1341,6 @@ proc executeMotion*(
   # Disable horizontal scrolling when line wrap is enabled
   if lineWrap:
     controller.viewportManager.viewport.leftColumn = 0
-
-  # Store last motion for repeat
-  controller.cursorManager.state.editState.lastMotion = some(cmd.motion)
 
   # Update preferredColumn based on motion type
   if isVerticalMotion:

@@ -132,14 +132,6 @@ proc executeKeybinding*(
   return e.commandRegistry.executeCommand(ctx, binding)
 
 # Compatibility methods for existing code
-proc clampCursor*(exec: CommandExecutor) =
-  ## Compatibility wrapper - cursor is now managed by motion system
-  discard
-
-proc updateViewport*(exec: CommandExecutor) =
-  ## Compatibility wrapper - viewport is now managed by motion system
-  discard
-
 proc executeMotion*(exec: CommandExecutor, motion: Motion, count: int = 1) =
   ## Compatibility wrapper for direct motion execution
   let cmd = MotionCommand(motion: motion, count: count)

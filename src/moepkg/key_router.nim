@@ -74,10 +74,6 @@ proc nextTimeoutMs*(router: KeyRouter): int =
     return router.policy.timeoutlen
   return 0
 
-proc hasRuntimeMappingPending*(router: KeyRouter): bool {.inline.} =
-  ## True while a runtime mapping prefix is being accumulated.
-  router.dispatchState.keys.len > 0
-
 proc cancel*(router: KeyRouter): bool {.discardable.} =
   ## Cancel pending dispatch state that Escape should clear. Currently this
   ## is the built-in multi-key sequence accumulator only; the runtime mapping

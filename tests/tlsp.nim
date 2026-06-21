@@ -41,20 +41,6 @@ suite "LSP JSON-RPC":
     check not msg.contains("\"id\"")
     check msg.contains("test/notify")
 
-  test "parseContentLength valid":
-    let result = parseContentLength("Content-Length: 123")
-    check result.isOk
-    check result.get == 123
-
-  test "parseContentLength with spaces":
-    let result = parseContentLength("Content-Length:   456  ")
-    check result.isOk
-    check result.get == 456
-
-  test "parseContentLength invalid":
-    let result = parseContentLength("Invalid header")
-    check result.isErr
-
   test "parseJsonRpcMessage response":
     let body = """{"jsonrpc":"2.0","id":1,"result":{"key":"value"}}"""
     let result = parseJsonRpcMessage(body)

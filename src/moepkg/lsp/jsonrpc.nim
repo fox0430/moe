@@ -125,21 +125,6 @@ proc encodeErrorResponse*(
   result = "Content-Length: " & $body.len & "\r\n\r\n" & body
 
 # Header parsing
-proc parseContentLength*(header: string): Result[int, string] =
-  ## Parse Content-Length from header line
-  let trimmed = header.strip()
-  if not trimmed.toLowerAscii.startsWith("content-length:"):
-    return err("Not a Content-Length header")
-
-  let valueStr = trimmed[15 ..^ 1].strip()
-  try:
-    let length = parseInt(valueStr)
-    if length < 0:
-      return err("Content-Length cannot be negative")
-    return ok(length)
-  except ValueError:
-    return err("Invalid Content-Length value: " & valueStr)
-
 proc parseHeaders*(headerBlock: string): Result[Table[string, string], string] =
   ## Parse all headers from header block
   var headers = initTable[string, string]()
@@ -233,80 +218,6 @@ proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
       )
   else:
     return err("Invalid JSON-RPC message structure")
-
-# Streaming message reader state machine
-type
-  ReaderState* = enum
-    rsReadingHeaders
-    rsReadingBody
-
-  MessageReader* = ref object
-    state*: ReaderState
-    headerBuffer*: string
-    bodyBuffer*: string
-    contentLength*: int
-    bytesRead*: int
-
-proc newMessageReader*(): MessageReader =
-  MessageReader(
-    state: rsReadingHeaders,
-    headerBuffer: "",
-    bodyBuffer: "",
-    contentLength: 0,
-    bytesRead: 0,
-  )
-
-proc reset*(reader: MessageReader) =
-  reader.state = rsReadingHeaders
-  reader.headerBuffer = ""
-  reader.bodyBuffer = ""
-  reader.contentLength = 0
-  reader.bytesRead = 0
-
-proc feedLine*(reader: MessageReader, line: string): Result[Option[string], string] =
-  ## Feed a line to the reader (for header parsing)
-  ## Returns Some(body) when a complete message is ready
-  case reader.state
-  of rsReadingHeaders:
-    if line == "" or line == "\r\n" or line == "\r":
-      # End of headers
-      if reader.contentLength <= 0:
-        return err("No Content-Length header found")
-      reader.state = rsReadingBody
-      reader.bodyBuffer = ""
-      reader.bytesRead = 0
-      return ok(none(string))
-    else:
-      reader.headerBuffer.add(line & "\n")
-      let lengthResult = parseContentLength(line)
-      if lengthResult.isOk:
-        reader.contentLength = lengthResult.get
-      return ok(none(string))
-  of rsReadingBody:
-    return err("Use feedBytes for body reading")
-
-proc feedBytes*(reader: MessageReader, data: string): Result[Option[string], string] =
-  ## Feed bytes to the reader (for body parsing)
-  ## Returns Some(body) when a complete message is ready
-  if reader.state != rsReadingBody:
-    return err("Not in body reading state")
-
-  reader.bodyBuffer.add(data)
-  reader.bytesRead += data.len
-
-  if reader.bytesRead >= reader.contentLength:
-    let body = reader.bodyBuffer[0 ..< reader.contentLength]
-    reader.reset()
-    return ok(some(body))
-  else:
-    return ok(none(string))
-
-proc remainingBytes*(reader: MessageReader): int =
-  ## Get remaining bytes needed for current message
-  if reader.state == rsReadingBody:
-    return reader.contentLength - reader.bytesRead
-  else:
-    return 0
 
 # Async I/O types and functions using chronos
 

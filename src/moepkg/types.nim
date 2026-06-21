@@ -216,7 +216,6 @@ type
     targetChar*: string
 
   EditState* = object ## Edit operation state grouped together
-    lastMotion*: Option[Motion] # Last motion for repeat
     lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
     lastFindChar*: Option[LastFindChar] # Last f/F/t/T for ; and , repeat
     pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
