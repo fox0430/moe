@@ -27,6 +27,7 @@ import pkg/[results, chronos]
 
 import lsp/worker
 import lsp/protocol/types
+import logger
 
 export worker, types
 
@@ -527,17 +528,31 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
     else:
       svc.recordResponse(evt.requestId, none(JsonNode), evt.responseError)
   of levRawJson:
-    let timestamp = now().format("HH:mm:ss'.'fff")
-    let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
-    # Split multi-line JSON into separate log entries
-    let lines = evt.rawJson.splitLines()
-    for i, line in lines:
-      if i == 0:
-        svc.onLogMessage(langId, mtLog, "[" & timestamp & "] " & direction & line)
-      else:
-        svc.onLogMessage(langId, mtLog, "    " & line)
-    # Add blank line after each JSON block
-    svc.onLogMessage(langId, mtLog, "")
+    # Debug log file: one compact line per frame whenever `-d` is on,
+    # independent of the per-server verbose setting. logDebug no-ops when the
+    # logger is disabled; the isEnabled guard skips building the line then.
+    if getGlobalLogger().isEnabled:
+      logDebug("lsp", formatRawJsonLogLine(langId, evt.jsonDirection, evt.rawJson))
+
+    # In-memory :lspLog viewer: pretty-printed and timestamped, but only for
+    # servers that opted into verbose raw-JSON logging.
+    if langId in svc.configs and svc.configs[langId].rawJsonLog:
+      let timestamp = now().format("HH:mm:ss'.'fff")
+      let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
+      let pretty =
+        try:
+          parseJson(evt.rawJson).pretty
+        except CatchableError:
+          evt.rawJson
+      # Split multi-line JSON into separate log entries
+      let lines = pretty.splitLines()
+      for i, line in lines:
+        if i == 0:
+          svc.onLogMessage(langId, mtLog, "[" & timestamp & "] " & direction & line)
+        else:
+          svc.onLogMessage(langId, mtLog, "    " & line)
+      # Add blank line after each JSON block
+      svc.onLogMessage(langId, mtLog, "")
   of levProgress:
     svc.onProgress(langId, evt.progressToken, evt.progress)
   of levDynamicRegister:

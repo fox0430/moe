@@ -23,7 +23,7 @@ import
 
 import pkg/results
 
-import ../src/moepkg/lsp_service
+import ../src/moepkg/[lsp_service, logger]
 import ../src/moepkg/lsp/protocol/types
 
 suite "LspService - newLspService":
@@ -922,6 +922,69 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
       LspEvent(kind: levCapabilities, capabilitiesJson: $(%*{"hoverProvider": true})),
     )
     check "nim" in svc.capabilities
+
+  test "levRawJson forwards pretty, timestamped lines to the viewer when verbose":
+    let svc = newLspService()
+    svc.setConfig("nim", LanguageServerConfig(enabled: true, rawJsonLog: true))
+    var logs: seq[string] = @[]
+    svc.onLogMessage = proc(
+        langId: string, msgType: MessageType, message: string
+    ) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        logs.add(message)
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levRawJson,
+        jsonDirection: ljdSent,
+        rawJson: """{"method":"initialize","id":1}""",
+      ),
+    )
+    # Re-prettified on the main thread -> multiple lines, first one marked >>>.
+    check logs.len >= 2
+    let joined = logs.join("\n")
+    check joined.contains(">>> ")
+    check joined.contains("\"method\"")
+    check joined.contains("initialize")
+
+  test "levRawJson does not touch the viewer when verbose is off":
+    let svc = newLspService()
+    svc.setConfig("nim", LanguageServerConfig(enabled: true, rawJsonLog: false))
+    var called = false
+    svc.onLogMessage = proc(
+        langId: string, msgType: MessageType, message: string
+    ) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        called = true
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levRawJson, jsonDirection: ljdReceived, rawJson: """{"result":null}"""
+      ),
+    )
+    check not called
+
+  test "levRawJson mirrors a compact line to the debug log file when -d is on":
+    # File logging is independent of the per-server verbose setting: only the
+    # debug logger being enabled (-d) gates it.
+    privateAccess(Logger)
+    let svc = newLspService()
+    svc.setConfig("nim", LanguageServerConfig(enabled: true, rawJsonLog: false))
+    let prev = getGlobalLogger()
+    let logger = initLogger(enabled = true)
+    setGlobalLogger(logger)
+    try:
+      # On a read-only CWD the logger disables itself; only assert when it opened.
+      if logger.isEnabled:
+        let payload = """{"method":"textDocument/hover","id":7}"""
+        svc.processEvent(
+          "nim", LspEvent(kind: levRawJson, jsonDirection: ljdSent, rawJson: payload)
+        )
+        logger.close()
+        let content = readFile(logger.filePath)
+        check content.contains("[lsp] nim >>> " & payload)
+    finally:
+      setGlobalLogger(prev)
 
   test "levDynamicRegister is parsed and stored":
     let svc = newLspService()

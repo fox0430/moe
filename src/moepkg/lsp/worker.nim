@@ -28,6 +28,7 @@ import pkg/chronos/[asyncproc, threadsync, selectors2]
 
 import jsonrpc
 import protocol/types
+import ../logger
 
 export types
 
@@ -226,7 +227,8 @@ type
     sharedState: ptr SharedState
     signal: ThreadSignalPtr # Signal for event-driven wakeup
     tempDir: string
-    rawJsonLog: bool # Emit levRawJson events for every frame (debug only)
+    rawJsonLog: bool # Emit levRawJson events for the :lspLog viewer (verbose)
+    debugLog: bool # Also emit them so req/res reach the debug log file (-d)
 
   LspWorker* = ref object
     thread: Thread[LspWorkerContext]
@@ -412,6 +414,16 @@ proc buildApplyEditResponse*(
     resultObj["failureReason"] = %failureReason
   %*{"jsonrpc": "2.0", "id": idNode, "result": resultObj}
 
+proc formatRawJsonLogLine*(
+    languageId: string, direction: LspJsonDirection, json: string
+): string =
+  ## Build a one-line debug-log entry for a raw JSON-RPC frame. `json` is the
+  ## already-serialized (compact) payload, kept on a single greppable line and
+  ## tagged with the server's language id and a direction marker
+  ## (`>>>` sent / `<<<` received).
+  let arrow = if direction == ljdSent: ">>>" else: "<<<"
+  languageId & " " & arrow & " " & json
+
 # Worker thread main loop
 proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
   var
@@ -474,13 +486,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ctx.eventQueue[].push(evt)
 
   proc sendRawJson(direction: LspJsonDirection, node: JsonNode) =
-    # Gate on the debug flag: pretty-printing every frame (a full-document
-    # didChange on each keystroke under full sync) and pushing it through the
-    # event queue is expensive and the in-memory log grows unbounded, so skip
-    # the work entirely unless raw-JSON logging was explicitly enabled.
-    if not ctx.rawJsonLog:
+    # Capture the frame only if a sink wants it: the in-memory :lspLog viewer
+    # (trace=verbose) or the debug log file (-d). Both sinks live on the main
+    # thread, so just serialize compactly and hand the frame off via the event
+    # queue; processEvent decides routing (the viewer re-prettifies, the file
+    # logs the line as-is).
+    if not (ctx.rawJsonLog or ctx.debugLog):
       return
-    var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: node.pretty)
+    var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: $node)
     ctx.eventQueue[].push(evt)
 
   proc sendDynamicRegister(paramsJson: string) =
@@ -1367,6 +1380,9 @@ proc start*(worker: LspWorker) =
     signal: worker.signal,
     tempDir: getTempDir(),
     rawJsonLog: worker.rawJsonLog,
+    # Read once here on the main thread; the worker only emits events, the
+    # actual file write happens in processEvent (also on the main thread).
+    debugLog: getGlobalLogger().isEnabled,
   )
 
   createThread(worker.thread, workerThreadProc, ctx)
