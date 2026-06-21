@@ -24,12 +24,12 @@
 
 import std/[strformat, strutils, options]
 
+import buffer, list_viewer
 import lsp/protocol/[types, enums]
-import buffer
-import picker/nav
-
 import types/documentsymbol_viewer_types
+
 export documentsymbol_viewer_types
+export list_viewer
 
 proc symbolKindToString*(kind: SymbolKind): string =
   ## Convert SymbolKind to a short display string
@@ -117,24 +117,7 @@ proc newDocumentSymbolViewerState*(
     else:
       flattenSymbolInformations(symbolResult.symbolInfos)
 
-  DocumentSymbolViewerState(
-    items: items, selectedIndex: 0, topLine: 0, filePath: filePath
-  )
-
-proc itemCount*(state: DocumentSymbolViewerState): int =
-  ## Get the number of items
-  state.items.len
-
-proc getItem*(state: DocumentSymbolViewerState, index: int): Option[SymbolItem] =
-  ## Get a specific item
-  if index >= 0 and index < state.items.len:
-    some(state.items[index])
-  else:
-    none(SymbolItem)
-
-proc getSelectedItem*(state: DocumentSymbolViewerState): Option[SymbolItem] =
-  ## Get the currently selected item
-  state.getItem(state.selectedIndex)
+  DocumentSymbolViewerState(items: items, selectedIndex: 0, filePath: filePath)
 
 proc formatLine*(item: SymbolItem): string =
   ## Format a symbol item as a display line
@@ -146,46 +129,7 @@ proc formatLine*(item: SymbolItem): string =
   else:
     fmt"{indent}[{icon}] {item.name} :{lineNum}"
 
-proc getLine*(state: DocumentSymbolViewerState, index: int): string =
-  ## Get a formatted line for display
-  if index >= 0 and index < state.items.len:
-    state.items[index].formatLine()
-  else:
-    ""
-
-proc moveUp*(state: DocumentSymbolViewerState) =
-  ## Move selection up
-  pickerMoveUp(state.selectedIndex)
-
-proc moveDown*(state: DocumentSymbolViewerState) =
-  ## Move selection down
-  pickerMoveDown(state.selectedIndex, state.items.len)
-
-proc moveToFirst*(state: DocumentSymbolViewerState) =
-  ## Move to first item
-  pickerMoveToFirst(state.selectedIndex)
-
-proc moveToLast*(state: DocumentSymbolViewerState) =
-  ## Move to last item
-  pickerMoveToLast(state.selectedIndex, state.items.len)
-
-proc halfPageUp*(state: DocumentSymbolViewerState, viewportHeight: int) =
-  ## Move up by half a page
-  pickerHalfPageUp(state.selectedIndex, viewportHeight)
-
-proc halfPageDown*(state: DocumentSymbolViewerState, viewportHeight: int) =
-  ## Move down by half a page
-  pickerHalfPageDown(state.selectedIndex, state.items.len, viewportHeight)
-
-proc ensureSelectedVisible*(state: DocumentSymbolViewerState, viewportHeight: int) =
-  ## Ensure the selected item is visible in the viewport
-  pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
-
 proc createDocumentSymbolTextBuffer*(state: DocumentSymbolViewerState): TextBuffer =
   ## Create a TextBuffer from document symbols for rendering via the normal view path
-  var content = "-- SYMBOLS (" & $state.itemCount() & ") --"
-  for i in 0 ..< state.itemCount:
-    content.add('\n')
-    content.add(state.getLine(i))
-  result = newTextBuffer(content)
-  result.readOnly = true
+  let header = "-- SYMBOLS (" & $state.itemCount() & ") --"
+  state.toListTextBuffer(header, formatLine)

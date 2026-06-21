@@ -124,7 +124,7 @@ suite "buffer_manager_handler: Navigation":
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
-    check bmState.selectedIndex == bmState.entries.len - 1
+    check bmState.selectedIndex == bmState.items.len - 1
 
   test "Move to first with gg":
     let bmState = createTestBufferManagerState()
@@ -143,7 +143,6 @@ suite "buffer_manager_handler: Navigation":
 
     check result2.kind == bmrHandled
     check bmState.selectedIndex == 0
-    check bmState.topLine == 0
     check bmState.waitingForG == false
 
   test "Half page down with Ctrl+d":
@@ -157,7 +156,7 @@ suite "buffer_manager_handler: Navigation":
 
     check result.kind == bmrHandled
     # Should move down by half page (capped by entries count)
-    let expectedIndex = min(expectedMove, bmState.entries.len - 1)
+    let expectedIndex = min(expectedMove, bmState.items.len - 1)
     check bmState.selectedIndex == expectedIndex
 
   test "Half page up with Ctrl+u":
@@ -319,6 +318,32 @@ suite "buffer_manager_handler: Waiting for G State":
     check bmState.waitingForG == false
     check result.kind == bmrQuit
 
+  test "Waiting for G cancelled when Ctrl-k passes through":
+    let bmState = createTestBufferManagerState()
+    bmState.selectedIndex = 2
+
+    # First 'g' starts waiting
+    discard handleBufferManagerModeKey(
+      bmState, 24, KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    )
+    check bmState.waitingForG == true
+
+    # Ctrl-k is passed through for window switching; the pending 'gg' must clear.
+    let result = handleBufferManagerModeKey(
+      bmState, 24, KeyCombo(isSpecial: false, char: "k", modifiers: {kmCtrl})
+    )
+    check result.kind == bmrUnhandled
+    check bmState.waitingForG == false
+    check bmState.selectedIndex == 2
+
+    # A later lone 'g' only re-arms gg; it must not jump to the first buffer.
+    let result2 = handleBufferManagerModeKey(
+      bmState, 24, KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    )
+    check result2.kind == bmrHandled
+    check bmState.waitingForG == true
+    check bmState.selectedIndex == 2
+
 suite "buffer_manager_handler: Unhandled Keys":
   test "Unhandled special key returns bmrUnhandled":
     let bmState = createTestBufferManagerState()
@@ -361,13 +386,13 @@ suite "buffer_manager_handler: Edge Cases":
 
   test "Navigation at bottom boundary":
     let bmState = createTestBufferManagerState()
-    bmState.selectedIndex = bmState.entries.len - 1
+    bmState.selectedIndex = bmState.items.len - 1
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
-    check bmState.selectedIndex == bmState.entries.len - 1 # Should stay at last
+    check bmState.selectedIndex == bmState.items.len - 1 # Should stay at last
 
   test "G with empty entries":
     let bmState = newBufferManagerState()
@@ -393,7 +418,6 @@ suite "buffer_manager_handler: Edge Cases":
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 0
-    check bmState.topLine == 0
 
   test "Ctrl+d with large half page":
     let bmState = createTestBufferManagerState()
@@ -406,7 +430,7 @@ suite "buffer_manager_handler: Edge Cases":
 
     check result.kind == bmrHandled
     # Should be capped at last entry
-    check bmState.selectedIndex == bmState.entries.len - 1
+    check bmState.selectedIndex == bmState.items.len - 1
 
   test "Ctrl+u at top":
     let bmState = createTestBufferManagerState()

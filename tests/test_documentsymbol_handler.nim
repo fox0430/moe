@@ -313,8 +313,8 @@ suite "documentsymbol_handler: handleDocumentSymbolModeKey - Unhandled keys":
 
     check result.kind == dsvrUnhandled
 
-suite "documentsymbol_handler: handleDocumentSymbolModeKey - Viewport adjustment":
-  test "Navigation adjusts viewport when needed":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Navigation":
+  test "G moves to the last symbol":
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -322,13 +322,9 @@ suite "documentsymbol_handler: handleDocumentSymbolModeKey - Viewport adjustment
       lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(symResult, "/path/to/file.nim")
     state.selectedIndex = 0
-    state.topLine = 0
     let keyCombo = charKeyCombo("G")
 
-    # G moves to last (index 19), which should be outside viewport height of 5
     let result = handleDocumentSymbolModeKey(state, 5, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 19
-    # topLine should be adjusted to ensure selectedIndex is visible
-    check state.topLine == 15

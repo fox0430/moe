@@ -25,6 +25,9 @@
 
 import std/options
 
+import list_viewer_types
+export list_viewer_types
+
 type
   BufferEntry* = object ## Represents a buffer entry in the buffer manager list
     index*: int # Index in the window list
@@ -32,12 +35,10 @@ type
     modified*: bool # Whether buffer has unsaved changes
     active*: bool # Whether this is the currently active buffer
 
-  BufferManagerState* = ref object ## State for the buffer manager UI
-    entries*: seq[BufferEntry] # List of buffer entries
-    selectedIndex*: int # Currently selected entry index
-    topLine*: int # Scroll position (first visible line)
+  BufferManagerState* = ref object of ListViewer[BufferEntry]
+    ## State for the buffer manager UI.
+    ## items (buffer entries)/selectedIndex/topLine/waitingForG are inherited.
     previousWindowIndex*: int # Window index to return to when closing
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
   BufferInfo* = object ## Information about a buffer for initializing buffer manager
     filePath*: Option[string]

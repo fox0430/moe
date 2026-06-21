@@ -26,6 +26,8 @@
 
 import ../lsp/protocol/enums
 import ../primitives
+import list_viewer_types
+export list_viewer_types
 
 type
   SymbolItem* = object
@@ -36,12 +38,9 @@ type
     detail*: string # Optional detail (e.g., signature)
     depth*: int # Nesting depth for indentation
 
-  DocumentSymbolViewerState* = ref object
-    items*: seq[SymbolItem] # Flattened symbol items
-    selectedIndex*: int # Currently selected item index
-    topLine*: int # Scroll position (first visible line)
+  DocumentSymbolViewerState* = ref object of ListViewer[SymbolItem]
+    ## items/selectedIndex/topLine/waitingForG/title are inherited.
     filePath*: string # File path for the symbols
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
     # Cursor/viewport of the underlying buffer captured on entry, so quitting
     # the viewer restores the position instead of leaving it at (0, 0).
     originCursor*: BufferPosition

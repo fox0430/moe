@@ -53,74 +53,19 @@ proc handleDocumentSymbolModeKey*(
   ##
   ## Returns a DocumentSymbolResult indicating what action should be taken
 
-  # Handle 'gg' command (two g presses)
-  if symState.waitingForG:
-    symState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      symState.moveToFirst()
-      return DocumentSymbolResult(kind: dsvrHandled)
-    # If not 'g', fall through to normal handling
-
-  # Escape or q to quit
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    return DocumentSymbolResult(kind: dsvrQuit)
-
-  # Check for special keys first
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skUp:
-      symState.moveUp()
-      symState.ensureSelectedVisible(viewportHeight)
-      return DocumentSymbolResult(kind: dsvrHandled)
-    of skDown:
-      symState.moveDown()
-      symState.ensureSelectedVisible(viewportHeight)
-      return DocumentSymbolResult(kind: dsvrHandled)
-    of skEnter:
-      # Jump to selected symbol
-      let item = symState.getSelectedItem()
-      if item.isSome:
-        return DocumentSymbolResult(kind: dsvrJumpToSymbol, targetItem: item.get)
-      else:
-        return DocumentSymbolResult(kind: dsvrError, errorMessage: "No symbol selected")
+  case symState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    DocumentSymbolResult(kind: dsvrHandled)
+  of lvaQuitKey, lvaEscape:
+    DocumentSymbolResult(kind: dsvrQuit)
+  of lvaEnterCommand:
+    DocumentSymbolResult(kind: dsvrEnterCommand)
+  of lvaSelect:
+    # Jump to selected symbol
+    let item = symState.getSelectedItem()
+    if item.isSome:
+      DocumentSymbolResult(kind: dsvrJumpToSymbol, targetItem: item.get)
     else:
-      discard
-  else:
-    # Character keys
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      symState.halfPageDown(viewportHeight)
-      symState.ensureSelectedVisible(viewportHeight)
-      return DocumentSymbolResult(kind: dsvrHandled)
-
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      symState.halfPageUp(viewportHeight)
-      symState.ensureSelectedVisible(viewportHeight)
-      return DocumentSymbolResult(kind: dsvrHandled)
-
-    case keyCombo.char
-    of ":":
-      return DocumentSymbolResult(kind: dsvrEnterCommand)
-    of "q":
-      return DocumentSymbolResult(kind: dsvrQuit)
-    of "j":
-      symState.moveDown()
-      symState.ensureSelectedVisible(viewportHeight)
-      return DocumentSymbolResult(kind: dsvrHandled)
-    of "k":
-      symState.moveUp()
-      symState.ensureSelectedVisible(viewportHeight)
-      return DocumentSymbolResult(kind: dsvrHandled)
-    of "g":
-      # Start waiting for second 'g'
-      symState.waitingForG = true
-      return DocumentSymbolResult(kind: dsvrHandled)
-    of "G":
-      symState.moveToLast()
-      symState.ensureSelectedVisible(viewportHeight)
-      return DocumentSymbolResult(kind: dsvrHandled)
-    else:
-      discard
-
-  return DocumentSymbolResult(kind: dsvrUnhandled)
+      DocumentSymbolResult(kind: dsvrError, errorMessage: "No symbol selected")
+  of lvaUnhandled:
+    DocumentSymbolResult(kind: dsvrUnhandled)

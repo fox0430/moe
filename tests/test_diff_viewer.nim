@@ -35,9 +35,8 @@ suite "diff_viewer: newDiffViewerState":
   test "Create new state with defaults":
     let state = newDiffViewerState()
 
-    check state.lines.len == 0
-    check state.selectedLine == 0
-    check state.topLine == 0
+    check state.items.len == 0
+    check state.selectedIndex == 0
     check state.sourceFilePath == ""
     check state.backupFilePath == ""
     check state.errorMessage == ""
@@ -99,174 +98,145 @@ suite "diff_viewer: moveUp":
   test "Move up from line 3 to line 2":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 3
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 3
 
     state.moveUp()
 
-    check state.selectedLine == 2
+    check state.selectedIndex == 2
 
   test "Move up at first line stays at 0":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 0
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 0
 
     state.moveUp()
 
-    check state.selectedLine == 0
+    check state.selectedIndex == 0
 
   test "Move up with empty lines stays at 0":
     let state = newDiffViewerState()
-    state.selectedLine = 0
+    state.selectedIndex = 0
 
     state.moveUp()
 
-    check state.selectedLine == 0
-
-  test "Move up adjusts topLine when going above visible area":
-    let state = newDiffViewerState()
-    for i in 0 ..< 10:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 5
-    state.topLine = 5
-
-    state.moveUp()
-
-    check state.selectedLine == 4
-    check state.topLine == 4
-
-  test "Move up does not adjust topLine when still visible":
-    let state = newDiffViewerState()
-    for i in 0 ..< 10:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 5
-    state.topLine = 0
-
-    state.moveUp()
-
-    check state.selectedLine == 4
-    check state.topLine == 0
+    check state.selectedIndex == 0
 
 suite "diff_viewer: moveDown":
   test "Move down from line 0 to line 1":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 0
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 0
 
     state.moveDown()
 
-    check state.selectedLine == 1
+    check state.selectedIndex == 1
 
   test "Move down at last line stays at last":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 4
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 4
 
     state.moveDown()
 
-    check state.selectedLine == 4
+    check state.selectedIndex == 4
 
   test "Move down with empty lines stays at 0":
     let state = newDiffViewerState()
-    state.selectedLine = 0
+    state.selectedIndex = 0
 
     state.moveDown()
 
-    check state.selectedLine == 0
+    check state.selectedIndex == 0
 
   test "Move down multiple times":
     let state = newDiffViewerState()
     for i in 0 ..< 10:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 0
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 0
 
     for _ in 0 ..< 5:
       state.moveDown()
 
-    check state.selectedLine == 5
+    check state.selectedIndex == 5
 
 suite "diff_viewer: moveToFirst":
   test "Move to first from middle":
     let state = newDiffViewerState()
     for i in 0 ..< 10:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 5
-    state.topLine = 3
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 5
 
     state.moveToFirst()
 
-    check state.selectedLine == 0
-    check state.topLine == 0
+    check state.selectedIndex == 0
 
   test "Move to first when already at first":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 0
-    state.topLine = 0
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 0
 
     state.moveToFirst()
 
-    check state.selectedLine == 0
-    check state.topLine == 0
+    check state.selectedIndex == 0
 
   test "Move to first with empty lines":
     let state = newDiffViewerState()
 
     state.moveToFirst()
 
-    check state.selectedLine == 0
-    check state.topLine == 0
+    check state.selectedIndex == 0
 
 suite "diff_viewer: moveToLast":
   test "Move to last from first":
     let state = newDiffViewerState()
     for i in 0 ..< 10:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 0
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 0
 
     state.moveToLast()
 
-    check state.selectedLine == 9
+    check state.selectedIndex == 9
 
   test "Move to last when already at last":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 4
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 4
 
     state.moveToLast()
 
-    check state.selectedLine == 4
+    check state.selectedIndex == 4
 
   test "Move to last with empty lines stays at 0":
     let state = newDiffViewerState()
-    state.selectedLine = 0
+    state.selectedIndex = 0
 
     state.moveToLast()
 
-    check state.selectedLine == 0
+    check state.selectedIndex == 0
 
   test "Move to last with single line":
     let state = newDiffViewerState()
-    state.lines.add(DiffLine(text: "only line", kind: dlkNormal))
-    state.selectedLine = 0
+    state.items.add(DiffLine(text: "only line", kind: dlkNormal))
+    state.selectedIndex = 0
 
     state.moveToLast()
 
-    check state.selectedLine == 0
+    check state.selectedIndex == 0
 
-suite "diff_viewer: getSelectedLine":
+suite "diff_viewer: getSelectedItem":
   test "Get selected line at valid index":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 2
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 2
 
-    let result = state.getSelectedLine()
+    let result = state.getSelectedItem()
 
     check result.isSome
     check result.get.text == "line 2"
@@ -274,12 +244,12 @@ suite "diff_viewer: getSelectedLine":
 
   test "Get selected line with different kinds":
     let state = newDiffViewerState()
-    state.lines.add(DiffLine(text: "+added", kind: dlkAdded))
-    state.lines.add(DiffLine(text: "-deleted", kind: dlkDeleted))
-    state.lines.add(DiffLine(text: "@@header@@", kind: dlkHeader))
-    state.selectedLine = 1
+    state.items.add(DiffLine(text: "+added", kind: dlkAdded))
+    state.items.add(DiffLine(text: "-deleted", kind: dlkDeleted))
+    state.items.add(DiffLine(text: "@@header@@", kind: dlkHeader))
+    state.selectedIndex = 1
 
-    let result = state.getSelectedLine()
+    let result = state.getSelectedItem()
 
     check result.isSome
     check result.get.text == "-deleted"
@@ -287,29 +257,29 @@ suite "diff_viewer: getSelectedLine":
 
   test "Get selected line with empty lines returns none":
     let state = newDiffViewerState()
-    state.selectedLine = 0
+    state.selectedIndex = 0
 
-    let result = state.getSelectedLine()
+    let result = state.getSelectedItem()
 
     check result.isNone
 
   test "Get selected line with negative index returns none":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = -1
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = -1
 
-    let result = state.getSelectedLine()
+    let result = state.getSelectedItem()
 
     check result.isNone
 
   test "Get selected line with out of bounds index returns none":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 10
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 10
 
-    let result = state.getSelectedLine()
+    let result = state.getSelectedItem()
 
     check result.isNone
 
@@ -474,10 +444,9 @@ suite "diff_viewer: initDiffViewerState - Integration tests":
 
     check state.sourceFilePath == file1
     check state.backupFilePath == file2
-    check state.lines.len > 0
+    check state.items.len > 0
     check state.errorMessage == ""
-    check state.selectedLine == 0
-    check state.topLine == 0
+    check state.selectedIndex == 0
 
   test "Initialize state with identical files":
     let
@@ -490,8 +459,8 @@ suite "diff_viewer: initDiffViewerState - Integration tests":
 
     check state.sourceFilePath == file1
     check state.backupFilePath == file2
-    check state.lines.len == 1
-    check state.lines[0].text == "(No differences)"
+    check state.items.len == 1
+    check state.items[0].text == "(No differences)"
     check state.errorMessage == ""
 
   test "Initialize state with non-existent file sets error":
@@ -505,52 +474,52 @@ suite "diff_viewer: initDiffViewerState - Integration tests":
     check state.sourceFilePath == file1
     check state.backupFilePath == file2
     check state.errorMessage.len > 0
-    check state.lines.len == 1
-    check state.lines[0].text.startsWith("Error:")
+    check state.items.len == 1
+    check state.items[0].text.startsWith("Error:")
 
 suite "diff_viewer: Movement edge cases":
   test "Multiple moveUp calls stop at first line":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 2
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 2
 
     for _ in 0 ..< 10:
       state.moveUp()
 
-    check state.selectedLine == 0
+    check state.selectedIndex == 0
 
   test "Multiple moveDown calls stop at last line":
     let state = newDiffViewerState()
     for i in 0 ..< 5:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 2
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 2
 
     for _ in 0 ..< 10:
       state.moveDown()
 
-    check state.selectedLine == 4
+    check state.selectedIndex == 4
 
   test "Movement sequence: down, down, up, moveToLast, moveToFirst":
     let state = newDiffViewerState()
     for i in 0 ..< 10:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 0
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 0
 
     state.moveDown()
-    check state.selectedLine == 1
+    check state.selectedIndex == 1
 
     state.moveDown()
-    check state.selectedLine == 2
+    check state.selectedIndex == 2
 
     state.moveUp()
-    check state.selectedLine == 1
+    check state.selectedIndex == 1
 
     state.moveToLast()
-    check state.selectedLine == 9
+    check state.selectedIndex == 9
 
     state.moveToFirst()
-    check state.selectedLine == 0
+    check state.selectedIndex == 0
 
 suite "diff_viewer: DiffLineKind enum":
   test "All DiffLineKind values":
@@ -597,31 +566,17 @@ suite "diff_viewer: classifyDiffLine - Additional cases":
   test "Multiple @@ is Header":
     check classifyDiffLine("@@ -1,3 +1,5 @@ function foo()") == dlkHeader
 
-suite "diff_viewer: moveDown - topLine behavior":
-  test "moveDown does not change topLine":
+suite "diff_viewer: moveDown - extended":
+  test "moveDown advances selectedIndex":
     let state = newDiffViewerState()
     for i in 0 ..< 30:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 0
-    state.topLine = 0
+      state.items.add(DiffLine(text: "line " & $i, kind: dlkNormal))
+    state.selectedIndex = 0
 
     for _ in 0 ..< 10:
       state.moveDown()
 
-    check state.selectedLine == 10
-    check state.topLine == 0 # topLine unchanged by moveDown
-
-  test "moveDown from middle with topLine set":
-    let state = newDiffViewerState()
-    for i in 0 ..< 30:
-      state.lines.add(DiffLine(text: "line " & $i, kind: dlkNormal))
-    state.selectedLine = 15
-    state.topLine = 10
-
-    state.moveDown()
-
-    check state.selectedLine == 16
-    check state.topLine == 10 # topLine unchanged
+    check state.selectedIndex == 10
 
 suite "diff_viewer: initDiffViewerBuffer - Additional integration tests":
   setup:
@@ -750,47 +705,45 @@ suite "diff_viewer: initDiffViewerState - Error message validation":
 
     let state = initDiffViewerState(source, backup)
 
-    check state.lines.len >= 1
-    check state.lines[0].text.startsWith("Error:")
-    check state.lines[0].kind == dlkNormal
+    check state.items.len >= 1
+    check state.items[0].text.startsWith("Error:")
+    check state.items[0].kind == dlkNormal
 
 suite "diff_viewer: DiffViewerState field access":
   test "All fields are accessible and mutable":
     let state = newDiffViewerState()
 
-    state.lines = @[DiffLine(text: "test", kind: dlkAdded)]
-    state.selectedLine = 5
-    state.topLine = 3
+    state.items = @[DiffLine(text: "test", kind: dlkAdded)]
+    state.selectedIndex = 5
     state.sourceFilePath = "/path/to/source"
     state.backupFilePath = "/path/to/backup"
     state.errorMessage = "test error"
 
-    check state.lines.len == 1
-    check state.lines[0].text == "test"
-    check state.lines[0].kind == dlkAdded
-    check state.selectedLine == 5
-    check state.topLine == 3
+    check state.items.len == 1
+    check state.items[0].text == "test"
+    check state.items[0].kind == dlkAdded
+    check state.selectedIndex == 5
     check state.sourceFilePath == "/path/to/source"
     check state.backupFilePath == "/path/to/backup"
     check state.errorMessage == "test error"
 
   test "State is ref object - modifications persist":
     let state = newDiffViewerState()
-    state.lines.add(DiffLine(text: "line 1", kind: dlkNormal))
+    state.items.add(DiffLine(text: "line 1", kind: dlkNormal))
 
     proc modifyState(s: DiffViewerState) =
-      s.selectedLine = 10
-      s.lines.add(DiffLine(text: "line 2", kind: dlkAdded))
+      s.selectedIndex = 10
+      s.items.add(DiffLine(text: "line 2", kind: dlkAdded))
 
     modifyState(state)
 
-    check state.selectedLine == 10
-    check state.lines.len == 2
+    check state.selectedIndex == 10
+    check state.items.len == 2
 
 suite "diff_viewer: createDiffTextBuffer":
   test "Creates TextBuffer with correct content":
     let state = newDiffViewerState()
-    state.lines = @[
+    state.items = @[
       DiffLine(text: "+added line", kind: dlkAdded),
       DiffLine(text: "-deleted line", kind: dlkDeleted),
       DiffLine(text: " context line", kind: dlkNormal),
@@ -805,7 +758,7 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Sets language to langDiff":
     let state = newDiffViewerState()
-    state.lines = @[DiffLine(text: "test", kind: dlkNormal)]
+    state.items = @[DiffLine(text: "test", kind: dlkNormal)]
 
     let buf = state.createDiffTextBuffer()
 
@@ -813,7 +766,7 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Sets readOnly to true":
     let state = newDiffViewerState()
-    state.lines = @[DiffLine(text: "test", kind: dlkNormal)]
+    state.items = @[DiffLine(text: "test", kind: dlkNormal)]
 
     let buf = state.createDiffTextBuffer()
 
@@ -821,7 +774,7 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Initializes highlight (not nil)":
     let state = newDiffViewerState()
-    state.lines = @[
+    state.items = @[
       DiffLine(text: "+added", kind: dlkAdded),
       DiffLine(text: "-deleted", kind: dlkDeleted),
     ]
@@ -833,7 +786,7 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Empty diff lines":
     let state = newDiffViewerState()
-    state.lines = @[]
+    state.items = @[]
 
     let buf = state.createDiffTextBuffer()
 
@@ -842,7 +795,7 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Highlight assigns correct colors for diff line types":
     let state = newDiffViewerState()
-    state.lines = @[
+    state.items = @[
       DiffLine(text: "+added line", kind: dlkAdded),
       DiffLine(text: "-deleted line", kind: dlkDeleted),
       DiffLine(text: "@@ -1,3 +1,4 @@", kind: dlkHeader),
@@ -866,7 +819,7 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Single line diff":
     let state = newDiffViewerState()
-    state.lines = @[DiffLine(text: "(No differences)", kind: dlkNormal)]
+    state.items = @[DiffLine(text: "(No differences)", kind: dlkNormal)]
 
     let buf = state.createDiffTextBuffer()
 

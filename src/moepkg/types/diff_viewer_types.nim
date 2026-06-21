@@ -23,6 +23,9 @@
 ## (notably `types` and its importers) do not transitively pull in `highlight`
 ## / `syntax/tokenizer` via the full `diff_viewer` module.
 
+import list_viewer_types
+export list_viewer_types
+
 type
   DiffLineKind* = enum
     dlkNormal # Normal (context) line
@@ -35,11 +38,9 @@ type
     text*: string
     kind*: DiffLineKind
 
-  DiffViewerState* = ref object ## State for the diff viewer UI
-    lines*: seq[DiffLine] # Diff lines
-    selectedLine*: int # Currently selected/highlighted line
-    topLine*: int # Scroll position (first visible line)
+  DiffViewerState* = ref object of ListViewer[DiffLine]
+    ## State for the diff viewer UI.
+    ## items (diff lines)/selectedIndex/topLine/waitingForG are inherited.
     sourceFilePath*: string # Path of the source file (current version)
     backupFilePath*: string # Path of the backup file (old version)
     errorMessage*: string # Error message if diff failed
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command

@@ -56,83 +56,33 @@ proc handleCallHierarchyModeKey*(
   ##
   ## Returns a CallHierarchyResult indicating what action should be taken
 
-  # Handle 'gg' command (two g presses)
-  if chState.waitingForG:
-    chState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      chState.moveToFirst()
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
-    # If not 'g', fall through to normal handling
-
-  # Escape or q to quit
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
+  case chState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    return CallHierarchyResult(kind: chvrHandled)
+  of lvaQuitKey, lvaEscape:
     return CallHierarchyResult(kind: chvrQuit)
-
-  # Check for special keys first
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skUp:
-      chState.moveUp()
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
-    of skDown:
-      chState.moveDown()
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
-    of skEnter:
-      # Jump to selected item
-      let item = chState.getSelectedItem()
-      if item.isSome:
-        return CallHierarchyResult(kind: chvrJumpToItem, targetItem: item.get)
-      else:
-        return CallHierarchyResult(kind: chvrError, errorMessage: "No item selected")
+  of lvaEnterCommand:
+    return CallHierarchyResult(kind: chvrEnterCommand)
+  of lvaSelect:
+    # Jump to selected item
+    let item = chState.getSelectedItem()
+    if item.isSome:
+      return CallHierarchyResult(kind: chvrJumpToItem, targetItem: item.get)
     else:
-      discard
-  else:
-    # Character keys
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      chState.halfPageDown(viewportHeight)
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
+      return CallHierarchyResult(kind: chvrError, errorMessage: "No item selected")
+  of lvaUnhandled:
+    discard # fall through to call-hierarchy-specific keys
 
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      chState.halfPageUp(viewportHeight)
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
-
+  # Call-hierarchy-specific keys: request incoming/outgoing calls for the item.
+  if not keyCombo.isSpecial:
     case keyCombo.char
-    of ":":
-      return CallHierarchyResult(kind: chvrEnterCommand)
-    of "q":
-      return CallHierarchyResult(kind: chvrQuit)
-    of "j":
-      chState.moveDown()
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
-    of "k":
-      chState.moveUp()
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
-    of "g":
-      # Start waiting for second 'g'
-      chState.waitingForG = true
-      return CallHierarchyResult(kind: chvrHandled)
-    of "G":
-      chState.moveToLast()
-      chState.ensureSelectedVisible(viewportHeight)
-      return CallHierarchyResult(kind: chvrHandled)
     of "i":
-      # Request incoming calls for selected item
       let item = chState.getSelectedItem()
       if item.isSome:
         return CallHierarchyResult(kind: chvrRequestIncoming, targetItem: item.get)
       else:
         return CallHierarchyResult(kind: chvrError, errorMessage: "No item selected")
     of "o":
-      # Request outgoing calls for selected item
       let item = chState.getSelectedItem()
       if item.isSome:
         return CallHierarchyResult(kind: chvrRequestOutgoing, targetItem: item.get)

@@ -654,8 +654,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     let activeWin = e.activeWindow
     if activeWin.modeState.kind == mskBackupManager:
       let bkState = activeWin.modeState.backupManager
-      if backupIndex >= 0 and backupIndex < bkState.entries.len:
-        let entry = bkState.entries[backupIndex]
+      if backupIndex >= 0 and backupIndex < bkState.items.len:
+        let entry = bkState.items[backupIndex]
         # Initialize diff viewer with source and backup paths
         let dvState = initDiffViewerState(bkState.sourceFilePath, entry.fullPath)
         # Save original buffer and replace with diff content TextBuffer

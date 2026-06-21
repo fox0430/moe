@@ -22,14 +22,14 @@
 
 import std/options
 
-import buffer
-import picker/nav
-
+import buffer, list_viewer
 import types/buffer_manager_types
+
 export buffer_manager_types
+export list_viewer
 
 proc newBufferManagerState*(): BufferManagerState =
-  BufferManagerState(entries: @[], selectedIndex: 0, topLine: 0, previousWindowIndex: 0)
+  BufferManagerState(items: @[], selectedIndex: 0, previousWindowIndex: 0)
 
 proc initBufferManagerEntries*(bufferInfos: seq[BufferInfo]): seq[BufferEntry] =
   ## Create buffer entries from buffer information
@@ -48,27 +48,10 @@ proc initBufferManagerEntries*(bufferInfos: seq[BufferInfo]): seq[BufferEntry] =
 
 proc updateEntries*(state: BufferManagerState, bufferInfos: seq[BufferInfo]) =
   ## Update the buffer manager entries from buffer information
-  state.entries = initBufferManagerEntries(bufferInfos)
+  state.items = initBufferManagerEntries(bufferInfos)
   # Clamp selectedIndex to valid range
-  if state.selectedIndex >= state.entries.len:
-    state.selectedIndex = max(0, state.entries.len - 1)
-
-proc moveUp*(state: BufferManagerState) =
-  ## Move selection up
-  pickerMoveUp(state.selectedIndex)
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-
-proc moveDown*(state: BufferManagerState) =
-  ## Move selection down
-  pickerMoveDown(state.selectedIndex, state.entries.len)
-
-proc getSelectedItem*(state: BufferManagerState): Option[BufferEntry] =
-  ## Get the currently selected buffer entry
-  if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:
-    some(state.entries[state.selectedIndex])
-  else:
-    none(BufferEntry)
+  if state.selectedIndex >= state.items.len:
+    state.selectedIndex = max(0, state.items.len - 1)
 
 proc formatLine*(entry: BufferEntry): string =
   ## Format a buffer entry for display
@@ -80,9 +63,4 @@ proc formatLine*(entry: BufferEntry): string =
 
 proc createBufferManagerTextBuffer*(state: BufferManagerState): TextBuffer =
   ## Create a TextBuffer from buffer manager entries for rendering via the normal view path
-  var content = "-- Buffer Manager --"
-  for entry in state.entries:
-    content.add('\n')
-    content.add(formatLine(entry))
-  result = newTextBuffer(content)
-  result.readOnly = true
+  state.toListTextBuffer("-- Buffer Manager --", formatLine)

@@ -26,6 +26,9 @@
 
 import ../lsp/protocol/types as lspTypes
 import ../primitives
+import list_viewer_types
+
+export list_viewer_types
 
 type
   CallHierarchyViewKind* = enum
@@ -33,13 +36,9 @@ type
     chvkIncoming ## Incoming calls view
     chvkOutgoing ## Outgoing calls view
 
-  CallHierarchyViewerState* = ref object
-    items*: seq[lspTypes.CallHierarchyItem] ## Call hierarchy items to display
-    selectedIndex*: int ## Currently selected item index
-    topLine*: int ## Scroll position (first visible line)
+  CallHierarchyViewerState* = ref object of ListViewer[lspTypes.CallHierarchyItem]
+    ## items/selectedIndex/topLine/waitingForG/title are inherited.
     viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
-    title*: string ## Title for the list
-    waitingForG*: bool ## Waiting for second 'g' for 'gg' command
     ## Cursor/viewport of the underlying buffer captured on entry, so quitting
     ## the viewer restores the position instead of leaving it at (0, 0).
     originCursor*: BufferPosition

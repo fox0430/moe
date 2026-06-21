@@ -47,7 +47,6 @@ suite "CallHierarchyViewer - newCallHierarchyViewerState":
 
     check state.items.len == 1
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.viewKind == chvkPrepare
     check state.title == "Call Hierarchy"
 
@@ -71,7 +70,6 @@ suite "CallHierarchyViewer - newCallHierarchyViewerState":
 
     check state.items.len == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
 
 suite "CallHierarchyViewer - itemCount":
   test "Get item count with multiple items":
@@ -156,30 +154,15 @@ suite "CallHierarchyViewer - formatLine":
 
     check line == "myFunc (untitled:Untitled-1:1:1)"
 
-suite "CallHierarchyViewer - getLine":
-  test "Get line at valid index":
+suite "CallHierarchyViewer - getItem + formatLine":
+  test "Get formatted line at valid index":
     let items = @[
       makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
       makeCallHierarchyItem("bar", "file:///test.nim", 10, 5),
     ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
-    let line = state.getLine(1)
-    check line == "bar (/test.nim:11:6)"
-
-  test "Get line at negative index returns empty string":
-    let items = @[makeCallHierarchyItem("foo", "file:///test.nim", 0, 0)]
-    let state = newCallHierarchyViewerState(items, chvkPrepare)
-
-    let line = state.getLine(-1)
-    check line == ""
-
-  test "Get line at out of bounds index returns empty string":
-    let items = @[makeCallHierarchyItem("foo", "file:///test.nim", 0, 0)]
-    let state = newCallHierarchyViewerState(items, chvkPrepare)
-
-    let line = state.getLine(10)
-    check line == ""
+    check state.getItem(1).get.formatLine == "bar (/test.nim:11:6)"
 
 suite "CallHierarchyViewer - moveUp":
   test "Move up from middle":
@@ -350,50 +333,3 @@ suite "CallHierarchyViewer - halfPageDown":
     state.halfPageDown(10)
 
     check state.selectedIndex == 0
-
-suite "CallHierarchyViewer - ensureSelectedVisible":
-  test "Selected above viewport scrolls up":
-    var items: seq[lspTypes.CallHierarchyItem] = @[]
-    for i in 0 ..< 20:
-      items.add(makeCallHierarchyItem("func" & $i, "file:///test.nim", i, 0))
-    let state = newCallHierarchyViewerState(items, chvkPrepare)
-    state.topLine = 10
-    state.selectedIndex = 5
-
-    state.ensureSelectedVisible(5)
-
-    check state.topLine == 5
-
-  test "Selected below viewport scrolls down":
-    var items: seq[lspTypes.CallHierarchyItem] = @[]
-    for i in 0 ..< 20:
-      items.add(makeCallHierarchyItem("func" & $i, "file:///test.nim", i, 0))
-    let state = newCallHierarchyViewerState(items, chvkPrepare)
-    state.topLine = 0
-    state.selectedIndex = 10
-
-    state.ensureSelectedVisible(5)
-
-    check state.topLine == 6
-
-  test "Selected within viewport does not change topLine":
-    var items: seq[lspTypes.CallHierarchyItem] = @[]
-    for i in 0 ..< 20:
-      items.add(makeCallHierarchyItem("func" & $i, "file:///test.nim", i, 0))
-    let state = newCallHierarchyViewerState(items, chvkPrepare)
-    state.topLine = 5
-    state.selectedIndex = 7
-
-    state.ensureSelectedVisible(5)
-
-    check state.topLine == 5
-
-  test "Negative topLine is corrected to zero":
-    let items = @[makeCallHierarchyItem("foo", "file:///test.nim", 0, 0)]
-    let state = newCallHierarchyViewerState(items, chvkPrepare)
-    state.topLine = -5
-    state.selectedIndex = 0
-
-    state.ensureSelectedVisible(10)
-
-    check state.topLine == 0

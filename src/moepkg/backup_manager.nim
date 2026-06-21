@@ -22,22 +22,17 @@
 
 import std/[options, os, times, algorithm]
 
-import backup, buffer
-import picker/nav
-
+import backup, buffer, list_viewer
 import types/backup_manager_types
+
 export backup_manager_types
+export list_viewer
 
 const BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
 
 proc newBackupManagerState*(): BackupManagerState =
   BackupManagerState(
-    entries: @[],
-    selectedIndex: 0,
-    topLine: 0,
-    sourceFilePath: "",
-    backupDir: "",
-    baseBackupDir: "",
+    items: @[], selectedIndex: 0, sourceFilePath: "", backupDir: "", baseBackupDir: ""
   )
 
 proc parseBackupTimestamp(filename: string): Option[DateTime] =
@@ -83,44 +78,18 @@ proc initBackupManagerState*(
   result.sourceFilePath = sourceFilePath
   result.baseBackupDir = baseBackupDir
   result.backupDir = getBackupDirForSource(baseBackupDir, sourceFilePath)
-  result.entries = initBackupManagerEntries(result.backupDir)
+  result.items = initBackupManagerEntries(result.backupDir)
 
 proc refresh*(state: BackupManagerState) =
   ## Refresh the backup entries list
   state.backupDir = getBackupDirForSource(state.baseBackupDir, state.sourceFilePath)
-  state.entries = initBackupManagerEntries(state.backupDir)
+  state.items = initBackupManagerEntries(state.backupDir)
   # Clamp selectedIndex to valid range
-  if state.entries.len > 0:
-    if state.selectedIndex >= state.entries.len:
-      state.selectedIndex = state.entries.len - 1
+  if state.items.len > 0:
+    if state.selectedIndex >= state.items.len:
+      state.selectedIndex = state.items.len - 1
   else:
     state.selectedIndex = 0
-
-proc moveUp*(state: BackupManagerState) =
-  ## Move selection up
-  pickerMoveUp(state.selectedIndex)
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-
-proc moveDown*(state: BackupManagerState) =
-  ## Move selection down
-  pickerMoveDown(state.selectedIndex, state.entries.len)
-
-proc moveToFirst*(state: BackupManagerState) =
-  ## Move to first entry
-  pickerMoveToFirst(state.selectedIndex)
-  state.topLine = 0
-
-proc moveToLast*(state: BackupManagerState) =
-  ## Move to last entry
-  pickerMoveToLast(state.selectedIndex, state.entries.len)
-
-proc getSelectedItem*(state: BackupManagerState): Option[BackupEntry] =
-  ## Get the currently selected backup entry
-  if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:
-    some(state.entries[state.selectedIndex])
-  else:
-    none(BackupEntry)
 
 proc formatTimestamp*(dt: DateTime): string =
   ## Format a DateTime for display
@@ -133,10 +102,10 @@ proc formatLine*(entry: BackupEntry): string =
 proc deleteBackup*(state: BackupManagerState, index: int): bool =
   ## Delete a backup file
   ## Returns true on success
-  if index < 0 or index >= state.entries.len:
+  if index < 0 or index >= state.items.len:
     return false
 
-  let entry = state.entries[index]
+  let entry = state.items[index]
   try:
     removeFile(entry.fullPath)
     state.refresh()
@@ -147,10 +116,10 @@ proc deleteBackup*(state: BackupManagerState, index: int): bool =
 proc restoreBackup*(state: BackupManagerState, index: int): bool =
   ## Restore a backup file to its source
   ## Returns true on success
-  if index < 0 or index >= state.entries.len:
+  if index < 0 or index >= state.items.len:
     return false
 
-  let entry = state.entries[index]
+  let entry = state.items[index]
   if not fileExists(entry.fullPath):
     return false
 
@@ -162,12 +131,8 @@ proc restoreBackup*(state: BackupManagerState, index: int): bool =
 
 proc createBackupManagerTextBuffer*(state: BackupManagerState): TextBuffer =
   ## Create a TextBuffer from backup entries for rendering via the normal view path
-  var content = "-- Backup Manager: " & state.sourceFilePath & " --"
-  if state.entries.len == 0:
-    content.add("\nNo backup files found")
-  else:
-    for entry in state.entries:
-      content.add('\n')
-      content.add(formatLine(entry))
-  result = newTextBuffer(content)
-  result.readOnly = true
+  state.toListTextBuffer(
+    "-- Backup Manager: " & state.sourceFilePath & " --",
+    formatLine,
+    emptyPlaceholder = "No backup files found",
+  )

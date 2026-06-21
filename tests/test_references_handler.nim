@@ -262,8 +262,8 @@ suite "references_handler: Unhandled keys":
 
     check result.kind == rvrUnhandled
 
-suite "references_handler: Viewport scrolling":
-  test "navigation ensures selected item is visible":
+suite "references_handler: Navigation":
+  test "repeated j advances the selection":
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 30:
       itemList.add ReferenceItem(
@@ -271,19 +271,13 @@ suite "references_handler: Viewport scrolling":
       )
 
     let state = newReferencesViewerState(itemList)
-    state.topLine = 0
     state.selectedIndex = 0
 
-    # Move down many times to go beyond viewport
     for _ in 0 ..< 15:
       let keyCombo = toKeyCombo('j')
       discard handleReferencesModeKey(state, 10, keyCombo)
 
     check state.selectedIndex == 15
-    # topLine should have scrolled to keep selection visible
-    check state.topLine > 0
-    check state.selectedIndex >= state.topLine
-    check state.selectedIndex < state.topLine + 10
 
 suite "references_handler: Boundary conditions":
   test "k at first item stays at first":
@@ -410,8 +404,8 @@ suite "references_handler: gg with special key":
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
-suite "references_handler: G with viewport":
-  test "G scrolls viewport to show last item":
+suite "references_handler: G moves to last":
+  test "G selects the last item":
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 30:
       itemList.add ReferenceItem(
@@ -419,7 +413,6 @@ suite "references_handler: G with viewport":
       )
 
     let state = newReferencesViewerState(itemList)
-    state.topLine = 0
     state.selectedIndex = 0
     let keyCombo = toKeyCombo('G')
 
@@ -427,7 +420,3 @@ suite "references_handler: G with viewport":
 
     check result.kind == rvrHandled
     check state.selectedIndex == 29
-    # topLine should have scrolled to show last item
-    check state.topLine > 0
-    check state.selectedIndex >= state.topLine
-    check state.selectedIndex < state.topLine + 10

@@ -58,64 +58,13 @@ proc handleDiffViewerModeKey*(
   ##
   ## Returns a DiffViewerResult indicating what action should be taken
 
-  # Handle 'gg' command (two g presses)
-  if dvState.waitingForG:
-    dvState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      dvState.moveToFirst()
-      return DiffViewerResult(kind: dvrHandled)
-    # If not 'g', fall through to normal handling
-
-  # Escape key - quit diff viewer
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    return DiffViewerResult(kind: dvrQuit)
-
-  # Check for special keys first
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skUp:
-      dvState.moveUp()
-      return DiffViewerResult(kind: dvrHandled)
-    of skDown:
-      dvState.moveDown()
-      return DiffViewerResult(kind: dvrHandled)
-    else:
-      discard
-  else:
-    # Character keys
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        dvState.moveDown()
-      return DiffViewerResult(kind: dvrHandled)
-
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        dvState.moveUp()
-      return DiffViewerResult(kind: dvrHandled)
-
-    case keyCombo.char
-    of ":":
-      return DiffViewerResult(kind: dvrEnterCommand)
-    of "q":
-      return DiffViewerResult(kind: dvrQuit)
-    of "j":
-      dvState.moveDown()
-      return DiffViewerResult(kind: dvrHandled)
-    of "k":
-      dvState.moveUp()
-      return DiffViewerResult(kind: dvrHandled)
-    of "g":
-      # Start waiting for second 'g'
-      dvState.waitingForG = true
-      return DiffViewerResult(kind: dvrHandled)
-    of "G":
-      dvState.moveToLast()
-      return DiffViewerResult(kind: dvrHandled)
-    else:
-      discard
-
-  return DiffViewerResult(kind: dvrUnhandled)
+  case dvState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    DiffViewerResult(kind: dvrHandled)
+  of lvaQuitKey, lvaEscape:
+    DiffViewerResult(kind: dvrQuit)
+  of lvaEnterCommand:
+    DiffViewerResult(kind: dvrEnterCommand)
+  of lvaSelect, lvaUnhandled:
+    # The diff viewer has no selectable action; Enter and other keys are ignored.
+    DiffViewerResult(kind: dvrUnhandled)

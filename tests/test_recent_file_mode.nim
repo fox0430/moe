@@ -24,9 +24,8 @@ import ../src/moepkg/recent_file_mode
 suite "RecentFileMode - State creation":
   test "newRecentFileModeState creates empty state":
     let state = newRecentFileModeState()
-    check state.files.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
 
   test "len returns 0 for empty state":
     let state = newRecentFileModeState()
@@ -38,13 +37,13 @@ suite "RecentFileMode - State creation":
 
   test "isEmpty returns false when files exist":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file.txt")
+    state.items.add RecentFileEntry(path: "/file.txt")
     check state.isEmpty == false
 
   test "len returns correct count":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file1.txt")
-    state.files.add RecentFileEntry(path: "/file2.txt")
+    state.items.add RecentFileEntry(path: "/file1.txt")
+    state.items.add RecentFileEntry(path: "/file2.txt")
     check state.len == 2
 
   test "getRecentUsedXbelPath returns correct path":
@@ -145,33 +144,33 @@ suite "RecentFileMode - XBEL parsing":
     check files[0] == "/home/user/file.txt"
 
 suite "RecentFileMode - Selection":
-  test "getSelectedItem returns none for empty state":
+  test "getSelectedPath returns none for empty state":
     let state = newRecentFileModeState()
-    check state.getSelectedItem.isNone
+    check state.getSelectedPath.isNone
 
-  test "getSelectedItem returns selected file path":
+  test "getSelectedPath returns selected file path":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/path/to/file1.txt")
-    state.files.add RecentFileEntry(path: "/path/to/file2.txt")
+    state.items.add RecentFileEntry(path: "/path/to/file1.txt")
+    state.items.add RecentFileEntry(path: "/path/to/file2.txt")
     state.selectedIndex = 1
 
-    let selected = state.getSelectedItem
+    let selected = state.getSelectedPath
     check selected.isSome
     check selected.get == "/path/to/file2.txt"
 
-  test "getSelectedItem returns none for out of range index":
+  test "getSelectedPath returns none for out of range index":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/path/to/file.txt")
+    state.items.add RecentFileEntry(path: "/path/to/file.txt")
     state.selectedIndex = 5
 
-    check state.getSelectedItem.isNone
+    check state.getSelectedPath.isNone
 
 suite "RecentFileMode - Navigation":
   test "moveUp decreases selectedIndex":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file1.txt")
-    state.files.add RecentFileEntry(path: "/file2.txt")
-    state.files.add RecentFileEntry(path: "/file3.txt")
+    state.items.add RecentFileEntry(path: "/file1.txt")
+    state.items.add RecentFileEntry(path: "/file2.txt")
+    state.items.add RecentFileEntry(path: "/file3.txt")
     state.selectedIndex = 2
 
     state.moveUp()
@@ -182,8 +181,8 @@ suite "RecentFileMode - Navigation":
 
   test "moveUp does nothing at index 0":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file1.txt")
-    state.files.add RecentFileEntry(path: "/file2.txt")
+    state.items.add RecentFileEntry(path: "/file1.txt")
+    state.items.add RecentFileEntry(path: "/file2.txt")
     state.selectedIndex = 0
 
     state.moveUp()
@@ -196,9 +195,9 @@ suite "RecentFileMode - Navigation":
 
   test "moveDown increases selectedIndex":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file1.txt")
-    state.files.add RecentFileEntry(path: "/file2.txt")
-    state.files.add RecentFileEntry(path: "/file3.txt")
+    state.items.add RecentFileEntry(path: "/file1.txt")
+    state.items.add RecentFileEntry(path: "/file2.txt")
+    state.items.add RecentFileEntry(path: "/file3.txt")
     state.selectedIndex = 0
 
     state.moveDown()
@@ -209,8 +208,8 @@ suite "RecentFileMode - Navigation":
 
   test "moveDown does nothing at last index":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file1.txt")
-    state.files.add RecentFileEntry(path: "/file2.txt")
+    state.items.add RecentFileEntry(path: "/file1.txt")
+    state.items.add RecentFileEntry(path: "/file2.txt")
     state.selectedIndex = 1
 
     state.moveDown()
@@ -223,9 +222,9 @@ suite "RecentFileMode - Navigation":
 
   test "moveToFirst sets selectedIndex to 0":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file1.txt")
-    state.files.add RecentFileEntry(path: "/file2.txt")
-    state.files.add RecentFileEntry(path: "/file3.txt")
+    state.items.add RecentFileEntry(path: "/file1.txt")
+    state.items.add RecentFileEntry(path: "/file2.txt")
+    state.items.add RecentFileEntry(path: "/file3.txt")
     state.selectedIndex = 2
 
     state.moveToFirst()
@@ -233,9 +232,9 @@ suite "RecentFileMode - Navigation":
 
   test "moveToLast sets selectedIndex to last":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file1.txt")
-    state.files.add RecentFileEntry(path: "/file2.txt")
-    state.files.add RecentFileEntry(path: "/file3.txt")
+    state.items.add RecentFileEntry(path: "/file1.txt")
+    state.items.add RecentFileEntry(path: "/file2.txt")
+    state.items.add RecentFileEntry(path: "/file3.txt")
     state.selectedIndex = 0
 
     state.moveToLast()
@@ -245,72 +244,6 @@ suite "RecentFileMode - Navigation":
     let state = newRecentFileModeState()
     state.moveToLast()
     check state.selectedIndex == 0
-
-suite "RecentFileMode - Viewport":
-  test "ensureSelectedVisible scrolls up when selection above viewport":
-    let state = newRecentFileModeState()
-    for i in 0 ..< 10:
-      state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
-    state.topLine = 5
-    state.selectedIndex = 2
-
-    state.ensureSelectedVisible(5)
-    check state.topLine == 2
-
-  test "ensureSelectedVisible scrolls down when selection below viewport":
-    let state = newRecentFileModeState()
-    for i in 0 ..< 10:
-      state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
-    state.topLine = 0
-    state.selectedIndex = 7
-
-    state.ensureSelectedVisible(5)
-    check state.topLine == 3
-
-  test "ensureSelectedVisible does not change when selection is visible":
-    let state = newRecentFileModeState()
-    for i in 0 ..< 10:
-      state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
-    state.topLine = 2
-    state.selectedIndex = 4
-
-    state.ensureSelectedVisible(5)
-    check state.topLine == 2
-
-  test "getVisibleFiles returns correct slice":
-    let state = newRecentFileModeState()
-    for i in 0 ..< 10:
-      state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
-    state.topLine = 3
-
-    let visible = state.getVisibleFiles(4)
-    check visible.len == 4
-    check visible[0].path == "/file3.txt"
-    check visible[3].path == "/file6.txt"
-
-  test "getVisibleFiles handles viewport larger than remaining files":
-    let state = newRecentFileModeState()
-    for i in 0 ..< 5:
-      state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
-    state.topLine = 3
-
-    let visible = state.getVisibleFiles(10)
-    check visible.len == 2
-    check visible[0].path == "/file3.txt"
-    check visible[1].path == "/file4.txt"
-
-  test "getVisibleFiles returns empty for empty state":
-    let state = newRecentFileModeState()
-    let visible = state.getVisibleFiles(5)
-    check visible.len == 0
-
-  test "getVisibleFiles returns empty when topLine beyond files":
-    let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file.txt")
-    state.topLine = 5
-
-    let visible = state.getVisibleFiles(5)
-    check visible.len == 0
 
 suite "RecentFileMode - File existence":
   setup:
@@ -329,13 +262,13 @@ suite "RecentFileMode - File existence":
     writeFile(testFile, "test content")
 
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: testFile)
+    state.items.add RecentFileEntry(path: testFile)
 
     check state.selectedFileExists == true
 
   test "selectedFileExists returns false when file does not exist":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: testDir / "nonexistent.txt")
+    state.items.add RecentFileEntry(path: testDir / "nonexistent.txt")
 
     check state.selectedFileExists == false
 
@@ -346,13 +279,11 @@ suite "RecentFileMode - loadRecentFiles":
 
     check result.isOk
     check state.selectedIndex == 0
-    check state.topLine == 0
 
   test "loadRecentFiles resets state on success":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/old/file.txt")
+    state.items.add RecentFileEntry(path: "/old/file.txt")
     state.selectedIndex = 5
-    state.topLine = 3
 
     let result = state.loadRecentFiles()
 
@@ -360,4 +291,3 @@ suite "RecentFileMode - loadRecentFiles":
     if fileExists(xbelPath):
       check result.isOk
       check state.selectedIndex == 0
-      check state.topLine == 0

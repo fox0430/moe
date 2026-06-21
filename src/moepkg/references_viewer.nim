@@ -21,80 +21,29 @@
 ##
 ## This module provides the data structures and operations for the references viewer mode.
 ## Used to display and navigate LSP references, definitions, call hierarchy results.
+##
+## Selection/scroll navigation comes from the generic `ListViewer` base; only
+## the reference-specific construction and formatting live here.
 
-import std/[strformat, strutils, options]
+import std/[strformat, strutils]
 
-import buffer
-import picker/nav
-
+import buffer, list_viewer
 import types/references_viewer_types
+
 export references_viewer_types
+export list_viewer
 
 proc newReferencesViewerState*(
     items: seq[ReferenceItem], title: string = "References"
 ): ReferencesViewerState =
   ## Create a new references viewer state
-  ReferencesViewerState(items: items, selectedIndex: 0, topLine: 0, title: title)
-
-proc itemCount*(state: ReferencesViewerState): int =
-  ## Get the number of items
-  state.items.len
-
-proc getItem*(state: ReferencesViewerState, index: int): Option[ReferenceItem] =
-  ## Get a specific item
-  if index >= 0 and index < state.items.len:
-    some(state.items[index])
-  else:
-    none(ReferenceItem)
-
-proc getSelectedItem*(state: ReferencesViewerState): Option[ReferenceItem] =
-  ## Get the currently selected item
-  state.getItem(state.selectedIndex)
+  ReferencesViewerState(items: items, selectedIndex: 0, title: title)
 
 proc formatLine*(item: ReferenceItem): string =
   ## Format a reference item as a display line
   fmt"{item.path} {item.line + 1} Line {item.column + 1} Col"
 
-proc getLine*(state: ReferencesViewerState, index: int): string =
-  ## Get a formatted line for display
-  if index >= 0 and index < state.items.len:
-    state.items[index].formatLine()
-  else:
-    ""
-
-proc moveUp*(state: ReferencesViewerState) =
-  ## Move selection up
-  pickerMoveUp(state.selectedIndex)
-
-proc moveDown*(state: ReferencesViewerState) =
-  ## Move selection down
-  pickerMoveDown(state.selectedIndex, state.items.len)
-
-proc moveToFirst*(state: ReferencesViewerState) =
-  ## Move to first item
-  pickerMoveToFirst(state.selectedIndex)
-
-proc moveToLast*(state: ReferencesViewerState) =
-  ## Move to last item
-  pickerMoveToLast(state.selectedIndex, state.items.len)
-
-proc halfPageUp*(state: ReferencesViewerState, viewportHeight: int) =
-  ## Move up by half a page
-  pickerHalfPageUp(state.selectedIndex, viewportHeight)
-
-proc halfPageDown*(state: ReferencesViewerState, viewportHeight: int) =
-  ## Move down by half a page
-  pickerHalfPageDown(state.selectedIndex, state.items.len, viewportHeight)
-
-proc ensureSelectedVisible*(state: ReferencesViewerState, viewportHeight: int) =
-  ## Ensure the selected item is visible in the viewport
-  pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
-
 proc createReferencesTextBuffer*(state: ReferencesViewerState): TextBuffer =
   ## Create a TextBuffer from references for rendering via the normal view path
-  var content = "-- " & state.title.toUpperAscii() & " (" & $state.itemCount() & ") --"
-  for i in 0 ..< state.itemCount:
-    content.add('\n')
-    content.add(state.getLine(i))
-  result = newTextBuffer(content)
-  result.readOnly = true
+  let header = "-- " & state.title.toUpperAscii() & " (" & $state.itemCount() & ") --"
+  state.toListTextBuffer(header, formatLine)

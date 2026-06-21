@@ -22,20 +22,18 @@
 
 import std/[options, unicode]
 
-import buffer
-import picker/nav
-
+import buffer, list_viewer
 import types/bookmark_manager_types
+
 export bookmark_manager_types
+export list_viewer
 
 proc newBookmarkManagerState*(): BookmarkManagerState =
-  BookmarkManagerState(
-    entries: @[], selectedIndex: 0, topLine: 0, previousWindowIndex: 0
-  )
+  BookmarkManagerState(items: @[], selectedIndex: 0, previousWindowIndex: 0)
 
 proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
   ## Update the bookmark manager entries by scanning all buffers for bookmarks
-  state.entries = @[]
+  state.items = @[]
   for i, buf in buffers:
     let filePath = if buf.filePath.isSome: buf.filePath.get else: "No Name"
     for bline in buf.bookmarks:
@@ -48,32 +46,15 @@ proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
             line
         else:
           ""
-      state.entries.add(
+      state.items.add(
         BookmarkEntry(bufferIndex: i, filePath: filePath, line: bline, text: text)
       )
 
   # Clamp selectedIndex to valid range
-  if state.entries.len == 0:
+  if state.items.len == 0:
     state.selectedIndex = 0
-  elif state.selectedIndex >= state.entries.len:
-    state.selectedIndex = max(0, state.entries.len - 1)
-
-proc moveUp*(state: BookmarkManagerState) =
-  ## Move selection up
-  pickerMoveUp(state.selectedIndex)
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-
-proc moveDown*(state: BookmarkManagerState) =
-  ## Move selection down
-  pickerMoveDown(state.selectedIndex, state.entries.len)
-
-proc getSelectedItem*(state: BookmarkManagerState): Option[BookmarkEntry] =
-  ## Get the currently selected bookmark entry
-  if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:
-    some(state.entries[state.selectedIndex])
-  else:
-    none(BookmarkEntry)
+  elif state.selectedIndex >= state.items.len:
+    state.selectedIndex = max(0, state.items.len - 1)
 
 proc formatLine*(entry: BookmarkEntry): string =
   ## Format a bookmark entry for display
@@ -82,15 +63,9 @@ proc formatLine*(entry: BookmarkEntry): string =
 
 proc createBookmarkManagerTextBuffer*(state: BookmarkManagerState): TextBuffer =
   ## Create a TextBuffer from bookmark manager entries for rendering
-  var content = "-- Bookmark Manager --"
-  if state.entries.len == 0:
-    content.add("\n  No bookmarks")
-  else:
-    for entry in state.entries:
-      content.add('\n')
-      content.add(formatLine(entry))
-  result = newTextBuffer(content)
-  result.readOnly = true
+  state.toListTextBuffer(
+    "-- Bookmark Manager --", formatLine, emptyPlaceholder = "  No bookmarks"
+  )
 
 proc deleteSelectedBookmark*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
   ## Delete the currently selected bookmark and refresh entries

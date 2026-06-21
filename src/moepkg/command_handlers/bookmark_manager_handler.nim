@@ -55,86 +55,40 @@ proc handleBookmarkManagerModeKey*(
 ): BookmarkManagerResult =
   ## Handle a key press in Bookmark Manager mode
 
-  # Handle 'gg' command (two g presses)
-  if bmState.waitingForG:
+  # Ctrl-k / Ctrl-j switch windows; the editor handles them. Cancel any pending
+  # 'gg' first, since this early return bypasses handleListNavKey (the only place
+  # that would otherwise clear waitingForG).
+  if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+      (keyCombo.char == "k" or keyCombo.char == "j"):
     bmState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      bmState.selectedIndex = 0
-      bmState.topLine = 0
-      return BookmarkManagerResult(kind: bkmrHandled)
+    return BookmarkManagerResult(kind: bkmrUnhandled)
 
-  # Escape key - quit
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
+  case bmState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    return BookmarkManagerResult(kind: bkmrHandled)
+  of lvaQuitKey, lvaEscape:
     return BookmarkManagerResult(kind: bkmrQuit)
+  of lvaEnterCommand:
+    return BookmarkManagerResult(kind: bkmrEnterCommand)
+  of lvaSelect:
+    # Jump to the selected bookmark
+    let entry = bmState.getSelectedItem()
+    if entry.isSome:
+      return BookmarkManagerResult(
+        kind: bkmrJumpToBookmark,
+        jumpBufferIndex: entry.get.bufferIndex,
+        jumpLine: entry.get.line,
+      )
+    return BookmarkManagerResult(kind: bkmrHandled)
+  of lvaUnhandled:
+    discard # fall through to bookmark-manager-specific keys
 
-  # Check for special keys first
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEnter:
-      let entry = bmState.getSelectedItem()
-      if entry.isSome:
-        return BookmarkManagerResult(
-          kind: bkmrJumpToBookmark,
-          jumpBufferIndex: entry.get.bufferIndex,
-          jumpLine: entry.get.line,
-        )
-      return BookmarkManagerResult(kind: bkmrHandled)
-    of skUp:
-      bmState.moveUp()
-      return BookmarkManagerResult(kind: bkmrHandled)
-    of skDown:
-      bmState.moveDown()
-      return BookmarkManagerResult(kind: bkmrHandled)
-    else:
-      discard
-  else:
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        bmState.moveDown()
-      return BookmarkManagerResult(kind: bkmrHandled)
-
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        bmState.moveUp()
-      return BookmarkManagerResult(kind: bkmrHandled)
-
-    # Check for Ctrl+k (next window)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "k":
-      return BookmarkManagerResult(kind: bkmrUnhandled)
-
-    # Check for Ctrl+j (prev window)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "j":
-      return BookmarkManagerResult(kind: bkmrUnhandled)
-
-    case keyCombo.char
-    of ":":
-      return BookmarkManagerResult(kind: bkmrEnterCommand)
-    of "q":
-      return BookmarkManagerResult(kind: bkmrQuit)
-    of "j":
-      bmState.moveDown()
-      return BookmarkManagerResult(kind: bkmrHandled)
-    of "k":
-      bmState.moveUp()
-      return BookmarkManagerResult(kind: bkmrHandled)
-    of "g":
-      bmState.waitingForG = true
-      return BookmarkManagerResult(kind: bkmrHandled)
-    of "G":
-      bmState.selectedIndex = max(0, bmState.entries.len - 1)
-      return BookmarkManagerResult(kind: bkmrHandled)
-    of "D":
-      let entry = bmState.getSelectedItem()
-      if entry.isSome:
-        return BookmarkManagerResult(
-          kind: bkmrDeleteBookmark, deleteEntryIndex: bmState.selectedIndex
-        )
-      return BookmarkManagerResult(kind: bkmrHandled)
-    else:
-      discard
+  if not keyCombo.isSpecial and keyCombo.char == "D":
+    let entry = bmState.getSelectedItem()
+    if entry.isSome:
+      return BookmarkManagerResult(
+        kind: bkmrDeleteBookmark, deleteEntryIndex: bmState.selectedIndex
+      )
+    return BookmarkManagerResult(kind: bkmrHandled)
 
   return BookmarkManagerResult(kind: bkmrUnhandled)

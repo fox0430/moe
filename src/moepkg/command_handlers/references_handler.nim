@@ -53,71 +53,19 @@ proc handleReferencesModeKey*(
   ##
   ## Returns a ReferencesResult indicating what action should be taken
 
-  # Handle 'gg' command (two g presses)
-  if refState.waitingForG:
-    refState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      refState.moveToFirst()
-      return ReferencesResult(kind: rvrHandled)
-    # If not 'g', fall through to normal handling
-
-  # Check for special keys first
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEscape:
-      return ReferencesResult(kind: rvrQuit)
-    of skUp:
-      refState.moveUp()
-      refState.ensureSelectedVisible(viewportHeight)
-      return ReferencesResult(kind: rvrHandled)
-    of skDown:
-      refState.moveDown()
-      refState.ensureSelectedVisible(viewportHeight)
-      return ReferencesResult(kind: rvrHandled)
-    of skEnter:
-      # Jump to selected reference
-      let item = refState.getSelectedItem()
-      if item.isSome:
-        return ReferencesResult(kind: rvrJumpToReference, targetItem: item.get)
-      else:
-        return ReferencesResult(kind: rvrError, errorMessage: "No reference selected")
+  case refState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    ReferencesResult(kind: rvrHandled)
+  of lvaQuitKey, lvaEscape:
+    ReferencesResult(kind: rvrQuit)
+  of lvaEnterCommand:
+    ReferencesResult(kind: rvrEnterCommand)
+  of lvaSelect:
+    # Jump to selected reference
+    let item = refState.getSelectedItem()
+    if item.isSome:
+      ReferencesResult(kind: rvrJumpToReference, targetItem: item.get)
     else:
-      discard
-  else:
-    # Character keys
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      refState.halfPageDown(viewportHeight)
-      return ReferencesResult(kind: rvrHandled)
-
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      refState.halfPageUp(viewportHeight)
-      return ReferencesResult(kind: rvrHandled)
-
-    case keyCombo.char
-    of "q":
-      # Close the references viewer
-      return ReferencesResult(kind: rvrQuit)
-    of ":":
-      return ReferencesResult(kind: rvrEnterCommand)
-    of "j":
-      refState.moveDown()
-      refState.ensureSelectedVisible(viewportHeight)
-      return ReferencesResult(kind: rvrHandled)
-    of "k":
-      refState.moveUp()
-      refState.ensureSelectedVisible(viewportHeight)
-      return ReferencesResult(kind: rvrHandled)
-    of "g":
-      # Start waiting for second 'g'
-      refState.waitingForG = true
-      return ReferencesResult(kind: rvrHandled)
-    of "G":
-      refState.moveToLast()
-      refState.ensureSelectedVisible(viewportHeight)
-      return ReferencesResult(kind: rvrHandled)
-    else:
-      discard
-
-  return ReferencesResult(kind: rvrUnhandled)
+      ReferencesResult(kind: rvrError, errorMessage: "No reference selected")
+  of lvaUnhandled:
+    ReferencesResult(kind: rvrUnhandled)

@@ -25,17 +25,19 @@
 
 import std/times
 
+import list_viewer_types
+
+export list_viewer_types
+
 type
   BackupEntry* = object ## Represents a backup file entry in the backup manager list
     filename*: string # Backup filename (timestamp)
     timestamp*: DateTime # Parsed timestamp
     fullPath*: string # Full path to the backup file
 
-  BackupManagerState* = ref object ## State for the backup manager UI
-    entries*: seq[BackupEntry] # List of backup entries
-    selectedIndex*: int # Currently selected entry index
-    topLine*: int # Scroll position (first visible line)
+  BackupManagerState* = ref object of ListViewer[BackupEntry]
+    ## State for the backup manager UI.
+    ## items (backup entries)/selectedIndex/topLine/waitingForG are inherited.
     sourceFilePath*: string # Path of the source file being backed up
     backupDir*: string # Directory containing backup files
     baseBackupDir*: string # Base backup directory from config
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command

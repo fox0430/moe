@@ -23,12 +23,13 @@
 ## (notably `types` and its importers) do not transitively pull in `picker/nav`
 ## via the full `recent_file_mode` module.
 
+import list_viewer_types
+export list_viewer_types
+
 type
   RecentFileEntry* = object
     path*: string
 
-  RecentFileModeState* = ref object
-    files*: seq[RecentFileEntry]
-    selectedIndex*: int
-    topLine*: int
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+  RecentFileModeState* = ref object of ListViewer[RecentFileEntry]
+    ## items (recent file entries)/selectedIndex/topLine/waitingForG are
+    ## inherited from ListViewer.
