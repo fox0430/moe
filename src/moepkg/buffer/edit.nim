@@ -29,18 +29,23 @@ import pkg/results
 import ../[primitives, unicode_utils]
 import core, internal_mutations, undo
 
-# Public NoUndo procs for external code that bypasses undo recording
+# Public NoUndo procs for external code that bypasses undo recording. They skip
+# the undo stack and changeSeq, but still advance contentVersion: the content
+# changed, so any content-keyed cache must invalidate.
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Replace line content without recording undo. Used by substitute preview etc.
   b.backendReplaceLine(lineNumber, content)
+  b.advanceContentVersion()
 
 proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
   ## Delete a line without recording undo. Used by substitute preview etc.
   b.backendDeleteLine(lineNumber)
+  b.advanceContentVersion()
 
 proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Insert a line without recording undo. Used by substitute preview etc.
   b.backendInsertLine(lineNumber, content)
+  b.advanceContentVersion()
 
 proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), string] =
   ## Replace line content with undo recording.

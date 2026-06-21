@@ -277,7 +277,7 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
 
   # Restore changeSeq to its value at transaction start
   b.changeSeq = transaction.startSeq
-  b.contentVersion.inc # content changed; advance the monotonic version
+  b.advanceContentVersion()
 
   # Mark highlight as needing update after rollback
   if transaction.changes.len > 0:
@@ -335,7 +335,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     # collapses N inc'd changes back to the saved value in one step, fixing
     # the stale isModified-after-multi-change-undo bug.
     b.changeSeq = change.startSeq
-    b.contentVersion.inc # content changed; advance the monotonic version
+    b.advanceContentVersion()
 
     # Adjust changelist index
     if b.changeListIndex > 0:
@@ -499,7 +499,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     # Restore changeSeq to the post-mutation value (symmetric with undo()).
     b.changeSeq = change.endSeq
-    b.contentVersion.inc # content changed; advance the monotonic version
+    b.advanceContentVersion()
 
     # Adjust changelist index
     if b.changeListIndex < b.changeList.len - 1:

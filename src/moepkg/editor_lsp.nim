@@ -62,6 +62,23 @@ proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
   elif buf.filePath.isSome:
     logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
 
+proc resyncBufferAfterReload*(e: Editor, buf: TextBuffer) =
+  ## Re-publish diagnostics after a reload. A reload drops the buffer's
+  ## diagnostics (their positions are stale against the new content), but a plain
+  ## didChange is skipped when the reloaded text equals the server's shadow (`:e!`
+  ## on a clean buffer, or an external touch that left the bytes unchanged), so
+  ## diagnostics would stay gone until the next edit. Re-open the document
+  ## (didClose + didOpen) to force a fresh publish regardless of whether the bytes
+  ## changed — matching a reload's "re-read from disk" semantics.
+  if not e.lsp.enabled or buf.filePath.isNone:
+    return
+  discard e.lsp.onBufferClose(buf) # best effort; re-opened next regardless
+  let openResult = e.lsp.onBufferOpen(buf)
+  if openResult.isOk:
+    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+  else:
+    logLspDegraded("reload: didOpen " & buf.filePath.get, openResult.error)
+
 proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
   ## didOpen a freshly registered buffer and record its synced changeSeq so the
   ## next didChange delta is computed against the right baseline. No-op when LSP

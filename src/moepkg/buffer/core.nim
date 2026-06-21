@@ -213,10 +213,12 @@ type
     savedSeq*: int # Sequence number when file was last saved
 
     contentVersion*: int
-      ## Monotonic content generation. Bumped on every content-changing op and
-      ## never reset or rolled back, so unlike `changeSeq` (which undo restores
-      ## and reload resets to 0) it uniquely identifies a buffer's content across
-      ## its lifetime. Use this, not `changeSeq`, as a cache-invalidation key.
+      ## Monotonic content generation. Advanced via `advanceContentVersion` on
+      ## every content-changing op (including the no-undo preview mutators that
+      ## bypass `changeSeq`) and never reset or rolled back, so unlike `changeSeq`
+      ## (which undo restores and reload resets to 0) it uniquely identifies a
+      ## buffer's content across its lifetime. Use this, not `changeSeq`, as a
+      ## cache-invalidation key.
 
     # Transaction support
     currentTransaction*: Option[BufferTransaction]
@@ -277,7 +279,55 @@ type
     of PieceTable:
       pieceTable*: piece_table.PieceTable
 
-const AutoBackendLargeFileThreshold* = 10 * 1024 * 1024 # 10 MB
+  BufferIdentity* = object
+    ## Identity, session, and detected state that must survive `loadFile`'s
+    ## backend-swap branch (`b[] = newBuffer[]`), which otherwise replaces the
+    ## whole object with `newTextBuffer` defaults. Snapshot before the swap with
+    ## `captureIdentity`, re-apply after with `restoreIdentity`.
+    ##
+    ## Invariant: whether the backend swaps (which only depends on the file size
+    ## crossing `AutoBackendLargeFileThreshold` in auto mode) is an implementation
+    ## detail and must NOT change any user-visible state beyond the content. So
+    ## every field a same-backend reload keeps — which is everything `loadFile`
+    ## does not explicitly reset — belongs here, EXCEPT:
+    ##   - content-derived state `loadFile` recomputes from the new content anyway
+    ##     (highlight, incrementalHighlight, lineMarkers, modifiedLines, language);
+    ##     and
+    ##   - state keyed on the OLD content that a reload makes stale, so `loadFile`
+    ##     explicitly resets it on BOTH paths (not just the swap): the char->byte
+    ##     cursor cache via `resetCursorCache`; the undo/redo stacks, in-flight
+    ##     transaction and pending PieceTable snapshots via `clearUndoRedoState`;
+    ##     LSP diagnostics (their line positions go stale on a content change, and
+    ##     a reload sends no didChange for the server to re-publish against);
+    ##     conflictBlocks (line ranges into the replaced content; the caller
+    ##     re-scans); lastChangedLines (the incremental-highlight seed line); and
+    ##     the changelist (`changeList`/`changeListIndex`, positions into the
+    ##     replaced content — discarded with the undo history, matching vim `:e!`).
+    ## A new persistent TextBuffer field that is none of those belongs here, or it
+    ## will silently vanish on a backend-swap reload while surviving a normal one.
+    id: BufferId
+    contentVersion: int
+    lineEnding: LineEnding
+    encoding: CharacterEncoding
+    endOfLine: bool
+    bookmarks: seq[int]
+    editorConfig: Option[BufferEditorConfig]
+    displayName: Option[string]
+    readOnly: bool
+    isUtilityBuffer: bool
+    reservedWords: seq[ReservedWord]
+    foldState: FoldState
+
+const
+  AutoBackendLargeFileThreshold* = 10 * 1024 * 1024
+    # 10 MB
+    ## In auto-backend mode, a file at or above this size loads into PieceTable
+    ## instead of GapBuffer (`chooseBackendForFile`). Crossing it is also the only
+    ## thing that makes `loadFile` take the backend-swap branch, so the swap must
+    ## not change any user-visible state beyond the content (see `BufferIdentity`).
+  InvalidCursorPosCache =
+    CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1)
+  ## Sentinel for "no cached position"; line=-1 forces a recompute on first lookup.
 
 var nextBufferId = 1
   ## Starts at 1 so `BufferId(0)` is reserved as a sentinel for the
@@ -363,6 +413,23 @@ proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: i
   # Remove folds marked for deletion (in reverse order to preserve indices)
   for i in countdown(toRemove.high, 0):
     state.folds.delete(toRemove[i])
+
+proc clampFoldsToLineCount*(state: var FoldState, lineCount: int) =
+  ## Drop folds that start past the content and clamp folds that extend past it.
+  ## A reload preserves folds (identity) but can shrink the buffer, which would
+  ## otherwise leave a fold referencing lines that no longer exist.
+  if lineCount <= 0:
+    state.folds.setLen(0)
+    return
+  var kept: seq[Fold]
+  for fold in state.folds:
+    if fold.startLine >= lineCount:
+      continue # entirely past the new end
+    var f = fold
+    if f.endLine >= lineCount:
+      f.endLine = lineCount - 1
+    kept.add(f)
+  state.folds = kept
 
 proc toggleBookmark*(b: TextBuffer, line: int) =
   ## Toggle a bookmark on the given line
@@ -518,8 +585,7 @@ proc newTextBuffer*(
   result.lineMarkers = initCowSeq[Option[LineMarkerKind]](lineCount)
   result.modifiedLines = newSeq[LineModificationKind](lineCount)
   result.language = SourceLanguage.langNone
-  # Invalid-state cache (line=-1 forces a recompute on first lookup)
-  result.cursorCache = CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1)
+  result.cursorCache = InvalidCursorPosCache
   result.foldState = initFoldState()
   result.editorConfig = none(BufferEditorConfig)
 
@@ -741,6 +807,69 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.hasPendingModifiedLinesSnapshot = false
   b.pendingModifiedLinesSnapshot.setLen(0)
 
+proc resetCursorCache*(b: TextBuffer) {.inline.} =
+  ## Invalidate the char->byte position cache (line=-1 forces a recompute on the
+  ## next lookup). A reload replaces the content, so any cached
+  ## (line, charPos)->bytePos mapping is stale. The backend-swap path resets this
+  ## via newTextBuffer; this matches it on the same-backend path.
+  b.cursorCache = InvalidCursorPosCache
+
+proc clearUndoRedoState*(b: TextBuffer) =
+  ## Drop all undo/redo history, the in-flight transaction and any pending
+  ## snapshot. A reload replaces the content wholesale, so every recorded change
+  ## (and the positions it stores) is invalid against the new content. The
+  ## backend-swap path clears these via newTextBuffer; this matches it on the
+  ## same-backend path.
+  b.undoStack.clear()
+  b.redoStack.clear()
+  b.inTransaction = false
+  b.currentTransaction = none(BufferTransaction)
+  b.discardPendingSnapshot()
+
+proc advanceContentVersion*(b: TextBuffer) {.inline.} =
+  ## Advance the monotonic content version. Call from EVERY content-mutating
+  ## path: alongside each `changeSeq` write, and from the no-undo preview
+  ## mutators that bypass `changeSeq`. It only ever increases, so it stays a
+  ## safe cache-invalidation key. See the `contentVersion` field doc.
+  b.contentVersion.inc
+
+proc captureIdentity*(b: TextBuffer): BufferIdentity =
+  ## Snapshot the fields a backend swap would otherwise clobber. Take this AFTER
+  ## line-ending/encoding detection so the freshly detected values are captured.
+  BufferIdentity(
+    id: b.id,
+    contentVersion: b.contentVersion,
+    lineEnding: b.lineEnding,
+    encoding: b.encoding,
+    endOfLine: b.endOfLine,
+    bookmarks: b.bookmarks,
+    editorConfig: b.editorConfig,
+    displayName: b.displayName,
+    readOnly: b.readOnly,
+    isUtilityBuffer: b.isUtilityBuffer,
+    reservedWords: b.reservedWords,
+    foldState: b.foldState,
+  )
+
+proc restoreIdentity*(b: TextBuffer, s: BufferIdentity) =
+  ## Re-apply identity after a backend swap reset it to newTextBuffer defaults.
+  ## contentVersion is restored to its pre-reload value then advanced, keeping it
+  ## monotonic across the reload (see advanceContentVersion). A no-op on the
+  ## same-backend path, where the swap never ran.
+  b.id = s.id
+  b.lineEnding = s.lineEnding
+  b.encoding = s.encoding
+  b.endOfLine = s.endOfLine
+  b.bookmarks = s.bookmarks
+  b.editorConfig = s.editorConfig
+  b.displayName = s.displayName
+  b.readOnly = s.readOnly
+  b.isUtilityBuffer = s.isUtilityBuffer
+  b.reservedWords = s.reservedWords
+  b.foldState = s.foldState
+  b.contentVersion = s.contentVersion
+  b.advanceContentVersion()
+
 proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
   ## Always increments changeSeq to mark buffer as modified
@@ -759,7 +888,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # which collapse N inc'd changes into a single undo entry.
   let preSeq = b.changeSeq
   b.changeSeq.inc
-  b.contentVersion.inc # monotonic, never rolled back (see field docs)
+  b.advanceContentVersion()
   let postSeq = b.changeSeq
 
   # Mark highlight as needing update and track changed range

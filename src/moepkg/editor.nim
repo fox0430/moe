@@ -1132,6 +1132,20 @@ proc clampCursorAfterReload(e: Editor, buf: TextBuffer) =
   )
   e.cursor = BufferPosition(line: clamped.y, column: clamped.x)
 
+proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
+  ## Shared post-reload bookkeeping for both the external-change and `:e!` paths:
+  ## re-clamp the cursor, refresh the git gutter, rescan conflict markers against
+  ## the new content, and re-open the document so the LSP re-publishes diagnostics.
+  ## The reload dropped the buffer's diagnostics and reset changeSeq to 0, so
+  ## maybeUpdateLsp's changeSeq guard would never re-sync on its own.
+  e.clampCursorAfterReload(buf)
+  e.state.statusMessage = "File reloaded: " & filePath
+  e.refreshGitDiff(useBuffer = false)
+  buf.refreshConflicts()
+  e.state.timing.lastConflictScan = getMonoTime()
+  e.state.timing.lastConflictScanSeq = buf.changeSeq
+  e.resyncBufferAfterReload(buf)
+
 proc maybeReloadExternallyModifiedFile*(e: Editor) =
   ## Check if files were modified externally and reload them if:
   ##   - liveReloadOfFile is enabled in config
@@ -1173,14 +1187,7 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   logInfo("editor", "File externally modified, reloading: " & filePath)
   let reloadResult = activeBuffer.reloadFile()
   if reloadResult.isOk:
-    e.clampCursorAfterReload(activeBuffer)
-    e.state.statusMessage = "File reloaded: " & filePath
-    # Update git diff after reload
-    e.refreshGitDiff(useBuffer = false)
-    # Rescan conflict markers against the newly loaded content
-    activeBuffer.refreshConflicts()
-    e.state.timing.lastConflictScan = getMonoTime()
-    e.state.timing.lastConflictScanSeq = activeBuffer.changeSeq
+    e.finishReload(activeBuffer, filePath)
   else:
     e.state.statusMessage = "Failed to reload file: " & reloadResult.error
 
@@ -1195,12 +1202,7 @@ proc reloadCurrentFile*(e: Editor): Result[void, string] =
   if reloadResult.isErr:
     return err(reloadResult.error)
 
-  e.clampCursorAfterReload(activeBuffer)
-  e.state.statusMessage = "File reloaded: " & filePath
-  e.refreshGitDiff(useBuffer = false)
-  activeBuffer.refreshConflicts()
-  e.state.timing.lastConflictScan = getMonoTime()
-  e.state.timing.lastConflictScanSeq = activeBuffer.changeSeq
+  e.finishReload(activeBuffer, filePath)
   return ok()
 
 proc refreshBufferGitAndConflicts*(e: Editor, buf: TextBuffer) =
