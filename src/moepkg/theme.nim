@@ -405,3 +405,14 @@ const DefaultColors*: ThemeColors = [
 proc initDefaultTheme*() =
   ## Initialize the theme with default colors.
   setThemeColors(DefaultColors)
+
+# Initialize the global theme to the bundled defaults at module load. The
+# `themeColors` global lives in `color.nim`, which cannot reference
+# `DefaultColors` here without an import cycle, so it is zero-initialized
+# (every channel 0 -> all-black `#000000`). Any code path that serializes
+# `themeColors` before `initTheme`/`setThemeColors` runs (e.g. tooling or a
+# test using a default `EditorConfig`, whose `theme.path` points at the real
+# `~/.config/moe/themes/dark.toml`) would otherwise overwrite that file with an
+# all-black theme. Seeding the global here makes such a stray save write a
+# valid dark theme instead.
+setThemeColors(DefaultColors)
