@@ -108,6 +108,11 @@ proc getGlobalLogger*(): Logger {.gcsafe, raises: [].} =
   {.cast(gcsafe).}:
     result = globalLogger
 
+proc isEnabled*(logger: Logger): bool {.gcsafe, raises: [].} =
+  ## Whether the logger will actually write. Use this to skip building log
+  ## strings on hot paths when logging is disabled.
+  not logger.isNil and logger.enabled
+
 proc logLevelToStr(level: LogLevel): string =
   ## Convert log level to string representation
   case level

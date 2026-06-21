@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, os, monotimes, times]
+import std/[unittest, json, options, os, monotimes, times, strutils]
 
 import pkg/results
 
@@ -119,6 +119,33 @@ suite "LspWorker - LspJsonDirection enum":
   test "LspJsonDirection has expected values":
     check ljdSent in {ljdSent, ljdReceived}
     check ljdReceived in {ljdSent, ljdReceived}
+
+suite "LspWorker - formatRawJsonLogLine":
+  test "sent frames use the >>> marker":
+    let line = formatRawJsonLogLine(
+      "nim", ljdSent, """{"jsonrpc":"2.0","method":"initialize"}"""
+    )
+    check line == """nim >>> {"jsonrpc":"2.0","method":"initialize"}"""
+
+  test "received frames use the <<< marker":
+    let line = formatRawJsonLogLine("rust", ljdReceived, """{"id":1,"result":null}""")
+    check line == """rust <<< {"id":1,"result":null}"""
+
+  test "language id prefixes the line":
+    let line = formatRawJsonLogLine("python", ljdSent, "{}")
+    check line.startsWith("python >>> ")
+
+  test "the payload is passed through verbatim on a single line":
+    # Compactness is the caller's responsibility ($node); the formatter must
+    # not reflow the payload, so a single-line input stays single-line.
+    let payload = """{"a":1,"b":{"c":2}}"""
+    let line = formatRawJsonLogLine("nim", ljdSent, payload)
+    check not line.contains("\n")
+    check line.endsWith(payload)
+
+  test "empty language id still produces a well-formed line":
+    let line = formatRawJsonLogLine("", ljdReceived, """{"x":1}""")
+    check line == """ <<< {"x":1}"""
 
 suite "LspWorker - LspCommand object":
   test "LspCommand lcmdStart variant":

@@ -86,6 +86,23 @@ suite "logger - Global logger":
     check getGlobalLogger() == newLogger
     setGlobalLogger(original)
 
+suite "logger - isEnabled":
+  test "nil logger is not enabled":
+    var logger: Logger = nil
+    check not logger.isEnabled
+
+  test "disabled logger is not enabled":
+    let logger = initLogger(enabled = false)
+    check not logger.isEnabled
+
+  test "enabled logger reports enabled":
+    let logger = initLogger(enabled = true)
+    # Only assert when the file actually opened; on a read-only CWD the logger
+    # disables itself, which isEnabled must then report faithfully.
+    check logger.isEnabled == logger.enabled
+    if logger.enabled:
+      logger.close()
+
 suite "logger - Convenience procs":
   test "logDebug does not crash":
     logDebug("test", "debug message")
