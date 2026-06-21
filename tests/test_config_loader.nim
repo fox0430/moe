@@ -69,9 +69,9 @@ suite "Config Validation - InvalidItem and ValidationResult":
 suite "Config Validation - Standard section validKeys completeness":
   test "All StandardConfig fields are accepted in TOML":
     ## Every field in StandardConfig should be loadable from TOML without
-    ## triggering an "unknown key" warning. If a field is added to
-    ## StandardConfig but not to validKeys in loadStandardConfig, this test
-    ## will fail.
+    ## triggering an "unknown key" warning. The validKeys list is derived from
+    ## the type by generateConfigLoader, so adding a field keeps this passing;
+    ## this test guards against the macro/type wiring regressing.
     let tomlStr = """
 [Standard]
 number = true
@@ -1962,6 +1962,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     modifyAllFields(config.quickRun)
     modifyAllFields(config.notification)
     modifyAllFields(config.filer)
+    modifyAllFields(config.fileTree)
     modifyAllFields(config.autocomplete)
     modifyAllFields(config.autoSave)
     modifyAllFields(config.persist)
@@ -1970,6 +1971,8 @@ suite "Config - saveConfigToToml round-trip completeness":
     modifyAllFields(config.smoothScroll)
     modifyAllFields(config.startUpFileOpen)
     modifyAllFields(config.startUpFileTree)
+    modifyAllFields(config.editorConfig)
+    modifyAllFields(config.log)
     modifyAllFields(config.debug)
     modifyAllFields(config.theme)
     modifyAllFields(config.lsp)
@@ -2016,6 +2019,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     check config.quickRun == loaded.quickRun
     check config.notification == loaded.notification
     check config.filer == loaded.filer
+    check config.fileTree == loaded.fileTree
     check config.autocomplete == loaded.autocomplete
     check config.autoSave == loaded.autoSave
     check config.persist == loaded.persist
@@ -2024,6 +2028,8 @@ suite "Config - saveConfigToToml round-trip completeness":
     check config.smoothScroll == loaded.smoothScroll
     check config.startUpFileOpen == loaded.startUpFileOpen
     check config.startUpFileTree == loaded.startUpFileTree
+    check config.editorConfig == loaded.editorConfig
+    check config.log == loaded.log
     check config.debug == loaded.debug
     check config.theme == loaded.theme
     check config.lsp == loaded.lsp
