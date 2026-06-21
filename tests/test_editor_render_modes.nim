@@ -27,6 +27,11 @@ import ../src/moepkg/editor_render_modes
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
   let config = newEditorConfig()
+  # Use the bundled default theme so the test is hermetic. Without this the
+  # default config's tkConfig theme.path (~/.config/moe/themes/dark.toml) would
+  # load the user's real theme file, making color assertions environment-
+  # dependent (and break entirely if that file is missing or corrupted).
+  config.theme.kind = tkDefault
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
@@ -72,6 +77,7 @@ suite "renderConfig - Basic behavior":
 
   test "Render config with status line hidden":
     var config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     let e = newEditor(config, vr)
     e.state.display.showStatusLine = false
@@ -85,6 +91,7 @@ suite "renderConfig - Basic behavior":
 
   test "Render config with status line shown":
     var config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     let e = newEditor(config, vr)
     e.state.display.showStatusLine = true
