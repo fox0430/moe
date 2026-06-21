@@ -47,8 +47,6 @@ const shellKeywords* = [
 proc shellNextToken*(g: var GeneralTokenizer) =
   const
     hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
-    octChars = {'0' .. '7'}
-    binChars = {'0' .. '1'}
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
@@ -105,72 +103,21 @@ proc shellNextToken*(g: var GeneralTokenizer) =
         g.kind = gtKeyword
       else:
         g.kind = gtIdentifier
-    of '0':
-      inc(pos)
-      case g.buf[pos]
-      of 'b', 'B':
-        g.kind = gtBinNumber
-        inc(pos)
-        while g.buf[pos] in binChars:
-          inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      of 'x', 'X':
-        g.kind = gtHexNumber
-        inc(pos)
-        while g.buf[pos] in hexChars:
-          inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      of '0' .. '7':
-        g.kind = gtOctNumber
-        inc(pos)
-        while g.buf[pos] in octChars:
-          inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      else:
-        pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-    of '1' .. '9':
-      pos = generalNumber(g, pos)
+    of '0' .. '9':
+      pos = g.scanRadixNumber(pos)
       if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
         inc(pos)
     of '\"':
       inc(pos)
       g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0', '\r', '\n':
-          # Line-bounded: the resume path also ends the string at EOL, so a
-          # multi-line string never becomes one token whose interior line
-          # boundary state (gtNone) breaks incremental resume.
-          break
-        of '\"':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc(pos)
+      # Line-bounded: the resume path also ends the string at EOL, so a
+      # multi-line string never becomes one token whose interior line boundary
+      # state (gtNone) breaks incremental resume.
+      pos = g.scanStringBody(pos, '\"')
     of '\'':
-      inc pos
+      inc(pos)
       g.kind = gtStringLit
-
-      while true:
-        case g.buf[pos]
-        of '\0', '\r', '\n':
-          break
-        of '\'':
-          inc pos
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc pos
+      pos = g.scanStringBody(pos, '\'')
     of '(', ')', ':', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation

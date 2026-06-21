@@ -1055,3 +1055,102 @@ suite "tokenizer - all TokenClass values used":
         foundBoolean = true
         break
     check foundBoolean
+
+suite "tokenizer - peek":
+  test "peek looks ahead without advancing":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("abc")
+    check g.peek(0) == 'b'
+    check g.peek(0, 2) == 'c'
+
+  test "peek past the buffer yields the NUL terminator":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("ab")
+    check g.peek(0, 2) == '\0'
+    check g.peek(0, 5) == '\0'
+
+suite "tokenizer - scanStringBody":
+  test "consumes the closing quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"abc\"")
+    g.kind = gtStringLit
+    # position 1 is just past the opening quote.
+    check g.scanStringBody(1, '"') == 5
+    check g.state == low(TokenClass)
+
+  test "single-quoted string works the same way":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'x'")
+    g.kind = gtStringLit
+    check g.scanStringBody(1, '\'') == 3
+
+  test "stops at a line boundary without consuming it":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"ab\nrest")
+    g.kind = gtStringLit
+    check g.scanStringBody(1, '"') == 3
+    check g.state == low(TokenClass)
+
+  test "stops at EOF without consuming it":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"ab")
+    g.kind = gtStringLit
+    check g.scanStringBody(1, '"') == 3
+
+  test "parks g.state on a backslash so the resume path takes over":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\nb\"")
+    g.kind = gtStringLit
+    # Halts at the backslash (index 2) and parks the kind into state.
+    check g.scanStringBody(1, '"') == 2
+    check g.state == gtStringLit
+
+  test "preserves a non-default token kind (JSON key)":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"k\\\"")
+    g.kind = gtKey
+    discard g.scanStringBody(1, '"')
+    check g.state == gtKey
+
+suite "tokenizer - scanRadixNumber":
+  test "hexadecimal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0xFF")
+    check g.scanRadixNumber(0) == 4
+    check g.kind == gtHexNumber
+
+  test "binary":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0b1010")
+    check g.scanRadixNumber(0) == 6
+    check g.kind == gtBinNumber
+
+  test "implicit octal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0755")
+    check g.scanRadixNumber(0) == 4
+    check g.kind == gtOctNumber
+
+  test "decimal falls through to generalNumber":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("42")
+    check g.scanRadixNumber(0) == 2
+    check g.kind == gtDecNumber
+
+  test "float falls through to generalNumber":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("3.14")
+    check g.scanRadixNumber(0) == 4
+    check g.kind == gtFloatNumber
+
+  test "lone zero is decimal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0;")
+    check g.scanRadixNumber(0) == 1
+    check g.kind == gtDecNumber
+
+  test "trailing suffix letters are left to the caller":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0xFFu")
+    # The 'u' suffix is not consumed by the radix scanner.
+    check g.scanRadixNumber(0) == 4
