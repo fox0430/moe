@@ -920,9 +920,13 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       of hrSaveAll:
         e.processSaveAllResult(r)
       of hrSaveAndQuit:
-        return e.processSaveAndQuitResult(r)
+        # On success the editor quits; on failure (e.g. externally modified)
+        # fall through so command mode is exited and the error is shown.
+        if not e.processSaveAndQuitResult(r):
+          return false
       of hrSaveAllAndQuit:
-        return e.processSaveAllAndQuitResult(r)
+        if not e.processSaveAllAndQuitResult(r):
+          return false
       of hrBufferNext:
         e.switchToNextBuffer()
       of hrBufferPrev:
