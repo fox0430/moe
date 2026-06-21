@@ -23,7 +23,7 @@
 ## - Background process management
 ## - Search mode event handling helpers
 
-import std/[unittest, options, tables, os, osproc]
+import std/[unittest, options, tables, os, osproc, times]
 from std/strutils import contains
 
 import config_test_helper
@@ -1536,6 +1536,32 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
     check not e.state.isCommandOverlay
     check e.state.commandText == ""
 
+  test "Overlay exited and error shown after :wq on externally modified file":
+    # Regression: :wq early-returned on save failure, skipping exitOverlay() and
+    # leaving the editor stuck in command mode with the error message hidden.
+    let e = createTestEditorWithBuffer("hello")
+    let testFile = getTempDir() / "moe_test_wq_extmod.txt"
+    writeFile(testFile, "Original content")
+    defer:
+      removeFile(testFile)
+    check e.loadFile(testFile).isOk
+
+    # Edit the buffer, then simulate an external write newer than our baseline.
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "X")
+    e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(testFile, "Externally modified")
+
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":wq"
+    e.state.commandCursor = 2
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true # save refused, editor keeps running
+    check not e.state.isCommandOverlay # overlay exited
+    check e.state.commandText == "" # command line cleared
+    check "modified externally" in e.state.statusMessage
+
 suite "handleCommandModeEvent - exitOverlay on self-managed branches":
   test "Overlay exited after :recent with no xbel file (empty list)":
     ## When recently-used.xbel doesn't exist, :recent should still succeed
@@ -1756,8 +1782,11 @@ suite "handleCommandModeEvent - all command mode commands execute":
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
-    # Save fails (no file path), processSaveAndQuitResult returns true (continue)
+    # Save fails (no file path), processSaveAndQuitResult returns true (continue).
+    # The overlay must still be exited so the editor isn't stuck in command mode.
     check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
 
   test ":b 0 switch to buffer":
     let e = createTestEditorWithBuffer("hello")
