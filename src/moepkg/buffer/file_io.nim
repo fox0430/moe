@@ -26,7 +26,6 @@ import std/[options, os, strutils, times]
 import pkg/[celina, results]
 
 import ../[encoding, highlight, logger, uri_utils]
-import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import core
 
 const ExternalModErrorMsg* =
@@ -94,34 +93,14 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   b.detectAndNormalizeLineEnding(content)
   b.encoding = detectCharacterEncoding(content)
 
+  # Reassign only the backend storage. Because the backend variant lives in the
+  # embedded `storage` field (not as a discriminant on TextBuffer), this single
+  # statement serves BOTH a same-backend reload and a backend swap: it resets the
+  # backend in place and leaves every other field untouched, so the reload's
+  # result never depends on whether the file size crossed the swap threshold.
   let newBackend = chooseBackendForFile(fileSize)
-
-  if b.backendKind != newBackend:
-    # Backend swap: newTextBuffer resets the WHOLE object to newTextBuffer
-    # defaults (it handles the object-variant discriminant change), so snapshot
-    # the identity/session/detected state first and re-apply it after. Capture
-    # now — after line-ending/encoding detection — so the freshly detected values
-    # survive. skipHighlightInit=true avoids building a full runesBuffer (O(n) per
-    # line) that loadFile overwrites below.
-    let identity = b.captureIdentity()
-    let newBuffer = newTextBuffer(
-      move content, some(path), backend = newBackend, skipHighlightInit = true
-    )
-    b[] = newBuffer[]
-    b.restoreIdentity(identity) # re-applies identity and advances contentVersion
-  else:
-    # Same-backend reload keeps every persistent field untouched; only the content
-    # is replaced, so just advance the monotonic content version.
-    case b.backendKind
-    of GapBuffer:
-      b.gapBuffer = newGapBuffer(move content)
-    of SqrtDecomp:
-      b.sqrtDecomp = newSqrtDecomp(move content)
-    of Rope:
-      b.rope = newRope(move content)
-    of PieceTable:
-      b.pieceTable = newPieceTable(move content)
-    b.advanceContentVersion()
+  b.storage = newBufferStorage(newBackend, move content)
+  b.advanceContentVersion() # keep the monotonic content version climbing
 
   b.filePath = some(path)
 
@@ -140,8 +119,8 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   b.savedSeq = 0
 
   # A reload replaces the content, so state keyed on the OLD content is stale and
-  # must be dropped on BOTH paths (the swap path already cleared it via
-  # newTextBuffer) — otherwise a reload's result would depend on the backend swap:
+  # must be dropped here on loadFile's single reload path, or it would point into
+  # content that no longer exists:
   #   - the char->byte cursor cache would return wrong byte offsets,
   #   - undo/redo history would replay changes against mismatched content,
   #   - LSP diagnostics would render at stale line positions (reload sends no

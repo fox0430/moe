@@ -578,7 +578,7 @@ suite "Editor - Substitute preview":
     e.startSubstitutePreview()
 
     # Modify buffer (simulate preview)
-    buffer.gapBuffer.replaceLine(0, "Modified")
+    buffer.storage.gapBuffer.replaceLine(0, "Modified")
 
     e.cancelSubstitutePreview()
 
@@ -595,7 +595,7 @@ suite "Editor - Substitute preview":
     e.startSubstitutePreview()
 
     # Modify buffer (simulate preview)
-    buffer.gapBuffer.replaceLine(0, "Modified Content")
+    buffer.storage.gapBuffer.replaceLine(0, "Modified Content")
 
     e.commitSubstitutePreview()
 

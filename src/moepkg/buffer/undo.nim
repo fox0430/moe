@@ -99,7 +99,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
           return r
         dec i
     of ckSnapshot:
-      b.pieceTable.restoreSnapshot(change.snapshotData)
+      b.storage.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
       # b.modifiedLines currently holds the post-mutation state; reverse it.
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
@@ -131,7 +131,7 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     startSeq: change.startSeq,
     endSeq: change.endSeq,
     kind: ckSnapshot,
-    snapshotData: b.pieceTable.takeSnapshot(),
+    snapshotData: b.storage.pieceTable.takeSnapshot(),
     snapshotCursorPos: change.snapshotCursorPos,
     snapshotLineMarkers: b.lineMarkers,
     modifiedLinesDelta: change.modifiedLinesDelta,
@@ -259,7 +259,7 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
 
   if b.pendingSnapshot.isSome:
     # PieceTable: O(1) restore from snapshot
-    b.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
+    b.storage.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
     b.lineMarkers = b.pendingSnapshotMarkers
     b.modifiedLines = b.pendingSnapshotModifiedLines
     b.foldState = b.pendingSnapshotFolds
@@ -435,7 +435,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
           return r
         inc i
     of ckSnapshot:
-      b.pieceTable.restoreSnapshot(change.snapshotData)
+      b.storage.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
       # b.modifiedLines currently holds the pre-mutation state; re-apply it.
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)

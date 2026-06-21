@@ -31,57 +31,57 @@ import ./core
 proc backendInsertIntoLine*(b: TextBuffer, line, col: int, text: string) =
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.insertIntoLine(line, col, text)
+    b.storage.gapBuffer.insertIntoLine(line, col, text)
   of SqrtDecomp:
-    b.sqrtDecomp.insertIntoLine(line, col, text)
+    b.storage.sqrtDecomp.insertIntoLine(line, col, text)
   of Rope:
-    b.rope.insertIntoLine(line, col, text)
+    b.storage.rope.insertIntoLine(line, col, text)
   of PieceTable:
-    b.pieceTable.insertIntoLine(line, col, text)
+    b.storage.pieceTable.insertIntoLine(line, col, text)
 
 proc backendDeleteLine*(b: TextBuffer, lineNumber: int) =
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.deleteLine(lineNumber)
+    b.storage.gapBuffer.deleteLine(lineNumber)
   of SqrtDecomp:
-    b.sqrtDecomp.deleteLine(lineNumber)
+    b.storage.sqrtDecomp.deleteLine(lineNumber)
   of Rope:
-    b.rope.deleteLine(lineNumber)
+    b.storage.rope.deleteLine(lineNumber)
   of PieceTable:
-    b.pieceTable.deleteLine(lineNumber)
+    b.storage.pieceTable.deleteLine(lineNumber)
 
 proc backendInsertLine*(b: TextBuffer, lineNumber: int, content: string) =
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.insertLine(lineNumber, content)
+    b.storage.gapBuffer.insertLine(lineNumber, content)
   of SqrtDecomp:
-    b.sqrtDecomp.insertLine(lineNumber, content)
+    b.storage.sqrtDecomp.insertLine(lineNumber, content)
   of Rope:
-    b.rope.insertLine(lineNumber, content)
+    b.storage.rope.insertLine(lineNumber, content)
   of PieceTable:
-    b.pieceTable.insertLine(lineNumber, content)
+    b.storage.pieceTable.insertLine(lineNumber, content)
 
 proc backendReplaceLine*(b: TextBuffer, lineNumber: int, content: string) =
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.replaceLine(lineNumber, content)
+    b.storage.gapBuffer.replaceLine(lineNumber, content)
   of SqrtDecomp:
-    b.sqrtDecomp.replaceLine(lineNumber, content)
+    b.storage.sqrtDecomp.replaceLine(lineNumber, content)
   of Rope:
-    b.rope.replaceLine(lineNumber, content)
+    b.storage.rope.replaceLine(lineNumber, content)
   of PieceTable:
-    b.pieceTable.replaceLine(lineNumber, content)
+    b.storage.pieceTable.replaceLine(lineNumber, content)
 
 proc backendDeleteAtLineCol*(b: TextBuffer, line, col, count: int) =
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.deleteAtLineCol(line, col, count)
+    b.storage.gapBuffer.deleteAtLineCol(line, col, count)
   of SqrtDecomp:
-    b.sqrtDecomp.deleteAtLineCol(line, col, count)
+    b.storage.sqrtDecomp.deleteAtLineCol(line, col, count)
   of Rope:
-    b.rope.deleteAtLineCol(line, col, count)
+    b.storage.rope.deleteAtLineCol(line, col, count)
   of PieceTable:
-    b.pieceTable.deleteAtLineCol(line, col, count)
+    b.storage.pieceTable.deleteAtLineCol(line, col, count)
 
 proc insertTextWithNewlines*(b: TextBuffer, pos: BufferPosition, text: string) =
   ## Insert text that may contain newlines, properly splitting into multiple lines
