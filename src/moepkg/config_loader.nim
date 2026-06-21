@@ -19,17 +19,21 @@
 
 ## TOML configuration loader entry point.
 ##
-## This module is the orchestrator: per-section loaders/serializers live in
-## `config_loader/<section>.nim` and are re-exported here so external callers
-## (`editor.nim`, `command_handlers/*`, etc.) can keep `import config_loader`
-## unchanged. The actual TOML <-> `EditorConfig` work happens via the
-## `loadXxxConfig` / `appendXxxToml` helpers exposed from the sub-modules.
+## This module is the orchestrator. Most sections are loaded and serialized by
+## the whole-config dispatch macros (`generateSectionLoaders` /
+## `generateSectionSerializers` from `config_macros`), which derive the section
+## set from `EditorConfig`'s `{.cfgSection.}` fields so it cannot drift from the
+## type. Sections without a `{.cfgSection.}` (Theme, Lsp, Debug, KeyMapping,
+## CommandAliases, ShellCommands) and the nested `[StartUp.*]` tables are
+## dispatched by hand here, using the helpers from `config_loader/<section>.nim`.
+## Those sub-modules are re-exported so external callers (`editor.nim`,
+## `command_handlers/*`, etc.) can keep `import config_loader` unchanged.
 
-import std/[os, strutils, tables]
+import std/[options, os, strutils, tables]
 
 import pkg/[parsetoml, results]
 
-import config, color
+import config, color, config_macros
 
 import
   config_loader/[
@@ -72,60 +76,16 @@ proc loadConfigFromToml*(
     ] & @UserCommandsSectionNames
   checkUnknownKeys(toml.getTable(), knownSections, "", vr)
 
-  # Load each section (validation integrated into loading)
-  if toml.hasKey("Standard"):
-    loadStandardConfig(toml["Standard"].getTable(), config.standard, vr)
-
-  if toml.hasKey("Clipboard"):
-    loadClipboardConfig(toml["Clipboard"].getTable(), config.clipboard, vr)
-
-  if toml.hasKey("BuildOnSave"):
-    loadBuildOnSaveConfig(toml["BuildOnSave"].getTable(), config.buildOnSave, vr)
-
-  if toml.hasKey("TabLine"):
-    loadTabLineConfig(toml["TabLine"].getTable(), config.tabLine, vr)
-
-  if toml.hasKey("StatusLine"):
-    loadStatusLineConfig(toml["StatusLine"].getTable(), config.statusLine, vr)
-
-  if toml.hasKey("Git"):
-    loadGitConfig(toml["Git"].getTable(), config.git, vr)
-
-  if toml.hasKey("SyntaxChecker"):
-    loadSyntaxCheckerConfig(toml["SyntaxChecker"].getTable(), config.syntaxChecker, vr)
+  # Load each top-level {.cfgSection.} section (validation integrated into
+  # loading). This single macro call expands to the per-section
+  # `if toml.hasKey(...)` dispatch derived from EditorConfig's fields, so it
+  # stays in sync with the type automatically. Sections with no {.cfgSection.}
+  # (Theme, Lsp, Debug, KeyMapping, CommandAliases, ShellCommands) and the
+  # nested [StartUp.*] sections are handled by hand below.
+  generateSectionLoaders(toml, config, vr, EditorConfig)
 
   if toml.hasKey("Theme"):
     loadThemeConfig(toml["Theme"].getTable(), config.theme, vr)
-
-  if toml.hasKey("AutoSave"):
-    loadAutoSaveConfig(toml["AutoSave"].getTable(), config.autoSave, vr)
-
-  if toml.hasKey("Notification"):
-    loadNotificationConfig(toml["Notification"].getTable(), config.notification, vr)
-
-  if toml.hasKey("QuickRun"):
-    loadQuickRunConfig(toml["QuickRun"].getTable(), config.quickRun, vr)
-
-  if toml.hasKey("AutoBackup"):
-    loadAutoBackupConfig(toml["AutoBackup"].getTable(), config.autoBackup, vr)
-
-  if toml.hasKey("SmoothScroll"):
-    loadSmoothScrollConfig(toml["SmoothScroll"].getTable(), config.smoothScroll, vr)
-
-  if toml.hasKey("Highlight"):
-    loadHighlightConfig(toml["Highlight"].getTable(), config.highlight, vr)
-
-  if toml.hasKey("Filer"):
-    loadFilerConfig(toml["Filer"].getTable(), config.filer, vr)
-
-  if toml.hasKey("FileTree"):
-    loadFileTreeConfig(toml["FileTree"].getTable(), config.fileTree, vr)
-
-  if toml.hasKey("Autocomplete"):
-    loadAutocompleteConfig(toml["Autocomplete"].getTable(), config.autocomplete, vr)
-
-  if toml.hasKey("Persist"):
-    loadPersistConfig(toml["Persist"].getTable(), config.persist, vr)
 
   if toml.hasKey("StartUp"):
     let startUpTable = toml["StartUp"].getTable()
@@ -140,14 +100,8 @@ proc loadConfigFromToml*(
         startUpTable["FileTree"].getTable(), config.startUpFileTree, vr
       )
 
-  if toml.hasKey("EditorConfig"):
-    loadEditorConfigSettings(toml["EditorConfig"].getTable(), config.editorConfig, vr)
-
   if toml.hasKey("Lsp"):
     loadLspConfig(toml["Lsp"].getTable(), config.lsp, vr)
-
-  if toml.hasKey("Log"):
-    loadLogConfig(toml["Log"].getTable(), config.log, vr)
 
   if toml.hasKey("Debug"):
     loadDebugConfig(toml["Debug"].getTable(), config.debug, vr)
@@ -192,33 +146,15 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   ## Save configuration to a TOML file
   var lines: seq[string] = @[]
 
-  appendStandardToml(lines, config.standard)
-  appendClipboardToml(lines, config.clipboard)
-  appendBuildOnSaveToml(lines, config.buildOnSave)
-  appendTabLineToml(lines, config.tabLine)
-  appendStatusLineToml(lines, config.statusLine)
+  # Serialize every {.cfgSection.} section of EditorConfig (in field-declaration
+  # order). This single macro call expands to one `appendXxxToml`-equivalent per
+  # section, derived from the type, so it cannot drift from the loader dispatch
+  # above. Sections without {.cfgSection.} are appended by hand afterwards.
+  generateSectionSerializers(lines, config, EditorConfig)
+
   appendThemeToml(lines, config.theme)
-  appendHighlightToml(lines, config.highlight)
-  appendAutoBackupToml(lines, config.autoBackup)
-  appendNotificationToml(lines, config.notification)
-  appendFilerToml(lines, config.filer)
-  appendFileTreeToml(lines, config.fileTree)
-  appendAutocompleteToml(lines, config.autocomplete)
-  appendAutoSaveToml(lines, config.autoSave)
-  appendPersistToml(lines, config.persist)
-  appendGitToml(lines, config.git)
-  appendSyntaxCheckerToml(lines, config.syntaxChecker)
-  appendSmoothScrollToml(lines, config.smoothScroll)
-  appendStartUpFileOpenToml(lines, config.startUpFileOpen)
-  appendStartUpFileTreeToml(lines, config.startUpFileTree)
-  appendEditorConfigToml(lines, config.editorConfig)
-  appendQuickRunToml(lines, config.quickRun)
-
   appendLspToml(lines, config.lsp)
-
   appendKeyMappingToml(lines, config.keyMapping)
-
-  appendLogToml(lines, config.log)
   appendDebugToml(lines, config.debug)
   appendCommandAliasesToml(lines, config.commandAliases)
   appendShellCommandsToml(lines, config.shellCommands)

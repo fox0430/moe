@@ -359,34 +359,19 @@ proc enumStringValues(typeNode: NimNode): seq[string] =
     else:
       discard
 
-macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
-  ## Emit a section loader body for type `T`. Expects the call to sit inside
-  ## a proc with parameters `t: TomlTableRef`, `cfg: var T`, `vr: var ValidationResult`.
-  ##
-  ## Produces:
-  ##   const section = "<from cfgSection>"
-  ##   const validKeys = ["k1", "k2", ...]
-  ##   checkUnknownKeys(t, validKeys, section, vr)
-  ##   loadBool(t, "k1", cfg.k1, vr, section)
-  ##   loadInt(t, "k2", cfg.k2, vr, section, minVal = ..., maxVal = ...)
-  ##   ...
-  let td = typeDef(T)
-  if td == nil:
-    error("cannot get impl for type", T)
-  let sec = sectionName(td)
-  result = newStmtList()
-
-  # Collect field names + emit per-field load calls.
-  var validKeys: seq[string] = @[]
-  var loadCalls = newStmtList()
-
+iterator serializableFields(
+    td: NimNode
+): tuple[fieldName: string, typeNode: NimNode, pragmas: NimNode, key: string] =
+  ## Yield each `{.cfg.}` field of the section TypeDef `td` (skipping
+  ## `{.cfgSkip.}` and un-annotated fields), already paired with its resolved
+  ## TOML key (the `{.cfgKey.}` override, or the field name). Shared by
+  ## `buildLoaderBody` and `buildSerializerBody` so the skip filter and key
+  ## resolution live in exactly one place and the two bodies cannot drift.
   for (fieldName, typeNode, pragmas) in sectionFields(td):
     if hasPragma(pragmas, "cfgSkip"):
       continue
     if not hasPragma(pragmas, "cfg"):
       continue
-
-    # TOML key override
     let keyOverride = findPragma(pragmas, "cfgKey")
     let key =
       if keyOverride != nil:
@@ -396,6 +381,88 @@ macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
         a.strVal
       else:
         fieldName
+    yield (fieldName, typeNode, pragmas, key)
+
+proc validateEnumStringValues(typeNode: NimNode) =
+  ## Compile-time guard for enum-typed config fields: every member must declare
+  ## an explicit string value (e.g. `seA = "a"`). The serializer emits enum
+  ## fields via `$value` and the loader only accepts the `ValidXxx` string-literal
+  ## set, so a bare member (whose `$` yields the Nim ident) would silently fail
+  ## to round-trip. Reject it here with a clear message instead.
+  let impl = typeNode.getImpl
+  if impl == nil or impl.kind != nnkTypeDef:
+    return
+  let body = impl[2]
+  if body.kind != nnkEnumTy:
+    return
+  for i in 1 ..< body.len: # body[0] is empty (parent enum)
+    let field = body[i]
+    if field.kind != nnkEnumFieldDef or field[1].kind != nnkStrLit:
+      let memberName =
+        if field.kind == nnkEnumFieldDef:
+          field[0].strVal
+        else:
+          field.strVal
+      error(
+        "enum `" & typeNode.strVal & "` member `" & memberName &
+          "` has no explicit string value; the config serializer emits enums as " &
+          "`$value` and the loader only accepts the string-literal set, so a bare " &
+          "member cannot round-trip. Give every member a string value " &
+          "(e.g. `xA = \"a\"`).",
+        typeNode,
+      )
+
+type CfgFieldKind = enum
+  ## The supported field-type taxonomy the loader and serializer both dispatch
+  ## on. Centralizing it here means adding a new supported type touches one
+  ## classifier, not two parallel `case` statements that could drift apart.
+  cfkBool
+  cfkInt
+  cfkFloat
+  cfkString
+  cfkEnum
+  cfkSeqString
+  cfkOptionString
+  cfkUnsupported
+
+proc classifyConfigFieldType(typeNode: NimNode): CfgFieldKind =
+  ## Map a section field's declared type to its `CfgFieldKind`. Shared by
+  ## `buildLoaderBody` and `buildSerializerBody` so the set of types they accept
+  ## cannot diverge.
+  let typeName = if typeNode.kind in {nnkIdent, nnkSym}: typeNode.strVal else: ""
+  case typeName
+  of "bool":
+    cfkBool
+  of "int":
+    cfkInt
+  of "float":
+    cfkFloat
+  of "string":
+    cfkString
+  else:
+    if isEnumTypeIdent(typeNode):
+      cfkEnum
+    elif isSeqOfString(typeNode):
+      cfkSeqString
+    elif isOptionOfString(typeNode):
+      cfkOptionString
+    else:
+      cfkUnsupported
+
+proc buildLoaderBody(td, t, cfgVar, vr: NimNode): NimNode =
+  ## Build the loader statements for the section TypeDef `td`, reading from the
+  ## TOML table expression `t` into the config accessor `cfgVar`, recording
+  ## issues in `vr`. Shared by `generateConfigLoader` (single section) and
+  ## `generateSectionLoaders` (whole-config dispatch) so the per-field type
+  ## handling lives in exactly one place.
+  let sec = sectionName(td)
+  result = newStmtList()
+
+  # Collect field names + emit per-field load calls.
+  var validKeys: seq[string] = @[]
+  var loadCalls = newStmtList()
+
+  for (fieldName, typeNode, pragmas, key) in serializableFields(td):
     validKeys.add key
 
     let fieldAcc = newDotExpr(cfgVar, ident(fieldName))
@@ -403,13 +470,11 @@ macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
     let keyLit = newLit(key)
 
     # Dispatch by type
-    let typeName = if typeNode.kind in {nnkIdent, nnkSym}: typeNode.strVal else: ""
-
-    case typeName
-    of "bool":
+    case classifyConfigFieldType(typeNode)
+    of cfkBool:
       loadCalls.add quote do:
         loadBool(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
-    of "int":
+    of cfkInt:
       let minP = findPragma(pragmas, "cfgMin")
       let maxP = findPragma(pragmas, "cfgMax")
       var call = newCall(ident("loadInt"), t, keyLit, fieldAcc, vr, secLit)
@@ -418,7 +483,7 @@ macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
       if maxP != nil:
         call.add newTree(nnkExprEqExpr, ident("maxVal"), pragmaArg(maxP))
       loadCalls.add call
-    of "float":
+    of cfkFloat:
       let minP = findPragma(pragmas, "cfgMin")
       let maxP = findPragma(pragmas, "cfgMax")
       var call = newCall(ident("loadFloat"), t, keyLit, fieldAcc, vr, secLit)
@@ -427,7 +492,7 @@ macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
       if maxP != nil:
         call.add newTree(nnkExprEqExpr, ident("maxVal"), pragmaArg(maxP))
       loadCalls.add call
-    of "string":
+    of cfkString:
       loadCalls.add quote do:
         loadString(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
       # cfgEnumStrings: post-validate against a fixed option list.
@@ -449,29 +514,28 @@ macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
           if `t`.hasKey(`keyLit`) and `fieldAcc` notin `arr`:
             `vr`.addError(fullKey(`secLit`, `keyLit`), `fieldAcc`, `expectedLit`)
             `fieldAcc` = `defaultLit`
-    else:
-      if isEnumTypeIdent(typeNode):
-        let parseFn = enumParseName(typeNode)
-        let validArr = enumValidName(typeNode)
+    of cfkEnum:
+      let parseFn = enumParseName(typeNode)
+      let validArr = enumValidName(typeNode)
+      loadCalls.add quote do:
+        loadEnum(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`, `parseFn`, `validArr`)
+    of cfkSeqString:
+      loadCalls.add quote do:
+        loadStringArray(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
+    of cfkOptionString:
+      if hasPragma(pragmas, "cfgDirPath"):
         loadCalls.add quote do:
-          loadEnum(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`, `parseFn`, `validArr`)
-      elif isSeqOfString(typeNode):
-        loadCalls.add quote do:
-          loadStringArray(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
-      elif isOptionOfString(typeNode):
-        if hasPragma(pragmas, "cfgDirPath"):
-          loadCalls.add quote do:
-            loadOptionDirPath(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
-        else:
-          loadCalls.add quote do:
-            loadOptionString(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
+          loadOptionDirPath(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
       else:
-        error(
-          "generateConfigLoader: unsupported field type `" & typeNode.repr &
-            "` for field `" & fieldName & "`. Skip it with {.cfgSkip.} or " &
-            "extend the macro.",
-          typeNode,
-        )
+        loadCalls.add quote do:
+          loadOptionString(`t`, `keyLit`, `fieldAcc`, `vr`, `secLit`)
+    of cfkUnsupported:
+      error(
+        "generateConfigLoader: unsupported field type `" & typeNode.repr &
+          "` for field `" & fieldName & "`. Skip it with {.cfgSkip.} or " &
+          "extend the macro.",
+        typeNode,
+      )
 
   # Build `const validKeys = [...]`. Use gensym'd names so the const block
   # the macro injects into the caller's proc scope cannot be referenced by
@@ -488,6 +552,174 @@ macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
     const `validKeysIdent` = `arrLit`
     checkUnknownKeys(`t`, `validKeysIdent`, `sectionIdent`, `vr`)
   result.add loadCalls
+
+macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
+  ## Emit a section loader body for type `T`. Expects the call to sit inside
+  ## a proc with parameters `t: TomlTableRef`, `cfg: var T`, `vr: var ValidationResult`.
+  ##
+  ## Produces:
+  ##   const section = "<from cfgSection>"
+  ##   const validKeys = ["k1", "k2", ...]
+  ##   checkUnknownKeys(t, validKeys, section, vr)
+  ##   loadBool(t, "k1", cfg.k1, vr, section)
+  ##   loadInt(t, "k2", cfg.k2, vr, section, minVal = ..., maxVal = ...)
+  ##   ...
+  let td = typeDef(T)
+  if td == nil:
+    error("cannot get impl for type", T)
+  buildLoaderBody(td, t, cfgVar, vr)
+
+proc buildSerializerBody(td, lines, cfgVar: NimNode): NimNode =
+  ## Build the serializer statements for the section TypeDef `td`, appending
+  ## TOML lines to `lines` from the config accessor `cfgVar`. The inverse of
+  ## `buildLoaderBody`; field order follows the struct declaration so saved
+  ## output stays parseable by the loader. Scalar formatters (`toTomlBool`,
+  ## `toTomlString`, `toTomlStringArray`) must be in scope at the call site
+  ## (re-exported from `config_loader/save_base`).
+  ##
+  ## Normalization note: `seq[string]` fields are emitted unconditionally (even
+  ## when empty -> `key = []`); the loader reads an empty array back to an empty
+  ## seq, so the round-trip is value-stable. `Option[string]` fields are emitted
+  ## only when `isSome`.
+  let sec = sectionName(td)
+  result = newStmtList()
+
+  let headerLit = newLit("[" & sec & "]")
+  result.add quote do:
+    `lines`.add `headerLit`
+
+  for (fieldName, typeNode, _, key) in serializableFields(td):
+    let keyPrefix = newLit(key & " = ")
+    let fieldAcc = newDotExpr(cfgVar, ident(fieldName))
+
+    case classifyConfigFieldType(typeNode)
+    of cfkBool:
+      result.add quote do:
+        `lines`.add `keyPrefix` & toTomlBool(`fieldAcc`)
+    of cfkInt, cfkFloat:
+      result.add quote do:
+        `lines`.add `keyPrefix` & $`fieldAcc`
+    of cfkString:
+      result.add quote do:
+        `lines`.add `keyPrefix` & toTomlString(`fieldAcc`)
+    of cfkEnum:
+      validateEnumStringValues(typeNode)
+      result.add quote do:
+        `lines`.add `keyPrefix` & toTomlString($`fieldAcc`)
+    of cfkSeqString:
+      result.add quote do:
+        `lines`.add `keyPrefix` & toTomlStringArray(`fieldAcc`)
+    of cfkOptionString:
+      result.add quote do:
+        if `fieldAcc`.isSome:
+          `lines`.add `keyPrefix` & toTomlString(`fieldAcc`.get)
+    of cfkUnsupported:
+      error(
+        "config serializer: unsupported field type `" & typeNode.repr & "` for field `" &
+          fieldName & "`. Skip it with {.cfgSkip.} or " & "extend the macro.",
+        typeNode,
+      )
+
+  result.add quote do:
+    `lines`.add ""
+
+## Single-source section registry
+##
+## Historically the section list was managed in three places that had to be
+## kept in sync by hand: the loader dispatch (`loadConfigFromToml`), the
+## serializer dispatch (`saveConfigToToml`), and the top-level section-name
+## list used for unknown-key validation. Adding a section meant editing all
+## three; forgetting one failed silently (not saved / not loaded / spurious
+## "unknown section" error).
+##
+## The macros below instead derive all three from a single walk of the
+## `EditorConfig` type — the same source of truth the loader/serializer
+## field macros already use. A section is "registered" simply by being a
+## `{.cfgSection.}`-typed field of `EditorConfig`; nothing else is required.
+##
+## Nested vs flat sections are distinguished structurally, with no hand-kept
+## list: a section whose `{.cfgSection.}` name contains a dot (e.g.
+## `[StartUp.FileOpen]`) is NOT a top-level table — it lives under a parent
+## (`[StartUp]`). Such sections are still serialized as flat `[Parent.Child]`
+## headers, but are loaded by hand under their parent and are excluded from
+## the top-level unknown-key list. Because nested-ness is derived from the
+## section name itself, the loader / serializer / section-name lists cannot
+## diverge: adding a nested section needs no registry edit.
+
+proc cfgSectionFields(
+    outerTd: NimNode
+): seq[tuple[field: string, typ: NimNode, sec: string]] =
+  ## Walk `outerTd`'s fields and return those whose declared type carries a
+  ## `{.cfgSection.}` pragma. Fields with non-section types (Table, ThemeConfig,
+  ## LspConfig, …) are skipped — they are handled by hand-written code.
+  result = @[]
+  for (name, typeNode, _) in sectionFields(outerTd):
+    if typeNode.kind notin {nnkIdent, nnkSym}:
+      continue
+    let impl = typeNode.getImpl
+    if impl == nil or impl.kind != nnkTypeDef:
+      continue
+    let p = findPragma(typePragmas(impl), "cfgSection")
+    if p == nil:
+      continue
+    result.add (name, typeNode, sectionName(impl))
+
+macro generateSectionLoaders*(toml, cfg, vr: typed, OuterT: typedesc): untyped =
+  ## Emit the per-section load dispatch for every top-level `{.cfgSection.}`
+  ## field of `OuterT` (excluding nested sections — those whose section name
+  ## contains a dot, which are loaded by hand under their parent table).
+  ## Produces, for each section:
+  ##   if toml.hasKey("Section"):
+  ##     generateConfigLoader(toml["Section"].getTable(), cfg.field, vr, FieldType)
+  let outerTd = typeDef(OuterT)
+  if outerTd == nil:
+    error("cannot get impl for outer type", OuterT)
+  result = newStmtList()
+  for (field, typ, sec) in cfgSectionFields(outerTd):
+    if '.' in sec:
+      # Nested section (e.g. "StartUp.FileOpen"): loaded by hand under [StartUp].
+      continue
+    let secLit = newLit(sec)
+    let fieldAcc = newDotExpr(cfg, ident(field))
+    let tbl = genSym(nskLet, "tbl")
+    let innerTd = typ.getImpl
+    let loadBody = buildLoaderBody(innerTd, tbl, fieldAcc, vr)
+    result.add quote do:
+      if `toml`.hasKey(`secLit`):
+        let `tbl` = `toml`[`secLit`].getTable()
+        `loadBody`
+
+macro generateSectionSerializers*(lines, cfg: typed, OuterT: typedesc): untyped =
+  ## Emit the per-section save dispatch for every `{.cfgSection.}` field of
+  ## `OuterT`. Nested sections are included — their flat `[Parent.Child]`
+  ## header serializes correctly without special handling. Produces, for each
+  ## section, the serializer body for `cfg.field` (header line, one `key = value`
+  ## line per `{.cfg.}` field, trailing blank).
+  let outerTd = typeDef(OuterT)
+  if outerTd == nil:
+    error("cannot get impl for outer type", OuterT)
+  result = newStmtList()
+  for (field, typ, sec) in cfgSectionFields(outerTd):
+    let fieldAcc = newDotExpr(cfg, ident(field))
+    let innerTd = typ.getImpl
+    result.add buildSerializerBody(innerTd, lines, fieldAcc)
+
+macro generateSimpleSectionNames*(OuterT: typedesc): untyped =
+  ## Return an array literal of the top-level TOML section names produced from
+  ## `OuterT`'s `{.cfgSection.}` fields (excluding nested sections — those whose
+  ## section name contains a dot). Use as the basis for unknown-key validation:
+  ##   const SimpleSectionNames = generateSimpleSectionNames(EditorConfig)
+  let outerTd = typeDef(OuterT)
+  if outerTd == nil:
+    error("cannot get impl for outer type", OuterT)
+  var arr = newNimNode(nnkBracket)
+  for (field, typ, sec) in cfgSectionFields(outerTd):
+    if '.' in sec:
+      continue
+    arr.add newLit(sec)
+  if arr.len == 0:
+    error("no {.cfgSection.} fields found on " & OuterT.repr, OuterT)
+  result = arr
 
 macro generateConfigDescriptors*(
     target: typed, OuterT: typedesc, accessor: untyped

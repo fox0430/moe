@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, macros, strutils, tables]
+import std/[unittest, macros, options, sequtils, strutils, tables]
 
 import pkg/parsetoml
 
 import ../src/moepkg/config_macros
+import ../src/moepkg/config
 import ../src/moepkg/config_loader {.all.}
 
 # Sample annotated type — proves the pragma vocabulary parses and is reflectable
@@ -141,6 +142,198 @@ suite "config_macros: generateConfigLoader":
     loadMini(t, c, vr)
     check vr.hasErrors
     check c.mode == "x" # first option = fallback default
+
+# Exercise the serializer against a section covering every supported field type,
+# then prove its output round-trips back through generateConfigLoader.
+type SerEnum = enum
+  seX = "x"
+  seY = "y"
+
+type SerSection {.cfgSection: "Ser".} = object
+  flag {.cfg.}: bool
+  count {.cfg.}: int
+  ratio {.cfg.}: float
+  label {.cfg.}: string
+  choice {.cfg.}: SerEnum
+  tags {.cfg.}: seq[string]
+  maybe {.cfg.}: Option[string]
+  renamed {.cfg, cfgKey: "Renamed".}: bool
+
+proc parseSerEnum(s: string): SerEnum =
+  parseEnum[SerEnum](s)
+
+const ValidSerEnums = ["x", "y"]
+
+# Wrap the all-field-types section in an outer type so the serializer is
+# exercised through the same generateSectionSerializers dispatch production uses.
+type SerOuter = object
+  ser: SerSection
+
+proc serializeSer(lines: var seq[string], cfg: SerSection) =
+  let o = SerOuter(ser: cfg)
+  generateSectionSerializers(lines, o, SerOuter)
+
+proc loadSer(t: TomlTableRef, c: var SerSection, vr: var ValidationResult) =
+  generateConfigLoader(t, c, vr, SerSection)
+
+suite "config_macros: section serializer field-type coverage":
+  test "emits header, typed lines, and trailing blank":
+    var cfg = SerSection(
+      flag: true,
+      count: 7,
+      ratio: 1.5,
+      label: "hi",
+      choice: seY,
+      tags: @["a", "b"],
+      maybe: none(string),
+      renamed: true,
+    )
+    var lines: seq[string]
+    serializeSer(lines, cfg)
+    check lines[0] == "[Ser]"
+    check "flag = true" in lines
+    check "count = 7" in lines
+    check "ratio = 1.5" in lines
+    check "label = \"hi\"" in lines
+    check "choice = \"y\"" in lines
+    check "tags = [\"a\", \"b\"]" in lines
+    check "Renamed = true" in lines # cfgKey override applied
+    check lines[^1] == "" # trailing blank separator
+
+  test "omits Option[string] when none, emits when some":
+    block:
+      var lines: seq[string]
+      serializeSer(lines, SerSection(maybe: none(string)))
+      check not lines.anyIt(it.startsWith("maybe = "))
+    block:
+      var lines: seq[string]
+      serializeSer(lines, SerSection(maybe: some("val")))
+      check "maybe = \"val\"" in lines
+
+  test "empty seq[string] still emitted as []":
+    var lines: seq[string]
+    serializeSer(lines, SerSection(tags: @[]))
+    check "tags = []" in lines
+
+  test "serializer output round-trips through the loader":
+    var original = SerSection(
+      flag: true,
+      count: 42,
+      ratio: 3.25,
+      label: "round trip",
+      choice: seY,
+      tags: @["one", "two"],
+      maybe: some("present"),
+      renamed: true,
+    )
+    var lines: seq[string]
+    serializeSer(lines, original)
+    # Drop the "[Ser]" header and blank line; the loader takes the table body.
+    let body = lines[1 ..< lines.len].join("\n")
+    var loaded: SerSection
+    var vr = newValidationResult()
+    loadSer(tomlTable(body), loaded, vr)
+    check not vr.hasErrors
+    check loaded == original
+
+# Single-source section registry: a mini "outer" type standing in for
+# EditorConfig, used to exercise the whole-config dispatch macros in isolation.
+type
+  AlphaSection {.cfgSection: "Alpha".} = object
+    on {.cfg.}: bool
+    size {.cfg.}: int
+
+  BetaSection {.cfgSection: "Beta".} = object
+    name {.cfg.}: string
+
+  # Nested section: its cfgSection name contains a dot, so it must be treated as
+  # living under a parent table ([Mini.Gamma] under [Mini]) — excluded from the
+  # top-level names and the auto loader dispatch, but still serialized flat.
+  GammaNested {.cfgSection: "Mini.Gamma".} = object
+    flag {.cfg.}: bool
+
+  MiniOuter = object
+    alpha: AlphaSection
+    beta: BetaSection
+    gamma: GammaNested # nested (dotted) section -> not a top-level table
+    notASection: int # no {.cfgSection.} -> must be ignored by the walk
+
+proc saveOuter(lines: var seq[string], o: MiniOuter) =
+  generateSectionSerializers(lines, o, MiniOuter)
+
+proc loadOuter(toml: TomlTableRef, o: var MiniOuter, vr: var ValidationResult) =
+  generateSectionLoaders(toml, o, vr, MiniOuter)
+
+const MiniSectionNames = generateSimpleSectionNames(MiniOuter)
+
+# A section whose field type the macros cannot handle, used for negative tests.
+type
+  BadSection {.cfgSection: "Bad".} = object
+    weird {.cfg.}: seq[int]
+
+  BadOuter = object
+    bad: BadSection
+
+suite "config_macros: single-source section registry":
+  test "generateSimpleSectionNames lists only flat {.cfgSection.} fields":
+    # Gamma is nested ("Mini.Gamma"), so it is excluded structurally — no
+    # hand-kept list. notASection has no {.cfgSection.} so it is ignored.
+    check MiniSectionNames == ["Alpha", "Beta"]
+    check "Mini.Gamma" notin MiniSectionNames
+
+  test "loader + serializer dispatch round-trip the whole outer type":
+    var original = MiniOuter(
+      alpha: AlphaSection(on: true, size: 9), beta: BetaSection(name: "hello")
+    )
+    var lines: seq[string]
+    saveOuter(lines, original)
+    # Output carries both section headers, in field-declaration order.
+    check "[Alpha]" in lines
+    check "[Beta]" in lines
+    check lines.find("[Alpha]") < lines.find("[Beta]")
+
+    var loaded: MiniOuter
+    var vr = newValidationResult()
+    loadOuter(tomlTable(lines.join("\n")), loaded, vr)
+    check not vr.hasErrors
+    check loaded == original
+
+  test "serializer dispatch rejects an unsupported field type at compile time":
+    check not compiles(
+      (
+        block:
+          var lines: seq[string]
+          var o: BadOuter
+          generateSectionSerializers(lines, o, BadOuter)
+      )
+    )
+
+  test "loader dispatch rejects an unsupported field type at compile time":
+    check not compiles(
+      (
+        block:
+          var o: BadOuter
+          var vr = newValidationResult()
+          generateSectionLoaders(tomlTable(""), o, vr, BadOuter)
+      )
+    )
+
+  test "nested (dotted) section is serialized flat but skipped by names + loader":
+    # Nested-ness is derived from the dot in the cfgSection name, with no
+    # hand-kept registry: the serializer emits [Mini.Gamma], while the name list
+    # and the loader dispatch (which leaves nested sections to the hand-written
+    # parent path) both skip it.
+    check "Mini.Gamma" notin MiniSectionNames
+    var lines: seq[string]
+    saveOuter(lines, MiniOuter(gamma: GammaNested(flag: true)))
+    check "[Mini.Gamma]" in lines
+    check "flag = true" in lines
+
+    var loaded: MiniOuter
+    var vr = newValidationResult()
+    loadOuter(tomlTable(lines.join("\n")), loaded, vr)
+    check not vr.hasErrors
+    check not loaded.gamma.flag # not loaded by the auto dispatch
 
 suite "config_macros: escapeMarkdownCell":
   test "passes through plain text unchanged":
