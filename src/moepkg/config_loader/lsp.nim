@@ -84,6 +84,9 @@ proc loadLspConfig*(
   const section = "Lsp"
   # Main LSP settings
   loadBool(table, "enable", config.enable, vr, section)
+  # Correctness only requires a positive timeout; any positive value is safe
+  # (no overflow/crash). The narrower `LspTimeout{Min,Max}Ms` range is a
+  # usability guardrail enforced by the config-mode UI, not here.
   loadInt(table, "timeout", config.timeout, vr, section, minVal = 1)
 
   # Feature configs
