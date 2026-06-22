@@ -17,23 +17,29 @@
 #                                                                              #
 #[############################################################################]#
 
-## Lightweight type definitions for the bookmark manager.
-##
-## Split out from `bookmark_manager` so modules that only need its State type
-## (notably `types` and its importers) do not transitively pull in `picker/nav`
-## via the full `bookmark_manager` module.
-
-import list_viewer_types
-export list_viewer_types
-
 type
-  BookmarkEntry* = object ## Represents a bookmark entry in the bookmark manager list
-    bufferIndex*: int # Index in the buffer list
-    filePath*: string # File path ("No Name" if none)
-    line*: int # Line number (0-based)
-    text*: string # Line text preview (truncated to 50 chars)
+  ListViewer*[T] = ref object of RootObj
+    ## Shared core for every list-style mode (LSP viewers, managers, ...).
+    ## Owns the selection/list state. Concrete modes inherit from a
+    ## `ListViewer[ItemT]` instantiation and add their own fields, so the
+    ## generic navigation/key/render procs apply to them via subtyping while
+    ## field names stay unchanged at every call site.
+    ##
+    ## Scrolling is not tracked here: every list mode renders through the normal
+    ## window path with `cursor.line` mirrored from `selectedIndex`
+    ## (see `editor_render_views.syncSelectionCursor`), so the window viewport is
+    ## the single source of truth for the visible range.
+    items*: seq[T]
+    selectedIndex*: int ## Currently selected item index
+    waitingForG*: bool ## Waiting for the second 'g' of 'gg'
+    title*: string ## List title (empty when unused)
 
-  BookmarkManagerState* = ref object of ListViewer[BookmarkEntry]
-    ## State for the bookmark manager UI.
-    ## items (bookmark entries)/selectedIndex/topLine/waitingForG are inherited.
-    previousWindowIndex*: int # Window index to return to when closing
+  ListViewerAction* = enum
+    ## Result of the shared key handler. Mode-specific keys yield `lvaUnhandled`
+    ## so the caller can apply its own bindings.
+    lvaConsumed ## A shared navigation key was handled
+    lvaQuitKey ## q (distinct from Escape so modes can treat them differently)
+    lvaEscape ## Escape
+    lvaEnterCommand ## :
+    lvaSelect ## Enter (caller reads getSelectedItem)
+    lvaUnhandled ## Not a shared key

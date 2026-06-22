@@ -26,9 +26,8 @@ suite "BufferManagerState - Constructor":
   test "newBufferManagerState creates empty state":
     let state = newBufferManagerState()
 
-    check state.entries.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.previousWindowIndex == 0
 
 suite "BufferEntry - initBufferManagerEntries":
@@ -98,9 +97,9 @@ suite "BufferManagerState - updateEntries":
 
     state.updateEntries(bufferInfos)
 
-    check state.entries.len == 2
-    check state.entries[0].name == "/file1.nim"
-    check state.entries[1].name == "/file2.nim"
+    check state.items.len == 2
+    check state.items[0].name == "/file1.nim"
+    check state.items[1].name == "/file2.nim"
 
   test "Update clamps selectedIndex when entries shrink":
     let state = newBufferManagerState()
@@ -111,7 +110,7 @@ suite "BufferManagerState - updateEntries":
 
     state.updateEntries(bufferInfos)
 
-    check state.entries.len == 1
+    check state.items.len == 1
     check state.selectedIndex == 0
 
   test "Update preserves valid selectedIndex":
@@ -126,7 +125,7 @@ suite "BufferManagerState - updateEntries":
 
     state.updateEntries(bufferInfos)
 
-    check state.entries.len == 3
+    check state.items.len == 3
     check state.selectedIndex == 1
 
 suite "BufferManagerState - Navigation":
@@ -153,22 +152,6 @@ suite "BufferManagerState - Navigation":
     state.moveUp()
 
     check state.selectedIndex == 0
-
-  test "moveUp adjusts topLine when scrolling":
-    let state = newBufferManagerState()
-    let bufferInfos = @[
-      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
-      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
-      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: true),
-    ]
-    state.updateEntries(bufferInfos)
-    state.selectedIndex = 1
-    state.topLine = 1
-
-    state.moveUp()
-
-    check state.selectedIndex == 0
-    check state.topLine == 0
 
   test "moveDown increases selectedIndex":
     let state = newBufferManagerState()
@@ -304,7 +287,7 @@ suite "BufferManagerState - Integration":
     let state = newBufferManagerState()
 
     # Initial state
-    check state.entries.len == 0
+    check state.items.len == 0
 
     # Add some buffers
     let bufferInfos = @[
@@ -314,7 +297,7 @@ suite "BufferManagerState - Integration":
     ]
     state.updateEntries(bufferInfos)
 
-    check state.entries.len == 3
+    check state.items.len == 3
     check state.selectedIndex == 0
 
     # Navigate down
@@ -363,5 +346,5 @@ suite "BufferManagerState - Integration":
     state.updateEntries(bufferInfos2)
 
     # selectedIndex should be clamped
-    check state.entries.len == 2
+    check state.items.len == 2
     check state.selectedIndex == 1

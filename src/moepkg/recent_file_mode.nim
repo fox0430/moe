@@ -26,15 +26,15 @@ import std/[os, options, uri, strutils]
 
 import pkg/results
 
-import buffer
-import picker/nav
-
+import buffer, list_viewer
 import types/recent_file_mode_types
+
 export recent_file_mode_types
+export list_viewer
 
 proc newRecentFileModeState*(): RecentFileModeState =
   ## Create a new RecentFileModeState
-  RecentFileModeState(files: @[], selectedIndex: 0, topLine: 0)
+  RecentFileModeState(items: @[], selectedIndex: 0)
 
 proc getRecentUsedXbelPath*(): string =
   ## Return the path to the recently-used.xbel file
@@ -82,72 +82,41 @@ proc loadRecentFiles*(state: RecentFileModeState): Result[void, string] =
   if filesResult.isErr:
     return Result[void, string].err filesResult.error
 
-  state.files = @[]
+  state.items = @[]
   for path in filesResult.get:
-    state.files.add RecentFileEntry(path: path)
+    state.items.add RecentFileEntry(path: path)
 
   state.selectedIndex = 0
-  state.topLine = 0
 
   return Result[void, string].ok()
 
 proc len*(state: RecentFileModeState): int =
   ## Get number of files
-  state.files.len
+  state.items.len
 
 proc isEmpty*(state: RecentFileModeState): bool =
   ## Check if file list is empty
-  state.files.len == 0
+  state.items.len == 0
 
-proc getSelectedItem*(state: RecentFileModeState): Option[string] =
-  ## Get currently selected file path
-  if state.isEmpty or state.selectedIndex >= state.files.len:
+proc getSelectedPath*(state: RecentFileModeState): Option[string] =
+  ## Get the currently selected file path. (The selected entry itself is
+  ## available via the generic `getSelectedItem`.)
+  if state.isEmpty or state.selectedIndex >= state.items.len:
     return none(string)
-  return some(state.files[state.selectedIndex].path)
-
-proc moveUp*(state: RecentFileModeState) =
-  ## Move selection up
-  pickerMoveUp(state.selectedIndex)
-
-proc moveDown*(state: RecentFileModeState) =
-  ## Move selection down
-  pickerMoveDown(state.selectedIndex, state.files.len)
-
-proc moveToFirst*(state: RecentFileModeState) =
-  ## Move to first file
-  pickerMoveToFirst(state.selectedIndex)
-
-proc moveToLast*(state: RecentFileModeState) =
-  ## Move to last file
-  pickerMoveToLast(state.selectedIndex, state.files.len)
-
-proc ensureSelectedVisible*(state: RecentFileModeState, viewportHeight: int) =
-  ## Adjust topLine to keep selected item visible
-  pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
-
-proc getVisibleFiles*(
-    state: RecentFileModeState, viewportHeight: int
-): seq[RecentFileEntry] =
-  ## Get files visible in current viewport
-  ## Note: Call ensureSelectedVisible before this if needed
-  let endIndex = min(state.topLine + viewportHeight, state.files.len)
-  if state.topLine < state.files.len:
-    return state.files[state.topLine ..< endIndex]
-  return @[]
+  return some(state.items[state.selectedIndex].path)
 
 proc selectedFileExists*(state: RecentFileModeState): bool =
   ## Check if the currently selected file exists on disk
-  let selected = state.getSelectedItem()
+  let selected = state.getSelectedPath()
   if selected.isNone:
     return false
   return fileExists(selected.get)
 
 proc createRecentFileTextBuffer*(state: RecentFileModeState): TextBuffer =
   ## Create a TextBuffer from recent files for rendering via the normal view path
-  var content = "-- Recent Files --"
-  for entry in state.files:
-    content.add('\n')
-    content.add(entry.path)
-  result = newTextBuffer(content)
-  result.readOnly = true
+  result = state.toListTextBuffer(
+    "-- Recent Files --",
+    proc(entry: RecentFileEntry): string =
+      entry.path,
+  )
   result.isUtilityBuffer = true

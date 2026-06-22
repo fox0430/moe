@@ -42,9 +42,8 @@ proc createTestBackupFile(
 suite "backup_manager - newBackupManagerState":
   test "Create new state with default values":
     let state = newBackupManagerState()
-    check state.entries.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.sourceFilePath == ""
     check state.backupDir == ""
     check state.baseBackupDir == ""
@@ -126,7 +125,7 @@ suite "backup_manager - initBackupManagerState":
     check state.sourceFilePath == sourcePath
     check state.baseBackupDir == TestBackupDir
     check state.backupDir == backupDir
-    check state.entries.len == 1
+    check state.items.len == 1
 
   test "Initialize state with source file that has no backups":
     let sourcePath = "/home/user/nobackup.txt"
@@ -135,7 +134,7 @@ suite "backup_manager - initBackupManagerState":
     check state.sourceFilePath == sourcePath
     check state.baseBackupDir == TestBackupDir
     check state.backupDir == ""
-    check state.entries.len == 0
+    check state.items.len == 0
 
 suite "backup_manager - refresh":
   setup:
@@ -152,13 +151,13 @@ suite "backup_manager - refresh":
     createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00")
 
     let state = initBackupManagerState(TestBackupDir, sourcePath)
-    check state.entries.len == 1
+    check state.items.len == 1
 
     # Add another backup file
     createTestBackupFile(backupDir, "2025-01-16T11:00:00+09:00")
 
     state.refresh()
-    check state.entries.len == 2
+    check state.items.len == 2
 
   test "Refresh clamps selectedIndex when entries reduced":
     let
@@ -169,13 +168,13 @@ suite "backup_manager - refresh":
 
     let state = initBackupManagerState(TestBackupDir, sourcePath)
     state.selectedIndex = 1
-    check state.entries.len == 2
+    check state.items.len == 2
 
     # Remove one file
     removeFile(backupDir / "2025-01-16T11:00:00+09:00")
 
     state.refresh()
-    check state.entries.len == 1
+    check state.items.len == 1
     check state.selectedIndex == 0
 
   test "Refresh sets selectedIndex to 0 when no entries":
@@ -185,19 +184,19 @@ suite "backup_manager - refresh":
     createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00")
 
     let state = initBackupManagerState(TestBackupDir, sourcePath)
-    check state.entries.len == 1
+    check state.items.len == 1
 
     # Remove all backup files
     removeFile(backupDir / "2025-01-15T10:30:45+09:00")
 
     state.refresh()
-    check state.entries.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
 
 suite "backup_manager - moveUp":
   test "Move up decrements selectedIndex":
     let state = newBackupManagerState()
-    state.entries = @[
+    state.items = @[
       BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
       BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
       BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
@@ -212,7 +211,7 @@ suite "backup_manager - moveUp":
 
   test "Move up does not go below 0":
     let state = newBackupManagerState()
-    state.entries = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
+    state.items = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
     state.selectedIndex = 0
 
     state.moveUp()
@@ -225,24 +224,10 @@ suite "backup_manager - moveUp":
     state.moveUp()
     check state.selectedIndex == 0
 
-  test "Move up adjusts topLine when needed":
-    let state = newBackupManagerState()
-    state.entries = @[
-      BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
-      BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
-      BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
-    ]
-    state.selectedIndex = 1
-    state.topLine = 1
-
-    state.moveUp()
-    check state.selectedIndex == 0
-    check state.topLine == 0
-
 suite "backup_manager - moveDown":
   test "Move down increments selectedIndex":
     let state = newBackupManagerState()
-    state.entries = @[
+    state.items = @[
       BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
       BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
       BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
@@ -257,7 +242,7 @@ suite "backup_manager - moveDown":
 
   test "Move down does not exceed last entry":
     let state = newBackupManagerState()
-    state.entries = @[
+    state.items = @[
       BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
       BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
     ]
@@ -276,21 +261,19 @@ suite "backup_manager - moveDown":
 suite "backup_manager - moveToFirst":
   test "Move to first sets selectedIndex to 0":
     let state = newBackupManagerState()
-    state.entries = @[
+    state.items = @[
       BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
       BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
     ]
     state.selectedIndex = 1
-    state.topLine = 1
 
     state.moveToFirst()
     check state.selectedIndex == 0
-    check state.topLine == 0
 
 suite "backup_manager - moveToLast":
   test "Move to last sets selectedIndex to last entry":
     let state = newBackupManagerState()
-    state.entries = @[
+    state.items = @[
       BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
       BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
       BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
@@ -311,7 +294,7 @@ suite "backup_manager - getSelectedItem":
   test "Get selected entry returns correct entry":
     let state = newBackupManagerState()
     let t = now()
-    state.entries = @[
+    state.items = @[
       BackupEntry(filename: "a", timestamp: t, fullPath: "/a"),
       BackupEntry(filename: "b", timestamp: t, fullPath: "/b"),
     ]
@@ -330,7 +313,7 @@ suite "backup_manager - getSelectedItem":
 
   test "Get selected entry returns none with invalid index":
     let state = newBackupManagerState()
-    state.entries = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
+    state.items = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
     state.selectedIndex = 5
 
     let entry = state.getSelectedItem()
@@ -338,7 +321,7 @@ suite "backup_manager - getSelectedItem":
 
   test "Get selected entry returns none with negative index":
     let state = newBackupManagerState()
-    state.entries = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
+    state.items = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
     state.selectedIndex = -1
 
     let entry = state.getSelectedItem()
@@ -373,11 +356,11 @@ suite "backup_manager - deleteBackup":
     createTestBackupFile(backupDir, "2025-01-16T11:00:00+09:00")
 
     let state = initBackupManagerState(TestBackupDir, sourcePath)
-    check state.entries.len == 2
+    check state.items.len == 2
 
     let success = state.deleteBackup(0)
     check success == true
-    check state.entries.len == 1
+    check state.items.len == 1
     check not fileExists(backupDir / "2025-01-16T11:00:00+09:00")
 
   test "Delete backup returns false for invalid index":
@@ -390,7 +373,7 @@ suite "backup_manager - deleteBackup":
 
     check state.deleteBackup(-1) == false
     check state.deleteBackup(5) == false
-    check state.entries.len == 1
+    check state.items.len == 1
 
   test "Delete backup returns false for empty entries":
     let state = newBackupManagerState()
@@ -481,13 +464,13 @@ suite "backup_manager - refresh (edge cases)":
 
     let state = initBackupManagerState(TestBackupDir, sourcePath)
     state.selectedIndex = 1
-    check state.entries.len == 3
+    check state.items.len == 3
 
     # Add another backup file (entries grow, index still valid)
     createTestBackupFile(backupDir, "2025-01-18T12:00:00+09:00")
 
     state.refresh()
-    check state.entries.len == 4
+    check state.items.len == 4
     check state.selectedIndex == 1 # Index should remain unchanged
 
 suite "backup_manager - deleteBackup (edge cases)":
@@ -505,7 +488,7 @@ suite "backup_manager - deleteBackup (edge cases)":
     createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00")
 
     let state = initBackupManagerState(TestBackupDir, sourcePath)
-    check state.entries.len == 1
+    check state.items.len == 1
 
     # Make directory read-only to prevent file deletion
     discard chmod(backupDir.cstring, 0o555)

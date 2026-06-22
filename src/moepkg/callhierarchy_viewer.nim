@@ -24,12 +24,12 @@
 
 import std/[strformat, strutils, options]
 
+import buffer, list_viewer
 import lsp/protocol/types as lspTypes
-import buffer
-import picker/nav
-
 import types/callhierarchy_viewer_types
+
 export callhierarchy_viewer_types
+export list_viewer
 
 proc newCallHierarchyViewerState*(
     items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind
@@ -41,27 +41,8 @@ proc newCallHierarchyViewerState*(
     of chvkIncoming: "Incoming Calls"
     of chvkOutgoing: "Outgoing Calls"
   CallHierarchyViewerState(
-    items: items, selectedIndex: 0, topLine: 0, viewKind: viewKind, title: title
+    items: items, selectedIndex: 0, viewKind: viewKind, title: title
   )
-
-proc itemCount*(state: CallHierarchyViewerState): int =
-  ## Get the number of items
-  state.items.len
-
-proc getItem*(
-    state: CallHierarchyViewerState, index: int
-): Option[lspTypes.CallHierarchyItem] =
-  ## Get a specific item
-  if index >= 0 and index < state.items.len:
-    some(state.items[index])
-  else:
-    none(lspTypes.CallHierarchyItem)
-
-proc getSelectedItem*(
-    state: CallHierarchyViewerState
-): Option[lspTypes.CallHierarchyItem] =
-  ## Get the currently selected item
-  state.getItem(state.selectedIndex)
 
 proc uriToPath(uri: string): string =
   ## Convert file:// URI to path
@@ -81,46 +62,7 @@ proc formatLine*(item: lspTypes.CallHierarchyItem): string =
   let col = item.selectionRange.start.character + 1
   fmt"{item.name}{detail} ({path}:{line}:{col})"
 
-proc getLine*(state: CallHierarchyViewerState, index: int): string =
-  ## Get a formatted line for display
-  if index >= 0 and index < state.items.len:
-    state.items[index].formatLine()
-  else:
-    ""
-
-proc moveUp*(state: CallHierarchyViewerState) =
-  ## Move selection up
-  pickerMoveUp(state.selectedIndex)
-
-proc moveDown*(state: CallHierarchyViewerState) =
-  ## Move selection down
-  pickerMoveDown(state.selectedIndex, state.items.len)
-
-proc moveToFirst*(state: CallHierarchyViewerState) =
-  ## Move to first item
-  pickerMoveToFirst(state.selectedIndex)
-
-proc moveToLast*(state: CallHierarchyViewerState) =
-  ## Move to last item
-  pickerMoveToLast(state.selectedIndex, state.items.len)
-
-proc halfPageUp*(state: CallHierarchyViewerState, viewportHeight: int) =
-  ## Move up by half a page
-  pickerHalfPageUp(state.selectedIndex, viewportHeight)
-
-proc halfPageDown*(state: CallHierarchyViewerState, viewportHeight: int) =
-  ## Move down by half a page
-  pickerHalfPageDown(state.selectedIndex, state.items.len, viewportHeight)
-
-proc ensureSelectedVisible*(state: CallHierarchyViewerState, viewportHeight: int) =
-  ## Ensure the selected item is visible in the viewport
-  pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
-
 proc createCallHierarchyTextBuffer*(state: CallHierarchyViewerState): TextBuffer =
   ## Create a TextBuffer from call hierarchy items for rendering via the normal view path
-  var content = "-- " & state.title & " (" & $state.itemCount() & ") --"
-  for i in 0 ..< state.itemCount:
-    content.add('\n')
-    content.add(state.getLine(i))
-  result = newTextBuffer(content)
-  result.readOnly = true
+  let header = "-- " & state.title & " (" & $state.itemCount() & ") --"
+  state.toListTextBuffer(header, formatLine)

@@ -56,82 +56,34 @@ proc handleBufferManagerModeKey*(
   ##
   ## Returns a BufferManagerResult indicating what action should be taken
 
-  # Handle 'gg' command (two g presses)
-  if bmState.waitingForG:
+  # Ctrl-k / Ctrl-j switch windows; the editor handles them. Cancel any pending
+  # 'gg' first, since this early return bypasses handleListNavKey (the only place
+  # that would otherwise clear waitingForG).
+  if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+      (keyCombo.char == "k" or keyCombo.char == "j"):
     bmState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      bmState.selectedIndex = 0
-      bmState.topLine = 0
-      return BufferManagerResult(kind: bmrHandled)
-    # If not 'g', fall through to normal handling
+    return BufferManagerResult(kind: bmrUnhandled)
 
-  # Escape key - quit buffer manager
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
+  case bmState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    return BufferManagerResult(kind: bmrHandled)
+  of lvaQuitKey, lvaEscape:
     return BufferManagerResult(kind: bmrQuit)
+  of lvaEnterCommand:
+    return BufferManagerResult(kind: bmrEnterCommand)
+  of lvaSelect:
+    # Select and switch to the buffer
+    let entry = bmState.getSelectedItem()
+    if entry.isSome:
+      return BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: entry.get.index)
+    return BufferManagerResult(kind: bmrHandled)
+  of lvaUnhandled:
+    discard # fall through to buffer-manager-specific keys
 
-  # Check for special keys first
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEnter:
-      # Select the buffer
-      let entry = bmState.getSelectedItem()
-      if entry.isSome:
-        return BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: entry.get.index)
-      return BufferManagerResult(kind: bmrHandled)
-    of skUp:
-      bmState.moveUp()
-      return BufferManagerResult(kind: bmrHandled)
-    of skDown:
-      bmState.moveDown()
-      return BufferManagerResult(kind: bmrHandled)
-    else:
-      discard
-  else:
-    # Character keys
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        bmState.moveDown()
-      return BufferManagerResult(kind: bmrHandled)
-
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        bmState.moveUp()
-      return BufferManagerResult(kind: bmrHandled)
-
-    # Check for Ctrl+k (next window)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "k":
-      # This will be handled by the editor to switch windows
-      return BufferManagerResult(kind: bmrUnhandled)
-
-    # Check for Ctrl+j (prev window)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "j":
-      # This will be handled by the editor to switch windows
-      return BufferManagerResult(kind: bmrUnhandled)
-
+  if not keyCombo.isSpecial:
     case keyCombo.char
-    of ":":
-      return BufferManagerResult(kind: bmrEnterCommand)
-    of "q":
-      return BufferManagerResult(kind: bmrQuit)
-    of "j":
-      bmState.moveDown()
-      return BufferManagerResult(kind: bmrHandled)
-    of "k":
-      bmState.moveUp()
-      return BufferManagerResult(kind: bmrHandled)
-    of "g":
-      # Start waiting for second 'g'
-      bmState.waitingForG = true
-      return BufferManagerResult(kind: bmrHandled)
-    of "G":
-      bmState.selectedIndex = max(0, bmState.entries.len - 1)
-      return BufferManagerResult(kind: bmrHandled)
     of "o":
-      # Open in new window (same as Enter for now)
+      # Open the selected buffer (same as Enter for now)
       let entry = bmState.getSelectedItem()
       if entry.isSome:
         return BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: entry.get.index)

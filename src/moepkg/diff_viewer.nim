@@ -20,20 +20,21 @@
 ## Diff Viewer module
 ## Provides a UI for viewing diffs between files
 
-import std/[options, osproc, strutils, os, unicode]
+import std/[osproc, strutils, os, unicode]
 
 import pkg/results
 
-import buffer, highlight, syntax/tokenizer
-
+import buffer, highlight, list_viewer
+import syntax/tokenizer
 import types/diff_viewer_types
+
 export diff_viewer_types
+export list_viewer
 
 proc newDiffViewerState*(): DiffViewerState =
   DiffViewerState(
-    lines: @[],
-    selectedLine: 0,
-    topLine: 0,
+    items: @[],
+    selectedIndex: 0,
     sourceFilePath: "",
     backupFilePath: "",
     errorMessage: "",
@@ -104,46 +105,15 @@ proc initDiffViewerState*(
 
   let diffResult = initDiffViewerBuffer(sourceFilePath, backupFilePath)
   if diffResult.isOk:
-    result.lines = diffResult.get
+    result.items = diffResult.get
   else:
     result.errorMessage = diffResult.error
-    result.lines = @[DiffLine(text: "Error: " & diffResult.error, kind: dlkNormal)]
-
-proc moveUp*(state: DiffViewerState) =
-  ## Move selection up
-  if state.lines.len > 0 and state.selectedLine > 0:
-    state.selectedLine.dec
-    # Adjust scroll position if needed
-    if state.selectedLine < state.topLine:
-      state.topLine = state.selectedLine
-
-proc moveDown*(state: DiffViewerState) =
-  ## Move selection down
-  if state.lines.len > 0 and state.selectedLine < state.lines.len - 1:
-    state.selectedLine.inc
-    # Note: scroll adjustment for moving down is handled during rendering
-
-proc moveToFirst*(state: DiffViewerState) =
-  ## Move to first line
-  state.selectedLine = 0
-  state.topLine = 0
-
-proc moveToLast*(state: DiffViewerState) =
-  ## Move to last line
-  if state.lines.len > 0:
-    state.selectedLine = state.lines.len - 1
-
-proc getSelectedLine*(state: DiffViewerState): Option[DiffLine] =
-  ## Get the currently selected diff line
-  if state.selectedLine >= 0 and state.selectedLine < state.lines.len:
-    some(state.lines[state.selectedLine])
-  else:
-    none(DiffLine)
+    result.items = @[DiffLine(text: "Error: " & diffResult.error, kind: dlkNormal)]
 
 proc createDiffTextBuffer*(state: DiffViewerState): TextBuffer =
   ## Create a TextBuffer from diff lines for rendering via the normal view path
   var content = ""
-  for i, line in state.lines:
+  for i, line in state.items:
     if i > 0:
       content.add('\n')
     content.add(line.text)

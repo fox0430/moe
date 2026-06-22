@@ -41,7 +41,7 @@ proc createTestState(): RecentFileModeState =
   ## Create a state with test files
   let state = newRecentFileModeState()
   for i in 0 ..< 30:
-    state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
+    state.items.add RecentFileEntry(path: "/file" & $i & ".txt")
   state
 
 suite "recent_file_mode_handler: RecentFileModeState":
@@ -206,7 +206,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg and G commands":
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("G"))
 
     check result.kind == rfmrHandled
-    check state.selectedIndex == state.files.high
+    check state.selectedIndex == state.items.high
 
 suite "recent_file_mode_handler: handleRecentFileModeKey - Mode transitions":
   test "Escape is unhandled (quit handled at higher level)":
@@ -246,44 +246,32 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - File opening":
     check result.kind == rfmrError
     check "No file selected" in result.errorMessage
 
-suite "recent_file_mode_handler: handleRecentFileModeKey - Scroll adjustment":
-  test "Moving down adjusts topLine when cursor goes below viewport":
+suite "recent_file_mode_handler: handleRecentFileModeKey - Navigation":
+  test "j moves the selection down":
     let state = createTestState()
-    # Set position at the bottom edge of viewport
     state.selectedIndex = TestViewportHeight - 1
-    state.topLine = 0
 
-    # Move down should trigger scroll adjustment
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("j"))
 
     check result.kind == rfmrHandled
     check state.selectedIndex == TestViewportHeight
-    check state.topLine == 1 # topLine adjusted to keep cursor visible
 
-  test "Moving up adjusts topLine when cursor goes above viewport":
+  test "k moves the selection up":
     let state = createTestState()
-    # Set position at top of viewport (which is scrolled down)
     state.selectedIndex = 10
-    state.topLine = 10
 
-    # Move up should trigger scroll adjustment
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("k"))
 
     check result.kind == rfmrHandled
     check state.selectedIndex == 9
-    check state.topLine == 9 # topLine adjusted to keep cursor visible
 
-  test "G command scrolls to make last line visible":
+  test "G moves to the last item":
     let state = createTestState()
-    state.topLine = 0
 
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("G"))
 
     check result.kind == rfmrHandled
-    check state.selectedIndex == state.files.high
-    # topLine should be adjusted so selected line is visible
-    check state.topLine <= state.selectedIndex
-    check state.topLine + TestViewportHeight > state.selectedIndex
+    check state.selectedIndex == state.items.high
 
 suite "recent_file_mode_handler: handleRecentFileModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
@@ -373,7 +361,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg command edge cases
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("G"))
     check result.kind == rfmrHandled
     check state.waitingForG == false
-    check state.selectedIndex == state.files.high
+    check state.selectedIndex == state.items.high
 
   test "Handler state is reset after gg command":
     let state = createTestState()
@@ -393,7 +381,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg command edge cases
 suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
   test "Single file - j does not move":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/only.txt")
+    state.items.add RecentFileEntry(path: "/only.txt")
     check state.selectedIndex == 0
 
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("j"))
@@ -403,7 +391,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Single file - k does not move":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/only.txt")
+    state.items.add RecentFileEntry(path: "/only.txt")
     check state.selectedIndex == 0
 
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("k"))
@@ -413,7 +401,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Single file - G stays at 0":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/only.txt")
+    state.items.add RecentFileEntry(path: "/only.txt")
 
     let result = handleRecentFileModeKey(state, TestViewportHeight, charKey("G"))
 
@@ -422,7 +410,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Single file - Enter opens file":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/only.txt")
+    state.items.add RecentFileEntry(path: "/only.txt")
 
     let result = handleRecentFileModeKey(state, TestViewportHeight, specialKey(skEnter))
 
@@ -431,7 +419,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Out of range selectedIndex returns error on Enter":
     let state = newRecentFileModeState()
-    state.files.add RecentFileEntry(path: "/file.txt")
+    state.items.add RecentFileEntry(path: "/file.txt")
     state.selectedIndex = 100 # Out of range
 
     let result = handleRecentFileModeKey(state, TestViewportHeight, specialKey(skEnter))

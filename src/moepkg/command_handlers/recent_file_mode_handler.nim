@@ -59,70 +59,43 @@ proc handleRecentFileModeKey*(
 ): RecentFileModeResult =
   ## Handle a key press in Recent File mode
 
-  # Handle 'gg' command (second g)
-  if state.waitingForG:
-    state.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      state.moveToFirst()
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    # If not 'g', fall through to handle as normal key
+  # Shared list navigation (gg/G/j/k/Up/Down/Ctrl-d/Ctrl-u).
+  case state.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
+  of lvaQuitKey, lvaEscape:
+    # Recent file mode has no quit key of its own; q/Escape are passed through.
+    return RecentFileModeResult(kind: rfmrUnhandled, modeTransition: none(EditorMode))
+  of lvaEnterCommand:
+    return
+      RecentFileModeResult(kind: rfmrEnterCommand, overlayTransition: some(okCommand))
+  of lvaSelect:
+    let selectedFile = state.getSelectedPath()
+    if selectedFile.isSome:
+      return RecentFileModeResult(
+        kind: rfmrOpenFile,
+        filePath: selectedFile.get,
+        modeTransition: some(EditorMode.Normal),
+      )
+    else:
+      return RecentFileModeResult(
+        kind: rfmrError,
+        errorMessage: "No file selected",
+        modeTransition: none(EditorMode),
+      )
+  of lvaUnhandled:
+    discard # fall through to recent-file-specific keys
 
-  # Handle special keys
+  # h/l/Left/Right/Backspace are no-ops for vim compatibility.
   if keyCombo.isSpecial:
     case keyCombo.special
-    of skEnter:
-      let selectedFile = state.getSelectedItem()
-      if selectedFile.isSome:
-        return RecentFileModeResult(
-          kind: rfmrOpenFile,
-          filePath: selectedFile.get,
-          modeTransition: some(EditorMode.Normal),
-        )
-      else:
-        return RecentFileModeResult(
-          kind: rfmrError,
-          errorMessage: "No file selected",
-          modeTransition: none(EditorMode),
-        )
-    of skUp:
-      state.moveUp()
-      state.ensureSelectedVisible(viewportHeight)
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    of skDown:
-      state.moveDown()
-      state.ensureSelectedVisible(viewportHeight)
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of skLeft, skRight, skBackspace:
-      # No-op for horizontal movement keys (vim compatibility)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     else:
       return RecentFileModeResult(kind: rfmrUnhandled, modeTransition: none(EditorMode))
 
-  # Handle character keys without modifiers
-  if not keyCombo.isSpecial:
-    case keyCombo.char
-    of "j":
-      state.moveDown()
-      state.ensureSelectedVisible(viewportHeight)
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    of "k":
-      state.moveUp()
-      state.ensureSelectedVisible(viewportHeight)
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    of "G":
-      state.moveToLast()
-      state.ensureSelectedVisible(viewportHeight)
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    of "g":
-      state.waitingForG = true
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    of ":":
-      return
-        RecentFileModeResult(kind: rfmrEnterCommand, overlayTransition: some(okCommand))
-    of "h", "l":
-      # No-op for horizontal movement keys (vim compatibility)
-      return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    else:
-      return RecentFileModeResult(kind: rfmrUnhandled, modeTransition: none(EditorMode))
-
-  return RecentFileModeResult(kind: rfmrUnhandled, modeTransition: none(EditorMode))
+  case keyCombo.char
+  of "h", "l":
+    return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
+  else:
+    return RecentFileModeResult(kind: rfmrUnhandled, modeTransition: none(EditorMode))

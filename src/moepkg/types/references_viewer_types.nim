@@ -24,6 +24,8 @@
 ## via the full `references_viewer` module.
 
 import ../primitives
+import list_viewer_types
+export list_viewer_types
 
 type
   ReferenceItem* = object
@@ -32,12 +34,8 @@ type
     column*: int # Column number (0-indexed)
     text*: string # Optional context text
 
-  ReferencesViewerState* = ref object
-    items*: seq[ReferenceItem] # Reference items to display
-    selectedIndex*: int # Currently selected item index
-    topLine*: int # Scroll position (first visible line)
-    title*: string # Title for the list (e.g., "References", "Definitions")
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+  ReferencesViewerState* = ref object of ListViewer[ReferenceItem]
+    ## items/selectedIndex/topLine/waitingForG/title are inherited.
     # When true, jumping to a selected item opens a new vertical split window
     # instead of reusing the current one (goto features' openWindow option).
     openWindowOnJump*: bool

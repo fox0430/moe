@@ -70,73 +70,33 @@ proc handleBackupManagerModeKey*(
   ##
   ## Returns a BackupManagerResult indicating what action should be taken
 
-  # Handle 'gg' command (two g presses)
-  if bkState.waitingForG:
+  # Ctrl-k / Ctrl-j switch windows; the editor handles them. Cancel any pending
+  # 'gg' first, since this early return bypasses handleListNavKey (the only place
+  # that would otherwise clear waitingForG).
+  if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+      (keyCombo.char == "k" or keyCombo.char == "j"):
     bkState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      bkState.moveToFirst()
-      return BackupManagerResult(kind: bkmrHandled)
-    # If not 'g', fall through to normal handling
+    return BackupManagerResult(kind: bkmrUnhandled)
 
-  # Check for special keys first
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEnter:
-      # Open diff viewer for selected backup
-      let entry = bkState.getSelectedItem()
-      if entry.isSome:
-        return BackupManagerResult(kind: bkmrOpenDiff, diffIndex: bkState.selectedIndex)
-      return BackupManagerResult(kind: bkmrHandled)
-    of skUp:
-      bkState.moveUp()
-      return BackupManagerResult(kind: bkmrHandled)
-    of skDown:
-      bkState.moveDown()
-      return BackupManagerResult(kind: bkmrHandled)
-    else:
-      discard
-  else:
-    # Character keys
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        bkState.moveDown()
-      return BackupManagerResult(kind: bkmrHandled)
+  case bkState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed:
+    return BackupManagerResult(kind: bkmrHandled)
+  of lvaQuitKey, lvaEscape:
+    # The backup manager has no quit action; q/Escape are passed through.
+    return BackupManagerResult(kind: bkmrUnhandled)
+  of lvaEnterCommand:
+    return BackupManagerResult(kind: bkmrEnterCommand)
+  of lvaSelect:
+    # Open the diff viewer for the selected backup
+    let entry = bkState.getSelectedItem()
+    if entry.isSome:
+      return BackupManagerResult(kind: bkmrOpenDiff, diffIndex: bkState.selectedIndex)
+    return BackupManagerResult(kind: bkmrHandled)
+  of lvaUnhandled:
+    discard # fall through to backup-manager-specific keys
 
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      let halfPage = max(1, viewportHeight div 2)
-      for i in 0 ..< halfPage:
-        bkState.moveUp()
-      return BackupManagerResult(kind: bkmrHandled)
-
-    # Check for Ctrl+k (next window)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "k":
-      # This will be handled by the editor to switch windows
-      return BackupManagerResult(kind: bkmrUnhandled)
-
-    # Check for Ctrl+j (prev window)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "j":
-      # This will be handled by the editor to switch windows
-      return BackupManagerResult(kind: bkmrUnhandled)
-
+  if not keyCombo.isSpecial:
     case keyCombo.char
-    of ":":
-      return BackupManagerResult(kind: bkmrEnterCommand)
-    of "j":
-      bkState.moveDown()
-      return BackupManagerResult(kind: bkmrHandled)
-    of "k":
-      bkState.moveUp()
-      return BackupManagerResult(kind: bkmrHandled)
-    of "g":
-      # Start waiting for second 'g'
-      bkState.waitingForG = true
-      return BackupManagerResult(kind: bkmrHandled)
-    of "G":
-      bkState.moveToLast()
-      return BackupManagerResult(kind: bkmrHandled)
     of "R":
       # Restore the selected backup
       let entry = bkState.getSelectedItem()

@@ -51,7 +51,7 @@ proc newTestDiffViewerState(lineCount: int = 10): DiffViewerState =
         dlkDeleted
       else:
         dlkNormal
-    result.lines.add(DiffLine(text: "line " & $i, kind: kind))
+    result.items.add(DiffLine(text: "line " & $i, kind: kind))
 
 suite "diff_viewer_handler: DiffViewerState construction":
   test "fresh DiffViewerState has waitingForG reset":
@@ -61,81 +61,80 @@ suite "diff_viewer_handler: DiffViewerState construction":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Basic movement keys":
   test "j key moves down":
     let dvState = newTestDiffViewerState(5)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 1
+    check dvState.selectedIndex == 1
 
   test "k key moves up":
     let dvState = newTestDiffViewerState(5)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 2
+    check dvState.selectedIndex == 2
 
   test "k key does not move above first line":
     let dvState = newTestDiffViewerState(5)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
   test "j key does not move below last line":
     let dvState = newTestDiffViewerState(5)
-    dvState.selectedLine = 4
+    dvState.selectedIndex = 4
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 4
+    check dvState.selectedIndex == 4
 
 suite "diff_viewer_handler: handleDiffViewerModeKey - Arrow keys":
   test "Down arrow moves down":
     let dvState = newTestDiffViewerState(5)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, specialKey(skDown))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 1
+    check dvState.selectedIndex == 1
 
   test "Up arrow moves up":
     let dvState = newTestDiffViewerState(5)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, specialKey(skUp))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 2
+    check dvState.selectedIndex == 2
 
 suite "diff_viewer_handler: handleDiffViewerModeKey - gg and G commands":
   test "gg moves to first line":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 5
+    dvState.selectedIndex = 5
 
     # First 'g' - starts waiting
     let result1 = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
     check result1.kind == dvrHandled
     check dvState.waitingForG == true
-    check dvState.selectedLine == 5 # Not moved yet
+    check dvState.selectedIndex == 5 # Not moved yet
 
     # Second 'g' - executes gg
     let result2 = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
     check result2.kind == dvrHandled
     check dvState.waitingForG == false
-    check dvState.selectedLine == 0
-    check dvState.topLine == 0
+    check dvState.selectedIndex == 0
 
   test "g followed by non-g cancels and falls through":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     # First 'g' - starts waiting
     let result1 = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
@@ -147,59 +146,59 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - gg and G commands":
     check dvState.waitingForG == false
     # The key falls through and 'j' is handled normally
     check result2.kind == dvrHandled
-    check dvState.selectedLine == 4 # moved down from line 3 to line 4
+    check dvState.selectedIndex == 4 # moved down from line 3 to line 4
 
   test "G moves to last line":
     let dvState = newTestDiffViewerState(10)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("G"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 9 # Last line (0-indexed)
+    check dvState.selectedIndex == 9 # Last line (0-indexed)
 
 suite "diff_viewer_handler: handleDiffViewerModeKey - Half page movement":
   test "Ctrl+d moves half page down":
     let dvState = newTestDiffViewerState(50)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("d", {kmCtrl}))
 
     check result.kind == dvrHandled
     # Half page is viewportHeight / 2 = 12
-    check dvState.selectedLine == TestViewportHeight div 2
+    check dvState.selectedIndex == TestViewportHeight div 2
 
   test "Ctrl+u moves half page up":
     let dvState = newTestDiffViewerState(50)
-    dvState.selectedLine = 30
+    dvState.selectedIndex = 30
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("u", {kmCtrl}))
 
     check result.kind == dvrHandled
     # Half page is viewportHeight / 2 = 12
-    check dvState.selectedLine == 30 - (TestViewportHeight div 2)
+    check dvState.selectedIndex == 30 - (TestViewportHeight div 2)
 
   test "Ctrl+u does not go below 0":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("u", {kmCtrl}))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
   test "Ctrl+d does not exceed last line":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 8
+    dvState.selectedIndex = 8
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("d", {kmCtrl}))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 9 # Last line
+    check dvState.selectedIndex == 9 # Last line
 
 suite "diff_viewer_handler: handleDiffViewerModeKey - Mode transitions":
   test ": enters command mode":
@@ -252,21 +251,21 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Unhandled keys":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
   test "Empty diff state - j does not crash":
     let dvState = newDiffViewerState()
-    check dvState.lines.len == 0
+    check dvState.items.len == 0
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
   test "Empty diff state - G stays at 0":
     let dvState = newDiffViewerState()
-    check dvState.lines.len == 0
+    check dvState.items.len == 0
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("G"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
   test "Empty diff state - gg stays at 0":
     let dvState = newDiffViewerState()
@@ -277,11 +276,11 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
   test "g followed by special key cancels":
     let dvState = newTestDiffViewerState(5)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     # First 'g' - starts waiting
     let result1 = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
@@ -294,33 +293,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
     check dvState.waitingForG == false
     # Down arrow is handled
     check result2.kind == dvrHandled
-    check dvState.selectedLine == 4
-
-suite "diff_viewer_handler: handleDiffViewerModeKey - Scroll position":
-  test "k updates topLine when going above visible area":
-    let dvState = newTestDiffViewerState(30)
-    dvState.selectedLine = 5
-    dvState.topLine = 5 # First visible line is 5
-
-    let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k"))
-
-    check result.kind == dvrHandled
-    check dvState.selectedLine == 4
-    check dvState.topLine == 4 # topLine adjusted to keep cursor visible
-
-  test "gg resets topLine to 0":
-    let dvState = newTestDiffViewerState(30)
-    dvState.selectedLine = 20
-    dvState.topLine = 15
-
-    # First 'g'
-    discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
-    # Second 'g'
-    let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
-
-    check result.kind == dvrHandled
-    check dvState.selectedLine == 0
-    check dvState.topLine == 0
+    check dvState.selectedIndex == 4
 
 suite "diff_viewer_handler: DiffViewerResult kinds":
   test "dvrHandled result":
@@ -351,60 +324,60 @@ suite "diff_viewer_handler: Multiple consecutive operations":
     for i in 0 ..< 5:
       discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j"))
 
-    check dvState.selectedLine == 5
+    check dvState.selectedIndex == 5
 
   test "Multiple k presses move cursor up":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 8
+    dvState.selectedIndex = 8
 
     for i in 0 ..< 5:
       discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k"))
 
-    check dvState.selectedLine == 3
+    check dvState.selectedIndex == 3
 
   test "j at last line followed by k moves up":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 9 # Last line
+    dvState.selectedIndex = 9 # Last line
 
     # j should not move
     discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j"))
-    check dvState.selectedLine == 9
+    check dvState.selectedIndex == 9
 
     # k should move up
     discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k"))
-    check dvState.selectedLine == 8
+    check dvState.selectedIndex == 8
 
   test "G followed by gg":
     let dvState = newTestDiffViewerState(10)
 
     # G moves to last line
     discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("G"))
-    check dvState.selectedLine == 9
+    check dvState.selectedIndex == 9
 
     # gg moves to first line
     discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
     discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
 suite "diff_viewer_handler: Single line diff":
   test "j on single line diff":
     let dvState = newTestDiffViewerState(1)
-    check dvState.lines.len == 1
-    check dvState.selectedLine == 0
+    check dvState.items.len == 1
+    check dvState.selectedIndex == 0
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0 # Can't move down
+    check dvState.selectedIndex == 0 # Can't move down
 
   test "k on single line diff":
     let dvState = newTestDiffViewerState(1)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0 # Can't move up
+    check dvState.selectedIndex == 0 # Can't move up
 
   test "G on single line diff":
     let dvState = newTestDiffViewerState(1)
@@ -412,7 +385,7 @@ suite "diff_viewer_handler: Single line diff":
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("G"))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0 # Last line is also line 0
+    check dvState.selectedIndex == 0 # Last line is also line 0
 
   test "Ctrl+d on single line diff":
     let dvState = newTestDiffViewerState(1)
@@ -421,57 +394,59 @@ suite "diff_viewer_handler: Single line diff":
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("d", {kmCtrl}))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 0 # Can't go beyond last line
+    check dvState.selectedIndex == 0 # Can't go beyond last line
 
 suite "diff_viewer_handler: Small viewport":
-  test "Ctrl+d with viewportHeight = 1 moves at least 1 line":
+  # Half page moves by `viewportHeight div 2`, shared with every other list
+  # viewer, so a degenerate viewport (0 or 1 rows) is a no-op.
+  test "Ctrl+d with viewportHeight = 1 is a no-op":
     let dvState = newTestDiffViewerState(10)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result = handleDiffViewerModeKey(dvState, 1, charKey("d", {kmCtrl}))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 1 # max(1, 1 div 2) = 1
+    check dvState.selectedIndex == 0 # 1 div 2 = 0
 
-  test "Ctrl+u with viewportHeight = 1 moves at least 1 line":
+  test "Ctrl+u with viewportHeight = 1 is a no-op":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 5
+    dvState.selectedIndex = 5
 
     let result = handleDiffViewerModeKey(dvState, 1, charKey("u", {kmCtrl}))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 4 # max(1, 1 div 2) = 1
+    check dvState.selectedIndex == 5 # 1 div 2 = 0
 
-  test "Ctrl+d with viewportHeight = 0 moves at least 1 line":
+  test "Ctrl+d with viewportHeight = 0 is a no-op":
     let dvState = newTestDiffViewerState(10)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result = handleDiffViewerModeKey(dvState, 0, charKey("d", {kmCtrl}))
 
     check result.kind == dvrHandled
-    check dvState.selectedLine == 1 # max(1, 0 div 2) = 1
+    check dvState.selectedIndex == 0 # 0 div 2 = 0
 
 suite "diff_viewer_handler: waitingForG with modifier keys":
   test "g followed by Ctrl+d cancels g and executes Ctrl+d":
     let dvState = newTestDiffViewerState(30)
-    dvState.selectedLine = 5
+    dvState.selectedIndex = 5
 
     # First 'g' - starts waiting
     let result1 = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
     check result1.kind == dvrHandled
     check dvState.waitingForG == true
-    check dvState.selectedLine == 5
+    check dvState.selectedIndex == 5
 
     # Ctrl+d - cancels waiting and executes half page down
     let result2 =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("d", {kmCtrl}))
     check dvState.waitingForG == false
     check result2.kind == dvrHandled
-    check dvState.selectedLine == 5 + (TestViewportHeight div 2)
+    check dvState.selectedIndex == 5 + (TestViewportHeight div 2)
 
   test "g followed by Ctrl+u cancels g and executes Ctrl+u":
     let dvState = newTestDiffViewerState(30)
-    dvState.selectedLine = 20
+    dvState.selectedIndex = 20
 
     # First 'g' - starts waiting
     discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
@@ -482,7 +457,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("u", {kmCtrl}))
     check dvState.waitingForG == false
     check result.kind == dvrHandled
-    check dvState.selectedLine == 20 - (TestViewportHeight div 2)
+    check dvState.selectedIndex == 20 - (TestViewportHeight div 2)
 
   test "g followed by : cancels g and enters command mode":
     let dvState = newTestDiffViewerState(10)
@@ -510,7 +485,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
 
   test "g followed by G cancels g and moves to last line":
     let dvState = newTestDiffViewerState(10)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     # First 'g'
     discard handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("g"))
@@ -520,7 +495,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
     let result = handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("G"))
     check dvState.waitingForG == false
     check result.kind == dvrHandled
-    check dvState.selectedLine == 9
+    check dvState.selectedIndex == 9
 
   test "g followed by Escape cancels g and quits":
     let dvState = newTestDiffViewerState(10)
@@ -553,58 +528,58 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Ctrl+j is treated as j (modifier ignored)":
     let dvState = newTestDiffViewerState(5)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j", {kmCtrl}))
 
     # Implementation ignores Ctrl modifier for 'j'
     check result.kind == dvrHandled
-    check dvState.selectedLine == 1
+    check dvState.selectedIndex == 1
 
   test "Ctrl+k is treated as k (modifier ignored)":
     let dvState = newTestDiffViewerState(5)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k", {kmCtrl}))
 
     # Implementation ignores Ctrl modifier for 'k'
     check result.kind == dvrHandled
-    check dvState.selectedLine == 2
+    check dvState.selectedIndex == 2
 
   test "Alt+j is treated as j (modifier ignored)":
     let dvState = newTestDiffViewerState(5)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j", {kmAlt}))
 
     # Implementation ignores Alt modifier for 'j'
     check result.kind == dvrHandled
-    check dvState.selectedLine == 1
+    check dvState.selectedIndex == 1
 
   test "Shift modifier on special key is ignored":
     let dvState = newTestDiffViewerState(5)
-    dvState.selectedLine = 3
+    dvState.selectedIndex = 3
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, specialKey(skUp, {kmShift}))
 
     # Implementation ignores Shift modifier for arrow keys
     check result.kind == dvrHandled
-    check dvState.selectedLine == 2
+    check dvState.selectedIndex == 2
 
   test "Ctrl+G is treated as G (modifier ignored)":
     let dvState = newTestDiffViewerState(10)
-    check dvState.selectedLine == 0
+    check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("G", {kmCtrl}))
 
     # Implementation ignores Ctrl modifier for 'G'
     check result.kind == dvrHandled
-    check dvState.selectedLine == 9
+    check dvState.selectedIndex == 9
 
   test "Ctrl+q is treated as q (modifier ignored)":
     let dvState = newTestDiffViewerState(5)

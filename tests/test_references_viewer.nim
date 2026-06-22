@@ -30,7 +30,6 @@ suite "ReferencesViewer - State creation":
 
     check state.items.len == 2
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.title == "References"
 
   test "newReferencesViewerState creates empty state":
@@ -38,7 +37,6 @@ suite "ReferencesViewer - State creation":
 
     check state.items.len == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
 
   test "newReferencesViewerState with custom title":
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
@@ -120,26 +118,15 @@ suite "ReferencesViewer - Formatting":
     let formatted = item.formatLine
     check formatted == "/file.nim 1 Line 1 Col"
 
-  test "getLine returns formatted line at index":
+  test "getItem + formatLine returns formatted line at index":
     let items = @[
       ReferenceItem(path: "/a.nim", line: 5, column: 10, text: ""),
       ReferenceItem(path: "/b.nim", line: 15, column: 20, text: ""),
     ]
     let state = newReferencesViewerState(items)
 
-    check state.getLine(0) == "/a.nim 6 Line 11 Col"
-    check state.getLine(1) == "/b.nim 16 Line 21 Col"
-
-  test "getLine returns empty string for invalid index":
-    let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
-    let state = newReferencesViewerState(items)
-
-    check state.getLine(-1) == ""
-    check state.getLine(5) == ""
-
-  test "getLine returns empty string for empty state":
-    let state = newReferencesViewerState(@[])
-    check state.getLine(0) == ""
+    check state.getItem(0).get.formatLine == "/a.nim 6 Line 11 Col"
+    check state.getItem(1).get.formatLine == "/b.nim 16 Line 21 Col"
 
 suite "ReferencesViewer - Navigation":
   test "moveUp decreases selectedIndex":
@@ -301,83 +288,3 @@ suite "ReferencesViewer - Half page navigation":
     let state = newReferencesViewerState(@[])
     state.halfPageDown(10)
     check state.selectedIndex == 0
-
-suite "ReferencesViewer - Viewport":
-  test "ensureSelectedVisible scrolls up when selection above viewport":
-    var itemList: seq[ReferenceItem]
-    for i in 0 ..< 20:
-      itemList.add ReferenceItem(
-        path: "/file" & $i & ".nim", line: i, column: 0, text: ""
-      )
-
-    let state = newReferencesViewerState(itemList)
-    state.topLine = 10
-    state.selectedIndex = 5
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 5
-
-  test "ensureSelectedVisible scrolls down when selection below viewport":
-    var itemList: seq[ReferenceItem]
-    for i in 0 ..< 20:
-      itemList.add ReferenceItem(
-        path: "/file" & $i & ".nim", line: i, column: 0, text: ""
-      )
-
-    let state = newReferencesViewerState(itemList)
-    state.topLine = 0
-    state.selectedIndex = 15
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 6
-
-  test "ensureSelectedVisible does not change when selection is visible":
-    var itemList: seq[ReferenceItem]
-    for i in 0 ..< 20:
-      itemList.add ReferenceItem(
-        path: "/file" & $i & ".nim", line: i, column: 0, text: ""
-      )
-
-    let state = newReferencesViewerState(itemList)
-    state.topLine = 5
-    state.selectedIndex = 10
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 5
-
-  test "ensureSelectedVisible ensures topLine is not negative":
-    let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
-    let state = newReferencesViewerState(items)
-    state.topLine = -5
-    state.selectedIndex = 0
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 0
-
-  test "ensureSelectedVisible with selection at viewport boundary":
-    var itemList: seq[ReferenceItem]
-    for i in 0 ..< 20:
-      itemList.add ReferenceItem(
-        path: "/file" & $i & ".nim", line: i, column: 0, text: ""
-      )
-
-    let state = newReferencesViewerState(itemList)
-    state.topLine = 5
-    state.selectedIndex = 14
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 5
-
-  test "ensureSelectedVisible when selection just outside viewport":
-    var itemList: seq[ReferenceItem]
-    for i in 0 ..< 20:
-      itemList.add ReferenceItem(
-        path: "/file" & $i & ".nim", line: i, column: 0, text: ""
-      )
-
-    let state = newReferencesViewerState(itemList)
-    state.topLine = 5
-    state.selectedIndex = 15
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 6

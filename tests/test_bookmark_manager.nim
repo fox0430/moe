@@ -43,9 +43,8 @@ suite "BookmarkManagerState - Constructor":
   test "newBookmarkManagerState creates empty state":
     let state = newBookmarkManagerState()
 
-    check state.entries.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.previousWindowIndex == 0
 
 suite "BookmarkManagerState - updateEntries":
@@ -56,22 +55,22 @@ suite "BookmarkManagerState - updateEntries":
     state.updateEntries(buffers)
 
     # buf1 has 2 bookmarks (lines 1, 3), buf2 has 1 (line 0), buf3 has 0
-    check state.entries.len == 3
+    check state.items.len == 3
 
-    check state.entries[0].bufferIndex == 0
-    check state.entries[0].filePath == "/path/file1.nim"
-    check state.entries[0].line == 1
-    check state.entries[0].text == "line 1"
+    check state.items[0].bufferIndex == 0
+    check state.items[0].filePath == "/path/file1.nim"
+    check state.items[0].line == 1
+    check state.items[0].text == "line 1"
 
-    check state.entries[1].bufferIndex == 0
-    check state.entries[1].filePath == "/path/file1.nim"
-    check state.entries[1].line == 3
-    check state.entries[1].text == "line 3"
+    check state.items[1].bufferIndex == 0
+    check state.items[1].filePath == "/path/file1.nim"
+    check state.items[1].line == 3
+    check state.items[1].text == "line 3"
 
-    check state.entries[2].bufferIndex == 1
-    check state.entries[2].filePath == "/path/file2.nim"
-    check state.entries[2].line == 0
-    check state.entries[2].text == "alpha"
+    check state.items[2].bufferIndex == 1
+    check state.items[2].filePath == "/path/file2.nim"
+    check state.items[2].line == 0
+    check state.items[2].text == "alpha"
 
   test "Update entries from buffers with no bookmarks":
     let state = newBookmarkManagerState()
@@ -80,7 +79,7 @@ suite "BookmarkManagerState - updateEntries":
 
     state.updateEntries(buffers)
 
-    check state.entries.len == 0
+    check state.items.len == 0
 
   test "Update entries with buffer without filePath shows No Name":
     let state = newBookmarkManagerState()
@@ -90,8 +89,8 @@ suite "BookmarkManagerState - updateEntries":
 
     state.updateEntries(buffers)
 
-    check state.entries.len == 1
-    check state.entries[0].filePath == "No Name"
+    check state.items.len == 1
+    check state.items[0].filePath == "No Name"
 
   test "Update clamps selectedIndex when entries shrink":
     let state = newBookmarkManagerState()
@@ -103,7 +102,7 @@ suite "BookmarkManagerState - updateEntries":
     let emptyBuf = newTextBuffer("no bookmarks")
     state.updateEntries(@[emptyBuf])
 
-    check state.entries.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
 
   test "Update preserves valid selectedIndex":
@@ -115,7 +114,7 @@ suite "BookmarkManagerState - updateEntries":
     # Re-update with same buffers
     state.updateEntries(buffers)
 
-    check state.entries.len == 3
+    check state.items.len == 3
     check state.selectedIndex == 1
 
   test "Text preview is truncated to 50 chars":
@@ -126,9 +125,9 @@ suite "BookmarkManagerState - updateEntries":
 
     state.updateEntries(@[buf])
 
-    check state.entries.len == 1
-    check state.entries[0].text.len < 60
-    check state.entries[0].text.endsWith("...")
+    check state.items.len == 1
+    check state.items[0].text.len < 60
+    check state.items[0].text.endsWith("...")
 
   test "Bookmark on line beyond buffer length gives empty text":
     let state = newBookmarkManagerState()
@@ -138,15 +137,15 @@ suite "BookmarkManagerState - updateEntries":
 
     state.updateEntries(@[buf])
 
-    check state.entries.len == 1
-    check state.entries[0].text == ""
+    check state.items.len == 1
+    check state.items[0].text == ""
 
   test "Update entries from empty buffer list":
     let state = newBookmarkManagerState()
 
     state.updateEntries(@[])
 
-    check state.entries.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
 
 suite "BookmarkManagerState - Navigation":
@@ -183,18 +182,6 @@ suite "BookmarkManagerState - Navigation":
     state.moveUp()
 
     check state.selectedIndex == 0
-
-  test "moveUp adjusts topLine when scrolling":
-    let state = newBookmarkManagerState()
-    let buffers = createTestBuffers()
-    state.updateEntries(buffers)
-    state.selectedIndex = 1
-    state.topLine = 1
-
-    state.moveUp()
-
-    check state.selectedIndex == 0
-    check state.topLine == 0
 
   test "moveDown increases selectedIndex":
     let state = newBookmarkManagerState()
@@ -320,8 +307,8 @@ suite "BookmarkManagerState - createBookmarkManagerTextBuffer":
     let textBuf = state.createBookmarkManagerTextBuffer()
 
     check textBuf.len == 3
-    check textBuf.getLine(1) == formatLine(state.entries[0])
-    check textBuf.getLine(2) == formatLine(state.entries[1])
+    check textBuf.getLine(1) == formatLine(state.items[0])
+    check textBuf.getLine(2) == formatLine(state.items[1])
 
   test "Create text buffer with no entries":
     let state = newBookmarkManagerState()
@@ -340,7 +327,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     state.updateEntries(buffers)
     state.selectedIndex = 0 # First bookmark: file1.nim line 1
 
-    check state.entries.len == 3
+    check state.items.len == 3
     check buffers[0].hasBookmark(1) == true
 
     state.deleteSelectedBookmark(buffers)
@@ -348,7 +335,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     # Bookmark should be removed from buffer
     check buffers[0].hasBookmark(1) == false
     # Entries should be refreshed (now 2 entries)
-    check state.entries.len == 2
+    check state.items.len == 2
 
   test "Delete last remaining bookmark":
     let state = newBookmarkManagerState()
@@ -360,7 +347,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
 
     state.deleteSelectedBookmark(buffers)
 
-    check state.entries.len == 0
+    check state.items.len == 0
     check state.selectedIndex == 0
     check buf.hasBookmark(0) == false
 
@@ -371,7 +358,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
 
     state.deleteSelectedBookmark(buffers)
 
-    check state.entries.len == 0
+    check state.items.len == 0
 
   test "Delete middle entry preserves correct remaining entries":
     let state = newBookmarkManagerState()
@@ -386,17 +373,17 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
 
     let buffers = @[buf1, buf2]
     state.updateEntries(buffers)
-    check state.entries.len == 3
+    check state.items.len == 3
     state.selectedIndex = 1 # buf1 line 2
 
     state.deleteSelectedBookmark(buffers)
 
-    check state.entries.len == 2
+    check state.items.len == 2
     # Remaining: buf1 line 0, buf2 line 1
-    check state.entries[0].bufferIndex == 0
-    check state.entries[0].line == 0
-    check state.entries[1].bufferIndex == 1
-    check state.entries[1].line == 1
+    check state.items[0].bufferIndex == 0
+    check state.items[0].line == 0
+    check state.items[1].bufferIndex == 1
+    check state.items[1].line == 1
 
   test "Delete consecutively removes bookmarks one by one":
     let state = newBookmarkManagerState()
@@ -406,22 +393,22 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     buf.toggleBookmark(2)
     let buffers = @[buf]
     state.updateEntries(buffers)
-    check state.entries.len == 3
+    check state.items.len == 3
 
     # Delete first
     state.selectedIndex = 0
     state.deleteSelectedBookmark(buffers)
-    check state.entries.len == 2
+    check state.items.len == 2
 
     # Delete first again (was second)
     state.selectedIndex = 0
     state.deleteSelectedBookmark(buffers)
-    check state.entries.len == 1
+    check state.items.len == 1
 
     # Delete last
     state.selectedIndex = 0
     state.deleteSelectedBookmark(buffers)
-    check state.entries.len == 0
+    check state.items.len == 0
     check buf.bookmarks.len == 0
 
   test "Delete clamps selectedIndex":
@@ -436,7 +423,7 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     state.deleteSelectedBookmark(buffers)
 
     # After deleting line 1 bookmark, only line 0 bookmark remains
-    check state.entries.len == 1
+    check state.items.len == 1
     check state.selectedIndex == 0 # Clamped
 
 suite "BookmarkManagerState - Integration":
@@ -445,11 +432,11 @@ suite "BookmarkManagerState - Integration":
     let buffers = createTestBuffers()
 
     # Initial state
-    check state.entries.len == 0
+    check state.items.len == 0
 
     # Update entries
     state.updateEntries(buffers)
-    check state.entries.len == 3
+    check state.items.len == 3
     check state.selectedIndex == 0
 
     # Navigate down
@@ -463,10 +450,10 @@ suite "BookmarkManagerState - Integration":
 
     # Delete the selected bookmark
     state.deleteSelectedBookmark(buffers)
-    check state.entries.len == 2
+    check state.items.len == 2
     # file1.nim line 1 + file2.nim line 0
-    check state.entries[0].line == 1
-    check state.entries[1].line == 0
+    check state.items[0].line == 1
+    check state.items[1].line == 0
 
     # Navigate to end
     state.moveDown()
@@ -497,10 +484,10 @@ suite "BookmarkManagerState - Integration":
 
     state.updateEntries(@[buf1, buf2])
 
-    check state.entries.len == 3
-    check state.entries[0].bufferIndex == 0
-    check state.entries[0].line == 0
-    check state.entries[1].bufferIndex == 0
-    check state.entries[1].line == 2
-    check state.entries[2].bufferIndex == 1
-    check state.entries[2].line == 1
+    check state.items.len == 3
+    check state.items[0].bufferIndex == 0
+    check state.items[0].line == 0
+    check state.items[1].bufferIndex == 0
+    check state.items[1].line == 2
+    check state.items[2].bufferIndex == 1
+    check state.items[2].line == 1

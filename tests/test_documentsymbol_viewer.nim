@@ -159,7 +159,6 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with hierarchical sym
     check state.items[0].column == 0
     check state.items[0].depth == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.filePath == "/path/to/file.nim"
 
   test "Create state with nested symbols":
@@ -208,7 +207,6 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with hierarchical sym
 
     check state.items.len == 0
     check state.selectedIndex == 0
-    check state.topLine == 0
 
   test "Create state with symbol that has detail":
     let symbols = @[
@@ -354,8 +352,8 @@ suite "DocumentSymbolViewer - formatLine":
 
     check line == "[c] MyClass :1"
 
-suite "DocumentSymbolViewer - getLine":
-  test "Get line at valid index":
+suite "DocumentSymbolViewer - getItem + formatLine":
+  test "Get formatted line at valid index":
     let symbols = @[
       makeDocumentSymbol("foo", skFunction, 0, 0),
       makeDocumentSymbol("bar", skFunction, 10, 5),
@@ -363,24 +361,7 @@ suite "DocumentSymbolViewer - getLine":
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
-    let line = state.getLine(1)
-    check line == "[f] bar :11"
-
-  test "Get line at negative index returns empty string":
-    let symbols = @[makeDocumentSymbol("foo", skFunction, 0, 0)]
-    let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
-    let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
-
-    let line = state.getLine(-1)
-    check line == ""
-
-  test "Get line at out of bounds index returns empty string":
-    let symbols = @[makeDocumentSymbol("foo", skFunction, 0, 0)]
-    let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
-    let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
-
-    let line = state.getLine(10)
-    check line == ""
+    check state.getItem(1).get.formatLine == "[f] bar :11"
 
 suite "DocumentSymbolViewer - moveUp":
   test "Move up from middle":
@@ -564,54 +545,3 @@ suite "DocumentSymbolViewer - halfPageDown":
     state.halfPageDown(10)
 
     check state.selectedIndex == 0
-
-suite "DocumentSymbolViewer - ensureSelectedVisible":
-  test "Selected above viewport scrolls up":
-    var symbols: seq[lspTypes.DocumentSymbol] = @[]
-    for i in 0 ..< 20:
-      symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
-    let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
-    let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
-    state.topLine = 10
-    state.selectedIndex = 5
-
-    state.ensureSelectedVisible(5)
-
-    check state.topLine == 5
-
-  test "Selected below viewport scrolls down":
-    var symbols: seq[lspTypes.DocumentSymbol] = @[]
-    for i in 0 ..< 20:
-      symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
-    let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
-    let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
-    state.topLine = 0
-    state.selectedIndex = 10
-
-    state.ensureSelectedVisible(5)
-
-    check state.topLine == 6
-
-  test "Selected within viewport does not change topLine":
-    var symbols: seq[lspTypes.DocumentSymbol] = @[]
-    for i in 0 ..< 20:
-      symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
-    let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
-    let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
-    state.topLine = 5
-    state.selectedIndex = 7
-
-    state.ensureSelectedVisible(5)
-
-    check state.topLine == 5
-
-  test "Negative topLine is corrected to zero":
-    let symbols = @[makeDocumentSymbol("foo", skFunction, 0, 0)]
-    let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
-    let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
-    state.topLine = -5
-    state.selectedIndex = 0
-
-    state.ensureSelectedVisible(10)
-
-    check state.topLine == 0

@@ -306,14 +306,13 @@ suite "callhierarchy_handler: handleCallHierarchyModeKey - unhandled":
 
     check result.kind == chvrUnhandled
 
-suite "callhierarchy_handler: handleCallHierarchyModeKey - ensureSelectedVisible":
-  test "Moving updates topLine to keep selection visible":
+suite "callhierarchy_handler: handleCallHierarchyModeKey - Navigation":
+  test "G moves to the last item":
     var items: seq[lspTypes.CallHierarchyItem] = @[]
     for i in 0 ..< 20:
       items.add(makeCallHierarchyItem("func" & $i, "file:///test.nim", i, 0))
     let state = newCallHierarchyViewerState(items, chvkPrepare)
     state.selectedIndex = 0
-    state.topLine = 0
     let viewportHeight = 5
 
     # Move to last with G
@@ -322,8 +321,6 @@ suite "callhierarchy_handler: handleCallHierarchyModeKey - ensureSelectedVisible
 
     check result.kind == chvrHandled
     check state.selectedIndex == 19
-    # topLine should be adjusted to keep selected visible
-    check state.topLine == 15 # 19 - 5 + 1
 
 suite "callhierarchy_handler: handleCallHierarchyModeKey - g followed by special key":
   test "g followed by Escape quits":

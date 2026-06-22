@@ -131,7 +131,7 @@ suite "bookmark_manager_handler: Navigation":
     let result = handleBookmarkManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bkmrHandled
-    check bmState.selectedIndex == bmState.entries.len - 1
+    check bmState.selectedIndex == bmState.items.len - 1
 
   test "Move to first with gg":
     let bmState = createTestBookmarkManagerState()
@@ -150,7 +150,6 @@ suite "bookmark_manager_handler: Navigation":
 
     check result2.kind == bkmrHandled
     check bmState.selectedIndex == 0
-    check bmState.topLine == 0
     check bmState.waitingForG == false
 
   test "Half page down with Ctrl+d":
@@ -163,7 +162,7 @@ suite "bookmark_manager_handler: Navigation":
     let result = handleBookmarkManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bkmrHandled
-    let expectedIndex = min(expectedMove, bmState.entries.len - 1)
+    let expectedIndex = min(expectedMove, bmState.items.len - 1)
     check bmState.selectedIndex == expectedIndex
 
   test "Half page up with Ctrl+u":
@@ -342,6 +341,32 @@ suite "bookmark_manager_handler: Waiting for G State":
     check bmState.waitingForG == false
     check result.kind == bkmrQuit
 
+  test "Waiting for G cancelled when Ctrl-k passes through":
+    let bmState = createTestBookmarkManagerState()
+    bmState.selectedIndex = 2
+
+    # First 'g' starts waiting
+    discard handleBookmarkManagerModeKey(
+      bmState, 24, KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    )
+    check bmState.waitingForG == true
+
+    # Ctrl-k is passed through for window switching; the pending 'gg' must clear.
+    let result = handleBookmarkManagerModeKey(
+      bmState, 24, KeyCombo(isSpecial: false, char: "k", modifiers: {kmCtrl})
+    )
+    check result.kind == bkmrUnhandled
+    check bmState.waitingForG == false
+    check bmState.selectedIndex == 2
+
+    # A later lone 'g' only re-arms gg; it must not jump to the first bookmark.
+    let result2 = handleBookmarkManagerModeKey(
+      bmState, 24, KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    )
+    check result2.kind == bkmrHandled
+    check bmState.waitingForG == true
+    check bmState.selectedIndex == 2
+
 suite "bookmark_manager_handler: Unhandled Keys":
   test "Unhandled special key returns bkmrUnhandled":
     let bmState = createTestBookmarkManagerState()
@@ -381,13 +406,13 @@ suite "bookmark_manager_handler: Edge Cases":
 
   test "Navigation at bottom boundary":
     let bmState = createTestBookmarkManagerState()
-    bmState.selectedIndex = bmState.entries.len - 1
+    bmState.selectedIndex = bmState.items.len - 1
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
     let result = handleBookmarkManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bkmrHandled
-    check bmState.selectedIndex == bmState.entries.len - 1
+    check bmState.selectedIndex == bmState.items.len - 1
 
   test "G with empty entries":
     let bmState = newBookmarkManagerState()
@@ -409,20 +434,19 @@ suite "bookmark_manager_handler: Edge Cases":
 
     check result.kind == bkmrHandled
     check bmState.selectedIndex == 0
-    check bmState.topLine == 0
 
-  test "Ctrl+d with viewport height 1":
+  test "Ctrl+d with viewport height 1 is a no-op":
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
-    let viewportHeight = 1 # max(1, 1 div 2) = max(1, 0) = 1
+    let viewportHeight = 1 # 1 div 2 = 0, shared with every other list viewer
 
     let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {kmCtrl})
     let result = handleBookmarkManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bkmrHandled
-    check bmState.selectedIndex == 1 # Move by 1
+    check bmState.selectedIndex == 0 # no move
 
-  test "Ctrl+u with viewport height 1":
+  test "Ctrl+u with viewport height 1 is a no-op":
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 2
     let viewportHeight = 1
@@ -431,14 +455,14 @@ suite "bookmark_manager_handler: Edge Cases":
     let result = handleBookmarkManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bkmrHandled
-    check bmState.selectedIndex == 1 # Move by 1
+    check bmState.selectedIndex == 2 # no move
 
   test "Single entry - j does not move":
     let bmState = newBookmarkManagerState()
     var buf = newTextBuffer("only line")
     buf.toggleBookmark(0)
     bmState.updateEntries(@[buf])
-    check bmState.entries.len == 1
+    check bmState.items.len == 1
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
     let result = handleBookmarkManagerModeKey(bmState, 24, keyCombo)
@@ -493,7 +517,7 @@ suite "bookmark_manager_handler: Edge Cases":
     let result = handleBookmarkManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bkmrHandled
-    check bmState.selectedIndex == bmState.entries.len - 1
+    check bmState.selectedIndex == bmState.items.len - 1
 
   test "Ctrl+u at top":
     let bmState = createTestBookmarkManagerState()
