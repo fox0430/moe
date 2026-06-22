@@ -487,10 +487,30 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       discard e.closeWindow()
     return true
   of hrDiffViewerQuit:
-    # Close diff viewer and return to BackupManager
-    e.activeWindow.clearModeState(EditorMode.DiffViewer)
-    e.activeWindow.mode = EditorMode.BackupManager
-    e.setMode(EditorMode.BackupManager)
+    # Close the diff viewer overlay and resume the mode it was opened from.
+    # Take the suspended (mode, modeState) before clearModeState — which clears
+    # any leftover suspension as part of teardown — then re-install it as one
+    # consistent pair. clearModeState restores the swapped buffer and resets the
+    # live variant to mskNone. The selection cursor is re-placed by
+    # syncSelectionCursor on the next render.
+    let activeWin = e.activeWindow
+    let suspended = activeWin.takeSuspendedMode()
+    activeWin.clearModeState(EditorMode.DiffViewer)
+    if suspended.isSome:
+      activeWin.mode = suspended.get.mode
+      activeWin.modeState = suspended.get.modeState
+    else:
+      # Nothing was suspended: fall back to a stateless mode so mode and
+      # modeState stay consistent (a stateful mode left with mskNone state
+      # would make the dispatcher reject every key).
+      activeWin.mode = EditorMode.Normal
+    # Reset cursor/viewport to the top of the restored (small) buffer, mirroring
+    # the diff-entry reset. The diff may have scrolled far past the restored
+    # buffer's length, so this prevents a stale off-screen viewport; the resumed
+    # selection mode re-places the cursor via syncSelectionCursor on render.
+    activeWin.cursor = BufferPosition(line: 0, column: 0)
+    activeWin.viewport.topLine = 0
+    activeWin.viewport.leftColumn = 0
     return true
   of hrConfigQuit:
     # Close config mode and return to previous mode
@@ -658,8 +678,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         let entry = bkState.items[backupIndex]
         # Initialize diff viewer with source and backup paths
         let dvState = initDiffViewerState(bkState.sourceFilePath, entry.fullPath)
-        # Save original buffer and replace with diff content TextBuffer
+        # Save original buffer and suspend the backup-manager mode, then
+        # replace with diff content. The diff viewer is a transient overlay
+        # over the backup manager; both the swapped buffer and the suspended
+        # (mode, modeState) must be restored on exit.
         activeWin.saveOriginalBuffer()
+        activeWin.suspendMode()
         activeWin.buffer = dvState.createDiffTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.topLine = 0

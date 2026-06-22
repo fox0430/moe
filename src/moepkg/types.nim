@@ -153,6 +153,14 @@ type
     of mskRecentFile: recentFile*: RecentFileModeState
     of mskTerminal: terminal*: TerminalState
 
+  SuspendedMode* = object
+    ## The (mode, modeState) a window held before a transient overlay (the
+    ## DiffViewer opened from the BackupManager) replaced it. Captured on
+    ## overlay entry and restored as one consistent unit on exit, so the
+    ## restored mode and its variant can never desync.
+    mode*: EditorMode
+    modeState*: ModeState
+
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
     buffer*: TextBuffer
@@ -171,6 +179,10 @@ type
     originalBuffer*: TextBuffer
       # Saved buffer for modes that swap the window buffer (Filer, Terminal,
       # BufferManager, ...). Set on mode entry, restored and cleared on exit.
+    suspendedMode*: Option[SuspendedMode]
+      # The mode suspended by a transient overlay opened from another mode
+      # (DiffViewer opened from BackupManager). Set on overlay entry, restored
+      # and cleared on overlay exit. `none` when no overlay is active.
     fixedWidth*: Option[int] # Fixed width for sidebar windows (skips equalize)
     wrapCountCache*: WrapCountCache
 

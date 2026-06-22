@@ -43,6 +43,26 @@ proc restoreOriginalBufferUnchecked(win: EditorWindow) =
     win.buffer = win.originalBuffer
     win.originalBuffer = nil
 
+proc suspendMode*(win: EditorWindow) =
+  ## Suspend the current (mode, modeState) so a transient overlay (the
+  ## DiffViewer opened from the BackupManager) can resume it on exit. The
+  ## mode-state analogue of `saveOriginalBuffer`; mode and variant are
+  ## captured together so they can never be resumed out of sync.
+  if win.suspendedMode.isSome:
+    addMessageLog(
+      "suspendMode: overwriting existing suspension (mode=" & $win.suspendedMode.get.mode &
+        ") — missing resumeMode upstream?"
+    )
+  win.suspendedMode = some(SuspendedMode(mode: win.mode, modeState: win.modeState))
+
+proc takeSuspendedMode*(win: EditorWindow): Option[SuspendedMode] =
+  ## Remove and return the suspended (mode, modeState), if any. The overlay
+  ## exit path takes the suspension *before* `clearModeState` (which clears any
+  ## leftover suspension as part of teardown) and re-installs it afterward, so
+  ## the live-variant reset can never strand a suspension on the window.
+  result = win.suspendedMode
+  win.suspendedMode = none(SuspendedMode)
+
 proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
   ## Restore the saved buffer (if any) for modes that replace the window
   ## buffer on entry. No-op when the live ModeState variant does not match
@@ -54,11 +74,11 @@ proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
   win.restoreOriginalBufferUnchecked()
 
 proc clearModeState*(win: EditorWindow, mode: EditorMode) =
-  ## Restore the original buffer (if any), run mode-specific cleanup, and
-  ## reset the `modeState` variant back to `mskNone`. All side effects
-  ## are gated on the variant actually matching `mode`, so callers that
-  ## clear an unrelated mode do not disturb whatever state happens to be
-  ## live on the window.
+  ## Restore the original buffer (if any), run mode-specific cleanup, reset the
+  ## `modeState` variant back to `mskNone`, and drop any overlay suspension.
+  ## All side effects are gated on the variant actually matching `mode`, so
+  ## callers that clear an unrelated mode do not disturb whatever state happens
+  ## to be live on the window.
   if win.modeState.kind != modeStateKind(mode):
     return
 
@@ -74,6 +94,12 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
     win.fixedWidth = none(int)
 
   win.modeState = ModeState(kind: mskNone)
+
+  # Drop any overlay suspension belonging to the mode being torn down so it
+  # can't strand on the window. The overlay-exit path takes the suspension
+  # beforehand (takeSuspendedMode), so this only fires for non-resume exits
+  # (window close, buffer/tab switch, ...).
+  win.suspendedMode = none(SuspendedMode)
 
   # Terminal owns a PTY that must be cleaned up before the ref is dropped.
   if term != nil:
