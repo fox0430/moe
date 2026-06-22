@@ -19,7 +19,7 @@
 
 ## Window split and buffer management procedures
 
-import std/options
+import std/[options, os]
 
 import pkg/results
 
@@ -29,7 +29,9 @@ import
   render_utils,
   editorconfig_helper,
   editor_window_layout,
-  editor_lsp
+  editor_lsp,
+  git_diff,
+  git_conflict
 
 # Window state management procedures
 
@@ -123,6 +125,27 @@ proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
 
 # Window split procedures
 
+proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
+  ## Per-buffer initialisation shared by every freshly loaded file regardless of
+  ## how it is opened: `:e`, the FileTree opener and no-split startup go through
+  ## `loadOrCreateBuffer`, while `:vsplit file`/`:split file` and auto-split
+  ## startup go through `registerSplitBuffer`. Restore persisted bookmarks, seed
+  ## the git-diff gutter, scan conflict markers and announce the document to the
+  ## language server so a file looks identical whichever path reaches it.
+  ## Cursor restore is intentionally omitted: it is handled per window (the
+  ## window manager seeds the split cursor, loadFile restores the first file's).
+  if buf.filePath.isSome:
+    let absPath = absolutePath(buf.filePath.get)
+    if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
+      buf.bookmarks = e.savedBookmarks[absPath]
+    if e.state.display.showGitDiff:
+      discard updateBufferWithGitDiff(buf, useBuffer = false)
+  # Scan conflict markers regardless of the highlight config (like loadFile) so
+  # conflict-navigation works as soon as this buffer becomes active.
+  buf.refreshConflicts()
+  # Announce the new document to the language server.
+  e.openBufferWithLsp(buf)
+
 proc registerSplitBuffer(
     e: Editor, newBuffer: TextBuffer, applyConfig: bool, context: string
 ) =
@@ -138,12 +161,12 @@ proc registerSplitBuffer(
   # Apply EditorConfig settings to the new buffer
   if applyConfig:
     applyEditorConfigToBuffer(newBuffer, e.config)
-    # A freshly loaded split file: announce it to the LSP (didOpen) like
-    # loadOrCreateBuffer does, so split-opened files — including the
-    # auto-split multi-file startup path — are visible to the language
-    # server. WithBuffer splits (applyConfig = false) show an existing or
-    # synthetic buffer and must not re-open it.
-    e.openBufferWithLsp(newBuffer)
+    # A freshly loaded split file: give it the same per-buffer setup
+    # (bookmarks, git diff, conflict markers, LSP didOpen) as loadOrCreateBuffer
+    # so split-opened files — including the auto-split multi-file startup path —
+    # look identical to no-split startup. WithBuffer splits (applyConfig = false)
+    # show an existing or synthetic buffer and must not re-initialise it.
+    e.initLoadedBuffer(newBuffer)
   logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
 
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =

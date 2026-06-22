@@ -724,6 +724,48 @@ indent_size = 4
     check newBuffer in e.buffers
     check newBuffer.editorConfig.isNone
 
+  const conflictContent =
+    "line before\n" & "<<<<<<< HEAD\n" & "ours\n" & "=======\n" & "theirs\n" &
+    ">>>>>>> feature\n" & "line after\n"
+
+  test "applyConfig = true scans conflict markers on the new buffer":
+    # The split startup path must give freshly loaded files the same per-buffer
+    # setup as no-split startup, so conflict navigation works immediately.
+    let e = createTestEditor()
+    e.state.display.showGitDiff = false
+    let newBuffer =
+      newTextBuffer(conflictContent, some(getTempDir() / "moe_split_conflict.txt"))
+
+    e.registerSplitBuffer(newBuffer, applyConfig = true, context = "test")
+
+    check newBuffer.conflictBlocks.len == 1
+
+  test "applyConfig = true restores persisted bookmarks":
+    let e = createTestEditor()
+    e.state.display.showGitDiff = false
+    e.config.persist.bookmarks = true
+    let testFile = getTempDir() / "moe_split_bookmark.txt"
+    e.savedBookmarks[absolutePath(testFile)] = @[2]
+    let newBuffer = newTextBuffer("a\nb\nc\n", some(testFile))
+
+    e.registerSplitBuffer(newBuffer, applyConfig = true, context = "test")
+
+    check newBuffer.bookmarks == @[2]
+
+  test "applyConfig = false leaves conflict markers and bookmarks untouched":
+    # WithBuffer splits show an existing/synthetic buffer that is already set up
+    # elsewhere; the helper must not re-initialise it.
+    let e = createTestEditor()
+    e.config.persist.bookmarks = true
+    let testFile = getTempDir() / "moe_split_noinit.txt"
+    e.savedBookmarks[absolutePath(testFile)] = @[1]
+    let newBuffer = newTextBuffer(conflictContent, some(testFile))
+
+    e.registerSplitBuffer(newBuffer, applyConfig = false, context = "test")
+
+    check newBuffer.conflictBlocks.len == 0
+    check newBuffer.bookmarks.len == 0
+
 suite "applyStartUpScreenSize":
   ## First-render sizing: the startup window layout is built against the
   ## initial default screen size (80x20) before the real terminal size is
