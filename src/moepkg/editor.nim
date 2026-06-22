@@ -586,24 +586,12 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
   e.addBuffer(newBuffer)
 
-  # Mirror loadFile's per-buffer initialisation so files reached via :e, the
-  # FileTree opener and multi-file startup get the same setup as the first file.
-  # Cursor restore is intentionally omitted: these buffers are not the displayed
-  # buffer and a later switch resets the cursor to the top.
-  if newBuffer.filePath.isSome:
-    let absPath = absolutePath(newBuffer.filePath.get)
-    if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
-      newBuffer.bookmarks = e.savedBookmarks[absPath]
-    if e.state.display.showGitDiff:
-      discard updateBufferWithGitDiff(newBuffer, useBuffer = false)
-  # Scan conflict markers regardless of the highlight config (like loadFile) so
-  # conflict-navigation works as soon as this buffer becomes active.
-  newBuffer.refreshConflicts()
-
-  # Announce the new document to the language server. Unlike `loadFile`,
-  # this path is reached by :e, the FileTree opener and multi-file startup,
-  # all of which previously left the buffer invisible to LSP.
-  e.openBufferWithLsp(newBuffer)
+  # Mirror loadFile's per-buffer initialisation (bookmarks, git diff, conflict
+  # markers, LSP didOpen) so files reached via :e, the FileTree opener and
+  # multi-file startup get the same setup as the first file. Shared with the
+  # split startup path (registerSplitBuffer) so the file looks identical however
+  # it is opened.
+  e.initLoadedBuffer(newBuffer)
   ok(newBuffer)
 
 proc editFile*(e: Editor, path: string): Result[(), string] =
