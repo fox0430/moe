@@ -17,12 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, posix]
+import std/[unittest, options, posix, strutils]
 
 import
   ../src/moepkg/[
     editor, editor_window_state, config, types, buffer, modes, help_viewer, diff_viewer,
     buffer_manager, backup_manager, references_viewer, recent_file_mode, debug_viewer,
+    message_log,
   ]
 import ../src/moepkg/terminal/pty
 
@@ -359,6 +360,84 @@ suite "clearModeState":
     win.clearModeState(EditorMode.Normal)
 
     check win.buffer == buf
+
+suite "suspendMode / takeSuspendedMode":
+  test "round-trips a suspended (mode, modeState) across an overlay":
+    # Mirrors the BackupManager -> DiffViewer -> BackupManager flow: suspend the
+    # manager mode, swap in the overlay variant, then take + re-install on exit.
+    let e = createTestEditor()
+    let win = e.activeWindow
+    let bkState = newBackupManagerState()
+    win.mode = EditorMode.BackupManager
+    win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+    win.suspendMode()
+    win.mode = EditorMode.DiffViewer
+    win.modeState = ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
+
+    # The exit path takes the suspension before tearing the overlay down.
+    let suspended = win.takeSuspendedMode()
+    check suspended.isSome
+    # Taking consumes it so it can't be resumed twice.
+    check win.suspendedMode.isNone
+
+    # clearModeState resets the live variant to mskNone (and clears any leftover
+    # suspension, already none here).
+    win.clearModeState(EditorMode.DiffViewer)
+    check win.modeState.kind == mskNone
+
+    # Re-install the taken pair, mirroring hrDiffViewerQuit.
+    win.mode = suspended.get.mode
+    win.modeState = suspended.get.modeState
+    check win.mode == EditorMode.BackupManager
+    check win.modeState.kind == mskBackupManager
+    check win.modeState.backupManager == bkState
+
+  test "clearModeState clears a leftover suspension":
+    # If the overlay is torn down via a path other than the take-before-clear
+    # exit (window close, buffer/tab switch, ...), clearModeState must not
+    # strand the suspension on the window.
+    let e = createTestEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.BackupManager
+    win.modeState =
+      ModeState(kind: mskBackupManager, backupManager: newBackupManagerState())
+    win.suspendMode()
+    win.mode = EditorMode.DiffViewer
+    win.modeState = ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
+
+    win.clearModeState(EditorMode.DiffViewer)
+
+    check win.modeState.kind == mskNone
+    check win.suspendedMode.isNone
+
+  test "takeSuspendedMode returns none when nothing was suspended":
+    let e = createTestEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.Filer
+    win.modeState = ModeState(kind: mskFiler, filer: FilerState())
+
+    check win.takeSuspendedMode().isNone
+
+    check win.mode == EditorMode.Filer
+    check win.modeState.kind == mskFiler
+
+  test "suspendMode warns when overwriting an existing suspension":
+    let e = createTestEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.BackupManager
+    win.modeState =
+      ModeState(kind: mskBackupManager, backupManager: newBackupManagerState())
+    win.suspendMode()
+
+    win.mode = EditorMode.Filer
+    win.modeState = ModeState(kind: mskFiler, filer: FilerState())
+    let logLenBefore = getMessageLog().len
+    win.suspendMode()
+
+    let log = getMessageLog()
+    check log.len == logLenBefore + 1
+    check "suspendMode: overwriting existing suspension" in log[^1]
 
 suite "ModeState variant invariants":
   test "modeStateKind maps every stateful mode":

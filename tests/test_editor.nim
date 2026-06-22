@@ -24,7 +24,7 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
-    render_utils, lsp_service,
+    render_utils, lsp_service, diff_viewer,
   ]
 import ../src/moepkg/command_handlers/[command_mode_handler, handler_result]
 import ../src/moepkg/command_handlers/result_processor
@@ -2208,6 +2208,105 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     check e.windowManager.windows.len == windowCountBefore # window NOT closed
     check e.bufferById(f2Id).isNone
     check e.activeBuffer().id != f2Id
+
+suite "Editor - BackupManager <-> DiffViewer round-trip":
+  # Regression: opening a diff from the backup manager overwrote the window's
+  # modeState with the DiffViewer variant, and quitting the diff reset it to
+  # mskNone instead of restoring the BackupManagerState. The dispatcher then
+  # rejected every key in "BackupManager" mode ("state not initialized"),
+  # leaving the manager inoperable. Suspending/resuming the mode fixes this.
+  test "quitting the diff restores an operable backup manager":
+    let e = createTestEditor()
+    let sourceFile = getTempDir() / "moe_test_bk_diff_src.txt"
+    let backupFile = getTempDir() / "moe_test_bk_diff_bak.txt"
+    writeFile(sourceFile, "line1\nline2\n")
+    writeFile(backupFile, "line1\nchanged\n")
+    defer:
+      removeFile(sourceFile)
+      removeFile(backupFile)
+
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "bak", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+    let win = e.activeWindow
+    win.mode = EditorMode.BackupManager
+    e.setMode(EditorMode.BackupManager)
+    win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+    # Open the diff for the selected backup.
+    discard e.processResult(
+      HandlerResult(kind: hrBackupManagerOpenDiff, diffBackupIndex: 0), e.activeBuffer()
+    )
+    check win.mode == EditorMode.DiffViewer
+    check win.modeState.kind == mskDiffViewer
+
+    # Simulate scrolling deep into a long diff: the cursor/viewport sit far past
+    # the short backup-list buffer's length.
+    win.cursor.line = 50
+    win.cursor.column = 3
+    win.viewport.topLine = 40
+    win.viewport.leftColumn = 5
+
+    # Quit the diff: must land back on the *same* backup manager state. The
+    # selectedIndex carried by that state is what places the cursor at render
+    # time (syncSelectionCursor), so restoring the exact bkState ref is the
+    # meaningful guarantee here; the post-quit `cursor` is a pre-render reset
+    # the user never observes. processResult also drops the diff's stale scroll
+    # position by resetting the viewport to the top.
+    discard e.processResult(HandlerResult(kind: hrDiffViewerQuit), e.activeBuffer())
+    check win.mode == EditorMode.BackupManager
+    check win.modeState.kind == mskBackupManager
+    check win.modeState.backupManager == bkState
+    check win.suspendedMode.isNone
+    check win.viewport.topLine == 0
+    check win.viewport.leftColumn == 0
+
+  test "hrDiffViewerQuit resumes any suspended mode, not just BackupManager":
+    # Manually set up a DiffViewer overlay that suspended Filer mode.
+    let e = createTestEditor()
+    let win = e.activeWindow
+    let origBuf = newTextBuffer("original")
+    let diffBuf = newTextBuffer("diff")
+    win.buffer = diffBuf
+    win.originalBuffer = origBuf
+    win.mode = EditorMode.DiffViewer
+    e.setMode(EditorMode.DiffViewer)
+    win.modeState = ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
+    win.suspendedMode = some(
+      SuspendedMode(
+        mode: EditorMode.Filer,
+        modeState: ModeState(kind: mskFiler, filer: FilerState()),
+      )
+    )
+
+    discard e.processResult(HandlerResult(kind: hrDiffViewerQuit), e.activeBuffer())
+
+    check win.mode == EditorMode.Filer
+    check win.modeState.kind == mskFiler
+    check win.buffer == origBuf
+    check win.suspendedMode.isNone
+
+  test "hrDiffViewerQuit falls back to Normal when nothing was suspended":
+    # When no mode was suspended, the quit must land on a stateless mode whose
+    # modeState is mskNone. It must NOT borrow `previousMode` (a stateful mode
+    # there would leave mode and modeState desynced, reviving the original bug).
+    let e = createTestEditor()
+    let win = e.activeWindow
+    let diffBuf = newTextBuffer("diff")
+    win.buffer = diffBuf
+    win.mode = EditorMode.DiffViewer
+    e.setMode(EditorMode.DiffViewer)
+    win.modeState = ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
+    win.suspendedMode = none(SuspendedMode)
+    e.state.previousMode = EditorMode.BufferManager
+
+    discard e.processResult(HandlerResult(kind: hrDiffViewerQuit), e.activeBuffer())
+
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.suspendedMode.isNone
 
 suite "Editor - Command mode command alias bridge end-to-end (#2597)":
   # Regression: the `keyMappableCommandModeAliases` bridge in

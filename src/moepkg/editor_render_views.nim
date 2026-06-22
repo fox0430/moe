@@ -240,6 +240,12 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     # no-wrap mode regardless of the global lineWrap setting, matching the
     # sidebar / scrollbar gating done above.
     let effectiveLineWrap = e.state.display.lineWrap and window.mode.isFileEditMode
+    # Mirror a selection-list mode's selected index onto the cursor *before* the
+    # viewport pass so the viewport tracks the selection on the same frame
+    # (e.g. resuming a long backup list after closing a diff, where the cursor
+    # would otherwise sit at the top for one frame). No-op for modes whose
+    # modeState isn't a selection list.
+    window.syncSelectionCursor()
     adjustViewportForCursor(
       window.viewport, window.cursor, adjustHeight, textAreaWidth, effectiveLineWrap,
       window.buffer, e.state.display.tabStop, window.wrapCountCache,
@@ -272,16 +278,15 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
         window.mode
 
     # Render based on mode - some special modes support per-window rendering.
-    # Selection-list modes (Filer/Help/managers/viewers) share one path: sync
-    # the mode's selected index onto the window cursor (syncSelectionCursor is
-    # a no-op when modeState doesn't match), then render normally. Config and
-    # Terminal-Input are the only modes that need a dedicated render proc.
+    # Selection-list modes (Filer/Help/managers/viewers) share one path and
+    # render normally; their cursor was already synced from the selected index
+    # before the viewport pass above. Config and Terminal-Input are the only
+    # modes that need a dedicated render proc.
     case renderMode
     of EditorMode.Filer, EditorMode.FileTree, EditorMode.Help, EditorMode.BufferManager,
         EditorMode.BookmarkManager, EditorMode.BackupManager, EditorMode.DiffViewer,
         EditorMode.Debug, EditorMode.References, EditorMode.DocumentSymbol,
         EditorMode.CallHierarchy, EditorMode.RecentFile:
-      window.syncSelectionCursor()
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
