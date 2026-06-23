@@ -23,7 +23,7 @@
 ## Design: Table-driven approach to avoid duplication between building
 ## the item list and applying changes.
 
-import std/[options, strutils]
+import std/[options, strutils, unicode]
 
 import pkg/results
 
@@ -594,19 +594,19 @@ proc startEdit*(state: ConfigModeState) =
   of cvkInt:
     state.editMode = true
     state.editBuffer = $item.intValue
-    state.editCursor = state.editBuffer.len
+    state.editCursor = state.editBuffer.runeLen
   of cvkFloat:
     state.editMode = true
     state.editBuffer = $item.floatValue
-    state.editCursor = state.editBuffer.len
+    state.editCursor = state.editBuffer.runeLen
   of cvkString:
     state.editMode = true
     state.editBuffer = item.stringValue
-    state.editCursor = state.editBuffer.len
+    state.editCursor = state.editBuffer.runeLen
   of cvkColor:
     state.editMode = true
     state.editBuffer = item.colorValue
-    state.editCursor = state.editBuffer.len
+    state.editCursor = state.editBuffer.runeLen
   else:
     discard
 
@@ -666,25 +666,42 @@ proc confirmEdit*(state: ConfigModeState): bool =
     state.cancelEdit()
     return false
 
+# editCursor is a rune (character) index, not a byte offset, so multibyte
+# values (e.g. bookmarkMarker) stay intact while editing. String ops below
+# convert it to a byte offset via runeOffset just before mutating editBuffer.
+
+proc byteOffsetAtCursor(state: ConfigModeState): int =
+  ## Byte offset of the rune at editCursor (or buffer end when at the tail).
+  if state.editCursor >= state.editBuffer.runeLen:
+    state.editBuffer.len
+  else:
+    state.editBuffer.runeOffset(state.editCursor)
+
 proc editInsertChar*(state: ConfigModeState, c: string) =
   ## Insert a character at cursor position in edit buffer
   if not state.editMode:
     return
-  state.editBuffer.insert(c, state.editCursor)
-  state.editCursor.inc
+  state.editBuffer.insert(c, state.byteOffsetAtCursor)
+  state.editCursor += c.runeLen
 
 proc editBackspace*(state: ConfigModeState) =
-  ## Delete character before cursor
+  ## Delete the rune before the cursor
   if not state.editMode or state.editCursor <= 0:
     return
-  state.editBuffer.delete(state.editCursor - 1 ..< state.editCursor)
+  let
+    endByte = state.byteOffsetAtCursor
+    startByte = state.editBuffer.runeOffset(state.editCursor - 1)
+  state.editBuffer.delete(startByte ..< endByte)
   state.editCursor.dec
 
 proc editDelete*(state: ConfigModeState) =
-  ## Delete character at cursor
-  if not state.editMode or state.editCursor >= state.editBuffer.len:
+  ## Delete the rune at the cursor
+  if not state.editMode or state.editCursor >= state.editBuffer.runeLen:
     return
-  state.editBuffer.delete(state.editCursor ..< state.editCursor + 1)
+  let
+    startByte = state.byteOffsetAtCursor
+    endByte = startByte + runeLenAt(state.editBuffer, startByte)
+  state.editBuffer.delete(startByte ..< endByte)
 
 proc editMoveCursorLeft*(state: ConfigModeState) =
   ## Move cursor left in edit buffer
@@ -693,7 +710,7 @@ proc editMoveCursorLeft*(state: ConfigModeState) =
 
 proc editMoveCursorRight*(state: ConfigModeState) =
   ## Move cursor right in edit buffer
-  if state.editMode and state.editCursor < state.editBuffer.len:
+  if state.editMode and state.editCursor < state.editBuffer.runeLen:
     state.editCursor.inc
 
 proc editMoveCursorHome*(state: ConfigModeState) =
@@ -704,7 +721,7 @@ proc editMoveCursorHome*(state: ConfigModeState) =
 proc editMoveCursorEnd*(state: ConfigModeState) =
   ## Move cursor to end of edit buffer
   if state.editMode:
-    state.editCursor = state.editBuffer.len
+    state.editCursor = state.editBuffer.runeLen
 
 proc isEditing*(state: ConfigModeState): bool =
   ## Check if currently in edit mode
