@@ -29,17 +29,10 @@ import pkg/results
 
 import config, color
 
-type
-  ConfigValueKind* = enum
-    ## Types of configuration values
-    cvkBool # true/false
-    cvkInt # integer
-    cvkFloat # floating point
-    cvkString # string
-    cvkColor # theme color (hex or "termDefault")
-    cvkEnum # enumerated value
-    cvkSection # section header (not editable)
+import types/config_mode_types
+export config_mode_types
 
+type
   ## Getter/Setter closures for config values
   BoolGetter = proc(cfg: EditorConfig): bool {.noSideEffect.}
   BoolSetter = proc(cfg: EditorConfig, val: bool)
@@ -81,50 +74,6 @@ type
       discard # Color items are built directly, not via descriptors
     of cvkSection:
       discard
-
-  ConfigItem* = object ## Represents a single configuration item in the list
-    displayName*: string
-    section*: string
-    depth*: int # Indentation depth (0 for section, 1 for item)
-    descriptorIndex*: int # Index into descriptor table (-1 for sections)
-    case kind*: ConfigValueKind
-    of cvkBool:
-      boolValue*: bool
-    of cvkInt:
-      intValue*: int
-      intMin*: int
-      intMax*: int
-    of cvkFloat:
-      floatValue*: float
-      floatMin*: float
-      floatMax*: float
-      floatStep*: float
-    of cvkString:
-      stringValue*: string
-    of cvkEnum:
-      enumValue*: string
-      enumOptions*: seq[string]
-    of cvkColor:
-      colorIndex*: EditorColorPairIndex
-      colorIsFg*: bool
-      colorValue*: string # current value as "#rrggbb" or "termDefault"
-    of cvkSection:
-      discard
-
-  ConfigModeState* = ref object ## State for the configuration mode UI
-    items*: seq[ConfigItem] # All configuration items
-    selectedIndex*: int # Index in items
-    topLine*: int # Scroll position
-    editMode*: bool # Whether we're editing a value (Int/String)
-    editBuffer*: string # Buffer for editing text
-    editCursor*: int # Cursor position in edit buffer
-    enumPopupOpen*: bool # Whether enum selection popup is open
-    enumPopupIndex*: int # Selected index in enum popup
-    searchQuery*: string # Active search query ("" when no search)
-    searchStartIndex*: int # Selection index when the current search began
-    config*: EditorConfig # Reference to the config being edited
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
-    lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
 
 # Theme color entries that only have a background (no foreground).
 const ColorBgOnlyEntries* =

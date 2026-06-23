@@ -37,7 +37,7 @@ import
   types/backup_manager_types,
   types/diff_viewer_types,
   types/debug_viewer_types,
-  config_mode,
+  types/config_mode_types,
   types/references_viewer_types,
   types/documentsymbol_viewer_types,
   types/callhierarchy_viewer_types,
@@ -53,7 +53,7 @@ export
   buffer.LineMarkerKind, registers, command_completion_types, filer_types,
   filetree_types, log_viewer, help_viewer_types, buffer_manager_types,
   bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
-  config_mode, references_viewer_types, documentsymbol_viewer_types,
+  config_mode_types, references_viewer_types, documentsymbol_viewer_types,
   callhierarchy_viewer_types, hover_popup, notification_popup, primitives,
   syntax_checker_types, recent_file_mode_types, terminal_mode, config.BracketSplitMode
 
