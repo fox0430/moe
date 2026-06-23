@@ -39,6 +39,16 @@ proc createTestBuffer(): Buffer =
   result = newBuffer(80, 24)
   result.area = Rect(x: 0, y: 0, width: 80, height: 24)
 
+proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
+  ## Test shim preserving the pre-M16 call shape. The render pipeline split the
+  ## former renderSplitView(wasResized) into a state-advancement pass
+  ## (advanceLayoutForFrame: resize, viewport scroll, selection-cursor sync,
+  ## screen cursor) followed by a read-only paint. Run both, matching what the
+  ## real `render` does. Resolves by arity: the 3-arg form is this shim; the
+  ## inner 2-arg call is the real (paint-only) renderSplitView.
+  e.advanceLayoutForFrame(buffer, wasResized)
+  e.renderSplitView(buffer)
+
 suite "updateViewportSize - Basic behavior":
   test "Update screenSize from buffer area":
     let e = createTestEditor()
@@ -283,6 +293,7 @@ suite "renderBottomLines - Normal mode":
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Test status message"
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Render empty status message":
@@ -294,6 +305,7 @@ suite "renderBottomLines - Normal mode":
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = ""
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Render multi-line status message":
@@ -305,6 +317,7 @@ suite "renderBottomLines - Normal mode":
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Line 1\nLine 2\nLine 3"
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
 suite "renderBottomLines - Command mode":
@@ -318,6 +331,7 @@ suite "renderBottomLines - Command mode":
     e.state.input.commandText = ":write"
     e.state.input.commandCursor = 5 # 0-based after ":", max = runeLen - 1
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Cursor should be positioned at end of command text
@@ -334,6 +348,7 @@ suite "renderBottomLines - Command mode":
     e.state.input.commandText = ":"
     e.state.input.commandCursor = 0
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check e.state.screenCursor.x == 1 # After ":"
@@ -349,6 +364,7 @@ suite "renderBottomLines - Command mode":
     e.state.input.commandText = ":set tabstop=4 shiftwidth=4 expandtab"
     e.state.input.commandCursor = 36 # 0-based after ":", max = runeLen - 1
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check e.state.screenCursor.x == 37
@@ -365,6 +381,7 @@ suite "renderBottomLines - Command mode":
     e.state.input.commandText = ":あいう"
     e.state.input.commandCursor = 3 # After all 3 wide chars
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # ":" = 1 column, "あいう" = 6 columns, total = 7
@@ -382,6 +399,7 @@ suite "renderBottomLines - Command mode":
     e.state.input.commandText = ":eあb"
     e.state.input.commandCursor = 2 # After "eあ"
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # ":" = 1 column, "eあ" = 3 columns, total = 4
@@ -399,6 +417,7 @@ suite "renderBottomLines - Search mode":
     e.state.input.search.text = "pattern"
     e.state.input.search.cursor = 7
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Cursor at end of search prompt
@@ -415,6 +434,7 @@ suite "renderBottomLines - Search mode":
     e.state.input.search.text = "test"
     e.state.input.search.cursor = 4
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Cursor at end of search prompt
@@ -430,6 +450,7 @@ suite "renderBottomLines - Search mode":
     e.state.enterSearchOverlay(Forward)
     e.state.input.search.text = ""
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check e.state.screenCursor.x == 1 # Just "/"
@@ -444,6 +465,7 @@ suite "renderBottomLines - Rename mode":
     e.viewport.height = 24
     e.state.enterRenameOverlay("newName", 0, 0)
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Cursor at end of rename prompt
@@ -458,6 +480,7 @@ suite "renderBottomLines - Rename mode":
     e.viewport.height = 24
     e.state.enterRenameOverlay("", 0, 0)
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check e.state.screenCursor.x == 8 # "Rename: ".len
@@ -480,6 +503,7 @@ suite "renderBottomLines - Wrapped overlay input":
     e.state.input.commandText = ":" & "a".repeat(80)
     e.state.input.commandCursor = 80 # cursor at end
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Rows 22-23 hold the wrapped input, status line is pushed up to row 21
@@ -500,6 +524,7 @@ suite "renderBottomLines - Wrapped overlay input":
     e.state.input.commandText = ":" & "a".repeat(79)
     e.state.input.commandCursor = 79
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check rowText(buffer, 22, 80) == ":" & "a".repeat(79)
@@ -519,6 +544,7 @@ suite "renderBottomLines - Wrapped overlay input":
     e.state.input.commandText = ":" & "a".repeat(80 * 12)
     e.state.input.commandCursor = 80 * 12
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Area occupies rows 14-23; the first 3 wrap rows are scrolled out
@@ -537,6 +563,7 @@ suite "renderBottomLines - Wrapped overlay input":
     e.state.input.search.text = "x".repeat(85)
     e.state.input.search.cursor = 85
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check rowText(buffer, 22, 80) == "/" & "x".repeat(79)
@@ -553,6 +580,7 @@ suite "renderBottomLines - Wrapped overlay input":
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Line 1\nLine 2\nLine 3"
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check rowText(buffer, 21, 6) == "Line 1"
@@ -570,6 +598,7 @@ suite "renderBottomLines - Status line visibility":
 
     # Single window always renders status line
     check e.windowManager.windows.len == 1
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Render with multi status line disabled":
@@ -581,6 +610,7 @@ suite "renderBottomLines - Status line visibility":
     e.state.mode = EditorMode.Normal
     e.state.display.multiStatusLine = false
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Render with status line merge enabled":
@@ -594,6 +624,7 @@ suite "renderBottomLines - Status line visibility":
     e.viewport.height = 24
     e.state.mode = EditorMode.Normal
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
 suite "renderTempMessages - Basic behavior":
@@ -606,6 +637,7 @@ suite "renderTempMessages - Basic behavior":
     e.state.ui.tempMessages = @[]
 
     # Should return early without crashing
+    e.advanceLayoutForFrame(buffer, false)
     e.renderTempMessages(buffer)
 
   test "Render single temp message":
@@ -616,6 +648,7 @@ suite "renderTempMessages - Basic behavior":
     e.viewport.height = 24
     e.state.ui.tempMessages = @["Jump list entry 1"]
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderTempMessages(buffer)
 
     # Cursor should be at bottom for prompt
@@ -633,6 +666,7 @@ suite "renderTempMessages - Basic behavior":
       "   2    20   10 /path/to/file2.nim", "   3    30   15 /path/to/file3.nim",
     ]
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderTempMessages(buffer)
 
     check e.state.screenCursor.x == 0
@@ -651,6 +685,7 @@ suite "renderTempMessages - Basic behavior":
       messages.add("Message " & $i)
     e.state.ui.tempMessages = messages
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderTempMessages(buffer)
 
     check e.state.screenCursor.y == buffer.area.height - 1
@@ -664,6 +699,7 @@ suite "renderTempMessages - Basic behavior":
     e.state.ui.tempMessages =
       @["File: /home/user/file.nim", "Unicode: こんにちは", "Symbols: <>&\"'"]
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderTempMessages(buffer)
 
 suite "renderSplitView - Viewport adjustment":
@@ -832,6 +868,7 @@ suite "renderBottomLines - Edge cases":
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "x".repeat(200)
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Status message exceeds max lines":
@@ -847,6 +884,7 @@ suite "renderBottomLines - Edge cases":
       lines.add("Line " & $i)
     e.state.statusMessage = lines.join("\n")
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Small buffer height":
@@ -859,6 +897,7 @@ suite "renderBottomLines - Edge cases":
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Status"
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Minimum buffer height":
@@ -870,6 +909,7 @@ suite "renderBottomLines - Edge cases":
     e.viewport.height = 3
     e.state.mode = EditorMode.Normal
 
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
 suite "Integration - Full render cycle":
@@ -888,6 +928,7 @@ suite "Integration - Full render cycle":
     # Full render cycle
     discard e.updateViewportSize(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
   test "Render cycle with mode change":
@@ -900,12 +941,14 @@ suite "Integration - Full render cycle":
     # Normal mode
     e.state.mode = EditorMode.Normal
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Switch to command mode
     e.state.enterCommandOverlay()
     e.state.input.commandText = ":quit"
     e.state.input.commandCursor = 5
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     check e.state.screenCursor.y == buffer.area.height - 1
@@ -921,7 +964,9 @@ suite "Integration - Full render cycle":
 
     discard e.updateViewportSize(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderTempMessages(buffer)
 
     check e.state.screenCursor.y == buffer.area.height - 1
@@ -957,6 +1002,7 @@ suite "renderSplitView - Close window cleans up status line":
     # Render with 2 windows (draws separator between them)
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Record the separator Y position (between windows)
@@ -974,6 +1020,7 @@ suite "renderSplitView - Close window cleans up status line":
     # Render after close
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # The old separator Y should now be normal content, not a separator
@@ -996,6 +1043,7 @@ suite "renderSplitView - Close window cleans up status line":
     # Render with 2 windows
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # The top window has a per-window status line at its bottom edge
@@ -1012,6 +1060,7 @@ suite "renderSplitView - Close window cleans up status line":
     # Render after close
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # The old top-window status line Y should now be normal content
@@ -1071,6 +1120,7 @@ suite "renderSplitView - Close window cleans up status line":
     # Render with 2 windows (draws vertical separator)
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Record the separator X position
@@ -1087,6 +1137,7 @@ suite "renderSplitView - Close window cleans up status line":
     # Render after close
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # The old separator X should now be normal content
@@ -1140,6 +1191,7 @@ suite "Status line count - no duplicate status lines":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
@@ -1158,6 +1210,7 @@ suite "Status line count - no duplicate status lines":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
@@ -1179,6 +1232,7 @@ suite "Status line count - no duplicate status lines":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
@@ -1199,6 +1253,7 @@ suite "Status line count - no duplicate status lines":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
@@ -1220,6 +1275,7 @@ suite "Status line count - no duplicate status lines":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
@@ -1239,6 +1295,7 @@ suite "Bottom area - status line and command line share last row":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
@@ -1257,6 +1314,7 @@ suite "Bottom area - status line and command line share last row":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Last row should be the status line (not blank)
@@ -1278,6 +1336,7 @@ suite "Bottom area - status line and command line share last row":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Content area: y=1 (after tab) to y=22 (before status line) = 22 rows
@@ -1304,6 +1363,7 @@ suite "Bottom area - status line and command line share last row":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Command text should be at last row (y=23)
@@ -1325,6 +1385,7 @@ suite "Bottom area - status line and command line share last row":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
@@ -1356,6 +1417,7 @@ suite "Status line - grown area in multiStatusLine mode":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     # Both per-window status lines sit on the pushed-up row 21
@@ -1385,6 +1447,7 @@ suite "Status line - grown area in multiStatusLine mode":
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
+    e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
 
     let positions = statusLineYPositions(buffer)
