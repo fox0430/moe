@@ -18,10 +18,10 @@
 #[############################################################################]#
 
 ## Per-frame pipeline for the editor: background processing (`tick`: LSP, file
-## watching, config reload, autosave, notifications), frame preparation
-## (`prepareFrame`: animation, highlight), and rendering orchestration
-## (`render`, main content + overlay popups). Also the debug-buffer refresher,
-## notification routing, and editor shutdown.
+## watching, config reload, autosave, notifications), per-frame state
+## advancement (`updateForFrame`: animation, highlight, viewport/layout), and a
+## read-only draw (`draw` / `render`, main content + overlay popups). Also the
+## debug-buffer refresher, notification routing, and editor shutdown.
 
 import std/[options, strutils, monotimes, times]
 
@@ -267,7 +267,7 @@ proc tickLsp(e: Editor) =
   e.updateCodeLensCache()
   e.updateDocumentHighlightCache()
   e.updateInlayHintCache()
-  # Note: updateSemanticTokensCache is called in prepareFrame after updateHighlight
+  # Note: updateSemanticTokensCache is called in updateForFrame after updateHighlight
   e.requestSignatureHelpFromLsp()
   e.pollLspCompletion()
   e.pollLspHover()
@@ -325,11 +325,12 @@ proc tick*(e: Editor) =
   e.tickAutoSave()
   e.tickNotifications()
 
-proc prepareFrame(e: Editor, buffer: var Buffer): bool =
-  ## Prepare for rendering: clear buffer, update animations, prepare highlights.
-  ## Returns true if viewport was resized.
-
-  clearBuffer(buffer)
+proc updateForFrame*(e: Editor, buffer: Buffer): bool =
+  ## Advance per-frame editor state: smooth-scroll animation, fold cursor pin,
+  ## matching-paren / current-word, syntax + semantic highlight, viewport size,
+  ## and window layout (viewport scroll, selection-cursor sync, screen cursor).
+  ## No drawing — the draw pass (`draw`) is a read-only projection of the state
+  ## this produces. Returns true if the viewport was resized.
 
   # Update smooth scroll animation
   if e.state.windowDisplay.scrollAnimation.active:
@@ -392,10 +393,12 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     e.updateSemanticTokensCache()
 
   result = e.updateViewportSize(buffer)
+  e.advanceLayoutForFrame(buffer, result)
 
-proc renderMainContent(e: Editor, buffer: var Buffer, wasResized: bool) =
-  ## Render the main editor view (always uses split view since we always have at least one window).
-  e.renderSplitView(buffer, wasResized)
+proc renderMainContent(e: Editor, buffer: var Buffer) =
+  ## Paint the main editor view (always uses split view since we always have at
+  ## least one window). Read-only.
+  e.renderSplitView(buffer)
   e.renderBottomLines(buffer)
   e.renderTempMessages(buffer)
 
@@ -468,15 +471,25 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
     for rect in rects:
       renderNotificationPopup(buffer, rect)
 
+proc draw(e: Editor, buffer: var Buffer) =
+  ## Read-only projection of editor state onto the render buffer. The only state
+  ## writes remaining in the draw are the idempotent, draw-side exceptions of
+  ## Config (cursor placement + its own list scroll via ensureSelectedVisible)
+  ## and Terminal-Input (cursor from the grid), each inline with its specialized
+  ## render; see renderConfig / renderTerminal.
+  clearBuffer(buffer)
+
+  # Always use split view rendering - each window renders based on its own mode
+  e.renderMainContent(buffer)
+
+  e.renderOverlays(buffer)
+
 proc render*(e: Editor, buffer: var Buffer) =
-  ## Main render procedure - orchestrates the rendering of all editor components.
+  ## Main render procedure: background processing (`tick`), per-frame state
+  ## advancement (`updateForFrame`), then a read-only draw (`draw`).
   if buffer.area.width <= 0 or buffer.area.height <= 0:
     return
 
   e.tick()
-  let wasResized = e.prepareFrame(buffer)
-
-  # Always use split view rendering - each window renders based on its own mode
-  e.renderMainContent(buffer, wasResized)
-
-  e.renderOverlays(buffer)
+  discard e.updateForFrame(buffer)
+  e.draw(buffer)

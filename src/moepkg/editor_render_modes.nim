@@ -221,7 +221,12 @@ proc renderConfig*(
         startX + popupX, popupY + popupHeight - 1, bottomBorder, borderStyle
       )
 
-  # Set cursor position and visibility - only visible in edit mode
+  # Set cursor position and visibility - only visible in edit mode.
+  # Note (M16): Config positions its own screen cursor here, inline with its
+  # specialized draw, rather than in advanceLayoutForFrame. This is an idempotent
+  # draw-side exception. The screen-cursor write is gated on no overlay/temp
+  # message being active, since those own the cursor and are placed earlier in
+  # advanceLayoutForFrame (preserving the former draw-order precedence).
   if isEditMode:
     # Position cursor within the edit buffer
     let selectedItem = configState.getSelectedItem()
@@ -229,15 +234,16 @@ proc renderConfig*(
       let item = selectedItem.get
       let indent = item.depth * 2
       let nameWidth = maxNameWidth - item.depth * 2
-      # cursor x = startX + indent + name + " : " + edit cursor position.
-      # editInfo.cursor is a rune index, so convert the buffer prefix to its
-      # display width to keep the cursor aligned with multibyte values.
-      let cursorWidth = displayWidthUpToWithTabs(
-        editInfo.buffer, editInfo.cursor, e.state.display.tabStop
-      )
-      e.state.screenCursor.x = startX + indent + nameWidth + 3 + cursorWidth
-      e.state.screenCursor.y =
-        listStartY + (configState.selectedIndex - configState.topLine)
+      if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
+        # cursor x = startX + indent + name + " : " + edit cursor position.
+        # editInfo.cursor is a rune index, so convert the buffer prefix to its
+        # display width to keep the cursor aligned with multibyte values.
+        let cursorWidth = displayWidthUpToWithTabs(
+          editInfo.buffer, editInfo.cursor, e.state.display.tabStop
+        )
+        e.state.screenCursor.x = startX + indent + nameWidth + 3 + cursorWidth
+        e.state.screenCursor.y =
+          listStartY + (configState.selectedIndex - configState.topLine)
       e.state.cursorVisible = true
   else:
     # Hide cursor when not in edit mode, unless an overlay (command/search) is
@@ -319,10 +325,17 @@ proc renderTerminal*(
       for row in grid.rows ..< maxRows:
         buffer.setString(startX, startY + row, emptyLine, normalStyle())
 
-    # Position cursor at terminal cursor location
+    # Position cursor at terminal cursor location.
+    # Note (M16): Terminal-Input positions its own screen cursor here from the
+    # grid, inline with its specialized draw, rather than in
+    # advanceLayoutForFrame. This is an idempotent draw-side exception. The
+    # screen-cursor write is gated on no overlay/temp message being active, since
+    # those own the cursor and are placed earlier in advanceLayoutForFrame
+    # (preserving the former draw-order precedence).
     if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
-      e.state.screenCursor.x = startX + grid.cursorCol
-      e.state.screenCursor.y = startY + grid.cursorRow
+      if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
+        e.state.screenCursor.x = startX + grid.cursorCol
+        e.state.screenCursor.y = startY + grid.cursorRow
       e.state.cursorVisible = true
     else:
       e.state.cursorVisible = false
