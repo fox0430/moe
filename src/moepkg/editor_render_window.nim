@@ -86,12 +86,12 @@ proc effectiveSearchPattern(state: EditorState): string =
   ## - Command overlay: substitute pattern if present, else last search
   ## - Otherwise: last search
   if state.isSearchOverlay:
-    state.search.text
+    state.input.search.text
   elif state.isCommandOverlay:
-    let subPattern = extractSubstitutePattern(state.commandText)
-    if subPattern.len > 0: subPattern else: state.search.lastText
+    let subPattern = extractSubstitutePattern(state.input.commandText)
+    if subPattern.len > 0: subPattern else: state.input.search.lastText
   else:
-    state.search.lastText
+    state.input.search.lastText
 
 proc newLineStyleContext*(
     e: Editor,
@@ -110,15 +110,15 @@ proc newLineStyleContext*(
       @[]
 
   let searchRanges =
-    if textBuffer != nil and e.state.search.hlsearch and
-        not e.state.search.hlsearchTempDisabled:
+    if textBuffer != nil and e.state.input.search.hlsearch and
+        not e.state.input.search.hlsearchTempDisabled:
       let searchPattern = e.state.effectiveSearchPattern()
       if searchPattern.len > 0:
         let shouldIgnoreCase = shouldIgnoreCase(
-          searchPattern, e.state.search.ignorecase, e.state.search.smartcase
+          searchPattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
         )
         textBuffer.findSearchMatchRanges(
-          lineIndex, searchPattern, shouldIgnoreCase, e.state.search.wholeWord
+          lineIndex, searchPattern, shouldIgnoreCase, e.state.input.search.wholeWord
         )
       else:
         @[]

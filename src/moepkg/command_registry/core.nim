@@ -458,27 +458,27 @@ proc recordJump*(state: EditorState) =
   )
 
   # Don't record if the position is the same as the last jump in the list
-  if state.jumpList.len > 0:
-    let lastPos = state.jumpList[^1]
+  if state.jumpList.list.len > 0:
+    let lastPos = state.jumpList.list[^1]
     if lastPos.bufferId == currentPos.bufferId and lastPos.line == currentPos.line and
         lastPos.column == currentPos.column:
       # Same position as last jump - don't record duplicate
       return
 
   # If we're navigating the jump list, truncate everything after current position
-  if state.jumpListIndex >= 0 and state.jumpListIndex < state.jumpList.len - 1:
-    state.jumpList.setLen(state.jumpListIndex + 1)
+  if state.jumpList.index >= 0 and state.jumpList.index < state.jumpList.list.len - 1:
+    state.jumpList.list.setLen(state.jumpList.index + 1)
 
   # Add new position to the end
-  state.jumpList.add(currentPos)
+  state.jumpList.list.add(currentPos)
 
   # Keep jump list to a reasonable size (100 entries like Vim)
   const MaxJumpListSize = 100
-  while state.jumpList.len > MaxJumpListSize:
-    state.jumpList.delete(0)
+  while state.jumpList.list.len > MaxJumpListSize:
+    state.jumpList.list.delete(0)
 
   # Reset index to indicate we're not navigating the list
-  state.jumpListIndex = -1
+  state.jumpList.index = -1
 
 ## Helper for clipboard operations
 proc getSelectedText*(state: EditorState, buffer: TextBuffer): string =

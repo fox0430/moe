@@ -124,11 +124,11 @@ suite "editor_navigation - openFileAndJumpTo":
       removeFile(testFile)
 
     discard e.editFile(testFile)
-    let initialJumpListLen = e.state.jumpList.len
+    let initialJumpListLen = e.state.jumpList.list.len
 
     discard e.openFileAndJumpTo(testFile, 2, 0)
 
-    check e.state.jumpList.len == initialJumpListLen + 1
+    check e.state.jumpList.list.len == initialJumpListLen + 1
 
   test "Opens different file and jumps to location":
     let e = createTestEditor()
@@ -172,10 +172,10 @@ suite "editor_navigation - Jump list":
 
     # Jump to same position twice
     discard e.openFileAndJumpTo(testFile, 0, 0)
-    let lenAfterFirst = e.state.jumpList.len
+    let lenAfterFirst = e.state.jumpList.list.len
 
     discard e.openFileAndJumpTo(testFile, 0, 0)
-    let lenAfterSecond = e.state.jumpList.len
+    let lenAfterSecond = e.state.jumpList.list.len
 
     # Should not add duplicate
     check lenAfterFirst == lenAfterSecond
@@ -198,7 +198,7 @@ suite "editor_navigation - Jump list":
       discard e.openFileAndJumpTo(testFile, i, 0)
 
     # Jump list should be capped at 100
-    check e.state.jumpList.len <= 100
+    check e.state.jumpList.list.len <= 100
 
 suite "editor_navigation - handleLspLocations":
   test "Returns false and sets message when no locations":
@@ -317,12 +317,12 @@ suite "editor_navigation - addToJumpList":
 
     discard e.editFile(testFile)
     e.cursor = BufferPosition(line: 1, column: 3)
-    let initialLen = e.state.jumpList.len
+    let initialLen = e.state.jumpList.list.len
 
     e.addToJumpList()
 
-    check e.state.jumpList.len == initialLen + 1
-    let lastPos = e.state.jumpList[^1]
+    check e.state.jumpList.list.len == initialLen + 1
+    let lastPos = e.state.jumpList.list[^1]
     check lastPos.line == 1
     check lastPos.column == 3
 
@@ -338,20 +338,20 @@ suite "editor_navigation - addToJumpList":
     e.cursor = BufferPosition(line: 1, column: 3)
 
     e.addToJumpList()
-    let lenAfterFirst = e.state.jumpList.len
+    let lenAfterFirst = e.state.jumpList.list.len
 
     e.addToJumpList()
-    let lenAfterSecond = e.state.jumpList.len
+    let lenAfterSecond = e.state.jumpList.list.len
 
     check lenAfterFirst == lenAfterSecond
 
   test "Resets jump list index after adding":
     let e = createTestEditor()
-    e.state.jumpListIndex = 5
+    e.state.jumpList.index = 5
 
     e.addToJumpList()
 
-    check e.state.jumpListIndex == -1
+    check e.state.jumpList.index == -1
 
 suite "editor_navigation - jumpToLspLocation":
   test "Jumps to location in same file":

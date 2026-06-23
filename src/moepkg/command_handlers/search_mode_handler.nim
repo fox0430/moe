@@ -70,29 +70,30 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
   ## - Updates viewport to follow cursor
   ## - Sets status message (success or failure)
   let shouldIgnoreCase = shouldIgnoreCase(
-    e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
+    e.state.input.search.text, e.state.input.search.ignorecase,
+    e.state.input.search.smartcase,
   )
 
   # Validate regex before searching
-  if compileSearchRegex(e.state.search.text, shouldIgnoreCase).isNone:
-    e.state.statusMessage = "Invalid regex: " & e.state.search.text
+  if compileSearchRegex(e.state.input.search.text, shouldIgnoreCase).isNone:
+    e.state.statusMessage = "Invalid regex: " & e.state.input.search.text
     return false
 
   let activeBuffer = e.activeBuffer()
   let searchResult =
-    if e.state.search.direction == Forward:
-      activeBuffer.findNext(e.state.search.text, e.cursor, shouldIgnoreCase)
+    if e.state.input.search.direction == Forward:
+      activeBuffer.findNext(e.state.input.search.text, e.cursor, shouldIgnoreCase)
     else:
-      activeBuffer.findPrev(e.state.search.text, e.cursor, shouldIgnoreCase)
+      activeBuffer.findPrev(e.state.input.search.text, e.cursor, shouldIgnoreCase)
 
   if searchResult.isSome:
     let pos = searchResult.get
     e.cursor = pos
     e.updateViewportForCursor(pos)
-    e.state.statusMessage = "Found: " & e.state.search.text
+    e.state.statusMessage = "Found: " & e.state.input.search.text
     return true
   else:
-    e.state.statusMessage = "Pattern not found: " & e.state.search.text
+    e.state.statusMessage = "Pattern not found: " & e.state.input.search.text
     return false
 
 proc finalizeSearch(e: Editor) =
@@ -107,39 +108,39 @@ proc finalizeSearch(e: Editor) =
   ## - Re-enable search highlight (hlsearch)
   ## - Transition to Normal mode
   ## - Clear searchText buffer
-  if e.state.search.text.len > 0:
+  if e.state.input.search.text.len > 0:
     # Save search text for n/N commands
-    e.state.search.lastText = e.state.search.text
+    e.state.input.search.lastText = e.state.input.search.text
     # Re-enable highlight for new search
-    e.state.search.hlsearchTempDisabled = false
+    e.state.input.search.hlsearchTempDisabled = false
     # Reset whole word mode (/ and ? are substring searches)
-    e.state.search.wholeWord = false
+    e.state.input.search.wholeWord = false
 
     # Add to search history (avoid duplicates)
     # Remove if already exists in history
-    let searchTextCopy = e.state.search.text
-    for i in countdown(e.state.search.history.high, 0):
-      if e.state.search.history[i] == searchTextCopy:
-        e.state.search.history.delete(i)
+    let searchTextCopy = e.state.input.search.text
+    for i in countdown(e.state.input.search.history.high, 0):
+      if e.state.input.search.history[i] == searchTextCopy:
+        e.state.input.search.history.delete(i)
 
     # Add to beginning of history (most recent first)
-    e.state.search.history.insert(searchTextCopy, 0)
+    e.state.input.search.history.insert(searchTextCopy, 0)
 
     # Limit history size to configured limit
     let historyLimit = e.config.persist.searchHistoryLimit
-    if e.state.search.history.len > historyLimit:
-      e.state.search.history.setLen(historyLimit)
+    if e.state.input.search.history.len > historyLimit:
+      e.state.input.search.history.setLen(historyLimit)
 
     let cfg = e.activeConfigState()
     if cfg != nil:
       # Config mode: commit the query and move the selection to the first match,
       # anchored from where the search started.
-      cfg.setSearchQuery(e.state.search.text)
-      let forward = e.state.search.direction == Forward
-      discard cfg.searchItems(e.state.search.text, cfg.searchStartIndex, forward)
+      cfg.setSearchQuery(e.state.input.search.text)
+      let forward = e.state.input.search.direction == Forward
+      discard cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward)
     else:
       # If incsearch is enabled, cursor is already at the found position
-      if e.state.search.incsearch:
+      if e.state.input.search.incsearch:
         e.updateViewportForCursor(e.cursor)
       else:
         # If incsearch is disabled, perform search now
@@ -149,7 +150,7 @@ proc finalizeSearch(e: Editor) =
       if e.state.mode == EditorMode.Help:
         let window = e.activeWindow
         if window.modeState.kind == mskHelp:
-          window.modeState.help.setSearchQuery(e.state.search.text)
+          window.modeState.help.setSearchQuery(e.state.input.search.text)
       e.syncHelpViewerIndex(e.cursor.line)
 
   # Exit overlay and return to base mode
@@ -175,11 +176,11 @@ proc cancelSearch(e: Editor) =
   let cfg = e.activeConfigState()
   if cfg != nil:
     # Config mode: restore the selection that was active before the search.
-    if e.state.search.incsearch:
+    if e.state.input.search.incsearch:
       cfg.selectedIndex = cfg.searchStartIndex
-  elif e.state.search.incsearch:
-    e.cursor = e.state.search.startPos
-    e.syncHelpViewerIndex(e.state.search.startPos.line)
+  elif e.state.input.search.incsearch:
+    e.cursor = e.state.input.search.startPos
+    e.syncHelpViewerIndex(e.state.input.search.startPos.line)
   # Exit overlay and restore base mode
   e.state.exitOverlay()
   e.setMode(e.state.mode) # Sync window mode
@@ -205,42 +206,43 @@ proc performIncrementalSearch(e: Editor) =
   ## - Sets appropriate status message
   ##
   ## This provides real-time feedback as the user types their search query.
-  if not e.state.search.incsearch:
+  if not e.state.input.search.incsearch:
     return
 
   let cfg = e.activeConfigState()
   if cfg != nil:
     # Config mode: live-search the item list from the search start anchor.
-    if e.state.search.text.len == 0:
+    if e.state.input.search.text.len == 0:
       cfg.selectedIndex = cfg.searchStartIndex
     else:
-      let forward = e.state.search.direction == Forward
-      discard cfg.searchItems(e.state.search.text, cfg.searchStartIndex, forward)
+      let forward = e.state.input.search.direction == Forward
+      discard cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward)
     return
 
-  if e.state.search.text.len == 0:
+  if e.state.input.search.text.len == 0:
     return
 
   # Apply smartcase logic to determine if we should ignore case
   let shouldIgnoreCase = shouldIgnoreCase(
-    e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
+    e.state.input.search.text, e.state.input.search.ignorecase,
+    e.state.input.search.smartcase,
   )
 
   # Validate regex - silently ignore invalid patterns during typing
-  if compileSearchRegex(e.state.search.text, shouldIgnoreCase).isNone:
-    e.state.statusMessage = "Invalid regex: " & e.state.search.text
+  if compileSearchRegex(e.state.input.search.text, shouldIgnoreCase).isNone:
+    e.state.statusMessage = "Invalid regex: " & e.state.input.search.text
     return
 
   # Perform search from the original search start position (not current cursor!)
   let activeBuffer = e.activeBuffer()
   let searchResult =
-    if e.state.search.direction == Forward:
+    if e.state.input.search.direction == Forward:
       activeBuffer.findNext(
-        e.state.search.text, e.state.search.startPos, shouldIgnoreCase
+        e.state.input.search.text, e.state.input.search.startPos, shouldIgnoreCase
       )
     else:
       activeBuffer.findPrev(
-        e.state.search.text, e.state.search.startPos, shouldIgnoreCase
+        e.state.input.search.text, e.state.input.search.startPos, shouldIgnoreCase
       )
 
   if searchResult.isSome:
@@ -251,13 +253,13 @@ proc performIncrementalSearch(e: Editor) =
     # Update viewport to follow cursor
     e.updateViewportForCursor(pos)
 
-    e.state.statusMessage = "Found: " & e.state.search.text
+    e.state.statusMessage = "Found: " & e.state.input.search.text
   else:
     # No match found, restore to start position
-    e.cursor = e.state.search.startPos
-    e.syncHelpViewerIndex(e.state.search.startPos.line)
+    e.cursor = e.state.input.search.startPos
+    e.syncHelpViewerIndex(e.state.input.search.startPos.line)
 
-    e.state.statusMessage = "Pattern not found: " & e.state.search.text
+    e.state.statusMessage = "Pattern not found: " & e.state.input.search.text
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Handle character input in Search mode
@@ -269,10 +271,11 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## - Advance cursor past the inserted character
   ## - If incsearch enabled: Trigger incremental search
   ## - Always trigger redraw to update search highlight
-  let bytePos = charToBytePos(e.state.search.text, e.state.search.cursor)
-  e.state.search.text =
-    e.state.search.text[0 ..< bytePos] & ch & e.state.search.text[bytePos ..^ 1]
-  e.state.search.cursor += ch.runeLen
+  let bytePos = charToBytePos(e.state.input.search.text, e.state.input.search.cursor)
+  e.state.input.search.text =
+    e.state.input.search.text[0 ..< bytePos] & ch &
+    e.state.input.search.text[bytePos ..^ 1]
+  e.state.input.search.cursor += ch.runeLen
   e.performIncrementalSearch()
 
 proc insertPastedTextInSearch*(e: Editor, text: string) =
@@ -290,10 +293,11 @@ proc insertPastedTextInSearch*(e: Editor, text: string) =
   if insertText.len == 0:
     return
 
-  let bytePos = charToBytePos(e.state.search.text, e.state.search.cursor)
-  e.state.search.text =
-    e.state.search.text[0 ..< bytePos] & insertText & e.state.search.text[bytePos ..^ 1]
-  e.state.search.cursor += insertText.runeLen
+  let bytePos = charToBytePos(e.state.input.search.text, e.state.input.search.cursor)
+  e.state.input.search.text =
+    e.state.input.search.text[0 ..< bytePos] & insertText &
+    e.state.input.search.text[bytePos ..^ 1]
+  e.state.input.search.cursor += insertText.runeLen
   e.performIncrementalSearch()
 
 proc handleSearchBackspace(e: Editor) =
@@ -306,9 +310,10 @@ proc handleSearchBackspace(e: Editor) =
   ## - Move cursor left by one
   ## - If incsearch enabled: Trigger incremental search with updated text
   ## - Always trigger redraw to update search highlight
-  if e.state.search.cursor > 0:
-    e.state.search.text = e.state.search.text.deleteCharAt(e.state.search.cursor - 1)
-    e.state.search.cursor -= 1
+  if e.state.input.search.cursor > 0:
+    e.state.input.search.text =
+      e.state.input.search.text.deleteCharAt(e.state.input.search.cursor - 1)
+    e.state.input.search.cursor -= 1
     e.performIncrementalSearch()
 
 proc handleSearchModeEvent*(e: Editor, event: Event): bool =
@@ -351,87 +356,90 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
 
   # Up arrow: Navigate to previous (older) search in history
   if keyCombo.isSpecial and keyCombo.special == skUp:
-    if e.state.search.history.len > 0:
+    if e.state.input.search.history.len > 0:
       # If not yet navigating history, start from the most recent entry
-      if e.state.search.historyIndex == -1:
-        e.state.search.historyIndex = 0
+      if e.state.input.search.historyIndex == -1:
+        e.state.input.search.historyIndex = 0
       # Otherwise, move to the next older entry
-      elif e.state.search.historyIndex < e.state.search.history.high:
-        e.state.search.historyIndex += 1
+      elif e.state.input.search.historyIndex < e.state.input.search.history.high:
+        e.state.input.search.historyIndex += 1
 
       # Update search text with history entry
-      e.state.search.text = e.state.search.history[e.state.search.historyIndex]
-      e.state.search.cursor = e.state.search.text.runeLen
+      e.state.input.search.text =
+        e.state.input.search.history[e.state.input.search.historyIndex]
+      e.state.input.search.cursor = e.state.input.search.text.runeLen
       # Trigger incremental search with history entry
       e.performIncrementalSearch()
     return true
 
   # Down arrow: Navigate to next (newer) search in history
   if keyCombo.isSpecial and keyCombo.special == skDown:
-    if e.state.search.history.len > 0 and e.state.search.historyIndex >= 0:
+    if e.state.input.search.history.len > 0 and e.state.input.search.historyIndex >= 0:
       # Move to newer entry
-      if e.state.search.historyIndex > 0:
-        e.state.search.historyIndex -= 1
-        e.state.search.text = e.state.search.history[e.state.search.historyIndex]
-        e.state.search.cursor = e.state.search.text.runeLen
+      if e.state.input.search.historyIndex > 0:
+        e.state.input.search.historyIndex -= 1
+        e.state.input.search.text =
+          e.state.input.search.history[e.state.input.search.historyIndex]
+        e.state.input.search.cursor = e.state.input.search.text.runeLen
         e.performIncrementalSearch()
       else:
         # Reached the newest entry, clear search text
-        e.state.search.historyIndex = -1
-        e.state.search.text = ""
-        e.state.search.cursor = 0
+        e.state.input.search.historyIndex = -1
+        e.state.input.search.text = ""
+        e.state.input.search.cursor = 0
         # Restore position to start if incsearch is enabled
-        if e.state.search.incsearch:
+        if e.state.input.search.incsearch:
           let cfg = e.activeConfigState()
           if cfg != nil:
             cfg.selectedIndex = cfg.searchStartIndex
           else:
-            e.cursor = e.state.search.startPos
-            e.syncHelpViewerIndex(e.state.search.startPos.line)
+            e.cursor = e.state.input.search.startPos
+            e.syncHelpViewerIndex(e.state.input.search.startPos.line)
     return true
 
   # Left arrow: Move cursor left within search text
   if keyCombo.isSpecial and keyCombo.special == skLeft:
-    if e.state.search.cursor > 0:
-      e.state.search.cursor -= 1
+    if e.state.input.search.cursor > 0:
+      e.state.input.search.cursor -= 1
     return true
 
   # Right arrow: Move cursor right within search text
   if keyCombo.isSpecial and keyCombo.special == skRight:
-    if e.state.search.cursor < e.state.search.text.runeLen:
-      e.state.search.cursor += 1
+    if e.state.input.search.cursor < e.state.input.search.text.runeLen:
+      e.state.input.search.cursor += 1
     return true
 
   # Home: Move cursor to start of search text
   if keyCombo.isSpecial and keyCombo.special == skHome:
-    e.state.search.cursor = 0
+    e.state.input.search.cursor = 0
     return true
 
   # End: Move cursor to end of search text
   if keyCombo.isSpecial and keyCombo.special == skEnd:
-    e.state.search.cursor = e.state.search.text.runeLen
+    e.state.input.search.cursor = e.state.input.search.text.runeLen
     return true
 
   # Delete: Remove character at cursor position
   if keyCombo.isSpecial and keyCombo.special == skDelete:
-    if e.state.search.cursor < e.state.search.text.runeLen:
+    if e.state.input.search.cursor < e.state.input.search.text.runeLen:
       # Reset history navigation when user edits
-      e.state.search.historyIndex = -1
-      e.state.search.text = e.state.search.text.deleteCharAt(e.state.search.cursor)
+      e.state.input.search.historyIndex = -1
+      e.state.input.search.text =
+        e.state.input.search.text.deleteCharAt(e.state.input.search.cursor)
       e.performIncrementalSearch()
     return true
 
   # Backspace: Remove last character and re-search
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
     # Reset history navigation when user types
-    e.state.search.historyIndex = -1
+    e.state.input.search.historyIndex = -1
     e.handleSearchBackspace()
     return true
 
   # Character input: Add character and perform incremental search
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     # Reset history navigation when user types
-    e.state.search.historyIndex = -1
+    e.state.input.search.historyIndex = -1
     e.handleSearchCharacterInput(keyCombo.char)
     return true
 

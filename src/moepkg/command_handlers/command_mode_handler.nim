@@ -278,11 +278,11 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## - Pattern only (e.g. ":%s/foo"): jump cursor to first match (incsearch-like)
   ## - Pattern + replacement (e.g. ":%s/foo/bar"): also preview the replacement
   ##   in the buffer when config.highlight.replaceText is enabled.
-  if e.state.commandText.contains("s/"):
-    let pattern = extractSubstitutePattern(e.state.commandText)
+  if e.state.input.commandText.contains("s/"):
+    let pattern = extractSubstitutePattern(e.state.input.commandText)
     let (replacement, hasReplacement) =
-      extractSubstituteReplacement(e.state.commandText)
-    let flags = extractSubstituteFlags(e.state.commandText)
+      extractSubstituteReplacement(e.state.input.commandText)
+    let flags = extractSubstituteFlags(e.state.input.commandText)
     let isGlobal = "g" in flags
     if pattern.len > 0:
       if not e.state.ui.substitutePreview.isActive:
@@ -340,15 +340,17 @@ proc insertPastedTextInCommand*(e: Editor, text: string) =
   if insertText.len == 0:
     return
 
-  e.state.commandState.historyIndex = -1
-  if e.state.commandText.len == 0:
-    e.state.commandText = ":"
-    e.state.commandCursor = 0
+  e.state.input.commandState.historyIndex = -1
+  if e.state.input.commandText.len == 0:
+    e.state.input.commandText = ":"
+    e.state.input.commandCursor = 0
 
-  let bytePos = charToBytePos(e.state.commandText, e.state.commandCursor + 1)
-  e.state.commandText =
-    e.state.commandText[0 ..< bytePos] & insertText & e.state.commandText[bytePos ..^ 1]
-  e.state.commandCursor += insertText.runeLen
+  let bytePos =
+    charToBytePos(e.state.input.commandText, e.state.input.commandCursor + 1)
+  e.state.input.commandText =
+    e.state.input.commandText[0 ..< bytePos] & insertText &
+    e.state.input.commandText[bytePos ..^ 1]
+  e.state.input.commandCursor += insertText.runeLen
 
   e.state.commandCompletionManager.cancelCompletion()
   e.updateSubstitutePreviewIfNeeded()
@@ -441,7 +443,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   # Handle Tab key for command completion
   if keyCombo.isSpecial and (keyCombo.special == skTab or keyCombo.special == skBackTab):
     let mgr = e.state.commandCompletionManager
-    let hasSpace = ' ' in e.state.commandText
+    let hasSpace = ' ' in e.state.input.commandText
 
     proc applyCompletion(): bool =
       ## Apply the selected completion to command text
@@ -452,21 +454,21 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
       case mgr.mode
       of cmCommand:
-        e.state.commandText = ":" & selected
-        e.state.commandCursor = selected.runeLen
+        e.state.input.commandText = ":" & selected
+        e.state.input.commandCursor = selected.runeLen
         return false
       of cmFilePath:
         # Use original directory prefix (saved when completion started)
         let newArg = mgr.originalDirPrefix & selected
-        e.state.commandText = ":" & mgr.baseCommand & " " & newArg
-        e.state.commandCursor = mgr.baseCommand.runeLen + 1 + newArg.runeLen
+        e.state.input.commandText = ":" & mgr.baseCommand & " " & newArg
+        e.state.input.commandCursor = mgr.baseCommand.runeLen + 1 + newArg.runeLen
         # Return true if directory selected (ends with /)
         return selected.endsWith("/")
       of cmSetOption:
         # Replace only the argument part
-        let (cmd, _) = parseCommandLine(e.state.commandText)
-        e.state.commandText = ":" & cmd & " " & selected
-        e.state.commandCursor = cmd.runeLen + 1 + selected.runeLen
+        let (cmd, _) = parseCommandLine(e.state.input.commandText)
+        e.state.input.commandText = ":" & cmd & " " & selected
+        e.state.input.commandCursor = cmd.runeLen + 1 + selected.runeLen
         return false
 
     if kmShift in keyCombo.modifiers or keyCombo.special == skBackTab:
@@ -486,9 +488,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       else:
         # Trigger completion
         if hasSpace:
-          mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+          mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
         else:
-          mgr.triggerCompletion(e.commandLineParser, e.state.commandText)
+          mgr.triggerCompletion(e.commandLineParser, e.state.input.commandText)
     return true
 
   # Handle Enter to execute command
@@ -513,7 +515,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       mgr.cancelCompletion()
       # If directory was confirmed, re-trigger completion for its contents
       if isDir:
-        mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+        mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
         return true
       # If not a no-argument command, wait for more input
       if not shouldExecuteNow:
@@ -528,12 +530,12 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     if e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
 
-    if e.state.commandText.len > 1: # Must have something after :
+    if e.state.input.commandText.len > 1: # Must have something after :
       # Use the command handler with active buffer
       let activeBuffer = e.activeBuffer()
       # Check if the buffer is shared across multiple windows
       let isShared = e.isBufferShared(activeBuffer)
-      let commandToExecute = e.state.commandText
+      let commandToExecute = e.state.input.commandText
       let r = e.handlerManager.handleCommandMode(
         activeBuffer, commandToExecute, isShared, e.activeWindow.cursor.line
       )
@@ -771,16 +773,16 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         of bsoMultipleStatusLine:
           e.setMultiStatusLine(val)
         of bsoIgnoreCase:
-          e.state.search.ignorecase = val
+          e.state.input.search.ignorecase = val
           e.state.statusMessage = "ignorecase = " & $val
         of bsoSmartCase:
-          e.state.search.smartcase = val
+          e.state.input.search.smartcase = val
           e.state.statusMessage = "smartcase = " & $val
         of bsoIncSearch:
-          e.state.search.incsearch = val
+          e.state.input.search.incsearch = val
           e.state.statusMessage = "incsearch = " & $val
         of bsoHlSearch:
-          e.state.search.hlsearch = val
+          e.state.input.search.hlsearch = val
           e.state.statusMessage = "hlsearch = " & $val
         of bsoBuildOnSave:
           e.config.buildOnSave.enable = val
@@ -834,7 +836,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.state.statusMessage = "scrollairdrag = " & $val
       of hrClearSearchHighlight:
         # Handle clear search highlight (:noh)
-        e.state.search.hlsearch = false
+        e.state.input.search.hlsearch = false
       of hrShellCommand:
         # Set pending shell command to be executed by handleEventAsync
         e.state.pending.shellCommand = r.shellCommand
@@ -1192,19 +1194,19 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           )
         generateEditorStateInfo(
           debugLines, e.state.mode, e.state.previousMode, e.activeWindow.cursor.line,
-          e.activeWindow.cursor.column, e.state.commandText, e.state.statusMessage,
-          debugConfig.editorView.enable,
+          e.activeWindow.cursor.column, e.state.input.commandText,
+          e.state.statusMessage, debugConfig.editorView.enable,
         )
         generateSearchInfo(
           debugLines,
-          e.state.search.text,
-          e.state.search.lastText,
-          $e.state.search.direction,
-          e.state.search.history.len,
-          e.state.search.ignorecase,
-          e.state.search.smartcase,
-          e.state.search.incsearch,
-          e.state.search.hlsearch,
+          e.state.input.search.text,
+          e.state.input.search.lastText,
+          $e.state.input.search.direction,
+          e.state.input.search.history.len,
+          e.state.input.search.ignorecase,
+          e.state.input.search.smartcase,
+          e.state.input.search.incsearch,
+          e.state.input.search.hlsearch,
           debugConfig.search.enable,
         )
         generateDisplayInfo(
@@ -1231,7 +1233,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           debugConfig.visual.enable,
         )
         generateJumpListInfo(
-          debugLines, e.state.jumpList.len, e.state.jumpListIndex,
+          debugLines, e.state.jumpList.list.len, e.state.jumpList.index,
           debugConfig.jumpList.enable,
         )
         generateLspInfo(
@@ -1262,14 +1264,14 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         overlayHandled = true
         # Handle jump list command (:ju, :jump)
         # Display jump list temporarily like Vim using tempMessages
-        if e.state.jumpList.len == 0:
+        if e.state.jumpList.list.len == 0:
           e.state.statusMessage = "Jump list is empty"
         else:
           e.state.ui.tempMessages = @[]
           e.state.ui.tempMessages.add(" jump  line  col  file")
-          for i, pos in e.state.jumpList:
-            let marker = if i == e.state.jumpListIndex: ">" else: " "
-            let jumpNum = e.state.jumpList.len - i
+          for i, pos in e.state.jumpList.list:
+            let marker = if i == e.state.jumpList.index: ">" else: " "
+            let jumpNum = e.state.jumpList.list.len - i
             let lineNum = pos.line + 1 # 1-based for display
             let colNum = pos.column + 1 # 1-based for display
             # Get file name from BufferId
@@ -1523,8 +1525,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       e.setMode(e.state.mode) # Sync window mode
 
     # Clear command text and cursor (already done by exitOverlay, but ensure consistency)
-    e.state.commandText = ""
-    e.state.commandCursor = 0
+    e.state.input.commandText = ""
+    e.state.input.commandCursor = 0
 
     # Insert-Normal mode (Ctrl-o): handle mode after the command completes
     if e.state.insertNormalMode:
@@ -1547,132 +1549,138 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # Handle Left arrow - move cursor left
   if keyCombo.isSpecial and keyCombo.special == skLeft:
-    if e.state.commandCursor > 0:
-      e.state.commandCursor -= 1
+    if e.state.input.commandCursor > 0:
+      e.state.input.commandCursor -= 1
       e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Handle Right arrow - move cursor right
   if keyCombo.isSpecial and keyCombo.special == skRight:
     # commandText includes the ":" prefix, so max cursor position is runeLen - 1
-    let maxPos = e.state.commandText.runeLen - 1
-    if e.state.commandCursor < maxPos:
-      e.state.commandCursor += 1
+    let maxPos = e.state.input.commandText.runeLen - 1
+    if e.state.input.commandCursor < maxPos:
+      e.state.input.commandCursor += 1
       e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Handle Backspace - delete character before cursor
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
-    e.state.commandState.historyIndex = -1
-    if e.state.commandCursor > 0 and e.state.commandText.runeLen > 1:
+    e.state.input.commandState.historyIndex = -1
+    if e.state.input.commandCursor > 0 and e.state.input.commandText.runeLen > 1:
       # Delete the character before cursor (commandCursor is 0-based after ":")
-      let pos = e.state.commandCursor # Character position in commandText
-      e.state.commandText = e.state.commandText.deleteCharAt(pos)
-      e.state.commandCursor -= 1
+      let pos = e.state.input.commandCursor # Character position in commandText
+      e.state.input.commandText = e.state.input.commandText.deleteCharAt(pos)
+      e.state.input.commandCursor -= 1
       # Update completion
       let mgr = e.state.commandCompletionManager
-      if ' ' in e.state.commandText:
+      if ' ' in e.state.input.commandText:
         # Argument mode
-        mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+        mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
       elif mgr.isActive():
-        let prefix = extractCommandPrefix(e.state.commandText)
+        let prefix = extractCommandPrefix(e.state.input.commandText)
         mgr.updateFilter(prefix)
       e.updateSubstitutePreviewIfNeeded()
     return true
 
   # Handle Delete - delete character at cursor
   if keyCombo.isSpecial and keyCombo.special == skDelete:
-    let charPos = e.state.commandCursor + 1
+    let charPos = e.state.input.commandCursor + 1
       # Character position in commandText (after ":")
-    if charPos < e.state.commandText.runeLen:
-      e.state.commandText = e.state.commandText.deleteCharAt(charPos)
+    if charPos < e.state.input.commandText.runeLen:
+      e.state.input.commandText = e.state.input.commandText.deleteCharAt(charPos)
       # Update completion
       let mgr = e.state.commandCompletionManager
-      if ' ' in e.state.commandText:
+      if ' ' in e.state.input.commandText:
         # Argument mode
-        mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+        mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
       elif mgr.isActive():
-        let prefix = extractCommandPrefix(e.state.commandText)
+        let prefix = extractCommandPrefix(e.state.input.commandText)
         mgr.updateFilter(prefix)
       e.updateSubstitutePreviewIfNeeded()
     return true
 
   # Handle Home - move cursor to beginning
   if keyCombo.isSpecial and keyCombo.special == skHome:
-    e.state.commandCursor = 0
+    e.state.input.commandCursor = 0
     e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Handle End - move cursor to end
   if keyCombo.isSpecial and keyCombo.special == skEnd:
-    e.state.commandCursor = e.state.commandText.runeLen - 1
+    e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
     e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Up arrow: Navigate to previous (older) command in history
   if keyCombo.isSpecial and keyCombo.special == skUp:
-    if e.state.commandState.history.len > 0:
+    if e.state.input.commandState.history.len > 0:
       # If not yet navigating history, start from the most recent entry
-      if e.state.commandState.historyIndex == -1:
-        e.state.commandState.historyIndex = 0
+      if e.state.input.commandState.historyIndex == -1:
+        e.state.input.commandState.historyIndex = 0
       # Otherwise, move to the next older entry
-      elif e.state.commandState.historyIndex < e.state.commandState.history.high:
-        e.state.commandState.historyIndex += 1
+      elif e.state.input.commandState.historyIndex <
+          e.state.input.commandState.history.high:
+        e.state.input.commandState.historyIndex += 1
 
       # Update command text with history entry
-      e.state.commandText =
-        ":" & e.state.commandState.history[e.state.commandState.historyIndex]
-      e.state.commandCursor = e.state.commandText.runeLen - 1
+      e.state.input.commandText =
+        ":" & e.state.input.commandState.history[
+          e.state.input.commandState.historyIndex
+        ]
+      e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
       e.state.commandCompletionManager.cancelCompletion()
       e.updateSubstitutePreviewIfNeeded()
     return true
 
   # Down arrow: Navigate to next (newer) command in history
   if keyCombo.isSpecial and keyCombo.special == skDown:
-    if e.state.commandState.history.len > 0 and e.state.commandState.historyIndex >= 0:
+    if e.state.input.commandState.history.len > 0 and
+        e.state.input.commandState.historyIndex >= 0:
       # Move to newer entry
-      if e.state.commandState.historyIndex > 0:
-        e.state.commandState.historyIndex -= 1
-        e.state.commandText =
-          ":" & e.state.commandState.history[e.state.commandState.historyIndex]
-        e.state.commandCursor = e.state.commandText.runeLen - 1
+      if e.state.input.commandState.historyIndex > 0:
+        e.state.input.commandState.historyIndex -= 1
+        e.state.input.commandText =
+          ":" &
+          e.state.input.commandState.history[e.state.input.commandState.historyIndex]
+        e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
       else:
         # Reached the newest entry, clear to empty command
-        e.state.commandState.historyIndex = -1
-        e.state.commandText = ":"
-        e.state.commandCursor = 0
+        e.state.input.commandState.historyIndex = -1
+        e.state.input.commandText = ":"
+        e.state.input.commandCursor = 0
       e.state.commandCompletionManager.cancelCompletion()
       e.updateSubstitutePreviewIfNeeded()
     return true
 
   # Handle character input - insert at cursor position
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    e.state.commandState.historyIndex = -1
+    e.state.input.commandState.historyIndex = -1
     # Guard against empty commandText (should have at least ":")
-    if e.state.commandText.len == 0:
-      e.state.commandText = ":"
-      e.state.commandCursor = 0
-    let bytePos = charToBytePos(e.state.commandText, e.state.commandCursor + 1)
-    e.state.commandText =
-      e.state.commandText[0 ..< bytePos] & keyCombo.char &
-      e.state.commandText[bytePos ..^ 1]
-    e.state.commandCursor += 1
+    if e.state.input.commandText.len == 0:
+      e.state.input.commandText = ":"
+      e.state.input.commandCursor = 0
+    let bytePos =
+      charToBytePos(e.state.input.commandText, e.state.input.commandCursor + 1)
+    e.state.input.commandText =
+      e.state.input.commandText[0 ..< bytePos] & keyCombo.char &
+      e.state.input.commandText[bytePos ..^ 1]
+    e.state.input.commandCursor += 1
     # Handle completion
     let mgr = e.state.commandCompletionManager
-    let hasSpace = ' ' in e.state.commandText
+    let hasSpace = ' ' in e.state.input.commandText
     if keyCombo.char == " ":
       # Space is a delimiter - trigger argument completion if applicable
       mgr.cancelCompletion()
-      mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+      mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
     elif hasSpace:
       # In argument mode - always update argument completion
-      mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+      mgr.triggerArgumentCompletion(e.state.input.commandText, getCurrentDir())
     elif mgr.isActive():
-      let prefix = extractCommandPrefix(e.state.commandText)
+      let prefix = extractCommandPrefix(e.state.input.commandText)
       mgr.updateFilter(prefix)
     else:
       # Auto-trigger command completion on first character
-      mgr.triggerCompletion(e.commandLineParser, e.state.commandText)
+      mgr.triggerCompletion(e.commandLineParser, e.state.input.commandText)
     e.updateSubstitutePreviewIfNeeded()
     return true
 

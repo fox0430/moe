@@ -1192,9 +1192,9 @@ suite "Editor - applyConfigSettings syncs display state":
     e.config.standard.incrementalSearch = false
     e.applyConfigSettings(e.config)
 
-    check e.state.search.ignorecase == false
-    check e.state.search.smartcase == false
-    check e.state.search.incsearch == false
+    check e.state.input.search.ignorecase == false
+    check e.state.input.search.smartcase == false
+    check e.state.input.search.incsearch == false
 
 suite "Editor - Config mode changes sync to display via applyConfigSettings":
   test "Config mode toggle number syncs to display":

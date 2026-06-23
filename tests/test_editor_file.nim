@@ -537,11 +537,11 @@ suite "Editor - addCommandToHistory":
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
-    e.state.commandState.history = @[]
+    e.state.input.commandState.history = @[]
 
     e.addCommandToHistory("write")
-    check e.state.commandState.history.len == 1
-    check e.state.commandState.history[0] == "write"
+    check e.state.input.commandState.history.len == 1
+    check e.state.input.commandState.history[0] == "write"
 
   test "Add multiple commands to history":
     var config = newEditorConfig()
@@ -549,17 +549,17 @@ suite "Editor - addCommandToHistory":
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
-    e.state.commandState.history = @[]
+    e.state.input.commandState.history = @[]
 
     e.addCommandToHistory("first")
     e.addCommandToHistory("second")
     e.addCommandToHistory("third")
 
-    check e.state.commandState.history.len == 3
+    check e.state.input.commandState.history.len == 3
     # Most recent first
-    check e.state.commandState.history[0] == "third"
-    check e.state.commandState.history[1] == "second"
-    check e.state.commandState.history[2] == "first"
+    check e.state.input.commandState.history[0] == "third"
+    check e.state.input.commandState.history[1] == "second"
+    check e.state.input.commandState.history[2] == "first"
 
   test "Skip empty command":
     var config = newEditorConfig()
@@ -567,10 +567,10 @@ suite "Editor - addCommandToHistory":
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
-    e.state.commandState.history = @[]
+    e.state.input.commandState.history = @[]
 
     e.addCommandToHistory("")
-    check e.state.commandState.history.len == 0
+    check e.state.input.commandState.history.len == 0
 
   test "Skip duplicate of last command":
     var config = newEditorConfig()
@@ -578,12 +578,12 @@ suite "Editor - addCommandToHistory":
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
-    e.state.commandState.history = @[]
+    e.state.input.commandState.history = @[]
 
     e.addCommandToHistory("write")
     e.addCommandToHistory("write")
 
-    check e.state.commandState.history.len == 1
+    check e.state.input.commandState.history.len == 1
 
   test "Allow same command if not last":
     var config = newEditorConfig()
@@ -591,13 +591,13 @@ suite "Editor - addCommandToHistory":
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
-    e.state.commandState.history = @[]
+    e.state.input.commandState.history = @[]
 
     e.addCommandToHistory("write")
     e.addCommandToHistory("quit")
     e.addCommandToHistory("write")
 
-    check e.state.commandState.history.len == 3
+    check e.state.input.commandState.history.len == 3
 
   test "Trim history to limit":
     var config = newEditorConfig()
@@ -606,7 +606,7 @@ suite "Editor - addCommandToHistory":
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
-    e.state.commandState.history = @[]
+    e.state.input.commandState.history = @[]
 
     e.addCommandToHistory("cmd1")
     e.addCommandToHistory("cmd2")
@@ -614,11 +614,11 @@ suite "Editor - addCommandToHistory":
     e.addCommandToHistory("cmd4")
     e.addCommandToHistory("cmd5")
 
-    check e.state.commandState.history.len == 3
+    check e.state.input.commandState.history.len == 3
     # Most recent commands should be kept
-    check e.state.commandState.history[0] == "cmd5"
-    check e.state.commandState.history[1] == "cmd4"
-    check e.state.commandState.history[2] == "cmd3"
+    check e.state.input.commandState.history[0] == "cmd5"
+    check e.state.input.commandState.history[1] == "cmd4"
+    check e.state.input.commandState.history[2] == "cmd3"
 
 suite "Editor - updateInputTime":
   test "Update input time":

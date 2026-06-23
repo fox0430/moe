@@ -133,8 +133,8 @@ suite "renderConfig - search highlight gating":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     discard e.setupMatchingConfig()
-    e.state.search.hlsearch = true
-    e.state.search.hlsearchTempDisabled = false
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
 
     e.renderConfig(buffer, e.activeWindow, true, 0)
     check countSearchHighlightCells(buffer) > 0
@@ -143,8 +143,8 @@ suite "renderConfig - search highlight gating":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     let cfg = e.setupMatchingConfig()
-    e.state.search.hlsearch = true
-    e.state.search.hlsearchTempDisabled = false
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
 
     e.renderConfig(buffer, e.activeWindow, true, 0)
     let highlighted = countSearchHighlightCells(buffer)
@@ -159,8 +159,8 @@ suite "renderConfig - search highlight gating":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     discard e.setupMatchingConfig()
-    e.state.search.hlsearch = true
-    e.state.search.hlsearchTempDisabled = true
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = true
 
     e.renderConfig(buffer, e.activeWindow, true, 0)
     check countSearchHighlightCells(buffer) == 0
@@ -169,8 +169,8 @@ suite "renderConfig - search highlight gating":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     discard e.setupMatchingConfig()
-    e.state.search.hlsearch = false
-    e.state.search.hlsearchTempDisabled = false
+    e.state.input.search.hlsearch = false
+    e.state.input.search.hlsearchTempDisabled = false
 
     e.renderConfig(buffer, e.activeWindow, true, 0)
     check countSearchHighlightCells(buffer) == 0

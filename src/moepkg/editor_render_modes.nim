@@ -71,12 +71,12 @@ proc renderConfig*(
   # hlsearch/hlsearchTempDisabled flags as buffer search, so a highlight
   # clear (double-Escape, :noh) in any window/mode hides Config matches too.
   let searchHighlightOn =
-    e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled
+    e.state.input.search.hlsearch and not e.state.input.search.hlsearchTempDisabled
   let searchQuery =
     if not searchHighlightOn:
       ""
     elif e.state.isSearchOverlay():
-      e.state.search.text
+      e.state.input.search.text
     else:
       configState.searchQuery
 

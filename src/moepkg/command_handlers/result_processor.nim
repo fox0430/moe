@@ -853,8 +853,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     let commandText = ":" & r.execCommandText
     let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
     for i in 0 ..< count:
-      e.state.commandText = commandText
-      e.state.commandCursor = commandText.len
+      e.state.input.commandText = commandText
+      e.state.input.commandCursor = commandText.len
       let continueRunning = e.handleCommandModeKeyCombo(enterKey)
       if not continueRunning:
         return false
@@ -896,7 +896,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.enterCommandOverlay()
     of okSearch:
       # Search mode needs direction from search state (already set by handler)
-      e.state.enterSearchOverlay(e.state.search.direction)
+      e.state.enterSearchOverlay(e.state.input.search.direction)
     of okRename:
       e.state.enterRenameOverlay(
         e.state.renameState.originalWord, e.state.renameState.cursorLine,

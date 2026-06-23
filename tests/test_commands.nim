@@ -265,7 +265,7 @@ suite "CommandExecutor - Execute Command String":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.commandText = "some command"
+    state.input.commandText = "some command"
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
@@ -274,7 +274,7 @@ suite "CommandExecutor - Execute Command String":
     let result = exec.execute("motion.left")
 
     if result.isOk:
-      check state.commandText == ""
+      check state.input.commandText == ""
 
 suite "CommandExecutor - Keybinding Execution":
   test "Execute keybinding with motion command":

@@ -143,14 +143,15 @@ proc addCommandToHistory*(e: Editor, command: string) =
   if command.len == 0:
     return
   # Skip if same as last entry
-  if e.state.commandState.history.len > 0 and e.state.commandState.history[0] == command:
+  if e.state.input.commandState.history.len > 0 and
+      e.state.input.commandState.history[0] == command:
     return
   # Add to beginning (most recent first)
-  e.state.commandState.history.insert(command, 0)
+  e.state.input.commandState.history.insert(command, 0)
   # Trim to limit
   let limit = e.config.persist.commandHistoryLimit
-  if e.state.commandState.history.len > limit:
-    e.state.commandState.history.setLen(limit)
+  if e.state.input.commandState.history.len > limit:
+    e.state.input.commandState.history.setLen(limit)
 
 proc savePersistData*(e: Editor) =
   ## Save all persist data (search history, command history, cursor positions)
@@ -158,15 +159,16 @@ proc savePersistData*(e: Editor) =
 
   if e.config.persist.search:
     # Save search history
-    let r =
-      saveSearchHistory(e.state.search.history, e.config.persist.searchHistoryLimit)
+    let r = saveSearchHistory(
+      e.state.input.search.history, e.config.persist.searchHistoryLimit
+    )
     if r.isErr:
       logError("editor", "Failed to save search history: " & r.error)
 
   if e.config.persist.commandHistory:
     # Save command history
     let r = saveCommandHistory(
-      e.state.commandState.history, e.config.persist.commandHistoryLimit
+      e.state.input.commandState.history, e.config.persist.commandHistoryLimit
     )
     if r.isErr:
       logError("editor", "Failed to save command history: " & r.error)

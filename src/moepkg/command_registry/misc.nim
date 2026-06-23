@@ -248,7 +248,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
   ): Result[(), string] =
     # Apply smartcase logic
     let shouldIgnoreCase = shouldIgnoreCase(
-      searchText, ctx.state.search.ignorecase, ctx.state.search.smartcase
+      searchText, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
     )
 
     # Validate regex
@@ -287,16 +287,16 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Next",
     "Find next occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      if ctx.state.search.lastText.len == 0:
+      if ctx.state.input.search.lastText.len == 0:
         return err("No previous search")
 
       # Record jump before searching
       recordJump(ctx.state)
 
       # Re-enable highlight when using n/N
-      ctx.state.search.hlsearchTempDisabled = false
+      ctx.state.input.search.hlsearchTempDisabled = false
 
-      return executeSearch(ctx, ctx.state.search.lastText, findNext),
+      return executeSearch(ctx, ctx.state.input.search.lastText, findNext),
     0,
     0,
   )
@@ -306,16 +306,16 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Previous",
     "Find previous occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      if ctx.state.search.lastText.len == 0:
+      if ctx.state.input.search.lastText.len == 0:
         return err("No previous search")
 
       # Record jump before searching
       recordJump(ctx.state)
 
       # Re-enable highlight when using n/N
-      ctx.state.search.hlsearchTempDisabled = false
+      ctx.state.input.search.hlsearchTempDisabled = false
 
-      return executeSearch(ctx, ctx.state.search.lastText, findPrev),
+      return executeSearch(ctx, ctx.state.input.search.lastText, findPrev),
     0,
     0,
   )
@@ -565,9 +565,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       recordJump(ctx.state)
 
       # Update last search text and set whole word mode
-      ctx.state.search.lastText = info.word
-      ctx.state.search.hlsearchTempDisabled = false
-      ctx.state.search.wholeWord = true
+      ctx.state.input.search.lastText = info.word
+      ctx.state.input.search.hlsearchTempDisabled = false
+      ctx.state.input.search.wholeWord = true
 
       # Remember original word position to skip it after wrap-around
       let originalWordPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
@@ -575,7 +575,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       # Search from word end position to skip current word
       var searchPos = BufferPosition(line: ctx.cursor.line, column: info.endCol)
       let ignoreCase = shouldIgnoreCase(
-        info.word, ctx.state.search.ignorecase, ctx.state.search.smartcase
+        info.word, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
       )
       var wrapped = false
 
@@ -645,9 +645,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       recordJump(ctx.state)
 
       # Update last search text and set whole word mode
-      ctx.state.search.lastText = info.word
-      ctx.state.search.hlsearchTempDisabled = false
-      ctx.state.search.wholeWord = true
+      ctx.state.input.search.lastText = info.word
+      ctx.state.input.search.hlsearchTempDisabled = false
+      ctx.state.input.search.wholeWord = true
 
       # Remember original word position to skip it after wrap-around
       let originalWordPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
@@ -655,7 +655,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       # Search from word start position to skip current word
       var searchPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
       let ignoreCase = shouldIgnoreCase(
-        info.word, ctx.state.search.ignorecase, ctx.state.search.smartcase
+        info.word, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
       )
       var wrapped = false
 

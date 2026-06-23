@@ -203,13 +203,14 @@ proc searchMatchAndSelect(
 ): NormalModeResult =
   ## Find a search match and enter Visual mode selecting it.
   ## Used by both gn (forward=true) and gN (forward=false).
-  if state.search.lastText.len == 0:
+  if state.input.search.lastText.len == 0:
     return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
-  let searchText = state.search.lastText
-  let ignoreCase =
-    shouldIgnoreCase(searchText, state.search.ignorecase, state.search.smartcase)
-  let wholeWord = state.search.wholeWord
-  state.search.hlsearchTempDisabled = false
+  let searchText = state.input.search.lastText
+  let ignoreCase = shouldIgnoreCase(
+    searchText, state.input.search.ignorecase, state.input.search.smartcase
+  )
+  let wholeWord = state.input.search.wholeWord
+  state.input.search.hlsearchTempDisabled = false
 
   var matchStart =
     findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, wholeWord)
@@ -237,13 +238,14 @@ proc searchMatchAndOperate(
     buffer: TextBuffer, state: EditorState, forward: bool, op: PendingOperator
 ): NormalModeResult =
   ## Find a search match and apply an operator (delete/change/yank) to it.
-  if state.search.lastText.len == 0:
+  if state.input.search.lastText.len == 0:
     return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
-  let searchText = state.search.lastText
-  let ignoreCase =
-    shouldIgnoreCase(searchText, state.search.ignorecase, state.search.smartcase)
-  let wholeWord = state.search.wholeWord
-  state.search.hlsearchTempDisabled = false
+  let searchText = state.input.search.lastText
+  let ignoreCase = shouldIgnoreCase(
+    searchText, state.input.search.ignorecase, state.input.search.smartcase
+  )
+  let wholeWord = state.input.search.wholeWord
+  state.input.search.hlsearchTempDisabled = false
 
   var matchStart =
     findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, wholeWord)
@@ -327,22 +329,22 @@ proc handleModeSwitchToOverlay*(
   case overlay
   of okCommand:
     # Initialize command mode state
-    state.commandText = ":"
-    state.commandCursor = 0 # Cursor starts after the ":"
+    state.input.commandText = ":"
+    state.input.commandCursor = 0 # Cursor starts after the ":"
     return NormalModeResult(kind: nmrHandled, overlayTransition: some(okCommand))
   of okSearch:
     # Initialize search mode state
-    state.search.text = ""
-    state.search.cursor = 0
+    state.input.search.text = ""
+    state.input.search.cursor = 0
     # Save current cursor position for incsearch cancellation
-    state.search.startPos = state.cursor
+    state.input.search.startPos = state.cursor
     # Set search direction based on command name
     if commandName == "switch-to-search-backward":
-      state.search.direction = Backward
+      state.input.search.direction = Backward
     else:
-      state.search.direction = Forward
+      state.input.search.direction = Forward
     # Reset history navigation index
-    state.search.historyIndex = -1
+    state.input.search.historyIndex = -1
     return NormalModeResult(kind: nmrHandled, overlayTransition: some(okSearch))
   of okRename:
     # Rename mode is entered through LSP rename command, not mode switch
@@ -567,8 +569,8 @@ proc handleNormalModeKey*(
           # @: - repeat last Command mode command
           state.macroState.waitingForRegister = false
           state.macroState.commandType = ""
-          if state.commandState.history.len > 0:
-            let lastCmd = state.commandState.history[0]
+          if state.input.commandState.history.len > 0:
+            let lastCmd = state.input.commandState.history[0]
             return NormalModeResult(
               kind: nmrExecCommand, execCommandText: lastCmd, execCommandCount: count
             )
@@ -818,22 +820,22 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrHandled)
     of "jump.back":
       # Ctrl-o - Jump to previous position in jump list
-      if state.jumpList.len == 0:
+      if state.jumpList.list.len == 0:
         return NormalModeResult(kind: nmrError, errorMessage: "Jump list is empty")
 
       # If this is the first jump back, record current position and start from end
-      if state.jumpListIndex < 0:
+      if state.jumpList.index < 0:
         let currentPos = JumpPosition(
           bufferId: state.windowDisplay.currentBufferId,
           line: state.cursor.line,
           column: state.cursor.column,
         )
-        state.jumpList.add(currentPos)
-        state.jumpListIndex = state.jumpList.len - 2
+        state.jumpList.list.add(currentPos)
+        state.jumpList.index = state.jumpList.list.len - 2
       else:
-        state.jumpListIndex = max(0, state.jumpListIndex - 1)
+        state.jumpList.index = max(0, state.jumpList.index - 1)
 
-      let pos = state.jumpList[state.jumpListIndex]
+      let pos = state.jumpList.list[state.jumpList.index]
 
       # Check if we need to switch buffers
       if pos.bufferId != state.windowDisplay.currentBufferId:
@@ -848,16 +850,16 @@ proc handleNormalModeKey*(
       return handler.updateCursorToJumpPosition(buffer, state, pos)
     of "jump.forward":
       # Ctrl-i - Jump to next position in jump list
-      if state.jumpList.len == 0 or state.jumpListIndex < 0:
+      if state.jumpList.list.len == 0 or state.jumpList.index < 0:
         return NormalModeResult(kind: nmrError, errorMessage: "No newer jump position")
 
-      if state.jumpListIndex >= state.jumpList.len - 1:
+      if state.jumpList.index >= state.jumpList.list.len - 1:
         return NormalModeResult(
           kind: nmrError, errorMessage: "Already at newest jump position"
         )
 
-      state.jumpListIndex = state.jumpListIndex + 1
-      let pos = state.jumpList[state.jumpListIndex]
+      state.jumpList.index = state.jumpList.index + 1
+      let pos = state.jumpList.list[state.jumpList.index]
 
       # Check if we need to switch buffers
       if pos.bufferId != state.windowDisplay.currentBufferId:
@@ -923,8 +925,8 @@ proc handleNormalModeKey*(
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       elif registerChar == ':':
         # @: - repeat last Command mode command
-        if state.commandState.history.len > 0:
-          let lastCmd = state.commandState.history[0]
+        if state.input.commandState.history.len > 0:
+          let lastCmd = state.input.commandState.history[0]
           return NormalModeResult(
             kind: nmrExecCommand, execCommandText: lastCmd, execCommandCount: count
           )

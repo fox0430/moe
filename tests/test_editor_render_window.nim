@@ -1858,9 +1858,9 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
 suite "getSelectionStyle - Search highlight":
   test "Returns search highlight style when search matches":
     let e = createTestEditor()
-    e.state.search.hlsearch = true
-    e.state.search.hlsearchTempDisabled = false
-    e.state.search.lastText = "hello"
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.lastText = "hello"
     e.state.mode = EditorMode.Normal
     e.state.display.showSyntax = false
     e.state.display.showCursorLine = false
@@ -1879,8 +1879,8 @@ suite "getSelectionStyle - Search highlight":
 
   test "No search highlight when hlsearch is disabled":
     let e = createTestEditor()
-    e.state.search.hlsearch = false
-    e.state.search.lastText = "hello"
+    e.state.input.search.hlsearch = false
+    e.state.input.search.lastText = "hello"
     e.state.mode = EditorMode.Normal
     e.state.display.showSyntax = false
     e.state.display.showCursorLine = false
@@ -1898,9 +1898,9 @@ suite "getSelectionStyle - Search highlight":
 
   test "No search highlight when hlsearchTempDisabled":
     let e = createTestEditor()
-    e.state.search.hlsearch = true
-    e.state.search.hlsearchTempDisabled = true
-    e.state.search.lastText = "hello"
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = true
+    e.state.input.search.lastText = "hello"
     e.state.mode = EditorMode.Normal
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
