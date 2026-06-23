@@ -253,8 +253,8 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
   ## Request LSP folding ranges and fold the buffer (LSP "fold all").
   ## Manual folds are preserved. When folding is disabled or unsupported the
   ## existing folds are left untouched. If the cursor ends up inside a freshly
-  ## collapsed fold, `prepareFrame` pins it back onto a visible line on the next
-  ## render, so this proc does not adjust the cursor itself.
+  ## collapsed fold, `updateForFrame` pins it back onto a visible line on the
+  ## next render, so this proc does not adjust the cursor itself.
   try:
     if not e.lsp.enabled:
       e.state.statusMessage = "LSP not enabled"
@@ -283,8 +283,8 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
       e.state.statusMessage = "LSP fold failed: " & foldResult.error
       return
 
-    # The cursor may now sit inside a collapsed fold; prepareFrame normalizes it
-    # onto a visible line on the next render, so no cursor fix-up is needed here.
+    # The cursor may now sit inside a collapsed fold; updateForFrame normalizes
+    # it onto a visible line on the next render, so no cursor fix-up is needed.
     let count = foldResult.get
     e.state.statusMessage =
       if count > 0:

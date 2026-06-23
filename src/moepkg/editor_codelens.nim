@@ -759,7 +759,7 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
   ## here; the renderer stays feature-agnostic.
   if e.state.display.showInlayHint:
     # The cache is keyed by file but read per line number, so right after a
-    # buffer switch (before the highlightChanged invalidation in prepareFrame
+    # buffer switch (before the highlightChanged invalidation in updateForFrame
     # runs) it can still hold the previous file's hints. Gate on the owning
     # file once per frame instead of per line.
     let cache = e.state.lspCache.inlayHintCache

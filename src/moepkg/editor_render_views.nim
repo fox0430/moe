@@ -37,6 +37,19 @@ import
   command_completion,
   color
 
+type WindowLayout = object
+  ## Per-frame layout metrics for a window. A pure, idempotent projection of
+  ## window + display state, independent of `viewport.topLine`, so it yields the
+  ## same result whether computed before or after the viewport adjustment.
+  lineNumOffset: int
+  isBottomWindow: bool
+  isActiveWindow: bool
+  reservedLines: int
+  adjustHeight: int
+  textAreaWidth: int
+  effectiveLineWrap: bool
+  renderMode: EditorMode
+
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update screen size from buffer area and return true if resized.
   ## Uses e.screenSize (not e.viewport) to avoid overwriting the active
@@ -185,71 +198,149 @@ proc syncSelectionCursor(window: EditorWindow) =
     return
   window.cursor.column = 0
 
-proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
-  ## Render split window view
+proc computeWindowLayout(
+    e: Editor, window: EditorWindow, i, maxBottomY, tabLineOffset: int
+): WindowLayout =
+  ## Compute a window's layout metrics. Shared by `advanceLayoutForFrame` (to
+  ## feed the viewport pass) and `renderSplitView` (to paint); calling it in both
+  ## phases is cheap and produces identical results.
+  let
+    lineNumOffset =
+      calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers)
+    windowBottomY = window.viewport.y + window.viewport.height
+    isBottomWindow = (windowBottomY == maxBottomY)
+    isActiveWindow = (i == e.windowManager.activeWindowIndex)
+    reservedLines = e.calculateReservedLines(isBottomWindow)
+    # Viewport scrolling (topLine) is persistent state, so it must use the
+    # steady bottom reserve: a transiently grown command-line area (wrapped
+    # overlay input, multi-line status message) would otherwise scroll the view
+    # up and never scroll it back once the area shrinks again.
+    steadyReservedLines =
+      if isBottomWindow:
+        steadyBottomAreaHeight()
+      else:
+        reservedLines
+    adjustHeight = max(1, window.viewport.height - steadyReservedLines - tabLineOffset)
+    sidebarWidth = e.calculateSidebarWidth(window.mode)
+    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    textAreaWidth =
+      max(0, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    # Utility windows (Filer / Help / BufferManager / ...) render in no-wrap mode
+    # regardless of the global lineWrap setting.
+    effectiveLineWrap = e.state.display.lineWrap and window.mode.isFileEditMode
+    # For overlay modes (Command, Search, Rename) over the active window, paint
+    # the underlying base mode as background.
+    renderMode =
+      if isActiveWindow and e.state.hasOverlay: e.state.baseMode else: window.mode
+  WindowLayout(
+    lineNumOffset: lineNumOffset,
+    isBottomWindow: isBottomWindow,
+    isActiveWindow: isActiveWindow,
+    reservedLines: reservedLines,
+    adjustHeight: adjustHeight,
+    textAreaWidth: textAreaWidth,
+    effectiveLineWrap: effectiveLineWrap,
+    renderMode: renderMode,
+  )
 
-  # If terminal was resized, rebuild window layout
+proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
+  ## Advance per-frame window-layout state so the draw pass can be a read-only
+  ## projection: rebuild the layout on resize, sync selection-list cursors,
+  ## adjust each viewport to follow its cursor, and set the screen cursor and
+  ## visibility. Config / Terminal-Input position their own cursor inline with
+  ## their specialized draw (see renderConfig / renderTerminal), so they are
+  ## skipped here.
+
+  # If terminal was resized, rebuild window layout.
   if wasResized and e.screenSize.prevWidth > 0 and e.screenSize.prevHeight > 0 and
       e.screenSize.width > 0 and e.screenSize.height > 0:
-    # Note: cursor is now stored directly in EditorWindow (single source of truth)
-
     e.windowManager.resizeWindows(
       e.screenSize.width, e.screenSize.height, e.screenSize.prevWidth,
       e.screenSize.prevHeight, e.state.display.multiStatusLine,
     )
 
-  # Find the maximum bottom Y coordinate (to determine bottom windows)
-  let maxBottomY = findMaxBottomY(e.windowManager.windows)
+  let
+    maxBottomY = findMaxBottomY(e.windowManager.windows)
+    tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
 
-  # Calculate tab line offset (1 if tab line is shown, 0 otherwise)
-  let tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
-
-  # Render all split windows
   for i, window in e.windowManager.windows:
-    # Calculate line number offset dynamically based on buffer size
-    let lineNumOffset =
-      calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers)
-
-    # Determine if this is a bottom window (needs status line reservation)
-    # A window is a bottom window if its bottom edge is at the maximum bottom Y
-    let
-      windowBottomY = window.viewport.y + window.viewport.height
-      isBottomWindow = (windowBottomY == maxBottomY)
-      isActiveWindow = (i == e.windowManager.activeWindowIndex)
-      reservedLines = e.calculateReservedLines(isBottomWindow)
-      visibleHeight = max(1, window.viewport.height - reservedLines - tabLineOffset)
-      # Viewport scrolling (topLine) is persistent state, so it must use the
-      # steady bottom reserve: a transiently grown command-line area (wrapped
-      # overlay input, multi-line status message) would otherwise scroll the
-      # view up and never scroll it back once the area shrinks again. The
-      # grown area simply covers the bottom content rows for a frame instead,
-      # like Vim.
-      steadyReservedLines =
-        if isBottomWindow:
-          steadyBottomAreaHeight()
-        else:
-          reservedLines
-      adjustHeight =
-        max(1, window.viewport.height - steadyReservedLines - tabLineOffset)
-      sidebarWidth = e.calculateSidebarWidth(window.mode)
-      scrollbarWidth = e.calculateScrollbarWidth(window.mode)
-      textAreaWidth =
-        max(0, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
-
-    # Utility windows (Filer / Help / BufferManager / ...) render in
-    # no-wrap mode regardless of the global lineWrap setting, matching the
-    # sidebar / scrollbar gating done above.
-    let effectiveLineWrap = e.state.display.lineWrap and window.mode.isFileEditMode
+    let layout = e.computeWindowLayout(window, i, maxBottomY, tabLineOffset)
     # Mirror a selection-list mode's selected index onto the cursor *before* the
     # viewport pass so the viewport tracks the selection on the same frame
-    # (e.g. resuming a long backup list after closing a diff, where the cursor
-    # would otherwise sit at the top for one frame). No-op for modes whose
-    # modeState isn't a selection list.
+    # (e.g. resuming a long backup list after closing a diff). No-op for modes
+    # whose modeState isn't a selection list.
     window.syncSelectionCursor()
     adjustViewportForCursor(
-      window.viewport, window.cursor, adjustHeight, textAreaWidth, effectiveLineWrap,
-      window.buffer, e.state.display.tabStop, window.wrapCountCache,
+      window.viewport, window.cursor, layout.adjustHeight, layout.textAreaWidth,
+      layout.effectiveLineWrap, window.buffer, e.state.display.tabStop,
+      window.wrapCountCache,
     )
+
+  # Set screen cursor to active window position.
+  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    # Terminal-Input manages its own screen cursor from the grid; Config
+    # positions it at the edit field. Both do so during the draw, so skip the
+    # standard buffer-cursor calculation that would overwrite them.
+    let
+      isTerminalInput =
+        e.activeWindow.mode == EditorMode.Terminal and
+        e.activeWindow.modeState.kind == mskTerminal and
+        e.activeWindow.modeState.terminal.subMode == tsmInput
+      isConfig = e.activeWindow.mode == EditorMode.Config
+
+    if not isTerminalInput and not isConfig:
+      e.setActiveWindowScreenCursor(e.activeWindow)
+
+    # Set cursor visibility based on mode. Config and Terminal set cursorVisible
+    # in their render functions (the documented draw-side exceptions).
+    case e.activeWindow.mode
+    of EditorMode.Filer:
+      e.state.cursorVisible = e.state.hasOverlay
+    of EditorMode.Config:
+      discard
+    of EditorMode.BufferManager, EditorMode.BookmarkManager, EditorMode.Help,
+        EditorMode.BackupManager, EditorMode.DiffViewer, EditorMode.Debug,
+        EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
+        EditorMode.RecentFile, EditorMode.FileTree:
+      # Show cursor when an overlay (command/search/rename) is active
+      e.state.cursorVisible = e.state.hasOverlay
+    of EditorMode.Terminal:
+      discard
+    else:
+      # Normal, Insert, Visual, etc. - cursor should be visible
+      e.state.cursorVisible = true
+
+  # Screen-cursor override. Higher-priority owners set the cursor last, so the
+  # final precedence is tempMessage > overlay > window (matching the former
+  # draw-order of renderWrappedInput / renderTempMessages). Config / Terminal
+  # defer to these via a guard in their render procs.
+  let width = buffer.area.width
+  if e.state.hasOverlay:
+    let
+      screenBottomY = buffer.area.y + buffer.area.height - 1
+      areaH = min(e.state.commandLineAreaHeight(width), buffer.area.height)
+      areaTopY = screenBottomY - areaH + 1
+      (text, cursorChar) = e.state.overlayInput()
+      (totalRows, cRow, cCol) = wrappedInputGrid(text, cursorChar, width)
+      firstRow = max(0, min(cRow, totalRows - areaH))
+    e.state.screenCursor.x = buffer.area.x + cCol
+    e.state.screenCursor.y = areaTopY + (cRow - firstRow)
+
+  if e.state.ui.tempMessages.len > 0:
+    e.state.screenCursor.x = 0
+    e.state.screenCursor.y = buffer.area.height - 1
+
+proc renderSplitView*(e: Editor, buffer: var Buffer) =
+  ## Paint the split window view. Read-only: viewport scrolling, selection-list
+  ## cursor sync, and screen cursor/visibility are advanced beforehand in
+  ## `advanceLayoutForFrame`; this proc only draws.
+
+  let
+    maxBottomY = findMaxBottomY(e.windowManager.windows)
+    tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+
+  for i, window in e.windowManager.windows:
+    let layout = e.computeWindowLayout(window, i, maxBottomY, tabLineOffset)
 
     # Render tab line for this window if enabled.
     # Resolve the window's per-window tab list (BufferIds) to TextBuffer refs.
@@ -265,48 +356,42 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       renderWindowTabLine(
         buffersToShow, window.buffer, window.mode, buffer, window.viewport.y,
         window.viewport.x, window.viewport.width, e.state.display.showTabLine,
-        isActiveWindow,
+        layout.isActiveWindow,
       )
-
-    # Render window content based on window's mode
-    # Special modes only render when active (they use activeWindow state internally)
-    # For overlay modes (Command, Search, Rename), use the base mode for background rendering
-    let renderMode =
-      if isActiveWindow and e.state.hasOverlay:
-        e.state.baseMode # Use the underlying mode when overlay is active
-      else:
-        window.mode
 
     # Render based on mode - some special modes support per-window rendering.
     # Selection-list modes (Filer/Help/managers/viewers) share one path and
     # render normally; their cursor was already synced from the selected index
-    # before the viewport pass above. Config and Terminal-Input are the only
-    # modes that need a dedicated render proc.
-    case renderMode
+    # in advanceLayoutForFrame. Config and Terminal-Input are the only modes
+    # that need a dedicated render proc.
+    case layout.renderMode
     of EditorMode.Filer, EditorMode.FileTree, EditorMode.Help, EditorMode.BufferManager,
         EditorMode.BookmarkManager, EditorMode.BackupManager, EditorMode.DiffViewer,
         EditorMode.Debug, EditorMode.References, EditorMode.DocumentSymbol,
         EditorMode.CallHierarchy, EditorMode.RecentFile:
       e.renderWindow(
-        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        buffer, window, layout.lineNumOffset, layout.isBottomWindow,
+        layout.isActiveWindow, tabLineOffset,
       )
     of EditorMode.Config:
       # Config supports per-window rendering
-      e.renderConfig(buffer, window, isBottomWindow, tabLineOffset)
+      e.renderConfig(buffer, window, layout.isBottomWindow, tabLineOffset)
     of EditorMode.Terminal:
       # Terminal mode renders grid directly in Input sub-mode,
       # or uses standard window rendering in Normal sub-mode
       if window.modeState.kind == mskTerminal and
           window.modeState.terminal.subMode == tsmInput:
-        e.renderTerminal(buffer, window, isBottomWindow, tabLineOffset)
+        e.renderTerminal(buffer, window, layout.isBottomWindow, tabLineOffset)
       else:
         e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+          buffer, window, layout.lineNumOffset, layout.isBottomWindow,
+          layout.isActiveWindow, tabLineOffset,
         )
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(
-        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        buffer, window, layout.lineNumOffset, layout.isBottomWindow,
+        layout.isActiveWindow, tabLineOffset,
       )
 
     # Render per-window status line if multi-status line mode is enabled
@@ -318,77 +403,37 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       # up by the grown rows; steady state (reservedLines == 1) is unshifted
       # and keeps sharing the bottom row with the command line.
       let statusLineY =
-        if isBottomWindow:
+        if layout.isBottomWindow:
           max(
             window.viewport.y,
-            calculateWindowStatusLineY(window, isBottomWindow) - (reservedLines - 1),
+            calculateWindowStatusLineY(window, layout.isBottomWindow) -
+              (layout.reservedLines - 1),
           )
         else:
-          calculateWindowStatusLineY(window, isBottomWindow)
+          calculateWindowStatusLineY(window, layout.isBottomWindow)
       e.state.renderWindowStatusLine(
         window.buffer, buffer, statusLineY, window.viewport.x, window.viewport.width,
-        isActiveWindow, window.mode, e.config.statusLine,
+        layout.isActiveWindow, window.mode, e.config.statusLine,
       )
 
     # Draw separator between windows (except for last window)
     if i < e.windowManager.windows.len - 1:
       let nextWindow = e.windowManager.windows[i + 1]
-      e.renderWindowSeparator(buffer, window, nextWindow, isBottomWindow)
-
-  # Set cursor to active window position
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Terminal-Input mode manages its own screen cursor from the grid,
-    # so skip the standard cursor calculation that would overwrite it.
-    let isTerminalInput =
-      e.activeWindow.mode == EditorMode.Terminal and
-      e.activeWindow.modeState.kind == mskTerminal and
-      e.activeWindow.modeState.terminal.subMode == tsmInput
-
-    # Config mode positions the cursor itself in renderConfig (at the edit field
-    # while editing, hidden otherwise). The buffer-cursor calculation would
-    # overwrite that and pin the cursor to the top-left, so skip it here too.
-    let isConfig = e.activeWindow.mode == EditorMode.Config
-
-    if not isTerminalInput and not isConfig:
-      e.setActiveWindowScreenCursor(e.activeWindow)
-
-    # Set cursor visibility based on mode
-    # Special modes (Filer, Config, etc.) set cursorVisible in their render functions
-    # Normal modes need cursor visible
-    case e.activeWindow.mode
-    of EditorMode.Filer:
-      e.state.cursorVisible = e.state.hasOverlay
-    of EditorMode.Config:
-      # Config mode sets cursorVisible in renderWindowConfig based on edit state
-      discard
-    of EditorMode.BufferManager, EditorMode.BookmarkManager, EditorMode.Help,
-        EditorMode.BackupManager, EditorMode.DiffViewer, EditorMode.Debug,
-        EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
-        EditorMode.RecentFile, EditorMode.FileTree:
-      # Show cursor when an overlay (command/search/rename) is active
-      e.state.cursorVisible = e.state.hasOverlay
-    of EditorMode.Terminal:
-      # Terminal mode sets cursorVisible in renderTerminal
-      discard
-    else:
-      # Normal, Insert, Visual, etc. - cursor should be visible
-      e.state.cursorVisible = true
+      e.renderWindowSeparator(buffer, window, nextWindow, layout.isBottomWindow)
 
 proc renderWrappedInput(
-    e: Editor,
     buffer: var Buffer,
     areaTopY, areaH, width: int,
     text: string,
     grid: tuple[totalRows, cursorRow, cursorCol: int],
 ) =
-  ## Render overlay input text wrapped across the command-line area and place
-  ## the screen cursor on the wrap grid (precomputed by the caller via
-  ## wrappedInputGrid). When the input exceeds the area (height cap), scrolls
-  ## within the wrap grid keeping the cursor row visible, biased to the tail
-  ## like Vim.
+  ## Render overlay input text wrapped across the command-line area. When the
+  ## input exceeds the area (height cap), scrolls within the wrap grid keeping
+  ## the cursor row visible, biased to the tail like Vim. Read-only: the screen
+  ## cursor is placed in advanceLayoutForFrame from the same wrap grid.
   let
     style = commandStyle()
-    (totalRows, cRow, cCol) = grid
+    (totalRows, cRow, _) = grid
     firstRow = max(0, min(cRow, totalRows - areaH))
 
   if areaH > 1:
@@ -415,9 +460,6 @@ proc renderWrappedInput(
       )
     bytePos = endByte
     row.inc
-
-  e.state.screenCursor.x = buffer.area.x + cCol
-  e.state.screenCursor.y = areaTopY + (cRow - firstRow)
 
 proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   ## Render status line and the command-line area at the bottom of the screen.
@@ -454,7 +496,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     let
       (text, cursorChar) = e.state.overlayInput()
       grid = wrappedInputGrid(text, cursorChar, width)
-    e.renderWrappedInput(buffer, areaTopY, areaH, width, text, grid)
+    renderWrappedInput(buffer, areaTopY, areaH, width, text, grid)
 
     # Render command completion popup if active
     if e.state.isCommandOverlay and e.state.commandCompletionManager.isActive():
@@ -532,10 +574,8 @@ proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   buffer.setString(
     buffer.area.x, promptY, "Press ENTER or type command to continue", commandStyle()
   )
-
-  # Position cursor at the end of the prompt
-  e.state.screenCursor.x = 0
-  e.state.screenCursor.y = promptY
+  # Read-only: the screen cursor for this prompt is placed in
+  # advanceLayoutForFrame.
 
 proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
   ## Render CodeLens picker popup when multiple items are available
