@@ -863,6 +863,115 @@ suite "ConfigMode - Edit buffer manipulation":
     check info.buffer == "test"
     check info.cursor == 2
 
+suite "ConfigMode - Multibyte edit buffer":
+  # editCursor is a rune index. These guard against byte/rune confusion that
+  # corrupted multibyte values (e.g. bookmarkMarker) while editing.
+  proc stringEditState(): ConfigModeState =
+    let cfg = newEditorConfig()
+    result = newConfigModeState(cfg)
+    var strIndex = -1
+    for i, item in result.items:
+      if item.kind == cvkString:
+        strIndex = i
+        break
+    check strIndex >= 0
+    result.selectedIndex = strIndex
+    result.startEdit()
+
+  test "editInsertChar inserts a multibyte rune at the end":
+    let state = stringEditState()
+    state.editBuffer = "あ"
+    state.editCursor = 1
+
+    state.editInsertChar("い")
+    check state.editBuffer == "あい"
+    check state.editCursor == 2
+
+  test "editInsertChar inserts between multibyte runes":
+    let state = stringEditState()
+    state.editBuffer = "あう"
+    state.editCursor = 1
+
+    state.editInsertChar("い")
+    check state.editBuffer == "あいう"
+    check state.editCursor == 2
+
+  test "editInsertChar mixes ascii and multibyte":
+    let state = stringEditState()
+    state.editBuffer = "a日c"
+    state.editCursor = 2
+
+    state.editInsertChar("X")
+    check state.editBuffer == "a日Xc"
+    check state.editCursor == 3
+
+  test "editBackspace deletes a whole multibyte rune":
+    let state = stringEditState()
+    state.editBuffer = "あいう"
+    state.editCursor = 2
+
+    state.editBackspace()
+    check state.editBuffer == "あう"
+    check state.editCursor == 1
+
+  test "editBackspace at end deletes the last multibyte rune":
+    let state = stringEditState()
+    state.editBuffer = "テスト"
+    state.editCursor = 3
+
+    state.editBackspace()
+    check state.editBuffer == "テス"
+    check state.editCursor == 2
+
+  test "editDelete removes a whole multibyte rune at cursor":
+    let state = stringEditState()
+    state.editBuffer = "あいう"
+    state.editCursor = 1
+
+    state.editDelete()
+    check state.editBuffer == "あう"
+    check state.editCursor == 1
+
+  test "editDelete does nothing past the last rune":
+    let state = stringEditState()
+    state.editBuffer = "あい"
+    state.editCursor = 2
+
+    state.editDelete()
+    check state.editBuffer == "あい"
+    check state.editCursor == 2
+
+  test "editMoveCursorRight stops at rune length, not byte length":
+    let state = stringEditState()
+    state.editBuffer = "あい"
+    state.editCursor = 0
+
+    state.editMoveCursorRight()
+    check state.editCursor == 1
+    state.editMoveCursorRight()
+    check state.editCursor == 2
+    state.editMoveCursorRight()
+    check state.editCursor == 2
+
+  test "editMoveCursorEnd uses rune length":
+    let state = stringEditState()
+    state.editBuffer = "あいう"
+    state.editCursor = 0
+
+    state.editMoveCursorEnd()
+    check state.editCursor == 3
+
+  test "edit sequence keeps a multibyte value intact":
+    let state = stringEditState()
+    state.editBuffer = "→"
+    state.editMoveCursorEnd()
+
+    state.editInsertChar("☆")
+    state.editMoveCursorHome()
+    state.editInsertChar("★")
+    check state.editBuffer == "★→☆"
+    check state.editCursor == 1
+
 suite "ConfigMode - Enum popup":
   test "openEnumPopup opens popup for enum item":
     let cfg = newEditorConfig()
