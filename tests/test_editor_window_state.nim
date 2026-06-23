@@ -21,9 +21,9 @@ import std/[unittest, options, posix, strutils]
 
 import
   ../src/moepkg/[
-    editor, editor_window_state, config, types, buffer, modes, help_viewer, diff_viewer,
-    buffer_manager, backup_manager, references_viewer, recent_file_mode, debug_viewer,
-    message_log,
+    editor, editor_window_state, config, config_mode, types, buffer, modes, help_viewer,
+    diff_viewer, buffer_manager, backup_manager, references_viewer, recent_file_mode,
+    debug_viewer, message_log,
   ]
 import ../src/moepkg/terminal/pty
 
