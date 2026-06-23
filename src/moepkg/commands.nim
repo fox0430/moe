@@ -110,8 +110,8 @@ proc execute*(e: CommandExecutor, command: string): Result[(), string] =
   let r = e.commandRegistry.execute(ctx, command)
   if r.isOk:
     e.state.pendingCommand = PendingNone
-    e.state.commandText = ""
-    e.state.commandCursor = 0
+    e.state.input.commandText = ""
+    e.state.input.commandCursor = 0
 
   return r
 

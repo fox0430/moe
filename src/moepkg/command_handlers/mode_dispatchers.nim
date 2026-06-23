@@ -508,59 +508,59 @@ proc handleCommandMode*(
     case keyCombo.special
     of skEscape:
       # Cancel command mode
-      state.commandText = ""
-      state.commandCursor = 0
+      state.input.commandText = ""
+      state.input.commandCursor = 0
       return HandlerResult(
         kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
       )
     of skEnter:
       # Execute the command
-      let commandText = state.commandText
-      state.commandText = ""
-      state.commandCursor = 0
+      let commandText = state.input.commandText
+      state.input.commandText = ""
+      state.input.commandCursor = 0
       return manager.handleCommandMode(buffer, commandText, false, state.cursor.line)
     of skBackspace:
       # Delete character (rune) before cursor - handles unicode properly
-      if state.commandCursor > 1: # Keep the ":" prefix
-        let beforeCursor = state.commandText[0 ..< state.commandCursor]
-        let afterCursor = state.commandText[state.commandCursor ..^ 1]
+      if state.input.commandCursor > 1: # Keep the ":" prefix
+        let beforeCursor = state.input.commandText[0 ..< state.input.commandCursor]
+        let afterCursor = state.input.commandText[state.input.commandCursor ..^ 1]
         # Convert to runes and remove last one
         var runes = beforeCursor.toRunes
         if runes.len > 1: # Keep the ":" prefix
           runes.setLen(runes.len - 1)
           let newBefore = $runes
-          state.commandText = newBefore & afterCursor
-          state.commandCursor = newBefore.len
+          state.input.commandText = newBefore & afterCursor
+          state.input.commandCursor = newBefore.len
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     of skLeft:
       # Move cursor left by one rune (handles unicode properly)
-      if state.commandCursor > 1:
-        let beforeCursor = state.commandText[0 ..< state.commandCursor]
+      if state.input.commandCursor > 1:
+        let beforeCursor = state.input.commandText[0 ..< state.input.commandCursor]
         let runes = beforeCursor.toRunes
         if runes.len > 1: # Keep cursor after ":"
-          state.commandCursor = ($runes[0 ..< runes.len - 1]).len
+          state.input.commandCursor = ($runes[0 ..< runes.len - 1]).len
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     of skRight:
       # Move cursor right by one rune (handles unicode properly)
-      if state.commandCursor < state.commandText.len:
-        let afterCursor = state.commandText[state.commandCursor ..^ 1]
+      if state.input.commandCursor < state.input.commandText.len:
+        let afterCursor = state.input.commandText[state.input.commandCursor ..^ 1]
         let runes = afterCursor.toRunes
         if runes.len > 0:
-          state.commandCursor += ($runes[0]).len
+          state.input.commandCursor += ($runes[0]).len
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     of skHome:
-      state.commandCursor = 1 # After ":"
+      state.input.commandCursor = 1 # After ":"
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     of skEnd:
-      state.commandCursor = state.commandText.len
+      state.input.commandCursor = state.input.commandText.len
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
@@ -569,10 +569,10 @@ proc handleCommandMode*(
   else:
     # Regular character - insert at cursor position
     if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.commandText =
-        state.commandText[0 ..< state.commandCursor] & keyCombo.char &
-        state.commandText[state.commandCursor ..^ 1]
-      state.commandCursor += keyCombo.char.len
+      state.input.commandText =
+        state.input.commandText[0 ..< state.input.commandCursor] & keyCombo.char &
+        state.input.commandText[state.input.commandCursor ..^ 1]
+      state.input.commandCursor += keyCombo.char.len
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
@@ -597,8 +597,8 @@ proc handleSearchMode*(
     case keyCombo.special
     of skEscape:
       # Cancel search mode and restore cursor
-      state.search.text = ""
-      state.cursor = state.search.startPos
+      state.input.search.text = ""
+      state.cursor = state.input.search.startPos
       return HandlerResult(
         kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
       )
@@ -610,11 +610,11 @@ proc handleSearchMode*(
       )
     of skBackspace:
       # Delete last character (rune) - handles unicode properly
-      if state.search.text.len > 0:
-        var runes = state.search.text.toRunes
+      if state.input.search.text.len > 0:
+        var runes = state.input.search.text.toRunes
         if runes.len > 0:
           runes.setLen(runes.len - 1)
-          state.search.text = $runes
+          state.input.search.text = $runes
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
@@ -623,7 +623,7 @@ proc handleSearchMode*(
   else:
     # Regular character - append to search text
     if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.search.text.add(keyCombo.char)
+      state.input.search.text.add(keyCombo.char)
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
@@ -732,8 +732,8 @@ proc handleFilerMode*(
     )
   of frEnterCommand:
     # Enter command mode from filer
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -775,8 +775,8 @@ proc handleFileTreeMode*(
   of ftrOpenFile:
     return HandlerResult(kind: hrFileTreeOpenFile, fileTreeFilePath: r.filePath)
   of ftrEnterCommand:
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -791,7 +791,7 @@ proc handleFileTreeMode*(
   of ftrClearSearchHighlight:
     # Double-Escape: clear the persisted search highlight. FileTree search is
     # self-contained (its own match list, not the global hlsearch gate), so the
-    # clear is applied here rather than through state.search.
+    # clear is applied here rather than through state.input.search.
     fileTreeState.clearSearch()
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
@@ -818,8 +818,8 @@ proc handleLogViewerMode*(
     )
   of lvrEnterCommand:
     # Enter command mode from log viewer
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -860,8 +860,8 @@ proc handleReferencesMode*(
     )
   of rvrEnterCommand:
     # Enter command mode from references viewer
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -895,8 +895,8 @@ proc handleDocumentSymbolMode*(
     )
   of dsvrEnterCommand:
     # Enter command mode from document symbol viewer
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -929,8 +929,8 @@ proc handleCallHierarchyMode*(
     )
   of chvrEnterCommand:
     # Enter command mode from call hierarchy viewer
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -972,34 +972,34 @@ proc handleHelpViewerMode*(
     )
   of hvrEnterCommand:
     # Enter command mode from help viewer
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of hvrEnterSearch:
     # Enter search mode (forward) from help viewer.
     # historyIndex/text/etc. are reset by enterSearchOverlay on transition.
-    state.search.direction = Forward
+    state.input.search.direction = Forward
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
     )
   of hvrEnterSearchBackward:
     # Enter search mode (backward) from help viewer
-    state.search.direction = Backward
+    state.input.search.direction = Backward
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
     )
   of hvrRepeatSearch:
     # n/N jumped to a match: re-enable the global hlsearch gate (like Vim's n
     # after :noh) so the highlight comes back across all windows/modes.
-    state.search.hlsearchTempDisabled = false
+    state.input.search.hlsearchTempDisabled = false
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of hvrClearSearchHighlight:
     # Double-Escape: clear search highlight in help viewer
-    state.search.hlsearchTempDisabled = true
+    state.input.search.hlsearchTempDisabled = true
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
@@ -1033,8 +1033,8 @@ proc handleBufferManagerMode*(
     )
   of bmrEnterCommand:
     # Enter command mode from buffer manager
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -1070,8 +1070,8 @@ proc handleBookmarkManagerMode*(
       kind: hrBookmarkManagerDelete, bookmarkDeleteEntryIndex: r.deleteEntryIndex
     )
   of bkmrEnterCommand:
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -1107,8 +1107,8 @@ proc handleBackupManagerMode*(
     return HandlerResult(kind: hrBackupManagerRefresh)
   of bkmrEnterCommand:
     # Enter command mode from backup manager
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -1133,8 +1133,8 @@ proc handleDiffViewerMode*(
     )
   of dvrEnterCommand:
     # Enter command mode from diff viewer
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -1161,8 +1161,8 @@ proc handleConfigMode*(
     )
   of cmrEnterCommand:
     # Enter command mode from config mode
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
@@ -1170,14 +1170,14 @@ proc handleConfigMode*(
     # Enter search mode (forward) from config mode.
     # historyIndex/text/etc. are reset by enterSearchOverlay on transition;
     # searchStartIndex is the config-specific anchor for the upcoming search.
-    state.search.direction = Forward
+    state.input.search.direction = Forward
     configState.searchStartIndex = configState.selectedIndex
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
     )
   of cmrEnterSearchBackward:
     # Enter search mode (backward) from config mode
-    state.search.direction = Backward
+    state.input.search.direction = Backward
     configState.searchStartIndex = configState.selectedIndex
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
@@ -1185,14 +1185,14 @@ proc handleConfigMode*(
   of cmrRepeatSearch:
     # n/N jumped to a match: re-enable the global hlsearch gate (like Vim's n
     # after :noh) so the highlight comes back across all windows/modes.
-    state.search.hlsearchTempDisabled = false
+    state.input.search.hlsearchTempDisabled = false
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of cmrClearSearchHighlight:
     # Double-Escape: clear search highlight. Disable the global hlsearch gate
     # so every window/mode (buffers, Help, other Config windows) hides matches.
-    state.search.hlsearchTempDisabled = true
+    state.input.search.hlsearchTempDisabled = true
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
@@ -1261,8 +1261,8 @@ proc handleTerminalMode*(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of trEnterCommand:
-    state.commandText = ":"
-    state.commandCursor = 0
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )

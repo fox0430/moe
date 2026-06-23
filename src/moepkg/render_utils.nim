@@ -555,10 +555,10 @@ proc overlayInput*(state: EditorState): tuple[text: string, cursorChar: int] =
   ## leading ':', search text is prefixed with '/' or '?', rename input is
   ## prefixed with "Rename: " (cursor pinned at the end).
   if state.isCommandOverlay:
-    (state.commandText, state.commandCursor + 1)
+    (state.input.commandText, state.input.commandCursor + 1)
   elif state.isSearchOverlay:
-    let prompt = if state.search.direction == Forward: "/" else: "?"
-    (prompt & state.search.text, 1 + state.search.cursor)
+    let prompt = if state.input.search.direction == Forward: "/" else: "?"
+    (prompt & state.input.search.text, 1 + state.input.search.cursor)
   elif state.isRenameOverlay:
     let prompt = "Rename: " & state.renameState.text
     (prompt, prompt.runeLen)

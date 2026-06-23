@@ -352,31 +352,33 @@ proc handleLogViewerModeKey*(
       return LogViewerResult(kind: lvrRefresh)
     of "n":
       # Search next - find next occurrence of last search
-      if state.search.lastText.len > 0:
+      if state.input.search.lastText.len > 0:
         let ignoreCase = shouldIgnoreCase(
-          state.search.lastText, state.search.ignorecase, state.search.smartcase
+          state.input.search.lastText, state.input.search.ignorecase,
+          state.input.search.smartcase,
         )
         let searchResult =
-          buffer.findNext(state.search.lastText, state.cursor, ignoreCase)
+          buffer.findNext(state.input.search.lastText, state.cursor, ignoreCase)
         if searchResult.isSome:
           state.cursor = searchResult.get
         else:
-          state.statusMessage = "Pattern not found: " & state.search.lastText
+          state.statusMessage = "Pattern not found: " & state.input.search.lastText
       else:
         state.statusMessage = "No previous search"
       return LogViewerResult(kind: lvrHandled)
     of "N":
       # Search prev - find previous occurrence of last search
-      if state.search.lastText.len > 0:
+      if state.input.search.lastText.len > 0:
         let ignoreCase = shouldIgnoreCase(
-          state.search.lastText, state.search.ignorecase, state.search.smartcase
+          state.input.search.lastText, state.input.search.ignorecase,
+          state.input.search.smartcase,
         )
         let searchResult =
-          buffer.findPrev(state.search.lastText, state.cursor, ignoreCase)
+          buffer.findPrev(state.input.search.lastText, state.cursor, ignoreCase)
         if searchResult.isSome:
           state.cursor = searchResult.get
         else:
-          state.statusMessage = "Pattern not found: " & state.search.lastText
+          state.statusMessage = "Pattern not found: " & state.input.search.lastText
       else:
         state.statusMessage = "No previous search"
       return LogViewerResult(kind: lvrHandled)
@@ -384,10 +386,11 @@ proc handleLogViewerModeKey*(
       # Search word forward - search for word under cursor
       let word = buffer.getWordAtPosition(state.cursor)
       if word.len > 0:
-        state.search.lastText = word
-        state.search.wholeWord = true
-        let ignoreCase =
-          shouldIgnoreCase(word, state.search.ignorecase, state.search.smartcase)
+        state.input.search.lastText = word
+        state.input.search.wholeWord = true
+        let ignoreCase = shouldIgnoreCase(
+          word, state.input.search.ignorecase, state.input.search.smartcase
+        )
         let searchResult = buffer.findNext(word, state.cursor, ignoreCase)
         if searchResult.isSome:
           state.cursor = searchResult.get
@@ -398,10 +401,11 @@ proc handleLogViewerModeKey*(
       # Search word backward - search for word under cursor
       let word = buffer.getWordAtPosition(state.cursor)
       if word.len > 0:
-        state.search.lastText = word
-        state.search.wholeWord = true
-        let ignoreCase =
-          shouldIgnoreCase(word, state.search.ignorecase, state.search.smartcase)
+        state.input.search.lastText = word
+        state.input.search.wholeWord = true
+        let ignoreCase = shouldIgnoreCase(
+          word, state.input.search.ignorecase, state.input.search.smartcase
+        )
         let searchResult = buffer.findPrev(word, state.cursor, ignoreCase)
         if searchResult.isSome:
           state.cursor = searchResult.get

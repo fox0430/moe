@@ -774,7 +774,7 @@ suite "executeCommand - Jump list":
 
     check result.isOk
     check ctx.cursor.line == 0
-    check ctx.state.jumpList.len > 0
+    check ctx.state.jumpList.list.len > 0
 
   test "LastLine motion records jump":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
@@ -788,7 +788,7 @@ suite "executeCommand - Jump list":
 
     check result.isOk
     check ctx.cursor.line == 4
-    check ctx.state.jumpList.len > 0
+    check ctx.state.jumpList.list.len > 0
 
 suite "executeCommand - Edge cases":
   test "motion at buffer boundary":
@@ -3098,7 +3098,7 @@ suite "Handler - Search Commands":
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     ctx.setCursor(0, 0)
-    ctx.state.search.lastText = "hello"
+    ctx.state.input.search.lastText = "hello"
     let registry = createTestRegistry()
 
     discard registry.execute(ctx, custom("search.next"))
@@ -3110,7 +3110,7 @@ suite "Handler - Search Commands":
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     ctx.setCursor(0, 12)
-    ctx.state.search.lastText = "hello"
+    ctx.state.input.search.lastText = "hello"
     let registry = createTestRegistry()
 
     discard registry.execute(ctx, custom("search.prev"))

@@ -186,8 +186,8 @@ suite "Overlay - enterCommandOverlay":
 
     check state.overlay.isSome
     check state.overlay.get == okCommand
-    check state.commandText == ":"
-    check state.commandCursor == 0
+    check state.input.commandText == ":"
+    check state.input.commandCursor == 0
 
   test "Preserves base mode when entering command overlay":
     let state = createTestState()
@@ -201,8 +201,8 @@ suite "Overlay - enterCommandOverlay":
     let state = createTestState()
     state.enterCommandOverlay()
 
-    check state.commandText == ":"
-    check state.commandCursor == 0
+    check state.input.commandText == ":"
+    check state.input.commandCursor == 0
 
   test "Preserves Filer as base mode":
     let state = createTestState()
@@ -221,7 +221,7 @@ suite "Overlay - enterSearchOverlay":
 
     check state.overlay.isSome
     check state.overlay.get == okSearch
-    check state.search.direction == Forward
+    check state.input.search.direction == Forward
 
   test "Sets overlay to search mode with Backward direction":
     let state = createTestState()
@@ -229,7 +229,7 @@ suite "Overlay - enterSearchOverlay":
 
     check state.overlay.isSome
     check state.overlay.get == okSearch
-    check state.search.direction == Backward
+    check state.input.search.direction == Backward
 
   test "Preserves base mode when entering search overlay":
     let state = createTestState()
@@ -244,17 +244,17 @@ suite "Overlay - enterSearchOverlay":
     state.cursor = BufferPosition(line: 3, column: 7)
     state.enterSearchOverlay(Forward)
 
-    check state.search.direction == Forward
-    check state.search.text == ""
-    check state.search.startPos == BufferPosition(line: 3, column: 7)
-    check state.search.historyIndex == -1
+    check state.input.search.direction == Forward
+    check state.input.search.text == ""
+    check state.input.search.startPos == BufferPosition(line: 3, column: 7)
+    check state.input.search.historyIndex == -1
 
   test "Resets hlsearchTempDisabled":
     let state = createTestState()
-    state.search.hlsearchTempDisabled = true
+    state.input.search.hlsearchTempDisabled = true
     state.enterSearchOverlay(Forward)
 
-    check state.search.hlsearchTempDisabled == false
+    check state.input.search.hlsearchTempDisabled == false
 
   test "Preserves LogViewer as base mode":
     let state = createTestState()
@@ -340,24 +340,24 @@ suite "Overlay - exitOverlay":
   test "Clears legacy command text and cursor":
     let state = createTestState()
     state.enterCommandOverlay()
-    state.commandText = ":wq"
-    state.commandCursor = 2
+    state.input.commandText = ":wq"
+    state.input.commandCursor = 2
 
     state.exitOverlay()
 
-    check state.commandText == ""
-    check state.commandCursor == 0
+    check state.input.commandText == ""
+    check state.input.commandCursor == 0
 
   test "Clears search text and history index":
     let state = createTestState()
     state.enterSearchOverlay(Forward)
-    state.search.text = "pattern"
-    state.search.historyIndex = 2
+    state.input.search.text = "pattern"
+    state.input.search.historyIndex = 2
 
     state.exitOverlay()
 
-    check state.search.text == ""
-    check state.search.historyIndex == -1
+    check state.input.search.text == ""
+    check state.input.search.historyIndex == -1
 
   test "Does nothing when no overlay is active":
     let state = createTestState()

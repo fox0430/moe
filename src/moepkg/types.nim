@@ -739,6 +739,17 @@ type
     PendingNone
     PendingWindowCmd # Ctrl-W prefix: waiting for window subcommand
 
+  InputState* = object ## Command-line / search input state grouped together.
+    commandText*: string # Text being typed in command mode
+    commandCursor*: int
+      # Cursor position within commandText (0-based, after the : prefix)
+    search*: SearchState # Search-related state (text, history, settings)
+    commandState*: CommandState # Command mode (ex-mode) state (history)
+
+  JumpListState* = object ## Jump list navigation state (Ctrl-o / Ctrl-i).
+    list*: seq[JumpPosition] # List of jump positions
+    index*: int # Current position in jump list (-1 when not navigating)
+
   EditorState* = ref object
     activeWindow*: EditorWindow
       ## Reference to the currently active EditorWindow.
@@ -749,11 +760,6 @@ type
       # Position of matching paren (for highlighting)
     currentWord*: string # Word under cursor (for currentWord highlighting)
     pendingCommand*: PendingCommand
-    commandText*: string # Text being typed in command mode
-    commandCursor*: int
-      # Cursor position within commandText (0-based, after the : prefix)
-    search*: SearchState # Search-related state (text, history, settings)
-    commandState*: CommandState # Command mode (ex-mode) state (history)
     statusMessageStr: string # Internal - use statusMessage getter/setter
     editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
     visualSelection*: VisualSelection # Visual mode selection state
@@ -768,9 +774,6 @@ type
       # Register selected with " prefix (e.g., "a for register a)
     # Macro state (grouped in MacroState)
     macroState*: MacroState # Macro recording and playback state
-    # Jump list (Ctrl-o / Ctrl-i)
-    jumpList*: seq[JumpPosition] # List of jump positions
-    jumpListIndex*: int # Current position in jump list (-1 when not navigating)
     # QuickRun request flag
     requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion
@@ -794,6 +797,8 @@ type
     # Exit code (non-zero for :cq)
     exitCode*: int
     # --- Sub-state groups (Phase 4 refactor) ---
+    input*: InputState # Command-line/search input state (text, cursor, history)
+    jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
     pending*: PendingAsyncOps # Pending async operations queued for the main event loop
     ui*: UiState # Transient UI display state (preview, progress, find char)
     windowDisplay*: WindowDisplayState
@@ -906,24 +911,24 @@ proc enterCommandOverlay*(state: EditorState) =
   ## Enter command mode overlay
   ## The base mode (Normal, Filer, etc.) is preserved
   state.overlay = some(okCommand)
-  state.commandText = ":"
-  state.commandCursor = 0
-  state.commandState.historyIndex = -1
+  state.input.commandText = ":"
+  state.input.commandCursor = 0
+  state.input.commandState.historyIndex = -1
 
 proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   ## Enter search mode overlay
   ## The base mode (Normal, LogViewer, etc.) is preserved
   state.overlay = some(okSearch)
-  state.search.direction = direction
-  state.search.text = ""
-  state.search.cursor = 0
-  state.search.startPos = state.cursor
-  state.search.historyIndex = -1
+  state.input.search.direction = direction
+  state.input.search.text = ""
+  state.input.search.cursor = 0
+  state.input.search.startPos = state.cursor
+  state.input.search.historyIndex = -1
   # Re-enable search highlight so incremental search results are visible
-  state.search.hlsearchTempDisabled = false
+  state.input.search.hlsearchTempDisabled = false
   # Reset whole word mode so / and ? use regex matching consistently
   # (wholeWord may be true from a previous * or # command)
-  state.search.wholeWord = false
+  state.input.search.wholeWord = false
 
 proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   ## Enter rename mode overlay
@@ -939,12 +944,12 @@ proc exitOverlay*(state: EditorState) =
   if state.overlay.isSome:
     state.overlay = none(OverlayKind)
     # Clear overlay-specific state
-    state.commandText = ""
-    state.commandCursor = 0
-    state.commandState.historyIndex = -1
-    state.search.text = ""
-    state.search.cursor = 0
-    state.search.historyIndex = -1
+    state.input.commandText = ""
+    state.input.commandCursor = 0
+    state.input.commandState.historyIndex = -1
+    state.input.search.text = ""
+    state.input.search.cursor = 0
+    state.input.search.historyIndex = -1
 
 proc baseMode*(state: EditorState): EditorMode =
   ## Get the base mode (the mode under the overlay)

@@ -114,18 +114,18 @@ proc addToJumpList*(e: Editor) =
   )
 
   # Don't add if same as last position (same buffer, line, and column)
-  if e.state.jumpList.len > 0:
-    let lastPos = e.state.jumpList[^1]
+  if e.state.jumpList.list.len > 0:
+    let lastPos = e.state.jumpList.list[^1]
     if lastPos.bufferId == jumpPos.bufferId and lastPos.line == jumpPos.line and
         lastPos.column == jumpPos.column:
       return
 
-  e.state.jumpList.add(jumpPos)
+  e.state.jumpList.list.add(jumpPos)
   # Keep jump list at reasonable size (max 100 entries)
-  if e.state.jumpList.len > 100:
-    e.state.jumpList.delete(0)
+  if e.state.jumpList.list.len > 100:
+    e.state.jumpList.list.delete(0)
   # Reset jump list index when adding new position
-  e.state.jumpListIndex = -1
+  e.state.jumpList.index = -1
 
 proc moveCursorToLspPosition(e: Editor, buffer: TextBuffer, lspLine, lspColumn: int) =
   ## Move the active window's cursor to an LSP location within `buffer`,

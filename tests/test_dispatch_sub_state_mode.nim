@@ -251,17 +251,17 @@ suite "dispatchSubStateMode - Config search highlight clear":
     let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Config)
     editor.activeWindow.modeState =
       ModeState(kind: mskConfig, config: newConfigModeState(newEditorConfig()))
-    editor.state.search.hlsearchTempDisabled = false
+    editor.state.input.search.hlsearchTempDisabled = false
 
     let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
     # First Escape is only recorded; the gate must stay enabled.
     let r1 = manager.dispatchSubStateMode(editor, esc)
     check r1.kind == hrHandled
-    check not editor.state.search.hlsearchTempDisabled
+    check not editor.state.input.search.hlsearchTempDisabled
     # Second Escape clears: the global gate is disabled for all windows.
     let r2 = manager.dispatchSubStateMode(editor, esc)
     check r2.kind == hrHandled
-    check editor.state.search.hlsearchTempDisabled
+    check editor.state.input.search.hlsearchTempDisabled
 
   test "Config 'n' re-enables the global hlsearch gate after a clear":
     # After a highlight clear, jumping to a match with n must bring the
@@ -277,12 +277,12 @@ suite "dispatchSubStateMode - Config search highlight clear":
     configState.setSearchQuery(configState.items[idx].displayName)
     editor.activeWindow.modeState = ModeState(kind: mskConfig, config: configState)
     # Highlight was previously cleared.
-    editor.state.search.hlsearchTempDisabled = true
+    editor.state.input.search.hlsearchTempDisabled = true
 
     let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
     let r = manager.dispatchSubStateMode(editor, n)
     check r.kind == hrHandled
-    check not editor.state.search.hlsearchTempDisabled
+    check not editor.state.input.search.hlsearchTempDisabled
 
 suite "dispatchSubStateMode - FileTree search highlight clear":
   test "FileTree double-Escape clears the search via the dispatcher":

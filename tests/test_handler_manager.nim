@@ -1133,7 +1133,7 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
     let viewport = createTestViewport()
 
     # Set up command history (":set number" was the last command)
-    state.commandState.history = @["set number"]
+    state.input.commandState.history = @["set number"]
 
     # Simulate @: via keybinding registry: @ builds sequence, : completes it
     let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
@@ -1160,7 +1160,7 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.commandState.history = @[]
+    state.input.commandState.history = @[]
 
     let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
     discard manager.handleNormalMode(
@@ -1182,7 +1182,7 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.commandState.history = @["set number"]
+    state.input.commandState.history = @["set number"]
 
     # Type "3@:" (count 3, then @:)
     let threeKey = KeyCombo(isSpecial: false, char: "3", modifiers: {})

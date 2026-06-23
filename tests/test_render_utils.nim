@@ -635,18 +635,18 @@ suite "overlayInput":
   test "command overlay includes the ':' prefix":
     let state = newTestState()
     state.enterCommandOverlay()
-    state.commandText = ":edit file"
-    state.commandCursor = 4
+    state.input.commandText = ":edit file"
+    state.input.commandCursor = 4
     check state.overlayInput() == (text: ":edit file", cursorChar: 5)
 
   test "search overlay uses '/' or '?' prompt":
     let state = newTestState()
     state.enterSearchOverlay(Forward)
-    state.search.text = "foo"
-    state.search.cursor = 2
+    state.input.search.text = "foo"
+    state.input.search.cursor = 2
     check state.overlayInput() == (text: "/foo", cursorChar: 3)
 
-    state.search.direction = Backward
+    state.input.search.direction = Backward
     check state.overlayInput() == (text: "?foo", cursorChar: 3)
 
   test "rename overlay pins the cursor at the end":
@@ -662,7 +662,7 @@ suite "commandLineAreaHeight":
   test "non-positive width falls back to the steady floor":
     let state = newTestState()
     state.enterCommandOverlay()
-    state.commandText = ":" & "a".repeat(200)
+    state.input.commandText = ":" & "a".repeat(200)
     check state.commandLineAreaHeight(0) == 1
     check state.commandLineAreaHeight(-1) == 1
 
@@ -670,15 +670,15 @@ suite "commandLineAreaHeight":
     let state = newTestState()
     state.enterCommandOverlay()
     # ":"  + 9 chars = 10 columns -> 3 rows at width 4
-    state.commandText = ":" & "a".repeat(9)
-    state.commandCursor = 0
+    state.input.commandText = ":" & "a".repeat(9)
+    state.input.commandCursor = 0
     check state.commandLineAreaHeight(4) == 3
 
   test "overlay growth is capped at MaxStatusMessageLines":
     let state = newTestState()
     state.enterCommandOverlay()
-    state.commandText = ":" & "a".repeat(80 * (MaxStatusMessageLines + 5))
-    state.commandCursor = 0
+    state.input.commandText = ":" & "a".repeat(80 * (MaxStatusMessageLines + 5))
+    state.input.commandCursor = 0
     check state.commandLineAreaHeight(80) == MaxStatusMessageLines
 
   test "multi-line status message grows the area":

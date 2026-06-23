@@ -112,20 +112,20 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
 
   generateEditorStateInfo(
     debugLines, e.state.mode, e.state.previousMode, e.activeWindow.cursor.line,
-    e.cursor.column, e.state.commandText, e.state.statusMessage,
+    e.cursor.column, e.state.input.commandText, e.state.statusMessage,
     debugConfig.editorView.enable,
   )
 
   generateSearchInfo(
     debugLines,
-    e.state.search.text,
-    e.state.search.lastText,
-    $e.state.search.direction,
-    e.state.search.history.len,
-    e.state.search.ignorecase,
-    e.state.search.smartcase,
-    e.state.search.incsearch,
-    e.state.search.hlsearch,
+    e.state.input.search.text,
+    e.state.input.search.lastText,
+    $e.state.input.search.direction,
+    e.state.input.search.history.len,
+    e.state.input.search.ignorecase,
+    e.state.input.search.smartcase,
+    e.state.input.search.incsearch,
+    e.state.input.search.hlsearch,
     debugConfig.search.enable,
   )
 
@@ -156,7 +156,8 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   )
 
   generateJumpListInfo(
-    debugLines, e.state.jumpList.len, e.state.jumpListIndex, debugConfig.jumpList.enable
+    debugLines, e.state.jumpList.list.len, e.state.jumpList.index,
+    debugConfig.jumpList.enable,
   )
 
   generateLspInfo(

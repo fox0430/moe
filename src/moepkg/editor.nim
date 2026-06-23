@@ -202,32 +202,35 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         lastLspCleanup: getMonoTime(),
         lspCleanupInterval: 1000, # Sweep timed-out LSP requests every 1 second
       ),
-      # Search state (grouped in SearchState)
-      search: SearchState(
-        text: "",
-        lastText: "",
-        direction: Forward,
-        history:
-          if editorConfig.persist.search:
-            loadSearchHistory(editorConfig.persist.searchHistoryLimit)
-          else:
-            @[],
-        historyIndex: -1,
-        startPos: BufferPosition(line: 0, column: 0),
-        ignorecase: editorConfig.standard.ignorecase,
-        smartcase: editorConfig.standard.smartcase,
-        incsearch: editorConfig.standard.incrementalSearch,
-        hlsearch: true,
-        hlsearchTempDisabled: false,
-      ),
-      # Command state (grouped in CommandState)
-      commandState: CommandState(
-        history:
-          if editorConfig.persist.commandHistory:
-            loadCommandHistory(editorConfig.persist.commandHistoryLimit)
-          else:
-            @[],
-        historyIndex: -1,
+      # Command-line/search input state (grouped in InputState)
+      input: InputState(
+        # Search state (grouped in SearchState)
+        search: SearchState(
+          text: "",
+          lastText: "",
+          direction: Forward,
+          history:
+            if editorConfig.persist.search:
+              loadSearchHistory(editorConfig.persist.searchHistoryLimit)
+            else:
+              @[],
+          historyIndex: -1,
+          startPos: BufferPosition(line: 0, column: 0),
+          ignorecase: editorConfig.standard.ignorecase,
+          smartcase: editorConfig.standard.smartcase,
+          incsearch: editorConfig.standard.incrementalSearch,
+          hlsearch: true,
+          hlsearchTempDisabled: false,
+        ),
+        # Command state (grouped in CommandState)
+        commandState: CommandState(
+          history:
+            if editorConfig.persist.commandHistory:
+              loadCommandHistory(editorConfig.persist.commandHistoryLimit)
+            else:
+              @[],
+          historyIndex: -1,
+        ),
       ),
       # Macro state (grouped in MacroState)
       macroState: MacroState(
@@ -255,9 +258,11 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       # Full register system
       registers: initRegisters(),
       pendingRegister: none(char),
-      # Jump list
-      jumpList: @[], # Empty jump list initially
-      jumpListIndex: -1, # Not navigating jump list initially
+      # Jump list (grouped in JumpListState)
+      jumpList: JumpListState(
+        list: @[], # Empty jump list initially
+        index: -1, # Not navigating jump list initially
+      ),
       # Command mode completion
       commandCompletionManager: newCommandCompletionManager(),
       # LSP cache state (grouped in LspCacheState)

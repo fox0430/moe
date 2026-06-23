@@ -84,9 +84,9 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.bracketSplit = newConfig.standard.bracketSplit
 
   # Update search settings
-  e.state.search.ignorecase = newConfig.standard.ignorecase
-  e.state.search.smartcase = newConfig.standard.smartcase
-  e.state.search.incsearch = newConfig.standard.incrementalSearch
+  e.state.input.search.ignorecase = newConfig.standard.ignorecase
+  e.state.input.search.smartcase = newConfig.standard.smartcase
+  e.state.input.search.incsearch = newConfig.standard.incrementalSearch
 
   # Update timing intervals
   e.state.timing.gitDiffUpdateInterval = newConfig.git.updateInterval

@@ -1281,9 +1281,9 @@ suite "CommandRegistry - Git conflict navigation (]x / [x)":
     let registry = newCommandRegistry()
     registerBuiltinCommands(registry)
 
-    let before = ctx.state.jumpList.len
+    let before = ctx.state.jumpList.list.len
     discard registry.execute(ctx, custom("navigate.conflict.next"))
-    check ctx.state.jumpList.len == before + 1
+    check ctx.state.jumpList.list.len == before + 1
 
 suite "KeyBindings - ]x / [x resolve to conflict navigation":
   test "] x maps to navigate-conflict-next":

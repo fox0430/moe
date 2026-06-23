@@ -579,7 +579,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       logState = newLogViewerState()
       buffer = newTestBuffer("line1\ntest here\nline3\ntest again\nline5\n")
       state = newTestEditorState()
-    state.search.lastText = "test"
+    state.input.search.lastText = "test"
     state.cursor.line = 0
 
     let result =
@@ -593,7 +593,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       logState = newLogViewerState()
       buffer = newTestBuffer("line1\ntest here\nline3\ntest again\nline5\n")
       state = newTestEditorState()
-    state.search.lastText = "test"
+    state.input.search.lastText = "test"
     state.cursor.line = 4
 
     let result =
@@ -607,7 +607,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       logState = newLogViewerState()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
-    state.search.lastText = ""
+    state.input.search.lastText = ""
 
     let result =
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("n"))
@@ -620,7 +620,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       logState = newLogViewerState()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
-    state.search.lastText = ""
+    state.input.search.lastText = ""
 
     let result =
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("N"))
@@ -639,8 +639,8 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("*"))
 
     check result.kind == lvrHandled
-    check state.search.lastText == "hello"
-    check state.search.wholeWord == true
+    check state.input.search.lastText == "hello"
+    check state.input.search.wholeWord == true
 
   test "# searches backward for word under cursor":
     let
@@ -653,8 +653,8 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("#"))
 
     check result.kind == lvrHandled
-    check state.search.lastText == "hello"
-    check state.search.wholeWord == true
+    check state.input.search.lastText == "hello"
+    check state.input.search.wholeWord == true
     check state.cursor.column == 0 # found first "hello"
 
 suite "log_viewer_handler: handleLogViewerModeKey - Unhandled keys":
@@ -845,7 +845,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
       logState = newLogViewerState()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
-    state.search.lastText = "notfound"
+    state.input.search.lastText = "notfound"
 
     let result =
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("n"))
@@ -858,7 +858,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
       logState = newLogViewerState()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
-    state.search.lastText = "notfound"
+    state.input.search.lastText = "notfound"
 
     let result =
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("N"))
@@ -904,7 +904,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("*"))
 
     check result.kind == lvrHandled
-    check state.search.lastText == "unique"
+    check state.input.search.lastText == "unique"
     # Word is found at current position, but no other occurrence
     # The implementation searches from current position, so it may find itself
     # or show "Pattern not found" - depends on implementation
@@ -920,7 +920,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
       handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("#"))
 
     check result.kind == lvrHandled
-    check state.search.lastText == "unique"
+    check state.input.search.lastText == "unique"
 
 suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion edge cases":
   test "{ at beginning of buffer stays at line 0":

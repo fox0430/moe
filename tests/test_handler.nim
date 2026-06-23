@@ -97,19 +97,21 @@ proc createTestState(): EditorState =
     ),
     registers: initRegisters(),
     overlay: none(OverlayKind),
-    search: SearchState(
-      direction: Forward,
-      text: "",
-      lastText: "",
-      startPos: BufferPosition(line: 0, column: 0),
-      history: @[],
-      historyIndex: -1,
-      ignorecase: true,
-      smartcase: true,
-      incsearch: true,
-      hlsearch: true,
-      hlsearchTempDisabled: false,
-      wholeWord: false,
+    input: InputState(
+      search: SearchState(
+        direction: Forward,
+        text: "",
+        lastText: "",
+        startPos: BufferPosition(line: 0, column: 0),
+        history: @[],
+        historyIndex: -1,
+        ignorecase: true,
+        smartcase: true,
+        incsearch: true,
+        hlsearch: true,
+        hlsearchTempDisabled: false,
+        wholeWord: false,
+      )
     ),
   )
 
@@ -817,32 +819,32 @@ suite "Search Mode - History Navigation":
     let state = createTestState()
     state.enterSearchOverlay(Forward)
 
-    check state.search.direction == Forward
-    check state.search.text == ""
-    check state.search.historyIndex == -1
+    check state.input.search.direction == Forward
+    check state.input.search.text == ""
+    check state.input.search.historyIndex == -1
 
   test "Search state with backward direction":
     let state = createTestState()
     state.enterSearchOverlay(Backward)
 
-    check state.search.direction == Backward
-    check state.search.text == ""
+    check state.input.search.direction == Backward
+    check state.input.search.text == ""
 
   test "Search history index starts at -1":
     let state = createTestState()
-    state.search.history = @["pattern1", "pattern2", "pattern3"]
+    state.input.search.history = @["pattern1", "pattern2", "pattern3"]
     state.enterSearchOverlay(Forward)
 
-    check state.search.historyIndex == -1
+    check state.input.search.historyIndex == -1
 
   test "Search state preserves history on enter":
     let state = createTestState()
-    state.search.history = @["old_search"]
+    state.input.search.history = @["old_search"]
     state.enterSearchOverlay(Forward)
 
     # History should be preserved
-    check state.search.history.len == 1
-    check state.search.history[0] == "old_search"
+    check state.input.search.history.len == 1
+    check state.input.search.history[0] == "old_search"
 
 suite "Search Mode - Start Position":
   test "Search start position captured from cursor":
@@ -850,8 +852,8 @@ suite "Search Mode - Start Position":
     state.cursor = BufferPosition(line: 10, column: 5)
     state.enterSearchOverlay(Forward)
 
-    check state.search.startPos.line == 10
-    check state.search.startPos.column == 5
+    check state.input.search.startPos.line == 10
+    check state.input.search.startPos.column == 5
 
   test "Different cursor positions captured correctly":
     let state = createTestState()
@@ -859,70 +861,70 @@ suite "Search Mode - Start Position":
     # First search
     state.cursor = BufferPosition(line: 0, column: 0)
     state.enterSearchOverlay(Forward)
-    check state.search.startPos.line == 0
-    check state.search.startPos.column == 0
+    check state.input.search.startPos.line == 0
+    check state.input.search.startPos.column == 0
 
     state.exitOverlay()
 
     # Second search from different position
     state.cursor = BufferPosition(line: 50, column: 20)
     state.enterSearchOverlay(Backward)
-    check state.search.startPos.line == 50
-    check state.search.startPos.column == 20
+    check state.input.search.startPos.line == 50
+    check state.input.search.startPos.column == 20
 
 suite "Search Mode - Text Handling":
   test "Search text cleared on overlay enter":
     let state = createTestState()
-    state.search.text = "previous search"
+    state.input.search.text = "previous search"
     state.enterSearchOverlay(Forward)
 
-    check state.search.text == ""
+    check state.input.search.text == ""
 
   test "Search text cleared on overlay exit":
     let state = createTestState()
     state.enterSearchOverlay(Forward)
-    state.search.text = "current search"
+    state.input.search.text = "current search"
     state.exitOverlay()
 
-    check state.search.text == ""
+    check state.input.search.text == ""
 
   test "History index reset on overlay exit":
     let state = createTestState()
-    state.search.history = @["pattern1", "pattern2"]
+    state.input.search.history = @["pattern1", "pattern2"]
     state.enterSearchOverlay(Forward)
-    state.search.historyIndex = 1
+    state.input.search.historyIndex = 1
     state.exitOverlay()
 
-    check state.search.historyIndex == -1
+    check state.input.search.historyIndex == -1
 
 suite "Search Mode - Search Options":
   test "Search ignorecase option preserved":
     let state = createTestState()
-    state.search.ignorecase = false
+    state.input.search.ignorecase = false
     state.enterSearchOverlay(Forward)
 
-    check state.search.ignorecase == false
+    check state.input.search.ignorecase == false
 
   test "Search smartcase option preserved":
     let state = createTestState()
-    state.search.smartcase = false
+    state.input.search.smartcase = false
     state.enterSearchOverlay(Forward)
 
-    check state.search.smartcase == false
+    check state.input.search.smartcase == false
 
   test "Search incsearch option preserved":
     let state = createTestState()
-    state.search.incsearch = false
+    state.input.search.incsearch = false
     state.enterSearchOverlay(Forward)
 
-    check state.search.incsearch == false
+    check state.input.search.incsearch == false
 
   test "Search hlsearch option preserved":
     let state = createTestState()
-    state.search.hlsearch = false
+    state.input.search.hlsearch = false
     state.enterSearchOverlay(Forward)
 
-    check state.search.hlsearch == false
+    check state.input.search.hlsearch == false
 
 suite "BufferInfo - Basic":
   test "BufferInfo created with file path":
@@ -945,24 +947,24 @@ suite "Command Mode - Text Input State":
     let state = createTestState()
     state.enterCommandOverlay()
 
-    check state.commandText == ":"
-    check state.commandCursor == 0
+    check state.input.commandText == ":"
+    check state.input.commandCursor == 0
 
   test "Command cursor starts at 0":
     let state = createTestState()
     state.enterCommandOverlay()
 
-    check state.commandCursor == 0
+    check state.input.commandCursor == 0
 
   test "Command state cleared on exit":
     let state = createTestState()
     state.enterCommandOverlay()
-    state.commandText = ":wq"
-    state.commandCursor = 2
+    state.input.commandText = ":wq"
+    state.input.commandCursor = 2
     state.exitOverlay()
 
-    check state.commandText == ""
-    check state.commandCursor == 0
+    check state.input.commandText == ""
+    check state.input.commandCursor == 0
 
 suite "Rename Mode - State":
   test "Rename state initialized with original word":
@@ -1406,124 +1408,124 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
   test "Overlay exited after :5 (gotoLine)":
     let e = createTestEditorWithBuffer("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":5"
-    e.state.commandCursor = 1
+    e.state.input.commandText = ":5"
+    e.state.input.commandCursor = 1
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after :bn (bufferNext)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":bn"
-    e.state.commandCursor = 2
+    e.state.input.commandText = ":bn"
+    e.state.input.commandCursor = 2
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after :bp (bufferPrev)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":bp"
-    e.state.commandCursor = 2
+    e.state.input.commandText = ":bp"
+    e.state.input.commandCursor = 2
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after :bf (bufferFirst)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":bf"
-    e.state.commandCursor = 2
+    e.state.input.commandText = ":bf"
+    e.state.input.commandCursor = 2
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after :bl (bufferLast)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":bl"
-    e.state.commandCursor = 2
+    e.state.input.commandText = ":bl"
+    e.state.input.commandCursor = 2
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after :noh (clearSearchHighlight)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":noh"
-    e.state.commandCursor = 3
+    e.state.input.commandText = ":noh"
+    e.state.input.commandCursor = 3
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after :set number (setBoolOption)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":set number"
-    e.state.commandCursor = 10
+    e.state.input.commandText = ":set number"
+    e.state.input.commandCursor = 10
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
     check "number" in e.state.statusMessage
 
   test "Overlay exited after :set tabstop 4 (setIntOption)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":set tabstop 4"
-    e.state.commandCursor = 13
+    e.state.input.commandText = ":set tabstop 4"
+    e.state.input.commandCursor = 13
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
     check "tabstop" in e.state.statusMessage
 
   test "Overlay exited after :enew":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":enew"
-    e.state.commandCursor = 4
+    e.state.input.commandText = ":enew"
+    e.state.input.commandCursor = 4
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after :stripws (stripWhitespace)":
     let e = createTestEditorWithBuffer("hello   \nworld  ")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":stripws"
-    e.state.commandCursor = 7
+    e.state.input.commandText = ":stripws"
+    e.state.input.commandCursor = 7
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited after empty command (just Enter on ':')":
     let e = createTestEditorWithBuffer("hello")
@@ -1534,7 +1536,7 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test "Overlay exited and error shown after :wq on externally modified file":
     # Regression: :wq early-returned on save failure, skipping exitOverlay() and
@@ -1552,14 +1554,14 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
     writeFile(testFile, "Externally modified")
 
     e.state.enterCommandOverlay()
-    e.state.commandText = ":wq"
-    e.state.commandCursor = 2
+    e.state.input.commandText = ":wq"
+    e.state.input.commandCursor = 2
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true # save refused, editor keeps running
     check not e.state.isCommandOverlay # overlay exited
-    check e.state.commandText == "" # command line cleared
+    check e.state.input.commandText == "" # command line cleared
     check "modified externally" in e.state.statusMessage
 
 suite "handleCommandModeEvent - exitOverlay on self-managed branches":
@@ -1568,8 +1570,8 @@ suite "handleCommandModeEvent - exitOverlay on self-managed branches":
     ## with an empty file list instead of failing.
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":recent"
-    e.state.commandCursor = 6
+    e.state.input.commandText = ":recent"
+    e.state.input.commandCursor = 6
 
     let origHome = getEnv("HOME")
     putEnv("HOME", getTempDir() / "moe_test_nonexistent_home")
@@ -1580,7 +1582,7 @@ suite "handleCommandModeEvent - exitOverlay on self-managed branches":
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
     check e.state.mode == EditorMode.RecentFile
 
 suite "enterFilerInActiveWindow":
@@ -1621,14 +1623,14 @@ suite "handleCommandModeEvent - :putconfigfile":
       e.config.theme.kind = tkDefault
       e.config.theme.path = ""
       e.state.enterCommandOverlay()
-      e.state.commandText = ":putconfigfile"
-      e.state.commandCursor = 14
+      e.state.input.commandText = ":putconfigfile"
+      e.state.input.commandCursor = 14
 
       let cont = handleCommandModeEvent(e, makeEnterEvent())
 
       check cont == true
       check not e.state.isCommandOverlay
-      check e.state.commandText == ""
+      check e.state.input.commandText == ""
       check e.state.mode == EditorMode.Normal
       check "Config written" in e.state.statusMessage
 
@@ -1643,15 +1645,15 @@ suite "handleCommandModeEvent - :putconfigfile":
 
       # Ensure config file exists first
       e.state.enterCommandOverlay()
-      e.state.commandText = ":putconfigfile"
-      e.state.commandCursor = 14
+      e.state.input.commandText = ":putconfigfile"
+      e.state.input.commandCursor = 14
       discard handleCommandModeEvent(e, makeEnterEvent())
       check fileExists(configPath)
 
       # Run again to trigger backup
       e.state.enterCommandOverlay()
-      e.state.commandText = ":putconfigfile"
-      e.state.commandCursor = 14
+      e.state.input.commandText = ":putconfigfile"
+      e.state.input.commandCursor = 14
       let cont = handleCommandModeEvent(e, makeEnterEvent())
 
       check cont == true
@@ -1672,8 +1674,8 @@ suite "handleCommandModeEvent - :putconfigfile":
       e.config.theme.path = themeFile
 
       e.state.enterCommandOverlay()
-      e.state.commandText = ":putconfigfile"
-      e.state.commandCursor = 14
+      e.state.input.commandText = ":putconfigfile"
+      e.state.input.commandCursor = 14
 
       let cont = handleCommandModeEvent(e, makeEnterEvent())
 
@@ -1690,7 +1692,7 @@ suite "handleCommandModeEvent - all command mode commands execute":
   test ":q exits editor (returns false)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":q"
+    e.state.input.commandText = ":q"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
@@ -1699,7 +1701,7 @@ suite "handleCommandModeEvent - all command mode commands execute":
   test ":q! closes window (returns false for single window)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":q!"
+    e.state.input.commandText = ":q!"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
@@ -1710,75 +1712,75 @@ suite "handleCommandModeEvent - all command mode commands execute":
   test ":vs vertical split":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":vs"
+    e.state.input.commandText = ":vs"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":sp horizontal split":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":sp"
+    e.state.input.commandText = ":sp"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":new creates new buffer in horizontal split":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":new"
+    e.state.input.commandText = ":new"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":vnew creates new buffer in vertical split":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":vnew"
+    e.state.input.commandText = ":vnew"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   # --- File/Buffer ---
 
   test ":e opens or creates file":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":e testfile"
+    e.state.input.commandText = ":e testfile"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":w save (no file path shows error)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":w"
+    e.state.input.commandText = ":w"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":wq save and quit (save fails without file path)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":wq"
+    e.state.input.commandText = ":wq"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
@@ -1786,42 +1788,42 @@ suite "handleCommandModeEvent - all command mode commands execute":
     # The overlay must still be exited so the editor isn't stuck in command mode.
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":b 0 switch to buffer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":b 0"
+    e.state.input.commandText = ":b 0"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":bd delete buffer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":bd"
+    e.state.input.commandText = ":bd"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   # --- Option ---
 
   test ":set scrollfriction 50 (float option)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":set scrollfriction 50"
+    e.state.input.commandText = ":set scrollfriction 50"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
     check "scrollfriction" in e.state.statusMessage
 
   # --- Mode transitions ---
@@ -1829,250 +1831,250 @@ suite "handleCommandModeEvent - all command mode commands execute":
   test ":filer enters filer mode":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":filer"
+    e.state.input.commandText = ":filer"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":log enters log viewer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":log"
+    e.state.input.commandText = ":log"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":help enters help viewer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":help"
+    e.state.input.commandText = ":help"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":buffers enters buffer manager":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":buffers"
+    e.state.input.commandText = ":buffers"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":backup enters backup manager":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":backup"
+    e.state.input.commandText = ":backup"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":jump shows jump list":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":jump"
+    e.state.input.commandText = ":jump"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":build with no file shows error":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":build"
+    e.state.input.commandText = ":build"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":debug opens debug viewer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":debug"
+    e.state.input.commandText = ":debug"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":config opens configuration mode":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":config"
+    e.state.input.commandText = ":config"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":quickrun with no file shows error":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":quickrun"
+    e.state.input.commandText = ":quickrun"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   # --- Theme/Substitute ---
 
   test ":theme default changes to default theme":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":theme default"
+    e.state.input.commandText = ":theme default"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":s/a/b/ substitutes text":
     let e = createTestEditorWithBuffer("abc")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":s/a/b/"
+    e.state.input.commandText = ":s/a/b/"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   # --- Misc ---
 
   test ":!echo hi executes shell command":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":!echo hi"
+    e.state.input.commandText = ":!echo hi"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":bg sends editor to background":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":bg"
+    e.state.input.commandText = ":bg"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":man ls shows man page":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":man ls"
+    e.state.input.commandText = ":man ls"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   # --- LSP ---
 
   test ":lsplog opens LSP log viewer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":lsplog"
+    e.state.input.commandText = ":lsplog"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":lspformat requests LSP formatting":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":lspformat"
+    e.state.input.commandText = ":lspformat"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":lsprestart restarts LSP server":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":lsprestart"
+    e.state.input.commandText = ":lsprestart"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":lspfold requests LSP folding":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":lspfold"
+    e.state.input.commandText = ":lspfold"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":lspexecommand executes LSP command":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":lspexecommand"
+    e.state.input.commandText = ":lspexecommand"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":lspcallhierarchyincoming requests incoming calls":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":lspcallhierarchyincoming"
+    e.state.input.commandText = ":lspcallhierarchyincoming"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
   test ":lspcallhierarchyoutgoing requests outgoing calls":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandText = ":lspcallhierarchyoutgoing"
+    e.state.input.commandText = ":lspcallhierarchyoutgoing"
 
     let cont = handleCommandModeEvent(e, makeEnterEvent())
 
     check cont == true
     check not e.state.isCommandOverlay
-    check e.state.commandText == ""
+    check e.state.input.commandText == ""
 
 proc makeUpArrowEvent(): Event =
   Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.ArrowUp))
@@ -2091,44 +2093,44 @@ suite "Command Mode - History Navigation":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
     # No history entries
-    e.state.commandState.history = @[]
+    e.state.input.commandState.history = @[]
 
     let cont = handleCommandModeEvent(e, makeUpArrowEvent())
 
     check cont == true
-    check e.state.commandText == ":"
-    check e.state.commandCursor == 0
-    check e.state.commandState.historyIndex == -1
+    check e.state.input.commandText == ":"
+    check e.state.input.commandCursor == 0
+    check e.state.input.commandState.historyIndex == -1
 
   test "Up navigates to most recent entry":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandState.history = @["w", "q"]
+    e.state.input.commandState.history = @["w", "q"]
 
     let cont = handleCommandModeEvent(e, makeUpArrowEvent())
 
     check cont == true
-    check e.state.commandText == ":w"
-    check e.state.commandCursor == 1
-    check e.state.commandState.historyIndex == 0
+    check e.state.input.commandText == ":w"
+    check e.state.input.commandCursor == 1
+    check e.state.input.commandState.historyIndex == 0
 
   test "Up twice navigates to second entry":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandState.history = @["w", "q"]
+    e.state.input.commandState.history = @["w", "q"]
 
     discard handleCommandModeEvent(e, makeUpArrowEvent())
     let cont = handleCommandModeEvent(e, makeUpArrowEvent())
 
     check cont == true
-    check e.state.commandText == ":q"
-    check e.state.commandCursor == 1
-    check e.state.commandState.historyIndex == 1
+    check e.state.input.commandText == ":q"
+    check e.state.input.commandCursor == 1
+    check e.state.input.commandState.historyIndex == 1
 
   test "Up stops at oldest entry":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandState.history = @["w", "q"]
+    e.state.input.commandState.history = @["w", "q"]
 
     discard handleCommandModeEvent(e, makeUpArrowEvent())
     discard handleCommandModeEvent(e, makeUpArrowEvent())
@@ -2136,13 +2138,13 @@ suite "Command Mode - History Navigation":
 
     check cont == true
     # Still at the oldest entry
-    check e.state.commandText == ":q"
-    check e.state.commandState.historyIndex == 1
+    check e.state.input.commandText == ":q"
+    check e.state.input.commandState.historyIndex == 1
 
   test "Down navigates to newer entry":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandState.history = @["w", "q"]
+    e.state.input.commandState.history = @["w", "q"]
 
     # Navigate to oldest
     discard handleCommandModeEvent(e, makeUpArrowEvent())
@@ -2151,14 +2153,14 @@ suite "Command Mode - History Navigation":
     let cont = handleCommandModeEvent(e, makeDownArrowEvent())
 
     check cont == true
-    check e.state.commandText == ":w"
-    check e.state.commandCursor == 1
-    check e.state.commandState.historyIndex == 0
+    check e.state.input.commandText == ":w"
+    check e.state.input.commandCursor == 1
+    check e.state.input.commandState.historyIndex == 0
 
   test "Down from index 0 resets to empty command":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandState.history = @["w", "q"]
+    e.state.input.commandState.history = @["w", "q"]
 
     # Navigate to most recent
     discard handleCommandModeEvent(e, makeUpArrowEvent())
@@ -2166,37 +2168,37 @@ suite "Command Mode - History Navigation":
     let cont = handleCommandModeEvent(e, makeDownArrowEvent())
 
     check cont == true
-    check e.state.commandText == ":"
-    check e.state.commandCursor == 0
-    check e.state.commandState.historyIndex == -1
+    check e.state.input.commandText == ":"
+    check e.state.input.commandCursor == 0
+    check e.state.input.commandState.historyIndex == -1
 
   test "Character input resets historyIndex":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandState.history = @["w", "q"]
+    e.state.input.commandState.history = @["w", "q"]
 
     # Navigate into history
     discard handleCommandModeEvent(e, makeUpArrowEvent())
-    check e.state.commandState.historyIndex == 0
+    check e.state.input.commandState.historyIndex == 0
 
     # Type a character
     discard handleCommandModeEvent(e, makeCharEvent("x"))
 
-    check e.state.commandState.historyIndex == -1
+    check e.state.input.commandState.historyIndex == -1
 
   test "Backspace resets historyIndex":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
-    e.state.commandState.history = @["w", "q"]
+    e.state.input.commandState.history = @["w", "q"]
 
     # Navigate into history (sets commandText to ":w")
     discard handleCommandModeEvent(e, makeUpArrowEvent())
-    check e.state.commandState.historyIndex == 0
+    check e.state.input.commandState.historyIndex == 0
 
     # Backspace
     discard handleCommandModeEvent(e, makeBackspaceEvent())
 
-    check e.state.commandState.historyIndex == -1
+    check e.state.input.commandState.historyIndex == -1
 
 suite "adjustCursorAfterInsertExit":
   test "Cursor moves one position left (middle of line)":
@@ -2396,8 +2398,8 @@ suite "middleClickPaste":
 
       e.middleClickPaste()
 
-      check e.state.commandText == ":hello world"
-      check e.state.commandCursor == testText.len
+      check e.state.input.commandText == ":hello world"
+      check e.state.input.commandCursor == testText.len
 
   test "Command overlay - multiline paste keeps only first line":
     if not isClipboardToolAvailable():
@@ -2414,8 +2416,8 @@ suite "middleClickPaste":
 
       e.middleClickPaste()
 
-      check e.state.commandText == ":first"
-      check e.state.commandCursor == 5
+      check e.state.input.commandText == ":first"
+      check e.state.input.commandCursor == 5
 
   test "Search overlay - paste appends first line":
     if not isClipboardToolAvailable():
@@ -2432,7 +2434,7 @@ suite "middleClickPaste":
 
       e.middleClickPaste()
 
-      check e.state.search.text == "needle"
+      check e.state.input.search.text == "needle"
 
   test "handleEvent dispatches middle-click even when mouse config disabled":
     if not isClipboardToolAvailable():
@@ -2550,8 +2552,8 @@ suite "handlePasteEvent":
     let event = makePasteEvent("wq")
     discard e.handleEvent(event)
 
-    check e.state.commandText == ":wq"
-    check e.state.commandCursor == 2
+    check e.state.input.commandText == ":wq"
+    check e.state.input.commandCursor == 2
 
   test "Command overlay - bracketed paste keeps only first line":
     let e = createTestEditorForPaste("hello")
@@ -2560,8 +2562,8 @@ suite "handlePasteEvent":
     let event = makePasteEvent("set ts=4\nset nu")
     discard e.handleEvent(event)
 
-    check e.state.commandText == ":set ts=4"
-    check e.state.commandCursor == 8
+    check e.state.input.commandText == ":set ts=4"
+    check e.state.input.commandCursor == 8
 
   test "Search overlay - bracketed paste appends to search text":
     let e = createTestEditorForPaste("hello world")
@@ -2570,7 +2572,7 @@ suite "handlePasteEvent":
     let event = makePasteEvent("wor")
     discard e.handleEvent(event)
 
-    check e.state.search.text == "wor"
+    check e.state.input.search.text == "wor"
 
   test "Search overlay - bracketed paste keeps only first line":
     let e = createTestEditorForPaste("hello world")
@@ -2579,7 +2581,7 @@ suite "handlePasteEvent":
     let event = makePasteEvent("wor\nignored")
     discard e.handleEvent(event)
 
-    check e.state.search.text == "wor"
+    check e.state.input.search.text == "wor"
 
 suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
   let quitEvent = Event(kind: EventKind.Quit)
@@ -2640,7 +2642,7 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = true
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "world"
+    e.state.input.search.text = "world"
 
     discard e.handleEvent(quitEvent)
 
@@ -2653,7 +2655,7 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = true
     e.state.enterCommandOverlay()
-    e.state.commandText = ":w"
+    e.state.input.commandText = ":w"
 
     discard e.handleEvent(quitEvent)
 
@@ -2683,13 +2685,13 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     discard e.activeBuffer.beginTransaction("Insert mode edit")
     e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
     e.state.enterCommandOverlay()
-    e.state.commandText = ""
-    e.state.commandCursor = 0
+    e.state.input.commandText = ""
+    e.state.input.commandCursor = 0
 
   test "Escape in command overlay returns to Insert when insertNormalMode":
     let e = createEditorForCmdOverlay("hello")
     e.setupInsertNormalCommandOverlay()
-    e.state.commandText = ":partial"
+    e.state.input.commandText = ":partial"
 
     discard e.handleCommandModeKeyCombo(escKey)
 
@@ -2702,7 +2704,7 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = false
     e.state.enterCommandOverlay()
-    e.state.commandText = ":partial"
+    e.state.input.commandText = ":partial"
 
     discard e.handleCommandModeKeyCombo(escKey)
 
@@ -2712,7 +2714,7 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
   test "Empty Enter in command overlay returns to Insert when insertNormalMode":
     let e = createEditorForCmdOverlay("hello")
     e.setupInsertNormalCommandOverlay()
-    e.state.commandText = ""
+    e.state.input.commandText = ""
 
     discard e.handleCommandModeKeyCombo(enterKey)
 
@@ -2724,7 +2726,7 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     let e = createEditorForCmdOverlay("hello")
     e.setupInsertNormalCommandOverlay()
     # :noh is a simple command that stays in Normal mode
-    e.state.commandText = ":noh"
+    e.state.input.commandText = ":noh"
 
     discard e.handleCommandModeKeyCombo(enterKey)
 

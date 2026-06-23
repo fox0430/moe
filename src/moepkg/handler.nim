@@ -234,7 +234,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     of okCommand:
       e.state.enterCommandOverlay()
     of okSearch:
-      e.state.enterSearchOverlay(e.state.search.direction)
+      e.state.enterSearchOverlay(e.state.input.search.direction)
     of okRename:
       e.state.enterRenameOverlay(
         e.state.renameState.originalWord, e.state.renameState.cursorLine,
@@ -778,8 +778,8 @@ proc handleQuitEvent(e: Editor): bool =
 
   # Search overlay: cancel search and exit overlay
   if e.state.isSearchOverlay:
-    if e.state.search.incsearch:
-      e.cursor = e.state.search.startPos
+    if e.state.input.search.incsearch:
+      e.cursor = e.state.input.search.startPos
     e.state.exitOverlay()
     e.setMode(e.state.mode)
     # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
@@ -1024,7 +1024,7 @@ proc handleEscapeCancellation(e: Editor, event: Event): bool =
     # No pending state - handle double-Escape to clear search highlight
     if e.state.lastKeyWasEscape:
       # Second Escape press - clear highlight
-      e.state.search.hlsearchTempDisabled = true
+      e.state.input.search.hlsearchTempDisabled = true
       e.state.lastKeyWasEscape = false
     else:
       # First Escape press - just mark it
