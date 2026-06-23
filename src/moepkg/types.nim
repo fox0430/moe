@@ -24,7 +24,7 @@ import pkg/celina
 import
   modes,
   buffer,
-  registers,
+  types/registers_types,
   types/filer_types,
   types/filetree_types,
   log_viewer,
@@ -50,7 +50,7 @@ import
   config
 
 export
-  buffer.LineMarkerKind, registers, command_completion_types, filer_types,
+  buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
   filetree_types, log_viewer, help_viewer_types, buffer_manager_types,
   bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
   config_mode, references_viewer_types, documentsymbol_viewer_types,

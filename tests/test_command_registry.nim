@@ -29,6 +29,7 @@ import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/git_conflict {.all.}
+import ../src/moepkg/registers {.all.}
 
 suite "CommandRegistry - CommandId":
   test "builtin creates CommandId from BuiltinCommandId":
