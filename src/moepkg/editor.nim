@@ -46,7 +46,8 @@ import
 
 import
   status_line, render_utils, git_conflict, logger, config_loader, search_utils,
-  hover_popup, command_completion, color, message_log, sidebar, recent_file_mode
+  hover_popup, command_completion, color, message_log, sidebar, recent_file_mode,
+  registers
 
 import command_handlers/handler_manager
 

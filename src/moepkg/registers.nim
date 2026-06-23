@@ -31,30 +31,9 @@ import std/[options, strutils, tables]
 import pkg/results
 
 import config, clipboard
+import types/registers_types
 
-type
-  Register* = object ## A single register containing text
-    isLine*: bool ## Whether the content is linewise (vs characterwise)
-    buffer*: seq[string] ## Content lines
-
-  Registers* = ref object ## Container for all register types
-    clipboardTool: Option[ClipboardTool]
-
-    noNamed: Register ## The unnamed register (") - latest yank/delete content
-
-    smallDelete: Register ## Small delete register (-) - deleted text less than one line
-
-    number: array[10, Register]
-      ## Numbered registers (0-9)
-      ## 0: Most recent yank
-      ## 1-9: Delete history (1 is most recent, shifts on new delete)
-
-    named: Table[char, Register]
-      ## Named registers (a-z)
-      ## Lowercase overwrites, uppercase appends
-
-    primarySelection: Register ## Primary selection register (*) - X11 PRIMARY
-    clipboardSelection: Register ## Clipboard selection register (+, ~) - CLIPBOARD
+export registers_types
 
 proc initRegisters*(): Registers =
   ## Initialize a new register set

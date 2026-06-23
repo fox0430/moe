@@ -33,7 +33,8 @@ import
   highlight,
   config_loader,
   sidebar,
-  logger
+  logger,
+  registers
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor
