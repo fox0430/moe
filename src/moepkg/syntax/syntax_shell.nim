@@ -31,110 +31,12 @@
 #    distribution, for details about the copyright.
 #
 
-import flags, tokenizer, lexer
+## Bash/POSIX-sh tokenizer. Lexing is shared with Zsh and Fish in
+## `syntax_shelllike`; this module is the Bash-mode entry point.
 
-const shellKeywords* = [
-  "[", "]", "alias", "bg", "bind", "break", "builtin", "case", "cd", "chdir", "command",
-  "compgen", "complete", "continue", "declare", "dirs", "disown", "do", "done", "echo",
-  "elif", "else", "enable", "esac", "eval", "exec", "exit", "export", "fc", "fg", "fi",
-  "for", "function", "getopts", "hash", "help", "history", "if", "in", "jobs", "kill",
-  "let", "local", "login", "logout", "newgrp", "popd", "print", "printf", "pushd",
-  "pwd", "read", "readonly", "return", "select", "set", "shift", "shopt", "source",
-  "stop", "suspend", "test", "then", "time", "times", "trap", "type", "typeset",
-  "ulimit", "umask", "unalias", "unset", "until", "wait", "whence", "while", "{", "}",
-]
+import tokenizer, syntax_shelllike
+
+export shellKeywords
 
 proc shellNextToken*(g: var GeneralTokenizer) =
-  const
-    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
-    symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
-  var pos = g.pos
-  g.start = g.pos
-  if g.state == gtStringLit and g.buf[pos] notin {'\0', '\r', '\n'}:
-    g.kind = gtStringLit
-    while true:
-      case g.buf[pos]
-      of '\\':
-        g.kind = gtEscapeSequence
-        inc(pos)
-        case g.buf[pos]
-        of 'x', 'X':
-          inc(pos)
-          if g.buf[pos] in hexChars:
-            inc(pos)
-          if g.buf[pos] in hexChars:
-            inc(pos)
-        of '0' .. '9':
-          while g.buf[pos] in {'0' .. '9'}:
-            inc(pos)
-        of '\0':
-          g.state = gtNone
-        else:
-          inc(pos)
-        break
-      of '\0', '\r', '\n':
-        g.state = gtNone
-        break
-      of '\"':
-        inc(pos)
-        g.state = gtNone
-        break
-      else:
-        inc(pos)
-  else:
-    # A string resume landing directly on EOL/EOF has no content left (an
-    # escape consumed up to the newline). The string is line-bounded, so end
-    # it: reset to gtNone and tokenize the terminator normally instead of
-    # emitting an empty gtStringLit token.
-    g.state = gtNone
-    case g.buf[pos]
-    of ' ', '\t' .. '\r':
-      g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\t' .. '\r'}:
-        inc(pos)
-    of '#':
-      pos = g.lexHash(pos, flagsShell)
-    of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
-      var id = ""
-      while g.buf[pos] in symChars:
-        add(id, g.buf[pos])
-        inc(pos)
-      if isKeyword(shellKeywords, id) >= 0:
-        g.kind = gtKeyword
-      else:
-        g.kind = gtIdentifier
-    of '0' .. '9':
-      pos = g.scanRadixNumber(pos)
-      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-        inc(pos)
-    of '\"':
-      inc(pos)
-      g.kind = gtStringLit
-      # Line-bounded: the resume path also ends the string at EOL, so a
-      # multi-line string never becomes one token whose interior line boundary
-      # state (gtNone) breaks incremental resume.
-      pos = g.scanStringBody(pos, '\"')
-    of '\'':
-      inc(pos)
-      g.kind = gtStringLit
-      pos = g.scanStringBody(pos, '\'')
-    of '(', ')', ':', ',', ';', '.':
-      inc(pos)
-      g.kind = gtPunctuation
-    of '[', ']', '{', '}':
-      inc(pos)
-      g.kind = gtKeyword
-    of '\0':
-      g.kind = gtEof
-    else:
-      if g.buf[pos] in opChars:
-        g.kind = gtOperator
-        while g.buf[pos] in opChars:
-          inc(pos)
-      else:
-        inc(pos)
-        g.kind = gtNone
-  g.length = pos - g.pos
-  if g.kind != gtEof and g.length <= 0:
-    assert false, "shellNextToken: produced an empty token"
-  g.pos = pos
+  shellLikeNextToken(g, sdShell)
