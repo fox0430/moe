@@ -234,20 +234,28 @@ proc handleVisualModeKey*(
       state.editState.pendingTextObject = none(PendingTextObject)
       # Fall through to process the key normally
 
-  # Try to find a binding for this key in the current mode first,
-  # then fall back to Visual mode for shared bindings
-  var binding = handler.keyBindingRegistry.findBinding(state.mode, keyCombo)
-  if binding.isNone and state.mode != EditorMode.Visual:
-    # Fall back to Visual mode bindings for VisualBlock/VisualLine
-    binding = handler.keyBindingRegistry.findBinding(EditorMode.Visual, keyCombo)
+  # Resolve the key through the shared built-in decode entry (`resolveBuiltin`)
+  # — the same path the Normal dispatcher uses. For VisualBlock/VisualLine, fall
+  # back to the shared Visual bindings, but only when the sub-mode genuinely had
+  # nothing to say (`rrUnhandled`). Falling back on `rrWaiting` would drive
+  # `processKey` a second time and complete a one-key-short sequence early
+  # (e.g. a single `g` in VisualBlock firing `gg`).
+  var route = handler.keyBindingRegistry.resolveBuiltin(state.mode, keyCombo)
+  if route.kind == rrUnhandled and state.mode != EditorMode.Visual:
+    route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Visual, keyCombo)
 
-  if binding.isNone:
-    # Check if we're waiting for character input (e.g., after pressing 'r')
-    if handler.keyBindingRegistry.isWaitingForChar:
-      return VisualModeResult(kind: vmrWaitingForInput)
+  case route.kind
+  of rrWaiting:
+    # Accumulating a multi-key sequence (gg/ge/zf) or waiting for an operand
+    # (e.g. after pressing `r`).
+    return VisualModeResult(kind: vmrWaitingForInput)
+  of rrCommand:
+    discard # Fall through to dispatch below.
+  else:
+    # rrCancelled (Escape cleared a pending sequence) or rrUnhandled.
     return VisualModeResult(kind: vmrUnhandled)
 
-  let cmd = binding.get
+  let cmd = route.command
 
   # Special-case action dispatch — mirrors the `of ctAction` arm in
   # `normal_handler.handleNormalModeKey` so all three mode handlers funnel
