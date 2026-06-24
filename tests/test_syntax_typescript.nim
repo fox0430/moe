@@ -703,6 +703,13 @@ suite "syntax_typescript - typescriptNextToken operators":
     g.typescriptNextToken()
     check g.kind == gtOperator
 
+  test "division-assignment is a single operator":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/= 2")
+    g.typescriptNextToken()
+    check g.kind == gtOperator
+    check g.length == 2
+
   test "equals operator":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("=")
