@@ -29,9 +29,9 @@ import pkg/unicodedb/properties
 
 import
   syntax/[
-    tokenizer, syntax_c, syntax_cpp, syntax_csharp, syntax_haskell, syntax_java,
-    syntax_javascript, syntax_lisp, syntax_nim, syntax_python, syntax_rust,
-    syntax_shell, syntax_typescript,
+    tokenizer, syntax_c, syntax_cpp, syntax_csharp, syntax_fish, syntax_haskell,
+    syntax_java, syntax_javascript, syntax_lisp, syntax_nim, syntax_python,
+    syntax_rust, syntax_shell, syntax_typescript, syntax_zsh,
   ]
 
 type WordDictionary* = CritBitTree[int]
@@ -131,6 +131,14 @@ proc getShellKeywords(): seq[string] {.compileTime.} =
   for s in shellKeywords:
     result.add s
 
+proc getZshKeywords(): seq[string] {.compileTime.} =
+  for s in zshKeywords:
+    result.add s
+
+proc getFishKeywords(): seq[string] {.compileTime.} =
+  for s in fishKeywords:
+    result.add s
+
 proc getTypeScriptKeywords(): seq[string] {.compileTime.} =
   for s in typescriptKeywords:
     result.add s
@@ -152,6 +160,8 @@ const
   PythonKeywordList = getPythonKeywords()
   RustKeywordList = getRustKeywords()
   ShellKeywordList = getShellKeywords()
+  ZshKeywordList = getZshKeywords()
+  FishKeywordList = getFishKeywords()
   TypeScriptKeywordList = getTypeScriptKeywords()
 
 proc getLanguageKeywords*(lang: SourceLanguage): seq[string] =
@@ -180,6 +190,10 @@ proc getLanguageKeywords*(lang: SourceLanguage): seq[string] =
     @RustKeywordList
   of langShell:
     @ShellKeywordList
+  of langZsh:
+    @ZshKeywordList
+  of langFish:
+    @FishKeywordList
   of langTypeScript, langTsx:
     @TypeScriptKeywordList
   else:
