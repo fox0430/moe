@@ -118,8 +118,7 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
   ## Shared JavaScript/TypeScript tokenizer. `tsMode` enables the
   ## TypeScript-only lexing rules: the TypeScript keyword set, generic `<T>`
   ## disambiguation, optional-property `?:` keys, and the `?`, `!` and `@`
-  ## (decorator) operators. In JavaScript mode `/=` is consumed as a single
-  ## operator token.
+  ## (decorator) operators.
 
   const
     hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
@@ -381,9 +380,9 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
         else:
           inc(pos)
     else:
-      # Division operator. JavaScript also consumes `/=`; TypeScript does not.
+      # Division operator, or the `/=` division-assignment operator.
       g.kind = gtOperator
-      if not tsMode and g.buf[pos] == '=':
+      if g.buf[pos] == '=':
         inc(pos)
   of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
     var id = ""
