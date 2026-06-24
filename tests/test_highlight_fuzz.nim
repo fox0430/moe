@@ -294,26 +294,22 @@ proc haskellCorpus(): seq[seq[string]] =
   ## apostrophes, char literals next to identifiers, escaped quotes, plus
   ## nested {- -} block comments and -- line comments.
   result = @[
-    @[
-      "module Main where", "", "main :: IO ()",
-      "main = putStrLn \"it's a test\"",
-    ],
+    @["module Main where", "", "main :: IO ()", "main = putStrLn \"it's a test\""],
     @[
       "greet :: String -> String", "greet name = \"Hello, \" ++ name ++ \"!\"",
       "-- a line comment", "sep = '\\n'",
     ],
     @[
-      "{- outer comment", "   {- nested -}", "   still inside -}",
-      "quote = '\\''", "esc = \"a\\\"b\"",
+      "{- outer comment", "   {- nested -}", "   still inside -}", "quote = '\\''",
+      "esc = \"a\\\"b\"",
     ],
     @[
-      "chars :: [Char]", "chars = ['a', 'b', '\\t', '\\'']", "",
-      "tab = '\\t'", "x = 1 -- trailing",
+      "chars :: [Char]", "chars = ['a', 'b', '\\t', '\\'']", "", "tab = '\\t'",
+      "x = 1 -- trailing",
     ],
     @[
-      "data Color = Red | Green | Blue", "",
-      "describe :: Color -> String", "describe Red = \"can't be redder\"",
-      "describe _ = \"some color\"",
+      "data Color = Red | Green | Blue", "", "describe :: Color -> String",
+      "describe Red = \"can't be redder\"", "describe _ = \"some color\"",
     ],
   ]
 
