@@ -260,6 +260,20 @@ suite "word_dictionary: getLanguageKeywords":
     check "then" in keywords
     check "fi" in keywords
 
+  test "Zsh":
+    let keywords = getLanguageKeywords(langZsh)
+    check keywords.len > 0
+    check "if" in keywords
+    check "setopt" in keywords # Zsh-specific
+    check "zstyle" in keywords # Zsh-specific
+
+  test "Fish":
+    let keywords = getLanguageKeywords(langFish)
+    check keywords.len > 0
+    check "function" in keywords
+    check "end" in keywords # Fish-specific
+    check "set_color" in keywords # Fish-specific
+
   test "None language":
     let keywords = getLanguageKeywords(langNone)
     check keywords.len == 0
