@@ -38,11 +38,10 @@
 
 import flags, tokenizer, lexer
 
-type
-  ShellDialect* = enum
-    sdShell ## Bash / POSIX sh
-    sdZsh
-    sdFish
+type ShellDialect* = enum
+  sdShell ## Bash / POSIX sh
+  sdZsh
+  sdFish
 
 const shellKeywords* = [
   "[", "]", "alias", "bg", "bind", "break", "builtin", "case", "cd", "chdir", "command",
@@ -80,9 +79,12 @@ const fishKeywords* = [
 
 proc isShellLikeKeyword(dialect: ShellDialect, id: string): bool =
   case dialect
-  of sdShell: isKeyword(shellKeywords, id) >= 0
-  of sdZsh: isKeyword(zshKeywords, id) >= 0
-  of sdFish: isKeyword(fishKeywords, id) >= 0
+  of sdShell:
+    isKeyword(shellKeywords, id) >= 0
+  of sdZsh:
+    isKeyword(zshKeywords, id) >= 0
+  of sdFish:
+    isKeyword(fishKeywords, id) >= 0
 
 proc shellLikeNextToken*(g: var GeneralTokenizer, dialect: ShellDialect) =
   ## Shared Bash/Zsh/Fish tokenizer. `dialect` selects the rules that differ
