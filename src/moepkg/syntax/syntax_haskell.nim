@@ -48,6 +48,22 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
+
+  # A string-literal continuation that reaches end-of-buffer emits gtEof, and
+  # one that reaches a newline drops to the main path: Haskell strings are
+  # line-bounded, so neither must spill a zero-length token out of the resume
+  # loop below.
+  if g.buf[pos] == '\0' and g.state == gtStringLit:
+    g.kind = gtEof
+    g.state = gtNone
+    g.commentDepth = 0
+    g.length = 0
+    g.pos = pos
+    return
+  if g.state == gtStringLit and g.buf[pos] in {'\r', '\n'}:
+    g.state = gtNone
+    g.commentDepth = 0
+
   if g.state in {gtLongComment, gtDocLongComment}:
     # Continuation of {- -} block comment
     if g.buf[pos] == '\0':
@@ -80,7 +96,10 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
         else:
           inc(pos)
   elif g.state == gtStringLit:
+    # Continuation of a string or char literal after a \ escape split.
+    # commentDepth: 1 = ", 2 = ' — selects the closing quote.
     g.kind = gtStringLit
+    let quote = if g.commentDepth == 2: '\'' else: '\"'
     while true:
       case g.buf[pos]
       of '\\':
@@ -96,18 +115,25 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
         of '0' .. '9':
           while g.buf[pos] in {'0' .. '9'}:
             inc(pos)
-        of '\0':
+        of '\0', '\r', '\n':
+          # Trailing backslash at the line end: stay line-bounded.
           g.state = gtNone
+          g.commentDepth = 0
         else:
           inc(pos)
         break
       of '\0', '\r', '\n':
         g.state = gtNone
+        g.commentDepth = 0
         break
-      of '\"':
-        inc(pos)
-        g.state = gtNone
-        break
+      of '\"', '\'':
+        if g.buf[pos] == quote:
+          inc(pos)
+          g.state = gtNone
+          g.commentDepth = 0
+          break
+        else:
+          inc(pos)
       else:
         inc(pos)
   else:
@@ -118,7 +144,7 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
         inc(pos)
     of '-':
       # Check for -- line comment
-      if g.buf[pos + 1] == '-':
+      if g.peek(pos) == '-':
         g.kind = gtComment
         pos = g.endLine(pos)
       else:
@@ -171,20 +197,17 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
       if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
         inc(pos)
     of '\"', '\'':
+      # A string ('"') or char ('\'') literal. Both are line-bounded; the
+      # shared scanner closes only on the matching quote and parks on a
+      # backslash so the resume path picks up the escape.
+      let quote = g.buf[pos]
       inc(pos)
       g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0':
-          break
-        of '\"', '\'':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc(pos)
+      pos = g.scanStringBody(pos, quote)
+      if g.state == gtStringLit:
+        # Parked on a backslash; remember which quote opened the literal.
+        # commentDepth: 1 = ", 2 = '
+        g.commentDepth = if quote == '\"': 1 else: 2
     of '(', ')', '[', ']', '}', ':', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation

@@ -168,6 +168,16 @@ suite "curly_open_lexer - lexCurlyDashComment unterminated":
     check endPos == 12
     check g.kind == gtPreprocessor
 
+  test "preprocessor is line-bounded at a newline":
+    # A {-# pragma carries no resume state, so it must stop at the line
+    # boundary rather than run across the newline — otherwise a full reparse
+    # (one '\n'-joined buffer) diverges from the incremental, per-line one.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("{-# LANGUAGE\nfoo")
+    let endPos = g.lexCurlyDashComment(1, flagsHaskell)
+    check endPos == 12 # stops at the newline, before "foo"
+    check g.kind == gtPreprocessor
+
   test "partial closing - only dash":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("{- comment -")

@@ -1017,19 +1017,24 @@ suite "syntax_haskell - haskellNextToken edge cases":
     g.haskellNextToken()
     check g.kind == gtStringLit
 
-  test "string can contain newline":
-    # Haskell strings can span multiple lines (unlike some languages)
+  test "string is line-bounded at a newline":
+    # Haskell strings do not span literal newlines (they use \ gaps), so the
+    # literal stops at the line boundary and never swallows the newline. This
+    # also keeps the incremental tokenizer in step with a full reparse.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"test\nnext\"")
     g.haskellNextToken()
     check g.kind == gtStringLit
-    check g.length == 11 # includes quotes and newline
+    check g.length == 5 # just "test, up to the newline
+    check g.state != gtStringLit # no continuation onto the next line
 
-  test "string terminated by carriage return":
+  test "string is line-bounded at a carriage return":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"test\rnext")
     g.haskellNextToken()
     check g.kind == gtStringLit
+    check g.length == 5
+    check g.state != gtStringLit
 
   test "comment after code":
     var g: GeneralTokenizer
@@ -1103,6 +1108,70 @@ suite "syntax_haskell - haskellNextToken string continuation":
 
     check gtStringLit in tokens
     check gtEscapeSequence in tokens
+
+suite "syntax_haskell - haskellNextToken quote-specific literals":
+  test "apostrophe inside a double-quoted string does not close it":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"it's\"")
+    g.haskellNextToken()
+    check g.kind == gtStringLit
+    check g.length == 6 # the whole "it's"
+    check g.state != gtStringLit
+
+  test "string with apostrophes is a single token":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"it's a test\"")
+    g.haskellNextToken()
+    check g.kind == gtStringLit
+    check g.length == 13
+    check g.state != gtStringLit
+
+  test "double quote inside a char literal does not close it":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\"'") # the char literal '"'
+    g.haskellNextToken()
+    check g.kind == gtStringLit
+    check g.length == 3
+    check g.state != gtStringLit
+
+  test "escaped double quote does not terminate a string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\\"b\"") # "a\"b"
+    var tokens: seq[(TokenClass, int)] = @[]
+    while true:
+      g.haskellNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add((g.kind, g.length))
+    # "a  (parked at the backslash), \"  (escape), b"  (rest + closing quote)
+    check tokens == @[(gtStringLit, 2), (gtEscapeSequence, 2), (gtStringLit, 2)]
+
+  test "char literal with an escaped single quote closes on the single quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\''") # the char literal '\''
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.haskellNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+    check kinds == @[gtStringLit, gtEscapeSequence, gtStringLit]
+    check g.state == gtNone
+
+  test "char-literal continuation closes on a single quote, not a double quote":
+    # Regression: the resume path used to hard-code '"' as the only terminator,
+    # so an escaped char literal ran past its closing ' to the end of the line.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\n' x") # '\n' followed by an identifier
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.haskellNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+    # ' \n ' <space> x  — the literal must close so `x` is a separate identifier.
+    check gtIdentifier in kinds
+    check g.state == gtNone
 
 suite "syntax_haskell - haskellNextToken doc comments":
   test "haddock doc comment":

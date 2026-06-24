@@ -288,6 +288,35 @@ proc lispCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc haskellCorpus(): seq[seq[string]] =
+  ## Haskell snippets stressing the line-bounded string/char literals and the
+  ## `\` escape split carried in `commentDepth` (1 = ", 2 = '): strings with
+  ## apostrophes, char literals next to identifiers, escaped quotes, plus
+  ## nested {- -} block comments and -- line comments.
+  result = @[
+    @[
+      "module Main where", "", "main :: IO ()",
+      "main = putStrLn \"it's a test\"",
+    ],
+    @[
+      "greet :: String -> String", "greet name = \"Hello, \" ++ name ++ \"!\"",
+      "-- a line comment", "sep = '\\n'",
+    ],
+    @[
+      "{- outer comment", "   {- nested -}", "   still inside -}",
+      "quote = '\\''", "esc = \"a\\\"b\"",
+    ],
+    @[
+      "chars :: [Char]", "chars = ['a', 'b', '\\t', '\\'']", "",
+      "tab = '\\t'", "x = 1 -- trailing",
+    ],
+    @[
+      "data Color = Red | Green | Blue", "",
+      "describe :: Color -> String", "describe Red = \"can't be redder\"",
+      "describe _ = \"some color\"",
+    ],
+  ]
+
 proc cCorpus(): seq[seq[string]] =
   ## C snippets covering the cross-line state carried in `gtLongComment` /
   ## `gtDocLongComment`: multi-line block comments and doc comments (C block
@@ -841,6 +870,9 @@ suite "Incremental Highlight Fuzz":
 
   test "Lisp: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langLisp, lispCorpus(), iters, baseSeed)
+
+  test "Haskell: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langHaskell, haskellCorpus(), iters, baseSeed)
 
   test "C: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langC, cCorpus(), iters, baseSeed)

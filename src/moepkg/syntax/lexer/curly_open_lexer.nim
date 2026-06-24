@@ -49,7 +49,10 @@ proc lexCurlyDashPreprocessor(
 
     while true:
       case lexer.buf[result]
-      of '\0':
+      of '\0', '\r', '\n':
+        # Line-bounded: a {-# pragma has no resume state, so stopping at the
+        # line boundary keeps the incremental tokenizer in step with a full
+        # reparse (which would otherwise run the pragma across the newline).
         break
       of '#':
         inc result
