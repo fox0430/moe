@@ -462,6 +462,115 @@ suite "VisualModeHandler - handleVisualModeKey":
 
     check state.macroState.recordedKeys.len >= 1
 
+suite "VisualModeHandler - sequence dispatch (M7 regression)":
+  # `gg`/`ge`/`zf` are bound as multi-key sequences to all three Visual modes.
+  # A single `g` must keep waiting; it must not be completed early by the
+  # VisualBlock/VisualLine fallback re-driving the decode FSM (the old raw
+  # `findBinding` fallback fired `gg` on the very first `g`).
+  let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
+
+  for subMode in [EditorMode.VisualBlock, EditorMode.VisualLine]:
+    test "Single g waits, does not fire gg in " & $subMode:
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "line0\nline1\nline2")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.mode = subMode
+      state.cursor = BufferPosition(line: 2, column: 0)
+      initSelection(
+        state, buf, if subMode == EditorMode.VisualLine: vskLine else: vskBlock
+      )
+      let viewport = createTestViewport()
+
+      # First `g`: must wait, cursor must not jump to the first line.
+      let r1 = handler.handleVisualModeKey(buf, state, viewport, gKey)
+      check r1.kind == vmrWaitingForInput
+      check state.cursor.line == 2
+
+      # Second `g`: completes `gg`, cursor jumps to the first line.
+      let r2 = handler.handleVisualModeKey(buf, state, viewport, gKey)
+      check r2.kind == vmrHandled
+      check state.cursor.line == 0
+
+  test "Single g waits in plain Visual too":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line0\nline1\nline2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.cursor = BufferPosition(line: 2, column: 0)
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    let r1 = handler.handleVisualModeKey(buf, state, viewport, gKey)
+    check r1.kind == vmrWaitingForInput
+    check state.cursor.line == 2
+
+    let r2 = handler.handleVisualModeKey(buf, state, viewport, gKey)
+    check r2.kind == vmrHandled
+    check state.cursor.line == 0
+
+  test "Escape clears a pending sequence (next g does not fire gg)":
+    # rrCancelled arm: Escape on an active sequence clears it and stays in mode.
+    # If the pending `g` survived, the post-Escape `g` would complete `gg`.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line0\nline1\nline2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.cursor = BufferPosition(line: 2, column: 0)
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    check handler.handleVisualModeKey(buf, state, viewport, gKey).kind ==
+      vmrWaitingForInput
+    let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    discard handler.handleVisualModeKey(buf, state, viewport, escKey)
+
+    # A fresh `g` must wait again, not jump to the first line.
+    let r = handler.handleVisualModeKey(buf, state, viewport, gKey)
+    check r.kind == vmrWaitingForInput
+    check state.cursor.line == 2
+
+  test "i in VisualBlock dispatches via the shared Visual fallback":
+    # rrUnhandled -> fallback -> rrCommand: `i` (textobject-inner) is bound to
+    # plain Visual only; VisualBlock reaches it through the Visual fallback.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.cursor = BufferPosition(line: 0, column: 0)
+    initSelection(state, buf, vskBlock)
+    let viewport = createTestViewport()
+
+    let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
+    let r = handler.handleVisualModeKey(buf, state, viewport, iKey)
+    # The fallback found and dispatched the command (it armed a pending text
+    # object), so the key is not reported unhandled.
+    check r.kind == vmrHandled
+    check state.editState.pendingTextObject.isSome
+
+  test "r waits for its operand, then the operand char replaces the selection":
+    # rrWaiting via waitingForChar (operand wait), then rrCommand on the operand.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.cursor = BufferPosition(line: 0, column: 0)
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    let rKey = KeyCombo(isSpecial: false, char: "r", modifiers: {})
+    check handler.handleVisualModeKey(buf, state, viewport, rKey).kind ==
+      vmrWaitingForInput
+
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    let r = handler.handleVisualModeKey(buf, state, viewport, xKey)
+    check r.kind in {vmrHandled, vmrUnhandled}
+    check buf.getLine(0)[0] == 'x'
+
   test "Handle Visual mode fallback to VisualLine":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")

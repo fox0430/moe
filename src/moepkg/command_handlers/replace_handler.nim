@@ -211,10 +211,15 @@ proc handleReplaceModeKey*(
   if state.macroState.isRecording:
     state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
-  # Check for mode switch keys first (like Escape)
-  let binding = handler.keyBindingRegistry.findBinding(EditorMode.Replace, keyCombo)
-  if binding.isSome:
-    let cmd = binding.get
+  # Resolve through the shared built-in decode entry (`resolveBuiltin`), the
+  # same path Normal/Visual/Insert use. Replace has no built-in sequences, but a
+  # user `:rmap` may bind a multi-key command, so the FSM-backed entry (not a
+  # plain single-key lookup) is still required. Only `rrCommand` carries a
+  # binding to dispatch; every other result falls through to character replace,
+  # matching the previous `findBinding` `none` path exactly.
+  let route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Replace, keyCombo)
+  if route.kind == rrCommand:
+    let cmd = route.command
     case cmd.kind
     of ctModeSwitch:
       return handler.handleModeSwitch(cmd.targetMode)

@@ -23,8 +23,12 @@
 ## point and the `flushTimeout` follow-up). Built-in command resolution
 ## (multi-key sequences, single bindings, numeric prefix, f/t/r operand waits)
 ## lives in `KeyBindingRegistry.processKey`; `resolveBuiltin` (below) wraps it
-## into a `RouteResult` via the `rrCommand` variant and is invoked from the
-## Normal-mode dispatcher (the only mode that uses sequence resolution).
+## into a `RouteResult` via the `rrCommand` variant and is the single decode
+## entry shared by every mode dispatcher (Normal/Visual/Replace/Insert).
+## Sequence resolution is exercised by Normal (counts, gg/operators) and Visual
+## (gg/ge/zf, the `r` operand); Replace/Insert carry no built-in sequences but
+## still route through it so a user `:rmap`/`:imap` multi-key command binding
+## (which `addRuntimeMapping` stores in `sequences[mode]`) resolves correctly.
 ##
 ## The router owns the runtime-mapping accumulator directly via its
 ## `dispatchState` field (a `DispatchState`); the routing helpers
@@ -184,18 +188,20 @@ proc resolveBuiltin*(
   ##
   ## NOTE: `rrUnhandled` here is *not* a pure pass-through. `combo` may already
   ## have been consumed by `processKey` as the terminator of an invalid sequence
-  ## (e.g. `z` after `g` when only `gg` is bound) or as bad operand input. The
-  ## current Normal-mode caller collapses every non-`rrCommand` result to
-  ## "handled, no re-processing", so this is harmless today; a future caller
-  ## must NOT feed `route.key` back into built-in processing or it would
-  ## double-handle the terminator key.
+  ## (e.g. `z` after `g` when only `gg` is bound) or as bad operand input. Every
+  ## mode dispatcher collapses each non-`rrCommand` result to "handled / fall
+  ## through to char input", so this is harmless today; a caller must NOT feed
+  ## `route.key` back into built-in processing or it would double-handle the
+  ## terminator key. The one place that re-routes — the VisualBlock/VisualLine
+  ## fallback to shared Visual bindings — gates on `rrUnhandled` only, never
+  ## `rrWaiting`, so it never drives `processKey` twice over a pending sequence.
   ##
   ## Lives in the router module (not `key_bindings`) because it returns the
   ## router-owned `RouteResult`; moving it into `key_bindings` would require
   ## that module to import `key_router/types`, which already imports
   ## `key_bindings` — a cycle. It takes a `KeyBindingRegistry` (not a
   ## `KeyRouter`) by design: the built-in accumulator is registry-owned and the
-  ## Normal dispatcher holds the registry, not the router (see the module
+  ## mode dispatchers hold the registry, not the router (see the module
   ## docstring for why that ownership split is the intended end state).
   let wasEscapeOnActive =
     combo.isSpecial and combo.special == skEscape and registry.hasActiveSequence()
