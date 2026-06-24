@@ -43,8 +43,6 @@ const pythonKeywords* = [
 proc pythonNextToken*(g: var GeneralTokenizer) =
   const
     hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
-    octChars = {'0' .. '7'}
-    binChars = {'0' .. '1'}
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
@@ -79,8 +77,8 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
         if g.buf[pos] != '\0':
           inc(pos)
       of '\"', '\'':
-        if g.buf[pos] == quoteChar and g.buf[pos + 1] == quoteChar and
-            g.buf[pos + 2] == quoteChar:
+        if g.buf[pos] == quoteChar and g.peek(pos) == quoteChar and
+            g.peek(pos, 2) == quoteChar:
           inc(pos, 3)
           g.state = gtNone
           g.commentDepth = 0
@@ -146,42 +144,16 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
         g.kind = gtKeyword
       else:
         g.kind = gtIdentifier
-    of '0':
-      inc(pos)
-      case g.buf[pos]
-      of 'b', 'B':
-        g.kind = gtBinNumber
-        inc(pos)
-        while g.buf[pos] in binChars:
-          inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      of 'x', 'X':
-        g.kind = gtHexNumber
-        inc(pos)
-        while g.buf[pos] in hexChars:
-          inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      of '0' .. '7':
-        g.kind = gtOctNumber
-        inc(pos)
-        while g.buf[pos] in octChars:
-          inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-      else:
-        pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-          inc(pos)
-    of '1' .. '9':
-      pos = generalNumber(g, pos)
+    of '0' .. '9':
+      pos = g.scanRadixNumber(pos)
+      # Python allows a single trailing type letter (e.g. the `j` of an
+      # imaginary literal, or a stray suffix); the shared scanner leaves it.
       if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
         inc(pos)
     of '\"', '\'':
       let quoteChar = g.buf[pos]
       inc(pos)
-      if g.buf[pos] == quoteChar and g.buf[pos + 1] == quoteChar:
+      if g.buf[pos] == quoteChar and g.peek(pos) == quoteChar:
         # Triple-quoted string (docstring)
         inc(pos, 2)
         g.kind = gtDocLongComment
@@ -196,8 +168,8 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
             if g.buf[pos] != '\0':
               inc(pos)
           of '\"', '\'':
-            if g.buf[pos] == quoteChar and g.buf[pos + 1] == quoteChar and
-                g.buf[pos + 2] == quoteChar:
+            if g.buf[pos] == quoteChar and g.peek(pos) == quoteChar and
+                g.peek(pos, 2) == quoteChar:
               inc(pos, 3)
               break
             else:
@@ -206,22 +178,12 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
             inc(pos)
       else:
         g.kind = gtStringLit
-        while true:
-          case g.buf[pos]
-          of '\0', '\r', '\n':
-            break
-          of '\"', '\'':
-            if g.buf[pos] == quoteChar:
-              inc(pos)
-              break
-            else:
-              inc(pos)
-          of '\\':
-            g.state = g.kind
-            g.commentDepth = if quoteChar == '\"': 1 else: 2
-            break
-          else:
-            inc(pos)
+        pos = g.scanStringBody(pos, quoteChar)
+        if g.state == gtStringLit:
+          # scanStringBody parked on a backslash; record which quote opened the
+          # literal so the resume path picks the right terminator.
+          # commentDepth: 1 = ", 2 = '
+          g.commentDepth = if quoteChar == '\"': 1 else: 2
     of '(':
       inc(pos)
       g.kind = gtPunctuation
