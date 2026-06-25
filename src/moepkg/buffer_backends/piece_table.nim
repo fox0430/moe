@@ -24,8 +24,6 @@
 
 import std/algorithm
 
-import ../logger
-
 type
   RBColor = enum
     rbRed
@@ -487,7 +485,7 @@ proc tryCoalesceAtOffset(pt: PieceTable, offset: int) =
     )
     pt.root = pDeleteAtOffset(pt.root, predStart + pred.length + addLength)
 
-proc lineStartByteOffset*(pt: PieceTable, lineNumber: int): int =
+proc lineStartByteOffset(pt: PieceTable, lineNumber: int): int =
   if lineNumber <= 0:
     return 0
   if lineNumber >= pt.cachedLineCount:
@@ -514,16 +512,7 @@ proc lineStartByteOffset*(pt: PieceTable, lineNumber: int): int =
 
   pt.cachedByteLen
 
-proc lineEndByteOffset*(pt: PieceTable, lineNumber: int): int =
-  if lineNumber < 0 or lineNumber >= pt.cachedLineCount:
-    return pt.cachedByteLen
-  if lineNumber == pt.cachedLineCount - 1:
-    return pt.cachedByteLen
-  pt.lineStartByteOffset(lineNumber + 1) - 1
-
-proc lineByteRange*(
-    pt: PieceTable, lineNumber: int
-): tuple[startOff: int, endOff: int] =
+proc lineByteRange(pt: PieceTable, lineNumber: int): tuple[startOff: int, endOff: int] =
   ## Returns (startByteOffset, endByteOffset) for the given line in a single
   ## tree traversal when possible.
   if lineNumber < 0 or lineNumber >= pt.cachedLineCount:
@@ -682,9 +671,6 @@ proc lineCount*(pt: PieceTable): int {.inline.} =
 
 proc len*(pt: PieceTable): int {.inline.} =
   pt.cachedLineCount
-
-proc byteLen*(pt: PieceTable): int {.inline.} =
-  pt.cachedByteLen
 
 proc getLine*(pt: PieceTable, lineNumber: int): string =
   if lineNumber < 0 or lineNumber >= pt.cachedLineCount:
@@ -988,66 +974,6 @@ proc charAtLineCol*(pt: PieceTable, line: int, col: int): char =
   else:
     raise newException(IndexDefect, "PieceTable column out of bounds")
 
-proc charAt*(pt: PieceTable, index: int): char =
-  if index < 0 or index >= pt.cachedByteLen:
-    raise newException(IndexDefect, "PieceTable index out of bounds: " & $index)
-  let text = pt.substringBytes(index, 1)
-  if text.len > 0:
-    return text[0]
-  raise newException(IndexDefect, "PieceTable: failed to read byte")
-
-proc findLineStart*(pt: PieceTable, lineNumber: int): int =
-  if lineNumber < 0 or lineNumber >= pt.cachedLineCount:
-    return -1
-  pt.lineStartByteOffset(lineNumber)
-
-proc findLineEnd*(pt: PieceTable, lineNumber: int): int =
-  if lineNumber < 0 or lineNumber >= pt.cachedLineCount:
-    return -1
-  pt.lineEndByteOffset(lineNumber) - 1
-
-proc indexToLineCol*(pt: PieceTable, index: int): tuple[line: int, col: int] =
-  if index < 0:
-    return (-1, -1)
-  if pt.cachedLineCount == 0:
-    return (0, 0)
-  if index >= pt.cachedByteLen:
-    let lastLine = pt.cachedLineCount - 1
-    let lastLineStart = pt.lineStartByteOffset(lastLine)
-    return (lastLine, pt.cachedByteLen - lastLineStart)
-
-  var lineNum = 0
-  var cur = pt.root
-  var remaining = index
-  while not cur.isNil:
-    let ll = cur.leftLen
-    let llf = cur.leftLF
-    if remaining < ll:
-      cur = cur.left
-    elif remaining < ll + cur.length:
-      let localOff = remaining - ll
-      let buf = pt.buffers[cur.bufferIndex]
-      let sOff = buf.bufferOffset(cur.start)
-      let targetLine = buf.bufferLineForOffset(sOff + localOff)
-      let linesFromNodeStart = targetLine - cur.start.line
-      lineNum += llf + linesFromNodeStart
-      if linesFromNodeStart > 0:
-        # Line start is within this node — compute col directly O(1)
-        let col = (sOff + localOff) - buf.lineStarts[targetLine]
-        return (lineNum, col)
-      else:
-        # Line start is before this node — O(log n) fallback
-        let lineStart = pt.lineStartByteOffset(lineNum)
-        return (lineNum, index - lineStart)
-    else:
-      lineNum += llf + cur.lineFeedCount
-      remaining -= ll + cur.length
-      cur = cur.right
-
-  # Fallthrough: should not occur for valid index < cachedByteLen
-  let lineStart = pt.lineStartByteOffset(lineNum)
-  (lineNum, index - lineStart)
-
 proc insertIntoLine*(pt: PieceTable, line, col: int, text: string) =
   if line < 0 or line >= pt.cachedLineCount:
     raise newException(IndexDefect, "PieceTable line out of bounds: " & $line)
@@ -1069,36 +995,6 @@ proc deleteAtLineCol*(pt: PieceTable, line: int, col: int, count: int = 1) =
     return
   let actualCount = min(count, pt.cachedByteLen - byteOffset)
   pt.deleteNodeAt(byteOffset, actualCount)
-
-proc insert*(pt: PieceTable, index: int, text: string) =
-  if text.len == 0 or index < 0:
-    logDebug "piece_table",
-      "insert: no-op (text.len=" & $text.len & ", index=" & $index & ")"
-    return
-  pt.insertTextAt(min(index, pt.cachedByteLen), text)
-
-proc insert*(pt: PieceTable, index: int, ch: char) =
-  pt.insert(index, $ch)
-
-proc delete*(pt: PieceTable, index: int, count: int = 1) =
-  if count <= 0 or index < 0 or index >= pt.cachedByteLen:
-    logDebug "piece_table",
-      "delete: no-op (count=" & $count & ", index=" & $index & ", cachedByteLen=" &
-        $pt.cachedByteLen & ")"
-    return
-  pt.deleteNodeAt(index, min(count, pt.cachedByteLen - index))
-
-proc substring*(pt: PieceTable, start: int, length: int): string =
-  if length <= 0 or start < 0:
-    return ""
-  pt.substringBytes(start, length)
-
-proc `[]`*[T, U: Ordinal](pt: PieceTable, x: HSlice[T, U]): string =
-  let start = x.a.int
-  let endIdx = x.b.int
-  if start < 0 or endIdx < start:
-    return ""
-  pt.substring(start, endIdx - start + 1)
 
 proc clear*(pt: PieceTable) =
   pt.root = nil

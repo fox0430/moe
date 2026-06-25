@@ -82,6 +82,30 @@ suite "Rope - Line Access":
     check r[0] == "xyz"
     check r[1] == "def"
 
+  test "getLine and offset procs on empty middle line":
+    # An empty non-last line exercises the lineStartByteOffset /
+    # lineEndByteOffset path that getLine, [], and charAtLineCol use but the
+    # lines/chars leaf walk bypasses.
+    let r = newRope("a\n\nb")
+    check r.len == 3
+    check r.getLine(0) == "a"
+    check r.getLine(1) == "" # empty middle line
+    check r[1] == ""
+    check r.getLine(2) == "b" # line after the empty one
+    check r.charAtLineCol(2, 0) == 'b'
+    # Direct offset endpoints on the empty non-last line and the line after it.
+    check r.lineStartByteOffset(1) == 2
+    check r.lineEndByteOffset(1) == 2 # empty line: start == end
+    check r.lineStartByteOffset(2) == 3
+
+  test "empty middle line created by edit stays addressable":
+    let r = newRope("first\nsecond")
+    r.insertLine(1, "") # first / "" / second
+    check r.len == 3
+    check r.getLine(1) == ""
+    check r.getLine(2) == "second"
+    check r.charAtLineCol(2, 0) == 's'
+
 suite "Rope - Character Access":
   test "charAtLineCol basic":
     let r = newRope("hello\nworld")
@@ -92,14 +116,6 @@ suite "Rope - Character Access":
   test "charAtLineCol at end of line returns newline":
     let r = newRope("hello\nworld")
     check r.charAtLineCol(0, 5) == '\n'
-
-  test "charAt linear index":
-    let r = newRope("ab\ncd")
-    check r.charAt(0) == 'a'
-    check r.charAt(1) == 'b'
-    check r.charAt(2) == '\n'
-    check r.charAt(3) == 'c'
-    check r.charAt(4) == 'd'
 
 suite "Rope - Line Insert":
   test "insertLine at beginning":
@@ -181,77 +197,6 @@ suite "Rope - Delete At Line Col":
     r.deleteAtLineCol(0, 3, 5)
     check r.len == 1
     check r[0] == "helrld"
-
-suite "Rope - Linear Index Insert":
-  test "insert text without newline":
-    let r = newRope("hllo")
-    r.insert(1, "e")
-    check r[0] == "hello"
-
-  test "insert text with newline":
-    let r = newRope("helloworld")
-    r.insert(5, "\n")
-    check r.len == 2
-    check r[0] == "hello"
-    check r[1] == "world"
-
-  test "insert char":
-    let r = newRope("hllo")
-    r.insert(1, 'e')
-    check r[0] == "hello"
-
-suite "Rope - Linear Index Delete":
-  test "delete single char":
-    let r = newRope("hello")
-    r.delete(0)
-    check r[0] == "ello"
-
-  test "delete newline":
-    let r = newRope("hello\nworld")
-    r.delete(5, 1)
-    check r.len == 1
-    check r[0] == "helloworld"
-
-  test "delete multiple chars":
-    let r = newRope("hello world")
-    r.delete(5, 6)
-    check r[0] == "hello"
-
-suite "Rope - Linear Index":
-  test "findLineStart":
-    let r = newRope("hello\nworld\nfoo")
-    check r.findLineStart(0) == 0
-    check r.findLineStart(1) == 6
-    check r.findLineStart(2) == 12
-
-  test "findLineEnd":
-    let r = newRope("hello\nworld\nfoo")
-    check r.findLineEnd(0) == 4
-    check r.findLineEnd(1) == 10
-    check r.findLineEnd(2) == 14
-
-  test "indexToLineCol":
-    let r = newRope("hello\nworld")
-    check r.indexToLineCol(0) == (0, 0)
-    check r.indexToLineCol(4) == (0, 4)
-    check r.indexToLineCol(5) == (0, 5)
-    check r.indexToLineCol(6) == (1, 0)
-    check r.indexToLineCol(10) == (1, 4)
-
-suite "Rope - Substring":
-  test "substring within line":
-    let r = newRope("hello world")
-    check r.substring(0, 5) == "hello"
-    check r.substring(6, 5) == "world"
-
-  test "substring across lines":
-    let r = newRope("hello\nworld")
-    check r.substring(3, 5) == "lo\nwo"
-
-  test "slice operator":
-    let r = newRope("hello world")
-    check r[0 .. 4] == "hello"
-    check r[6 .. 10] == "world"
 
 suite "Rope - Conversion":
   test "toString basic":

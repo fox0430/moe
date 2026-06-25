@@ -98,35 +98,6 @@ proc logicalToPhysical(gb: GapBuffer, logicalLine: int): int {.inline.} =
   else:
     logicalLine + gb.gapSize
 
-proc byteLen*(gb: GapBuffer): int =
-  ## Return total byte count (including newlines between lines)
-  for i in 0 ..< gb.lineCount:
-    let physicalLine = gb.logicalToPhysical(i)
-    result += gb.lines[physicalLine].len
-    # Add newline for all but last line
-    if i < gb.lineCount - 1:
-      result += 1
-
-proc findLineStart*(gb: GapBuffer, lineNumber: int): int =
-  ## Return the linear index of the start of the given line
-  if lineNumber < 0 or lineNumber >= gb.lineCount:
-    return -1
-
-  result = 0
-  for i in 0 ..< lineNumber:
-    let physicalLine = gb.logicalToPhysical(i)
-    result += gb.lines[physicalLine].len + 1 # +1 for newline
-
-proc findLineEnd*(gb: GapBuffer, lineNumber: int): int =
-  ## Return the linear index of the end of the given line (last byte position)
-  ## Returns -1 if lineNumber is invalid or line is empty
-  if lineNumber < 0 or lineNumber >= gb.lineCount:
-    return -1
-
-  let lineStart = gb.findLineStart(lineNumber)
-  let physicalLine = gb.logicalToPhysical(lineNumber)
-  lineStart + gb.lines[physicalLine].len - 1
-
 proc ensureGapSize(gb: GapBuffer, minSize: int) =
   ## Ensure gap has at least minSize lines
   ##
@@ -389,49 +360,6 @@ proc charAtLineCol*(gb: GapBuffer, line: int, col: int): char =
   else:
     raise newException(IndexDefect, "GapBuffer column out of bounds")
 
-proc indexToLineCol*(gb: GapBuffer, index: int): tuple[line: int, col: int] =
-  ## Convert linear index to (line, column) position
-  ## Returns (-1, -1) for invalid index
-  if index < 0:
-    return (-1, -1)
-
-  var
-    remaining = index
-    lineNum = 0
-
-  while lineNum < gb.len:
-    let
-      physicalLine = gb.logicalToPhysical(lineNum)
-      lineObj = gb.lines[physicalLine]
-      lineLen = lineObj.len
-
-    if remaining <= lineLen:
-      return (lineNum, remaining)
-    else:
-      remaining -= lineLen
-      if lineNum < gb.len - 1:
-        remaining -= 1 # Account for newline
-      inc lineNum
-
-  # Past end of buffer - return position at end of last line
-  if gb.len > 0:
-    let lastLine = gb.len - 1
-    let physicalLine = gb.logicalToPhysical(lastLine)
-    return (lastLine, gb.lines[physicalLine].len)
-  return (0, 0)
-
-proc charAt*(gb: GapBuffer, index: int): char =
-  ## Get the byte at linear (byte) index position.
-  ## Treats the buffer as a flat sequence of bytes with newlines between
-  ## lines. Shares the index->(line, col) scan with `indexToLineCol`; a column
-  ## equal to the line length maps to the trailing newline (or out-of-bounds on
-  ## the last line) via `charAtLineCol`.
-  if index < 0:
-    raise newException(IndexDefect, "GapBuffer index out of bounds: " & $index)
-
-  let (line, col) = gb.indexToLineCol(index)
-  gb.charAtLineCol(line, col)
-
 proc replaceLine*(gb: GapBuffer, lineNumber: int, content: string) =
   ## Replace the content of a specific line
   ## Raises IndexDefect if lineNumber is out of bounds
@@ -448,17 +376,6 @@ proc `[]`*(gb: GapBuffer, lineNumber: int): string =
 proc `[]=`*(gb: GapBuffer, lineNumber: int, content: string) =
   ## Bracket operator for replacing line content
   gb.replaceLine(lineNumber, content)
-
-proc `[]`*[T, U: Ordinal](gb: GapBuffer, x: HSlice[T, U]): string =
-  ## Slice operator for extracting substring by linear index range
-  ## Returns substring from x.a to x.b (inclusive)
-  let
-    start = x.a.int
-    endIdx = x.b.int
-  if start < 0 or endIdx < start:
-    return ""
-  let length = endIdx - start + 1
-  gb.substring(start, length)
 
 proc insertLine*(gb: GapBuffer, lineNumber: int, content: string) =
   ## Insert a new line at the specified line number
@@ -502,133 +419,6 @@ proc modifyLineContent*(gb: GapBuffer, lineNumber: int, f: proc(s: var string)) 
   var line = gb.lines[physicalLine]
   f(line)
   gb.lines[physicalLine] = line
-
-# Linear index operations
-
-proc insert*(gb: GapBuffer, index: int, text: string) =
-  ## Insert text at linear index position
-  ## Handles newlines by splitting into multiple lines
-  if text.len == 0:
-    return
-
-  if index < 0:
-    return
-
-  let (line, col) = gb.indexToLineCol(index)
-  if line < 0:
-    return
-
-  # Parse text for newlines
-  var
-    parts: seq[string] = @[]
-    currentPart = ""
-
-  for ch in text:
-    if ch == '\n':
-      parts.add(currentPart)
-      currentPart = ""
-    else:
-      currentPart.add(ch)
-
-  if parts.len == 0:
-    # No newlines - simple insert into line
-    gb.insertIntoLine(line, col, text)
-  else:
-    # Has newlines - need to split lines
-    # parts.len = number of newlines in text
-    # currentPart = content after last newline
-    let
-      physicalLine = gb.logicalToPhysical(line)
-      originalLine = gb.lines[physicalLine]
-      prefix =
-        if col <= originalLine.len:
-          originalLine[0 ..< col]
-        else:
-          originalLine
-      suffix =
-        if col < originalLine.len:
-          originalLine[col .. ^1]
-        else:
-          ""
-
-    # Update first line with prefix + content before first newline
-    gb.lines[physicalLine] = prefix & parts[0]
-
-    # Insert new lines for content between newlines
-    for i in 1 ..< parts.len:
-      gb.insertLine(line + i, parts[i])
-
-    # Insert final new line with remaining content + suffix
-    gb.insertLine(line + parts.len, currentPart & suffix)
-
-proc insert*(gb: GapBuffer, index: int, ch: char) =
-  ## Insert a single byte at linear index position
-  gb.insert(index, $ch)
-
-proc delete*(gb: GapBuffer, index: int, count: int = 1) =
-  ## Delete 'count' bytes starting at linear index position
-  if count <= 0 or index < 0:
-    return
-
-  let (line, col) = gb.indexToLineCol(index)
-  if line < 0 or line >= gb.len:
-    return
-
-  # Clamp col to valid range
-  let physicalLine = gb.logicalToPhysical(line)
-  let lineLen = gb.lines[physicalLine].len
-  if col > lineLen:
-    return
-
-  gb.deleteAtLineCol(line, col, count)
-
-proc substring*(gb: GapBuffer, start: int, length: int): string =
-  ## Extract a substring starting at linear index 'start' with given 'length'
-  if length <= 0 or start < 0:
-    return ""
-
-  let (startLine, startCol) = gb.indexToLineCol(start)
-  if startLine < 0:
-    return ""
-
-  var
-    remaining = length
-    lineNum = startLine
-    col = startCol
-
-  while remaining > 0 and lineNum < gb.len:
-    let
-      physicalLine = gb.logicalToPhysical(lineNum)
-      lineObj = gb.lines[physicalLine]
-      lineLen = lineObj.len
-
-    if lineNum == startLine:
-      # First line - start from col
-      let available = lineLen - col
-      if remaining <= available:
-        result.add(lineObj[col ..< col + remaining])
-        return
-      else:
-        result.add(lineObj[col .. ^1])
-        remaining -= available
-        # Add newline if not last line
-        if lineNum < gb.len - 1 and remaining > 0:
-          result.add('\n')
-          remaining -= 1
-    else:
-      # Subsequent lines - start from beginning
-      if remaining <= lineLen:
-        result.add(lineObj[0 ..< remaining])
-        return
-      else:
-        result.add(lineObj)
-        remaining -= lineLen
-        # Add newline if not last line
-        if lineNum < gb.len - 1 and remaining > 0:
-          result.add('\n')
-          remaining -= 1
-
-    inc lineNum
 
 # Iterator support
 
