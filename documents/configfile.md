@@ -1540,6 +1540,7 @@ Notes:
 | sidebarSyntaxCheckHintSign | Sidebar: syntax checker hint sign |
 | sidebarSyntaxCheckWarnSign | Sidebar: syntax checker warning sign |
 | sidebarSyntaxCheckErrSign | Sidebar: syntax checker error sign |
+| sidebarBookmarkSign | Sidebar: bookmark sign |
 | viewerHeader | Viewer common: header |
 | viewerSelectedLine | Viewer common: selected line |
 | viewerEmptyMessage | Viewer common: empty-state message |
