@@ -314,7 +314,7 @@ proc concatNodes(left, right: RopeNode): RopeNode =
   result = newInternal(@[left, right])
   result = fixup(result)
 
-proc lineStartByteOffset*(rope: Rope, lineNumber: int): int =
+proc lineStartByteOffset(rope: Rope, lineNumber: int): int =
   ## Return the byte offset of the start of the given line number (0-based)
   ## Line 0 starts at byte 0.
   if lineNumber <= 0:
@@ -353,7 +353,7 @@ proc lineStartByteOffset*(rope: Rope, lineNumber: int): int =
   walk(rope.root)
   offset
 
-proc lineEndByteOffset*(rope: Rope, lineNumber: int): int =
+proc lineEndByteOffset(rope: Rope, lineNumber: int): int =
   ## Return the byte offset past the end of the given line (before the '\n' or at buffer end)
   if lineNumber < 0 or lineNumber >= rope.cachedLineCount:
     return rope.root.byteLen
@@ -407,28 +407,6 @@ proc byteAt(node: RopeNode, byteOffset: int): char =
       remaining -= child.byteLen
     raise newException(IndexDefect, "byteAt: offset past end")
 
-proc countNewlinesBefore(node: RopeNode, byteOffset: int): int =
-  ## Count '\n' characters in bytes [0, byteOffset). O(log n).
-  if byteOffset <= 0:
-    return 0
-  case node.kind
-  of rnkLeaf:
-    let scanEnd = min(byteOffset, node.text.len)
-    for i in 0 ..< scanEnd:
-      if node.text[i] == '\n':
-        inc result
-  of rnkInternal:
-    var remaining = byteOffset
-    for child in node.children:
-      if remaining <= 0:
-        break
-      if remaining >= child.byteLen:
-        result += child.lineBreakCount
-        remaining -= child.byteLen
-      else:
-        result += countNewlinesBefore(child, remaining)
-        break
-
 proc lineCount*(rope: Rope): int {.inline.} =
   rope.cachedLineCount
 
@@ -449,11 +427,6 @@ proc getLine*(rope: Rope, lineNumber: int): string =
 
 proc `[]`*(rope: Rope, lineNumber: int): string =
   rope.getLine(lineNumber)
-
-proc byteLen*(rope: Rope): int {.inline.} =
-  ## Total byte count of buffer content (lines + newlines between lines).
-  ## The rope stores text with embedded newlines, so byteLen is the total.
-  rope.root.byteLen
 
 proc `[]=`*(rope: Rope, lineNumber: int, content: string) =
   if lineNumber < 0 or lineNumber >= rope.cachedLineCount:
@@ -552,40 +525,6 @@ proc charAtLineCol*(rope: Rope, line: int, col: int): char =
   else:
     raise newException(IndexDefect, "Rope column out of bounds")
 
-proc charAt*(rope: Rope, index: int): char =
-  if index < 0 or index >= rope.root.byteLen:
-    raise newException(IndexDefect, "Rope index out of bounds: " & $index)
-  byteAt(rope.root, index)
-
-proc findLineStart*(rope: Rope, lineNumber: int): int =
-  ## Return the linear index of the start of the given line. O(log n).
-  if lineNumber < 0 or lineNumber >= rope.cachedLineCount:
-    return -1
-  rope.lineStartByteOffset(lineNumber)
-
-proc findLineEnd*(rope: Rope, lineNumber: int): int =
-  ## Return the linear index of the end of the given line (last byte position). O(log n).
-  if lineNumber < 0 or lineNumber >= rope.cachedLineCount:
-    return -1
-  rope.lineEndByteOffset(lineNumber) - 1
-
-proc indexToLineCol*(rope: Rope, index: int): tuple[line: int, col: int] =
-  ## Convert a linear byte index to (line, col). O(log n).
-  if index < 0:
-    return (-1, -1)
-  if rope.cachedLineCount == 0:
-    return (0, 0)
-
-  if index >= rope.root.byteLen:
-    # Past end
-    let lastLine = rope.cachedLineCount - 1
-    let lastLineStart = rope.lineStartByteOffset(lastLine)
-    return (lastLine, rope.root.byteLen - lastLineStart)
-
-  let line = countNewlinesBefore(rope.root, index)
-  let lineStart = rope.lineStartByteOffset(line)
-  (line, index - lineStart)
-
 proc insertIntoLine*(rope: Rope, line, col: int, text: string) =
   ## Insert text into an existing line at (line, column) byte position
   if line < 0 or line >= rope.cachedLineCount:
@@ -624,52 +563,6 @@ proc deleteAtLineCol*(rope: Rope, line: int, col: int, count: int = 1) =
   if rope.root.byteLen == 0:
     rope.root = newLeaf("")
   rope.cachedLineCount = rope.root.lineBreakCount + 1
-
-proc insert*(rope: Rope, index: int, text: string) =
-  ## Insert text at linear byte index position. O(log n).
-  if text.len == 0:
-    return
-  if index < 0:
-    return
-
-  let byteOffset = min(index, rope.root.byteLen)
-  let (left, right) = splitNode(rope.root, byteOffset)
-  let middle = textToNode(text)
-  rope.root = concatNodes(concatNodes(left, middle), right)
-  rope.cachedLineCount = rope.root.lineBreakCount + 1
-
-proc insert*(rope: Rope, index: int, ch: char) =
-  rope.insert(index, $ch)
-
-proc delete*(rope: Rope, index: int, count: int = 1) =
-  ## Delete 'count' bytes starting at linear byte index position. O(log n).
-  if count <= 0 or index < 0:
-    return
-  if index >= rope.root.byteLen:
-    return
-
-  let actualCount = min(count, rope.root.byteLen - index)
-  let (left, rest) = splitNode(rope.root, index)
-  let (_, right) = splitNode(rest, actualCount)
-  rope.root = concatNodes(left, right)
-  if rope.root.byteLen == 0:
-    rope.root = newLeaf("")
-  rope.cachedLineCount = rope.root.lineBreakCount + 1
-
-proc substring*(rope: Rope, start: int, length: int): string =
-  ## Extract substring by linear byte index. O(log n + L).
-  if length <= 0 or start < 0:
-    return ""
-  substringBytes(rope.root, start, length)
-
-proc `[]`*[T, U: Ordinal](rope: Rope, x: HSlice[T, U]): string =
-  let
-    start = x.a.int
-    endIdx = x.b.int
-  if start < 0 or endIdx < start:
-    return ""
-  let length = endIdx - start + 1
-  rope.substring(start, length)
 
 proc clear*(rope: Rope) =
   rope.root = newLeaf("")

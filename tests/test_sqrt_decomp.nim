@@ -95,14 +95,6 @@ suite "SqrtDecomp - Character Access":
     let sd = newSqrtDecomp("hello\nworld")
     check sd.charAtLineCol(0, 5) == '\n'
 
-  test "charAt linear index":
-    let sd = newSqrtDecomp("ab\ncd")
-    check sd.charAt(0) == 'a'
-    check sd.charAt(1) == 'b'
-    check sd.charAt(2) == '\n'
-    check sd.charAt(3) == 'c'
-    check sd.charAt(4) == 'd'
-
 suite "SqrtDecomp - Insert Operations":
   test "insertLine at beginning":
     let sd = newSqrtDecomp("world")
@@ -238,44 +230,6 @@ suite "SqrtDecomp - Iterators":
       result.add(line)
     check result == @["hello", "world", "foo"]
 
-suite "SqrtDecomp - Linear Index Operations":
-  test "indexToLineCol":
-    let sd = newSqrtDecomp("ab\ncd\nef")
-    check sd.indexToLineCol(0) == (0, 0)
-    check sd.indexToLineCol(1) == (0, 1)
-    check sd.indexToLineCol(2) == (0, 2) # end of line 0
-    check sd.indexToLineCol(3) == (1, 0)
-    check sd.indexToLineCol(5) == (1, 2) # end of line 1
-    check sd.indexToLineCol(6) == (2, 0)
-
-  test "substring":
-    let sd = newSqrtDecomp("hello\nworld")
-    check sd.substring(0, 5) == "hello"
-    check sd.substring(6, 5) == "world"
-    check sd.substring(3, 5) == "lo\nwo"
-
-  test "slice operator":
-    let sd = newSqrtDecomp("hello\nworld")
-    check sd[0 .. 4] == "hello"
-    check sd[6 .. 10] == "world"
-
-  test "insert at linear index":
-    let sd = newSqrtDecomp("hllo")
-    sd.insert(1, "e")
-    check $sd == "hello"
-
-  test "insert with newline at linear index":
-    let sd = newSqrtDecomp("helloworld")
-    sd.insert(5, "\n")
-    check sd.len == 2
-    check sd[0] == "hello"
-    check sd[1] == "world"
-
-  test "delete at linear index":
-    let sd = newSqrtDecomp("hello")
-    sd.delete(1, 1)
-    check $sd == "hllo"
-
 suite "SqrtDecomp - Unicode/Multibyte":
   test "Japanese text":
     let sd = newSqrtDecomp("こんにちは\n世界")
@@ -336,14 +290,7 @@ suite "SqrtDecomp - Block Rebalancing":
     # rather than drifting toward O(n) blocks. The delete branch uses cross-block
     # multi-line deletes, which exercise the under-full merge at BOTH ends of a
     # splice; without that the block count would creep above the band between
-    # rebalances. Also asserts the global byteLen cache stays exact after every
-    # op (guards the per-block cachedCharLen bookkeeping the backend relies on).
-    proc recomputedByteLen(sd: SqrtDecomp): int =
-      for ln in sd.lines:
-        result += ln.len
-      if sd.lineCount > 1:
-        result += sd.lineCount - 1
-
+    # rebalances.
     var r = initRand(20240604)
     let sd = newSqrtDecomp()
     for i in 0 ..< 2000:
@@ -354,18 +301,22 @@ suite "SqrtDecomp - Block Rebalancing":
       case r.rand(0 .. 3)
       of 0, 1:
         if n > 64:
-          # Cross-block multi-line delete (spans a block boundary for large counts)
-          let ls = sd.findLineStart(r.rand(0 ..< n - 1))
-          sd.delete(ls, r.rand(1 .. 40))
+          # Cross-block multi-line delete (spans block boundaries for large
+          # counts via deleteAtLineCol's newline-spanning semantics).
+          let startLine = r.rand(0 ..< n - 1)
+          sd.deleteAtLineCol(startLine, 0, r.rand(1 .. 40))
         else:
           sd.insertLine(n, "refill" & $step)
       else:
-        # Multi-line insert to add lines back and keep n in a healthy range
-        let idx = r.rand(0 .. sd.byteLen)
-        sd.insert(idx, "a\nbb\nccc")
-
-      # The byteLen cache must match a from-scratch recomputation every step.
-      check sd.byteLen == sd.recomputedByteLen
+        # Multi-line insert to add lines back and keep n in a healthy range.
+        # Reproduces the old `insert(idx, "a\nbb\nccc")` line layout: the suffix
+        # of the target line is carried onto the final inserted segment.
+        let line = r.rand(0 .. sd.lineCount - 1)
+        let col = r.rand(0 .. sd[line].len)
+        let suffix = sd[line][col .. ^1]
+        sd[line] = sd[line][0 ..< col] & "a"
+        sd.insertLine(line + 1, "bb")
+        sd.insertLine(line + 2, "ccc" & suffix)
 
       let info = sd.getBlockInfo()
       check info.totalLines == sd.lineCount
@@ -484,310 +435,6 @@ suite "SqrtDecomp - Error Handling":
     expect IndexDefect:
       discard sd.charAtLineCol(0, 10)
 
-  test "charAt at negative index":
-    let sd = newSqrtDecomp("hello")
-    expect IndexDefect:
-      discard sd.charAt(-1)
-
-  test "charAt beyond end":
-    let sd = newSqrtDecomp("hello")
-    expect IndexDefect:
-      discard sd.charAt(5)
-
-suite "SqrtDecomp - Linear Index Insert Extended":
-  test "insert char overload":
-    let sd = newSqrtDecomp("hllo")
-    sd.insert(1, 'e')
-    check $sd == "hello"
-
-  test "insert empty string does nothing":
-    let sd = newSqrtDecomp("hello")
-    sd.insert(2, "")
-    check $sd == "hello"
-
-  test "insert at beginning":
-    let sd = newSqrtDecomp("world")
-    sd.insert(0, "hello ")
-    check $sd == "hello world"
-
-  test "insert at end of buffer":
-    let sd = newSqrtDecomp("hello")
-    sd.insert(5, " world")
-    check $sd == "hello world"
-
-  test "insert single newline in empty buffer":
-    let sd = newSqrtDecomp("")
-    sd.insert(0, "\n")
-    check sd.len == 2
-    check sd[0] == ""
-    check sd[1] == ""
-
-  test "insert single newline at line start":
-    let sd = newSqrtDecomp("hello")
-    sd.insert(0, "\n")
-    check sd.len == 2
-    check sd[0] == ""
-    check sd[1] == "hello"
-
-  test "insert single newline in line middle":
-    let sd = newSqrtDecomp("helloworld")
-    sd.insert(5, "\n")
-    check sd.len == 2
-    check sd[0] == "hello"
-    check sd[1] == "world"
-
-  test "insert multiple consecutive newlines":
-    let sd = newSqrtDecomp("hello")
-    sd.insert(5, "\n\n\n")
-    check sd.len == 4
-    check sd[0] == "hello"
-    check sd[1] == ""
-    check sd[2] == ""
-    check sd[3] == ""
-
-  test "insert multi-line text":
-    let sd = newSqrtDecomp("start end")
-    sd.insert(6, "a\nb\nc ")
-    check sd.len == 3
-    check sd[0] == "start a"
-    check sd[1] == "b"
-    check sd[2] == "c end"
-
-  test "insert multi-line text in middle of line":
-    let sd = newSqrtDecomp("abcdef")
-    sd.insert(3, "X\nY\nZ")
-    check sd.len == 3
-    check sd[0] == "abcX"
-    check sd[1] == "Y"
-    check sd[2] == "Zdef"
-
-  test "insert text with newline at start":
-    let sd = newSqrtDecomp("world")
-    sd.insert(0, "hello\n")
-    check sd.len == 2
-    check sd[0] == "hello"
-    check sd[1] == "world"
-
-  test "sequential insertions":
-    let sd = newSqrtDecomp("")
-    sd.insert(0, "c")
-    sd.insert(0, "b")
-    sd.insert(0, "a")
-    check $sd == "abc"
-
-  test "insert preserves content after":
-    let sd = newSqrtDecomp("hello world")
-    sd.insert(5, "\n")
-    check sd.len == 2
-    check sd[0] == "hello"
-    check sd[1] == " world"
-
-  test "insert at negative index does nothing":
-    let sd = newSqrtDecomp("hello")
-    sd.insert(-1, "x")
-    check $sd == "hello"
-
-suite "SqrtDecomp - Linear Index Delete Extended":
-  test "delete single character from line":
-    let sd = newSqrtDecomp("hello")
-    sd.delete(0, 1)
-    check $sd == "ello"
-
-  test "delete from end of line":
-    let sd = newSqrtDecomp("hello")
-    sd.delete(4, 1)
-    check $sd == "hell"
-
-  test "delete entire line content":
-    let sd = newSqrtDecomp("hello")
-    sd.delete(0, 5)
-    check $sd == ""
-    check sd.len == 1
-
-  test "delete newline character merges lines":
-    let sd = newSqrtDecomp("hello\nworld")
-    # Delete newline at index 5
-    sd.delete(5, 1)
-    check sd.len == 1
-    check $sd == "helloworld"
-
-  test "delete across two lines":
-    let sd = newSqrtDecomp("hello\nworld")
-    # Delete "lo\nwo" = 5 chars starting at index 3
-    sd.delete(3, 5)
-    check sd.len == 1
-    check $sd == "helrld"
-
-  test "delete across three lines":
-    let sd = newSqrtDecomp("aaa\nbbb\nccc")
-    # Indices: a(0)a(1)a(2)\n(3)b(4)b(5)b(6)\n(7)c(8)c(9)c(10)
-    # Delete from index 2, 8 chars = positions 2..9 = "a\nbbb\ncc"
-    sd.delete(2, 8)
-    check sd.len == 1
-    check $sd == "aac"
-
-  test "delete entire first line including newline":
-    let sd = newSqrtDecomp("hello\nworld")
-    sd.delete(0, 6)
-    check sd.len == 1
-    check $sd == "world"
-
-  test "delete middle line completely":
-    let sd = newSqrtDecomp("aaa\nbbb\nccc")
-    # "bbb\n" = 4 chars starting at index 4
-    sd.delete(4, 4)
-    check sd.len == 2
-    check sd[0] == "aaa"
-    check sd[1] == "ccc"
-
-  test "delete from middle to end":
-    let sd = newSqrtDecomp("hello\nworld")
-    sd.delete(3, 100)
-    check sd.len == 1
-    check sd[0] == "hel"
-
-  test "delete with count 0 does nothing":
-    let sd = newSqrtDecomp("hello")
-    sd.delete(2, 0)
-    check $sd == "hello"
-
-  test "delete with negative count does nothing":
-    let sd = newSqrtDecomp("hello")
-    sd.delete(2, -1)
-    check $sd == "hello"
-
-  test "delete from invalid position does nothing":
-    let sd = newSqrtDecomp("hello")
-    sd.delete(-1, 1)
-    check $sd == "hello"
-
-  test "delete empty lines":
-    let sd = newSqrtDecomp("\n\n\n")
-    # 3 lines: "", "", ""
-    # byteLen = 2 (two newlines between 3 lines)
-    sd.delete(0, 1) # delete first newline
-    check sd.len == 2
-
-  test "sequential deletes":
-    let sd = newSqrtDecomp("abcdef")
-    sd.delete(0, 1) # "bcdef"
-    sd.delete(0, 1) # "cdef"
-    sd.delete(0, 1) # "def"
-    check $sd == "def"
-
-  test "delete and insert combination":
-    let sd = newSqrtDecomp("hello world")
-    sd.delete(5, 1) # "helloworld"
-    sd.insert(5, "_") # "hello_world"
-    check $sd == "hello_world"
-
-  test "delete in empty buffer does nothing":
-    let sd = newSqrtDecomp("")
-    sd.delete(0, 1)
-    check sd.len == 1
-    check sd[0] == ""
-
-suite "SqrtDecomp - byteLen and charAt Extended":
-  test "byteLen of empty buffer":
-    let sd = newSqrtDecomp("")
-    check sd.byteLen == 0
-
-  test "byteLen of single line":
-    let sd = newSqrtDecomp("hello")
-    check sd.byteLen == 5
-
-  test "byteLen of multiple lines":
-    let sd = newSqrtDecomp("abc\ndef\nghi")
-    # 3 + 1 + 3 + 1 + 3 = 11
-    check sd.byteLen == 11
-
-  test "byteLen with empty lines":
-    let sd = newSqrtDecomp("\n\n")
-    # 2 lines: "", ""; byteLen = 1 (one newline between)
-    check sd.byteLen == 1
-
-  test "byteLen after insertLine":
-    let sd = newSqrtDecomp("abc")
-    check sd.byteLen == 3
-    sd.insertLine(1, "def")
-    # "abc\ndef" = 7
-    check sd.byteLen == 7
-
-  test "byteLen after deleteLine":
-    let sd = newSqrtDecomp("abc\ndef")
-    check sd.byteLen == 7
-    sd.deleteLine(1)
-    check sd.byteLen == 3
-
-  test "byteLen after insertIntoLine":
-    let sd = newSqrtDecomp("abc")
-    sd.insertIntoLine(0, 3, "def")
-    check sd.byteLen == 6
-
-  test "charAt at line boundaries":
-    let sd = newSqrtDecomp("ab\ncd\nef")
-    check sd.charAt(2) == '\n' # end of line 0
-    check sd.charAt(3) == 'c' # start of line 1
-    check sd.charAt(5) == '\n' # end of line 1
-    check sd.charAt(6) == 'e' # start of line 2
-
-  test "charAt on empty buffer":
-    let sd = newSqrtDecomp("")
-    expect IndexDefect:
-      discard sd.charAt(0)
-
-  test "charAt on single char":
-    let sd = newSqrtDecomp("x")
-    check sd.charAt(0) == 'x'
-    expect IndexDefect:
-      discard sd.charAt(1)
-
-suite "SqrtDecomp - findLineStart and findLineEnd":
-  test "findLineStart single line":
-    let sd = newSqrtDecomp("hello")
-    check sd.findLineStart(0) == 0
-
-  test "findLineStart multiple lines":
-    let sd = newSqrtDecomp("abc\ndef\nghi")
-    check sd.findLineStart(0) == 0
-    check sd.findLineStart(1) == 4
-    check sd.findLineStart(2) == 8
-
-  test "findLineStart invalid line":
-    let sd = newSqrtDecomp("hello")
-    check sd.findLineStart(-1) == -1
-    check sd.findLineStart(1) == -1
-
-  test "findLineStart with empty lines":
-    let sd = newSqrtDecomp("a\n\nb")
-    check sd.findLineStart(0) == 0
-    check sd.findLineStart(1) == 2
-    check sd.findLineStart(2) == 3
-
-  test "findLineEnd single line":
-    let sd = newSqrtDecomp("hello")
-    check sd.findLineEnd(0) == 4
-
-  test "findLineEnd multiple lines":
-    let sd = newSqrtDecomp("abc\ndef\nghi")
-    check sd.findLineEnd(0) == 2
-    check sd.findLineEnd(1) == 6
-    check sd.findLineEnd(2) == 10
-
-  test "findLineEnd empty line":
-    let sd = newSqrtDecomp("a\n\nb")
-    # Empty line: findLineStart(1) = 2, lineLen = 0, so 2 + 0 - 1 = 1
-    check sd.findLineEnd(1) == 1
-
-  test "findLineEnd invalid line":
-    let sd = newSqrtDecomp("hello")
-    check sd.findLineEnd(-1) == -1
-    check sd.findLineEnd(1) == -1
-
-  test "findLineEnd empty buffer":
-    let sd = newSqrtDecomp("")
-    check sd.findLineEnd(0) == -1 # empty line: 0 + 0 - 1 = -1
-
 suite "SqrtDecomp - Multi-line Deletion Extended":
   test "deleteAtLineCol spanning three lines":
     let sd = newSqrtDecomp("aaa\nbbb\nccc\nddd")
@@ -874,8 +521,8 @@ suite "SqrtDecomp - Unicode Extended":
   test "substring with multibyte":
     let sd = newSqrtDecomp("あいう\nえおか")
     # "あ" = bytes 0-2, "い" = bytes 3-5
-    check sd.substring(0, 3) == "あ"
-    check sd.substring(3, 3) == "い"
+    check ($sd)[0 ..< 3] == "あ"
+    check ($sd)[3 ..< 6] == "い"
 
   test "replaceLine with multibyte":
     let sd = newSqrtDecomp("hello\nworld")
@@ -908,48 +555,7 @@ suite "SqrtDecomp - Unicode Extended":
     let sd = newSqrtDecomp("あいう")
     # 3 characters, but 9 bytes
     check sd[0].len == 9
-    check sd.byteLen == 9
-
-suite "SqrtDecomp - Substring Extended":
-  test "substring basic extraction":
-    let sd = newSqrtDecomp("hello world")
-    check sd.substring(0, 5) == "hello"
-    check sd.substring(6, 5) == "world"
-
-  test "substring boundary cases":
-    let sd = newSqrtDecomp("hello")
-    check sd.substring(0, 0) == ""
-    check sd.substring(0, 5) == "hello"
-
-  test "substring full buffer":
-    let sd = newSqrtDecomp("abc\ndef")
-    check sd.substring(0, 7) == "abc\ndef"
-
-  test "substring from start partial":
-    let sd = newSqrtDecomp("abc\ndef\nghi")
-    check sd.substring(0, 3) == "abc"
-
-  test "substring from end partial":
-    let sd = newSqrtDecomp("abc\ndef\nghi")
-    check sd.substring(8, 3) == "ghi"
-
-  test "substring beyond end":
-    let sd = newSqrtDecomp("abc")
-    check sd.substring(0, 100) == "abc"
-
-  test "substring start beyond end":
-    let sd = newSqrtDecomp("abc")
-    check sd.substring(100, 5) == ""
-
-  test "substring negative length":
-    let sd = newSqrtDecomp("abc")
-    check sd.substring(0, -1) == ""
-
-  test "substring cross multiple lines":
-    let sd = newSqrtDecomp("aa\nbb\ncc\ndd")
-    # Indices: a(0)a(1)\n(2)b(3)b(4)\n(5)c(6)c(7)\n(8)d(9)d(10)
-    # From index 1, 8 chars = positions 1..8 = "a\nbb\ncc\n"
-    check sd.substring(1, 8) == "a\nbb\ncc\n"
+    check ($sd).len == 9
 
 suite "SqrtDecomp - Iterator Edge Cases":
   test "iterate over empty buffer":
@@ -1057,20 +663,20 @@ suite "SqrtDecomp - Stress Tests":
 
   test "byteLen consistency after operations":
     let sd = newSqrtDecomp("abc\ndef\nghi")
-    let initial = sd.byteLen
+    let initial = ($sd).len
     check initial == 11
 
     sd.insertIntoLine(0, 3, "XYZ")
-    check sd.byteLen == initial + 3
+    check ($sd).len == initial + 3
 
     sd.deleteAtLineCol(0, 3, 3)
-    check sd.byteLen == initial
+    check ($sd).len == initial
 
     sd.insertLine(1, "new")
-    check sd.byteLen == initial + 4 # "new" + newline
+    check ($sd).len == initial + 4 # "new" + newline
 
     sd.deleteLine(1)
-    check sd.byteLen == initial
+    check ($sd).len == initial
 
   test "lineCount consistency after operations":
     let sd = newSqrtDecomp("a\nb\nc")

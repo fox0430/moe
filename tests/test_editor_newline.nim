@@ -11,18 +11,18 @@ suite "Editor newline integration tests":
     check gb.getLine(0) == ""
 
     # Type "Hello"
-    gb.insert(0, "Hello")
+    gb.insertIntoLine(0, 0, "Hello")
     check $gb == "Hello"
     check gb.lineCount() == 1
 
-    # Press Enter (insert newline)
-    gb.insert(5, "\n")
+    # Press Enter (split line 0 at its end -> new empty line follows)
+    gb.insertLine(1, "")
     check gb.lineCount() == 2
     check gb.getLine(0) == "Hello"
     check gb.getLine(1) == ""
 
     # Type "World"
-    gb.insert(6, "World")
+    gb.insertIntoLine(1, 0, "World")
     check gb.lineCount() == 2
     check gb.getLine(0) == "Hello"
     check gb.getLine(1) == "World"
@@ -32,9 +32,8 @@ suite "Editor newline integration tests":
     let gb = newGapBuffer("First line")
     check gb.lineCount() == 1
 
-    # Insert newline after first line (like 'o' command)
-    let endOfLine = gb.getLine(0).len
-    gb.insert(endOfLine, "\n")
+    # Insert empty line after the first line (like 'o' command)
+    gb.insertLine(1, "")
 
     check gb.lineCount() == 2
     check gb.getLine(0) == "First line"
@@ -44,8 +43,8 @@ suite "Editor newline integration tests":
     let gb = newGapBuffer("Second line")
     check gb.lineCount() == 1
 
-    # Insert newline before first line (like 'O' command)
-    gb.insert(0, "\n")
+    # Insert empty line before the first line (like 'O' command)
+    gb.insertLine(0, "")
 
     check gb.lineCount() == 2
     check gb.getLine(0) == ""
@@ -54,13 +53,13 @@ suite "Editor newline integration tests":
   test "Multiple newlines in sequence":
     let gb = newGapBuffer()
 
-    gb.insert(0, "\n")
+    gb.insertLine(1, "")
     check gb.lineCount() == 2
 
-    gb.insert(1, "\n")
+    gb.insertLine(2, "")
     check gb.lineCount() == 3
 
-    gb.insert(2, "\n")
+    gb.insertLine(3, "")
     check gb.lineCount() == 4
 
     # All lines should be empty
