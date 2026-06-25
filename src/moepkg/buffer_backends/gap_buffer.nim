@@ -119,7 +119,7 @@ proc findLineStart*(gb: GapBuffer, lineNumber: int): int =
     result += gb.lines[physicalLine].len + 1 # +1 for newline
 
 proc findLineEnd*(gb: GapBuffer, lineNumber: int): int =
-  ## Return the linear index of the end of the given line (last character position)
+  ## Return the linear index of the end of the given line (last byte position)
   ## Returns -1 if lineNumber is invalid or line is empty
   if lineNumber < 0 or lineNumber >= gb.lineCount:
     return -1
@@ -374,7 +374,7 @@ proc getLine*(gb: GapBuffer, lineNumber: int): string =
   gb.lines[physicalLine]
 
 proc charAtLineCol*(gb: GapBuffer, line: int, col: int): char =
-  ## Get character at (line, column) position
+  ## Get the byte at (line, col) position (col is a byte offset)
   if line < 0 or line >= gb.len:
     raise newException(IndexDefect, "GapBuffer line out of bounds")
 
@@ -422,8 +422,8 @@ proc indexToLineCol*(gb: GapBuffer, index: int): tuple[line: int, col: int] =
   return (0, 0)
 
 proc charAt*(gb: GapBuffer, index: int): char =
-  ## Get character at linear index position.
-  ## Treats the buffer as a flat sequence of characters with newlines between
+  ## Get the byte at linear (byte) index position.
+  ## Treats the buffer as a flat sequence of bytes with newlines between
   ## lines. Shares the index->(line, col) scan with `indexToLineCol`; a column
   ## equal to the line length maps to the trailing newline (or out-of-bounds on
   ## the last line) via `charAtLineCol`.
@@ -563,11 +563,11 @@ proc insert*(gb: GapBuffer, index: int, text: string) =
     gb.insertLine(line + parts.len, currentPart & suffix)
 
 proc insert*(gb: GapBuffer, index: int, ch: char) =
-  ## Insert a single character at linear index position
+  ## Insert a single byte at linear index position
   gb.insert(index, $ch)
 
 proc delete*(gb: GapBuffer, index: int, count: int = 1) =
-  ## Delete 'count' characters starting at linear index position
+  ## Delete 'count' bytes starting at linear index position
   if count <= 0 or index < 0:
     return
 
@@ -634,7 +634,7 @@ proc substring*(gb: GapBuffer, start: int, length: int): string =
 # Iterator support
 
 iterator chars*(gb: GapBuffer): char =
-  ## Iterate over all characters in the buffer, including newlines
+  ## Iterate over each byte in the buffer, including newlines
   ## Consistent with $ operator: newlines between lines, trailing newline only for explicit empty final line
   for i in 0 ..< gb.len:
     let

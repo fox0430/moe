@@ -1185,7 +1185,7 @@ proc `$`*(pt: PieceTable): string =
     result.add('\n')
 
 iterator chars*(pt: PieceTable): char =
-  ## Yields characters matching `$` output (includes implicit trailing newline).
+  ## Yields each byte matching `$` output (includes implicit trailing newline).
   var stack: array[64, PieceTreeNode]
   var sp = 0
   var cur = pt.root
