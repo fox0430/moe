@@ -336,9 +336,9 @@ suite "SqrtDecomp - Block Rebalancing":
     # rather than drifting toward O(n) blocks. The delete branch uses cross-block
     # multi-line deletes, which exercise the under-full merge at BOTH ends of a
     # splice; without that the block count would creep above the band between
-    # rebalances. Also asserts the global charLen cache stays exact after every
+    # rebalances. Also asserts the global byteLen cache stays exact after every
     # op (guards the per-block cachedCharLen bookkeeping the backend relies on).
-    proc recomputedCharLen(sd: SqrtDecomp): int =
+    proc recomputedByteLen(sd: SqrtDecomp): int =
       for ln in sd.lines:
         result += ln.len
       if sd.lineCount > 1:
@@ -361,11 +361,11 @@ suite "SqrtDecomp - Block Rebalancing":
           sd.insertLine(n, "refill" & $step)
       else:
         # Multi-line insert to add lines back and keep n in a healthy range
-        let idx = r.rand(0 .. sd.charLen)
+        let idx = r.rand(0 .. sd.byteLen)
         sd.insert(idx, "a\nbb\nccc")
 
-      # The charLen cache must match a from-scratch recomputation every step.
-      check sd.charLen == sd.recomputedCharLen
+      # The byteLen cache must match a from-scratch recomputation every step.
+      check sd.byteLen == sd.recomputedByteLen
 
       let info = sd.getBlockInfo()
       check info.totalLines == sd.lineCount
@@ -664,7 +664,7 @@ suite "SqrtDecomp - Linear Index Delete Extended":
   test "delete empty lines":
     let sd = newSqrtDecomp("\n\n\n")
     # 3 lines: "", "", ""
-    # charLen = 2 (two newlines between 3 lines)
+    # byteLen = 2 (two newlines between 3 lines)
     sd.delete(0, 1) # delete first newline
     check sd.len == 2
 
@@ -687,42 +687,42 @@ suite "SqrtDecomp - Linear Index Delete Extended":
     check sd.len == 1
     check sd[0] == ""
 
-suite "SqrtDecomp - charLen and charAt Extended":
-  test "charLen of empty buffer":
+suite "SqrtDecomp - byteLen and charAt Extended":
+  test "byteLen of empty buffer":
     let sd = newSqrtDecomp("")
-    check sd.charLen == 0
+    check sd.byteLen == 0
 
-  test "charLen of single line":
+  test "byteLen of single line":
     let sd = newSqrtDecomp("hello")
-    check sd.charLen == 5
+    check sd.byteLen == 5
 
-  test "charLen of multiple lines":
+  test "byteLen of multiple lines":
     let sd = newSqrtDecomp("abc\ndef\nghi")
     # 3 + 1 + 3 + 1 + 3 = 11
-    check sd.charLen == 11
+    check sd.byteLen == 11
 
-  test "charLen with empty lines":
+  test "byteLen with empty lines":
     let sd = newSqrtDecomp("\n\n")
-    # 2 lines: "", ""; charLen = 1 (one newline between)
-    check sd.charLen == 1
+    # 2 lines: "", ""; byteLen = 1 (one newline between)
+    check sd.byteLen == 1
 
-  test "charLen after insertLine":
+  test "byteLen after insertLine":
     let sd = newSqrtDecomp("abc")
-    check sd.charLen == 3
+    check sd.byteLen == 3
     sd.insertLine(1, "def")
     # "abc\ndef" = 7
-    check sd.charLen == 7
+    check sd.byteLen == 7
 
-  test "charLen after deleteLine":
+  test "byteLen after deleteLine":
     let sd = newSqrtDecomp("abc\ndef")
-    check sd.charLen == 7
+    check sd.byteLen == 7
     sd.deleteLine(1)
-    check sd.charLen == 3
+    check sd.byteLen == 3
 
-  test "charLen after insertIntoLine":
+  test "byteLen after insertIntoLine":
     let sd = newSqrtDecomp("abc")
     sd.insertIntoLine(0, 3, "def")
-    check sd.charLen == 6
+    check sd.byteLen == 6
 
   test "charAt at line boundaries":
     let sd = newSqrtDecomp("ab\ncd\nef")
@@ -908,7 +908,7 @@ suite "SqrtDecomp - Unicode Extended":
     let sd = newSqrtDecomp("あいう")
     # 3 characters, but 9 bytes
     check sd[0].len == 9
-    check sd.charLen == 9
+    check sd.byteLen == 9
 
 suite "SqrtDecomp - Substring Extended":
   test "substring basic extraction":
@@ -1055,22 +1055,22 @@ suite "SqrtDecomp - Stress Tests":
     check sd[1] == "bbb"
     check $sd == "new\nbbb\nccc"
 
-  test "charLen consistency after operations":
+  test "byteLen consistency after operations":
     let sd = newSqrtDecomp("abc\ndef\nghi")
-    let initial = sd.charLen
+    let initial = sd.byteLen
     check initial == 11
 
     sd.insertIntoLine(0, 3, "XYZ")
-    check sd.charLen == initial + 3
+    check sd.byteLen == initial + 3
 
     sd.deleteAtLineCol(0, 3, 3)
-    check sd.charLen == initial
+    check sd.byteLen == initial
 
     sd.insertLine(1, "new")
-    check sd.charLen == initial + 4 # "new" + newline
+    check sd.byteLen == initial + 4 # "new" + newline
 
     sd.deleteLine(1)
-    check sd.charLen == initial
+    check sd.byteLen == initial
 
   test "lineCount consistency after operations":
     let sd = newSqrtDecomp("a\nb\nc")

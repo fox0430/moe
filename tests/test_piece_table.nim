@@ -533,30 +533,30 @@ suite "PieceTable - Stress Tests":
       let lineStart = pt.lineStartByteOffset(line)
       check lineStart + col == idx
 
-suite "PieceTable - charLen":
+suite "PieceTable - byteLen":
   test "empty buffer returns 0":
     let pt = newPieceTable()
-    check pt.charLen == 0
+    check pt.byteLen == 0
 
-  test "charLen after insert":
+  test "byteLen after insert":
     let pt = newPieceTable("hello")
-    check pt.charLen == 5
+    check pt.byteLen == 5
 
-  test "charLen with newlines":
+  test "byteLen with newlines":
     let pt = newPieceTable("a\nb\nc")
-    check pt.charLen == 5 # a + \n + b + \n + c
+    check pt.byteLen == 5 # a + \n + b + \n + c
 
-  test "charLen tracks insert and delete":
+  test "byteLen tracks insert and delete":
     let pt = newPieceTable("hello")
     pt.insert(5, " world")
-    check pt.charLen == 11
+    check pt.byteLen == 11
     pt.delete(0, 6) # delete "hello "
-    check pt.charLen == 5 # "world"
+    check pt.byteLen == 5 # "world"
 
-  test "charLen after clear":
+  test "byteLen after clear":
     let pt = newPieceTable("hello\nworld")
     pt.clear()
-    check pt.charLen == 0
+    check pt.byteLen == 0
 
 suite "PieceTable - Line Byte Offsets":
   test "lineStartByteOffset after edits":
@@ -685,7 +685,7 @@ suite "PieceTable - Node Split Details":
     let pt = newPieceTable("0123456789")
     pt.insert(5, "A")
     check $pt == "01234A56789"
-    check pt.charLen == 11
+    check pt.byteLen == 11
 
   test "multiple splits increase node count":
     let pt = newPieceTable("abcdefghijklmnop")
@@ -1185,7 +1185,7 @@ suite "PieceTable - Persistence / Snapshots":
     check pt.len == 2
     pt.restoreSnapshot(snap)
     check pt.len == 3
-    check pt.charLen == 5
+    check pt.byteLen == 5
 
 suite "PieceTable - Persistent RB Properties":
   test "continuous inserts maintain RB properties":
@@ -1227,7 +1227,7 @@ suite "PieceTable - Multi-Node Deletion":
     pt.insert(1, "X") # [a][X][bc]
     pt.insert(4, "Y") # [a][X][bc][Y]
     pt.delete(0, pt.cachedByteLen)
-    check pt.charLen == 0
+    check pt.byteLen == 0
     check verifyAll(pt)
 
   test "delete spanning nodes with newlines":
@@ -1294,7 +1294,7 @@ suite "PieceTable - Snapshot Edge Cases":
     check pt.len == 2
     pt.restoreSnapshot(snap)
     check pt.len == 1
-    check pt.charLen == 0
+    check pt.byteLen == 0
     check pt[0] == ""
     check verifyAll(pt)
 
@@ -1302,7 +1302,7 @@ suite "PieceTable - Snapshot Edge Cases":
     let pt = newPieceTable("hello\nworld\nfoo")
     let snap = pt.takeSnapshot()
     pt.delete(0, pt.cachedByteLen)
-    check pt.charLen == 0
+    check pt.byteLen == 0
     pt.restoreSnapshot(snap)
     check $pt == "hello\nworld\nfoo"
     check pt.len == 3
@@ -1313,7 +1313,7 @@ suite "PieceTable - Snapshot Edge Cases":
     let snap = pt.takeSnapshot()
     pt.clear()
     check pt.len == 1
-    check pt.charLen == 0
+    check pt.byteLen == 0
     pt.restoreSnapshot(snap)
     check $pt == "abc\ndef"
     check pt.len == 2
@@ -1357,7 +1357,7 @@ suite "PieceTable - Snapshot Edge Cases":
     pt.insert(0, "world")
     check $pt == "world"
     pt.restoreSnapshot(snap)
-    check pt.charLen == 0
+    check pt.byteLen == 0
     check pt.len == 1
     check verifyAll(pt)
 

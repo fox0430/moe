@@ -450,7 +450,7 @@ proc getLine*(rope: Rope, lineNumber: int): string =
 proc `[]`*(rope: Rope, lineNumber: int): string =
   rope.getLine(lineNumber)
 
-proc charLen*(rope: Rope): int {.inline.} =
+proc byteLen*(rope: Rope): int {.inline.} =
   ## Total byte count of buffer content (lines + newlines between lines).
   ## The rope stores text with embedded newlines, so byteLen is the total.
   rope.root.byteLen
