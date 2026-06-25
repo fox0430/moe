@@ -384,6 +384,9 @@ type
     documentHighlightRead
     documentHighlightWrite
 
+    # Temporary message area (Vim-like :jumps output)
+    tempMessageBorder
+
   ## A single color with RGB value
   ThemeColor* = object
     rgb*: Rgb
@@ -699,6 +702,7 @@ const
       "LSP document highlight: text occurrence",
     EditorColorPairIndex.documentHighlightRead: "LSP document highlight: read access",
     EditorColorPairIndex.documentHighlightWrite: "LSP document highlight: write access",
+    EditorColorPairIndex.tempMessageBorder: "Temporary message area border",
   ]
 
   ## Terminal default RGB (-1 indicates use terminal default)
