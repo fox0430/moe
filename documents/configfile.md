@@ -1568,4 +1568,5 @@ Notes:
 | documentHighlightText | LSP document highlight: text occurrence |
 | documentHighlightRead | LSP document highlight: read access |
 | documentHighlightWrite | LSP document highlight: write access |
+| tempMessageBorder | Temporary message area border |
 <!-- AUTO-GEN:end Colors -->

@@ -314,3 +314,6 @@ scrollBarTrack = { fg = "#d0d0d0" }
 documentHighlightText = { fg = "termDefault", bg = "#dbe6f6" }
 documentHighlightRead = { fg = "termDefault", bg = "#d6efd6" }
 documentHighlightWrite = { fg = "termDefault", bg = "#f6dcdc" }
+
+# Temporary message area
+tempMessageBorder = { fg = "termDefault", bg = "#8a8a8a" }

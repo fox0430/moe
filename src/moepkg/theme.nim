@@ -400,6 +400,9 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.documentHighlightText: makeColorPairTermDefaultFg("#3c3c50"),
   EditorColorPairIndex.documentHighlightRead: makeColorPairTermDefaultFg("#284628"),
   EditorColorPairIndex.documentHighlightWrite: makeColorPairTermDefaultFg("#503232"),
+
+  # Temporary message area
+  EditorColorPairIndex.tempMessageBorder: makeColorPairTermDefaultFg("#ffffff"),
 ]
 
 proc initDefaultTheme*() =

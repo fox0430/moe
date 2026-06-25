@@ -548,12 +548,7 @@ proc renderTempMessages*(e: Editor, buffer: var Buffer) =
     totalLines = e.state.ui.tempMessages.len + 2
     startY = max(0, buffer.area.height - totalLines)
     borderLine = " ".repeat(buffer.area.width)
-    # White background style for border
-    whiteBorderStyle = Style(
-      fg: ColorValue(kind: Default),
-      bg: ColorValue(kind: Indexed, indexed: Color.White),
-      modifiers: {},
-    )
+    whiteBorderStyle = getThemeStyle(EditorColorPairIndex.tempMessageBorder)
     theNormalStyle = normalStyle()
 
   # Clear the area where messages will be displayed
