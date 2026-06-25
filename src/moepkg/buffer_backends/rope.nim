@@ -564,7 +564,7 @@ proc findLineStart*(rope: Rope, lineNumber: int): int =
   rope.lineStartByteOffset(lineNumber)
 
 proc findLineEnd*(rope: Rope, lineNumber: int): int =
-  ## Return the linear index of the end of the given line (last character position). O(log n).
+  ## Return the linear index of the end of the given line (last byte position). O(log n).
   if lineNumber < 0 or lineNumber >= rope.cachedLineCount:
     return -1
   rope.lineEndByteOffset(lineNumber) - 1

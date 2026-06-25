@@ -182,7 +182,7 @@ proc maybeMerge(sd: SqrtDecomp, blockIdx: int) =
       sd.blocks.delete(blockIdx)
 
 proc blockSpan(sd: SqrtDecomp, bi: int): int =
-  ## Number of flat-string char positions owned by block `bi` for index-math:
+  ## Number of flat-string byte positions owned by block `bi` for index-math:
   ## its content plus a trailing newline per line, EXCEPT the buffer's final line
   ## (in the last block) has no trailing newline.
   let m = sd.blocks[bi].lines.len
@@ -259,7 +259,7 @@ proc findLineStart*(sd: SqrtDecomp, lineNumber: int): int =
       inc lineNum
 
 proc findLineEnd*(sd: SqrtDecomp, lineNumber: int): int =
-  ## Return the linear index of the end of the given line (last character position)
+  ## Return the linear index of the end of the given line (last byte position)
   ## Returns -1 if lineNumber is invalid or line is empty
   if lineNumber < 0 or lineNumber >= sd.cachedLineCount:
     return -1
@@ -318,7 +318,7 @@ proc modifyLineContent*(sd: SqrtDecomp, lineNumber: int, f: proc(s: var string))
   sd.blocks[blockIdx].cachedByteLen += line.len - oldLen
 
 proc charAtLineCol*(sd: SqrtDecomp, line: int, col: int): char =
-  ## Get character at (line, column) position
+  ## Get the byte at (line, col) position (col is a byte offset)
   if line < 0 or line >= sd.cachedLineCount:
     raise newException(IndexDefect, "SqrtDecomp line out of bounds")
 
@@ -334,8 +334,8 @@ proc charAtLineCol*(sd: SqrtDecomp, line: int, col: int): char =
     raise newException(IndexDefect, "SqrtDecomp column out of bounds")
 
 proc charAt*(sd: SqrtDecomp, index: int): char =
-  ## Get character at linear index position
-  ## Treats buffer as a flat sequence of characters with newlines between lines
+  ## Get the byte at linear (byte) index position
+  ## Treats buffer as a flat sequence of bytes with newlines between lines
   if index < 0:
     raise newException(IndexDefect, "SqrtDecomp index out of bounds: " & $index)
 
@@ -737,11 +737,11 @@ proc insert*(sd: SqrtDecomp, index: int, text: string) =
     sd.maybeRebalance()
 
 proc insert*(sd: SqrtDecomp, index: int, ch: char) =
-  ## Insert a single character at linear index position
+  ## Insert a single byte at linear index position
   sd.insert(index, $ch)
 
 proc delete*(sd: SqrtDecomp, index: int, count: int = 1) =
-  ## Delete 'count' characters starting at linear index position
+  ## Delete 'count' bytes starting at linear index position
   if count <= 0 or index < 0:
     return
 
@@ -783,7 +783,7 @@ proc `$`*(sd: SqrtDecomp): string =
       inc lineNum
 
 iterator chars*(sd: SqrtDecomp): char =
-  ## Iterate over all characters in the buffer, including newlines
+  ## Iterate over each byte in the buffer, including newlines
   ## Consistent with $ operator
   var lineNum = 0
   for b in sd.blocks:
