@@ -336,6 +336,7 @@ type
     sidebarSyntaxCheckHintSign
     sidebarSyntaxCheckWarnSign
     sidebarSyntaxCheckErrSign
+    sidebarBookmarkSign
 
     # Viewer common colors
     viewerHeader
@@ -667,6 +668,7 @@ const
     EditorColorPairIndex.sidebarSyntaxCheckWarnSign:
       "Sidebar: syntax checker warning sign",
     EditorColorPairIndex.sidebarSyntaxCheckErrSign: "Sidebar: syntax checker error sign",
+    EditorColorPairIndex.sidebarBookmarkSign: "Sidebar: bookmark sign",
     EditorColorPairIndex.viewerHeader: "Viewer common: header",
     EditorColorPairIndex.viewerSelectedLine: "Viewer common: selected line",
     EditorColorPairIndex.viewerEmptyMessage: "Viewer common: empty-state message",

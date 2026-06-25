@@ -354,6 +354,7 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.sidebarSyntaxCheckHintSign: makeColorPair("#e5c07b", "#000000"),
   EditorColorPairIndex.sidebarSyntaxCheckWarnSign: makeColorPair("#e5c07b", "#000000"),
   EditorColorPairIndex.sidebarSyntaxCheckErrSign: makeColorPair("#e06c75", "#000000"),
+  EditorColorPairIndex.sidebarBookmarkSign: makeColorPair("#56b6c2", "#000000"),
 
   # Viewer common colors
   EditorColorPairIndex.viewerHeader: makeColorPair("#d7af00", "#000000"),

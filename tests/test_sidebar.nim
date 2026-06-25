@@ -524,11 +524,10 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
     check sidebar.buffer[5][0].kind == some(SyntaxWarning)
 
 suite "Sidebar - Bookmark display":
-  test "bookmarkStyle has cyan foreground and bold":
-    let style = bookmarkStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Cyan
-    check StyleModifier.Bold in style.modifiers
+  test "bookmarkStyle uses the sidebarBookmarkSign theme color with bold":
+    initDefaultTheme()
+    check bookmarkStyle() ==
+      getThemeStyle(EditorColorPairIndex.sidebarBookmarkSign, {StyleModifier.Bold})
 
   test "Bookmark shown on line with no marker":
     let buf = newTextBuffer()

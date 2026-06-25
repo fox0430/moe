@@ -268,6 +268,7 @@ sidebarSyntaxCheckWarnSign = { fg = "#e5c07b", bg = "#000000" }
 sidebarSyntaxCheckErrSign = { fg = "#e06c75", bg = "#000000" }
 sidebarSessionModifiedSign = { fg = "#e5c07b", bg = "#000000" }
 sidebarSessionInsertedSign = { fg = "#98c379", bg = "#000000" }
+sidebarBookmarkSign = { fg = "#56b6c2", bg = "#000000" }
 
 # Viewer common colors
 viewerHeader = { fg = "#d7af00", bg = "#000000" }

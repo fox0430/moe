@@ -110,11 +110,7 @@ proc sessionInsertedStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.sidebarSessionInsertedSign)
 
 proc bookmarkStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Cyan),
-    bg: themeBackground(),
-    modifiers: {StyleModifier.Bold},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarBookmarkSign, {StyleModifier.Bold})
 
 proc emptyStyle*(): Style =
   Style(fg: ColorValue(kind: Default), bg: themeBackground(), modifiers: {})
