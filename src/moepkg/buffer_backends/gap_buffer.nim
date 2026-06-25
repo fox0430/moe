@@ -98,9 +98,8 @@ proc logicalToPhysical(gb: GapBuffer, logicalLine: int): int {.inline.} =
   else:
     logicalLine + gb.gapSize
 
-proc charLen*(gb: GapBuffer): int =
-  ## Return total character count (including newlines between lines)
-  result = 0
+proc byteLen*(gb: GapBuffer): int =
+  ## Return total byte count (including newlines between lines)
   for i in 0 ..< gb.lineCount:
     let physicalLine = gb.logicalToPhysical(i)
     result += gb.lines[physicalLine].len

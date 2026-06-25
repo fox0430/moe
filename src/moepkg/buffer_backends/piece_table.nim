@@ -683,7 +683,7 @@ proc lineCount*(pt: PieceTable): int {.inline.} =
 proc len*(pt: PieceTable): int {.inline.} =
   pt.cachedLineCount
 
-proc charLen*(pt: PieceTable): int {.inline.} =
+proc byteLen*(pt: PieceTable): int {.inline.} =
   pt.cachedByteLen
 
 proc getLine*(pt: PieceTable, lineNumber: int): string =

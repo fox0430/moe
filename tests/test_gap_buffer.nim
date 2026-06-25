@@ -1002,18 +1002,18 @@ suite "GapBuffer - Linear Index Delete":
     check gb.lineCount() == 1
     check gb.getLine(0) == "FirstSecond"
 
-suite "GapBuffer - charAt and charLen":
-  test "charLen of empty buffer":
+suite "GapBuffer - charAt and byteLen":
+  test "byteLen of empty buffer":
     let gb = newGapBuffer()
-    check gb.charLen == 0
+    check gb.byteLen == 0
 
-  test "charLen of single line":
+  test "byteLen of single line":
     let gb = newGapBuffer("Hello")
-    check gb.charLen == 5
+    check gb.byteLen == 5
 
-  test "charLen of multiple lines":
+  test "byteLen of multiple lines":
     let gb = newGapBuffer("Hello\nWorld")
-    check gb.charLen == 11 # 5 + 1 (newline) + 5
+    check gb.byteLen == 11 # 5 + 1 (newline) + 5
 
   test "charAt access":
     let gb = newGapBuffer("ABCDE")
@@ -1154,7 +1154,7 @@ suite "GapBuffer - Gap Management (Low-level)":
 
     # Insert at different positions to force gap movement
     gb.insert(0, "A") # Gap moves to line 0
-    gb.insert(gb.charLen, "Z") # Gap moves to end
+    gb.insert(gb.byteLen, "Z") # Gap moves to end
 
     # Verify content is still correct
     check gb.getLine(0) == "ALine1"
@@ -1182,9 +1182,9 @@ suite "GapBuffer - Gap Management (Low-level)":
 
     # Build a large buffer
     for i in 0 ..< 500:
-      gb.insert(gb.charLen, "X")
+      gb.insert(gb.byteLen, "X")
       if i mod 10 == 0:
-        gb.insert(gb.charLen, "\n")
+        gb.insert(gb.byteLen, "\n")
 
     # Verify structure
     let lineCount = gb.lineCount()
@@ -1248,7 +1248,7 @@ suite "GapBuffer - Edge Cases (Low-level)":
     check $gb == ""
 
     # Length
-    check gb.charLen == 0 # No actual characters
+    check gb.byteLen == 0 # No actual characters
     check gb.lineCount() == 1 # One empty line
 
   test "single character buffer":
@@ -1279,7 +1279,7 @@ suite "GapBuffer - Edge Cases (Low-level)":
     let gb = newGapBuffer(longText)
     check gb.lineCount() == 1
     check gb.getLine(0).len == 10000
-    check gb.charLen == 10000
+    check gb.byteLen == 10000
 
   test "many empty lines":
     let gb = newGapBuffer()
@@ -1354,7 +1354,7 @@ suite "GapBuffer - Edge Cases (Low-level)":
       for length in 1 .. 3:
         let sub = gb.substring(start, length)
         for i in 0 ..< sub.len:
-          if start + i < gb.charLen:
+          if start + i < gb.byteLen:
             check sub[i] == gb.charAt(start + i)
 
   test "line iterator on edge cases":
@@ -1466,7 +1466,7 @@ suite "GapBuffer - String Conversion Extended":
     gb.insert(0, "Pre")
     check $gb == "PreInitial"
 
-    gb.insert(gb.charLen, "Post")
+    gb.insert(gb.byteLen, "Post")
     check $gb == "PreInitialPost"
 
     gb.delete(3, 7)
@@ -1615,9 +1615,9 @@ suite "GapBuffer - Stress Tests":
     # Operations that force gap movement
     for i in 0 ..< 50:
       gb.insert(0, "X") # Insert at start
-      gb.insert(gb.charLen, "Y") # Insert at end
+      gb.insert(gb.byteLen, "Y") # Insert at end
       if i mod 5 == 0:
-        gb.delete(gb.charLen div 2, 1) # Delete from middle
+        gb.delete(gb.byteLen div 2, 1) # Delete from middle
 
     # Verify buffer is still consistent
     check gb.lineCount() >= 1
@@ -1651,7 +1651,7 @@ suite "GapBuffer - Stress Tests":
 
     for i in 0 ..< 100:
       gb.insertLine(gb.lineCount(), "Line" & $i)
-      gb.insert(gb.charLen, "!")
+      gb.insert(gb.byteLen, "!")
       if i mod 3 == 0:
         gb.insertIntoLine(i, 0, ">>")
 
@@ -1697,16 +1697,16 @@ suite "GapBuffer - Boundary Conditions":
     gb[2] = "Z"
     check gb[2] == "Z"
 
-  test "charLen consistency after operations":
+  test "byteLen consistency after operations":
     let gb = newGapBuffer("Hello\nWorld")
-    let initialLen = gb.charLen
+    let initialLen = gb.byteLen
     check initialLen == 11 # "Hello" + "\n" + "World"
 
     gb.insert(5, "X")
-    check gb.charLen == initialLen + 1
+    check gb.byteLen == initialLen + 1
 
     gb.delete(5, 1)
-    check gb.charLen == initialLen
+    check gb.byteLen == initialLen
 
   test "lineCount consistency after operations":
     let gb = newGapBuffer("A")
@@ -1741,15 +1741,15 @@ suite "GapBuffer - Unicode Extended":
     check gb.findLineEnd(0) == 8 # "日本語" is 9 bytes, last char at position 8
     check gb.findLineEnd(1) == 16 # "English" ends at position 16
 
-  test "charLen with various Unicode":
+  test "byteLen with various Unicode":
     let gb1 = newGapBuffer("Hello")
-    check gb1.charLen == 5
+    check gb1.byteLen == 5
 
     let gb2 = newGapBuffer("日本語")
-    check gb2.charLen == 9 # 3 chars * 3 bytes each
+    check gb2.byteLen == 9 # 3 chars * 3 bytes each
 
     let gb3 = newGapBuffer("🎉🎌🌍")
-    check gb3.charLen == 12 # 3 emojis * 4 bytes each
+    check gb3.byteLen == 12 # 3 emojis * 4 bytes each
 
 suite "GapBuffer - Error Handling":
   test "insertLine at invalid negative index":
