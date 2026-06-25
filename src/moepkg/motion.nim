@@ -55,6 +55,11 @@ type
     viewportManager*: ViewportManager
     cursorManager*: CursorManager
 
+const tagScanInitialRadius = 128
+  ## Initial half-window (in lines) scanned around the cursor for it/at. The
+  ## window quadruples until the enclosing pair is found, so the common case
+  ## touches only nearby lines instead of flattening the whole buffer.
+
 proc newMotionExecutor*(buffer: buffer.TextBuffer): MotionExecutor =
   MotionExecutor(buffer: buffer)
 
@@ -2429,44 +2434,42 @@ proc findSentenceBoundaries(
     TextObjectRange(start: flatToPos(s), endPos: flatToPos(endIdx), isLinewise: false)
   )
 
-proc findTagBoundaries(
-    buffer: TextBuffer, cursor: BufferPosition, inner: bool
+proc findTagBoundariesInRange(
+    buffer: TextBuffer, cursor: BufferPosition, inner: bool, loLine, hiLine: int
 ): Result[TextObjectRange, string] =
-  ## Tag text object (it/at). Matches the innermost <tag>…</tag> pair enclosing
-  ## the cursor, honouring nesting, multi-line tags and quotes within a tag.
-  ## Self-closing tags do not enclose. Note: inner content trims boundary
-  ## newlines, so `dit` on multi-line tags removes the inner text but keeps the
-  ## surrounding line breaks.
-  if buffer.len == 0:
-    return err("Empty buffer")
+  ## Windowed core of the tag text object: runs the same scan as
+  ## findTagBoundaries but only over lines [loLine, hiLine]. A pair straddling
+  ## the window edge is treated as unterminated here and picked up once the
+  ## window grows to enclose it, so the result matches a full-buffer scan.
 
-  # Flatten the whole buffer into runes (newlines kept so tags may span lines).
-  # `flat` is O(runes); the position map, though, is only per-line start offsets
-  # (O(lines)) with flat indices mapped back on demand -- avoiding a
-  # BufferPosition per rune.
+  # Flatten the window into runes (newlines kept so tags may span lines). `flat`
+  # is O(window runes); the position map is only per-line start offsets
+  # (window-local) with flat indices mapped back to absolute positions on demand
+  # -- avoiding a BufferPosition per rune.
+  let winLen = hiLine - loLine + 1
   var
     flat: seq[Rune]
-    lineStart = newSeq[int](buffer.len + 1)
-  for ln in 0 ..< buffer.len:
-    lineStart[ln] = flat.len
-    let lr = lineRunesNoNl(buffer, ln)
+    lineStart = newSeq[int](winLen + 1)
+  for k in 0 ..< winLen:
+    lineStart[k] = flat.len
+    let lr = lineRunesNoNl(buffer, loLine + k)
     for c in 0 ..< lr.len:
       flat.add lr[c]
     flat.add Rune('\n')
-  lineStart[buffer.len] = flat.len
+  lineStart[winLen] = flat.len
 
   proc flatToPos(idx: int): BufferPosition =
-    # Largest line whose start offset is <= idx; column is the remainder. The
-    # trailing newline of line ln maps to column == line length (as before).
+    # Largest window line whose start offset is <= idx; column is the remainder.
+    # The trailing newline of a line maps to column == line length (as before).
     var lo = 0
-    var hi = buffer.len - 1
+    var hi = winLen - 1
     while lo < hi:
       let mid = (lo + hi + 1) div 2
       if lineStart[mid] <= idx:
         lo = mid
       else:
         hi = mid - 1
-    BufferPosition(line: lo, column: idx - lineStart[lo])
+    BufferPosition(line: loLine + lo, column: idx - lineStart[lo])
 
   proc isNameChar(r: Rune): bool =
     let c = r.int32
@@ -2541,7 +2544,7 @@ proc findTagBoundaries(
     else:
       i.inc
 
-  # Cursor index within the flattened buffer. Column is clamped to the line's
+  # Cursor index within the flattened window. Column is clamped to the line's
   # last *content* index (not its newline) so a position at/past end-of-line
   # never snaps onto the next line yet still falls inside a tag that ends the
   # line -- e.g. it/at with the cursor on the closing '>'.
@@ -2551,8 +2554,9 @@ proc findTagBoundaries(
     elif cursor.line >= buffer.len:
       n - 1
     else:
-      let contentLen = lineStart[cursor.line + 1] - lineStart[cursor.line] - 1
-      lineStart[cursor.line] + min(max(0, cursor.column), max(0, contentLen - 1))
+      let k = clamp(cursor.line - loLine, 0, winLen - 1)
+      let contentLen = lineStart[k + 1] - lineStart[k] - 1
+      lineStart[k] + min(max(0, cursor.column), max(0, contentLen - 1))
 
   # Match open/close pairs with a stack; the first popped pair that encloses the
   # cursor is the innermost (closers pop inner pairs before outer ones).
@@ -2632,6 +2636,37 @@ proc findTagBoundaries(
       )
     return
       ok(TextObjectRange(start: flatToPos(s), endPos: flatToPos(e), isLinewise: false))
+
+proc findTagBoundaries(
+    buffer: TextBuffer, cursor: BufferPosition, inner: bool
+): Result[TextObjectRange, string] =
+  ## Tag text object (it/at). Matches the innermost <tag>…</tag> pair enclosing
+  ## the cursor, honouring nesting, multi-line tags and quotes within a tag.
+  ## Self-closing tags do not enclose. Note: inner content trims boundary
+  ## newlines, so `dit` on multi-line tags removes the inner text but keeps the
+  ## surrounding line breaks.
+  ##
+  ## Scans a window of lines centred on the cursor, quadrupling it until the
+  ## enclosing pair is found or the whole buffer has been covered. A window can
+  ## only miss tags, never invent a closer pair, so growing it reproduces the
+  ## full-buffer result while keeping the common case proportional to the
+  ## enclosing tag's size rather than the file's.
+  if buffer.len == 0:
+    return err("Empty buffer")
+
+  let center = clamp(cursor.line, 0, buffer.len - 1)
+  var radius = tagScanInitialRadius
+  while true:
+    let
+      loLine = max(0, center - radius)
+      hiLine = min(buffer.len - 1, center + radius)
+    let res = findTagBoundariesInRange(buffer, cursor, inner, loLine, hiLine)
+    if res.isOk or (loLine == 0 and hiLine == buffer.len - 1):
+      return res
+    # Quadruple rather than double: when the enclosing pair is far (or absent in
+    # a huge buffer) this reaches the full buffer in fewer re-scans, bounding the
+    # wasted re-tokenisation to ~1/3 of the final window instead of ~1x.
+    radius *= 4
 
 proc calculateBaseTextObjectRange(
     buffer: TextBuffer,

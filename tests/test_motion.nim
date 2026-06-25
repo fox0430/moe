@@ -1157,6 +1157,79 @@ suite "Text Objects - Tag":
     let range = result.get
     check (range.start.column, range.endPos.column) == (3, 7)
 
+  test "tag pair beyond the initial scan window is still found":
+    # The open/close lie outside the first window centred on the cursor, so this
+    # drives the doubling scan; the result must equal a full-buffer scan.
+    let buffer = newTextBuffer("<div>\n" & "x\n".repeat(300) & "</div>")
+    let cursor = BufferPosition(line: 150, column: 0)
+    let around = calculateTextObjectRange(buffer, cursor, toTag, tomAround)
+    check around.isOk
+    check (around.get.start.line, around.get.start.column) == (0, 0)
+    check (around.get.endPos.line, around.get.endPos.column) == (301, 5)
+    let inner = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check inner.isOk
+    check inner.get.isLinewise
+    check (inner.get.start.line, inner.get.start.column) == (1, 0)
+    check (inner.get.endPos.line, inner.get.endPos.column) == (300, 0)
+
+  test "innermost pair is chosen after the window grows past both pairs":
+    # Cursor sits far from every tag, so the window must grow once before any
+    # markup is in range; the inner <p> pair, not the outer <div>, must win.
+    let buffer = newTextBuffer("<div>\n<p>\n" & "y\n".repeat(600) & "</p>\n</div>")
+    let cursor = BufferPosition(line: 301, column: 0)
+    let around = calculateTextObjectRange(buffer, cursor, toTag, tomAround)
+    check around.isOk
+    check (around.get.start.line, around.get.start.column) == (1, 0)
+    check (around.get.endPos.line, around.get.endPos.column) == (602, 3)
+    let inner = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check inner.isOk
+    check inner.get.isLinewise
+    check (inner.get.start.line, inner.get.start.column) == (2, 0)
+    check (inner.get.endPos.line, inner.get.endPos.column) == (601, 0)
+
+  test "counted 2at reaches an outer pair far beyond the inner one":
+    # The outer <outer> tags sit >128 lines from the cursor, so the count
+    # re-probe must drive the window growth a second time to find them.
+    let buffer = newTextBuffer(
+      "<outer>\n" & "x\n".repeat(150) & "<inner>\nhi\n</inner>\n" & "y\n".repeat(150) &
+        "</outer>"
+    )
+    let cursor = BufferPosition(line: 152, column: 0) # inside "hi"
+
+    let one = calculateTextObjectRange(buffer, cursor, toTag, tomAround, 1)
+    check one.isOk
+    check (one.get.start.line, one.get.start.column) == (151, 0)
+    check (one.get.endPos.line, one.get.endPos.column) == (153, 7) # '>' of </inner>
+
+    let two = calculateTextObjectRange(buffer, cursor, toTag, tomAround, 2)
+    check two.isOk
+    check (two.get.start.line, two.get.start.column) == (0, 0)
+    check (two.get.endPos.line, two.get.endPos.column) == (304, 7) # '>' of </outer>
+
+    let twoInner = calculateTextObjectRange(buffer, cursor, toTag, tomInner, 2)
+    check twoInner.isOk
+    check twoInner.get.isLinewise
+    check (twoInner.get.start.line, twoInner.get.start.column) == (1, 0)
+    check (twoInner.get.endPos.line, twoInner.get.endPos.column) == (303, 0)
+
+  test "wide-rune content maps to absolute columns on a non-zero window offset":
+    # The tag sits past the initial radius, so flatToPos must add the window's
+    # line offset; the inner range is in rune columns, not bytes.
+    let buffer = newTextBuffer("z\n".repeat(200) & "<p>あい</p>")
+    let cursor = BufferPosition(line: 200, column: 4) # on 'い'
+    let inner = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check inner.isOk
+    check (inner.get.start.line, inner.get.start.column) == (200, 3)
+    check (inner.get.endPos.line, inner.get.endPos.column) == (200, 4)
+
+  test "no enclosing tag in a large buffer fails instead of hanging":
+    # Worst case for the windowed scan: the window grows to the whole buffer and
+    # must terminate with an error rather than loop.
+    let buffer = newTextBuffer("plain text line here\n".repeat(2000))
+    let cursor = BufferPosition(line: 1000, column: 3)
+    let inner = calculateTextObjectRange(buffer, cursor, toTag, tomInner)
+    check inner.isErr
+
 suite "deleteRange":
   test "deleteRange single line":
     let buffer = newTextBuffer("hello world")
