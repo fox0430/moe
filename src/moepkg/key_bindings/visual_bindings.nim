@@ -40,6 +40,7 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("l", "visual-move-right"),
   ("j", "visual-move-down"),
   ("k", "visual-move-up"),
+  ("C-j", "visual-move-down"), # CTRL-J / <NL> = down (Vim built-in)
   ("0", "visual-move-home"),
   ("$", "visual-move-end"),
   ("^", "visual-move-firstnonblank"),

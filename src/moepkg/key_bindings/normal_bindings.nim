@@ -34,6 +34,7 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("j", "move-down"),
   ("k", "move-up"),
   ("l", "move-right"),
+  ("C-j", "move-down"), # CTRL-J / <NL> = down (Vim built-in)
   ("C-b", "page-up"),
   ("C-u", "half-page-up"),
   ("C-d", "half-page-down"),
