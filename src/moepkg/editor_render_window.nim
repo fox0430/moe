@@ -462,6 +462,12 @@ proc appendEndOfLineVirtualText(
     let baseStyle = colorIndexToStyle(chunk.color)
     for rune in chunk.text.runes:
       let w = runeWidth(rune)
+      if w == 0:
+        # Zero-width rune: fold into the preceding base cell, no advance. Skip
+        # a leading mark whose base would be the real text, not virtual text.
+        if result > startDisplayX:
+          foldZeroWidthRune(buffer, screenX + result, screenY, rune)
+        continue
       if screenX + result + w > ctx.windowRightEdge:
         return result
       let bgPatch = e.lineFillPatch(
@@ -534,7 +540,14 @@ proc renderLineSegmentWithSelection*(
 
   template renderNormalCell(rune: Rune, col: int, style: Style) =
     let width = runeWidth(rune)
-    if rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
+    if width == 0:
+      # Zero-width rune (combining mark / ZWJ / variation selector): fold it
+      # into the preceding base cell rather than writing a standalone cell the
+      # next glyph would overwrite. displayX does not advance. Skip when this
+      # cell starts the segment — its base, if any, is on the previous row.
+      if displayX > 0:
+        foldZeroWidthRune(buffer, screenX + displayX, screenY, rune)
+    elif rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
       if screenX + displayX < ctx.windowRightEdge:
         buffer.setCell(screenX + displayX, screenY, "│", 1, indentationLineStyle())
       displayX += 1

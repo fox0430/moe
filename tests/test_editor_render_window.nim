@@ -2248,6 +2248,56 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let trailingStyle = trailingSpacesStyle()
     check buf[4, 0].style != trailingStyle
 
+suite "renderLineSegmentWithSelection - zero-width rune folding":
+  proc plainEditor(): Editor =
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    result = newEditor(config, vr)
+    result.state.display.showSyntax = false
+    result.state.display.showCursorLine = false
+    result.state.display.showIndentationLines = false
+
+  test "Combining mark merges into the preceding base cell":
+    var e = plainEditor()
+    let text = "e" & $Rune(0x0301) & "X" # "éX" in NFD
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    # The acute folds onto 'e'; 'X' keeps its own column instead of being
+    # overwritten by a standalone zero-width cell.
+    check buf[0, 0].symbol == "e" & $Rune(0x0301)
+    check buf[1, 0].symbol == "X"
+    check buf[2, 0].symbol == " "
+
+  test "Variation selector folds onto a wide base, shadow preserved":
+    var e = plainEditor()
+    let text = "字" & $Rune(0xFE0E) & "z" # wide base + VS-15 + ascii
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    check buf[0, 0].symbol == "字" & $Rune(0xFE0E)
+    check buf[1, 0].symbol == "" # wide-char shadow intact
+    check buf[2, 0].symbol == "z"
+
 suite "renderLineSegmentWithSelection - full-width space highlight":
   test "Normal mode highlights full-width space":
     let config = newEditorConfig()

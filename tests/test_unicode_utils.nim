@@ -957,3 +957,53 @@ suite "unicode_utils - setRuneCell":
     let w = setRuneCell(buf, 2, 0, "日".runeAt(0), style)
     check w == 2
     check buf[2, 0].symbol == "日"
+
+  test "Combining mark folds into the preceding base cell, returns width 0":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    var x = 0
+    x += setRuneCell(buf, x, 0, "e".runeAt(0), style)
+    check x == 1
+    let w = setRuneCell(buf, x, 0, Rune(0x0301), style) # combining acute
+    check w == 0
+    check x == 1 # no advance
+    # The mark merged onto 'e' rather than landing on the next column.
+    check buf[0, 0].symbol == "e" & $Rune(0x0301)
+    check buf[1, 0].symbol == " " # next column untouched
+
+  test "Combining mark on a wide base keeps the continuation cell":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    var x = 0
+    x += setRuneCell(buf, x, 0, "漢".runeAt(0), style)
+    check x == 2
+    discard setRuneCell(buf, x, 0, Rune(0x0301), style)
+    check buf[0, 0].symbol == "漢" & $Rune(0x0301)
+    check buf[1, 0].symbol == "" # shadow cell still present
+
+  test "Variation selector folds into the preceding base cell":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    var x = 0
+    x += setRuneCell(buf, x, 0, "▶".runeAt(0), style)
+    let w = setRuneCell(buf, x, 0, Rune(0xFE0E), style) # VARIATION SELECTOR-15
+    check w == 0
+    check buf[0, 0].symbol == "▶" & $Rune(0xFE0E)
+
+  test "Leading zero-width rune has no base and is a no-op":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    let w = setRuneCell(buf, 0, 0, Rune(0x0301), style)
+    check w == 0
+    check buf[0, 0].symbol == " " # nothing written, cell stays default
+
+  test "Per-rune render loop keeps decomposed text in one cell":
+    # Mirrors the per-rune setCell loop used by the editor render path.
+    var buf = newBuffer(10, 1)
+    let text = "e" & $Rune(0x0301) & "X" # "éX" in NFD
+    var x = 0
+    for r in text.runes:
+      x += setRuneCell(buf, x, 0, r, defaultStyle())
+    check x == 2
+    check buf[0, 0].symbol == "e" & $Rune(0x0301)
+    check buf[1, 0].symbol == "X"

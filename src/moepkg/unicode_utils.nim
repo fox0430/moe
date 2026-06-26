@@ -27,14 +27,37 @@ import pkg/celina
 
 export buffer.runeWidth, buffer.displayWidth
 
+proc foldZeroWidthRune*(buffer: var Buffer, x, y: int, r: Rune) =
+  ## Merge a zero-width rune (combining mark, ZWJ, variation selector) into the
+  ## base cell to the left of column `x`, so it renders on that grapheme rather
+  ## than overwriting the next column. Callers advance the cursor per rune, so
+  ## when a zero-width rune arrives `x` already sits past the base: a narrow
+  ## base occupies `x-1`, a wide base its empty shadow at `x-1` and the lead at
+  ## `x-2`. Rewrite the base via setCell so the wide-char shadow is preserved.
+  ## No-op when no base cell precedes `x` (e.g. a leading combining mark).
+  var bx = x - 1
+  if bx < 0 or bx >= buffer.area.width or y < 0 or y >= buffer.area.height:
+    return
+  # Step left over a wide char's empty shadow cell onto its lead.
+  if buffer[bx, y].isShadow and bx - 1 >= 0:
+    dec bx
+  let base = buffer[bx, y]
+  if base.isEmpty:
+    return
+  buffer.setCell(bx, y, base.symbol & $r, base.width, base.style, base.hyperlink)
+
 proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
-  ## Write a single rune at (x, y) and the wide-char continuation cell when
-  ## runeWidth(r) == 2. Without the continuation cell, celina's diff cannot
-  ## detect that the second column needs to be repainted when a wide char is
-  ## overwritten, leaving ghost artifacts on popup close.
-  ## Returns the display width of the rune.
-  buffer[x, y] = cell($r, style)
+  ## Write a single rune at (x, y), returning its display width so callers can
+  ## advance the cursor. Wide chars (width 2) get an empty continuation cell so
+  ## celina's diff repaints the second column when the wide char is overwritten,
+  ## avoiding ghost artifacts on popup close. Zero-width runes (combining marks,
+  ## joiners, variation selectors) are folded into the preceding base cell and
+  ## return 0 — writing them standalone would overwrite the following glyph.
   let w = runeWidth(r)
+  if w == 0:
+    foldZeroWidthRune(buffer, x, y, r)
+    return 0
+  buffer[x, y] = cell($r, style)
   if w == 2 and x + 1 < buffer.area.width:
     buffer[x + 1, y] = cell("", style)
   return w
