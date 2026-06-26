@@ -1815,3 +1815,37 @@ suite "eventToKeyCombo - special key normalization (#2597)":
     check combo.get.isSpecial
     check combo.get.special == skBackTab
     check kmShift notin combo.get.modifiers
+
+suite "Vim parity - CTRL-J (<NL>) down motion":
+  # Holding Ctrl through a `<C-v>` j gesture sends CTRL-J (0x0a = <NL>), which
+  # Vim treats as a down motion in Normal and every Visual mode. celina maps the
+  # byte to a Char "j" event carrying the Ctrl modifier, so the binding lives
+  # under `C-j` (not a special keycode). These checks pin the end-to-end path:
+  # the event normalizes to the same combo as `parseKeyCombo("C-j")`, and that
+  # combo resolves to the down command.
+  test "CTRL-J event normalizes to the C-j combo":
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(
+        code: celina.KeyCode.Char, char: "j", modifiers: {celina.KeyModifier.Ctrl}
+      ),
+    )
+    let evCombo = eventToKeyCombo(ev)
+    let parsed = parseKeyCombo("C-j")
+    check evCombo.isSome
+    check parsed.isSome
+    check evCombo.get == parsed.get
+
+  test "C-j resolves to the down motion in Normal and Visual modes":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let ctrlJ = toKeyCombo('j', ctrl = true)
+
+    let n = registry.findBinding(EditorMode.Normal, ctrlJ)
+    check n.isSome
+    check n.get.name == "move-down"
+
+    for mode in [EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]:
+      let v = registry.findBinding(mode, ctrlJ)
+      check v.isSome
+      check v.get.name == "visual-move-down"
