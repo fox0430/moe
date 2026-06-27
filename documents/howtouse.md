@@ -54,6 +54,7 @@
 |:---|:---|
 | <kbd>**h**</kbd> | Go left |
 | <kbd>**j**</kbd> | Go down |
+| <kbd>**Ctrl**</kbd> <kbd>**j**</kbd> | Go down |
 | <kbd>**k**</kbd> | Go up |
 | <kbd>**l**</kbd> | Go right |
 | <kbd>**w**</kbd> | Go forwards to the start of a word |
@@ -76,17 +77,22 @@
 | <kbd>**H**</kbd> | Move to the top line of the screen |
 | <kbd>**M**</kbd> | Move to the center line of the screen |
 | <kbd>**L**</kbd> | Move to the bottom line of the screen |
+| <kbd>**Ctrl**</kbd> <kbd>**b**</kbd> | Page Up |
+| <kbd>**Ctrl**</kbd> <kbd>**f**</kbd> | Page Down |
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half Page Up |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half Page Down |
 | <kbd>**%**</kbd> | Move to matching pair of paren |
 | <kbd>**d**</kbd> <kbd>**$**</kbd> OR <kbd>**D**</kbd> | Delete until the end of the line |
+| <kbd>**C**</kbd> | Change until the end of the line |
 | <kbd>**y**</kbd> <kbd>**y**</kbd> OR <kbd>**Y**</kbd> | Copy a line |
 | <kbd>**y**</kbd> <kbd>**{**</kbd> | Yank to the previous blank line |
 | <kbd>**y**</kbd> <kbd>**}**</kbd> | Yank to the next blank line |
 | <kbd>**y**</kbd> <kbd>**l**</kbd> | Yank a character |
 | <kbd>**y**</kbd> <kbd>**t**</kbd> <kbd>**Any key**</kbd> | Yank characters to a any character |
 | <kbd>**p**</kbd> | Paste the clipboard |
+| <kbd>**P**</kbd> | Paste the clipboard before the cursor |
 | <kbd>**n**</kbd> | Search forwards |
+| <kbd>**N**</kbd> | Search backwards |
 | <kbd>**g**</kbd> <kbd>**n**</kbd> | Go to next search match and select it visually |
 | <kbd>**g**</kbd> <kbd>**N**</kbd> | Go to previous search match and select it visually |
 | <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**n**</kbd> | Delete next search match |
@@ -98,12 +104,18 @@
 | <kbd>**:**</kbd> | Start command mode |
 | <kbd>**u**</kbd> | Undo |
 | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd> | Redo |
+| <kbd>**Ctrl**</kbd> <kbd>**a**</kbd> | Increase number under cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**x**</kbd> | Decrease number under cursor |
 | <kbd>**>**</kbd> | Indent |
 | <kbd>**<**</kbd> | Unindent |
 | <kbd>**=**</kbd> <kbd>**=**</kbd> | Auto indent |
+| <kbd>**J**</kbd> | Join lines |
 | <kbd>**d**</kbd> <kbd>**d**</kbd> | Delete a line |
 | <kbd>**x**</kbd> | Delete current character |
 | <kbd>**X**</kbd> OR <kbd>**d**</kbd> <kbd>**h**</kbd> | Delete the character before the cursor |
+| <kbd>**~**</kbd> | Toggle case of character under cursor |
+| <kbd>**g**</kbd> <kbd>**u**</kbd> | Lowercase (operator) |
+| <kbd>**g**</kbd> <kbd>**U**</kbd> | Uppercase (operator) |
 | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd> | Delete the characters in the current line and start insert mode |
 | <kbd>**s**</kbd> OR <kbd>**c**</kbd> <kbd>**l**</kbd> | Delete the current character and enter insert mode |
 | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**"**</kbd> | Delete the inside of double quotes and enter insert mode |
@@ -152,11 +164,14 @@
 | <kbd>**F**</kbd> | Move to previous any character on the current line |
 | <kbd>**t**</kbd> | Move to the left of the any character on the current line |
 | <kbd>**T**</kbd> | Move to the right of the back any character on the current line |
+| <kbd>**;**</kbd> | Repeat last f/F/t/T |
+| <kbd>**,**</kbd> | Repeat last f/F/t/T in reverse |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd> | Move to the next window |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd> | Move to the previous window |
 | <kbd>**z**</kbd> <kbd>**t**</kbd> | Scroll the screen so the cursor is at the top |
 | <kbd>**z**</kbd> <kbd>**b**</kbd> | Scroll the screen so the cursor is at the bottom |
 | <kbd>**z**</kbd> <kbd>**.**</kbd> | Center the screen on the cursor |
+| <kbd>**z**</kbd> <kbd>**z**</kbd> | Center the screen on the cursor |
 | <kbd>**Z**</kbd> <kbd>**Z**</kbd> | Write current file and exit |
 | <kbd>**Z**</kbd> <kbd>**Q**</kbd> | Same as :q! |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> | Close current window |
@@ -182,10 +197,16 @@
 | <kbd>**g**</kbd> <kbd>**i**</kbd> | Goto Implementation (LSP) |
 | <kbd>**g**</kbd> <kbd>**r**</kbd> | References (LSP) |
 | <kbd>**g**</kbd> <kbd>**h**</kbd> | Open Call hierarchy viewer (LSP) |
+| <kbd>**g**</kbd> <kbd>**H**</kbd> | Outgoing call hierarchy (LSP) |
 | <kbd>**g**</kbd> <kbd>**l**</kbd> | Document Link (LSP) |
 | <kbd>**g**</kbd> <kbd>**f**</kbd> | Open URI/file under cursor |
 | <kbd>**Space**</kbd> <kbd>**r**</kbd> | Rename (LSP) |
-| <kbd>**\\**</kbd> <kbd>**r**</kbd> | Code Lens (LSP) |
+| <kbd>**g**</kbd> <kbd>**L**</kbd> | Code Lens (LSP) |
+| <kbd>**z**</kbd> <kbd>**o**</kbd> | Open fold |
+| <kbd>**z**</kbd> <kbd>**c**</kbd> | Close fold |
+| <kbd>**z**</kbd> <kbd>**a**</kbd> | Toggle fold |
+| <kbd>**z**</kbd> <kbd>**R**</kbd> | Open all folds |
+| <kbd>**z**</kbd> <kbd>**M**</kbd> | Close all folds |
 | <kbd>**z**</kbd> <kbd>**d**</kbd> | Delete folding lines |
 | <kbd>**z**</kbd> <kbd>**D**</kbd> | Delete all folding lines |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd> | Selection Range (LSP) |
@@ -242,6 +263,7 @@
 | Keys | Description |
 |:---|:---|
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd> | Delete text |
+| <kbd>**c**</kbd> | Change (delete selection and enter insert mode) |
 | <kbd>**y**</kbd> | Copy text |
 | <kbd>**r**</kbd> | Replace character |
 | <kbd>**S**</kbd> | Surround selection with character |
@@ -370,9 +392,12 @@
 | <kbd>**k**</kbd> | Go up |
 | <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first line |
 | <kbd>**G**</kbd> | Go to the last line |
+| <kbd>**l**</kbd> | Enter directory or open file |
 | <kbd>**i**</kbd> | Detail Information |
+| <kbd>**.**</kbd> | Toggle hidden files |
 | <kbd>**D**</kbd> | Delete file |
 | <kbd>**v**</kbd> | Split window and open file or directory |
+| <kbd>**h**</kbd> | Split window horizontally and open file |
 <!-- AUTO-GEN:end FilerMode -->
 
 </details>
