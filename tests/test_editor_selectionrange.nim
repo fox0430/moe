@@ -103,7 +103,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
       timeoutMs: 5000,
     )
     e.lsp.service.pendingResponses[requestId] =
-      (result: some(responseJson), error: none(string))
+      (result: some($responseJson), error: none(string))
 
     e.pollLspSelectionRange()
 

@@ -353,6 +353,13 @@ proc sendRequest*(s: InputStream, req: JsonNode): Future[JsonRpcSendResult] {.as
     return JsonRpcSendResult.err(err.error)
   return JsonRpcSendResult.ok()
 
+proc sendFrame*(s: InputStream, frame: string): Future[JsonRpcSendResult] {.async.} =
+  ## Send an already-serialized JSON-RPC message body. The caller is responsible
+  ## for building a well-formed envelope; this only adds the Content-Length
+  ## header. Lets callers splice the params (already a JSON string) into the
+  ## frame instead of round-tripping through a JsonNode.
+  return await s.send(frame)
+
 proc sendNotify*(
     s: InputStream, notify: JsonNode
 ): Future[JsonRpcSendResult] {.async.} =

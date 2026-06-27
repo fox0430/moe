@@ -89,7 +89,7 @@ suite "editor_hover - pollLspHover":
 
     const reqId = 42
     e.lsp.service.pendingResponses[reqId] = (
-      result: some(%*{"contents": {"kind": "plaintext", "value": "hover text"}}),
+      result: some($(%*{"contents": {"kind": "plaintext", "value": "hover text"}})),
       error: none(string),
     )
     e.state.lspCache.pendingHoverRequestId = reqId
@@ -108,7 +108,7 @@ suite "editor_hover - pollLspHover":
 
     const reqId = 43
     e.lsp.service.pendingResponses[reqId] = (
-      result: some(%*{"contents": {"kind": "plaintext", "value": "hover text"}}),
+      result: some($(%*{"contents": {"kind": "plaintext", "value": "hover text"}})),
       error: none(string),
     )
     e.state.lspCache.pendingHoverRequestId = reqId

@@ -549,9 +549,9 @@ suite "LspWorker - sendRequest (without starting worker)":
     check workerResult.isOk
     let worker = workerResult.get
 
-    let id1 = worker.sendRequest("textDocument/completion", %*{})
-    let id2 = worker.sendRequest("textDocument/hover", %*{})
-    let id3 = worker.sendRequest("textDocument/definition", %*{})
+    let id1 = worker.sendRequest("textDocument/completion", "{}")
+    let id2 = worker.sendRequest("textDocument/hover", "{}")
+    let id3 = worker.sendRequest("textDocument/definition", "{}")
 
     check id1 == 1
     check id2 == 2
@@ -563,10 +563,10 @@ suite "LspWorker - sendRequest (without starting worker)":
     let worker = workerResult.get
 
     discard worker.sendRequest(
-      "textDocument/completion", %*{"position": {"line": 0, "character": 5}}
+      "textDocument/completion", """{"position":{"line":0,"character":5}}"""
     )
     discard worker.sendRequest(
-      "textDocument/hover", %*{"textDocument": {"uri": "file:///test.nim"}}
+      "textDocument/hover", """{"textDocument":{"uri":"file:///test.nim"}}"""
     )
 
   test "sendRequest with explicit caller-provided id":
@@ -576,9 +576,9 @@ suite "LspWorker - sendRequest (without starting worker)":
     check workerResult.isOk
     let worker = workerResult.get
 
-    worker.sendRequest(42, "textDocument/hover", %*{})
+    worker.sendRequest(42, "textDocument/hover", "{}")
     # The internal counter is unaffected by explicit IDs
-    let autoId = worker.sendRequest("textDocument/completion", %*{})
+    let autoId = worker.sendRequest("textDocument/completion", "{}")
     check autoId == 1
 
 suite "LspWorker - Worker Thread Lifecycle":

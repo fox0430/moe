@@ -27,10 +27,9 @@ import
   std/
     [algorithm, sequtils, strutils, unicode, sets, options, json, os, monotimes, times]
 
-import pkg/celina
+import pkg/[celina, jsony]
 
-import buffer, word_dictionary, command_completion, fuzzy_match, color
-import popup_render
+import buffer, word_dictionary, command_completion, fuzzy_match, color, popup_render
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
@@ -61,7 +60,7 @@ type
     isSnippet*: bool ## True when the insert text is an LSP snippet (placeholders)
     filterText*: string ## LSP filterText for matching (falls back to label/word)
     sortText*: string ## LSP sortText for ordering (falls back to label/word)
-    lspItemIndex*: int ## Index into lspItems/lspRawJsonItems (-1 = not from LSP)
+    lspItemIndex*: int ## Index into lspItems (-1 = not from LSP)
 
   CompletionMenu* = object ## Completion popup state
     entries*: seq[CompletionEntry]
@@ -99,13 +98,24 @@ type
     lastLspRequestTime*: MonoTime ## Time of last LSP completion request
     isIncomplete*: bool ## Whether last LSP completion list was incomplete
     lastLspPrefix*: string ## Prefix used for last LSP request
-    lspRawJsonItems*: seq[JsonNode] ## Raw JSON for resolve requests
     resolveRequestId*: Option[int] ## Pending resolve request ID
     resolvedIndex*: int ## Index of item being resolved
 
   PopupPosition* = object
     x*, y*: int
     width*, height*: int
+
+  SnippetStopOffset* = object ## A tabstop located inside the expanded snippet text.
+    num*: int ## Tabstop number; 0 is the final stop.
+    offset*: int ## Rune offset of the stop within the expanded text.
+    len*: int ## Rune length of the placeholder default (0 for bare `$n`).
+
+  SnippetParse = object
+    text: string
+    finalStop: int ## rune offset of `$0` (the final stop), or -1 if absent
+    firstStopNum: int ## lowest tabstop number seen (>=1), high(int) if none
+    firstStopOffset: int ## rune offset of that lowest-numbered stop, or -1
+    stops: seq[SnippetStopOffset] ## every stop in source order (mirrors kept)
 
 const
   DefaultMaxVisible* = 10
@@ -362,19 +372,6 @@ proc matchingBrace(body: string, openIdx: int): int =
         return j
     inc j
   return -1
-
-type
-  SnippetStopOffset* = object ## A tabstop located inside the expanded snippet text.
-    num*: int ## Tabstop number; 0 is the final stop.
-    offset*: int ## Rune offset of the stop within the expanded text.
-    len*: int ## Rune length of the placeholder default (0 for bare `$n`).
-
-  SnippetParse = object
-    text: string
-    finalStop: int ## rune offset of `$0` (the final stop), or -1 if absent
-    firstStopNum: int ## lowest tabstop number seen (>=1), high(int) if none
-    firstStopOffset: int ## rune offset of that lowest-numbered stop, or -1
-    stops: seq[SnippetStopOffset] ## every stop in source order (mirrors kept)
 
 proc parseSnippet(body: string): SnippetParse =
   ## Recursive worker for expandSnippet. Walks the snippet body once, building
@@ -1233,14 +1230,10 @@ proc shouldSkipLspRequest*(mgr: CompletionManager, newPrefix: string): bool =
   return false
 
 proc setLspItems*(
-    mgr: CompletionManager,
-    items: seq[CompletionItem],
-    rawJsonItems: seq[JsonNode] = @[],
-    isIncomplete: bool = false,
+    mgr: CompletionManager, items: seq[CompletionItem], isIncomplete: bool = false
 ) =
   ## Set LSP completion items and update the menu
   mgr.lspItems = items
-  mgr.lspRawJsonItems = rawJsonItems
   mgr.isIncomplete = isIncomplete
   mgr.lspRequestId = none(int)
   mgr.resolveRequestId = none(int)
@@ -1269,7 +1262,11 @@ proc needsResolve*(mgr: CompletionManager): bool =
   return entry.detail.isNone or entry.documentation.isNone
 
 proc getSelectedRawJson*(mgr: CompletionManager): Option[JsonNode] =
-  ## Get the raw JSON for the selected LSP item (for resolve requests)
+  ## Get the JSON for the selected LSP item to echo back on a resolve request.
+  ## The original list is no longer kept as JsonNode (it is parsed straight into
+  ## typed CompletionItems), so the selected item is re-serialized on demand with
+  ## jsony. The opaque `data` resolve token is an Option[JsonNode] and round-trips
+  ## verbatim, which is the field servers rely on for completionItem/resolve.
   if not mgr.menu.hasSelection or mgr.menu.entries.len == 0:
     return none(JsonNode)
   let idx = mgr.menu.selectedIndex
@@ -1281,8 +1278,8 @@ proc getSelectedRawJson*(mgr: CompletionManager): Option[JsonNode] =
 
   # Use the stored index for direct lookup (avoids overload ambiguity)
   let lspIdx = entry.lspItemIndex
-  if lspIdx >= 0 and lspIdx < mgr.lspRawJsonItems.len:
-    return some(mgr.lspRawJsonItems[lspIdx])
+  if lspIdx >= 0 and lspIdx < mgr.lspItems.len:
+    return some(parseJson(mgr.lspItems[lspIdx].toJson))
 
   return none(JsonNode)
 

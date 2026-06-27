@@ -17,7 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, tables]
+import std/[unittest, json, options, tables, strutils]
+
+import pkg/jsony
 
 import ../src/moepkg/lsp/protocol/types
 
@@ -670,3 +672,81 @@ suite "types - InlayHint":
       %*{"position": {"line": 0, "character": 0}, "label": [{"novalue": 1}]}
     ).isNone
     check parseInlayHint(%*{"position": {"line": 0, "character": 0}, "label": 42}).isNone
+
+suite "types - jsony hooks for LSP integer enums":
+  test "CompletionItem round-trips with integer enums (dumpHook + parseHook)":
+    let item = CompletionItem(
+      label: "foo",
+      kind: some(cikFunction),
+      insertTextFormat: some(itfSnippet),
+      data: some(%*{"tok": 1}),
+    )
+    let j = item.toJson
+    # jsony's default enum dumpHook would emit the symbol name; LSP needs ints.
+    check j.contains("\"kind\":3")
+    check j.contains("\"insertTextFormat\":2")
+    check not j.contains("cikFunction")
+    let back = j.fromJson(CompletionItem)
+    check back.kind == some(cikFunction)
+    check back.insertTextFormat == some(itfSnippet)
+    check back.data.isSome
+    check back.data.get["tok"].getInt == 1
+
+  test "out-of-range enum clamps to the lowest member instead of raising":
+    let back = """{"label":"x","kind":999}""".fromJson(CompletionItem)
+    check back.kind == some(cikText)
+
+  test "SymbolKind / DiagnosticSeverity dump as integers":
+    check SymbolKind.skFunction.toJson == "12"
+    check DiagnosticSeverity.dsWarning.toJson == "2"
+
+  test "CompletionList fromJson captures nested item fields":
+    let raw = """{"isIncomplete":true,"items":[
+        {"label":"a","kind":3,
+         "textEdit":{"range":{"start":{"line":1,"character":2},
+                     "end":{"line":1,"character":5}},"newText":"abc"},
+         "additionalTextEdits":[{"range":{"start":{"line":0,"character":0},
+                     "end":{"line":0,"character":1}},"newText":"x"}],
+         "data":{"tok":1}}]}"""
+    let cl = raw.fromJson(CompletionList)
+    check cl.isIncomplete
+    check cl.items.len == 1
+    check cl.items[0].label == "a"
+    check cl.items[0].kind == some(cikFunction)
+    check cl.items[0].textEdit.isSome
+    check cl.items[0].additionalTextEdits.isSome
+    check cl.items[0].additionalTextEdits.get.len == 1
+    check cl.items[0].data.isSome
+
+  test "fromJson ignores unknown server fields without raising":
+    let back = """{"label":"a","kind":3,"x_custom":{"deep":[1,2]},"score":0.5}""".fromJson(
+      CompletionItem
+    )
+    check back.label == "a"
+    check back.kind == some(cikFunction)
+
+suite "types - jsony wire format for worker notification params":
+  # The worker builds didOpen/didChange params by jsony toJson of structs that
+  # wrap these shared types. Lock the field order so a reordering of the type
+  # definition (which would silently change the on-the-wire JSON, untested by
+  # the no-real-server worker suite) fails here instead.
+  type
+    OpenWrap = object
+      textDocument: TextDocumentItem
+
+    ChangeTextDoc = object
+      textDocument: VersionedTextDocumentIdentifier
+
+  test "didOpen textDocument serializes in LSP field order":
+    let w = OpenWrap(
+      textDocument:
+        TextDocumentItem(uri: "file:///a.nim", languageId: "nim", version: 1, text: "x")
+    )
+    check w.toJson ==
+      """{"textDocument":{"uri":"file:///a.nim","languageId":"nim","version":1,"text":"x"}}"""
+
+  test "didChange textDocument serializes in LSP field order":
+    let w = ChangeTextDoc(
+      textDocument: VersionedTextDocumentIdentifier(uri: "file:///a.nim", version: 2)
+    )
+    check w.toJson == """{"textDocument":{"uri":"file:///a.nim","version":2}}"""

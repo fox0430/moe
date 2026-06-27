@@ -23,7 +23,7 @@
 
 import std/[tables, sets, options, os, strutils, json, times, uri]
 
-import pkg/[results, chronos]
+import pkg/[results, chronos, jsony]
 
 import lsp/worker
 import lsp/protocol/types
@@ -92,8 +92,13 @@ type
     # worker keeps its own, deliberately longer RequestTimeoutSec (worker.nim);
     # the two are not meant to match.
     requestTimeoutMs*: int
-    # Pending request responses (requestId -> response)
-    pendingResponses: Table[int, tuple[result: Option[JsonNode], error: Option[string]]]
+    # Pending request responses (requestId -> response).
+    # The result is kept as the raw JSON string exactly as it crossed the
+    # worker thread boundary; it is parsed lazily by the consumer (parseJson for
+    # the JsonNode-based getters, jsony fromJson for the typed ones). This avoids
+    # eagerly building a JsonNode tree for large payloads (e.g. completion lists)
+    # that a typed consumer would rather parse directly.
+    pendingResponses: Table[int, tuple[result: Option[string], error: Option[string]]]
     # Active pending requests for timeout tracking
     activeRequests*: Table[int, LspPendingRequest]
     # Single request-ID counter shared by all workers. Both tables above are
@@ -153,7 +158,7 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     enabled: true,
     requestTimeoutMs: DefaultRequestTimeoutMs,
     pendingResponses:
-      initTable[int, tuple[result: Option[JsonNode], error: Option[string]]](),
+      initTable[int, tuple[result: Option[string], error: Option[string]]](),
     activeRequests: initTable[int, LspPendingRequest](),
     nextRequestId: 1,
     lastRestartTimes: initTable[string, float](),
@@ -460,7 +465,7 @@ proc stopAll*(svc: LspService) =
   svc.initializedLangs.clear()
 
 proc recordResponse*(
-    svc: LspService, requestId: int, res: Option[JsonNode], error: Option[string]
+    svc: LspService, requestId: int, res: Option[string], error: Option[string]
 ) =
   ## Store a response for a request that is still awaiting one. Responses
   ## that arrive after the request was already timed out or cancelled (no
@@ -515,18 +520,10 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
     except CatchableError as e:
       svc.onLogMessage(langId, mtWarning, "Failed to parse capabilities: " & e.msg)
   of levResponse:
-    if evt.responseResultJson.isSome:
-      var parsed: JsonNode
-      try:
-        parsed = parseJson(evt.responseResultJson.get)
-      except CatchableError as e:
-        svc.recordResponse(
-          evt.requestId, none(JsonNode), some("Failed to parse response: " & e.msg)
-        )
-        return
-      svc.recordResponse(evt.requestId, some(parsed), evt.responseError)
-    else:
-      svc.recordResponse(evt.requestId, none(JsonNode), evt.responseError)
+    # Store the raw result string as-is; parsing is deferred to the consumer
+    # (see checkResponse / waitForResponse / *Raw). Malformed JSON therefore
+    # surfaces as a parse error at consumption time rather than here.
+    svc.recordResponse(evt.requestId, evt.responseResultJson, evt.responseError)
   of levRawJson:
     # Debug log file: one compact line per frame whenever `-d` is on,
     # independent of the per-server verbose setting. logDebug no-ops when the
@@ -660,7 +657,10 @@ proc checkResponse*(
     if resp.error.isSome:
       return (lrsError, none(JsonNode), resp.error)
     elif resp.result.isSome:
-      return (lrsSuccess, resp.result, none(string))
+      try:
+        return (lrsSuccess, some(parseJson(resp.result.get)), none(string))
+      except CatchableError as e:
+        return (lrsError, none(JsonNode), some("Failed to parse response: " & e.msg))
     else:
       return (lrsSuccess, some(newJNull()), none(string))
 
@@ -673,6 +673,31 @@ proc checkResponse*(
       return (lrsTimeout, none(JsonNode), some("Request timed out"))
 
   return (lrsPending, none(JsonNode), none(string))
+
+proc checkResponseRaw*(
+    svc: LspService, requestId: int
+): tuple[status: LspResponseStatus, raw: Option[string], error: Option[string]] =
+  ## Like checkResponse but returns the unparsed result JSON string, letting a
+  ## typed consumer parse it directly (jsony fromJson) without the intermediate
+  ## JsonNode. `raw` is none when the server returned no result (or null).
+  if requestId in svc.pendingResponses:
+    let resp = svc.pendingResponses[requestId]
+    svc.pendingResponses.del(requestId)
+    svc.activeRequests.del(requestId)
+
+    if resp.error.isSome:
+      return (lrsError, none(string), resp.error)
+    else:
+      return (lrsSuccess, resp.result, none(string))
+
+  if requestId in svc.activeRequests:
+    let req = svc.activeRequests[requestId]
+    let elapsed = (epochTime() - req.startTime) * 1000.0
+    if elapsed > req.timeoutMs.float:
+      svc.activeRequests.del(requestId)
+      return (lrsTimeout, none(string), some("Request timed out"))
+
+  return (lrsPending, none(string), none(string))
 
 proc hasPendingRequests*(svc: LspService): bool =
   ## Check if there are any pending requests waiting for responses
@@ -742,7 +767,10 @@ proc waitForResponse*(
         if resp.error.isSome:
           return err(resp.error.get)
         elif resp.result.isSome:
-          return ok(resp.result.get)
+          try:
+            return ok(parseJson(resp.result.get))
+          except CatchableError as e:
+            return err("Failed to parse response: " & e.msg)
         else:
           return ok(newJNull())
 
@@ -753,6 +781,46 @@ proc waitForResponse*(
       return err("Request timed out")
 
     # Async sleep to yield to other tasks
+    await sleepAsync(timer.milliseconds(PollIntervalMs))
+
+proc waitForResponseRaw*(
+    svc: LspService, requestId: int, timeoutMs: int = 0
+): Future[Result[string, string]] {.async: (raises: [CancelledError]).} =
+  ## Like waitForResponse but yields the unparsed result JSON string so a typed
+  ## consumer can jsony fromJson it directly. A server result of null (or none)
+  ## is returned as the literal "null".
+  let startTime = epochTime()
+  let effectiveMs = if timeoutMs > 0: timeoutMs else: svc.requestTimeoutMs
+  let timeoutSec = effectiveMs.float / 1000.0
+
+  while true:
+    {.cast(raises: []).}:
+      try:
+        svc.poll()
+      except CatchableError as e:
+        svc.onLogMessage("", mtError, "Unexpected error in poll: " & e.msg)
+      except Defect as e:
+        svc.onLogMessage("", mtError, "Defect in poll: " & e.msg)
+        raise
+
+    {.cast(raises: []).}:
+      if requestId in svc.pendingResponses:
+        let resp = svc.pendingResponses[requestId]
+        svc.pendingResponses.del(requestId)
+        svc.activeRequests.del(requestId)
+
+        if resp.error.isSome:
+          return err(resp.error.get)
+        elif resp.result.isSome:
+          return ok(resp.result.get)
+        else:
+          return ok("null")
+
+    if epochTime() - startTime > timeoutSec:
+      {.cast(raises: []).}:
+        svc.activeRequests.del(requestId)
+      return err("Request timed out")
+
     await sleepAsync(timer.milliseconds(PollIntervalMs))
 
 # Helper to start a tracked request
@@ -769,7 +837,9 @@ proc startTrackedRequest(
   ## different workers never share an ID in the tracking tables.
   let requestId = svc.nextRequestId
   inc svc.nextRequestId
-  worker.sendRequest(requestId, methodName, params)
+  # Serialize once here; the worker splices the string into the request envelope
+  # rather than parsing it back into a JsonNode.
+  worker.sendRequest(requestId, methodName, $params)
   svc.activeRequests[requestId] = LspPendingRequest(
     requestId: requestId,
     langId: worker.languageId,
@@ -1110,23 +1180,26 @@ proc startCallHierarchyOutgoingCallsRequest*(
 
 # Response parsing helpers for async requests
 proc parseCompletionResponse*(
-    resp: JsonNode
-): tuple[items: seq[CompletionItem], rawJsonItems: seq[JsonNode], isIncomplete: bool] =
-  ## Parse a completion response JSON into CompletionItem sequence
-  var items: seq[CompletionItem] = @[]
-  var rawJsonItems: seq[JsonNode] = @[]
-  var isIncomplete = false
-  if resp.kind == JArray:
-    for item in resp:
-      items.add(parseCompletionItem(item))
-      rawJsonItems.add(item)
-  elif resp.kind == JObject and resp.hasKey("items"):
-    if resp.hasKey("isIncomplete"):
-      isIncomplete = resp["isIncomplete"].getBool
-    for item in resp["items"]:
-      items.add(parseCompletionItem(item))
-      rawJsonItems.add(item)
-  return (items, rawJsonItems, isIncomplete)
+    raw: string
+): tuple[items: seq[CompletionItem], isIncomplete: bool] =
+  ## Parse a completion response (the `result` of textDocument/completion)
+  ## straight from its raw JSON string with jsony, skipping the intermediate
+  ## JsonNode. The result may be a CompletionList object, a bare CompletionItem
+  ## array, or null. Malformed payloads degrade to an empty list rather than
+  ## raising.
+  var k = 0
+  while k < raw.len and raw[k] in Whitespace:
+    inc k
+  if k >= raw.len or raw[k] == 'n': # empty or null
+    return (@[], false)
+  try:
+    if raw[k] == '[':
+      return (raw.fromJson(seq[CompletionItem]), false)
+    else:
+      let cl = raw.fromJson(CompletionList)
+      return (cl.items, cl.isIncomplete)
+  except CatchableError:
+    return (@[], false)
 
 proc parseHoverResponse*(resp: JsonNode): Option[Hover] =
   ## Parse a hover response JSON
@@ -1551,7 +1624,7 @@ proc requestCompletion*(
     }
 
     let requestId = svc.startTrackedRequest(worker, "textDocument/completion", params)
-    let respResult = await svc.waitForResponse(requestId)
+    let respResult = await svc.waitForResponseRaw(requestId)
 
     if respResult.isErr:
       return err(respResult.error)

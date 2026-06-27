@@ -160,7 +160,7 @@ suite "Inlay Hint Response processing":
 
     const reqId = 77
     e.lsp.service.pendingResponses[reqId] = (
-      result: some(%*[{"position": {"line": 0, "character": 5}, "label": ": int"}]),
+      result: some($(%*[{"position": {"line": 0, "character": 5}, "label": ": int"}])),
       error: none(string),
     )
     e.state.lspCache.pendingInlayHintRequestId = reqId
@@ -185,7 +185,7 @@ suite "Inlay Hint Response processing":
 
     const reqId = 78
     e.lsp.service.pendingResponses[reqId] = (
-      result: some(%*[{"position": {"line": 0, "character": 5}, "label": ": int"}]),
+      result: some($(%*[{"position": {"line": 0, "character": 5}, "label": ": int"}])),
       error: none(string),
     )
     e.state.lspCache.pendingInlayHintRequestId = reqId

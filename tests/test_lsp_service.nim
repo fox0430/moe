@@ -364,35 +364,42 @@ suite "LspService - Pending Request Management":
 
 suite "LspService - Response Parsing":
   test "parseCompletionResponse parses array":
-    let resp = %*[{"label": "item1", "kind": 1}, {"label": "item2", "kind": 2}]
-    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
+    let resp = $(%*[{"label": "item1", "kind": 1}, {"label": "item2", "kind": 2}])
+    let (items, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 2
     check items[0].label == "item1"
     check items[1].label == "item2"
-    check rawJsonItems.len == 2
+    check items[0].kind == some(cikText)
     check not isIncomplete
 
   test "parseCompletionResponse parses object with items":
     let resp =
-      %*{"isIncomplete": false, "items": [{"label": "item1"}, {"label": "item2"}]}
-    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
+      $(%*{"isIncomplete": false, "items": [{"label": "item1"}, {"label": "item2"}]})
+    let (items, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 2
-    check rawJsonItems.len == 2
     check not isIncomplete
 
   test "parseCompletionResponse parses incomplete list":
-    let resp = %*{"isIncomplete": true, "items": [{"label": "item1"}]}
-    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
+    let resp = $(%*{"isIncomplete": true, "items": [{"label": "item1"}]})
+    let (items, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 1
-    check rawJsonItems.len == 1
     check isIncomplete
 
   test "parseCompletionResponse handles empty array":
-    let resp = %*[]
-    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
+    let resp = $(%*[])
+    let (items, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 0
-    check rawJsonItems.len == 0
     check not isIncomplete
+
+  test "parseCompletionResponse handles null and out-of-range kind":
+    let (items0, _) = parseCompletionResponse("null")
+    check items0.len == 0
+    # An out-of-range CompletionItemKind must not raise; it clamps to the
+    # lowest valid member rather than crashing the typed parse.
+    let resp = $(%*{"items": [{"label": "x", "kind": 999}]})
+    let (items, _) = parseCompletionResponse(resp)
+    check items.len == 1
+    check items[0].kind == some(cikText)
 
   test "parseHoverResponse parses valid hover":
     let resp = %*{"contents": {"kind": "plaintext", "value": "hover text"}}
@@ -801,7 +808,7 @@ suite "LspService - Poll":
 suite "LspService - processEvent (thread-boundary JSON parsing)":
   privateAccess(LspService)
 
-  test "levResponse with result is parsed and stored":
+  test "levResponse stores the raw result string verbatim":
     let svc = newLspService()
     svc.activeRequests[7] = LspPendingRequest(requestId: 7, langId: "nim")
     svc.processEvent(
@@ -816,10 +823,12 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     check 7 in svc.pendingResponses
     let resp = svc.pendingResponses[7]
     check resp.result.isSome
-    check resp.result.get["items"].len == 2
+    check resp.result.get == $(%*{"items": [1, 2]})
     check resp.error.isNone
 
-  test "levResponse with invalid JSON stores an error":
+  test "checkResponse surfaces a parse error for invalid JSON":
+    # Parsing is deferred to consumption, so a malformed payload is stored as-is
+    # and only fails when checkResponse tries to turn it into a JsonNode.
     let svc = newLspService()
     svc.activeRequests[8] = LspPendingRequest(requestId: 8, langId: "nim")
     svc.processEvent(
@@ -831,11 +840,11 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
         responseError: none(string),
       ),
     )
-    check 8 in svc.pendingResponses
-    let resp = svc.pendingResponses[8]
-    check resp.result.isNone
-    check resp.error.isSome
-    check resp.error.get.contains("Failed to parse response")
+    let (status, resultOpt, errorOpt) = svc.checkResponse(8)
+    check status == lrsError
+    check resultOpt.isNone
+    check errorOpt.isSome
+    check errorOpt.get.contains("Failed to parse response")
 
   test "levResponse for an unknown/timed-out request is dropped":
     # A response arriving after the request was timed out (no activeRequests
@@ -856,8 +865,8 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
   test "recordResponse stores only for active requests":
     let svc = newLspService()
     svc.activeRequests[1] = LspPendingRequest(requestId: 1, langId: "nim")
-    svc.recordResponse(1, some(%*{"a": 1}), none(string))
-    svc.recordResponse(2, some(%*{"b": 2}), none(string)) # not active -> dropped
+    svc.recordResponse(1, some($(%*{"a": 1})), none(string))
+    svc.recordResponse(2, some($(%*{"b": 2})), none(string)) # not active -> dropped
     check 1 in svc.pendingResponses
     check 2 notin svc.pendingResponses
 
@@ -869,7 +878,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     svc.cleanupTimedOutRequests()
     check 5 notin svc.activeRequests
     # The worker's response arrives afterwards
-    svc.recordResponse(5, some(%*{"late": true}), none(string))
+    svc.recordResponse(5, some($(%*{"late": true})), none(string))
     check svc.pendingResponses.len == 0
 
   test "levDiagnostics is parsed and forwarded to the callback":
