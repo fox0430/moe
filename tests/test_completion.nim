@@ -1341,9 +1341,12 @@ suite "Completion - resolve support":
 
   test "getSelectedRawJson returns matching JSON":
     let mgr = newCompletionManager()
-    mgr.lspItems = @[CompletionItem(label: "foo"), CompletionItem(label: "bar")]
-    mgr.lspRawJsonItems =
-      @[%*{"label": "foo", "data": 1}, %*{"label": "bar", "data": 2}]
+    # getSelectedRawJson re-serializes the selected typed item; the opaque `data`
+    # token round-trips verbatim.
+    mgr.lspItems = @[
+      CompletionItem(label: "foo", data: some(%*1)),
+      CompletionItem(label: "bar", data: some(%*2)),
+    ]
     mgr.menu.entries = @[
       CompletionEntry(word: "foo", matchScore: 100, source: csLsp, lspItemIndex: 0),
       CompletionEntry(word: "bar", matchScore: 90, source: csLsp, lspItemIndex: 1),
@@ -1355,16 +1358,34 @@ suite "Completion - resolve support":
     check rawJson.get["label"].getStr == "bar"
     check rawJson.get["data"].getInt == 2
 
+  test "getSelectedRawJson serializes kind as an integer (resolve wire format)":
+    # The re-serialized item is echoed back to the server on a resolve request,
+    # so enum fields must be LSP integers, not jsony's default symbol names.
+    let mgr = newCompletionManager()
+    mgr.lspItems = @[
+      CompletionItem(
+        label: "foo",
+        kind: some(cikFunction),
+        insertTextFormat: some(InsertTextFormat.itfSnippet),
+        data: some(%*{"tok": 1}),
+      )
+    ]
+    mgr.menu.entries =
+      @[CompletionEntry(word: "foo", matchScore: 100, source: csLsp, lspItemIndex: 0)]
+    mgr.menu.selectedIndex = 0
+    mgr.menu.hasSelection = true
+    let rawJson = mgr.getSelectedRawJson()
+    check rawJson.isSome
+    check rawJson.get["kind"].getInt == 3
+    check rawJson.get["insertTextFormat"].getInt == 2
+    check rawJson.get["data"]["tok"].getInt == 1
+
   test "getSelectedRawJson handles overloaded items with same word":
     let mgr = newCompletionManager()
     # Two overloaded functions with the same name but different details
     mgr.lspItems = @[
-      CompletionItem(label: "foo", detail: some("fn(int)")),
-      CompletionItem(label: "foo", detail: some("fn(string)")),
-    ]
-    mgr.lspRawJsonItems = @[
-      %*{"label": "foo", "detail": "fn(int)", "data": 1},
-      %*{"label": "foo", "detail": "fn(string)", "data": 2},
+      CompletionItem(label: "foo", detail: some("fn(int)"), data: some(%*1)),
+      CompletionItem(label: "foo", detail: some("fn(string)"), data: some(%*2)),
     ]
     mgr.menu.entries = @[
       CompletionEntry(
@@ -1434,17 +1455,22 @@ suite "Completion - resolve support":
 
     check mgr.menu.entries[0].detail == some("std::string &")
 
-  test "setLspItems stores raw JSON items":
+  test "setLspItems stores typed items for resolve re-serialization":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "te"
     mgr.state = csPendingLsp
 
-    let items = @[CompletionItem(label: "test")]
-    let rawJson = @[%*{"label": "test", "data": 42}]
-    mgr.setLspItems(items, rawJson)
+    let items = @[CompletionItem(label: "test", data: some(%*42))]
+    mgr.setLspItems(items)
 
-    check mgr.lspRawJsonItems.len == 1
-    check mgr.lspRawJsonItems[0]["data"].getInt == 42
+    check mgr.lspItems.len == 1
+    mgr.menu.entries =
+      @[CompletionEntry(word: "test", matchScore: 100, source: csLsp, lspItemIndex: 0)]
+    mgr.menu.selectedIndex = 0
+    mgr.menu.hasSelection = true
+    let rawJson = mgr.getSelectedRawJson()
+    check rawJson.isSome
+    check rawJson.get["data"].getInt == 42
 
 suite "Completion - DocPanel":
   test "updateDocPanel shows panel when documentation present":

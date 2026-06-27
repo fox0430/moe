@@ -65,7 +65,7 @@ proc injectLspResponse(e: Editor, requestId: int, resp: JsonNode) =
   ## Simulate a server response arriving for `requestId`. Uses privateAccess to
   ## reach the service's private `pendingResponses` table (no production seam).
   privateAccess(LspService)
-  e.lsp.service.pendingResponses[requestId] = (result: some(resp), error: none(string))
+  e.lsp.service.pendingResponses[requestId] = (result: some($resp), error: none(string))
 
 proc createTestEditorWithLspDisabled(): Editor =
   let config = newEditorConfig()

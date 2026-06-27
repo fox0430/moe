@@ -22,6 +22,8 @@
 
 import std/[options, json, tables]
 
+import pkg/jsony
+
 import enums
 
 export enums
@@ -697,6 +699,33 @@ proc toEnum*[T: enum](v: int): Option[T] =
     some(T(v))
   else:
     none(T)
+
+# Range-safe jsony parse hooks for LSP integer enums.
+#
+# jsony's built-in enum parseHook does a raw `T(parseInt(...))` for numeric
+# JSON values, which raises RangeDefect when a server sends a value outside the
+# enum (e.g. a CompletionItemKind from a newer LSP revision). These overrides
+# clamp out-of-range values to the enum default instead, mirroring the defensive
+# behaviour of the hand-written toEnum* parsers so a misbehaving server can
+# never crash a typed fromJson.
+template defLspIntEnum(T: typedesc) =
+  proc parseHook*(s: string, i: var int, v: var T) =
+    var n: int
+    parseHook(s, i, n)
+    # Clamp out-of-range values to the lowest valid member rather than
+    # default(T): these enums start at 1, so default(T) would yield an invalid
+    # ord-0 value with no name.
+    v = toEnumOr[T](n, low(T))
+
+  proc dumpHook*(s: var string, v: T) =
+    # LSP wants the numeric value on the wire; jsony's default enum dumpHook
+    # emits the symbol name ("cikFunction") instead, which servers reject.
+    s.add $ord(v)
+
+defLspIntEnum(CompletionItemKind)
+defLspIntEnum(InsertTextFormat)
+defLspIntEnum(SymbolKind)
+defLspIntEnum(DiagnosticSeverity)
 
 proc parseDiagnostic*(node: JsonNode): Diagnostic =
   result.range = parseRange(node["range"])

@@ -933,6 +933,13 @@ proc checkResponse*(
   ## Non-blocking check if a response has arrived
   return lsp.service.checkResponse(requestId)
 
+proc checkResponseRaw*(
+    lsp: LspIntegration, requestId: int
+): tuple[status: LspResponseStatus, raw: Option[string], error: Option[string]] =
+  ## Non-blocking check that returns the unparsed result JSON string for a
+  ## typed (jsony) consumer.
+  return lsp.service.checkResponseRaw(requestId)
+
 proc hasPendingRequests*(lsp: LspIntegration): bool =
   ## Check if there are any pending requests
   lsp.service.hasPendingRequests()

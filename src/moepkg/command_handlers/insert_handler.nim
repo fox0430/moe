@@ -776,16 +776,18 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
   # Poll LSP service for events
   handler.lsp.poll()
 
-  # Check for response
-  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(reqIdOpt.get)
+  # Check for response. The raw result string is parsed directly into typed
+  # CompletionItems with jsony (parseCompletionResponse), avoiding an
+  # intermediate JsonNode tree for what can be a very large completion list.
+  let (status, rawOpt, errorOpt) = handler.lsp.checkResponseRaw(reqIdOpt.get)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    if resultOpt.isSome:
-      let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resultOpt.get)
-      handler.completionManager.setLspItems(items, rawJsonItems, isIncomplete)
+    if rawOpt.isSome:
+      let (items, isIncomplete) = parseCompletionResponse(rawOpt.get)
+      handler.completionManager.setLspItems(items, isIncomplete)
   of lrsError, lrsTimeout:
     # Clear pending state on error/timeout
     logLspDegraded("Completion", status, errorOpt.get(""))

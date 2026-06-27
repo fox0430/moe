@@ -23,7 +23,7 @@
 import std/[json, options, os, strutils, strtabs, locks, tables, atomics, deques, uri]
 import std/times except milliseconds
 
-import pkg/[results, chronos]
+import pkg/[results, chronos, jsony]
 import pkg/chronos/[asyncproc, threadsync, selectors2]
 
 import jsonrpc
@@ -31,6 +31,29 @@ import protocol/types
 import ../logger
 
 export types
+
+type
+  # Typed params for the notifications the worker builds itself. Serialized with
+  # jsony toJson, so they carry exactly these fields (no Option/null noise) and
+  # match the previous %* output byte-for-byte.
+  DidOpenParams = object
+    textDocument: TextDocumentItem
+
+  DidCloseParams = object
+    textDocument: TextDocumentIdentifier
+
+  FullContentChange = object
+    text: string
+
+  DidChangeParams = object
+    textDocument: VersionedTextDocumentIdentifier
+    contentChanges: seq[FullContentChange]
+
+proc didOpenParamsJson(uri, langId: string, version: int, text: string): string =
+  DidOpenParams(
+    textDocument:
+      TextDocumentItem(uri: uri, languageId: langId, version: version, text: text)
+  ).toJson
 
 proc pathToFileUri*(path: string): string =
   ## Build a percent-encoded file:// URI from an absolute path. Encoding is
@@ -496,6 +519,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: $node)
     ctx.eventQueue[].push(evt)
 
+  proc sendRawJsonStr(direction: LspJsonDirection, frame: string) =
+    ## Like sendRawJson but for an already-serialized frame string.
+    if not (ctx.rawJsonLog or ctx.debugLog):
+      return
+    ctx.eventQueue[].push(
+      LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: frame)
+    )
+
   proc sendDynamicRegister(paramsJson: string) =
     var evt = LspEvent(kind: levDynamicRegister, registrationsJson: paramsJson)
     ctx.eventQueue[].push(evt)
@@ -718,34 +749,38 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       sendLogMessage(mtInfo, "Unknown LSP notification: " & meth)
 
   proc sendRequest(
-      meth: string, params: JsonNode
+      meth: string, paramsJson: string
   ): Future[Result[int, string]] {.async.} =
+    ## paramsJson is the already-serialized params object. The envelope is built
+    ## by splicing it in, avoiding a JsonNode round-trip on the request path.
     if serverStreams.isNil:
       return Result[int, string].err("Server not running")
 
     lastId.inc
-    let req = %*{"jsonrpc": "2.0", "id": lastId, "method": meth, "params": params}
-    # Log outgoing request JSON (pretty formatted)
-    sendRawJson(ljdSent, req)
-    let sendResult = await serverStreams.input.sendRequest(req)
+    let frame =
+      "{\"jsonrpc\":\"2.0\",\"id\":" & $lastId & ",\"method\":" & escapeJson(meth) &
+      ",\"params\":" & paramsJson & "}"
+    sendRawJsonStr(ljdSent, frame)
+    let sendResult = await serverStreams.input.sendFrame(frame)
     if sendResult.isErr:
       return Result[int, string].err(sendResult.error)
     return Result[int, string].ok(lastId)
 
   proc sendNotification(
-      meth: string, params: JsonNode
+      meth: string, paramsJson: string
   ): Future[Result[void, string]] {.async.} =
     if serverStreams.isNil:
       return Result[void, string].err("Server not running")
 
-    let notify = %*{"jsonrpc": "2.0", "method": meth, "params": params}
-    # Log outgoing notification JSON (pretty formatted)
-    sendRawJson(ljdSent, notify)
-    return await serverStreams.input.sendNotify(notify)
+    let frame =
+      "{\"jsonrpc\":\"2.0\",\"method\":" & escapeJson(meth) & ",\"params\":" & paramsJson &
+      "}"
+    sendRawJsonStr(ljdSent, frame)
+    return await serverStreams.input.sendFrame(frame)
 
-  proc sendNotificationLog(meth: string, params: JsonNode): Future[void] {.async.} =
+  proc sendNotificationLog(meth: string, paramsJson: string): Future[void] {.async.} =
     ## Send notification and log any errors (non-critical)
-    let sendResult = await sendNotification(meth, params)
+    let sendResult = await sendNotification(meth, paramsJson)
     if sendResult.isErr:
       sendLogMessage(mtWarning, "Failed to send " & meth & ": " & sendResult.error)
 
@@ -880,7 +915,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       except JsonParsingError:
         discard
 
-    let reqResult = await sendRequest("initialize", initParams)
+    let reqResult = await sendRequest("initialize", $initParams)
     if reqResult.isErr:
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to send initialize: " & reqResult.error)
@@ -981,7 +1016,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       break
 
     # Send initialized notification
-    let initedResult = await sendNotification("initialized", %*{})
+    let initedResult = await sendNotification("initialized", "{}")
     if initedResult.isErr:
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to send initialized: " & initedResult.error)
@@ -989,22 +1024,17 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       return
 
     # Send workspace/didChangeConfiguration (some servers need this)
-    await sendNotificationLog("workspace/didChangeConfiguration", %*{"settings": {}})
+    await sendNotificationLog("workspace/didChangeConfiguration", """{"settings":{}}""")
 
     ctx.sharedState.storeState(lwsRunning)
     sendEvent(levInitialized)
 
     # Send all pending didOpen notifications now that server is running
     for cmd in pendingDidOpen:
-      let params = %*{
-        "textDocument": {
-          "uri": cmd.openUri,
-          "languageId": cmd.openLangId,
-          "version": cmd.openVersion,
-          "text": cmd.openText,
-        }
-      }
-      await sendNotificationLog("textDocument/didOpen", params)
+      await sendNotificationLog(
+        "textDocument/didOpen",
+        didOpenParamsJson(cmd.openUri, cmd.openLangId, cmd.openVersion, cmd.openText),
+      )
     pendingDidOpen = @[]
 
   proc stopServer(): Future[void] {.async.} =
@@ -1030,15 +1060,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       ctx.sharedState.storeRunning(false)
     of lcmdDidOpen:
       if ctx.sharedState.loadState() == lwsRunning:
-        let params = %*{
-          "textDocument": {
-            "uri": cmd.openUri,
-            "languageId": cmd.openLangId,
-            "version": cmd.openVersion,
-            "text": cmd.openText,
-          }
-        }
-        await sendNotificationLog("textDocument/didOpen", params)
+        await sendNotificationLog(
+          "textDocument/didOpen",
+          didOpenParamsJson(cmd.openUri, cmd.openLangId, cmd.openVersion, cmd.openText),
+        )
       else:
         let currentState = ctx.sharedState.loadState()
         if currentState == lwsStarting or currentState == lwsStopped:
@@ -1047,31 +1072,28 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           pendingDidOpen.add(cmd)
     of lcmdDidClose:
       if ctx.sharedState.loadState() == lwsRunning:
-        let params = %*{"textDocument": {"uri": cmd.closeUri}}
+        let params =
+          DidCloseParams(textDocument: TextDocumentIdentifier(uri: cmd.closeUri)).toJson
         await sendNotificationLog("textDocument/didClose", params)
     of lcmdDidChange:
       let changeState = ctx.sharedState.loadState()
       if changeState == lwsRunning:
-        let contentChanges =
+        let params =
           case cmd.changeMode
           of lcdmIncremental:
-            try:
-              parseJson(cmd.changeContentChangesJson)
-            except CatchableError:
-              sendLogMessage(
-                mtWarning, "didChange: invalid contentChanges JSON: " & cmd.changeUri
-              )
-              # Defensive only: the integration layer serializes its own JSON, so
-              # this is unreachable in practice. If it ever fired, the change is
-              # lost while the integration shadow has already advanced, so it
-              # would not re-sync until a full sync or server restart.
-              return
+            # contentChanges was already serialized to JSON by the integration
+            # layer; splice it straight into the envelope rather than parsing it
+            # back into a JsonNode only to re-serialize it.
+            "{\"textDocument\":{\"uri\":" & escapeJson(cmd.changeUri) & ",\"version\":" &
+              $cmd.changeVersion & "},\"contentChanges\":" & cmd.changeContentChangesJson &
+              "}"
           of lcdmFull:
-            %*[{"text": cmd.changeText}]
-        let params = %*{
-          "textDocument": {"uri": cmd.changeUri, "version": cmd.changeVersion},
-          "contentChanges": contentChanges,
-        }
+            DidChangeParams(
+              textDocument: VersionedTextDocumentIdentifier(
+                uri: cmd.changeUri, version: cmd.changeVersion
+              ),
+              contentChanges: @[FullContentChange(text: cmd.changeText)],
+            ).toJson
         await sendNotificationLog("textDocument/didChange", params)
       elif changeState == lwsStarting or changeState == lwsStopped:
         # Before the server is running, fold the change into the pending didOpen
@@ -1120,21 +1142,16 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         )
     of lcmdDidSave:
       if ctx.sharedState.loadState() == lwsRunning:
-        var params = %*{"textDocument": {"uri": cmd.saveUri}}
+        var params = "{\"textDocument\":{\"uri\":" & escapeJson(cmd.saveUri) & "}"
         if cmd.saveText.isSome:
-          params["text"] = %cmd.saveText.get
+          params &= ",\"text\":" & escapeJson(cmd.saveText.get)
+        params &= "}"
         await sendNotificationLog("textDocument/didSave", params)
     of lcmdRequest:
       if ctx.sharedState.loadState() == lwsRunning:
-        var params: JsonNode
-        try:
-          params = parseJson(cmd.reqParamsJson)
-        except CatchableError as e:
-          sendResponse(
-            cmd.requestId, none(JsonNode), some("Invalid request params: " & e.msg)
-          )
-          return
-        let lspIdResult = await sendRequest(cmd.reqMethod, params)
+        # reqParamsJson was serialized by the integration layer; pass it through
+        # to be spliced into the envelope without a JsonNode round-trip.
+        let lspIdResult = await sendRequest(cmd.reqMethod, cmd.reqParamsJson)
         if lspIdResult.isOk:
           # Track mapping from LSP request ID to our request ID with timestamp
           pendingRequests[lspIdResult.get] = (cmd.requestId, getTime())
@@ -1145,15 +1162,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         sendResponse(cmd.requestId, none(JsonNode), some("Server not running"))
     of lcmdNotification:
       if ctx.sharedState.loadState() == lwsRunning:
-        var params: JsonNode
-        try:
-          params = parseJson(cmd.notifyParamsJson)
-        except CatchableError as e:
-          sendLogMessage(
-            mtWarning, "Invalid params for " & cmd.notifyMethod & ": " & e.msg
-          )
-          return
-        await sendNotificationLog(cmd.notifyMethod, params)
+        await sendNotificationLog(cmd.notifyMethod, cmd.notifyParamsJson)
     of lcmdCancel:
       # Translate the service-side tracking id to the JSON-RPC id actually
       # sent to the server (pendingRequests maps lspId -> tracking id), then
@@ -1167,7 +1176,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       if lspId >= 0:
         pendingRequests.del(lspId)
         if ctx.sharedState.loadState() == lwsRunning:
-          await sendNotificationLog("$/cancelRequest", %*{"id": lspId})
+          await sendNotificationLog("$/cancelRequest", "{\"id\":" & $lspId & "}")
     of lcmdApplyEditResponse:
       # Deliver the deferred response to a server-initiated workspace/applyEdit.
       # Drop it if the server is gone (no one to answer) or if it crashed and was
@@ -1508,20 +1517,21 @@ proc isThreadAlive*(worker: LspWorker): bool =
   worker.threadStarted and not worker.stopped and
     worker.sharedState.running.load(moAcquire)
 
-proc sendRequest*(worker: LspWorker, requestId: int, meth: string, params: JsonNode) =
+proc sendRequest*(worker: LspWorker, requestId: int, meth: string, paramsJson: string) =
   ## Send a request to the LSP server with a caller-provided request ID.
   ## Use pollEvents to get the response with matching requestId.
   ## The caller is responsible for ID uniqueness; LspService allocates IDs
   ## from a single counter shared by all workers so responses from different
   ## language servers can never collide in its tracking tables.
-  ## The params are serialized here so no JsonNode ref crosses the thread
-  ## boundary (non-atomic ORC refcounts).
+  ## `paramsJson` is the already-serialized params object: only strings cross
+  ## the thread boundary (no JsonNode ref under non-atomic ORC refcounts), and
+  ## the worker splices it into the request envelope without re-parsing.
   let cmd = LspCommand(
-    kind: lcmdRequest, requestId: requestId, reqMethod: meth, reqParamsJson: $params
+    kind: lcmdRequest, requestId: requestId, reqMethod: meth, reqParamsJson: paramsJson
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
-proc sendRequest*(worker: LspWorker, meth: string, params: JsonNode): int =
+proc sendRequest*(worker: LspWorker, meth: string, paramsJson: string): int =
   ## Send a request to the LSP server and return the request ID
   ## Use pollEvents to get the response with matching requestId
   ## Note: IDs from this worker-local counter are only unique within this
@@ -1529,12 +1539,13 @@ proc sendRequest*(worker: LspWorker, meth: string, params: JsonNode): int =
   ## explicit-ID overload.
   result = worker.nextRequestId
   worker.nextRequestId.inc
-  worker.sendRequest(result, meth, params)
+  worker.sendRequest(result, meth, paramsJson)
 
-proc sendNotification*(worker: LspWorker, meth: string, params: JsonNode) =
-  ## Send a notification to the LSP server (no response expected)
+proc sendNotification*(worker: LspWorker, meth: string, paramsJson: string) =
+  ## Send a notification to the LSP server (no response expected).
+  ## `paramsJson` is the already-serialized params object (see sendRequest).
   let cmd =
-    LspCommand(kind: lcmdNotification, notifyMethod: meth, notifyParamsJson: $params)
+    LspCommand(kind: lcmdNotification, notifyMethod: meth, notifyParamsJson: paramsJson)
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
 proc cancelRequest*(worker: LspWorker, requestId: int) =

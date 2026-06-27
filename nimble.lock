@@ -131,6 +131,16 @@
       "checksums": {
         "sha1": "2a9fb57ef1f6460fd61b1cfab2d83af44f788a25"
       }
+    },
+    "jsony": {
+      "version": "1.1.6",
+      "vcsRevision": "bb647e1ca21af25ffdc423bcb96feeeeae963ca2",
+      "url": "https://github.com/treeform/jsony",
+      "downloadMethod": "git",
+      "dependencies": [],
+      "checksums": {
+        "sha1": "b28964a93a3cf7248126ba39047593cd63a3aa6d"
+      }
     }
   },
   "tasks": {}

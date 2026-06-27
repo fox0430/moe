@@ -126,11 +126,13 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     e.lsp.service.pendingResponses[reqId] = (
       result: some(
-        %*{
-          "signatures": [{"label": "foo(a: int, b: int)"}],
-          "activeSignature": 0,
-          "activeParameter": 0,
-        }
+        $(
+          %*{
+            "signatures": [{"label": "foo(a: int, b: int)"}],
+            "activeSignature": 0,
+            "activeParameter": 0,
+          }
+        )
       ),
       error: none(string),
     )
