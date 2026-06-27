@@ -832,16 +832,36 @@ proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
     return none(string)
   lsp.service.getLanguageIdFromPath(buffer.filePath.get)
 
+template defineSupportCheck(name: untyped) =
+  ## Generate a buffer-level capability predicate: resolve the buffer's language
+  ## and delegate to the `LspService` check of the same name. Used for the many
+  ## `hasXxxSupport` wrappers that differ only by the delegated proc.
+  proc name*(lsp: LspIntegration, buffer: TextBuffer): bool =
+    let langId = requireLangId(lsp, buffer)
+    langId.isSome and lsp.service.name(langId.get)
+
+template definePositionRequest(name: untyped) =
+  ## Generate a position-based request wrapper: resolve the buffer path, convert
+  ## the rune column to UTF-16, and delegate to the `LspService` proc of the same
+  ## name. Returns the request ID.
+  proc name*(
+      lsp: LspIntegration, buffer: TextBuffer, line, column: int
+  ): Result[int, string] =
+    let path = requireBufferPath(lsp, buffer)
+    lsp.service.name(path, line, buffer.toUtf16Column(line, column))
+
+template defineDocumentRequest(name: untyped) =
+  ## Generate a whole-document request wrapper: resolve the buffer path and
+  ## delegate to the `LspService` proc of the same name. Returns the request ID.
+  proc name*(lsp: LspIntegration, buffer: TextBuffer): Result[int, string] =
+    let path = requireBufferPath(lsp, buffer)
+    lsp.service.name(path)
+
 # Async (non-blocking) feature requests
 # These return immediately with a request ID. Use poll() and checkResponse() to get results.
 # Note: All position-based requests convert rune-index columns to UTF-16 for LSP protocol compliance.
 
-proc startCompletionRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a completion request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startCompletionRequest(path, line, buffer.toUtf16Column(line, column))
+definePositionRequest(startCompletionRequest)
 
 proc startCompletionResolveRequest*(
     lsp: LspIntegration, buffer: TextBuffer, itemJson: JsonNode
@@ -850,124 +870,27 @@ proc startCompletionResolveRequest*(
   let path = requireBufferPath(lsp, buffer)
   lsp.service.startCompletionResolveRequest(path, itemJson)
 
-proc startHoverRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a hover request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startHoverRequest(path, line, buffer.toUtf16Column(line, column))
+definePositionRequest(startHoverRequest)
+definePositionRequest(startDefinitionRequest)
+definePositionRequest(startDeclarationRequest)
+definePositionRequest(startReferencesRequest)
+definePositionRequest(startTypeDefinitionRequest)
+definePositionRequest(startImplementationRequest)
+definePositionRequest(startSignatureHelpRequest)
 
-proc startDefinitionRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a definition request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startDefinitionRequest(path, line, buffer.toUtf16Column(line, column))
+defineSupportCheck(hasCompletionSupport)
+defineSupportCheck(hasSignatureHelpSupport)
+defineSupportCheck(hasDocumentHighlightSupport)
+defineSupportCheck(hasHoverSupport)
+defineSupportCheck(hasDefinitionSupport)
+defineSupportCheck(hasDeclarationSupport)
+defineSupportCheck(hasReferencesSupport)
+defineSupportCheck(hasTypeDefinitionSupport)
+defineSupportCheck(hasImplementationSupport)
 
-proc startDeclarationRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a declaration request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startDeclarationRequest(path, line, buffer.toUtf16Column(line, column))
-
-proc startReferencesRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a references request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startReferencesRequest(path, line, buffer.toUtf16Column(line, column))
-
-proc startTypeDefinitionRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a type definition request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startTypeDefinitionRequest(path, line, buffer.toUtf16Column(line, column))
-
-proc startImplementationRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start an implementation request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startImplementationRequest(path, line, buffer.toUtf16Column(line, column))
-
-proc startSignatureHelpRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a signature help request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startSignatureHelpRequest(path, line, buffer.toUtf16Column(line, column))
-
-proc hasCompletionSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if completion is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasCompletionSupport(langId.get)
-
-proc hasSignatureHelpSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if signature help is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasSignatureHelpSupport(langId.get)
-
-proc hasDocumentHighlightSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if document highlight is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasDocumentHighlightSupport(langId.get)
-
-proc hasHoverSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if hover is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasHoverSupport(langId.get)
-
-proc hasDefinitionSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if go to definition is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasDefinitionSupport(langId.get)
-
-proc hasDeclarationSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if go to declaration is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasDeclarationSupport(langId.get)
-
-proc hasReferencesSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if find references is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasReferencesSupport(langId.get)
-
-proc hasTypeDefinitionSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if go to type definition is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasTypeDefinitionSupport(langId.get)
-
-proc hasImplementationSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if go to implementation is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasImplementationSupport(langId.get)
-
-proc startDocumentHighlightRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a document highlight request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startDocumentHighlightRequest(
-    path, line, buffer.toUtf16Column(line, column)
-  )
-
-proc startCodeLensRequest*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[int, string] =
-  ## Start a code lens request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startCodeLensRequest(path)
-
-proc startCallHierarchyPrepareRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a call hierarchy prepare request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startCallHierarchyPrepareRequest(
-    path, line, buffer.toUtf16Column(line, column)
-  )
+definePositionRequest(startDocumentHighlightRequest)
+defineDocumentRequest(startCodeLensRequest)
+definePositionRequest(startCallHierarchyPrepareRequest)
 
 proc startCallHierarchyIncomingCallsRequest*(
     lsp: LspIntegration, item: CallHierarchyItem
@@ -992,19 +915,8 @@ proc startCallHierarchyOutgoingCallsRequest*(
   let path = uriToPath(item.uri)
   lsp.service.startCallHierarchyOutgoingCallsRequest(path, item)
 
-proc startDocumentSymbolsRequest*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[int, string] =
-  ## Start a document symbols request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startDocumentSymbolsRequest(path)
-
-proc startDocumentLinkRequest*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[int, string] =
-  ## Start a document link request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startDocumentLinkRequest(path)
+defineDocumentRequest(startDocumentSymbolsRequest)
+defineDocumentRequest(startDocumentLinkRequest)
 
 proc startDocumentLinkResolveRequest*(
     lsp: LspIntegration, buffer: TextBuffer, link: DocumentLink
@@ -1013,12 +925,7 @@ proc startDocumentLinkResolveRequest*(
   let path = requireBufferPath(lsp, buffer)
   lsp.service.startDocumentLinkResolveRequest(path, link)
 
-proc startSelectionRangeRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[int, string] =
-  ## Start a selection range request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
-  lsp.service.startSelectionRangeRequest(path, line, buffer.toUtf16Column(line, column))
+definePositionRequest(startSelectionRangeRequest)
 
 proc checkResponse*(
     lsp: LspIntegration, requestId: int
@@ -1075,10 +982,7 @@ proc startSemanticTokensRequest*(
   else:
     return err("Semantic tokens not supported")
 
-proc hasInlayHintSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if inlay hints are supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasInlayHintSupport(langId.get)
+defineSupportCheck(hasInlayHintSupport)
 
 proc startInlayHintRequest*(
     lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
@@ -1095,20 +999,9 @@ proc startInlayHintRequest*(
     buffer.toUtf16Column(actualLastLine, buffer.getLine(actualLastLine).charLen)
   lsp.service.startInlayHintRequest(path, actualFirstLine, 0, actualLastLine, endChar)
 
-proc hasDocumentLinkSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if document link is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasDocumentLinkSupport(langId.get)
-
-proc hasDocumentLinkResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if document link resolve is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasDocumentLinkResolveSupport(langId.get)
-
-proc hasRenameSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if rename is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasRenameSupport(langId.get)
+defineSupportCheck(hasDocumentLinkSupport)
+defineSupportCheck(hasDocumentLinkResolveSupport)
+defineSupportCheck(hasRenameSupport)
 
 # TextEdit application helpers
 proc compareTextEditReverse(a, b: (int, TextEdit)): int =
@@ -1604,25 +1497,10 @@ proc isServerRunningForPath*(lsp: LspIntegration, path: string): bool =
   lsp.service.getWorker(langIdOpt.get).isSome
 
 # CodeLens support
-proc hasCodeLensSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if code lens is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasCodeLensSupport(langId.get)
-
-proc hasCodeLensResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if code lens resolve is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasCodeLensResolveSupport(langId.get)
-
-proc hasDocumentSymbolSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if document symbol is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasDocumentSymbolSupport(langId.get)
-
-proc hasCallHierarchySupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if call hierarchy is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasCallHierarchySupport(langId.get)
+defineSupportCheck(hasCodeLensSupport)
+defineSupportCheck(hasCodeLensResolveSupport)
+defineSupportCheck(hasDocumentSymbolSupport)
+defineSupportCheck(hasCallHierarchySupport)
 
 proc requestCodeLensResolve*(
     lsp: LspIntegration, buffer: TextBuffer, lens: CodeLens
@@ -1646,16 +1524,10 @@ proc requestExecuteCommand*(
     return err(pathRes.error)
   return await lsp.service.requestExecuteCommand(pathRes.get, command, arguments)
 
-proc hasExecuteCommandSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if execute command is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasExecuteCommandSupport(langId.get)
+defineSupportCheck(hasExecuteCommandSupport)
 
 # Folding Range support
-proc hasFoldingRangeSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if folding range is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasFoldingRangeSupport(langId.get)
+defineSupportCheck(hasFoldingRangeSupport)
 
 proc applyLspFoldingRanges*(
     buffer: TextBuffer,
