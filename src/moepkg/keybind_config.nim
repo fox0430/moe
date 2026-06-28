@@ -403,8 +403,7 @@ proc loadKeybindingsFromToml*(
             targetKeyStr,
             "valid key string (e.g. \"Escape\", \"C-c\")",
           )
-        elif binding.hasKey("noremap") and
-            binding["noremap"].kind != TomlValueKind.Bool:
+        elif binding.hasKey("noremap") and binding["noremap"].kind != TomlValueKind.Bool:
           vr.addError(
             entryName & ".noremap", $binding["noremap"].kind, "boolean (true/false)"
           )
@@ -412,7 +411,10 @@ proc loadKeybindingsFromToml*(
           # `noremap` defaults to true (replay the target verbatim); set false to
           # expand it recursively through other user mappings.
           let noremap =
-            if binding.hasKey("noremap"): binding["noremap"].getBool() else: true
+            if binding.hasKey("noremap"):
+              binding["noremap"].getBool()
+            else:
+              true
           for mode in modes:
             registry.addKeySequenceMapping(mode, keyStr, targetKeyStr, noremap)
       continue
