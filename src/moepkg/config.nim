@@ -24,6 +24,8 @@
 
 import std/[options, tables, os, osproc]
 
+import modes
+
 import config_macros
 export config_macros
 
@@ -646,29 +648,21 @@ type
     servers*: Table[string, LspServerConfig]
 
   # Key mapping settings
+  KeyMappingEntry* = object
+    ## A single [KeyMapping] right-hand side. A bare TOML string maps to
+    ## `KeyMappingEntry(rhs: s, noremap: true)`; an inline table can additionally
+    ## carry args, force a key sequence, and toggle noremap.
+    rhs*: string ## Command name, key sequence, or "mode_switch <mode>" etc.
+    args*: seq[string] ## Explicit args (may contain spaces); empty resolves rhs as-is.
+    forceKeySeq*: bool ## true skips command-name resolution (verbatim key sequence).
+    noremap*: bool ## true replays verbatim (Vim :noremap); false expands recursively.
+
   KeyMappingConfig* = object
-    all*: OrderedTable[string, string]
-    normal*: OrderedTable[string, string]
-    insert*: OrderedTable[string, string]
-    visual*: OrderedTable[string, string]
-    visualAll*: OrderedTable[string, string]
-    visualLine*: OrderedTable[string, string]
-    visualBlock*: OrderedTable[string, string]
-    replace*: OrderedTable[string, string]
-    command*: OrderedTable[string, string]
-    filer*: OrderedTable[string, string]
-    logViewer*: OrderedTable[string, string]
-    help*: OrderedTable[string, string]
-    bufferManager*: OrderedTable[string, string]
-    backupManager*: OrderedTable[string, string]
-    diffViewer*: OrderedTable[string, string]
-    config*: OrderedTable[string, string]
-    references*: OrderedTable[string, string]
-    documentSymbol*: OrderedTable[string, string]
-    callHierarchy*: OrderedTable[string, string]
-    recentFile*: OrderedTable[string, string]
-    debug*: OrderedTable[string, string]
-    terminal*: OrderedTable[string, string]
+    ## `perMode` is indexed by EditorMode; `all`/`visualAll` are meta sections
+    ## expanded at apply time (all modes but Command / the three visual modes).
+    perMode*: array[EditorMode, OrderedTable[string, KeyMappingEntry]]
+    all*: OrderedTable[string, KeyMappingEntry]
+    visualAll*: OrderedTable[string, KeyMappingEntry]
 
   # Main configuration
   EditorConfig* = ref object
@@ -946,30 +940,7 @@ proc newEditorConfig*(): EditorConfig =
       executeCommand: LspFeatureConfig(enable: true),
       servers: initTable[string, LspServerConfig](),
     ),
-    keyMapping: KeyMappingConfig(
-      all: initOrderedTable[string, string](),
-      normal: initOrderedTable[string, string](),
-      insert: initOrderedTable[string, string](),
-      visual: initOrderedTable[string, string](),
-      visualAll: initOrderedTable[string, string](),
-      visualLine: initOrderedTable[string, string](),
-      visualBlock: initOrderedTable[string, string](),
-      replace: initOrderedTable[string, string](),
-      command: initOrderedTable[string, string](),
-      filer: initOrderedTable[string, string](),
-      logViewer: initOrderedTable[string, string](),
-      help: initOrderedTable[string, string](),
-      bufferManager: initOrderedTable[string, string](),
-      backupManager: initOrderedTable[string, string](),
-      diffViewer: initOrderedTable[string, string](),
-      config: initOrderedTable[string, string](),
-      references: initOrderedTable[string, string](),
-      documentSymbol: initOrderedTable[string, string](),
-      callHierarchy: initOrderedTable[string, string](),
-      recentFile: initOrderedTable[string, string](),
-      debug: initOrderedTable[string, string](),
-      terminal: initOrderedTable[string, string](),
-    ),
+    keyMapping: KeyMappingConfig(),
     shellCommands: initTable[string, UserCommandEntry](),
     commandAliases: initTable[string, UserCommandEntry](),
   )

@@ -469,7 +469,7 @@ Persistent key remappings per editor mode. Uses the same key notation as `:nmap`
 
 Values can be a command name (e.g., `"save"`), a command with arguments (`"<command> <args...>"`), a key sequence (e.g., `"Escape"`), a mode switch (`"mode_switch <mode>"`), or an overlay switch (`"overlay_switch command|search|rename"`). See [How to use - Runtime Key Mapping](howtouse.md#runtime-key-mapping) for the full list of right-hand-side forms.
 
-Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`.
+Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `QuickRun`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree`.
 
 `[KeyMapping.All]` applies mappings to all modes (except CommandLine). Mode-specific sections override `All`.
 
@@ -552,6 +552,25 @@ Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupMan
 
 [KeyMapping.Terminal]
 "C-c" = "Escape"
+```
+
+#### Inline table form (noremap, args, forced key sequences)
+
+A bare string value (`"jj" = "Escape"`) is shorthand: it is bound to a registered command if one matches the name, otherwise replayed verbatim as a key sequence (`noremap = true`). For anything the bare string cannot express, a value may instead be an inline table:
+
+| Field | Type | Description |
+|:---|:---|:---|
+| `command` | string | Bind the key to a registered command. Mutually exclusive with `keys`. |
+| `keys` | string | Force a key sequence: the right-hand side is always replayed as keys, never resolved as a command. Mutually exclusive with `command`. |
+| `args` | array of strings | Arguments passed to `command` (may contain spaces, unlike the bare `"<command> <args>"` form). Only valid together with `command`. |
+| `noremap` | bool (default `true`) | `true` replays the target verbatim (Vim `:noremap`); `false` expands it recursively through other user mappings (Vim `:map`). Recursion is depth-bounded, so cyclic mappings fail with an error instead of hanging. |
+
+```toml
+[KeyMapping.Normal]
+# Force a key sequence and expand it recursively through other mappings:
+"x" = { keys = "dd", noremap = false }
+# Command with a space-bearing argument:
+"C-p" = { command = "quickrun", args = ["build release"] }
 ```
 
 #### Available commands
@@ -861,21 +880,28 @@ Example:
 
 #### Application order
 
-Key mappings are applied in this order (later overrides earlier):
+Key mappings are resolved in two stages.
+
+**Stage 1 — merge the configured mappings into one layer.** `moerc.toml`'s `[KeyMapping.*]` sections and the dedicated `keybindings.toml` feed the *same* per-mode tables. When the **same key in the same section** is defined in both files, the dedicated `keybindings.toml` wins (it is merged last). Entries in *different* sections do not collide at this stage.
+
+**Stage 2 — apply the merged layer over the built-in defaults**, where (for the same key in the same target mode) later overrides earlier:
 
 1. Built-in default bindings
-2. `keybindings.toml`
-3. `moerc.toml` `[KeyMapping.All]`
-4. `moerc.toml` `[KeyMapping.VisualAll]`
-5. `moerc.toml` mode-specific sections (`[KeyMapping.Normal]`, `[KeyMapping.Visual]`, `[KeyMapping.Filer]`, etc.)
-6. Runtime `:nmap`/`:imap`/`:cmap` commands
+2. `All` (every mode except Command)
+3. `VisualAll` (Visual, VisualLine, VisualBlock)
+4. Mode-specific sections (`Normal`, `Visual`, `Filer`, …)
+5. Runtime `:nmap`/`:imap`/`:cmap` commands (session-only)
+
+A mode-specific mapping therefore always overrides an `All` mapping for the same key **regardless of which file each came from** — the file of origin only matters when two entries target the *same* section (Stage 1). For example, `moerc.toml`'s `[KeyMapping.All] "x" = "commandA"` together with `keybindings.toml`'s `[Normal] "x" = "commandB"` resolve to **`commandB`** in Normal mode, because the per-mode section (step 4) overrides `All` (step 2).
+
+When `moerc.toml` is reloaded (it is watched for changes), this configured layer is rebuilt from scratch: removed entries take effect, and session-only `:nmap`/`:map` mappings are reset.
 
 Also see [Runtime Key Mapping](howtouse.md#runtime-key-mapping) for session-only mappings.
 
 
-### keybindings.toml
+### keybindings.toml (dedicated keymap file)
 
-An alternative keybinding configuration file with typed commands and richer options than `[KeyMapping]`.
+An optional file dedicated to key mappings, so they do not have to clutter `moerc.toml`. It uses exactly the same per-mode entry format as the [`[KeyMapping]` section](#keymapping-table) above, except the mode tables sit at the **top level** (the whole file is keymaps) instead of being nested under `[KeyMapping.*]`.
 
 The file is searched in the following locations (in order):
 
@@ -883,103 +909,32 @@ The file is searched in the following locations (in order):
 2. `~/.config/moe/keybindings.toml`
 3. `./keybindings.toml` (current directory)
 
-Each keybinding is defined as a `[[keybinding]]` entry.
+Entries here are merged on top of `moerc.toml`'s `[KeyMapping]` section. When both define the same key in the same mode, the dedicated file wins (it is loaded last).
 
-#### Required fields
+#### Format
 
-| Field | Type | Description |
-|:---|:---|:---|
-| mode | string | Editor mode (see below) |
-| key | string | Key or key sequence to bind |
-
-#### Supported modes
-
-Individual modes: `normal`, `insert`, `visual`, `visualline`, `visualblock`, `replace`, `command`, `filer`, `quickrun`, `logviewer`, `help`, `buffermanager`, `backupmanager`, `diffviewer`, `recentfile`, `debug`, `config`, `references`, `documentsymbol`, `callhierarchy`, `terminal`.
-
-Meta modes:
-- `all` - All modes except Command mode
-- `visualall` - Visual, VisualLine, VisualBlock
-
-#### Command types
-
-| command_type | Required field | Description |
-|:---|:---|:---|
-| `action` (default) | `command` | General editor action |
-| `mode_switch` | `target_mode` | Switch editor mode |
-| `overlay_switch` | `target_overlay` | Switch to overlay (one of: `command`, `search`, `rename`) |
-| `text_object` | `command` | Text object operation |
-| `operator` | `command` | Vim-style operator |
-| `custom` | `command` | User-defined command |
-| `key_sequence` | `target_keys` | Remap key to another key sequence |
-
-Optional field `args` (array of strings) is available for `action`, `text_object`, `operator`, and `custom` types.
-
-Optional field `noremap` (boolean, default `true`) is available for `key_sequence` mappings. When `true` the target keys are replayed verbatim (like Vim's `:noremap`); set it to `false` to expand the target recursively through other user mappings (like Vim's `:map`). Recursion is bounded by a depth limit, so cyclic mappings fail with an error instead of hanging.
-
-#### Key notation
-
-- Single character: `"h"`, `"j"`
-- Modifiers: `"C-s"` (Ctrl), `"M-x"` (Alt/Meta), `"S-Tab"` (Shift), `"C-M-s"` (combined)
-- Special keys: `"Escape"`, `"Enter"`, `"Tab"`, `"Backspace"`, `"Delete"`, `"Space"`, `"Up"`, `"Down"`, `"Left"`, `"Right"`, `"PageUp"`, `"PageDown"`, `"Home"`, `"End"`, `"F1"`-`"F12"`
-- Multi-key sequences: `"g d"` (space-separated), `"jj"` (Vim-style concatenated)
+Each section is a mode name (`All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `QuickRun`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree` — the same set as `[KeyMapping]`). Each entry maps a key (left-hand side) to a right-hand side that is either a bare string or an inline table, identical to the `[KeyMapping]` value forms (bare command name / key sequence / `"mode_switch <mode>"` / `"overlay_switch <overlay>"`, or `{ command = …, args = […] }` / `{ keys = …, noremap = … }`). See [KeyMapping table](#keymapping-table) for the full description of the value forms and the inline-table fields.
 
 #### Examples
 
 ```toml
-# Action: bind Ctrl-s to save
-[[keybinding]]
-mode = "normal"
-key = "C-s"
-command = "save"
+[All]
+"C-q" = "quit-force"
 
-# Mode switch: Escape to normal mode
-[[keybinding]]
-mode = "insert"
-key = "Escape"
-command_type = "mode_switch"
-target_mode = "normal"
+[Normal]
+"C-s" = "save"
+"g d" = "lsp-goto-definition"
+":" = "overlay_switch command"
+# Force a key sequence and expand it recursively through other mappings:
+"x" = { keys = "dd", noremap = false }
+# Command with a space-bearing argument:
+"C-p" = { command = "quickrun", args = ["build release"] }
 
-# Overlay switch: open search overlay
-[[keybinding]]
-mode = "normal"
-key = "C-f"
-command_type = "overlay_switch"
-target_overlay = "search"
+[Insert]
+"jj" = "Escape"
 
-# Key sequence remap: jj to Escape in insert mode
-[[keybinding]]
-mode = "insert"
-key = "jj"
-command_type = "key_sequence"
-target_keys = "Escape"
-
-# Recursive key sequence remap: x behaves like dd (expands other mappings)
-[[keybinding]]
-mode = "normal"
-key = "x"
-command_type = "key_sequence"
-target_keys = "dd"
-noremap = false
-
-# Multi-key sequence: g d to goto definition
-[[keybinding]]
-mode = "normal"
-key = "g d"
-command = "lsp-goto-definition"
-
-# All modes (except Command mode)
-[[keybinding]]
-mode = "all"
-key = "C-q"
-command = "quit-force"
-
-# Custom command with args
-[[keybinding]]
-mode = "normal"
-key = "C-p"
-command_type = "custom"
-command = "search.forward"
-args = ["case_sensitive"]
+[VisualAll]
+"C-c" = "mode_switch normal"
 ```
 
 #### Available commands

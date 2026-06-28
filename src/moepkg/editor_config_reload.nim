@@ -28,6 +28,7 @@ import pkg/results
 import
   types/editor_types,
   editor_lsp,
+  editor_init,
   status_line,
   color,
   highlight,
@@ -192,9 +193,10 @@ proc maybeReloadConfig*(e: Editor) =
   if currentModTime == e.state.timing.lastConfigModTime:
     return
 
-  # Config file was modified, reload it
+  # Config file was modified, reload it. Use loadConfig (not loadConfigFromToml)
+  # so the dedicated keybindings.toml is re-merged too.
   logInfo("editor", "Config file modified, reloading: " & configPath)
-  let loadResult = loadConfigFromToml(configPath)
+  let loadResult = loadConfig()
   if loadResult.isErr:
     logError("editor", "Failed to reload config: " & loadResult.error)
     return
@@ -206,6 +208,15 @@ proc maybeReloadConfig*(e: Editor) =
 
   # Apply the new settings
   e.applyConfigSettings(newConfig)
+
+  # Keybindings are declarative: the TOML config is authoritative, so reset the
+  # user mapping layer and re-apply it (this drops session `:nmap` mappings).
+  # Done here (file-change-triggered) rather than in applyConfigSettings, which
+  # also runs on every keystroke in Config mode.
+  var keyVr = newValidationResult()
+  e.keyBindingRegistry.reapplyKeyMappings(newConfig.keyMapping, keyVr)
+  for msg in keyVr.toErrorMessages:
+    logWarn("editor", "KeyMapping reload: " & msg)
 
   # Update last known modification time
   e.state.timing.lastConfigModTime = currentModTime
