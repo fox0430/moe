@@ -25,66 +25,77 @@
 
 import std/[options, tables]
 
-import
-  config, config_loader, command_registry, command_config, command_line, logger, modes
+import config, config_loader, command_registry, command_config, command_line, modes
 
 import key_bindings except Command
 import keybind_config
 
-proc applyKeyMappings*(registry: KeyBindingRegistry, km: KeyMappingConfig) =
+proc applyKeyMappings*(
+    registry: KeyBindingRegistry, km: KeyMappingConfig, vr: var ValidationResult
+) =
   ## Apply user-defined key mappings from the moerc.toml [KeyMapping] section.
-  ## Individual mapping failures are logged (logWarn) and skipped; they are
-  ## non-fatal so a single bad entry never aborts startup.
+  ## This is the single point where a mapping RHS is resolved against the real
+  ## command registry; failures are recorded in `vr` and skipped, so one bad
+  ## entry never aborts startup.
   ##
   ## Precedence (later wins): "All" (every mode but Command) < "VisualAll"
   ## (the three visual modes) < per-mode mappings. The application order below
   ## preserves that override behaviour.
+  # `vr` is passed explicitly (not captured) since Nim cannot capture a `var`
+  # param in a nested closure.
   proc apply(
+      vr: var ValidationResult,
       mode: EditorMode,
       label: string,
-      mappings: OrderedTable[string, string],
+      mappings: OrderedTable[string, KeyMappingEntry],
       multi = false,
   ) =
-    for lhs, rhs in mappings:
-      let err = registry.addRuntimeMappingExpanded(mode, lhs, rhs)
-      if err.len > 0:
-        let msg =
+    for lhs, e in mappings:
+      let
+        err = registry.addRuntimeMappingExpanded(
+          mode, lhs, e.rhs, e.noremap, e.args, e.forceKeySeq
+        )
+        # `km` is the merged keymap layer, so an entry's origin (moerc
+        # [KeyMapping.<section>] vs the top-level [<section>] of keybindings.toml)
+        # is unknown here. Label by the section name common to both files (no
+        # "KeyMapping." prefix, which would be wrong for keybindings.toml).
+        name =
           if multi:
-            "KeyMapping." & label & " error (" & $mode & "): " & err
+            label & "." & $mode & "." & lhs
           else:
-            "KeyMapping." & label & " error: " & err
-        logWarn("editor", msg)
+            label & "." & lhs
+      if err.len > 0:
+        vr.addError(name, e.rhs, err)
+      elif not e.forceKeySeq and e.args.len == 0 and
+          registry.looksLikeUnknownCommand(e.rhs):
+        # Applied as a key sequence, but the RHS looks like a typo'd command.
+        vr.addError(
+          name, e.rhs,
+          "a registered command name (treated as a key sequence; possible command typo)",
+        )
 
   # "All" applies to every mode first (mode-specific mappings can override).
   for mode in EditorMode:
     if mode != EditorMode.Command:
-      apply(mode, "All", km.all, multi = true)
+      apply(vr, mode, "All", km.all, multi = true)
 
   # "VisualAll" applies to the three visual modes.
   for mode in [EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]:
-    apply(mode, "VisualAll", km.visualAll, multi = true)
+    apply(vr, mode, "VisualAll", km.visualAll, multi = true)
 
   # Per-mode mappings.
-  apply(EditorMode.Normal, "Normal", km.normal)
-  apply(EditorMode.Insert, "Insert", km.insert)
-  apply(EditorMode.Visual, "Visual", km.visual)
-  apply(EditorMode.VisualLine, "VisualLine", km.visualLine)
-  apply(EditorMode.VisualBlock, "VisualBlock", km.visualBlock)
-  apply(EditorMode.Replace, "Replace", km.replace)
-  apply(EditorMode.Command, "Command", km.command)
-  apply(EditorMode.Filer, "Filer", km.filer)
-  apply(EditorMode.LogViewer, "LogViewer", km.logViewer)
-  apply(EditorMode.Help, "Help", km.help)
-  apply(EditorMode.BufferManager, "BufferManager", km.bufferManager)
-  apply(EditorMode.BackupManager, "BackupManager", km.backupManager)
-  apply(EditorMode.DiffViewer, "DiffViewer", km.diffViewer)
-  apply(EditorMode.Config, "Config", km.config)
-  apply(EditorMode.References, "References", km.references)
-  apply(EditorMode.DocumentSymbol, "DocumentSymbol", km.documentSymbol)
-  apply(EditorMode.CallHierarchy, "CallHierarchy", km.callHierarchy)
-  apply(EditorMode.RecentFile, "RecentFile", km.recentFile)
-  apply(EditorMode.Debug, "Debug", km.debug)
-  apply(EditorMode.Terminal, "Terminal", km.terminal)
+  for mode in EditorMode:
+    apply(vr, mode, $mode, km.perMode[mode])
+
+proc reapplyKeyMappings*(
+    registry: KeyBindingRegistry, km: KeyMappingConfig, vr: var ValidationResult
+) =
+  ## Reset the user mapping layer to the configured state for a live config
+  ## reload: clear all runtime mappings (including session `:nmap` ones, since
+  ## the declarative TOML config is authoritative) and re-apply [KeyMapping].
+  for mode in EditorMode:
+    registry.clearRuntimeMappings(mode)
+  registry.applyKeyMappings(km, vr)
 
 proc newEditorRegistries*(
     editorConfig: EditorConfig, vr: var ValidationResult
@@ -95,9 +106,9 @@ proc newEditorRegistries*(
   cmdLineParser: CommandLineParser,
 ] =
   ## Create and fully initialize the command/keybinding registries from config:
-  ## built-in commands, default key bindings, the default keybindings file, user
-  ## [KeyMapping] overrides, command aliases, and shell commands. Validation
-  ## errors discovered while loading keybindings are accumulated into `vr`.
+  ## built-in commands, default key bindings, user [KeyMapping] overrides,
+  ## command aliases, and shell commands. Validation errors discovered while
+  ## applying [KeyMapping] entries are accumulated into `vr`.
   let
     cmdRegistry = newCommandRegistry()
     keyRegistry = newKeyBindingRegistry()
@@ -108,9 +119,8 @@ proc newEditorRegistries*(
   cmdRegistry.registerBuiltinCommands
   keyRegistry.setupDefaultBindings
 
-  # Load custom key_bindings from TOML, then apply moerc.toml [KeyMapping].
-  keyRegistry.loadDefaultKeybindings(vr)
-  keyRegistry.applyKeyMappings(editorConfig.keyMapping)
+  # Apply moerc.toml [KeyMapping] overrides on top of the default bindings.
+  keyRegistry.applyKeyMappings(editorConfig.keyMapping, vr)
 
   # Load command configuration.
   cmdConfig.loadDefaultConfig

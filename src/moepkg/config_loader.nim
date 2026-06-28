@@ -138,9 +138,14 @@ proc getConfigPath*(): string =
   return getConfigDir() / "moe" / "moerc.toml"
 
 proc loadConfig*(): Result[(EditorConfig, ValidationResult), string] =
-  ## Load configuration from the default location
+  ## Load configuration from the default location, then merge the optional
+  ## dedicated keymap file (keybindings.toml) on top of moerc.toml [KeyMapping].
   let configPath = getConfigPath()
-  return loadConfigFromToml(configPath)
+  result = loadConfigFromToml(configPath)
+  if result.isOk:
+    var (config, vr) = result.get
+    loadKeyMappingFile(config.keyMapping, vr)
+    result = Result[(EditorConfig, ValidationResult), string].ok((config, vr))
 
 proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string] =
   ## Save configuration to a TOML file

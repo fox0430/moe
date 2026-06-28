@@ -25,7 +25,7 @@
 ## in `key_bindings/registry.nim` and are re-exported below, so external
 ## importers can continue to `import key_bindings` unchanged.
 
-import std/[tables, sets, strutils, options, sequtils]
+import std/[tables, strutils, options, sequtils]
 
 import pkg/celina
 
@@ -741,10 +741,3 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   )
 
   return some(combo)
-
-proc getValidMappingCommands*(): HashSet[string] =
-  ## Returns a set of valid command names for key mapping validation.
-  var registry = newKeyBindingRegistry()
-  registry.setupDefaultBindings()
-  for name in registry.commandRegistry.keys:
-    result.incl(name)

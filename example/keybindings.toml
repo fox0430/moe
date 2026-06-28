@@ -1,142 +1,64 @@
-# moe keybindings configuration
+# moe dedicated keymap file
 #
 # Place this file at:
 #   $XDG_CONFIG_HOME/moe/keybindings.toml
-#   or ~/.config/moe/keybindings.toml
+#   ~/.config/moe/keybindings.toml
+#   ./keybindings.toml          (current directory)
 #
-# Each entry is a [[keybinding]] with the following fields:
-#   mode          (required) - Editor mode or meta mode
-#   key           (required) - Key or key sequence
-#   command_type  (optional) - Default: "action"
-#   command       (for action, text_object, operator, custom)
-#   target_mode   (for mode_switch)
-#   target_overlay (for overlay_switch: "command", "search", "rename")
-#   target_keys   (for key_sequence)
-#   args          (optional array of strings)
+# This file uses the SAME entry format as the [KeyMapping] section in
+# moerc.toml, but the per-mode tables sit at the top level (the whole file is
+# keymaps). Entries here override moerc.toml [KeyMapping] entries for the same
+# key in the same mode (the file is loaded last).
 #
-# Supported modes:
-#   normal, insert, visual, visualline, visualblock, replace, command,
-#   filer, quickrun, logviewer, help, buffermanager, backupmanager,
-#   diffviewer, recentfile, debug, config, references, documentsymbol,
-#   callhierarchy, terminal
+# Right-hand side forms:
+#   "save"                                  - bind the key to a registered command
+#   "Escape"                                - replay another key / key sequence
+#   "mode_switch normal"                    - switch editor mode
+#   "overlay_switch command|search|rename"  - open an overlay (command line / search / rename)
+#   { keys = "dd", noremap = false }        - force a key sequence; noremap=false
+#                                             expands it recursively through other
+#                                             user mappings (Vim :map vs :noremap)
+#   { command = "quickrun", args = ["release"] }
+#                                           - command with arguments (may contain spaces)
 #
-# Meta modes:
-#   all       - All modes except Command mode
-#   visualall - Visual, VisualLine, VisualBlock
+# noremap defaults to true (replay the target verbatim, like Vim :noremap).
 #
-# Key notation:
-#   Single key:      "h", "j", "0"
-#   Ctrl modifier:   "C-s", "C-q"
-#   Alt modifier:    "M-x", "M-w"
-#   Shift modifier:  "S-Tab"
-#   Combined:        "C-M-s"
-#   Special keys:    "Escape", "Enter", "Tab", "Backspace", "Delete",
-#                    "Space", "Up", "Down", "Left", "Right",
-#                    "PageUp", "PageDown", "Home", "End", "F1"-"F12"
-#   Multi-key:       "g d" (space-separated), "jj" (Vim-style)
+# Mode sections: All, Normal, Insert, Visual, VisualAll, VisualLine, VisualBlock,
+#   Replace, Command, Filer, QuickRun, LogViewer, Help, BufferManager,
+#   BookmarkManager, BackupManager, DiffViewer, Config, References,
+#   DocumentSymbol, CallHierarchy, RecentFile, Debug, Terminal, FileTree.
+#   "All" applies to every mode except Command; "VisualAll" applies to Visual,
+#   VisualLine and VisualBlock.
+#
+# Key notation: "h", "C-s" (Ctrl), "M-x" (Alt), "S-Tab" (Shift), "Escape",
+#   "g d" (space-separated sequence), "jj" (concatenated sequence).
 
+[All]
+C-q = "quit-force"
 
-# --- Action examples ---
+[Normal]
+C-s = "save"
+u = "undo"
+C-r = "redo"
+"g d" = "lsp-goto-definition"
+"g r" = "lsp-find-references"
+":" = "overlay_switch command"
+"/" = "overlay_switch search"
 
-[[keybinding]]
-mode = "normal"
-key = "C-s"
-command = "save"
+# Force a key sequence and expand it recursively (noremap = false):
+x = { keys = "dd", noremap = false }
 
-[[keybinding]]
-mode = "normal"
-key = "C-q"
-command = "quit-force"
+# Command with arguments:
+C-p = { command = "quickrun", args = ["release"] }
 
-[[keybinding]]
-mode = "normal"
-key = "u"
-command = "undo"
+[Insert]
+jj = "Escape"
 
-[[keybinding]]
-mode = "normal"
-key = "C-r"
-command = "redo"
+[VisualAll]
+C-c = "mode_switch normal"
 
-
-# --- Multi-key sequence ---
-
-[[keybinding]]
-mode = "normal"
-key = "g d"
-command_type = "custom"
-command = "lsp-goto-definition"
-
-[[keybinding]]
-mode = "normal"
-key = "g r"
-command_type = "custom"
-command = "lsp-find-references"
-
-
-# --- Mode switch ---
-
-[[keybinding]]
-mode = "insert"
-key = "Escape"
-command_type = "mode_switch"
-target_mode = "normal"
-
-
-# --- Overlay switch ---
-
-[[keybinding]]
-mode = "normal"
-key = ":"
-command_type = "overlay_switch"
-target_overlay = "command"
-
-[[keybinding]]
-mode = "normal"
-key = "/"
-command_type = "overlay_switch"
-target_overlay = "search"
-
-
-# --- Key sequence remap ---
-# Remap a key to another key sequence (equivalent to [KeyMapping] in moerc.toml)
-
-[[keybinding]]
-mode = "insert"
-key = "jj"
-command_type = "key_sequence"
-target_keys = "Escape"
-
-[[keybinding]]
-mode = "normal"
-key = "C-a"
-command_type = "key_sequence"
-target_keys = "g g"
-
-
-# --- Meta modes ---
-
-# Apply to all modes except Command mode
-[[keybinding]]
-mode = "all"
-key = "C-q"
-command = "quit-force"
-
-# Apply to all visual modes (Visual, VisualLine, VisualBlock)
-[[keybinding]]
-mode = "visualall"
-key = "C-c"
-command_type = "mode_switch"
-target_mode = "normal"
-
-
-# --- Custom command with args ---
-# command_type = "custom" binds to a registered custom command;
-# `args` are passed through to the command handler.
-
-[[keybinding]]
-mode = "normal"
-key = "C-p"
-command_type = "custom"
-command = "quickrun"
-args = ["release"]
+# Special / viewer modes (Filer, BufferManager, Terminal, Help, DiffViewer,
+# QuickRun, FileTree, …) use the same format. Example: in the file manager,
+# make Ctrl-c behave like Escape.
+[Filer]
+C-c = "Escape"

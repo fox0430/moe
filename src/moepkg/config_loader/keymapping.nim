@@ -18,35 +18,45 @@
 #[############################################################################]#
 
 ## TOML loader and serializer for the [KeyMapping.*] section group. Each
-## per-mode sub-table maps a key sequence (LHS) to either a command name or
-## another key sequence (RHS); validation rejects bare identifiers that look
-## like typo'd command names rather than letting them fall through to
-## Vim-style concatenated parsing.
+## per-mode sub-table maps a key sequence (LHS) to an RHS that is either a bare
+## TOML string (command name / key sequence, like `jj = "Escape"`) or an inline
+## table escape hatch (`x = { keys = "dd", noremap = false }`) carrying noremap,
+## args, and a force-key-sequence flag. This is moe's single keymap surface;
+## command-name validity is checked once at apply time against the real registry
+## (see editor_init.applyKeyMappings), not here.
 
-import std/[sets, tables, strutils]
+import std/[os, tables, strutils]
 
 import pkg/parsetoml
 
-import ../[config, key_bindings]
+import ../[config, key_bindings, modes]
 
 import base, save_base
 
 # Top-level TOML section name handled by this module.
 const KeyMappingSectionName* = "KeyMapping"
 
+# Allowed [KeyMapping.<key>] section names. "All"/"VisualAll" are meta sections;
+# the rest match EditorMode member names one-to-one (parseEnum below).
+const ValidKeyMappingSections = [
+  "All", "Normal", "Insert", "Visual", "VisualAll", "VisualLine", "VisualBlock",
+  "Replace", "Command", "Filer", "QuickRun", "LogViewer", "Help", "BufferManager",
+  "BookmarkManager", "BackupManager", "DiffViewer", "RecentFile", "Debug", "Config",
+  "References", "DocumentSymbol", "CallHierarchy", "Terminal", "FileTree",
+]
+
 proc loadKeyMappingModeConfig*(
     table: TomlTableRef,
-    target: var OrderedTable[string, string],
+    target: var OrderedTable[string, KeyMappingEntry],
     vr: var ValidationResult,
     section: string,
-    validCommands: HashSet[string],
 ) =
+  ## Load one [KeyMapping.<mode>] sub-table. A string value is the terse form;
+  ## an inline table is the structured escape hatch. Only structural validation
+  ## happens here (key parse, types, mutual exclusion); command existence is
+  ## validated at apply time against the real registry.
   for key, value in table:
-    if value.kind != TomlValueKind.String:
-      vr.addError(fullKey(section, key), $value, "string")
-      continue
-
-    # LHS (key) validation
+    # LHS (key) validation.
     let lhsKeys = parseKeyString(key)
     if lhsKeys.len == 0:
       vr.addError(
@@ -54,323 +64,197 @@ proc loadKeyMappingModeConfig*(
       )
       continue
 
-    # RHS (target) validation: command name or key sequence.
-    # An identifier-like token (e.g. "bnext") that is not a known command would
-    # otherwise silently fall through to Vim-style concatenated parsing
-    # (b,n,e,x,t). Reject that explicitly so the user notices the typo.
-    let rhs = value.getStr()
-    let rhsKeys = parseKeyString(rhs)
-    if rhs in validCommands:
-      discard
-    elif rhsKeys.len == 0:
-      vr.addError(fullKey(section, key), rhs, "valid command name or key sequence")
-      continue
-    elif rhsKeys.len == rhs.len and rhs.len >= 3 and
-        rhs.allCharsInSet({'a' .. 'z', 'A' .. 'Z', '0' .. '9', '_'}):
-      # Vim-concat fallback was used: every char in rhs became its own KeyCombo.
-      # For 3+ char identifier-like tokens this almost always means the user
-      # typed an unknown command name rather than a multi-key sequence (2-char
-      # Vim sequences like "jj"/"gd" fall below the len >= 3 gate and stay
-      # accepted as key sequences).
-      vr.addError(
-        fullKey(section, key),
-        rhs,
-        "known command name (single identifier-like targets are treated as commands; " &
-          "use space-separated keys like \"b n e x t\" for a key sequence)",
-      )
-      continue
+    case value.kind
+    of TomlValueKind.String:
+      let rhs = value.getStr()
+      if rhs.len == 0:
+        vr.addError(
+          fullKey(section, key), rhs, "non-empty command name or key sequence"
+        )
+        continue
+      target[key] = KeyMappingEntry(rhs: rhs, noremap: true)
+    of TomlValueKind.Table:
+      let t = value.getTable()
+      let hasCommand = t.hasKey("command")
+      let hasKeys = t.hasKey("keys")
+      if hasCommand and hasKeys:
+        vr.addError(
+          fullKey(section, key), "command + keys", "exactly one of 'command' or 'keys'"
+        )
+        continue
+      if not (hasCommand or hasKeys):
+        vr.addError(
+          fullKey(section, key), $value.kind, "inline table with 'command' or 'keys'"
+        )
+        continue
 
-    target[key] = rhs
+      var entry = KeyMappingEntry(noremap: true)
+
+      # RHS: either a forced key sequence ('keys') or a command target ('command').
+      if hasKeys:
+        if t["keys"].kind != TomlValueKind.String:
+          vr.addError(fullKey(section, key) & ".keys", $t["keys"].kind, "string")
+          continue
+        let keys = t["keys"].getStr()
+        if parseKeyString(keys).len == 0:
+          vr.addError(fullKey(section, key) & ".keys", keys, "valid key sequence")
+          continue
+        entry.rhs = keys
+        entry.forceKeySeq = true
+      else:
+        if t["command"].kind != TomlValueKind.String:
+          vr.addError(fullKey(section, key) & ".command", $t["command"].kind, "string")
+          continue
+        let cmd = t["command"].getStr()
+        if cmd.len == 0:
+          vr.addError(fullKey(section, key) & ".command", cmd, "non-empty command name")
+          continue
+        entry.rhs = cmd
+
+      # args (only valid alongside 'command').
+      if t.hasKey("args"):
+        if hasKeys:
+          vr.addError(
+            fullKey(section, key), "keys + args", "'args' only with 'command'"
+          )
+          continue
+        if t["args"].kind != TomlValueKind.Array:
+          vr.addError(
+            fullKey(section, key) & ".args", $t["args"].kind, "array of strings"
+          )
+          continue
+        var args: seq[string] = @[]
+        var ok = true
+        for i, item in t["args"].getElems():
+          if item.kind != TomlValueKind.String:
+            vr.addError(
+              fullKey(section, key) & ".args[" & $i & "]", $item.kind, "string"
+            )
+            ok = false
+          else:
+            args.add item.getStr()
+        if not ok:
+          continue
+        entry.args = args
+
+      # noremap (default true).
+      if t.hasKey("noremap"):
+        if t["noremap"].kind != TomlValueKind.Bool:
+          vr.addError(
+            fullKey(section, key) & ".noremap",
+            $t["noremap"].kind,
+            "boolean (true/false)",
+          )
+          continue
+        entry.noremap = t["noremap"].getBool()
+
+      target[key] = entry
+    else:
+      vr.addError(fullKey(section, key), $value.kind, "string or inline table")
+      continue
 
 proc loadKeyMappingConfig*(
-    table: TomlTableRef, config: var KeyMappingConfig, vr: var ValidationResult
+    table: TomlTableRef,
+    config: var KeyMappingConfig,
+    vr: var ValidationResult,
+    section = KeyMappingSectionName,
 ) =
-  const section = "KeyMapping"
-  const validKeys = [
-    "All", "Normal", "Insert", "Visual", "VisualAll", "VisualLine", "VisualBlock",
-    "Replace", "Command", "Filer", "LogViewer", "Help", "BufferManager",
-    "BackupManager", "DiffViewer", "Config", "References", "DocumentSymbol",
-    "CallHierarchy", "RecentFile", "Debug", "Terminal",
+  ## `section` is the error-label prefix: "KeyMapping" for moerc.toml's
+  ## [KeyMapping.*] sections, or "" for a dedicated keymap file whose mode
+  ## tables sit at the top level (so labels read "Normal.jj", not the
+  ## non-existent "KeyMapping.Normal.jj").
+  checkUnknownKeys(table, ValidKeyMappingSections, section, vr)
+
+  for key in ValidKeyMappingSections:
+    if not table.hasKey(key):
+      continue
+    if table[key].kind != TomlValueKind.Table:
+      vr.addError(fullKey(section, key), $table[key].kind, "table")
+      continue
+    let
+      sub = table[key].getTable()
+      secName = fullKey(section, key)
+    case key
+    of "All":
+      loadKeyMappingModeConfig(sub, config.all, vr, secName)
+    of "VisualAll":
+      loadKeyMappingModeConfig(sub, config.visualAll, vr, secName)
+    else:
+      # All remaining section names match EditorMode members exactly.
+      let mode = parseEnum[EditorMode](key)
+      loadKeyMappingModeConfig(sub, config.perMode[mode], vr, secName)
+
+proc getKeyMappingFilePath*(): string =
+  ## Standard search locations for the optional dedicated keymap file. Returns
+  ## "" when none exists.
+  ## 1. $XDG_CONFIG_HOME/moe/keybindings.toml
+  ## 2. ~/.config/moe/keybindings.toml
+  ## 3. ./keybindings.toml
+  let paths = [
+    getConfigDir() / "moe" / "keybindings.toml",
+    getHomeDir() / ".config" / "moe" / "keybindings.toml",
+    "keybindings.toml",
   ]
-  checkUnknownKeys(table, validKeys, section, vr)
+  for p in paths:
+    if fileExists(p):
+      return p
 
-  let validCommands = getValidMappingCommands()
+proc loadKeyMappingFile*(config: var KeyMappingConfig, vr: var ValidationResult) =
+  ## Merge the optional dedicated keymap file into `config`. The file uses the
+  ## same per-mode entry format as moerc.toml's [KeyMapping] section, but with
+  ## the mode tables at the top level (`[Normal]`, `[Insert]`, `[All]`, …) since
+  ## the whole file is keymaps. Entries here override moerc.toml [KeyMapping]
+  ## entries for the same key in the same mode (it is loaded last).
+  let path = getKeyMappingFilePath()
+  if path.len == 0:
+    return
+  var toml: TomlValueRef
+  try:
+    toml = parseFile(path)
+  except CatchableError:
+    vr.addError("keybindings", getCurrentExceptionMsg(), "valid TOML file")
+    return
+  # Top-level mode sections (no "KeyMapping" prefix) → empty error-label prefix.
+  loadKeyMappingConfig(toml.getTable(), config, vr, section = "")
 
-  if table.hasKey("All"):
-    loadKeyMappingModeConfig(
-      table["All"].getTable(), config.all, vr, "KeyMapping.All", validCommands
-    )
-  if table.hasKey("Normal"):
-    loadKeyMappingModeConfig(
-      table["Normal"].getTable(), config.normal, vr, "KeyMapping.Normal", validCommands
-    )
-  if table.hasKey("Insert"):
-    loadKeyMappingModeConfig(
-      table["Insert"].getTable(), config.insert, vr, "KeyMapping.Insert", validCommands
-    )
-  if table.hasKey("Visual"):
-    loadKeyMappingModeConfig(
-      table["Visual"].getTable(), config.visual, vr, "KeyMapping.Visual", validCommands
-    )
-  if table.hasKey("VisualAll"):
-    loadKeyMappingModeConfig(
-      table["VisualAll"].getTable(),
-      config.visualAll,
-      vr,
-      "KeyMapping.VisualAll",
-      validCommands,
-    )
-  if table.hasKey("VisualLine"):
-    loadKeyMappingModeConfig(
-      table["VisualLine"].getTable(),
-      config.visualLine,
-      vr,
-      "KeyMapping.VisualLine",
-      validCommands,
-    )
-  if table.hasKey("VisualBlock"):
-    loadKeyMappingModeConfig(
-      table["VisualBlock"].getTable(),
-      config.visualBlock,
-      vr,
-      "KeyMapping.VisualBlock",
-      validCommands,
-    )
-  if table.hasKey("Replace"):
-    loadKeyMappingModeConfig(
-      table["Replace"].getTable(),
-      config.replace,
-      vr,
-      "KeyMapping.Replace",
-      validCommands,
-    )
-  if table.hasKey("Command"):
-    loadKeyMappingModeConfig(
-      table["Command"].getTable(),
-      config.command,
-      vr,
-      "KeyMapping.Command",
-      validCommands,
-    )
-  if table.hasKey("Filer"):
-    loadKeyMappingModeConfig(
-      table["Filer"].getTable(), config.filer, vr, "KeyMapping.Filer", validCommands
-    )
-  if table.hasKey("LogViewer"):
-    loadKeyMappingModeConfig(
-      table["LogViewer"].getTable(),
-      config.logViewer,
-      vr,
-      "KeyMapping.LogViewer",
-      validCommands,
-    )
-  if table.hasKey("Help"):
-    loadKeyMappingModeConfig(
-      table["Help"].getTable(), config.help, vr, "KeyMapping.Help", validCommands
-    )
-  if table.hasKey("BufferManager"):
-    loadKeyMappingModeConfig(
-      table["BufferManager"].getTable(),
-      config.bufferManager,
-      vr,
-      "KeyMapping.BufferManager",
-      validCommands,
-    )
-  if table.hasKey("BackupManager"):
-    loadKeyMappingModeConfig(
-      table["BackupManager"].getTable(),
-      config.backupManager,
-      vr,
-      "KeyMapping.BackupManager",
-      validCommands,
-    )
-  if table.hasKey("DiffViewer"):
-    loadKeyMappingModeConfig(
-      table["DiffViewer"].getTable(),
-      config.diffViewer,
-      vr,
-      "KeyMapping.DiffViewer",
-      validCommands,
-    )
-  if table.hasKey("Config"):
-    loadKeyMappingModeConfig(
-      table["Config"].getTable(), config.config, vr, "KeyMapping.Config", validCommands
-    )
-  if table.hasKey("References"):
-    loadKeyMappingModeConfig(
-      table["References"].getTable(),
-      config.references,
-      vr,
-      "KeyMapping.References",
-      validCommands,
-    )
-  if table.hasKey("DocumentSymbol"):
-    loadKeyMappingModeConfig(
-      table["DocumentSymbol"].getTable(),
-      config.documentSymbol,
-      vr,
-      "KeyMapping.DocumentSymbol",
-      validCommands,
-    )
-  if table.hasKey("CallHierarchy"):
-    loadKeyMappingModeConfig(
-      table["CallHierarchy"].getTable(),
-      config.callHierarchy,
-      vr,
-      "KeyMapping.CallHierarchy",
-      validCommands,
-    )
-  if table.hasKey("RecentFile"):
-    loadKeyMappingModeConfig(
-      table["RecentFile"].getTable(),
-      config.recentFile,
-      vr,
-      "KeyMapping.RecentFile",
-      validCommands,
-    )
-  if table.hasKey("Debug"):
-    loadKeyMappingModeConfig(
-      table["Debug"].getTable(), config.debug, vr, "KeyMapping.Debug", validCommands
-    )
-  if table.hasKey("Terminal"):
-    loadKeyMappingModeConfig(
-      table["Terminal"].getTable(),
-      config.terminal,
-      vr,
-      "KeyMapping.Terminal",
-      validCommands,
-    )
+proc isTerseEntry(e: KeyMappingEntry): bool =
+  ## A fully-default entry serializes back to the terse `lhs = "rhs"` string.
+  e.args.len == 0 and not e.forceKeySeq and e.noremap
+
+proc entryToToml(e: KeyMappingEntry): string =
+  if e.isTerseEntry:
+    return toTomlString(e.rhs)
+  var parts: seq[string]
+  if e.forceKeySeq:
+    parts.add "keys = " & toTomlString(e.rhs)
+  else:
+    parts.add "command = " & toTomlString(e.rhs)
+  if e.args.len > 0:
+    var arr = "["
+    for i, a in e.args:
+      if i > 0:
+        arr.add ", "
+      arr.add toTomlString(a)
+    arr.add "]"
+    parts.add "args = " & arr
+  if not e.noremap:
+    parts.add "noremap = false"
+  "{ " & parts.join(", ") & " }"
+
+proc emitKeyMappingSection(
+    lines: var seq[string], name: string, t: OrderedTable[string, KeyMappingEntry]
+) =
+  ## Emit a section only when it holds at least one mapping (mirrors prior
+  ## behavior). Terse entries stay terse; structured ones become inline tables.
+  if t.len == 0:
+    return
+  lines.add "[" & KeyMappingSectionName & "." & name & "]"
+  for lhs, e in t:
+    lines.add toTomlString(lhs) & " = " & entryToToml(e)
+  lines.add ""
 
 proc appendKeyMappingToml*(lines: var seq[string], cfg: KeyMappingConfig) =
-  ## Only emit modes that contain at least one mapping (mirrors prior behavior).
-  if cfg.all.len > 0:
-    lines.add "[KeyMapping.All]"
-    for lhs, rhs in cfg.all:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.normal.len > 0:
-    lines.add "[KeyMapping.Normal]"
-    for lhs, rhs in cfg.normal:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.insert.len > 0:
-    lines.add "[KeyMapping.Insert]"
-    for lhs, rhs in cfg.insert:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.visual.len > 0:
-    lines.add "[KeyMapping.Visual]"
-    for lhs, rhs in cfg.visual:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.visualAll.len > 0:
-    lines.add "[KeyMapping.VisualAll]"
-    for lhs, rhs in cfg.visualAll:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.visualLine.len > 0:
-    lines.add "[KeyMapping.VisualLine]"
-    for lhs, rhs in cfg.visualLine:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.visualBlock.len > 0:
-    lines.add "[KeyMapping.VisualBlock]"
-    for lhs, rhs in cfg.visualBlock:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.replace.len > 0:
-    lines.add "[KeyMapping.Replace]"
-    for lhs, rhs in cfg.replace:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.command.len > 0:
-    lines.add "[KeyMapping.Command]"
-    for lhs, rhs in cfg.command:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.filer.len > 0:
-    lines.add "[KeyMapping.Filer]"
-    for lhs, rhs in cfg.filer:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.logViewer.len > 0:
-    lines.add "[KeyMapping.LogViewer]"
-    for lhs, rhs in cfg.logViewer:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.help.len > 0:
-    lines.add "[KeyMapping.Help]"
-    for lhs, rhs in cfg.help:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.bufferManager.len > 0:
-    lines.add "[KeyMapping.BufferManager]"
-    for lhs, rhs in cfg.bufferManager:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.backupManager.len > 0:
-    lines.add "[KeyMapping.BackupManager]"
-    for lhs, rhs in cfg.backupManager:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.diffViewer.len > 0:
-    lines.add "[KeyMapping.DiffViewer]"
-    for lhs, rhs in cfg.diffViewer:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.config.len > 0:
-    lines.add "[KeyMapping.Config]"
-    for lhs, rhs in cfg.config:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.references.len > 0:
-    lines.add "[KeyMapping.References]"
-    for lhs, rhs in cfg.references:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.documentSymbol.len > 0:
-    lines.add "[KeyMapping.DocumentSymbol]"
-    for lhs, rhs in cfg.documentSymbol:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.callHierarchy.len > 0:
-    lines.add "[KeyMapping.CallHierarchy]"
-    for lhs, rhs in cfg.callHierarchy:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.recentFile.len > 0:
-    lines.add "[KeyMapping.RecentFile]"
-    for lhs, rhs in cfg.recentFile:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.debug.len > 0:
-    lines.add "[KeyMapping.Debug]"
-    for lhs, rhs in cfg.debug:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
-
-  if cfg.terminal.len > 0:
-    lines.add "[KeyMapping.Terminal]"
-    for lhs, rhs in cfg.terminal:
-      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
-    lines.add ""
+  emitKeyMappingSection(lines, "All", cfg.all)
+  emitKeyMappingSection(lines, "VisualAll", cfg.visualAll)
+  for mode in EditorMode:
+    emitKeyMappingSection(lines, $mode, cfg.perMode[mode])
