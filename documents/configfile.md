@@ -914,6 +914,8 @@ Meta modes:
 
 Optional field `args` (array of strings) is available for `action`, `text_object`, `operator`, and `custom` types.
 
+Optional field `noremap` (boolean, default `true`) is available for `key_sequence` mappings. When `true` the target keys are replayed verbatim (like Vim's `:noremap`); set it to `false` to expand the target recursively through other user mappings (like Vim's `:map`). Recursion is bounded by a depth limit, so cyclic mappings fail with an error instead of hanging.
+
 #### Key notation
 
 - Single character: `"h"`, `"j"`
@@ -950,6 +952,14 @@ mode = "insert"
 key = "jj"
 command_type = "key_sequence"
 target_keys = "Escape"
+
+# Recursive key sequence remap: x behaves like dd (expands other mappings)
+[[keybinding]]
+mode = "normal"
+key = "x"
+command_type = "key_sequence"
+target_keys = "dd"
+noremap = false
 
 # Multi-key sequence: g d to goto definition
 [[keybinding]]

@@ -133,11 +133,17 @@ proc parseCommandType(s: string): CommandType =
     # default to action
 
 proc addKeySequenceMapping*(
-    registry: KeyBindingRegistry, mode: EditorMode, keyStr: string, targetKeyStr: string
+    registry: KeyBindingRegistry,
+    mode: EditorMode,
+    keyStr: string,
+    targetKeyStr: string,
+    noremap = true,
 ) =
   ## Add a key→key_sequence mapping to the registry (runtimeMappings only).
   ## Unlike addKeybinding, this does NOT register in bindings/sequences tables.
-  ## The mapping is replayed via playbackMacro at runtime.
+  ## The mapping is replayed via playbackMacro at runtime. `noremap` defaults to
+  ## true (verbatim replay); pass false to expand the target recursively through
+  ## other user mappings (Vim's `:map` vs `:noremap`).
   let triggerKeys = parseKeyString(keyStr)
   if triggerKeys.len == 0:
     return
@@ -159,7 +165,7 @@ proc addKeySequenceMapping*(
       triggerKeys: triggerKeys,
       triggerStr: keyStr,
       targetStr: targetKeyStr,
-      noremap: true,
+      noremap: noremap,
       targetKeys: targetKeyStrs,
     )
   )
@@ -315,6 +321,14 @@ proc loadKeybindingsFromToml*(
   ## command_type = "key_sequence"
   ## target_keys = "Escape"
   ##
+  ## # `noremap` (key_sequence only, default true): set false for recursive expansion
+  ## [[keybinding]]
+  ## mode = "normal"
+  ## key = "x"
+  ## command_type = "key_sequence"
+  ## target_keys = "dd"
+  ## noremap = false
+  ##
   if not fileExists(tomlPath):
     return
 
@@ -389,9 +403,20 @@ proc loadKeybindingsFromToml*(
             targetKeyStr,
             "valid key string (e.g. \"Escape\", \"C-c\")",
           )
+        elif binding.hasKey("noremap") and binding["noremap"].kind != TomlValueKind.Bool:
+          vr.addError(
+            entryName & ".noremap", $binding["noremap"].kind, "boolean (true/false)"
+          )
         else:
+          # `noremap` defaults to true (replay the target verbatim); set false to
+          # expand it recursively through other user mappings.
+          let noremap =
+            if binding.hasKey("noremap"):
+              binding["noremap"].getBool()
+            else:
+              true
           for mode in modes:
-            registry.addKeySequenceMapping(mode, keyStr, targetKeyStr)
+            registry.addKeySequenceMapping(mode, keyStr, targetKeyStr, noremap)
       continue
 
     # Parse command type (default to action)
