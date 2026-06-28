@@ -190,7 +190,8 @@ proc addRuntimeMapping*(
   if lhsKeys.len == 0:
     return "Invalid key: " & lhsStr
 
-  # Check if RHS is a command name
+  # if/else (not early return) so the command branch can never fall through to
+  # the key-sequence branch even if a trailing `return ""` is stripped.
   if rhsStr in registry.commandRegistry:
     # Key → command mapping. Recorded in runtimeMappings only; the effective
     # bindings/sequences tables are derived by rebuildEffectiveBindings.
@@ -208,31 +209,59 @@ proc addRuntimeMapping*(
     registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
     registry.runtimeMappings[mode].add(mapping)
     registry.rebuildEffectiveBindings(mode)
-    return ""
+  else:
+    # Otherwise, parse RHS as a key sequence.
+    let rhsKeys = parseKeyString(rhsStr)
+    if rhsKeys.len == 0:
+      return "Invalid mapping target: " & rhsStr
 
-  # Otherwise, parse RHS as key sequence
-  let rhsKeys = parseKeyString(rhsStr)
-  if rhsKeys.len == 0:
-    return "Invalid mapping target: " & rhsStr
+    # Convert RHS keys to string representation for playbackMacro
+    var targetKeyStrs: seq[string] = @[]
+    for k in rhsKeys:
+      targetKeyStrs.add(keyComboToString(k))
 
-  # Convert RHS keys to string representation for playbackMacro
-  var targetKeyStrs: seq[string] = @[]
-  for k in rhsKeys:
-    targetKeyStrs.add(keyComboToString(k))
+    let mapping = RuntimeKeyMapping(
+      triggerKeys: lhsKeys,
+      triggerStr: lhsStr,
+      targetStr: rhsStr,
+      noremap: noremap,
+      kind: rmkKeySequence,
+      targetKeys: targetKeyStrs,
+    )
 
+    # Remove existing mapping for same trigger
+    registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
+    registry.runtimeMappings[mode].add(mapping)
+    registry.rebuildEffectiveBindings(mode)
+
+proc setRuntimeCommandMapping*(
+    registry: KeyBindingRegistry,
+    mode: EditorMode,
+    lhsStr: string,
+    rhsStr: string,
+    command: Command,
+    noremap = true,
+): string =
+  ## Record (or replace) a runtime key→command mapping from a pre-resolved
+  ## Command. Used for complex RHS targets (mode_switch / overlay_switch /
+  ## command-with-args) that addRuntimeMapping's RHS parser cannot express;
+  ## the resolver lives in keybind_config (it needs parseModes/parseOverlay).
+  ## `rhsStr` is kept verbatim for listing/display. Returns "" on success.
+  let lhsKeys = parseKeyString(lhsStr)
+  if lhsKeys.len == 0:
+    return "Invalid key: " & lhsStr
   let mapping = RuntimeKeyMapping(
     triggerKeys: lhsKeys,
     triggerStr: lhsStr,
     targetStr: rhsStr,
     noremap: noremap,
-    kind: rmkKeySequence,
-    targetKeys: targetKeyStrs,
+    kind: rmkCommand,
+    command: command,
+    commandName: command.name,
   )
-
-  # Remove existing mapping for same trigger
   registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
   registry.runtimeMappings[mode].add(mapping)
-  return ""
+  registry.rebuildEffectiveBindings(mode)
 
 proc removeRuntimeMapping*(
     registry: KeyBindingRegistry, mode: EditorMode, lhsStr: string
@@ -258,8 +287,6 @@ proc removeRuntimeMapping*(
   registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
   # Rebuild restores the built-in default for this trigger (if any).
   registry.rebuildEffectiveBindings(mode)
-
-  return ""
 
 proc clearRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode) =
   ## Clear all runtime mappings for the given mode, restoring built-in defaults.

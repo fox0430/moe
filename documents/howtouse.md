@@ -652,20 +652,33 @@ For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. See
 | `j j`, `g g` | Multi-key sequences (space-separated) |
 | `jj`, `gg` | Vim-style concatenated keys (equivalent to `j j`, `g g`) |
 
-`{rhs}` can be a command name or a key sequence (e.g. `Escape`).
+The `{rhs}` can take any of these forms:
+
+| RHS form | Meaning |
+|:---|:---|
+| `<command>` | A registered command name (e.g. `save-and-quit`) |
+| `<command> <args...>` | A registered command with arguments |
+| `<keys>` | A key sequence replayed as input (e.g. `Escape`, `g g`) |
+| `mode_switch <mode>` | Switch to a mode (`normal`, `insert`, `visual`, `replace`, `command`) |
+| `overlay_switch <overlay>` | Open an overlay (`command`, `search`, `rename`) |
+
+`mode_switch` and `overlay_switch` are reserved first words. The same RHS forms
+work in the `[KeyMapping]` config section.
 
 **Examples:**
 
 ```
-:nmap C-s save-and-quit  " Ctrl-S saves and quits (Normal mode)
-:imap jj Escape          " jj exits Insert mode
-:nmap C-a g g            " Ctrl-A goes to first line
-:vmap C-c Escape         " Ctrl-C exits Visual mode
-:cmap C-a Home           " Ctrl-A moves to line start (Command mode)
-:nmap                    " List all Normal mode mappings
-:map                     " List all mode mappings
-:nunmap C-s              " Remove Ctrl-S mapping in Normal mode
-:nmapclear               " Clear all Normal mode runtime mappings
+:nmap C-s save-and-quit       " Ctrl-S saves and quits (Normal mode)
+:imap jj Escape               " jj exits Insert mode
+:nmap C-a g g                 " Ctrl-A goes to first line
+:vmap C-c Escape              " Ctrl-C exits Visual mode
+:cmap C-a Home                " Ctrl-A moves to line start (Command mode)
+:nmap C-e mode_switch insert  " Ctrl-E enters Insert mode
+:nmap C-p overlay_switch command  " Ctrl-P opens the command line
+:nmap                         " List all Normal mode mappings
+:map                          " List all mode mappings
+:nunmap C-s                   " Remove Ctrl-S mapping in Normal mode
+:nmapclear                    " Clear all Normal mode runtime mappings
 ```
 
 </details>

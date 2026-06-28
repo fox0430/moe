@@ -191,6 +191,100 @@ proc addKeybinding*(
   )
   registry.rebuildEffectiveBindings(mode)
 
+proc buildModeSwitchCommand*(
+    modeStr: string
+): tuple[cmd: Option[Command], err: string] =
+  ## Build a synthetic `mode_switch` Command from a target-mode string. Shared
+  ## by the TOML loader and the runtime mapping resolver so the two cannot drift.
+  let targetModes = parseModes(modeStr)
+  if targetModes.len == 0:
+    return (none(Command), "invalid target mode: " & modeStr)
+  (
+    some(
+      Command(
+        kind: ctModeSwitch,
+        name: "mode_switch",
+        description: "Switch to " & modeStr,
+        targetMode: targetModes[0],
+      )
+    ),
+    "",
+  )
+
+proc buildOverlaySwitchCommand*(
+    overlayStr: string
+): tuple[cmd: Option[Command], err: string] =
+  ## Build a synthetic `overlay_switch` Command from an overlay string.
+  let overlay = parseOverlay(overlayStr)
+  if overlay.isNone:
+    return (none(Command), "invalid overlay (command|search|rename): " & overlayStr)
+  (
+    some(
+      Command(
+        kind: ctOverlaySwitch,
+        name: "overlay_switch",
+        description: "Switch to " & overlayStr & " overlay",
+        targetOverlay: overlay.get,
+      )
+    ),
+    "",
+  )
+
+proc attachArgs(
+    base: Command, args: seq[string]
+): tuple[cmd: Option[Command], err: string] =
+  ## Clone `base` with `args` attached. Only command kinds that carry an args
+  ## field accept arguments.
+  if base.kind notin {ctAction, ctTextObject, ctOperator, ctCustom}:
+    return (none(Command), "command '" & base.name & "' does not take arguments")
+  var c = base
+  c.args = args
+  (some(c), "")
+
+proc resolveRuntimeCommandTarget(
+    registry: KeyBindingRegistry, rhsStr: string
+): tuple[cmd: Option[Command], err: string] =
+  ## Resolve a runtime mapping RHS to a complex Command target. Returns:
+  ##   (some cmd, "") -> resolved; caller records it as an rmkCommand mapping
+  ##   (none, err)    -> a complex form was attempted but is invalid
+  ##   (none, "")     -> not a complex form; caller falls back to the plain
+  ##                     addRuntimeMapping (bare command name / key sequence)
+  let tokens = rhsStr.splitWhitespace()
+  if tokens.len == 0:
+    return (none(Command), "")
+  case tokens[0]
+  of "mode_switch":
+    if tokens.len < 2:
+      return (none(Command), "mode_switch requires a target mode")
+    return buildModeSwitchCommand(tokens[1])
+  of "overlay_switch":
+    if tokens.len < 2:
+      return (none(Command), "overlay_switch requires a target overlay")
+    return buildOverlaySwitchCommand(tokens[1])
+  else:
+    # command-with-args: a registered command name followed by arguments.
+    if tokens.len >= 2 and registry.commandRegistry.hasKey(tokens[0]):
+      return attachArgs(registry.commandRegistry[tokens[0]], tokens[1 ..^ 1])
+    return (none(Command), "")
+
+proc addRuntimeMappingExpanded*(
+    registry: KeyBindingRegistry,
+    mode: EditorMode,
+    lhsStr: string,
+    rhsStr: string,
+    noremap = true,
+): string =
+  ## Runtime `:nmap` / `[KeyMapping]` entry point. Understands complex RHS forms
+  ## (`mode_switch <mode>`, `overlay_switch <overlay>`, `<command> <args...>`) in
+  ## addition to the bare command name / key sequence handled by
+  ## addRuntimeMapping. Returns "" on success, an error message otherwise.
+  let (cmd, err) = resolveRuntimeCommandTarget(registry, rhsStr)
+  if err.len > 0:
+    return err
+  if cmd.isSome:
+    return registry.setRuntimeCommandMapping(mode, lhsStr, rhsStr, cmd.get, noremap)
+  return registry.addRuntimeMapping(mode, lhsStr, rhsStr, noremap)
+
 proc loadKeybindingsFromToml*(
     registry: KeyBindingRegistry, tomlPath: string, vr: var ValidationResult
 ) =
@@ -315,40 +409,28 @@ proc loadKeybindingsFromToml*(
       if not binding.hasKey("target_mode"):
         vr.addError(entryName & ".target_mode", "(missing)", allModeChoices)
       else:
-        let targetModes = parseModes(binding["target_mode"].getStr())
-        if targetModes.len == 0:
+        let (cmd, _) = buildModeSwitchCommand(binding["target_mode"].getStr())
+        if cmd.isNone:
           vr.addError(
             entryName & ".target_mode", binding["target_mode"].getStr(), allModeChoices
           )
         else:
-          let cmd = Command(
-            kind: ctModeSwitch,
-            name: "mode_switch",
-            description: "Switch to " & binding["target_mode"].getStr(),
-            targetMode: targetModes[0],
-          )
-          cmdOpt = some(cmd)
+          cmdOpt = cmd
     of ctOverlaySwitch:
       if not binding.hasKey("target_overlay"):
         vr.addError(
           entryName & ".target_overlay", "(missing)", "one of: command, search, rename"
         )
       else:
-        let targetOverlayOpt = parseOverlay(binding["target_overlay"].getStr())
-        if targetOverlayOpt.isNone:
+        let (cmd, _) = buildOverlaySwitchCommand(binding["target_overlay"].getStr())
+        if cmd.isNone:
           vr.addError(
             entryName & ".target_overlay",
             binding["target_overlay"].getStr(),
             "one of: command, search, rename",
           )
         else:
-          let cmd = Command(
-            kind: ctOverlaySwitch,
-            name: "overlay_switch",
-            description: "Switch to " & binding["target_overlay"].getStr() & " overlay",
-            targetOverlay: targetOverlayOpt.get,
-          )
-          cmdOpt = some(cmd)
+          cmdOpt = cmd
     of ctAction, ctTextObject, ctOperator, ctCustom:
       if not binding.hasKey("command"):
         vr.addError(
