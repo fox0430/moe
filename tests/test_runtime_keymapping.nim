@@ -21,7 +21,9 @@
 
 import std/[unittest, tables, strutils, options]
 
-import ../src/moepkg/[keybind_config, key_router, modes, command_line, command_config, buffer]
+import
+  ../src/moepkg/
+    [keybind_config, key_router, modes, command_line, command_config, buffer]
 import ../src/moepkg/command_handlers/command_handler
 import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/types {.all.}
@@ -514,11 +516,7 @@ suite "Two-layer default restoration":
     var registry = newKeyBindingRegistry()
     registry.setupDefaultBindings()
     let cmd = Command(
-      name: "test.cmd",
-      description: "",
-      count: 1,
-      kind: ctAction,
-      commandId: "test.cmd",
+      name: "test.cmd", description: "", count: 1, kind: ctAction, commandId: "test.cmd"
     )
     registry.registerCommand(cmd)
     let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
