@@ -38,101 +38,105 @@
 
 # --- Action examples ---
 
-# [[keybinding]]
-# mode = "normal"
-# key = "C-s"
-# command = "save"
+[[keybinding]]
+mode = "normal"
+key = "C-s"
+command = "save"
 
-# [[keybinding]]
-# mode = "normal"
-# key = "C-q"
-# command = "quit-force"
+[[keybinding]]
+mode = "normal"
+key = "C-q"
+command = "quit-force"
 
-# [[keybinding]]
-# mode = "normal"
-# key = "u"
-# command = "undo"
+[[keybinding]]
+mode = "normal"
+key = "u"
+command = "undo"
 
-# [[keybinding]]
-# mode = "normal"
-# key = "C-r"
-# command = "redo"
+[[keybinding]]
+mode = "normal"
+key = "C-r"
+command = "redo"
 
 
 # --- Multi-key sequence ---
 
-# [[keybinding]]
-# mode = "normal"
-# key = "g d"
-# command = "lsp-goto-definition"
+[[keybinding]]
+mode = "normal"
+key = "g d"
+command_type = "custom"
+command = "lsp-goto-definition"
 
-# [[keybinding]]
-# mode = "normal"
-# key = "g r"
-# command = "lsp-find-references"
+[[keybinding]]
+mode = "normal"
+key = "g r"
+command_type = "custom"
+command = "lsp-find-references"
 
 
 # --- Mode switch ---
 
-# [[keybinding]]
-# mode = "insert"
-# key = "Escape"
-# command_type = "mode_switch"
-# target_mode = "normal"
+[[keybinding]]
+mode = "insert"
+key = "Escape"
+command_type = "mode_switch"
+target_mode = "normal"
 
 
 # --- Overlay switch ---
 
-# [[keybinding]]
-# mode = "normal"
-# key = ":"
-# command_type = "overlay_switch"
-# target_overlay = "command"
+[[keybinding]]
+mode = "normal"
+key = ":"
+command_type = "overlay_switch"
+target_overlay = "command"
 
-# [[keybinding]]
-# mode = "normal"
-# key = "/"
-# command_type = "overlay_switch"
-# target_overlay = "search"
+[[keybinding]]
+mode = "normal"
+key = "/"
+command_type = "overlay_switch"
+target_overlay = "search"
 
 
 # --- Key sequence remap ---
 # Remap a key to another key sequence (equivalent to [KeyMapping] in moerc.toml)
 
-# [[keybinding]]
-# mode = "insert"
-# key = "jj"
-# command_type = "key_sequence"
-# target_keys = "Escape"
+[[keybinding]]
+mode = "insert"
+key = "jj"
+command_type = "key_sequence"
+target_keys = "Escape"
 
-# [[keybinding]]
-# mode = "normal"
-# key = "C-a"
-# command_type = "key_sequence"
-# target_keys = "g g"
+[[keybinding]]
+mode = "normal"
+key = "C-a"
+command_type = "key_sequence"
+target_keys = "g g"
 
 
 # --- Meta modes ---
 
 # Apply to all modes except Command mode
-# [[keybinding]]
-# mode = "all"
-# key = "C-q"
-# command = "quit-force"
+[[keybinding]]
+mode = "all"
+key = "C-q"
+command = "quit-force"
 
 # Apply to all visual modes (Visual, VisualLine, VisualBlock)
-# [[keybinding]]
-# mode = "visualall"
-# key = "C-c"
-# command_type = "mode_switch"
-# target_mode = "normal"
+[[keybinding]]
+mode = "visualall"
+key = "C-c"
+command_type = "mode_switch"
+target_mode = "normal"
 
 
 # --- Custom command with args ---
+# command_type = "custom" binds to a registered custom command;
+# `args` are passed through to the command handler.
 
-# [[keybinding]]
-# mode = "normal"
-# key = "C-p"
-# command_type = "custom"
-# command = "search.forward"
-# args = ["case_sensitive"]
+[[keybinding]]
+mode = "normal"
+key = "C-p"
+command_type = "custom"
+command = "quickrun"
+args = ["release"]
