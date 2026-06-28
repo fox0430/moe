@@ -17,13 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, tables, strutils]
+import std/[unittest, options, os, tables, strutils, sequtils]
 
 import ../src/moepkg/keybind_config {.all.}
 import ../src/moepkg/key_bindings
 import ../src/moepkg/modes
 import ../src/moepkg/types
 import ../src/moepkg/config_loader
+
+const ExampleKeybindings =
+  currentSourcePath().parentDir / ".." / "example" / "keybindings.toml"
 
 suite "KeybindConfig - parseModes":
   test "parse normal mode":
@@ -1550,6 +1553,47 @@ suite "KeybindConfig - addKeySequenceMapping":
 
     check not registry.runtimeMappings.hasKey(EditorMode.Insert) or
       registry.runtimeMappings[EditorMode.Insert].len == 0
+
+suite "example/keybindings.toml":
+  test "File exists":
+    check fileExists(ExampleKeybindings)
+
+  test "Parses as valid TOML":
+    # A malformed comment (missing '#') or other syntax error surfaces as a
+    # single "keybindings" validation error from the TOML parser.
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.loadKeybindingsFromToml(ExampleKeybindings, vr)
+
+    let parseErrors = vr.errors.filterIt(it.name == "keybindings")
+    if parseErrors.len > 0:
+      for e in parseErrors:
+        echo "  Parse error: ", e.toErrorMessage
+    check parseErrors.len == 0
+
+  test "No validation errors against default bindings":
+    # setupDefaultBindings populates commandRegistry so command names referenced
+    # in the example file are validated against the real registered commands.
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    var vr = newValidationResult()
+    registry.loadKeybindingsFromToml(ExampleKeybindings, vr)
+
+    if vr.errors.len > 0:
+      for e in vr.errors:
+        echo "  Validation error: ", e.toErrorMessage
+    check not vr.hasErrors
+
+  test "Example bindings are actually registered":
+    # Sanity check that the example file is non-empty and its entries land in the
+    # registry (guards against the file silently parsing to zero bindings).
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    var vr = newValidationResult()
+    let before = registry.bindings[EditorMode.Normal].len
+    registry.loadKeybindingsFromToml(ExampleKeybindings, vr)
+
+    check registry.bindings[EditorMode.Normal].len > before
 
 suite "KeybindConfig - runtimeMappings":
   test "addKeybinding registers in runtimeMappings":
