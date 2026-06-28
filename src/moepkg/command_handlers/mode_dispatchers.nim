@@ -35,8 +35,8 @@ import pkg/[results, celina]
 
 import
   ../[
-    types, buffer, modes, key_bindings, string_builder, filer, filetree, diff_viewer,
-    recent_file_mode,
+    types, buffer, modes, key_bindings, keybind_config, string_builder, filer, filetree,
+    diff_viewer, recent_file_mode,
   ]
 import ../lsp/protocol/types as lspTypes
 import ../types/editor_types
@@ -444,7 +444,7 @@ proc handleCommandMode*(
     var firstError = ""
     var modeNames: seq[string] = @[]
     for mode in r.mapAddModes:
-      let err = manager.keyBindingRegistry.addRuntimeMapping(
+      let err = manager.keyBindingRegistry.addRuntimeMappingExpanded(
         mode, r.mapAddLhs, r.mapAddRhs, noremap = r.mapAddNoremap
       )
       if err.len > 0:

@@ -21,21 +21,20 @@
 
 import std/[unittest, tables, strutils, options]
 
+import
+  ../src/moepkg/
+    [keybind_config, key_router, modes, command_line, command_config, buffer]
+import ../src/moepkg/command_handlers/command_handler
 import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/key_router
-import ../src/moepkg/modes
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/motion {.all.}
-import ../src/moepkg/command_line
-import ../src/moepkg/command_config
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/registers {.all.}
-import ../src/moepkg/buffer
-import ../src/moepkg/command_handlers/command_handler
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
 from ../src/moepkg/types/editor_types import Editor
+
 import editor_test_helper
 
 suite "parseKeyString":
@@ -508,6 +507,30 @@ suite "Two-layer default restoration":
     let restored = registry.findSingleBinding(Normal, xKey)
     check restored.isSome
     check restored.get.name == "delete-char"
+
+  test "overwriting a command mapping with a key sequence purges the stale binding":
+    # Regression: the rmkKeySequence branch of addRuntimeMapping must rebuild so
+    # an earlier rmkCommand binding for the same trigger does not linger in
+    # bindings/sequences (it would surface during :noremap replay, when the
+    # KeyRouter precheck is skipped).
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let cmd = Command(
+      name: "test.cmd", description: "", count: 1, kind: ctAction, commandId: "test.cmd"
+    )
+    registry.registerCommand(cmd)
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+
+    # 1) command mapping binds x -> test.cmd
+    discard registry.addRuntimeMapping(Normal, "x", "test.cmd")
+    check registry.findSingleBinding(Normal, xKey).get.name == "test.cmd"
+
+    # 2) overwrite with a key-sequence mapping (rhs is not a command name)
+    discard registry.addRuntimeMapping(Normal, "x", "j")
+    check registry.runtimeMappings[Normal][^1].kind == rmkKeySequence
+    # The stale command binding must be gone; the built-in default is restored in
+    # bindings (the key sequence dispatches via the KeyRouter, not findBinding).
+    check registry.findSingleBinding(Normal, xKey).get.name == "delete-char"
 
   test "clearRuntimeMappings restores all built-ins and keeps built-in sequences":
     var registry = newKeyBindingRegistry()
@@ -1158,6 +1181,93 @@ suite "Integration - recursive map (noremap=false)":
     check "recursive mapping" in r.errorMessage
     # The depth counter must unwind to zero even on the error path.
     check editor.keyRouter.mapExpandDepth == 0
+
+suite "addRuntimeMappingExpanded - complex command targets":
+  test "mode_switch resolves to a ctModeSwitch command binding":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let err = registry.addRuntimeMappingExpanded(Normal, "C-y", "mode_switch insert")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.kind == rmkCommand
+    check m.command.kind == ctModeSwitch
+    check m.command.targetMode == EditorMode.Insert
+    # Effective binding resolves to the synthetic command.
+    let combo = KeyCombo(isSpecial: false, char: "y", modifiers: {kmCtrl})
+    let b = registry.findSingleBinding(Normal, combo)
+    check b.isSome
+    check b.get.kind == ctModeSwitch
+    check b.get.targetMode == EditorMode.Insert
+
+  test "overlay_switch resolves to a ctOverlaySwitch command":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let err =
+      registry.addRuntimeMappingExpanded(Normal, "C-y", "overlay_switch command")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.command.kind == ctOverlaySwitch
+    check m.command.targetOverlay == okCommand
+
+  test "command with args attaches the arguments":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let cmd = Command(
+      name: "test.args",
+      description: "",
+      count: 1,
+      kind: ctCustom,
+      commandId: "test.args",
+      args: @[],
+    )
+    registry.registerCommand(cmd)
+    let err = registry.addRuntimeMappingExpanded(Normal, "C-y", "test.args foo bar")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.command.kind == ctCustom
+    check m.command.args == @["foo", "bar"]
+
+  test "complex mapping survives a rebuild triggered by another mapping":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    discard registry.addRuntimeMappingExpanded(Normal, "C-y", "mode_switch insert")
+    # A second runtime mapping forces rebuildEffectiveBindings to re-apply all.
+    discard registry.addRuntimeMappingExpanded(Normal, "C-u", "delete-char")
+    let combo = KeyCombo(isSpecial: false, char: "y", modifiers: {kmCtrl})
+    let b = registry.findSingleBinding(Normal, combo)
+    check b.isSome
+    check b.get.kind == ctModeSwitch
+    check b.get.targetMode == EditorMode.Insert
+
+  test "invalid target mode returns an error":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let err = registry.addRuntimeMappingExpanded(Normal, "C-y", "mode_switch bogus")
+    check err.len > 0
+    check registry.runtimeMappings[Normal].len == 0
+
+  test "invalid overlay returns an error":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let err = registry.addRuntimeMappingExpanded(Normal, "C-y", "overlay_switch bogus")
+    check err.len > 0
+
+  test "bare command name still falls back to addRuntimeMapping":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let err = registry.addRuntimeMappingExpanded(Normal, "C-y", "delete-char")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.kind == rmkCommand
+    check m.commandName == "delete-char"
+
+  test "non-command multi-key RHS still falls back to a key sequence":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let err = registry.addRuntimeMappingExpanded(Insert, "C-y", "g g")
+    check err == ""
+    let m = registry.runtimeMappings[Insert][^1]
+    check m.kind == rmkKeySequence
 
 suite "Integration - Vim-style jj mapping":
   test "Vim-style jj accumulates then triggers":

@@ -137,6 +137,8 @@ moe supports Vim-like runtime key mapping commands. You can remap keys during an
 
 The `:map` family expands the right-hand side recursively, like Vim's `:map`. The `:noremap` family (`:noremap`, `:nnoremap`, `:inoremap`, `:vnoremap`, `:cnoremap`) maps keys non-recursively (the right-hand side is replayed verbatim). Unmapping (`:unmap`) or clearing (`:mapclear`) restores the built-in default for the affected keys.
 
+The right-hand side can be a command name, a command with arguments (`<command> <args...>`), a key sequence, a mode switch (`mode_switch <mode>`), or an overlay switch (`overlay_switch command|search|rename`). For example, `:nmap C-e mode_switch insert` makes Ctrl-E enter Insert mode. The same forms are accepted in the `[KeyMapping]` config section.
+
 Mappings are session-only and are not persisted across restarts. For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml` or `keybindings.toml`. Use `[KeyMapping.All]` to apply mappings to all modes at once, `[KeyMapping.VisualAll]` for all visual modes, mode-specific sections like `[KeyMapping.Normal]`, `[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, `[KeyMapping.VisualBlock]` for individual modes, or special mode sections like `[KeyMapping.Filer]`, `[KeyMapping.BufferManager]`, `[KeyMapping.Terminal]`, etc. See [configfile.md](configfile.md#keymapping-table) and [configfile.md](configfile.md#keybindingstoml).
 
 Key notation supports regular keys (`a`, `j`), modifier keys (`C-s`, `M-x`), special keys (`Escape`, `Enter`, `Tab`, `F1`-`F12`), and multi-key sequences in both space-separated (`j j`) and Vim-style concatenated (`jj`) notation.

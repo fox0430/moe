@@ -467,7 +467,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 Persistent key remappings per editor mode. Uses the same key notation as `:nmap`/`:imap` runtime commands.
 
-Values can be either a command name (e.g., `"save"`) or a key sequence (e.g., `"Escape"`).
+Values can be a command name (e.g., `"save"`), a command with arguments (`"<command> <args...>"`), a key sequence (e.g., `"Escape"`), a mode switch (`"mode_switch <mode>"`), or an overlay switch (`"overlay_switch command|search|rename"`). See [How to use - Runtime Key Mapping](howtouse.md#runtime-key-mapping) for the full list of right-hand-side forms.
 
 Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`.
 

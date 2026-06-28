@@ -46,7 +46,7 @@ proc applyKeyMappings*(registry: KeyBindingRegistry, km: KeyMappingConfig) =
       multi = false,
   ) =
     for lhs, rhs in mappings:
-      let err = registry.addRuntimeMapping(mode, lhs, rhs)
+      let err = registry.addRuntimeMappingExpanded(mode, lhs, rhs)
       if err.len > 0:
         let msg =
           if multi:
