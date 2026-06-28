@@ -878,10 +878,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "noremap",
-    completionDescription: "Map keys (all modes)",
+    completionDescription: "Map keys non-recursively (all modes)",
     helpEntries: @[],
-    action: some(claMap),
-    isCanonicalLong: false,
+    action: some(claNoremap),
+    isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "nmap",
@@ -895,10 +895,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "nnoremap",
-    completionDescription: "Map keys (Normal mode)",
+    completionDescription: "Map keys non-recursively (Normal mode)",
     helpEntries: @[],
-    action: some(claNmap),
-    isCanonicalLong: false,
+    action: some(claNnoremap),
+    isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "imap",
@@ -912,10 +912,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "inoremap",
-    completionDescription: "Map keys (Insert mode)",
+    completionDescription: "Map keys non-recursively (Insert mode)",
     helpEntries: @[],
-    action: some(claImap),
-    isCanonicalLong: false,
+    action: some(claInoremap),
+    isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "vmap",
@@ -929,10 +929,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "vnoremap",
-    completionDescription: "Map keys (Visual modes)",
+    completionDescription: "Map keys non-recursively (Visual modes)",
     helpEntries: @[],
-    action: some(claVmap),
-    isCanonicalLong: false,
+    action: some(claVnoremap),
+    isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "rmap",
@@ -956,10 +956,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "cnoremap",
-    completionDescription: "Map keys (Command mode)",
+    completionDescription: "Map keys non-recursively (Command mode)",
     helpEntries: @[],
-    action: some(claCmap),
-    isCanonicalLong: false,
+    action: some(claCnoremap),
+    isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "unmap",

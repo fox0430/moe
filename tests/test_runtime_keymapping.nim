@@ -485,6 +485,59 @@ suite "clearRuntimeMappings":
     check registry.runtimeMappings[Normal].len == 0
     check registry.runtimeMappings[Insert].len == 1
 
+suite "Two-layer default restoration":
+  test "removeRuntimeMapping restores the built-in single-key binding":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    # Built-in default: x -> delete-char
+    let original = registry.findSingleBinding(Normal, xKey)
+    check original.isSome
+    check original.get.name == "delete-char"
+
+    # User override shadows the default
+    let cmd = Command(
+      name: "test.cmd", description: "", count: 1, kind: ctAction, commandId: "test.cmd"
+    )
+    registry.registerCommand(cmd)
+    discard registry.addRuntimeMapping(Normal, "x", "test.cmd")
+    check registry.findSingleBinding(Normal, xKey).get.name == "test.cmd"
+
+    # Removing the mapping falls back to the built-in default
+    discard registry.removeRuntimeMapping(Normal, "x")
+    let restored = registry.findSingleBinding(Normal, xKey)
+    check restored.isSome
+    check restored.get.name == "delete-char"
+
+  test "clearRuntimeMappings restores all built-ins and keeps built-in sequences":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+
+    # Built-in sequence: g g -> goto-first-line
+    discard registry.processKey(Normal, gKey)
+    let gg = registry.processKey(Normal, gKey)
+    check gg.isSome
+    check gg.get.name == "goto-first-line"
+
+    let cmd = Command(
+      name: "test.cmd", description: "", count: 1, kind: ctAction, commandId: "test.cmd"
+    )
+    registry.registerCommand(cmd)
+    discard registry.addRuntimeMapping(Normal, "x", "test.cmd")
+    check registry.findSingleBinding(Normal, xKey).get.name == "test.cmd"
+
+    registry.clearRuntimeMappings(Normal)
+
+    # Single-key default restored
+    check registry.findSingleBinding(Normal, xKey).get.name == "delete-char"
+    # Built-in sequence still resolves (mode was not wiped)
+    discard registry.processKey(Normal, gKey)
+    let gg2 = registry.processKey(Normal, gKey)
+    check gg2.isSome
+    check gg2.get.name == "goto-first-line"
+
 suite "listRuntimeMappings":
   test "List mappings":
     var registry = newKeyBindingRegistry()
@@ -577,6 +630,7 @@ suite "Command mode command parsing - map commands":
     check result.kind == claMap
     check result.mapLhs == "C-s"
     check result.mapRhs == "file.save"
+    check result.noremap == false
 
   test "Parse :vmap d visual.delete":
     let result = parser.parseAndExecute(":vmap d visual.delete")
@@ -584,15 +638,17 @@ suite "Command mode command parsing - map commands":
     check result.mapLhs == "d"
     check result.mapRhs == "visual.delete"
 
-  test "Parse :noremap C-s file.save (alias)":
+  test "Parse :noremap C-s file.save (folds to claMap, noremap=true)":
     let result = parser.parseAndExecute(":noremap C-s file.save")
     check result.kind == claMap
     check result.mapLhs == "C-s"
+    check result.noremap == true
 
-  test "Parse :nnoremap C-s file.save (alias)":
+  test "Parse :nnoremap C-s file.save (folds to claNmap, noremap=true)":
     let result = parser.parseAndExecute(":nnoremap C-s file.save")
     check result.kind == claNmap
     check result.mapLhs == "C-s"
+    check result.noremap == true
 
   test "Parse :nmap without args returns list request":
     let result = parser.parseAndExecute(":nmap")
@@ -647,17 +703,19 @@ suite "Command mode command parsing - map commands":
     check result.mapLhs == "C-a"
     check result.mapRhs == "d d"
 
-  test "Parse :inoremap (alias)":
+  test "Parse :inoremap (folds to claImap, noremap=true)":
     let result = parser.parseAndExecute(":inoremap jj Escape")
     check result.kind == claImap
     check result.mapLhs == "jj"
     check result.mapRhs == "Escape"
+    check result.noremap == true
 
-  test "Parse :vnoremap (alias)":
+  test "Parse :vnoremap (folds to claVmap, noremap=true)":
     let result = parser.parseAndExecute(":vnoremap d Escape")
     check result.kind == claVmap
     check result.mapLhs == "d"
     check result.mapRhs == "Escape"
+    check result.noremap == true
 
 suite "Command mode command parsing - unmap commands":
   setup:
@@ -740,6 +798,14 @@ suite "CommandModeHandler - map commands":
     check result.mapAddRhs == "file.save"
     check EditorMode.Normal in result.mapAddModes
     check result.mapAddModes.len == 1
+    check result.mapAddNoremap == false
+
+  test "handleCommandModeInput :nnoremap returns cmrMapAdd with noremap=true":
+    let buffer = newTextBuffer()
+    let result = handler.handleCommandModeInput(buffer, ":nnoremap C-s file.save")
+    check result.kind == cmrMapAdd
+    check EditorMode.Normal in result.mapAddModes
+    check result.mapAddNoremap == true
 
   test "handleCommandModeInput :imap returns cmrMapAdd for Insert":
     let buffer = newTextBuffer()
@@ -1047,6 +1113,51 @@ suite "Integration - noremap verification":
     discard manager.handleKeyCombo(editor, keyA)
     # Accumulator should be empty (no key-seq mappings registered for Insert)
     check editor.keyRouter.dispatchState.keys.len == 0
+
+suite "Integration - recursive map (noremap=false)":
+  test "Mapping A→B→Escape recursively expands when noremap=false":
+    ## Counterpart to the noremap test above: with noremap=false the replayed
+    ## C-b *is* re-expanded to Escape, switching Insert→Normal.
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    check manager.keyBindingRegistry.addRuntimeMapping(
+      Insert, "C-a", "C-b", noremap = false
+    ) == ""
+    check manager.keyBindingRegistry.addRuntimeMapping(
+      Insert, "C-b", "Escape", noremap = false
+    ) == ""
+
+    let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let r = manager.handleKeyCombo(editor, keyA)
+    check r.kind == hrHandled
+    # C-a → C-b → Escape: recursion reaches Escape, so we land in Normal mode.
+    check state.mode == EditorMode.Normal
+    check editor.keyRouter.mapExpandDepth == 0
+    check manager.keyBindingRegistry.isReplayingMapping == false
+
+  test "Cyclic mapping A→A errors at the depth limit without hanging":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    check manager.keyBindingRegistry.addRuntimeMapping(
+      Insert, "C-a", "C-a", noremap = false
+    ) == ""
+
+    let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let r = manager.handleKeyCombo(editor, keyA)
+    check r.kind == hrError
+    check "recursive mapping" in r.errorMessage
+    # The depth counter must unwind to zero even on the error path.
+    check editor.keyRouter.mapExpandDepth == 0
 
 suite "Integration - Vim-style jj mapping":
   test "Vim-style jj accumulates then triggers":

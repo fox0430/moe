@@ -404,6 +404,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         # for case exhaustiveness; keep the historical no-op for safety.
         return true
       of rrExecuteRuntimeKeySequence:
+        # Command overlay always replays verbatim (non-recursive), even for a
+        # :cmap. handleCommandModeKeyCombo has no mapping-expansion precheck, so
+        # noremap is not honoured here (known limitation).
         var replayResult = true
         e.keyRouter.withReplay:
           for targetKeyStr in route.targetKeys:

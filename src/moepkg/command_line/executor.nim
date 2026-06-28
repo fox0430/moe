@@ -275,32 +275,43 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       else:
         ""
     return CommandLineResult(kind: claTerminal, terminalCommand: termCmd)
-  of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
+  of claMap, claNmap, claImap, claVmap, claRmap, claCmap, claNoremap, claNnoremap,
+      claInoremap, claVnoremap, claCnoremap:
+    # Fold the :noremap family onto its base map kind, carrying noremap=true so
+    # the downstream handler shape stays unchanged. (Nim forbids constructing a
+    # variant with a runtime discriminant, hence the explicit literal cases.)
+    let noremap =
+      cmd.action in {claNoremap, claNnoremap, claInoremap, claVnoremap, claCnoremap}
     if cmd.args.len == 0:
       # No arguments: list mappings
       case cmd.action
-      of claMap:
-        return CommandLineResult(kind: claMap, mapLhs: "", mapRhs: "")
-      of claNmap:
-        return CommandLineResult(kind: claNmap, mapLhs: "", mapRhs: "")
-      of claImap:
-        return CommandLineResult(kind: claImap, mapLhs: "", mapRhs: "")
-      of claVmap:
-        return CommandLineResult(kind: claVmap, mapLhs: "", mapRhs: "")
+      of claMap, claNoremap:
+        return CommandLineResult(kind: claMap, mapLhs: "", mapRhs: "", noremap: noremap)
+      of claNmap, claNnoremap:
+        return
+          CommandLineResult(kind: claNmap, mapLhs: "", mapRhs: "", noremap: noremap)
+      of claImap, claInoremap:
+        return
+          CommandLineResult(kind: claImap, mapLhs: "", mapRhs: "", noremap: noremap)
+      of claVmap, claVnoremap:
+        return
+          CommandLineResult(kind: claVmap, mapLhs: "", mapRhs: "", noremap: noremap)
       of claRmap:
-        return CommandLineResult(kind: claRmap, mapLhs: "", mapRhs: "")
-      of claCmap:
-        return CommandLineResult(kind: claCmap, mapLhs: "", mapRhs: "")
+        return
+          CommandLineResult(kind: claRmap, mapLhs: "", mapRhs: "", noremap: noremap)
+      of claCmap, claCnoremap:
+        return
+          CommandLineResult(kind: claCmap, mapLhs: "", mapRhs: "", noremap: noremap)
       else:
         discard
     if cmd.args.len < 2:
       let cmdName =
         case cmd.action
-        of claNmap: "nmap"
-        of claImap: "imap"
-        of claVmap: "vmap"
+        of claNmap, claNnoremap: "nmap"
+        of claImap, claInoremap: "imap"
+        of claVmap, claVnoremap: "vmap"
         of claRmap: "rmap"
-        of claCmap: "cmap"
+        of claCmap, claCnoremap: "cmap"
         else: "map"
       return CommandLineResult(
         kind: claUnknown, errorMessage: "Usage: :" & cmdName & " {lhs} {rhs}"
@@ -308,18 +319,23 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     let lhs = cmd.args[0]
     let rhs = cmd.args[1 ..^ 1].join(" ")
     case cmd.action
-    of claMap:
-      return CommandLineResult(kind: claMap, mapLhs: lhs, mapRhs: rhs)
-    of claNmap:
-      return CommandLineResult(kind: claNmap, mapLhs: lhs, mapRhs: rhs)
-    of claImap:
-      return CommandLineResult(kind: claImap, mapLhs: lhs, mapRhs: rhs)
-    of claVmap:
-      return CommandLineResult(kind: claVmap, mapLhs: lhs, mapRhs: rhs)
+    of claMap, claNoremap:
+      return CommandLineResult(kind: claMap, mapLhs: lhs, mapRhs: rhs, noremap: noremap)
+    of claNmap, claNnoremap:
+      return
+        CommandLineResult(kind: claNmap, mapLhs: lhs, mapRhs: rhs, noremap: noremap)
+    of claImap, claInoremap:
+      return
+        CommandLineResult(kind: claImap, mapLhs: lhs, mapRhs: rhs, noremap: noremap)
+    of claVmap, claVnoremap:
+      return
+        CommandLineResult(kind: claVmap, mapLhs: lhs, mapRhs: rhs, noremap: noremap)
     of claRmap:
-      return CommandLineResult(kind: claRmap, mapLhs: lhs, mapRhs: rhs)
-    of claCmap:
-      return CommandLineResult(kind: claCmap, mapLhs: lhs, mapRhs: rhs)
+      return
+        CommandLineResult(kind: claRmap, mapLhs: lhs, mapRhs: rhs, noremap: noremap)
+    of claCmap, claCnoremap:
+      return
+        CommandLineResult(kind: claCmap, mapLhs: lhs, mapRhs: rhs, noremap: noremap)
     else:
       discard
   of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:

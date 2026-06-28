@@ -56,6 +56,14 @@ export
   recent_file_mode_handler, debug_handler, config_handler, references_handler,
   documentsymbol_handler, callhierarchy_handler, terminal_handler
 
+const MaxMacroRecursionDepth = 100
+  ## Maximum macro recursion depth to prevent infinite loops
+
+const MaxMapRecursionDepth = 50
+  ## Recursion limit for `:map` (noremap=false) expansion. Kept below
+  ## MaxMacroRecursionDepth so a cyclic mapping reports "recursive mapping"
+  ## before the macro depth guard fires.
+
 proc newHandlerManager*(
     motionController: MotionController,
     keyBindingRegistry: KeyBindingRegistry,
@@ -180,8 +188,35 @@ proc executeCommandDirect*(
         "' cannot be executed directly in special modes; use key sequence mapping instead"
     return none(HandlerResult)
 
-const MaxMacroRecursionDepth = 100
-  ## Maximum macro recursion depth to prevent infinite loops
+proc replayRuntimeKeySequence*(
+    manager: HandlerManager, editor: Editor, targetKeys: seq[string], noremap: bool
+): HandlerResult =
+  ## Replay the RHS of a fired runtime key-sequence mapping. Shared by the
+  ## immediate-match path (handler_manager) and the timeout-flush path (handler)
+  ## so `:map`/`:noremap` behave identically whether the trigger completes
+  ## instantly or after a prefix-collision timeout.
+  ##
+  ## - noremap=true: replay verbatim under `withReplay`, so re-entrant feedKey
+  ##   calls see `isReplayingMapping` and skip mapping expansion (non-recursive).
+  ## - noremap=false: replay *without* `withReplay`, so each replayed key
+  ##   re-enters handleKeyCombo with expansion enabled (`:map` recursion),
+  ##   bounded by `mapExpandDepth` / `MaxMapRecursionDepth` to break cycles.
+  if noremap:
+    var r: HandlerResult
+    editor.keyRouter.withReplay:
+      r = manager.playbackMacro(editor, targetKeys)
+    return r
+
+  if editor.keyRouter.mapExpandDepth >= MaxMapRecursionDepth:
+    return HandlerResult(
+      kind: hrError,
+      errorMessage: "recursive mapping (max " & $MaxMapRecursionDepth & ")",
+    )
+  editor.keyRouter.mapExpandDepth += 1
+  try:
+    result = manager.playbackMacro(editor, targetKeys)
+  finally:
+    editor.keyRouter.mapExpandDepth -= 1
 
 proc checkRuntimeKeySeqMapping(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
@@ -209,10 +244,8 @@ proc checkRuntimeKeySeqMapping(
       return cmdResult
     return none(HandlerResult)
   of rrExecuteRuntimeKeySequence:
-    var playbackResult: HandlerResult
-    editor.keyRouter.withReplay:
-      playbackResult = manager.playbackMacro(editor, route.targetKeys)
-    return some(playbackResult)
+    return
+      some(manager.replayRuntimeKeySequence(editor, route.targetKeys, route.noremap))
   of rrWaiting:
     return some(
       HandlerResult(

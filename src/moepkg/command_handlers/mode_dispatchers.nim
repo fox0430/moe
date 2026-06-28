@@ -444,8 +444,9 @@ proc handleCommandMode*(
     var firstError = ""
     var modeNames: seq[string] = @[]
     for mode in r.mapAddModes:
-      let err =
-        manager.keyBindingRegistry.addRuntimeMapping(mode, r.mapAddLhs, r.mapAddRhs)
+      let err = manager.keyBindingRegistry.addRuntimeMapping(
+        mode, r.mapAddLhs, r.mapAddRhs, noremap = r.mapAddNoremap
+      )
       if err.len > 0:
         if firstError.len == 0:
           firstError = err

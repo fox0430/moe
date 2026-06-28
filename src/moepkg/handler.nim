@@ -1392,6 +1392,9 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
         shouldContinue = e.processResult(cmdResult.get, e.activeBuffer)
   of rrExecuteRuntimeKeySequence:
     if inCommandOverlay:
+      # Command overlay replays through a different dispatcher
+      # (handleCommandModeKeyCombo) that has no mapping-expansion precheck, so it
+      # stays non-recursive regardless of noremap (known limitation).
       e.keyRouter.withReplay:
         for targetKeyStr in route.targetKeys:
           let targetKeyOpt = stringToKeyCombo(targetKeyStr)
@@ -1400,9 +1403,10 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
               shouldContinue = false
               break
     else:
-      var r: HandlerResult
-      e.keyRouter.withReplay:
-        r = e.handlerManager.playbackMacro(e, route.targetKeys)
+      # Base mode: honour noremap so a timeout-fired mapping expands the same way
+      # as an immediate match (recursive for :map, verbatim for :noremap).
+      let r =
+        e.handlerManager.replayRuntimeKeySequence(e, route.targetKeys, route.noremap)
       if r.kind == hrHandled and r.modeTransition.isSome:
         e.state.mode = r.modeTransition.get
       if r.kind == hrQuit:

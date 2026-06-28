@@ -84,6 +84,11 @@ type
     claVmap # :vmap {lhs} {rhs} (visual modes)
     claRmap # :rmap {lhs} {rhs} (replace mode)
     claCmap # :cmap {lhs} {rhs} (command-line mode)
+    claNoremap # :noremap {lhs} {rhs} (all modes, non-recursive)
+    claNnoremap # :nnoremap {lhs} {rhs} (normal mode, non-recursive)
+    claInoremap # :inoremap {lhs} {rhs} (insert mode, non-recursive)
+    claVnoremap # :vnoremap {lhs} {rhs} (visual modes, non-recursive)
+    claCnoremap # :cnoremap {lhs} {rhs} (command-line mode, non-recursive)
     claUnmap # :unmap {lhs} (all modes)
     claNunmap # :nunmap {lhs} (normal mode)
     claIunmap # :iunmap {lhs} (insert mode)
@@ -235,6 +240,12 @@ type
     of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
       mapLhs*: string
       mapRhs*: string
+      noremap*: bool ## True when the source was a :noremap-family command
+    of claNoremap, claNnoremap, claInoremap, claVnoremap, claCnoremap:
+      # The executor folds these into the base map kind above (carrying
+      # noremap=true); a result never actually holds these kinds. Present only
+      # so the variant stays exhaustive over CommandLineAction.
+      discard
     of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:
       unmapLhs*: string
     of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear, claCmapclear:
@@ -273,6 +284,11 @@ const ArgumentRequiredActions* = {
   claVmap, # requires lhs and rhs
   claRmap, # requires lhs and rhs
   claCmap, # requires lhs and rhs
+  claNoremap, # requires lhs and rhs
+  claNnoremap, # requires lhs and rhs
+  claInoremap, # requires lhs and rhs
+  claVnoremap, # requires lhs and rhs
+  claCnoremap, # requires lhs and rhs
   claUnmap, # requires lhs
   claNunmap, # requires lhs
   claIunmap, # requires lhs

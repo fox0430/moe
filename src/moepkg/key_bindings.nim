@@ -157,36 +157,57 @@ proc keySeqToDisplayString*(keys: seq[KeyCombo]): string =
       else:
         result.add(prefix & k.char)
 
+proc rebuildEffectiveBindings*(registry: KeyBindingRegistry, mode: EditorMode) =
+  ## Rebuild the effective `bindings`/`sequences` tables for `mode` from the
+  ## pristine default snapshot plus the user's rmkCommand runtime mappings. Run
+  ## after every runtime-mapping mutation so removing/clearing a mapping falls
+  ## back to the built-in default. rmkKeySequence mappings dispatch through the
+  ## KeyRouter and never touch these tables, so they are skipped. Only config
+  ## mutations call this; the hot path (`processKey`) just reads the tables.
+  registry.bindings[mode] = registry.defaultBindings.getOrDefault(mode)
+  registry.sequences[mode] = registry.defaultSequences.getOrDefault(mode)
+  for m in registry.runtimeMappings.getOrDefault(mode):
+    if m.kind == rmkCommand:
+      if m.triggerKeys.len == 1:
+        registry.bindKey(mode, m.triggerKeys[0], m.command)
+      else:
+        registry.bindSequence(mode, m.triggerKeys, m.command)
+
 proc addRuntimeMapping*(
-    registry: KeyBindingRegistry, mode: EditorMode, lhsStr: string, rhsStr: string
+    registry: KeyBindingRegistry,
+    mode: EditorMode,
+    lhsStr: string,
+    rhsStr: string,
+    noremap = true,
 ): string =
   ## Add a runtime key mapping. Returns empty string on success, error message on failure.
   ## If RHS is a known command name, registers as key→command.
   ## Otherwise, parses RHS as key sequence and registers as key→key-sequence.
+  ## `noremap` defaults to true for backwards compatibility (direct callers,
+  ## TOML, macros); only `:map`-family runtime commands pass false to opt into
+  ## recursive expansion.
   let lhsKeys = parseKeyString(lhsStr)
   if lhsKeys.len == 0:
     return "Invalid key: " & lhsStr
 
   # Check if RHS is a command name
   if rhsStr in registry.commandRegistry:
-    # Key → command mapping: register directly via existing bindings infrastructure
+    # Key → command mapping. Recorded in runtimeMappings only; the effective
+    # bindings/sequences tables are derived by rebuildEffectiveBindings.
     let command = registry.commandRegistry[rhsStr]
-    if lhsKeys.len == 1:
-      registry.bindKey(mode, lhsKeys[0], command)
-    else:
-      registry.bindSequence(mode, lhsKeys, command)
-
-    # Also store in runtimeMappings for listing/removal
     let mapping = RuntimeKeyMapping(
       triggerKeys: lhsKeys,
       triggerStr: lhsStr,
       targetStr: rhsStr,
+      noremap: noremap,
       kind: rmkCommand,
+      command: command,
       commandName: rhsStr,
     )
     # Remove existing mapping for same trigger
     registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
     registry.runtimeMappings[mode].add(mapping)
+    registry.rebuildEffectiveBindings(mode)
     return ""
 
   # Otherwise, parse RHS as key sequence
@@ -203,6 +224,7 @@ proc addRuntimeMapping*(
     triggerKeys: lhsKeys,
     triggerStr: lhsStr,
     targetStr: rhsStr,
+    noremap: noremap,
     kind: rmkKeySequence,
     targetKeys: targetKeyStrs,
   )
@@ -234,30 +256,16 @@ proc removeRuntimeMapping*(
     return "No mapping found: " & lhsStr
 
   registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
-
-  # If it was a command mapping, also remove from bindings/sequences
-  let m = removedMapping.get
-  if m.kind == rmkCommand:
-    if lhsKeys.len == 1:
-      registry.unbindKey(mode, lhsKeys[0])
-    else:
-      if mode in registry.sequences:
-        registry.sequences[mode].del(lhsKeys)
+  # Rebuild restores the built-in default for this trigger (if any).
+  registry.rebuildEffectiveBindings(mode)
 
   return ""
 
 proc clearRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode) =
-  ## Clear all runtime mappings for the given mode
+  ## Clear all runtime mappings for the given mode, restoring built-in defaults.
   if mode in registry.runtimeMappings:
-    # Remove command mappings from bindings/sequences
-    for m in registry.runtimeMappings[mode]:
-      if m.kind == rmkCommand:
-        if m.triggerKeys.len == 1:
-          registry.unbindKey(mode, m.triggerKeys[0])
-        else:
-          if mode in registry.sequences:
-            registry.sequences[mode].del(m.triggerKeys)
     registry.runtimeMappings[mode] = @[]
+    registry.rebuildEffectiveBindings(mode)
 
 proc listRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode): seq[string] =
   ## List all runtime mappings for the given mode as human-readable strings
@@ -337,7 +345,9 @@ proc routeRuntimeMapping*(
       )
     of rmkKeySequence:
       return RuntimeMappingDecision(
-        kind: rmdExecuteKeySequence, targetKeys: matched.targetKeys
+        kind: rmdExecuteKeySequence,
+        targetKeys: matched.targetKeys,
+        noremap: matched.noremap,
       )
 
   if hasLongerMatch:
@@ -382,7 +392,9 @@ proc flushRuntimeMapping*(
       )
     of rmkKeySequence:
       return RuntimeMappingFlushPlan(
-        kind: rmfExecuteKeySequence, targetKeys: matched.targetKeys
+        kind: rmfExecuteKeySequence,
+        targetKeys: matched.targetKeys,
+        noremap: matched.noremap,
       )
 
   return RuntimeMappingFlushPlan(kind: rmfReplayPerKey, keysToReplay: accKeys)
@@ -618,6 +630,12 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindVisualModes()
 
   registry.bindInsertAndReplaceModes()
+
+  # Snapshot the pristine default tables before any TOML/runtime mapping is
+  # applied. `rebuildEffectiveBindings` restores from these so `:unmap`/
+  # `:mapclear` fall back to built-in defaults. Value-type assignment deep-copies.
+  registry.defaultBindings = registry.bindings
+  registry.defaultSequences = registry.sequences
 
 proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   ## Convert a Celina event to a key combination

@@ -134,8 +134,17 @@ type
     triggerKeys*: seq[KeyCombo] ## LHS (trigger key sequence)
     triggerStr*: string ## Display string for LHS
     targetStr*: string ## Display string for RHS
+    noremap*: bool
+      ## When true, the RHS keys are replayed non-recursively (`:noremap`); when
+      ## false the RHS is re-expanded through the mapping table (`:map`). Only
+      ## meaningful for rmkKeySequence; rmkCommand is terminal.
     case kind*: RuntimeMappingKind
     of rmkCommand:
+      command*: Command
+        ## Resolved command, stored so `rebuildEffectiveBindings` can re-bind it
+        ## verbatim. `commandName` cannot round-trip synthetic commands
+        ## (mode_switch / overlay_switch are absent from commandRegistry, and
+        ## custom-with-args entries differ from the bare registry version).
       commandName*: string
     of rmkKeySequence:
       targetKeys*: seq[string] ## Key strings for playbackMacro
@@ -171,6 +180,7 @@ type
       commandName*: string
     of rmdExecuteKeySequence:
       targetKeys*: seq[string]
+      noremap*: bool
     of rmdWaitForMore, rmdNoMatchPassThrough:
       discard
     of rmdNoMatchFlush:
@@ -193,6 +203,7 @@ type
       commandName*: string
     of rmfExecuteKeySequence:
       targetKeys*: seq[string]
+      noremap*: bool
     of rmfReplayPerKey:
       keysToReplay*: seq[KeyCombo]
 
@@ -200,6 +211,14 @@ type
   KeyBindingRegistry* = ref object
     bindings*: Table[EditorMode, seq[KeyBinding]]
     sequences*: Table[EditorMode, Table[seq[KeyCombo], Command]] ## Multi-key sequences
+    defaultBindings*: Table[EditorMode, seq[KeyBinding]]
+      ## Pristine snapshot of `bindings`/`sequences` taken at the end of
+      ## `setupDefaultBindings`, before any TOML or runtime mapping is applied.
+      ## `rebuildEffectiveBindings` restores the effective tables from these so
+      ## `:unmap`/`:mapclear` fall back to built-in defaults. Snapshotting relies
+      ## on `KeyBinding`/`Command`/`KeyCombo` being value types (table assignment
+      ## deep-copies); adding a ref field to any of them would break it.
+    defaultSequences*: Table[EditorMode, Table[seq[KeyCombo], Command]]
     commandRegistry*: Table[string, Command]
     sequenceState*: KeySequenceState ## Current built-in sequence being built
     runtimeMappings*: Table[EditorMode, seq[RuntimeKeyMapping]]
@@ -559,6 +578,8 @@ proc newKeyBindingRegistry*(): KeyBindingRegistry =
   result = KeyBindingRegistry(
     bindings: initTable[EditorMode, seq[KeyBinding]](),
     sequences: initTable[EditorMode, Table[seq[KeyCombo], Command]](),
+    defaultBindings: initTable[EditorMode, seq[KeyBinding]](),
+    defaultSequences: initTable[EditorMode, Table[seq[KeyCombo], Command]](),
     commandRegistry: initTable[string, Command](),
     sequenceState: KeySequenceState(
       keys: @[],
@@ -575,6 +596,8 @@ proc newKeyBindingRegistry*(): KeyBindingRegistry =
   for mode in EditorMode:
     result.bindings[mode] = @[]
     result.sequences[mode] = initTable[seq[KeyCombo], Command]()
+    result.defaultBindings[mode] = @[]
+    result.defaultSequences[mode] = initTable[seq[KeyCombo], Command]()
     result.runtimeMappings[mode] = @[]
 
 proc registerCommand*(registry: KeyBindingRegistry, command: Command) =

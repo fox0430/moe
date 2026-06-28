@@ -61,9 +61,17 @@ type KeyRouter* = ref object
   dispatchState*: DispatchState
     ## Runtime-mapping key accumulator, owned by the router (no longer borrowed
     ## from the registry). See `key_bindings/registry.DispatchState`.
+  mapExpandDepth*: int
+    ## Recursion depth for `:map` (noremap=false) replay. Guards against cyclic
+    ## mappings; see `MaxMapRecursionDepth` in handler_manager.
 
 proc newKeyRouter*(registry: KeyBindingRegistry, policy: TimeoutPolicy): KeyRouter =
-  KeyRouter(registry: registry, policy: policy, dispatchState: DispatchState(keys: @[]))
+  KeyRouter(
+    registry: registry,
+    policy: policy,
+    dispatchState: DispatchState(keys: @[]),
+    mapExpandDepth: 0,
+  )
 
 proc updatePolicy*(router: KeyRouter, policy: TimeoutPolicy) {.inline.} =
   ## Update the timeout policy (call when config reloads).
@@ -140,7 +148,11 @@ proc decisionToRoute(decision: RuntimeMappingDecision, key: KeyCombo): RouteResu
   of rmdExecuteCommand:
     RouteResult(kind: rrExecuteRuntimeCommand, commandName: decision.commandName)
   of rmdExecuteKeySequence:
-    RouteResult(kind: rrExecuteRuntimeKeySequence, targetKeys: decision.targetKeys)
+    RouteResult(
+      kind: rrExecuteRuntimeKeySequence,
+      targetKeys: decision.targetKeys,
+      noremap: decision.noremap,
+    )
   of rmdWaitForMore:
     RouteResult(kind: rrWaiting, waitsForTimeout: true)
   of rmdNoMatchPassThrough:
@@ -169,7 +181,11 @@ proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
   of rmfExecuteCommand:
     RouteResult(kind: rrExecuteRuntimeCommand, commandName: plan.commandName)
   of rmfExecuteKeySequence:
-    RouteResult(kind: rrExecuteRuntimeKeySequence, targetKeys: plan.targetKeys)
+    RouteResult(
+      kind: rrExecuteRuntimeKeySequence,
+      targetKeys: plan.targetKeys,
+      noremap: plan.noremap,
+    )
   of rmfReplayPerKey:
     RouteResult(kind: rrUnhandledBatch, keys: plan.keysToReplay)
 
