@@ -135,7 +135,7 @@ moe supports Vim-like runtime key mapping commands. You can remap keys during an
 - `:cmap {lhs} {rhs}` - Map keys in Command mode
 - `:map {lhs} {rhs}` - Map keys in all modes (except Command mode)
 
-All mappings are non-recursive (equivalent to Vim's `noremap`). `noremap`, `nnoremap`, `inoremap`, `vnoremap`, `cnoremap` are available as aliases.
+The `:map` family expands the right-hand side recursively, like Vim's `:map`. The `:noremap` family (`:noremap`, `:nnoremap`, `:inoremap`, `:vnoremap`, `:cnoremap`) maps keys non-recursively (the right-hand side is replayed verbatim). Unmapping (`:unmap`) or clearing (`:mapclear`) restores the built-in default for the affected keys.
 
 Mappings are session-only and are not persisted across restarts. For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml` or `keybindings.toml`. Use `[KeyMapping.All]` to apply mappings to all modes at once, `[KeyMapping.VisualAll]` for all visual modes, mode-specific sections like `[KeyMapping.Normal]`, `[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, `[KeyMapping.VisualBlock]` for individual modes, or special mode sections like `[KeyMapping.Filer]`, `[KeyMapping.BufferManager]`, `[KeyMapping.Terminal]`, etc. See [configfile.md](configfile.md#keymapping-table) and [configfile.md](configfile.md#keybindingstoml).
 

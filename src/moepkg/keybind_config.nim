@@ -159,6 +159,7 @@ proc addKeySequenceMapping*(
       triggerKeys: triggerKeys,
       triggerStr: keyStr,
       targetStr: targetKeyStr,
+      noremap: true,
       targetKeys: targetKeyStrs,
     )
   )
@@ -166,17 +167,14 @@ proc addKeySequenceMapping*(
 proc addKeybinding*(
     registry: KeyBindingRegistry, mode: EditorMode, keyStr: string, cmd: Command
 ) =
-  ## Add a keybinding to the registry (supports multi-key sequences)
+  ## Add a keybinding to the registry (supports multi-key sequences). Recorded in
+  ## runtimeMappings only; the effective bindings/sequences are derived by
+  ## rebuildEffectiveBindings, which re-binds `cmd` verbatim (preserving
+  ## synthetic mode_switch/overlay_switch and custom-with-args commands).
   let keys = parseKeyString(keyStr)
   if keys.len == 0:
     return
 
-  if keys.len == 1:
-    registry.bindKey(mode, keys[0], cmd)
-  else:
-    registry.bindSequence(mode, keys, cmd)
-
-  # Register in runtimeMappings for replay protection (isReplayingMapping)
   if not registry.runtimeMappings.hasKey(mode):
     registry.runtimeMappings[mode] = @[]
 
@@ -186,9 +184,12 @@ proc addKeybinding*(
       triggerKeys: keys,
       triggerStr: keyStr,
       targetStr: cmd.name,
+      noremap: true,
+      command: cmd,
       commandName: cmd.name,
     )
   )
+  registry.rebuildEffectiveBindings(mode)
 
 proc loadKeybindingsFromToml*(
     registry: KeyBindingRegistry, tomlPath: string, vr: var ValidationResult

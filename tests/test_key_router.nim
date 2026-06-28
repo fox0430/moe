@@ -139,6 +139,26 @@ suite "KeyRouter - flushTimeout":
     check route.keys == @[toKeyCombo('j')]
     check router.dispatchState.keys.len == 0
 
+  test "noremap flag propagates through immediate match and flushTimeout":
+    let router = newRouter()
+    # noremap=false (:map) on an immediate single-key match
+    discard router.registry.addRuntimeMapping(
+      EditorMode.Insert, "x", "Escape", noremap = false
+    )
+    let immediate = router.feedKey(EditorMode.Insert, toKeyCombo('x'))
+    check immediate.kind == rrExecuteRuntimeKeySequence
+    check immediate.noremap == false
+
+    # noremap=true (:noremap) fired via the timeout-flush path
+    discard router.registry.addRuntimeMapping(
+      EditorMode.Insert, "yy", "Escape", noremap = true
+    )
+    discard router.feedKey(EditorMode.Insert, toKeyCombo('y')) # rrWaiting
+    router.dispatchState.keys.add(toKeyCombo('y'))
+    let flushed = router.flushTimeout(EditorMode.Insert)
+    check flushed.kind == rrExecuteRuntimeKeySequence
+    check flushed.noremap == true
+
 suite "KeyRouter - cancel and accessors":
   test "cancel clears the built-in sequence accumulator":
     let router = newRouter()

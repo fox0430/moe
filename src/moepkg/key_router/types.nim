@@ -72,6 +72,9 @@ type
       commandName*: string
     of rrExecuteRuntimeKeySequence:
       targetKeys*: seq[string]
+      noremap*: bool
+        ## When false the replayed keys are re-expanded through the mapping
+        ## table (`:map`); when true they are replayed verbatim (`:noremap`).
     of rrWaiting:
       waitsForTimeout*: bool
     of rrUnhandled:

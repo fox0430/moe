@@ -222,6 +222,7 @@ type
       mapAddLhs*: string
       mapAddRhs*: string
       mapAddModes*: seq[EditorMode]
+      mapAddNoremap*: bool ## True for :noremap-family (non-recursive) mappings
     of cmrMapRemove:
       mapRemoveLhs*: string
       mapRemoveModes*: seq[EditorMode]
@@ -876,6 +877,13 @@ proc handleCommandModeInput*(
       mapAddLhs: cmdResult.mapLhs,
       mapAddRhs: cmdResult.mapRhs,
       mapAddModes: modes,
+      mapAddNoremap: cmdResult.noremap,
+    )
+  of claNoremap, claNnoremap, claInoremap, claVnoremap, claCnoremap:
+    # Unreachable: the executor folds these onto the base map kind (carrying
+    # noremap=true). Present only to keep the case exhaustive.
+    return CommandModeResult(
+      kind: cmrError, errorMessage: "internal: unfolded noremap action"
     )
   of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:
     let modes =
