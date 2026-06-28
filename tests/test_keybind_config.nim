@@ -1171,6 +1171,94 @@ target_keys = "Escape"
     check lastMapping.targetStr == "Escape"
     check lastMapping.targetKeys.len == 1
 
+  test "key_sequence defaults to noremap when field omitted":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    let tomlContent = """
+[[keybinding]]
+mode = "insert"
+key = "jj"
+command_type = "key_sequence"
+target_keys = "Escape"
+"""
+    let testPath = getTempDir() / "test_keybind_keyseq_noremap_default.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check not vr.hasErrors
+    check registry.runtimeMappings[EditorMode.Insert][^1].noremap
+
+  test "key_sequence with noremap = false loads as recursive":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "x"
+command_type = "key_sequence"
+target_keys = "dd"
+noremap = false
+"""
+    let testPath = getTempDir() / "test_keybind_keyseq_noremap_false.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check not vr.hasErrors
+    let lastMapping = registry.runtimeMappings[EditorMode.Normal][^1]
+    check lastMapping.kind == rmkKeySequence
+    check not lastMapping.noremap
+
+  test "key_sequence with noremap = true loads as verbatim":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    let tomlContent = """
+[[keybinding]]
+mode = "insert"
+key = "jj"
+command_type = "key_sequence"
+target_keys = "Escape"
+noremap = true
+"""
+    let testPath = getTempDir() / "test_keybind_keyseq_noremap_true.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check not vr.hasErrors
+    check registry.runtimeMappings[EditorMode.Insert][^1].noremap
+
+  test "report error for non-boolean noremap":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    let tomlContent = """
+[[keybinding]]
+mode = "insert"
+key = "jj"
+command_type = "key_sequence"
+target_keys = "Escape"
+noremap = "yes"
+"""
+    let testPath = getTempDir() / "test_keybind_keyseq_noremap_bad.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check vr.hasErrors
+    check "noremap" in vr.errors[0].name
+    # The bad entry must not have been registered.
+    check not registry.runtimeMappings.hasKey(EditorMode.Insert) or
+      registry.runtimeMappings[EditorMode.Insert].len == 0
+
   test "load key_sequence with multi-key target":
     let registry = newKeyBindingRegistry()
     var vr = newValidationResult()
@@ -1427,6 +1515,20 @@ suite "KeybindConfig - addKeySequenceMapping":
     check lastMapping.triggerStr == "jj"
     check lastMapping.targetStr == "Escape"
     check lastMapping.targetKeys.len == 1
+
+  test "addKeySequenceMapping defaults to noremap":
+    let registry = newKeyBindingRegistry()
+    registry.addKeySequenceMapping(EditorMode.Insert, "jj", "Escape")
+
+    check registry.runtimeMappings[EditorMode.Insert][^1].noremap
+
+  test "addKeySequenceMapping with noremap = false is recursive":
+    let registry = newKeyBindingRegistry()
+    registry.addKeySequenceMapping(EditorMode.Normal, "x", "dd", noremap = false)
+
+    let lastMapping = registry.runtimeMappings[EditorMode.Normal][^1]
+    check lastMapping.kind == rmkKeySequence
+    check not lastMapping.noremap
 
   test "addKeySequenceMapping does not register in bindings":
     let registry = newKeyBindingRegistry()
