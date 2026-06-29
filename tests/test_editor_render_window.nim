@@ -3452,3 +3452,75 @@ suite "End-of-line virtual text - cursor line highlight":
     check buf[7, 0].symbol == "t"
     # Cells after the virtual text are filled with plain spaces.
     check buf[8, 0].symbol == " "
+
+suite "renderWindowLineNoWrap - display-width clipping":
+  proc plainNoWrapEditor(): Editor =
+    ## No-wrap editor with every cell-adding decoration disabled so that
+    ## cellBudget == viewport.width and the rendered columns are deterministic.
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    result = newEditor(config, vr)
+    result.state.display.showSyntax = false
+    result.state.display.showCursorLine = false
+    result.state.display.showIndentationLines = false
+    result.state.display.showSidebar = false
+    result.state.display.scrollbar = false
+
+  proc noWrapCtx(): RenderContext =
+    RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
+    )
+
+  test "CJK line fills the budget instead of being byte-truncated":
+    # 10 wide runes = 20 display cells but 30 bytes. With cellBudget 25 the old
+    # `min(displayLine.len, cellBudget)` byte-sliced at 25 bytes and dropped the
+    # last runes; clipping by display width keeps all 10 on screen.
+    let e = plainNoWrapEditor()
+    var buffer = createTestBuffer()
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "あ".repeat(10))
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 25
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    e.renderWindowLineNoWrap(buffer, window, 0, noWrapCtx(), 0, 0)
+
+    # Each wide rune occupies two cells, so the 10th rune leads at col 18.
+    check buffer[0, 0].symbol == "あ"
+    check buffer[18, 0].symbol == "あ"
+    check buffer[19, 0].symbol == "" # wide-char shadow
+
+  test "Tab-heavy line stops at the budget instead of overflowing the edge":
+    # tab (8 cells) + 30 'X'. With cellBudget 25 the old byte-slice (31 bytes
+    # clamped to 25) still emitted runes past col 24; clipping by display width
+    # stops at the budget so nothing is drawn beyond it.
+    let e = plainNoWrapEditor()
+    e.state.display.tabStop = 8
+    var buffer = createTestBuffer()
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "\t" & "X".repeat(30)
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 25
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    e.renderWindowLineNoWrap(buffer, window, 0, noWrapCtx(), 0, 0)
+
+    # The tab expands to cols 0..7; 'X' runs from col 8. The last cell within
+    # the 25-cell budget is col 24 and must hold an 'X'; col 25 must not.
+    check buffer[24, 0].symbol == "X"
+    check buffer[25, 0].symbol != "X"

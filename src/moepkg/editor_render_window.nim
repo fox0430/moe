@@ -803,35 +803,36 @@ proc renderWindowLineNoWrap*(
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
 
   if displayLine.len > 0 and textScreenX < buffer.area.width:
-    let
-      cellBudget = window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
-      maxWidth = min(displayLine.len, cellBudget)
-    if maxWidth > 0:
-      # Render with selection highlighting if in visual mode.
-      # Append end-of-line virtual text only when the line end is visible; when
-      # the line is truncated at the window edge the anchor (the line end) is
-      # off-screen, so drawing the hint there would place it mid-line. The
-      # window-edge clipping in appendEndOfLineVirtualText alone is not enough:
-      # the scrollbar gutter can leave room for a stray rune.
-      #
-      # Compare display width (tabs expanded, CJK counted as 2 cells) against
-      # the cell budget. maxWidth is a byte count, so `maxWidth == displayLine.len`
-      # (both bytes) would hide hints on multibyte/CJK lines and show them past
-      # the edge on tab-heavy lines (the lint_string_len hazard).
-      let lineEndVisible =
-        displayLine.displayWidthWithTabs(e.state.display.tabStop) <= cellBudget
-      e.renderLineSegmentWithSelection(
-        window.buffer,
-        buffer,
-        displayLine[0 ..< maxWidth],
-        textScreenX,
-        actualScreenY,
-        lineIndex,
-        window.viewport.leftColumn,
-        ctx,
-        useRunes = false,
-        appendVirtualText = lineEndVisible,
-      )
+    let cellBudget =
+      window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+    if cellBudget > 0:
+      # Clip by display width, not byte length: take as many runes as fit
+      # cellBudget cells (tabs expanded, CJK = 2 cells), like the wrapped path.
+      # Slicing by byte count would hide content on multibyte/CJK lines and
+      # overflow the edge on tab-heavy lines (the lint_string_len hazard).
+      let
+        (_, segmentWidth, endByte) = displayWidthSubstrFromByte(
+          displayLine, 0, cellBudget, e.state.display.tabStop
+        )
+        visibleSlice = displayLine[0 ..< endByte]
+      if visibleSlice.len > 0:
+        # Append end-of-line virtual text only when the whole line is visible
+        # (every rune consumed and within budget); otherwise the hint anchor (the
+        # line end) is off-screen and would land mid-line. Window-edge clipping
+        # alone is not enough — the scrollbar gutter can leave room for a stray rune.
+        let lineEndVisible = endByte >= displayLine.len and segmentWidth <= cellBudget
+        e.renderLineSegmentWithSelection(
+          window.buffer,
+          buffer,
+          visibleSlice,
+          textScreenX,
+          actualScreenY,
+          lineIndex,
+          window.viewport.leftColumn,
+          ctx,
+          useRunes = false,
+          appendVirtualText = lineEndVisible,
+        )
   else:
     # Empty line or scrolled past line end - fill to clear stale content
     e.fillLineBackground(
