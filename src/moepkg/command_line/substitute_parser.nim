@@ -123,6 +123,8 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
       else:
         try:
           let lineNum = parseInt(startStr)
+          if lineNum < 1:
+            return # Line number 0 is invalid (mirrors parseDeleteCommand)
           result.startLine = lineNum
           result.endLine = lineNum
         except ValueError:
