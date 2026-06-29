@@ -24,7 +24,7 @@ import std/[strutils, tables]
 
 import pkg/results
 
-import types, delete_parser
+import types, delete_parser, substitute_parser
 
 proc newCommandLineParser*(): CommandLineParser =
   ## Create a new command line parser.
@@ -100,18 +100,11 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     return
 
   # Check for range-prefixed substitute command (e.g., 1,10s/..., .s/..., .,10s/...)
-  if cleanInput.len > 0 and cleanInput[0] in {'0' .. '9', '.'}:
-    # Look for "s/" pattern after range
-    var i = 0
-    while i < cleanInput.len:
-      if cleanInput[i] == 's' and i + 1 < cleanInput.len and cleanInput[i + 1] == '/':
-        result.action = claSubstitute
-        result.args = @[cleanInput]
-        return
-      elif cleanInput[i] in {'0' .. '9', '.', ','}:
-        i.inc
-      else:
-        break
+  if cleanInput.len > 1 and cleanInput[0] in {'0' .. '9', '.'}:
+    if parseSubstituteCommand(":" & cleanInput).isValid:
+      result.action = claSubstitute
+      result.args = @[cleanInput]
+      return
 
   # Split into command and arguments
   let parts = cleanInput.split(WhiteSpace)

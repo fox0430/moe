@@ -189,6 +189,11 @@ suite "CommandLine - parseSubstituteCommand invalid":
     let result = parseSubstituteCommand(":q")
     check result.isValid == false
 
+  test ":0s/foo/bar/ (line number 0 is invalid)":
+    # Mirrors parseDeleteCommand: a single line 0 is rejected.
+    let result = parseSubstituteCommand(":0s/foo/bar/")
+    check result.isValid == false
+
 suite "CommandLine - extractSubstitutePattern":
   test "Extract pattern from :%s/foo/bar/g":
     check extractSubstitutePattern(":%s/foo/bar/g") == "foo"
@@ -333,6 +338,32 @@ suite "CommandLine - parseCommandLine":
     let cmd = parser.parseCommandLine(":1,10s/foo/bar/")
     check cmd.action == claSubstitute
     check cmd.args == @["1,10s/foo/bar/"]
+
+  test "Parse single numeric line substitute :5s/foo/bar/":
+    let cmd = parser.parseCommandLine(":5s/foo/bar/")
+    check cmd.action == claSubstitute
+    check cmd.args == @["5s/foo/bar/"]
+
+  test "Parse current-to-N range substitute :.,10s/foo/bar/":
+    let cmd = parser.parseCommandLine(":.,10s/foo/bar/")
+    check cmd.action == claSubstitute
+    check cmd.args == @[".,10s/foo/bar/"]
+
+  test "Parse N-to-current range substitute :1,.s/foo/bar/":
+    let cmd = parser.parseCommandLine(":1,.s/foo/bar/")
+    check cmd.action == claSubstitute
+    check cmd.args == @["1,.s/foo/bar/"]
+
+  test "Multi-comma range is not a substitute :1,2,3s/foo/bar/":
+    # Vim ranges have at most start,end; the dedicated parser rejects a third
+    # part, so parseCommandLine must not treat this as a substitute.
+    let cmd = parser.parseCommandLine(":1,2,3s/foo/bar/")
+    check cmd.action == claUnknown
+
+  test "Line number 0 is not a substitute :0s/foo/bar/":
+    # Aligned with :0d; line 0 is invalid so this is not a substitute.
+    let cmd = parser.parseCommandLine(":0s/foo/bar/")
+    check cmd.action == claUnknown
 
   test "Parse unknown command":
     let cmd = parser.parseCommandLine(":unknowncmd")
