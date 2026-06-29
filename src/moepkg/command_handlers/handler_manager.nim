@@ -40,21 +40,14 @@ import
     command_registry, config, lsp_integration, logger,
   ]
 import ../types/editor_types
-import
-  handler_types, handler_result, mode_dispatchers, normal_handler, insert_handler,
-  insert_commands, command_handler, visual_handler, replace_handler, filer_handler,
-  filetree_handler, log_viewer_handler, help_handler, buffer_manager_handler,
-  bookmark_manager_handler, backup_manager_handler, diff_viewer_handler,
-  recent_file_mode_handler, debug_handler, config_handler, references_handler,
-  documentsymbol_handler, callhierarchy_handler, terminal_handler, command_passthrough
+# The shared handler-module list lives in handler_modules (single source of
+# truth, re-exported here). `mode_dispatchers` and `command_passthrough` are
+# imported separately: the former imports handler_modules itself (so it can't
+# be part of it without a cycle), the latter is an internal helper kept off the
+# public surface.
+import handler_modules, mode_dispatchers, command_passthrough
 
-export
-  handler_types, handler_result, mode_dispatchers, normal_handler, insert_handler,
-  insert_commands, command_handler, visual_handler, replace_handler, filer_handler,
-  filetree_handler, log_viewer_handler, help_handler, buffer_manager_handler,
-  bookmark_manager_handler, backup_manager_handler, diff_viewer_handler,
-  recent_file_mode_handler, debug_handler, config_handler, references_handler,
-  documentsymbol_handler, callhierarchy_handler, terminal_handler
+export handler_modules, mode_dispatchers
 
 const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops

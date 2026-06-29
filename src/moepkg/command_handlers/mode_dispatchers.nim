@@ -40,13 +40,10 @@ import
   ]
 import ../lsp/protocol/types as lspTypes
 import ../types/editor_types
-import handler_types, handler_result
-import
-  insert_handler, insert_commands, command_handler, visual_handler, replace_handler,
-  filer_handler, filetree_handler, log_viewer_handler, help_handler,
-  buffer_manager_handler, bookmark_manager_handler, backup_manager_handler,
-  diff_viewer_handler, recent_file_mode_handler, config_handler, references_handler,
-  documentsymbol_handler, callhierarchy_handler, terminal_handler
+# The per-mode key handlers this module forwards to come from handler_modules
+# (the shared re-export surface). See handler_modules.nim for why the list is
+# centralized there rather than duplicated per importer.
+import handler_modules
 
 proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
   ## Extract net inserted text from a transaction
