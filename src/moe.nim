@@ -99,35 +99,51 @@ proc emergencySaveAndQuit(
     editor: Editor, e: ref Exception, cmdLineConfig: CmdLineConfig, log: Logger
 ) {.noreturn.} =
   ## Emergency save modified buffers and exit on crash.
-  let savedPaths = editor.emergencySaveBuffers()
-
-  editor.cleanupBackgroundProcesses()
-  # Kill in-flight QuickRun processes and remove their temp files so a crash
-  # doesn't orphan them or leave temp source/build artifacts behind.
-  editor.cleanupQuickRunProcesses()
-  # Kill + reap terminal shells too, so a crash doesn't orphan them.
-  editor.cleanupAllTerminals()
-  # Terminate any pending async git diff subprocesses and free their
-  # tempfiles. Swallow exceptions so a cache cleanup failure can't block
-  # the rest of the emergency shutdown sequence.
+  ##
+  ## This runs as a last-resort handler for an already-fatal exception from
+  ## inside `{.cast(raises: []).}` callbacks, so a secondary exception raised by
+  ## the rescue body would escape unchecked and skip the terminal restore below,
+  ## stranding the user in raw mode. Guard the save/cleanup sequence and always
+  ## fall through to restoreTerminal()/quit(1) no matter what it throws.
+  var savedPaths: seq[string]
   try:
-    cleanupGitDiffCache()
-  except CatchableError as e:
-    logError("moe", "cleanupGitDiffCache failed: " & e.msg)
+    savedPaths = editor.emergencySaveBuffers()
 
-  editor.shutdown()
-  editor.savePersistData()
+    editor.cleanupBackgroundProcesses()
+    # Kill in-flight QuickRun processes and remove their temp files so a crash
+    # doesn't orphan them or leave temp source/build artifacts behind.
+    editor.cleanupQuickRunProcesses()
+    # Kill + reap terminal shells too, so a crash doesn't orphan them.
+    editor.cleanupAllTerminals()
+    # Terminate any pending async git diff subprocesses and free their
+    # tempfiles. Swallow exceptions so a cache cleanup failure can't block
+    # the rest of the emergency shutdown sequence.
+    try:
+      cleanupGitDiffCache()
+    except CatchableError as e:
+      logError("moe", "cleanupGitDiffCache failed: " & e.msg)
 
-  if cmdLineConfig.debugEnabled:
-    logError("moe", "Fatal: " & e.msg)
-    log.close()
+    editor.shutdown()
+    editor.savePersistData()
 
-  editor.app.restoreTerminal()
+    if cmdLineConfig.debugEnabled:
+      logError("moe", "Fatal: " & e.msg)
+      log.close()
+  except CatchableError as ce:
+    logError("moe", "emergency save/cleanup failed: " & ce.msg)
 
-  stderr.writeLine "moe: fatal error: " & e.msg
-  stderr.writeLine e.getStackTrace()
-  if savedPaths.len > 0:
-    stderr.writeLine "Recovery files saved to: " & savedPaths[0].parentDir
+  # Always restore the terminal and report the crash, even if the rescue body
+  # above threw. Guarded so a failure here still reaches quit(1).
+  try:
+    editor.app.restoreTerminal()
+
+    stderr.writeLine "moe: fatal error: " & e.msg
+    stderr.writeLine e.getStackTrace()
+    if savedPaths.len > 0:
+      stderr.writeLine "Recovery files saved to: " & savedPaths[0].parentDir
+  except CatchableError as ce:
+    logError("moe", "terminal restore/report failed: " & ce.msg)
+
   quit(1)
 
 template editorCallback(
