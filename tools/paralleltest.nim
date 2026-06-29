@@ -11,7 +11,7 @@ const
 
   # Flaky tests that must be run sequentially after the parallel batch
   # so concurrent file/clipboard/etc. usage cannot perturb them.
-  SequentialTests = ["test_registers.nim"]
+  SequentialTests = ["test_registers.nim", "test_terminal_handler.nim"]
 
 proc defaultJobs(): int =
   # Default to the number of logical CPUs (hardware threads) available.
