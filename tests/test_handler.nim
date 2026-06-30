@@ -2764,7 +2764,7 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
 
 suite "updateViewportReservedLines - steady reserve":
   test "Multi-line status message keeps the motion reserve steady":
-    # Cause B symmetry: motion scrolling reads viewportReservedLines, which must
+    # Motion scrolling reads viewportReservedLines, which must
     # stay on the steady bottom reserve so a transient multi-line status message
     # does not change how far a motion scrolls (matching the scroll authority and
     # the screen cursor).
