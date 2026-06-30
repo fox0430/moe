@@ -243,16 +243,12 @@ proc computeWindowLayout(
     isBottomWindow = (windowBottomY == maxBottomY)
     isActiveWindow = (i == e.windowManager.activeWindowIndex)
     reservedLines = e.calculateReservedLines(isBottomWindow)
-    # Viewport scrolling (topLine) is persistent state, so it must use the
-    # steady bottom reserve: a transiently grown command-line area (wrapped
-    # overlay input, multi-line status message) would otherwise scroll the view
-    # up and never scroll it back once the area shrinks again.
-    steadyReservedLines =
-      if isBottomWindow:
-        steadyBottomAreaHeight()
-      else:
-        reservedLines
-    adjustHeight = max(1, window.viewport.height - steadyReservedLines - tabLineOffset)
+    # Persistent scroll (topLine) uses the steady reserve so a transiently grown
+    # command-line area does not ratchet the view up; the screen-cursor clamp
+    # shares the same reserve (see steadyReservedLines) so the two agree.
+    adjustHeight = max(
+      1, window.viewport.height - e.steadyReservedLines(isBottomWindow) - tabLineOffset
+    )
     sidebarWidth = e.calculateSidebarWidth(window.mode)
     scrollbarWidth = e.calculateScrollbarWidth(window.mode)
     textAreaWidth =

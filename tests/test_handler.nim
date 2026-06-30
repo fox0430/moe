@@ -2761,3 +2761,22 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     check e.state.mode == EditorMode.Insert
     check not e.state.insertNormalMode
     check not e.state.isCommandOverlay
+
+suite "updateViewportReservedLines - steady reserve":
+  test "Multi-line status message keeps the motion reserve steady":
+    # Motion scrolling reads viewportReservedLines, which must
+    # stay on the steady bottom reserve so a transient multi-line status message
+    # does not change how far a motion scrolls (matching the scroll authority and
+    # the screen cursor).
+    let e = createTestEditorWithBuffer("line0\nline1\nline2")
+    e.screenSize.width = 80
+    e.state.display.showTabLine = false
+
+    e.state.setStatusQuiet("error 1\nerror 2\nerror 3")
+    # The message grew the dynamic reserve the old code would have used...
+    check e.state.statusMessageLineCount == 3
+    check e.state.bottomAreaHeight(80) > steadyBottomAreaHeight()
+
+    # ...but the motion reserve stays steady.
+    e.updateViewportReservedLines()
+    check e.state.windowDisplay.viewportReservedLines == steadyBottomAreaHeight()

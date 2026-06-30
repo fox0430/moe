@@ -799,6 +799,32 @@ suite "renderSplitView - Viewport adjustment":
     e.renderSplitView(buffer, false)
     check e.windowManager.windows[0].viewport.topLine == settledTopLine
 
+  test "Multi-line status message does not fling the screen cursor to (0, 0)":
+    # The scroll and the cursor clamp used different bottom reserves, so
+    # a multi-line message flung a bottom-row cursor to (0, 0). The viewport does
+    # not scroll, so the cursor must stay where it settled before the message.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    for i in 0 ..< 100:
+      discard e.activeBuffer.insertText(
+        BufferPosition(line: i, column: 0), "Line " & $i & "\n"
+      )
+
+    # Cursor on the bottom visible row, then settle the viewport.
+    e.cursor = BufferPosition(line: 50, column: 0)
+    e.renderSplitView(buffer, false)
+    let settledCursor = e.state.screenCursor
+    check settledCursor != CursorPosition(x: 0, y: 0)
+
+    # A three-line message grows the bottom area but must not move the cursor.
+    e.state.setStatusQuiet("error line 1\nerror line 2\nerror line 3")
+    e.renderSplitView(buffer, false)
+    check e.state.screenCursor == settledCursor
+
   test "Viewport does not scroll horizontally when line wrap enabled":
     let e = createTestEditor()
     var buffer = createTestBuffer()
