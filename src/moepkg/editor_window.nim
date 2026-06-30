@@ -28,6 +28,7 @@ import
   logger,
   render_utils,
   editorconfig_helper,
+  highlight_config,
   editor_window_layout,
   editor_lsp,
   git_diff,
@@ -156,8 +157,8 @@ proc registerSplitBuffer(
     return
 
   e.addBuffer(newBuffer)
-  # Set reserved words for syntax highlighting on new buffer
-  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  # Apply config-derived highlight settings to the new buffer
+  applyHighlightConfig(newBuffer, e.config)
   # Apply EditorConfig settings to the new buffer
   if applyConfig:
     applyEditorConfigToBuffer(newBuffer, e.config)
@@ -302,8 +303,8 @@ proc enew*(e: Editor): Result[(), string] =
   # Register in active window's per-window tab list
   if newBuffer.id notin e.activeWindow.bufferIds:
     e.activeWindow.bufferIds.add(newBuffer.id)
-  # Set reserved words for syntax highlighting on new buffer
-  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  # Apply config-derived highlight settings to the new buffer
+  applyHighlightConfig(newBuffer, e.config)
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
   # Replace the buffer in the active window

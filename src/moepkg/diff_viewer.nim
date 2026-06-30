@@ -20,7 +20,7 @@
 ## Diff Viewer module
 ## Provides a UI for viewing diffs between files
 
-import std/[osproc, strutils, os, unicode]
+import std/[osproc, strutils, os]
 
 import pkg/results
 
@@ -121,8 +121,13 @@ proc createDiffTextBuffer*(state: DiffViewerState): TextBuffer =
   result.language = langDiff
   result.readOnly = true
 
-  # Initialize syntax highlighting for diff language
-  var runesBuffer = newSeqOfCap[seq[Rune]](result.len)
+  # Use the capped path (initHighlightIncremental) rather than the uncapped
+  # legacy initHighlight, so a very long diff line isn't tokenized in full. The
+  # diff viewer applies no config, so maxHighlightLineLength is the default.
+  var lines = newSeqOfCap[string](result.len)
   for line in result.lines:
-    runesBuffer.add(line.toRunes())
-  result.highlight = initHighlight(runesBuffer, @[], langDiff)
+    lines.add(line)
+  let (segments, _) = initHighlightIncremental(
+    lines, 0, lines.high, TokenizerState(), @[], langDiff, result.maxHighlightLineLength
+  )
+  result.highlight = Highlight(colorSegments: segments)

@@ -101,11 +101,28 @@ proc newLineStyleContext*(
     ctx: RenderContext,
 ): LineStyleContext =
   ## Compute all per-line state needed by the style pipeline in one place.
-  let trailingSpaceStart = findTrailingSpaceStart(fullLine)
+  # Trailing-space highlighting only fires on non-cursor lines in file-edit mode
+  # when enabled (see styleOverrideAt). Skip the whole-line scan when it cannot
+  # fire. Don't clip to the cap: trailing whitespace lives at the line *end*,
+  # past the cap, so the input must stay the full line.
+  let trailingSpaceStart =
+    if e.config.highlight.trailingSpaces and ctx.windowMode.isFileEditMode and
+        lineIndex != ctx.cursorLine:
+      findTrailingSpaceStart(fullLine)
+    else:
+      high(int) # disabled: `col >= trailingSpaceStart` never matches
 
+  # Bound the color-code scan to the cap: scanLineForColorCodes allocates an
+  # O(line) byte->rune map, and past the cap the line is plain text anyway.
+  # (Search/current-word ranges stay uncapped: they're functional, not
+  # decorative — a match past the cap must still be shown.)
   let colorCodeMatches =
     if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
-      scanLineForColorCodes(fullLine)
+      let cap = if textBuffer != nil: textBuffer.maxHighlightLineLength else: 0
+      if cap > 0 and fullLine.len > cap:
+        scanLineForColorCodes(fullLine.runeSubStr(0, cap))
+      else:
+        scanLineForColorCodes(fullLine)
     else:
       @[]
 

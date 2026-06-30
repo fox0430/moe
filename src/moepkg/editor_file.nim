@@ -31,7 +31,8 @@ import
   backup,
   search_utils,
   editorconfig_helper,
-  highlight
+  highlight,
+  highlight_config
 
 type SaveAllBuffersResult* = object
   savedCount*: int
@@ -59,6 +60,9 @@ template isPersistCursorPositionFile(lang: SourceLanguage): bool =
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
   logDebug("editor", "Loading file: " & path)
+  # Seed the highlight cap before loadFile builds the first chunk, so the cap
+  # is not changed afterwards (which would nil the progressive-load cache).
+  e.activeBuffer.applyHighlightCap(e.config)
   let r = e.activeBuffer.loadFile(path)
   if r.isErr:
     logError("editor", "Failed to load file " & path & ": " & r.error)
@@ -66,8 +70,8 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   logInfo("editor", "Successfully loaded file: " & path)
 
-  # Set reserved words for syntax highlighting from config
-  e.activeBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  # Apply config-derived highlight settings (reserved words + line-length cap)
+  applyHighlightConfig(e.activeBuffer, e.config)
 
   # Apply EditorConfig settings if enabled
   applyEditorConfigToBuffer(e.activeBuffer, e.config)

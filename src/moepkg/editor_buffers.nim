@@ -32,6 +32,7 @@ import
   status_line,
   editorconfig_helper,
   highlight,
+  highlight_config,
   logger
 
 proc findBufferByPath*(e: Editor, path: string): int =
@@ -458,6 +459,9 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
     return ok(e.buffers[existingIndex])
 
   let newBuffer = newTextBuffer()
+  # Seed the highlight cap before loadFile builds the first chunk, so the cap
+  # is not changed afterwards (which would nil the progressive-load cache).
+  newBuffer.applyHighlightCap(e.config)
   if fileExists(path):
     let loadResult = newBuffer.loadFile(path)
     if loadResult.isErr:
@@ -467,7 +471,7 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
     newBuffer.language = detectLanguage(path)
 
   applyEditorConfigToBuffer(newBuffer, e.config)
-  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  applyHighlightConfig(newBuffer, e.config)
   e.addBuffer(newBuffer)
 
   # Mirror loadFile's per-buffer initialisation (bookmarks, git diff, conflict

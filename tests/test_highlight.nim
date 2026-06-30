@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, unicode, os]
+import std/[unittest, unicode, os, strutils]
 
 import pkg/celina
 
@@ -2373,3 +2373,140 @@ suite "Highlight - Markdown Incremental":
       SourceLanguage.langMarkdown,
     )
     checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+suite "Highlight - line-length cap (synmaxcol)":
+  test "buildBufferStrCapped truncates long lines and emits a default tail":
+    let lines = @["short", "a".repeat(50)]
+    let (str, tails) = buildBufferStrCapped(lines, 0, 1, 10)
+    # First line untouched; second truncated to 10 runes.
+    check str == "short\n" & "a".repeat(10)
+    check tails.len == 1
+    check tails[0].firstRow == 1
+    check tails[0].lastRow == 1
+    check tails[0].firstColumn == 10
+    check tails[0].color == EditorColorPairIndex.default
+
+  test "buildBufferStrCapped with cap 0 disables capping (no truncation, no tails)":
+    let lines = @["x".repeat(5000), "y"]
+    let (str, tails) = buildBufferStrCapped(lines, 0, 1, 0)
+    check tails.len == 0
+    check str == lines.join("\n") # full lines joined, nothing dropped
+
+  test "cap counts runes, not bytes":
+    # 5 multibyte runes = 15 bytes, under a 10-rune cap → not truncated.
+    let lines = @["あ".repeat(5)]
+    let (str, tails) = buildBufferStrCapped(lines, 0, 0, 10)
+    check tails.len == 0
+    check str == lines[0]
+    # 20 runes (60 bytes) over the 10-rune cap → truncated to exactly 10 runes.
+    let lines2 = @["あ".repeat(20)]
+    let (str2, tails2) = buildBufferStrCapped(lines2, 0, 0, 10)
+    check tails2.len == 1
+    check tails2[0].firstColumn == 10
+    check str2.runeLen == 10
+
+  test "line with exactly cap runes (multibyte, byteLen > cap) is not truncated":
+    # 10 multibyte runes = 30 bytes: byteLen (30) > cap (10) so the rune scan
+    # runs, but runeLen (10) == cap, so the line must be kept whole with no tail.
+    # Guards the boundary where a naive runeOffset(s, cap) would report -1.
+    let lines = @["あ".repeat(10)]
+    let (str, tails) = buildBufferStrCapped(lines, 0, 0, 10)
+    check tails.len == 0
+    check str == lines[0]
+
+  test "absurdly large cap does not overflow the capacity hint":
+    # maxLineLen * 4 would overflow int for a near-high(int) cap; the saturating
+    # hint must keep newStringOfCap non-negative and leave the line untruncated.
+    let lines = @["x".repeat(5000)]
+    let (str, tails) = buildBufferStrCapped(lines, 0, 0, high(int))
+    check tails.len == 0
+    check str == lines[0]
+
+  test "capped line: prefix highlighted, remainder rendered as default":
+    let lines = @["# " & "a".repeat(50)] # Nim line comment, 52 chars
+    let (segments, _) = initHighlightIncremental(
+      lines, 0, 0, TokenizerState(), @[], SourceLanguage.langNim, 10
+    )
+    let hl = Highlight(colorSegments: segments)
+    check hl.getColorPair(0, 0) == EditorColorPairIndex.comment # within cap
+    check hl.getColorPair(0, 5) == EditorColorPairIndex.comment
+    check hl.getColorPair(0, 25) == EditorColorPairIndex.default # past cap
+
+  test "cap 0 leaves the whole long line highlighted":
+    let lines = @["# " & "a".repeat(50)]
+    let (segments, _) = initHighlightIncremental(
+      lines, 0, 0, TokenizerState(), @[], SourceLanguage.langNim, 0
+    )
+    let hl = Highlight(colorSegments: segments)
+    check hl.getColorPair(0, 40) == EditorColorPairIndex.comment
+
+  test "multi-line state continues across a capped line":
+    # A block comment opens within the cap on a long line; the boundary state
+    # captured at the cap must carry the open construct so the next line stays
+    # colored as a long comment.
+    let lines = @["#[ " & "a".repeat(50), "x"]
+    let (segments, _) = initHighlightIncremental(
+      lines, 0, 1, TokenizerState(), @[], SourceLanguage.langNim, 10
+    )
+    let hl = Highlight(colorSegments: segments)
+    check hl.getColorPair(0, 1) == EditorColorPairIndex.longComment # '[' of #[
+    check hl.getColorPair(0, 5) == EditorColorPairIndex.longComment # within cap
+    check hl.getColorPair(1, 0) == EditorColorPairIndex.longComment # continued
+
+  test "incremental update stays consistent with a full capped parse":
+    const cap = 10
+    var buffer = @["# " & "a".repeat(40), "let x = 1", "let y = 2"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim, cap
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+    # Edit a non-capped line; the capped line above must remain consistent.
+    buffer[1] = "let x = 100"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      1,
+      1,
+      @[],
+      SourceLanguage.langNim,
+      cap,
+    )
+    let (segFull, _) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim, cap
+    )
+    let incrHl = Highlight(colorSegments: ih.segments)
+    let fullHl = Highlight(colorSegments: segFull)
+    for row in 0 ..< buffer.len:
+      for col in 0 ..< buffer[row].len:
+        check incrHl.getColorPair(row, col) == fullHl.getColorPair(row, col)
+
+  test "newTextBuffer defaults the cap and updateHighlight honors it":
+    var buf = newTextBuffer("# " & "a".repeat(50))
+    check buf.maxHighlightLineLength == DefaultMaxHighlightLineLength
+    buf.language = SourceLanguage.langNim
+    buf.setMaxHighlightLineLength(10)
+    buf.updateHighlight()
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.comment
+    check buf.highlight.getColorPair(0, 30) == EditorColorPairIndex.default
+
+  test "loadFile honors the cap on the synchronous initial highlight":
+    # Regression: buffer/file_io.loadFile builds the first-chunk highlight
+    # directly and must pass maxHighlightLineLength, or a long line in the
+    # first chunk is tokenized uncapped on every open/reload (the on-load
+    # stall the cap exists to prevent).
+    let path = getTempDir() / "moe_test_highlight_cap_load.nim"
+    defer:
+      removeFile(path)
+    writeFile(path, "# " & "a".repeat(50) & "\n")
+    var buf = newTextBuffer("")
+    buf.setMaxHighlightLineLength(10)
+    check buf.loadFile(path).isOk
+    check buf.language == SourceLanguage.langNim
+    # Built at load time (no updateHighlight call): within the cap stays a
+    # comment, past the cap renders as default — proving the load path capped.
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.comment
+    check buf.highlight.getColorPair(0, 30) == EditorColorPairIndex.default

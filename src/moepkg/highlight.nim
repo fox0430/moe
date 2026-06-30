@@ -91,9 +91,21 @@ type
     ## addModifier, addUnderlineRanges). Disambiguates from celina's geometry
     ## Position and lsp/protocol/types Position.
 
-# Default style for highlighting
+const DefaultMaxHighlightLineLength* = 3000
+  ## Default per-line tokenization cap (in runes). A single huge line (e.g.
+  ## minified JS collapsed onto one line) would otherwise stall a frame, since
+  ## the chunk drivers budget by line count, not bytes within a line. Beyond
+  ## this column the line is rendered as plain text. `<= 0` disables the cap.
+  ## Mirrors vim's `synmaxcol` (default 3000).
+  ##
+  ## Tradeoff (same as vim): a multi-line construct (block comment, triple-quoted
+  ## string) that opens before the cap but *closes past it* on the same line is
+  ## seen as still-open, bleeding its color onto following lines until the next
+  ## real close. Detecting this needs tokenizing past the cap — the work it avoids.
+
 let defaultStyle* =
   Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+  ## Default style for highlighting
 
 proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
   ## Capture the current state of a tokenizer
@@ -952,6 +964,7 @@ proc initHighlightIncrementalFromStr*(
     initialState: TokenizerState,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
+    tailSegments: seq[ColorSegment] = @[],
 ): tuple[segments: seq[ColorSegment], lineStates: seq[TokenizerState]] =
   ## Core implementation that works directly with a pre-built buffer string.
   ##
@@ -1130,20 +1143,97 @@ proc initHighlightIncrementalFromStr*(
       "lineStates length contract violated: " & $lineStates.len & " states for " &
         $(endLine - startLine + 1) & " lines"
 
-  return (segments: colorSegments, lineStates: lineStates)
+  if tailSegments.len == 0:
+    return (segments: colorSegments, lineStates: lineStates)
 
-proc buildBufferStr*(lines: seq[string], startLine, endLine: int): string =
+  # Merge default-colored tail segments (for cap-truncated lines) into the
+  # produced segments, preserving the sorted-by-(row, column) invariant consumers
+  # rely on. `tailSegments` rows are 0-based relative to `startLine`; absolutize
+  # them to match `colorSegments`. A tail's column is the cap, past every token
+  # on its row, so a stable merge places it correctly.
+  var tails = tailSegments
+  for k in 0 ..< tails.len:
+    tails[k].firstRow += startLine
+    tails[k].lastRow += startLine
+
+  var merged = newSeqOfCap[ColorSegment](colorSegments.len + tails.len)
+  var
+    i = 0
+    j = 0
+  while i < colorSegments.len and j < tails.len:
+    if (colorSegments[i].firstRow, colorSegments[i].firstColumn) <=
+        (tails[j].firstRow, tails[j].firstColumn):
+      merged.add colorSegments[i]
+      inc i
+    else:
+      merged.add tails[j]
+      inc j
+  while i < colorSegments.len:
+    merged.add colorSegments[i]
+    inc i
+  while j < tails.len:
+    merged.add tails[j]
+    inc j
+
+  return (segments: merged, lineStates: lineStates)
+
+proc buildBufferStrCapped*(
+    lines: seq[string], startLine, endLine, maxLineLen: int
+): tuple[str: string, tails: seq[ColorSegment]] =
+  ## Join `lines[startLine..endLine]` with newlines, truncating any line longer
+  ## than `maxLineLen` runes so the tokenizer never sees the excess (bounds
+  ## per-line work to O(cap)). Each truncated line emits a default-colored "tail"
+  ## segment over the dropped remainder so it renders as plain text instead of
+  ## inheriting the last token's color. `maxLineLen <= 0` disables capping. Tail
+  ## rows are 0-based relative to `startLine`, matching how
+  ## `initHighlightIncrementalFromStr` maps every other row.
   let rangeEnd = min(endLine, lines.high)
+  let capping = maxLineLen > 0
+  # Upper bound on a capped line's byte contribution (maxLineLen runes <=
+  # maxLineLen*4 UTF-8 bytes); summing full lengths would reserve O(full line)
+  # for a huge truncated line. newStringOfCap only takes a hint, so an upper
+  # bound is fine. Saturate the *4 so an absurdly large cap can't overflow to a
+  # negative capacity.
+  let capBytesHint =
+    if not capping or maxLineLen > high(int) div 4:
+      high(int)
+    else:
+      maxLineLen * 4
   var totalLen = 0
   for i in startLine .. rangeEnd:
-    totalLen += lines[i].len
+    let contrib = min(lines[i].len, capBytesHint)
+    totalLen += contrib
     if i < rangeEnd:
       inc totalLen # '\n'
-  result = newStringOfCap(totalLen)
+  result.str = newStringOfCap(totalLen)
   for i in startLine .. rangeEnd:
-    result.add lines[i]
+    let line = lines[i]
+    # Quick reject: byteLen <= cap implies runeLen <= cap, so no capping. Only
+    # genuinely long lines pay for the rune scan.
+    if capping and line.len > maxLineLen:
+      # runeSubStr scans at most `maxLineLen` runes and returns the whole string
+      # when the line has <= maxLineLen runes, so `head.len < line.len` exactly
+      # means it was truncated.
+      let head = line.runeSubStr(0, maxLineLen)
+      if head.len < line.len:
+        result.str.add head
+        # lastColumn over-estimates the real rune column (byte length is an
+        # upper bound); safe because the renderer queries getColorPair per real
+        # character, so columns past the line end are never looked up.
+        result.tails.add ColorSegment(
+          firstRow: i - startLine,
+          firstColumn: maxLineLen,
+          lastRow: i - startLine,
+          lastColumn: line.len - 1,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      else:
+        result.str.add line
+    else:
+      result.str.add line
     if i < rangeEnd:
-      result.add '\n'
+      result.str.add '\n'
 
 proc initHighlightIncremental*(
     lines: seq[string],
@@ -1152,12 +1242,14 @@ proc initHighlightIncremental*(
     initialState: TokenizerState,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
+    maxLineLen: int = 0,
 ): tuple[segments: seq[ColorSegment], lineStates: seq[TokenizerState]] =
   ## Parse lines[startLine..endLine] and produce color segments with matching
   ## row numbers. `lines` must contain entries at indices startLine..endLine.
+  ## `maxLineLen` caps per-line tokenization (see `buildBufferStrCapped`).
   if language == SourceLanguage.langNone or lines.len == 0:
     return (segments: @[], lineStates: @[])
-  let bufferStr = buildBufferStr(lines, startLine, endLine)
+  let (bufferStr, tails) = buildBufferStrCapped(lines, startLine, endLine, maxLineLen)
   initHighlightIncrementalFromStr(
     bufferStr,
     startLine,
@@ -1165,6 +1257,7 @@ proc initHighlightIncremental*(
     initialState,
     reservedWords,
     language,
+    tails,
   )
 
 proc segmentCutIndex*(segs: openArray[ColorSegment], row: int): int =
@@ -1222,6 +1315,7 @@ proc updateHighlightIncremental*(
     bufferChangeSeq: int,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
+    maxLineLen: int = 0,
 ) =
   ## Update highlighting incrementally for a changed region.
   ## Re-parses from the changed line in chunks, stopping early when the
@@ -1301,10 +1395,11 @@ proc updateHighlightIncremental*(
     var chunkLines = newSeq[string](chunkEnd - currentStart + 1)
     for i in currentStart .. chunkEnd:
       chunkLines[i - currentStart] = getLine(i)
-    let bufferStr = buildBufferStr(chunkLines, 0, chunkLines.high)
+    let (bufferStr, tails) =
+      buildBufferStrCapped(chunkLines, 0, chunkLines.high, maxLineLen)
 
     let (newSegments, newLineStates) = initHighlightIncrementalFromStr(
-      bufferStr, currentStart, chunkEnd, currentState, reservedWords, language
+      bufferStr, currentStart, chunkEnd, currentState, reservedWords, language, tails
     )
 
     # `newLineStates[i]` is the state entering line `currentStart + i + 1`, so

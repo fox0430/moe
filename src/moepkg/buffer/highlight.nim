@@ -95,9 +95,10 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   for i in startLine .. endLine:
     chunkLines[i - startLine] = b.getLine(i)
 
-  let bufferStr = buildBufferStr(chunkLines, 0, chunkLines.high)
+  let (bufferStr, tails) =
+    buildBufferStrCapped(chunkLines, 0, chunkLines.high, b.maxHighlightLineLength)
   let (newSegments, newLineStates) = initHighlightIncrementalFromStr(
-    bufferStr, startLine, endLine, lastState, b.reservedWords, b.language
+    bufferStr, startLine, endLine, lastState, b.reservedWords, b.language, tails
   )
 
   b.incrementalHighlight.segments.add(newSegments)
@@ -162,7 +163,7 @@ proc continueUriScan*(b: TextBuffer): bool =
   var ranges: seq[tuple[row, firstCol, lastCol: int]]
   for lineIdx in startLine .. endLine:
     let line = b.getLine(lineIdx)
-    for m in findAllUris(line):
+    for m in findAllUris(line, b.maxHighlightLineLength):
       ranges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
 
   let modified = ranges.len > 0
@@ -208,6 +209,7 @@ proc updateHighlight*(b: TextBuffer) =
           b.changeSeq,
           b.reservedWords,
           b.language,
+          b.maxHighlightLineLength,
         )
 
         # Convert IncrementalHighlight segments to Highlight
@@ -229,6 +231,7 @@ proc updateHighlight*(b: TextBuffer) =
             TokenizerState(), # Default initial state
             b.reservedWords,
             b.language,
+            b.maxHighlightLineLength,
           )
 
           b.highlight = Highlight(colorSegments: segments)
@@ -270,7 +273,7 @@ proc updateHighlight*(b: TextBuffer) =
     var inlineRanges: seq[tuple[row, firstCol, lastCol: int]]
     for lineIdx in uriStart .. uriEnd:
       let line = b.getLine(lineIdx)
-      for m in findAllUris(line):
+      for m in findAllUris(line, b.maxHighlightLineLength):
         inlineRanges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
     if inlineRanges.len > 0:
       b.highlight.addUnderlineRanges(inlineRanges)
@@ -307,6 +310,16 @@ proc setReservedWords*(b: TextBuffer, words: seq[ReservedWord]) =
   ## This will trigger a re-highlight on the next update
   b.reservedWords = words
   b.highlightNeedsUpdate = true
+
+proc setMaxHighlightLineLength*(b: TextBuffer, maxLineLen: int) =
+  ## Set the per-line tokenization cap in runes (synmaxcol). 0 = unlimited.
+  if b.maxHighlightLineLength != maxLineLen:
+    b.maxHighlightLineLength = maxLineLen
+    # Drop the incremental cache and force a full rebuild: an incremental update
+    # reparses only from the last edit and stops at state convergence, so a
+    # far-away long line would keep its stale old-cap segments.
+    b.incrementalHighlight = nil
+    b.highlightNeedsUpdate = true
 
 proc toReservedWords*(words: seq[string]): seq[ReservedWord] =
   ## Convert a sequence of strings to ReservedWord objects

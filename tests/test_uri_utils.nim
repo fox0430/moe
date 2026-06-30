@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
+import std/[unittest, options, strutils]
 
 import ../src/moepkg/uri_utils
 
@@ -175,7 +175,22 @@ suite "findAllUris":
     check result[0].start == 3
     check result[0].finish == 21
 
-suite "extractUriAtPosition":
+  test "maxRunes bounds the scan past the cap":
+    # A URI that starts past the cap is not reported (it would not be
+    # highlighted, and scanning the whole long line every edit is the cost the
+    # cap avoids).
+    let line = "x".repeat(40) & " https://example.com"
+    check findAllUris(line).len == 1 # uncapped: found
+    check findAllUris(line, 20).len == 0 # capped at 20 runes: skipped
+
+  test "maxRunes = 0 disables the cap":
+    let line = "x".repeat(40) & " https://example.com"
+    check findAllUris(line, 0).len == 1
+
+  test "maxRunes keeps a URI fully within the cap":
+    let result = findAllUris("https://example.com " & "x".repeat(5000), 100)
+    check result.len == 1
+    check result[0].uri == "https://example.com"
   test "Cursor at start of URI":
     let result = extractUriAtPosition("Visit https://example.com here", 6)
     check result.isSome

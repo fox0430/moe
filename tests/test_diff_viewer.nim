@@ -817,6 +817,19 @@ suite "diff_viewer: createDiffTextBuffer":
     # Context line → default
     check buf.highlight.getColorPair(4, 0) == EditorColorPairIndex.default
 
+  test "Caps tokenization on a very long diff line":
+    # A diff line longer than the highlight cap is colored only up to the cap;
+    # past it renders as default. Guards that the diff viewer uses the capped
+    # path instead of tokenizing a huge minified line in full on open.
+    let longLen = DefaultMaxHighlightLineLength + 500
+    let state = newDiffViewerState()
+    state.items = @[DiffLine(text: "+" & "a".repeat(longLen), kind: dlkAdded)]
+
+    let buf = state.createDiffTextBuffer()
+
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
+    check buf.highlight.getColorPair(0, longLen) == EditorColorPairIndex.default
+
   test "Single line diff":
     let state = newDiffViewerState()
     state.items = @[DiffLine(text: "(No differences)", kind: dlkNormal)]

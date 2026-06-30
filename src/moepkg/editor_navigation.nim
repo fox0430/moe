@@ -36,7 +36,8 @@ import
   references_viewer,
   buffer,
   unicode_utils,
-  editorconfig_helper
+  editorconfig_helper,
+  highlight_config
 import lsp/protocol/types as lspTypes
 
 proc switchToBufferForLsp*(e: Editor, index: int) =
@@ -88,12 +89,15 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
       return ok(buf)
 
   let newBuffer = newTextBuffer()
+  # Seed the highlight cap before loadFile builds the first chunk, so the cap
+  # is not changed afterwards (which would nil the progressive-load cache).
+  newBuffer.applyHighlightCap(e.config)
   let loadResult = newBuffer.loadFile(path)
   if loadResult.isErr:
     return err(loadResult.error)
 
   applyEditorConfigToBuffer(newBuffer, e.config)
-  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  applyHighlightConfig(newBuffer, e.config)
   e.addBuffer(newBuffer)
   e.switchToBufferForLsp(e.buffers.high)
 

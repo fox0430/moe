@@ -168,6 +168,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
         TokenizerState(), # Default initial state
         @[],
         b.language,
+        b.maxHighlightLineLength,
       )
 
       b.highlight = Highlight(colorSegments: segments)
@@ -203,7 +204,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   let uriChunkEnd = min(999, b.len - 1)
   for lineIdx in 0 .. uriChunkEnd:
     let line = b.getLine(lineIdx)
-    for m in findAllUris(line):
+    for m in findAllUris(line, b.maxHighlightLineLength):
       b.highlight.addModifier(
         lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
       )

@@ -19,6 +19,7 @@
 
 import std/[unittest, options, tables]
 import ../src/moepkg/config
+import ../src/moepkg/highlight
 
 suite "Config - ColorMode enum":
   test "ColorMode string values":
@@ -137,6 +138,11 @@ suite "Config - newEditorConfig defaults":
     check config.highlight.fullWidthSpace == true
     check config.highlight.trailingSpaces == true
     check config.highlight.currentWord == true
+    # Pin the config default to the buffer fail-safe. config.nim hardcodes the
+    # literal 3000 because it must not import the highlight engine; this guards
+    # the two from drifting (a drift would make even default-config buffers
+    # nil their progressive-load cache on open — see applyHighlightCap).
+    check config.highlight.maxHighlightLineLength == DefaultMaxHighlightLineLength
 
   test "AutoBackup config defaults":
     let config = newEditorConfig()

@@ -264,6 +264,8 @@ type
     incrementalHighlight*: IncrementalHighlight # Incremental highlighting cache
     lastChangedLines*: int # First changed line for incremental highlight
     reservedWords*: seq[ReservedWord] # Reserved words to highlight (TODO, NOTE, etc.)
+    maxHighlightLineLength*: int
+      # Per-line tokenization cap in runes (synmaxcol). 0 = unlimited.
     uriScanParsedUpTo*: int # Last line scanned for URIs during progressive init
 
     # Performance optimization
@@ -562,6 +564,7 @@ proc newTextBuffer*(
   result.lineMarkers = initCowSeq[Option[LineMarkerKind]](lineCount)
   result.modifiedLines = newSeq[LineModificationKind](lineCount)
   result.language = SourceLanguage.langNone
+  result.maxHighlightLineLength = DefaultMaxHighlightLineLength
   result.cursorCache = InvalidCursorPosCache
   result.foldState = initFoldState()
   result.editorConfig = none(BufferEditorConfig)
