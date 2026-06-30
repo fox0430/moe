@@ -1077,10 +1077,9 @@ proc updateViewportReservedLines(e: Editor) =
     else:
       true
 
-  # calculateReservedLines also adds extra lines for multi-line status messages
-  # on the bottom window
-  e.state.windowDisplay.viewportReservedLines =
-    calculateReservedLines(e, isBottomWindow)
+  # Steady reserve: motion scrolling is persistent geometry and must match the
+  # scroll authority and screen cursor, not flap with a transient status message.
+  e.state.windowDisplay.viewportReservedLines = e.steadyReservedLines(isBottomWindow)
 
   # Add tab line height if shown
   if e.state.display.showTabLine:
