@@ -249,6 +249,12 @@ type
       cfgDocDescription:
         "Use GitHub-style two-color scheme (ours / theirs distinct); false for single red background"
     .}: bool
+    maxHighlightLineLength* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDescription:
+        "Stop syntax highlighting a line past this many characters (0 = unlimited). Bounds frame time on very long lines such as minified code"
+    .}: int
 
   # Auto backup settings
   AutoBackupConfig* {.cfgSection: "AutoBackup".} = object
@@ -794,6 +800,10 @@ proc newEditorConfig*(): EditorConfig =
       colorCodeHighlight: true,
       gitConflict: true,
       gitConflictTwoColor: true,
+      # Keep in sync with highlight.DefaultMaxHighlightLineLength. Not referenced
+      # directly: config.nim must not import the highlight engine (keeps its
+      # dependency closure small).
+      maxHighlightLineLength: 3000,
     ),
     autoBackup: AutoBackupConfig(
       enable: false,

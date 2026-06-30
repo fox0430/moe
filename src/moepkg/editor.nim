@@ -47,7 +47,7 @@ import
 import
   status_line, render_utils, git_conflict, logger, config_loader, search_utils,
   hover_popup, command_completion, color, message_log, sidebar, recent_file_mode,
-  registers
+  registers, highlight_config
 
 import command_handlers/handler_manager
 
@@ -340,8 +340,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   result.addBuffer(initialBuffer)
   logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)
 
-  # Set reserved words for syntax highlighting on initial buffer
-  initialBuffer.setReservedWords(toReservedWords(editorConfig.highlight.reservedWord))
+  # Apply config-derived highlight settings to the initial buffer
+  applyHighlightConfig(initialBuffer, editorConfig)
 
   # Create default window (always have at least one window)
   result.windowManager.windows.add(

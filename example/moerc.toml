@@ -151,6 +151,8 @@ gitConflict = true                     # Highlight git merge conflict blocks (<<
 
 gitConflictTwoColor = true             # Use two-color scheme (ours / theirs distinct); false for single red background
 
+maxHighlightLineLength = 3000          # Stop syntax highlighting a line past this many characters (0 = unlimited); bounds frame time on very long lines such as minified code
+
 [AutoBackup]
 
 enable = false                         # Auto-backup feature

@@ -514,6 +514,11 @@ proc vsplit*(
   let newBuffer =
     if filename.isSome:
       let buf = newTextBuffer()
+      # Inherit the highlight cap from the current buffer BEFORE loadFile builds
+      # the first chunk; otherwise the post-split applyHighlightConfig nils the
+      # progressive cache when the cap differs, forcing a full reparse on open
+      # (mirrors the :e seed-before-load).
+      buf.maxHighlightLineLength = currentBuffer.maxHighlightLineLength
 
       let loadResult = buf.loadFile(filename.get)
       if loadResult.isErr:
@@ -682,6 +687,11 @@ proc hsplit*(
   let newBuffer =
     if filename.isSome:
       let buf = newTextBuffer()
+      # Inherit the highlight cap from the current buffer BEFORE loadFile builds
+      # the first chunk; otherwise the post-split applyHighlightConfig nils the
+      # progressive cache when the cap differs, forcing a full reparse on open
+      # (mirrors the :e seed-before-load).
+      buf.maxHighlightLineLength = currentBuffer.maxHighlightLineLength
 
       let loadResult = buf.loadFile(filename.get)
       if loadResult.isErr:

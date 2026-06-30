@@ -197,6 +197,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | colorCodeHighlight | bool | true | Highlight inline color codes (#RRGGBB, #RGB) with their actual color |
 | gitConflict | bool | true | Highlight git merge conflict blocks (`<<<<<<<` / `=======` / `>>>>>>>`) |
 | gitConflictTwoColor | bool | true | Use GitHub-style two-color scheme (ours / theirs distinct); false for single red background |
+| maxHighlightLineLength | integer | 3000 | Stop syntax highlighting a line past this many characters (0 = unlimited). Bounds frame time on very long lines such as minified code |
 <!-- AUTO-GEN:end Highlight -->
 
 

@@ -77,11 +77,20 @@ proc findSchemeAtRune(runes: seq[Rune], pos: int): int =
 
 type UriMatch* = tuple[start, finish: int, uri: string]
 
-proc findAllUris*(line: string): seq[UriMatch] =
+proc findAllUris*(line: string, maxRunes: int = 0): seq[UriMatch] =
   ## Find all URIs in a line of text.
   ## Returns a sequence of (start rune column, end rune column, uri string).
   ## Positions are Unicode character (rune) indices.
-  let runes = line.toRunes
+  ##
+  ## `maxRunes > 0` bounds the scan to the first `maxRunes` runes (matching the
+  ## syntax-highlight cap); URIs past the cap aren't highlighted anyway, and one
+  ## straddling it is underlined only up to it. `runeSubStr` scans at most
+  ## `maxRunes` runes, keeping the cost O(cap).
+  let runes =
+    if maxRunes > 0 and line.len > maxRunes:
+      line.runeSubStr(0, maxRunes).toRunes
+    else:
+      line.toRunes
   var pos = 0
   while pos < runes.len:
     let schemeLen = findSchemeAtRune(runes, pos)

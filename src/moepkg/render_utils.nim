@@ -631,17 +631,16 @@ proc findTrailingSpaceStart*(text: string): int =
   ## Find the character index where trailing spaces start.
   ## Returns the character count (length) if no trailing spaces.
   ## Returns 0 if the entire line is whitespace.
-  var runes: seq[Rune] = @[]
+  # Single forward pass tracking the last non-whitespace rune index; avoids
+  # materializing the whole line into a `seq[Rune]` (an allocation per visible
+  # line per frame on the render hot path).
+  var
+    idx = 0
+    lastNonSpace = -1
   for r in text.runes:
-    runes.add(r)
+    if not isWhitespace(r):
+      lastNonSpace = idx
+    inc idx
 
-  if runes.len == 0:
-    return 0
-
-  # Scan backwards to find first non-whitespace character
-  var lastNonSpace = runes.len - 1
-  while lastNonSpace >= 0 and isWhitespace(runes[lastNonSpace]):
-    dec lastNonSpace
-
-  # Return the index after the last non-whitespace character
-  result = lastNonSpace + 1
+  # Index after the last non-whitespace rune (0 when empty or all whitespace).
+  lastNonSpace + 1

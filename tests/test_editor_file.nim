@@ -21,7 +21,7 @@
 
 import std/[unittest, os, options, monotimes, times, strutils]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, config_loader]
+import ../src/moepkg/[editor, buffer, config, config_loader, highlight]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -736,3 +736,64 @@ suite "Editor - refreshGitDiff":
     # Should early-return without touching buffer state or spawning git.
     e.refreshGitDiff()
     check true # early-returns without crashing
+
+suite "Editor - highlight line-length cap on load":
+  test "non-default cap preserves progressive load on :e (no full reparse on open)":
+    # Regression: the configured maxHighlightLineLength must be seeded BEFORE
+    # loadFile builds the first chunk. Otherwise loadFile seeds the progressive
+    # cache at the default cap, the post-load applyHighlightConfig changes the
+    # cap and nils that cache, and the next updateHighlight tokenizes the entire
+    # file synchronously — the on-open stall the cap exists to prevent.
+    #
+    # Opened via :e (editFile -> loadOrCreateBuffer), which builds a FRESH buffer
+    # at the default cap; the startup/active buffer is spared because newEditor
+    # already seeded its cap, so the bug only shows on subsequent opens.
+    var config = newEditorConfig()
+    config.highlight.maxHighlightLineLength = 500 # non-default
+    let e = createTestEditorWithConfig(config)
+
+    let testFile = getTempDir() / "moe_test_cap_progressive.nim"
+    var content = ""
+    for i in 0 ..< 1500: # > InitialChunkSize so progressive load is in play
+      content.add("let x" & $i & " = " & $i & "\n")
+    writeFile(testFile, content)
+    defer:
+      removeFile(testFile)
+
+    check e.editFile(testFile).isOk
+    check e.activeBuffer.maxHighlightLineLength == 500
+    # The progressive-load cache must survive the post-load cap apply...
+    check e.activeBuffer.incrementalHighlight != nil
+    # ...and stay progressive: only the first chunk parsed, not the whole file.
+    check e.activeBuffer.incrementalHighlight.parsedUpTo < e.activeBuffer.len - 1
+
+  test "non-default cap preserves progressive load on :vsplit/:hsplit":
+    # Same regression as the :e case, for the split-open paths. window_manager
+    # builds the split buffer and calls loadFile itself, so the cap must be
+    # seeded (inherited from the current buffer) BEFORE that loadFile. Without
+    # it, the post-split applyHighlightConfig nils the freshly-built progressive
+    # cache and forces a full synchronous reparse of the whole file on open.
+    var config = newEditorConfig()
+    config.highlight.maxHighlightLineLength = 500 # non-default
+
+    let testFile = getTempDir() / "moe_test_cap_split.nim"
+    var content = ""
+    for i in 0 ..< 1500: # > InitialChunkSize so progressive load is in play
+      content.add("let x" & $i & " = " & $i & "\n")
+    writeFile(testFile, content)
+    defer:
+      removeFile(testFile)
+
+    block vsplitCase:
+      let e = createTestEditorWithConfig(config)
+      check e.vsplit(some(testFile)).isOk
+      check e.activeBuffer.maxHighlightLineLength == 500
+      check e.activeBuffer.incrementalHighlight != nil
+      check e.activeBuffer.incrementalHighlight.parsedUpTo < e.activeBuffer.len - 1
+
+    block hsplitCase:
+      let e = createTestEditorWithConfig(config)
+      check e.hsplit(some(testFile)).isOk
+      check e.activeBuffer.maxHighlightLineLength == 500
+      check e.activeBuffer.incrementalHighlight != nil
+      check e.activeBuffer.incrementalHighlight.parsedUpTo < e.activeBuffer.len - 1

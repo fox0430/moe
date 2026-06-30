@@ -32,6 +32,7 @@ import
   status_line,
   color,
   highlight,
+  highlight_config,
   config_loader,
   sidebar,
   logger,
@@ -107,10 +108,9 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   if newConfig.clipboard.enable:
     e.state.registers.setClipboardTool(newConfig.clipboard.tool)
 
-  # Update reserved words on all buffers
-  let reservedWords = toReservedWords(newConfig.highlight.reservedWord)
+  # Update reserved words and the highlight line-length cap on all buffers
   for buf in e.buffers:
-    buf.setReservedWords(reservedWords)
+    applyHighlightConfig(buf, newConfig)
 
   # Reload theme if configured
   initTheme(newConfig)
