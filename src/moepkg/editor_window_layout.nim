@@ -35,6 +35,16 @@ proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
     else:
       0
 
+proc steadyReservedLines*(e: Editor, isBottomWindow: bool): int =
+  ## `calculateReservedLines` with the steady bottom-area floor, so it is stable
+  ## against transient command-line growth (wrapped input, multi-line messages).
+  ## The viewport scroll and the screen-cursor clamp must share this; clamping
+  ## with the dynamic reserve instead flings a bottom-row cursor to (0, 0).
+  if isBottomWindow:
+    steadyBottomAreaHeight()
+  else:
+    e.calculateReservedLines(isBottomWindow)
+
 proc terminalContentRows*(
     window: EditorWindow, isBottomWindow: bool, tabLineOffset: int
 ): int =

@@ -84,7 +84,8 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     lineNumOffset =
       calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers) +
       sidebarWidth
-    reservedLines = e.calculateReservedLines(isBottomWindow)
+    # Steady reserve so the clamp agrees with the scroll (see steadyReservedLines).
+    reservedLines = e.steadyReservedLines(isBottomWindow)
 
   var cursorPos = e.calculateWindowCursor(
     window.buffer,
