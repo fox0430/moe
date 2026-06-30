@@ -1244,7 +1244,9 @@ proc handleTerminalMode*(
     let snapshotBuffer = termState.enterNormalSubMode()
     window.buffer = snapshotBuffer
     window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
-    window.viewport.topLine = max(0, snapshotBuffer.len - window.viewport.height)
+    window.viewport.resetViewportTop(
+      max(0, snapshotBuffer.len - window.viewport.height)
+    )
     return HandlerResult(
       kind: hrHandled,
       modeTransition: none(EditorMode),

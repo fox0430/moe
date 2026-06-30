@@ -73,7 +73,7 @@ proc cancelSubstitutePreview*(e: Editor) =
 
   e.restoreFromPreview()
   e.cursor = e.state.ui.substitutePreview.originalCursor
-  e.activeWindow.viewport.topLine = e.state.ui.substitutePreview.originalTopLine
+  e.activeWindow.viewport.resetViewportTop(e.state.ui.substitutePreview.originalTopLine)
   e.activeWindow.viewport.leftColumn = e.state.ui.substitutePreview.originalLeftColumn
   e.state.ui.substitutePreview.isActive = false
   e.state.ui.substitutePreview.originalLines = @[]

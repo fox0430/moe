@@ -64,6 +64,39 @@ proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   (e.screenSize.prevWidth != e.screenSize.width) or
     (e.screenSize.prevHeight != e.screenSize.height)
 
+proc wrapPosAbove(aLine, aSeg, bLine, bSeg: int): bool {.inline.} =
+  ## True when the visual position (aLine, aSeg) is strictly above (bLine, bSeg)
+  ## in the wrapped layout (line-major, then wrap-segment within a line).
+  aLine < bLine or (aLine == bLine and aSeg < bSeg)
+
+proc walkBackWrap(
+    textBuffer: TextBuffer, wrapCache: WrapCountCache, cl, cseg, budget: int
+): tuple[line, offset: int] =
+  ## Return the top (line, wrapOffset) that sits exactly `budget` visual rows
+  ## above the visual position (cl, cseg) — i.e. the highest top that keeps
+  ## (cl, cseg) on the last of `budget + 1` visible rows. Fold-aware: a collapsed
+  ## fold counts as a single marker row. Clamps to (0, 0) when the buffer top is
+  ## reached. Caller must `ensureFresh` the cache first.
+  var remaining = budget
+  if cseg >= remaining:
+    return (cl, cseg - remaining)
+  remaining -= cseg
+  var line = cl - 1
+  while line >= 0:
+    let fold = textBuffer.foldState.getCollapsedFoldAt(line)
+    let
+      top = if fold.isSome: fold.get.startLine else: line
+      rows =
+        if fold.isSome:
+          1
+        else:
+          wrapCache.cachedWrapCount(textBuffer, line)
+    if remaining <= rows:
+      return (top, rows - remaining)
+    remaining -= rows
+    line = top - 1
+  return (0, 0)
+
 proc adjustViewportForCursor(
     viewport: ViewPort,
     cursor: BufferPosition,
@@ -75,85 +108,84 @@ proc adjustViewportForCursor(
 ) =
   ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen)
   # Vertical adjustment
-  if lineWrap and not textBuffer.isNil:
+  if lineWrap and not textBuffer.isNil and textBuffer.len > 0:
+    # Segment-precision scroll: the view can start mid logical line, so a single
+    # line taller than the window (or a cursor near the bottom segment) keeps the
+    # cursor visible instead of pinning topLine and flinging the cursor to (0,0).
     let maxWidth = max(1, textAreaWidth)
+    wrapCache.ensureFresh(textBuffer, maxWidth, tabStop)
 
-    if cursor.line < viewport.topLine:
-      viewport.topLine = cursor.line
+    # A width change (terminal resize, line-number / sidebar toggle) can shrink
+    # topLine's wrap count below a previously stored topWrapOffset, leaving the
+    # offset out of range. Re-clamp it to a real on-screen position before the
+    # comparisons below trust it; otherwise a stale offset makes the cursor look
+    # "below" the top and the (0,0) fling returns.
+    if viewport.topLine >= 0 and viewport.topLine < textBuffer.len:
+      let topWrapCount = wrapCache.cachedWrapCount(textBuffer, viewport.topLine)
+      viewport.topWrapOffset = max(0, min(viewport.topWrapOffset, topWrapCount - 1))
+
+    let cursorLine = max(0, min(cursor.line, textBuffer.len - 1))
+    # Cursor's wrap segment within its line (a collapsed fold marker is one row).
+    let cursorSeg =
+      if textBuffer.foldState.getCollapsedFoldAt(cursorLine).isSome:
+        0
+      else:
+        cursorWrapPosition(
+          textBuffer.getLine(cursorLine), cursor.column, maxWidth, tabStop
+        )[0]
+
+    if wrapPosAbove(cursorLine, cursorSeg, viewport.topLine, viewport.topWrapOffset):
+      # Cursor above the visible top: scroll up so it sits on the first row.
+      viewport.topLine = cursorLine
+      viewport.topWrapOffset = cursorSeg
     else:
-      # Cursor is at or below topLine. Walk backward from the cursor line,
-      # accumulating screen (wrapped) rows until we either reach visibleHeight
-      # or run out of lines. The stopping line is the highest topLine that still
-      # keeps the cursor visible — i.e. the minimal downward scroll, identical to
-      # what the previous forward-sum loop produced. Bounding the walk by
-      # visibleHeight makes this O(visibleHeight) per frame regardless of how far
-      # the cursor jumped (e.g. `G` on a huge file), instead of
-      # O(cursor.line - topLine), and only touches lines that become visible.
-      #
-      # Collapsed folds are fold-aware (matching renderWindow / calculateWindow-
-      # Cursor): a collapsed fold's start line is a single marker row, its hidden
-      # interior contributes no rows and is skipped to the fold start in one step.
-      let cursorLine = min(cursor.line, textBuffer.len - 1)
-      if cursorLine >= viewport.topLine:
-        wrapCache.ensureFresh(textBuffer, maxWidth, tabStop)
-        var
-          screenLines =
-            if textBuffer.foldState.getCollapsedFoldAt(cursorLine).isSome:
-              1
-            else:
-              wrapCache.cachedWrapCount(textBuffer, cursorLine)
-          newTopLine = cursorLine
-        # Walk past the current topLine (bounded by visibleHeight) and only apply
-        # a downward scroll, so a fold straddling topLine never scrolls up.
-        while newTopLine > 0 and screenLines < visibleHeight:
-          let prev = newTopLine - 1
-          let prevFold = textBuffer.foldState.getCollapsedFoldAt(prev)
-          let
-            prevTop = if prevFold.isSome: prevFold.get.startLine else: prev
-            prevCount =
-              if prevFold.isSome:
-                1
-              else:
-                wrapCache.cachedWrapCount(textBuffer, prev)
-          if screenLines + prevCount > visibleHeight:
-            break
-          screenLines += prevCount
-          newTopLine = prevTop
-        if newTopLine > viewport.topLine:
-          viewport.topLine = newTopLine
-  elif textBuffer.isNil:
-    # No buffer to consult for folds: fall back to raw line arithmetic.
-    if cursor.line >= viewport.topLine + visibleHeight:
-      viewport.topLine = max(0, cursor.line - visibleHeight + 1)
+      # Latest allowed top places the cursor segment on the last visible row.
+      # If the current top is above that, the cursor is below the window, so
+      # apply the minimal downward scroll; otherwise it is visible, leave as is.
+      let (latLine, latOff) = walkBackWrap(
+        textBuffer, wrapCache, cursorLine, cursorSeg, max(0, visibleHeight - 1)
+      )
+      if wrapPosAbove(viewport.topLine, viewport.topWrapOffset, latLine, latOff):
+        viewport.topLine = latLine
+        viewport.topWrapOffset = latOff
+  else:
+    # Not on the segment-precision path (no wrap, or a nil / empty buffer): clear
+    # the offset so a stale value never starts a later frame mid wrap segment
+    # (e.g. after a wrap toggle).
+    viewport.topWrapOffset = 0
+    if textBuffer.isNil:
+      # No buffer to consult for folds: fall back to raw line arithmetic.
+      if cursor.line >= viewport.topLine + visibleHeight:
+        viewport.topLine = max(0, cursor.line - visibleHeight + 1)
+      elif cursor.line < viewport.topLine:
+        viewport.topLine = cursor.line
     elif cursor.line < viewport.topLine:
       viewport.topLine = cursor.line
-  elif cursor.line < viewport.topLine:
-    viewport.topLine = cursor.line
-  else:
-    # Cursor is at or below topLine. Walk backward from the cursor accumulating
-    # visible (marker / non-folded) rows until the window fills, to find the
-    # minimal downward scroll. Each collapsed fold collapses to a single marker
-    # row and is skipped in one step, so this stays O(visibleHeight) per frame
-    # even when the cursor jumps far (e.g. `G`) over a large fold. If we reach
-    # the current topLine before filling, the cursor is already visible and
-    # topLine is left untouched.
-    let cursorLine = min(cursor.line, textBuffer.len - 1)
-    if cursorLine >= viewport.topLine:
-      var
-        rows = 1 # the cursor line itself
-        newTopLine = cursorLine
-      while newTopLine > 0 and rows < visibleHeight:
-        let prev = newTopLine - 1
-        let fold = textBuffer.foldState.getCollapsedFoldAt(prev)
-        if fold.isSome:
-          # The whole collapsed fold is one marker row; jump over its interior.
-          inc rows
-          newTopLine = fold.get.startLine
-        else:
-          inc rows
-          dec newTopLine
-      if newTopLine > viewport.topLine:
-        viewport.topLine = newTopLine
+    else:
+      # Cursor is at or below topLine. Walk backward from the cursor accumulating
+      # visible (marker / non-folded) rows until the window fills, to find the
+      # minimal downward scroll. Each collapsed fold collapses to a single marker
+      # row and is skipped in one step, so this stays O(visibleHeight) per frame
+      # even when the cursor jumps far (e.g. `G`) over a large fold. If we reach
+      # the current topLine before filling, the cursor is already visible and
+      # topLine is left untouched.
+      let cursorLine = min(cursor.line, textBuffer.len - 1)
+      if cursorLine >= viewport.topLine:
+        var
+          rows = 1 # the cursor line itself
+          newTopLine = cursorLine
+        while newTopLine > 0 and rows < visibleHeight:
+          let prev = newTopLine - 1
+          let fold = textBuffer.foldState.getCollapsedFoldAt(prev)
+          if fold.isSome:
+            # The whole collapsed fold is one marker row; jump over its interior.
+            inc rows
+            newTopLine = fold.get.startLine
+          else:
+            inc rows
+            dec newTopLine
+        if newTopLine > viewport.topLine:
+          viewport.topLine = newTopLine
 
   # Horizontal adjustment (only when line wrap is disabled)
   if not lineWrap:

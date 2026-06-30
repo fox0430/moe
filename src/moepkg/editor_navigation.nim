@@ -53,7 +53,7 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
 
   activeWindow.buffer = targetBuffer
   activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  activeWindow.viewport.topLine = 0
+  activeWindow.viewport.resetViewportTop()
   activeWindow.viewport.leftColumn = 0
 
   # Re-sync executor, motion controller, jump-list anchor and per-buffer
@@ -249,7 +249,7 @@ proc handleLspLocations*(
     activeWin.saveOriginalBuffer()
     activeWin.buffer = refState.createReferencesTextBuffer()
     activeWin.cursor = BufferPosition(line: 0, column: 0)
-    activeWin.viewport.topLine = 0
+    activeWin.viewport.resetViewportTop()
     activeWin.viewport.leftColumn = 0
     activeWin.modeState = ModeState(kind: mskReferences, references: refState)
     e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"

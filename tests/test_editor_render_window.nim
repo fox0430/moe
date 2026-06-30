@@ -282,6 +282,86 @@ suite "renderWindowLineWrapped - Basic behavior":
     check screenY == 2
     check lineIndex == 1
 
+  test "skipSegments renders from a later wrap segment (sub-line scroll)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.display.showSidebar = false
+    e.state.display.scrollbar = false
+
+    # 30 chars => 3 wrap segments at maxWidth 10: "0123456789" / "ABCDEFGHIJ" / ...
+    let line = "0123456789ABCDEFGHIJabcdefghij"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), line)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 10
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 10,
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+    e.renderWindowLineWrapped(
+      buffer, window, 0, ctx, screenY, lineIndex, 20, 0, skipSegments = 1
+    )
+
+    # Segment 0 is scrolled off the top; the first visible row is segment 1.
+    check buffer[0, 0].symbol == "A"
+    # The skip costs no screen rows: only the 2 remaining segments are drawn.
+    check screenY == 2
+    check lineIndex == 1
+
+  test "Partial top line draws no line number on its first visible row":
+    let e = createTestEditor()
+    e.state.display.showSidebar = false
+    e.state.display.scrollbar = false
+
+    let line = "0123456789ABCDEFGHIJabcdefghij"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), line)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 14 # lineNumOffset(4) + maxWidth(10)
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 14,
+    )
+
+    # skip = 1: continuation row, gutter blank (digit at x=2 becomes a space).
+    var skipBuffer = createTestBuffer()
+    var sY1 = 0
+    var lI1 = 0
+    e.renderWindowLineWrapped(
+      skipBuffer, window, 4, ctx, sY1, lI1, 20, 0, skipSegments = 1
+    )
+    check skipBuffer[2, 0].symbol == " "
+    check skipBuffer[4, 0].symbol == "A" # segment 1 text starts past the gutter
+
+    # skip = 0: the first wrap row owns the line number "1".
+    var fullBuffer = createTestBuffer()
+    var sY0 = 0
+    var lI0 = 0
+    e.renderWindowLineWrapped(
+      fullBuffer, window, 4, ctx, sY0, lI0, 20, 0, skipSegments = 0
+    )
+    check fullBuffer[2, 0].symbol == "1"
+    check fullBuffer[4, 0].symbol == "0" # segment 0 text
+
 suite "renderWindowLineNoWrap - Basic behavior":
   test "Render empty line":
     let e = createTestEditor()

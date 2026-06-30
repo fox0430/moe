@@ -567,6 +567,34 @@ suite "screenToBufferPosition - Line Wrap Mode":
     check result.get.line == 1
     check result.get.column == 1
 
+  test "Click honors topWrapOffset (sub-line scrolled top line)":
+    # Line 0 (30 chars) wraps into 3 segments at maxWidth=10: seg0 0-9, seg1
+    # 10-19, seg2 20-29. With topWrapOffset=1 the renderer hides seg0, so screen
+    # row 0 shows seg1 and row 1 shows seg2; the mapping must mirror that.
+    let
+      vp = createTestViewport(0, 0, 10, 24, 0, 0)
+      buffer = newTextBuffer("0123456789ABCDEFGHIJabcdefghij\ntail")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+    vp.topWrapOffset = 1
+
+    # Row 0, col 2 lands on seg1 => char 12, not seg0 char 2.
+    let onTop = screenToBufferPosition(
+      vp, buffer, 2, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+    )
+    check onTop.isSome
+    check onTop.get.line == 0
+    check onTop.get.column == 12
+
+    # Line 0 shows only 2 visible rows (seg1, seg2), so screen row 2 is line 1 —
+    # the over-counted top line must not swallow the click.
+    let below = screenToBufferPosition(
+      vp, buffer, 1, 2, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+    )
+    check below.isSome
+    check below.get.line == 1
+    check below.get.column == 1
+
 suite "screenToBufferPosition - Scrollbar":
   test "Click with scrollbar reduces text area width":
     # viewport width=12, sidebarWidth=0, scrollbarWidth=1, lineNumOffset=0

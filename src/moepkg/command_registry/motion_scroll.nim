@@ -73,7 +73,7 @@ proc handleScrollCursorTop*(
   ## Scroll the viewport to place cursor line at the top (zt command)
   ## Cursor position doesn't change, only the viewport
 
-  ctx.motionController.viewportManager.viewport.topLine = ctx.cursor.line
+  ctx.motionController.viewportManager.viewport.resetViewportTop(ctx.cursor.line)
   return ok(())
 
 proc handleScrollCursorCenter*(
@@ -91,7 +91,7 @@ proc handleScrollCursorCenter*(
   let targetTopLine = ctx.cursor.line - (visibleHeight div 2)
 
   # Clamp to valid range
-  ctx.motionController.viewportManager.viewport.topLine = max(0, targetTopLine)
+  ctx.motionController.viewportManager.viewport.resetViewportTop(max(0, targetTopLine))
 
   return ok(())
 
@@ -110,7 +110,7 @@ proc handleScrollCursorBottom*(
   let targetTopLine = ctx.cursor.line - visibleHeight + 1
 
   # Clamp to valid range
-  ctx.motionController.viewportManager.viewport.topLine = max(0, targetTopLine)
+  ctx.motionController.viewportManager.viewport.resetViewportTop(max(0, targetTopLine))
 
   return ok(())
 

@@ -20,10 +20,13 @@
 ## Tests for editor_render_views.nim
 
 import std/[unittest, strutils]
+
 import pkg/celina
-import ../src/moepkg/[editor, config, config_loader, modes, types, buffer, render_utils]
+
+import
+  ../src/moepkg/
+    [editor, config, config_loader, modes, types, buffer, render_utils, editor_window]
 import ../src/moepkg/editor_render_views {.all.}
-import ../src/moepkg/editor_window
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -1594,6 +1597,13 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     for ln in a .. b:
       result += buf.wrapAt(ln)
 
+  proc cursorVisualRow(buf: TextBuffer, vp: ViewPort, cursorLine, cursorSeg: int): int =
+    ## Visual row index of (cursorLine, cursorSeg) measured from the viewport
+    ## top, honoring topWrapOffset (sub-line scroll). No fold lines here.
+    result = cursorSeg - vp.topWrapOffset
+    for ln in vp.topLine ..< cursorLine:
+      result += buf.wrapAt(ln)
+
   proc adjustWrap(vp: ViewPort, buf: TextBuffer, cursorLine: int) =
     adjustViewportForCursor(
       vp,
@@ -1627,11 +1637,13 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
 
     vp.adjustWrap(buf, cursorLine)
 
+    # Segment-precision scroll: the cursor segment (here segment 0) lands on the
+    # last visible row with minimal downward scroll, possibly starting mid
+    # logical line (topWrapOffset > 0).
     check vp.topLine in 0 .. cursorLine
-    check buf.screenLines(vp.topLine, cursorLine) <= VisibleHeight
-    # Minimal scroll: moving topLine up one more line would overflow.
-    if vp.topLine > 0:
-      check buf.screenLines(vp.topLine - 1, cursorLine) > VisibleHeight
+    check vp.topWrapOffset >= 0
+    check vp.topWrapOffset < buf.wrapAt(vp.topLine)
+    check buf.cursorVisualRow(vp, cursorLine, 0) == VisibleHeight - 1
 
   test "Does not scroll when cursor already visible at topLine":
     let buf = makeWrappingBuffer(30)
@@ -1695,3 +1707,85 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     vp.adjustWrap(buf, 25)
 
     check vp.topLine == 0
+
+  # Sub-line (wrap-segment) scrolling via topWrapOffset
+
+  proc adjustWrapAt(vp: ViewPort, buf: TextBuffer, cursorLine, cursorCol: int) =
+    adjustViewportForCursor(
+      vp,
+      BufferPosition(line: cursorLine, column: cursorCol),
+      VisibleHeight,
+      TextAreaWidth,
+      true,
+      buf,
+      TabStop,
+      WrapCountCache(),
+    )
+
+  proc tallLineBuffer(): TextBuffer =
+    # A short line, then one logical line far taller than the window (25 wrap
+    # segments at TextAreaWidth=10), then a trailing short line.
+    newTextBuffer(["short", "x".repeat(250), "tail"].join("\n"))
+
+  test "A line taller than the window keeps a deep-segment cursor visible":
+    # Repro of the reported bug: with whole-line tops only, a cursor on a deep
+    # segment was flung to (0,0); sub-line scroll keeps it on the last row.
+    let buf = tallLineBuffer()
+    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+
+    # Cursor on segment 20 (column 200 / TextAreaWidth 10) of the tall line 1.
+    vp.adjustWrapAt(buf, 1, 200)
+
+    check vp.topLine == 1
+    check vp.topWrapOffset == 11 # 20 - (VisibleHeight - 1)
+    check buf.cursorVisualRow(vp, 1, 20) == VisibleHeight - 1
+
+  test "Scrolling up within a tall line moves the top toward the cursor segment":
+    let buf = tallLineBuffer()
+    let vp =
+      ViewPort(topLine: 1, topWrapOffset: 11, leftColumn: 0, width: 80, height: 24)
+
+    # Cursor moves above the current top (segment 10 < offset 11): scroll up so
+    # the cursor sits on the first visible row, still mid logical line.
+    vp.adjustWrapAt(buf, 1, 100)
+
+    check vp.topLine == 1
+    check vp.topWrapOffset == 10
+    check buf.cursorVisualRow(vp, 1, 10) == 0
+
+  test "Cursor already visible inside a tall line does not move the top":
+    let buf = tallLineBuffer()
+    let vp =
+      ViewPort(topLine: 1, topWrapOffset: 11, leftColumn: 0, width: 80, height: 24)
+
+    # Segment 15 is within rows 11..20 (visible): no scroll.
+    vp.adjustWrapAt(buf, 1, 150)
+
+    check vp.topLine == 1
+    check vp.topWrapOffset == 11
+
+  test "Normal-height lines never set a wrap offset":
+    let buf = singleRowBuffer(30)
+    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+
+    vp.adjustWrap(buf, 25)
+    check vp.topWrapOffset == 0
+
+    vp.adjustWrap(buf, 3)
+    check vp.topWrapOffset == 0
+
+  test "A stale oversized topWrapOffset is re-clamped, keeping the cursor on-screen":
+    # Post-resize state: topWrapOffset was set when topLine was tall, then the
+    # text area widened so the line now wraps into far fewer segments. With the
+    # cursor on a line below topLine the down-branch leaves the top unchanged, so
+    # without a re-clamp the offset stays out of range and calculateWindowCursor
+    # would fling the cursor to (0, 0). topLine 3 wraps into 4 segments here.
+    let buf = makeWrappingBuffer(30)
+    let vp =
+      ViewPort(topLine: 3, topWrapOffset: 20, leftColumn: 0, width: 80, height: 24)
+
+    vp.adjustWrap(buf, 5)
+
+    # Invariant restored and the cursor is not pushed above the viewport top.
+    check vp.topWrapOffset < buf.wrapAt(vp.topLine)
+    check buf.cursorVisualRow(vp, 5, 0) >= 0

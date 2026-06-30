@@ -996,7 +996,7 @@ proc updateViewport*(
 
   # Ensure we have valid data
   if lineCount <= 0:
-    mgr.viewport.topLine = 0
+    mgr.viewport.resetViewportTop()
     return
 
   let
@@ -1040,7 +1040,7 @@ proc updateViewport*(
 
     # Scroll up if cursor is above viewport
     if cursorScreenLine < 0 or clampedCursorY < mgr.viewport.topLine:
-      mgr.viewport.topLine = clampedCursorY
+      mgr.viewport.resetViewportTop(clampedCursorY)
     # Scroll down if cursor is below viewport
     elif cursorScreenLine >= visibleHeight:
       # Walk backwards from the cursor line to find the topLine that makes the
@@ -1080,19 +1080,19 @@ proc updateViewport*(
         else:
           break
 
-      mgr.viewport.topLine = targetTopLine
+      mgr.viewport.resetViewportTop(targetTopLine)
   else:
     # No line wrap: simple logic
     if clampedCursorY < mgr.viewport.topLine:
       # Cursor moved above viewport - scroll up
-      mgr.viewport.topLine = clampedCursorY
+      mgr.viewport.resetViewportTop(clampedCursorY)
     elif clampedCursorY >=
         mgr.viewport.topLine + mgr.viewport.height - actualReservedLines:
       # Cursor moved below viewport - scroll down (account for status and command lines)
       let
         newTopLine = clampedCursorY - mgr.viewport.height + actualReservedLines + 1
         maxTopLine = max(0, lineCount - mgr.viewport.height + actualReservedLines)
-      mgr.viewport.topLine = max(0, min(maxTopLine, newTopLine))
+      mgr.viewport.resetViewportTop(max(0, min(maxTopLine, newTopLine)))
 
   # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
   if not lineWrap:
@@ -1248,9 +1248,9 @@ proc updateScrollAnimation*(
     # Update viewport to ensure cursor is visible
     let visibleHeight = max(1, mgr.viewport.height - reservedLines)
     if finalCursorLine > mgr.viewport.topLine + visibleHeight - 1:
-      mgr.viewport.topLine = finalCursorLine - visibleHeight + 1
+      mgr.viewport.resetViewportTop(finalCursorLine - visibleHeight + 1)
     elif finalCursorLine < mgr.viewport.topLine:
-      mgr.viewport.topLine = finalCursorLine
+      mgr.viewport.resetViewportTop(finalCursorLine)
 
     return (false, finalCursorLine)
 
@@ -1272,7 +1272,7 @@ proc updateScrollAnimation*(
     # Cursor above viewport top - scroll up
     newTopLine = newCursorLine
 
-  mgr.viewport.topLine = max(0, newTopLine)
+  mgr.viewport.resetViewportTop(max(0, newTopLine))
 
   return (true, newCursorLine)
 

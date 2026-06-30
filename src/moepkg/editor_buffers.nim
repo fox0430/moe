@@ -98,7 +98,7 @@ proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
 
   e.activeWindow.buffer = targetBuffer
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  e.activeWindow.viewport.topLine = 0
+  e.activeWindow.viewport.resetViewportTop()
   e.activeWindow.viewport.leftColumn = 0
   e.applyBufferMode(targetBuffer)
 
@@ -201,7 +201,7 @@ proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
       e.addBufferToWindowList(blank)
       w.buffer = blank
       w.cursor = BufferPosition(line: 0, column: 0)
-      w.viewport.topLine = 0
+      w.viewport.resetViewportTop()
       w.viewport.leftColumn = 0
       w.modeState = ModeState(kind: mskNone)
       w.mode = EditorMode.Normal
@@ -396,7 +396,7 @@ proc redirectWindowsFromBuffer*(
       if newBuf.id notin window.bufferIds:
         window.bufferIds.add(newBuf.id)
       window.cursor = BufferPosition(line: 0, column: 0)
-      window.viewport.topLine = 0
+      window.viewport.resetViewportTop()
       window.viewport.leftColumn = 0
 
 proc deleteCurrentBuffer*(e: Editor) =

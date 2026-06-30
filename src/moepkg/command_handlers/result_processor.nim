@@ -280,7 +280,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if origin.isSome:
       let refState = origin.get
       win.cursor = refState.originCursor
-      win.viewport.topLine = refState.originTopLine
+      win.viewport.resetViewportTop(refState.originTopLine)
       win.viewport.leftColumn = refState.originLeftColumn
     win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
@@ -312,7 +312,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if origin.isSome:
       let st = origin.get
       win.cursor = st.originCursor
-      win.viewport.topLine = st.originTopLine
+      win.viewport.resetViewportTop(st.originTopLine)
       win.viewport.leftColumn = st.originLeftColumn
     win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
@@ -346,7 +346,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if origin.isSome:
       let st = origin.get
       win.cursor = st.originCursor
-      win.viewport.topLine = st.originTopLine
+      win.viewport.resetViewportTop(st.originTopLine)
       win.viewport.leftColumn = st.originLeftColumn
     win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
@@ -455,7 +455,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let buf = e.activeBuffer()
       let clampedLine = min(jumpLine, max(0, buf.len - 1))
       e.activeWindow.cursor = BufferPosition(line: clampedLine, column: 0)
-      e.activeWindow.viewport.topLine = max(0, clampedLine - 5)
+      e.activeWindow.viewport.resetViewportTop(max(0, clampedLine - 5))
     activeWin.modeState = ModeState(kind: mskNone)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
@@ -509,7 +509,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # buffer's length, so this prevents a stale off-screen viewport; the resumed
     # selection mode re-places the cursor via syncSelectionCursor on render.
     activeWin.cursor = BufferPosition(line: 0, column: 0)
-    activeWin.viewport.topLine = 0
+    activeWin.viewport.resetViewportTop()
     activeWin.viewport.leftColumn = 0
     return true
   of hrConfigQuit:
@@ -686,7 +686,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         activeWin.suspendMode()
         activeWin.buffer = dvState.createDiffTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
-        activeWin.viewport.topLine = 0
+        activeWin.viewport.resetViewportTop()
         activeWin.viewport.leftColumn = 0
         activeWin.modeState = ModeState(kind: mskDiffViewer, diffViewer: dvState)
         e.state.previousMode = e.state.mode
@@ -925,7 +925,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
       activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)
       activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.topLine = 0
+      activeWin.viewport.resetViewportTop()
       activeWin.viewport.leftColumn = 0
       activeWin.mode = EditorMode.Filer
 
@@ -947,7 +947,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
       activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
       activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.topLine = 0
+      activeWin.viewport.resetViewportTop()
       activeWin.mode = EditorMode.BookmarkManager
 
     # Adjust cursor when transitioning from Insert to Normal mode

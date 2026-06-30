@@ -656,8 +656,12 @@ proc renderWindowLineWrapped*(
     lineIndex: var int,
     visibleHeight: int,
     tabLineOffset: int,
+    skipSegments: int = 0,
 ) =
-  ## Render a single line with wrapping enabled
+  ## Render a single line with wrapping enabled.
+  ## `skipSegments` drops the given number of leading wrap segments without
+  ## advancing screenY (they are scrolled off the top, vim-style). Only the
+  ## viewport's first logical line ever passes a non-zero value.
   let
     maxScreenY = visibleHeight + tabLineOffset
     line = window.buffer.getLine(lineIndex)
@@ -725,6 +729,19 @@ proc renderWindowLineWrapped*(
     return
 
   let tabStop = e.state.display.tabStop
+
+  # Skip leading wrap segments scrolled off the top (partial first line). Keep
+  # wrapLineCount advancing so the resumed first visible row is treated as a
+  # continuation row (blank line number, vim-style) rather than the first wrap.
+  var segmentsSkipped = 0
+  while segmentsSkipped < skipSegments and startCharCol < lineCharLen:
+    let (charCount, _, endBytePos) =
+      displayWidthSubstrFromByte(line, startByteCol, maxWidth, tabStop)
+    let endCharCol = min(startCharCol + max(1, charCount), lineCharLen)
+    startByteCol = if endCharCol >= lineCharLen: line.len else: endBytePos
+    startCharCol = endCharCol
+    inc wrapLineCount
+    inc segmentsSkipped
 
   while startCharCol < lineCharLen and screenY < maxScreenY:
     # Use byte-position-aware function to avoid O(n) skip per segment
@@ -1097,9 +1114,19 @@ proc renderWindow*(
       renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
 
     if e.state.display.lineWrap:
+      # Only the top logical line skips leading wrap segments (sub-line scroll).
+      let skipSegments =
+        if lineIndex == window.viewport.topLine: window.viewport.topWrapOffset else: 0
       e.renderWindowLineWrapped(
-        buffer, window, lineNumOffset, ctx, screenY, lineIndex, visibleHeight,
+        buffer,
+        window,
+        lineNumOffset,
+        ctx,
+        screenY,
+        lineIndex,
+        visibleHeight,
         tabLineOffset,
+        skipSegments = skipSegments,
       )
     else:
       e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, lineIndex)
