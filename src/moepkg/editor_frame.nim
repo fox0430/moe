@@ -180,7 +180,9 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     foundWindow.buffer = newDebugBuffer
 
     # Restore scroll position (clamped to valid range)
-    foundWindow.viewport.topLine = min(savedTopLine, max(0, newDebugBuffer.len - 1))
+    foundWindow.viewport.resetViewportTop(
+      min(savedTopLine, max(0, newDebugBuffer.len - 1))
+    )
     foundWindow.viewport.leftColumn = savedLeftColumn
 
     # Update the reference in state

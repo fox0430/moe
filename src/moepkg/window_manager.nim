@@ -1241,9 +1241,9 @@ proc resizeWindows*(
 
     # Clamp viewport scroll positions
     if window.viewport.topLine >= window.buffer.len:
-      window.viewport.topLine = max(0, window.buffer.len - 1)
+      window.viewport.resetViewportTop(max(0, window.buffer.len - 1))
     if window.cursor.line < window.viewport.topLine:
-      window.viewport.topLine = window.cursor.line
+      window.viewport.resetViewportTop(window.cursor.line)
 
   # Horizontal groups (same y coordinate AND height, horizontally adjacent)
   for group in horizontalGroups:
@@ -1284,7 +1284,7 @@ proc resizeWindows*(
 
     # If cursor is now below the visible area, adjust topLine
     if window.cursor.line >= window.viewport.topLine + visibleHeight:
-      window.viewport.topLine = max(0, window.cursor.line - visibleHeight + 1)
+      window.viewport.resetViewportTop(max(0, window.cursor.line - visibleHeight + 1))
     # If cursor is above the visible area
     elif window.cursor.line < window.viewport.topLine:
-      window.viewport.topLine = window.cursor.line
+      window.viewport.resetViewportTop(window.cursor.line)

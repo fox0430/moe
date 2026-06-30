@@ -376,8 +376,11 @@ proc screenToBufferPosition(
     let maxWidth = max(1, vp.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     if wrapCache != nil:
       wrapCache.ensureFresh(buffer, maxWidth, tabStop)
-    # Walk through buffer lines, accumulating screen rows for each wrapped line
-    var currentScreenY = 0
+    # Walk through buffer lines, accumulating screen rows for each wrapped line.
+    # Start above the top edge by the leading wrap segments the renderer skips on
+    # the first line (topWrapOffset), mirroring calculateWindowCursor: screen row
+    # 0 then maps to segment topWrapOffset of topLine, not segment 0.
+    var currentScreenY = -vp.topWrapOffset
     var bufferLine = vp.topLine
     var wrapSegment = 0
 
@@ -587,9 +590,9 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
         let viewportHeight = window.viewport.height
         if viewportHeight > 0:
           if newLine < window.viewport.topLine:
-            window.viewport.topLine = newLine
+            window.viewport.resetViewportTop(newLine)
           elif newLine >= window.viewport.topLine + viewportHeight:
-            window.viewport.topLine = newLine - viewportHeight + 1
+            window.viewport.resetViewportTop(newLine - viewportHeight + 1)
 
       return true
 

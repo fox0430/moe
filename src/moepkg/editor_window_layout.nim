@@ -87,7 +87,10 @@ proc calculateWindowCursor*(
     if wrapCache != nil:
       wrapCache.ensureFresh(buffer, maxWidth, e.state.display.tabStop)
 
-    var screenY = 0
+    # Start above the top edge by the wrap segments skipped on the first line:
+    # the loop below adds topLine's full wrap count, so a non-zero offset shifts
+    # every screen row up by exactly the hidden leading segments.
+    var screenY = -viewport.topWrapOffset
 
     var lineIdx = viewport.topLine
     while lineIdx < cursor.line:
@@ -125,7 +128,9 @@ proc calculateWindowCursor*(
 
     screenY += wrapLineIndex
 
-    if screenY < viewport.height - reservedLines:
+    # Guard the lower bound too: with topWrapOffset > 0 a cursor on a segment
+    # above the visible top would compute a negative screenY.
+    if screenY >= 0 and screenY < viewport.height - reservedLines:
       let finalX = viewport.x + lineNumOffset + wrapLineColumn
       let finalY = viewport.y + screenY
       return CursorPosition(x: finalX, y: finalY)

@@ -680,6 +680,51 @@ suite "calculateWindowCursor":
     check pos.x == 2
     check pos.y == 2 # row 0: "abcdefghi", row 1: "j", row 2: "klm"
 
+  test "topWrapOffset shifts the wrapped cursor up by the skipped segments":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    # maxWidth = 10 - 0 - 1 = 9 => segments 0-8, 9-17, 18-26, 27-29
+    let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123")
+    # Start the view one wrap segment down (segment 0 of the top line is hidden).
+    let viewport = ViewPort(
+      topLine: 0, topWrapOffset: 1, leftColumn: 0, width: 10, height: 24, x: 0, y: 0
+    )
+    # Cursor at char 20 => wrap segment 2, display col 2 (chars 18,19,20).
+    let cursor = BufferPosition(line: 0, column: 20)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 0,
+      reservedLines = steadyBottomAreaHeight(),
+      scrollbarWidth = 1,
+    )
+    check pos.x == 2
+    check pos.y == 1 # segment 2 minus the skipped leading segment 1
+
+  test "cursor on a segment hidden above topWrapOffset returns (0, 0)":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123")
+    # Skip the first two segments of the top line.
+    let viewport = ViewPort(
+      topLine: 0, topWrapOffset: 2, leftColumn: 0, width: 10, height: 24, x: 0, y: 0
+    )
+    # Cursor at char 5 => segment 0, which is scrolled off the top.
+    let cursor = BufferPosition(line: 0, column: 5)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 0,
+      reservedLines = steadyBottomAreaHeight(),
+      scrollbarWidth = 1,
+    )
+    check pos.x == 0
+    check pos.y == 0
+
 suite "calculateWindowCursor - wrap mode edge cases":
   test "wrap mode with empty line":
     let e = createTestEditor()

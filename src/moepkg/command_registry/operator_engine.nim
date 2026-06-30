@@ -148,14 +148,15 @@ proc executeOperatorOnRange*(
     # 3. otherwise: restore saved position
     if restoredTopLine >= newBufferLen:
       # Saved position is beyond new buffer size
-      ctx.motionController.viewportManager.viewport.topLine =
+      ctx.motionController.viewportManager.viewport.resetViewportTop(
         max(0, min(cursorLine, newBufferLen - 1))
+      )
     elif cursorLine < restoredTopLine:
       # Cursor is above saved viewport (e.g., dgg), use cursor position
-      ctx.motionController.viewportManager.viewport.topLine = cursorLine
+      ctx.motionController.viewportManager.viewport.resetViewportTop(cursorLine)
     else:
       # Restore to saved position
-      ctx.motionController.viewportManager.viewport.topLine = restoredTopLine
+      ctx.motionController.viewportManager.viewport.resetViewportTop(restoredTopLine)
 
     return ok(())
   of OpChange:
@@ -201,14 +202,15 @@ proc executeOperatorOnRange*(
     # Restore viewport, but ensure cursor remains visible
     if restoredTopLine >= newBufferLen:
       # Saved position is beyond new buffer size
-      ctx.motionController.viewportManager.viewport.topLine =
+      ctx.motionController.viewportManager.viewport.resetViewportTop(
         max(0, min(cursorLine, newBufferLen - 1))
+      )
     elif cursorLine < restoredTopLine:
       # Cursor is above saved viewport (e.g., cgg), use cursor position
-      ctx.motionController.viewportManager.viewport.topLine = cursorLine
+      ctx.motionController.viewportManager.viewport.resetViewportTop(cursorLine)
     else:
       # Restore to saved position
-      ctx.motionController.viewportManager.viewport.topLine = restoredTopLine
+      ctx.motionController.viewportManager.viewport.resetViewportTop(restoredTopLine)
 
     # Enter insert mode (transaction remains open for insert mode input)
     ctx.state.mode = EditorMode.Insert

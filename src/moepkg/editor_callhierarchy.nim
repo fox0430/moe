@@ -97,7 +97,7 @@ proc enterCallHierarchyMode(
   e.setMode(EditorMode.CallHierarchy)
   activeWin.buffer = chState.createCallHierarchyTextBuffer()
   activeWin.cursor = BufferPosition(line: 0, column: 0)
-  activeWin.viewport.topLine = 0
+  activeWin.viewport.resetViewportTop()
   activeWin.viewport.leftColumn = 0
   activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
 

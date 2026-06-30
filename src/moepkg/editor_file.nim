@@ -101,7 +101,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
     e.activeBuffer.bookmarks = e.savedBookmarks[absPath]
 
   # Reset viewport to start (will be adjusted by motion controller)
-  e.viewport.topLine = 0
+  e.viewport.resetViewportTop()
   e.viewport.leftColumn = 0
 
   # Update git diff information if sidebar and git diff are enabled

@@ -310,7 +310,7 @@ proc enew*(e: Editor): Result[(), string] =
   # Replace the buffer in the active window
   e.activeWindow.buffer = newBuffer
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  e.activeWindow.viewport.topLine = 0
+  e.activeWindow.viewport.resetViewportTop()
   e.activeWindow.viewport.leftColumn = 0
 
   # Reset cursor

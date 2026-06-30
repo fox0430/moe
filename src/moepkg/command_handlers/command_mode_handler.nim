@@ -157,7 +157,7 @@ proc enterFilerInActiveWindow*(e: Editor, path: string) =
   activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
   activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)
   activeWin.cursor = BufferPosition(line: 0, column: 0)
-  activeWin.viewport.topLine = 0
+  activeWin.viewport.resetViewportTop()
   activeWin.viewport.leftColumn = 0
 
 proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffer) =
@@ -267,7 +267,9 @@ proc jumpToFirstSubstituteMatch*(e: Editor, pattern: string) =
     e.updateViewportForCursor(pos)
   else:
     e.cursor = e.state.ui.substitutePreview.originalCursor
-    e.activeWindow.viewport.topLine = e.state.ui.substitutePreview.originalTopLine
+    e.activeWindow.viewport.resetViewportTop(
+      e.state.ui.substitutePreview.originalTopLine
+    )
     e.activeWindow.viewport.leftColumn = e.state.ui.substitutePreview.originalLeftColumn
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
@@ -319,7 +321,7 @@ proc enterTerminalInActiveWindow*(e: Editor, command: string) =
   activeWin.buffer = termBuf
   activeWin.modeState = ModeState(kind: mskTerminal, terminal: termState)
   activeWin.cursor = BufferPosition(line: 0, column: 0)
-  activeWin.viewport.topLine = 0
+  activeWin.viewport.resetViewportTop()
   activeWin.viewport.leftColumn = 0
   e.setMode(EditorMode.Terminal)
 
@@ -1102,7 +1104,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           let activeWin = e.activeWindow
           activeWin.mode = EditorMode.Help
           activeWin.cursor = BufferPosition(line: 0, column: 0)
-          activeWin.viewport.topLine = 0
+          activeWin.viewport.resetViewportTop()
           activeWin.viewport.leftColumn = 0
           activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
       of hrEnterBufferManager:
@@ -1120,7 +1122,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         activeWin.saveOriginalBuffer()
         activeWin.buffer = bmState.createBufferManagerTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
-        activeWin.viewport.topLine = 0
+        activeWin.viewport.resetViewportTop()
         activeWin.viewport.leftColumn = 0
         activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
       of hrEnterBackupManager:
@@ -1373,7 +1375,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         activeWin.saveOriginalBuffer()
         activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
-        activeWin.viewport.topLine = 0
+        activeWin.viewport.resetViewportTop()
         activeWin.viewport.leftColumn = 0
         activeWin.modeState =
           ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)

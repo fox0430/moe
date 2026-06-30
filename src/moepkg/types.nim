@@ -71,6 +71,12 @@ type
 
   ViewPort* = ref object
     topLine*: int
+    topWrapOffset*: int
+      ## Leading wrap segments of `topLine` skipped so the view can start
+      ## mid logical line (wrap mode only; always 0 in no-wrap mode). Invariant:
+      ## `0 <= topWrapOffset < wrapCount(topLine)`. The authoritative
+      ## `adjustViewportForCursor` recomputes it every frame; every other writer
+      ## just resets it to 0 via `resetViewportTop` (next frame re-derives it).
     leftColumn*: int
     width*: int
     height*: int
@@ -857,8 +863,18 @@ proc `==`*(a, b: ViewPort): bool =
     return true
   if a.isNil or b.isNil:
     return false
-  a.topLine == b.topLine and a.leftColumn == b.leftColumn and a.width == b.width and
-    a.height == b.height and a.x == b.x and a.y == b.y
+  a.topLine == b.topLine and a.topWrapOffset == b.topWrapOffset and
+    a.leftColumn == b.leftColumn and a.width == b.width and a.height == b.height and
+    a.x == b.x and a.y == b.y
+
+proc resetViewportTop*(v: ViewPort, line = 0) =
+  ## Move the viewport to `line` and clear the wrap-segment offset. Used by
+  ## every non-authoritative topLine writer (scroll commands, buffer/file
+  ## switches, restores): the offset is recomputed next frame by the
+  ## authoritative `adjustViewportForCursor`, so resetting it to 0 here is
+  ## enough to avoid starting a fresh top line mid wrap segment.
+  v.topLine = line
+  v.topWrapOffset = 0
 
 proc statusMessage*(state: EditorState): string =
   ## Get the current status message
