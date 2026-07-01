@@ -335,6 +335,91 @@ suite "config_macros: single-source section registry":
     check not vr.hasErrors
     check not loaded.gamma.flag # not loaded by the auto dispatch
 
+# Exercise `cfgDeprecated`: the loader still assigns the value (keeping old
+# configs working), records a deprecation notice, and the serializer skips
+# the field so it fades out on the next save.
+type DeprSection {.cfgSection: "Depr".} = object
+  keep {.cfg.}: bool
+  gone {.cfg, cfgDeprecated: "use keep instead".}: bool
+
+proc loadDepr(t: TomlTableRef, c: var DeprSection, vr: var ValidationResult) =
+  generateConfigLoader(t, c, vr, DeprSection)
+
+type DeprOuter = object
+  depr: DeprSection
+
+proc serializeDepr(lines: var seq[string], cfg: DeprSection) =
+  let o = DeprOuter(depr: cfg)
+  generateSectionSerializers(lines, o, DeprOuter)
+
+suite "config_macros: cfgDeprecated":
+  test "loader assigns the value and records a deprecation notice":
+    let t = tomlTable("keep = false\ngone = true\n")
+    var c: DeprSection
+    var vr = newValidationResult()
+    loadDepr(t, c, vr)
+    check not c.keep
+    check c.gone # value still loaded for backward compatibility
+    var sawDeprecated = false
+    for e in vr.errors:
+      if e.kind == iikDeprecated and e.name == "Depr.gone":
+        sawDeprecated = true
+        check "use keep instead" in e.expected
+    check sawDeprecated
+
+  test "loader stays silent when the deprecated key is absent":
+    let t = tomlTable("keep = true\n")
+    var c: DeprSection
+    var vr = newValidationResult()
+    loadDepr(t, c, vr)
+    check not vr.errors.anyIt(it.kind == iikDeprecated)
+
+  test "deprecated key does not surface as an unknown key":
+    let t = tomlTable("gone = true\n")
+    var c: DeprSection
+    var vr = newValidationResult()
+    loadDepr(t, c, vr)
+    check not vr.errors.anyIt(it.kind == iikUnknownKey and "gone" in it.name)
+
+  test "serializer skips deprecated fields":
+    var cfg = DeprSection(keep: true, gone: true)
+    var lines: seq[string]
+    serializeDepr(lines, cfg)
+    check "keep = true" in lines
+    check not lines.anyIt(it.startsWith("gone = "))
+
+  test "toErrorMessage renders the deprecation notice":
+    let item =
+      InvalidItem(kind: iikDeprecated, name: "Depr.gone", expected: "use keep instead")
+    let msg = item.toErrorMessage
+    check "Depr.gone" in msg
+    check "Deprecated" in msg
+    check "use keep instead" in msg
+
+  test "hasErrors excludes deprecation notices":
+    let t = tomlTable("gone = true\n")
+    var c: DeprSection
+    var vr = newValidationResult()
+    loadDepr(t, c, vr)
+    check vr.hasDeprecations
+    check not vr.hasErrors # deprecation alone must not read as an error
+    check vr.toErrorMessages.len == 0
+    check vr.toDeprecationMessages.len == 1
+    check "Depr.gone" in vr.toDeprecationMessages[0]
+
+  test "hasErrors still reports real errors alongside a deprecation":
+    # gone is a bool; feed a non-bool so the loader records an actual error,
+    # plus the deprecation notice for the key being present.
+    let t = tomlTable("gone = \"nope\"\n")
+    var c: DeprSection
+    var vr = newValidationResult()
+    loadDepr(t, c, vr)
+    check vr.hasErrors
+    check vr.hasDeprecations
+    check vr.toErrorMessages.len == 1
+    check "Invalid value" in vr.toErrorMessages[0]
+    check vr.toDeprecationMessages.len == 1
+
 suite "config_macros: escapeMarkdownCell":
   test "passes through plain text unchanged":
     check escapeMarkdownCell("hello world") == "hello world"

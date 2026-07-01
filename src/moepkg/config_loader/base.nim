@@ -38,6 +38,10 @@ type
   InvalidItemKind* = enum
     iikInvalidValue ## Known key with an invalid value
     iikUnknownKey ## Unknown key in a section
+    iikDeprecated
+      ## Known key still accepted for backward compatibility. The `expected`
+      ## field carries the human-readable deprecation message (typically the
+      ## recommended replacement).
 
   InvalidItem* = object ## Represents a validation error for a configuration item
     kind*: InvalidItemKind # Default = iikInvalidValue
@@ -63,8 +67,21 @@ proc addError*(vr: var ValidationResult, name, val, expected: string) =
 proc addUnknownKey*(vr: var ValidationResult, name: string) =
   vr.errors.add(InvalidItem(kind: iikUnknownKey, name: name))
 
+proc addDeprecated*(vr: var ValidationResult, name, msg: string) =
+  ## Record that a deprecated key was present in the loaded TOML. The key was
+  ## still accepted (its value is loaded); `msg` is the human-readable notice
+  ## typically pointing at the replacement.
+  vr.errors.add(InvalidItem(kind: iikDeprecated, name: name, expected: msg))
+
 proc hasErrors*(vr: ValidationResult): bool =
-  vr.errors.len > 0
+  ## True if any *actual* validation error is present. Deprecation notices
+  ## (`iikDeprecated`) are excluded because the loader still accepts the value;
+  ## surface those separately via `hasDeprecations`.
+  vr.errors.anyIt(it.kind != iikDeprecated)
+
+proc hasDeprecations*(vr: ValidationResult): bool =
+  ## True if any deprecation notice was recorded.
+  vr.errors.anyIt(it.kind == iikDeprecated)
 
 proc toErrorMessage*(item: InvalidItem): string =
   ## Convert an InvalidItem to a human-readable error message
@@ -74,10 +91,28 @@ proc toErrorMessage*(item: InvalidItem): string =
       item.expected
   of iikUnknownKey:
     "Unknown key: '" & item.name & "'"
+  of iikDeprecated:
+    if item.expected.len > 0:
+      "Deprecated key '" & item.name & "': " & item.expected
+    else:
+      "Deprecated key '" & item.name & "'"
 
 proc toErrorMessages*(vr: ValidationResult): seq[string] =
-  ## Convert all validation errors to human-readable messages
-  vr.errors.mapIt(it.toErrorMessage)
+  ## Convert *actual* validation errors to human-readable messages. Deprecation
+  ## notices are excluded — use `toDeprecationMessages` for those.
+  var r: seq[string] = @[]
+  for e in vr.errors:
+    if e.kind != iikDeprecated:
+      r.add e.toErrorMessage
+  r
+
+proc toDeprecationMessages*(vr: ValidationResult): seq[string] =
+  ## Convert recorded deprecation notices to human-readable messages.
+  var r: seq[string] = @[]
+  for e in vr.errors:
+    if e.kind == iikDeprecated:
+      r.add e.toErrorMessage
+  r
 
 proc parseColorMode*(s: string): ColorMode =
   case s

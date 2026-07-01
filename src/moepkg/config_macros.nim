@@ -65,6 +65,11 @@
 ##                                                         field against a fixed
 ##                                                         option set; first entry
 ##                                                         is the fallback default)
+##                     cfgDeprecated: "msg"                (transitional deprecation:
+##                                                         loader accepts the value
+##                                                         but records a notice;
+##                                                         serializer / UI / docs
+##                                                         skip the field)
 ##
 ## Supported field types:
 ##   loader + descriptor: bool, int, float, string, enum
@@ -126,6 +131,20 @@ template cfgNoUi*() {.pragma.}
 ## For Option[string] fields, validate that the resolved path is an existing
 ## directory at load time (uses loadOptionDirPath instead of loadOptionString).
 template cfgDirPath*() {.pragma.}
+
+## Mark a field as deprecated. When the key is present in the loaded TOML,
+## the loader records a deprecation notice on the ValidationResult (via
+## `addDeprecated`) but still assigns the value, keeping existing user
+## configs working. The field is excluded from the serializer output and
+## the config-mode UI (and from the auto-generated markdown docs) so it
+## fades out of user configs naturally.
+##
+## Example:
+##   oldFlag* {.cfg, cfgDeprecated: "use newFlag instead".}: bool
+##
+## When the migration window closes, remove the field entirely. Old configs
+## will then surface as regular unknown-key notices.
+template cfgDeprecated*(msg: string) {.pragma.}
 
 ## Human-readable description used by the `gen_config_docs` tool to render
 ## `documents/configfile.md`. Required for every field that participates in
@@ -537,6 +556,19 @@ proc buildLoaderBody(td, t, cfgVar, vr: NimNode): NimNode =
         typeNode,
       )
 
+    # Deprecation notice: emit after the type-dispatched load so the value is
+    # still assigned (backward-compatible). The key stays in validKeys so it
+    # does not surface as an unknown-key notice.
+    let deprecatedP = findPragma(pragmas, "cfgDeprecated")
+    if deprecatedP != nil:
+      let msgArg = pragmaArg(deprecatedP)
+      if msgArg == nil or msgArg.kind != nnkStrLit:
+        error("cfgDeprecated requires a string literal message", deprecatedP)
+      let msgLit = newLit(msgArg.strVal)
+      loadCalls.add quote do:
+        if `t`.hasKey(`keyLit`):
+          `vr`.addDeprecated(fullKey(`secLit`, `keyLit`), `msgLit`)
+
   # Build `const validKeys = [...]`. Use gensym'd names so the const block
   # the macro injects into the caller's proc scope cannot be referenced by
   # surrounding code (preventing implicit dependencies on internal symbols).
@@ -588,7 +620,12 @@ proc buildSerializerBody(td, lines, cfgVar: NimNode): NimNode =
   result.add quote do:
     `lines`.add `headerLit`
 
-  for (fieldName, typeNode, _, key) in serializableFields(td):
+  for (fieldName, typeNode, pragmas, key) in serializableFields(td):
+    # Deprecated fields still load (see loader) but must not be written back,
+    # so user configs shed the obsolete key on the next save cycle.
+    if hasPragma(pragmas, "cfgDeprecated"):
+      continue
+
     let keyPrefix = newLit(key & " = ")
     let fieldAcc = newDotExpr(cfgVar, ident(fieldName))
 
@@ -764,9 +801,13 @@ macro generateConfigDescriptors*(
   for (fieldName, fieldType, pragmas) in sectionFields(innerTd):
     if hasPragma(pragmas, "cfgSkip"):
       continue
+    if not hasPragma(pragmas, "cfg"):
+      continue
     if hasPragma(pragmas, "cfgNoUi"):
       continue
-    if not hasPragma(pragmas, "cfg"):
+    if hasPragma(pragmas, "cfgDeprecated"):
+      # Deprecated fields are transitional: keep them loading but hide them
+      # from the config-mode UI so users are not prompted to edit them.
       continue
 
     let uiNameP = findPragma(pragmas, "cfgUiName")
@@ -1020,6 +1061,10 @@ macro generateSectionMarkdown*(
       continue
     if hasPragma(pragmas, "cfgDocSkip"):
       # Field is intentionally excluded from auto-gen docs but still loaded.
+      continue
+    if hasPragma(pragmas, "cfgDeprecated"):
+      # Deprecated fields are omitted from the docs so the reference does not
+      # advertise them; the loader still accepts them for backward compat.
       continue
     let docDescP = findPragma(pragmas, "cfgDocDescription")
     if docDescP == nil:
