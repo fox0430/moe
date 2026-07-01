@@ -573,6 +573,43 @@ suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
 
     check result.kind == lvrHandled
 
+  test "v enters characterwise Visual selection":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("test\n")
+      state = newTestEditorState()
+
+    let result =
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("v"))
+
+    check result.kind == lvrEnterVisual
+    check result.visualKind == vskChar
+
+  test "V enters linewise Visual selection":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("test\n")
+      state = newTestEditorState()
+
+    let result =
+      handleLogViewerModeKey(logState, buffer, state, TestViewportHeight, charKey("V"))
+
+    check result.kind == lvrEnterVisual
+    check result.visualKind == vskLine
+
+  test "Ctrl-v enters blockwise Visual selection":
+    let
+      logState = newLogViewerState()
+      buffer = newTestBuffer("test\n")
+      state = newTestEditorState()
+
+    let result = handleLogViewerModeKey(
+      logState, buffer, state, TestViewportHeight, charKey("v", {kmCtrl})
+    )
+
+    check result.kind == lvrEnterVisual
+    check result.visualKind == vskBlock
+
 suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
   test "n searches forward with last search text":
     let

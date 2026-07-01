@@ -39,6 +39,7 @@ type
     lvrEnterCommand # Enter command mode
     lvrEnterSearchForward # Enter search mode (forward)
     lvrEnterSearchBackward # Enter search mode (backward)
+    lvrEnterVisual # Enter Visual mode (v / V / Ctrl-v) for selection + yank
     lvrQuit # Close log viewer and return to previous mode
     lvrRefresh # Refresh log content
     lvrUnhandled # Command was not handled (delegate to normal mode)
@@ -46,6 +47,8 @@ type
 
   LogViewerResult* = object
     case kind*: LogViewerResultKind
+    of lvrEnterVisual:
+      visualKind*: VisualSelectionKind
     of lvrError:
       errorMessage*: string
     else:
@@ -137,6 +140,10 @@ proc handleLogViewerModeKey*(
       state.cursor.line = max(0, state.cursor.line - contentHeight)
       return LogViewerResult(kind: lvrHandled)
 
+    # Ctrl-v enters VisualBlock mode for column-wise selection.
+    if kmCtrl in keyCombo.modifiers and keyCombo.char == "v":
+      return LogViewerResult(kind: lvrEnterVisual, visualKind: vskBlock)
+
     case keyCombo.char
     of ":":
       return LogViewerResult(kind: lvrEnterCommand)
@@ -144,6 +151,10 @@ proc handleLogViewerModeKey*(
       return LogViewerResult(kind: lvrEnterSearchForward)
     of "?":
       return LogViewerResult(kind: lvrEnterSearchBackward)
+    of "v":
+      return LogViewerResult(kind: lvrEnterVisual, visualKind: vskChar)
+    of "V":
+      return LogViewerResult(kind: lvrEnterVisual, visualKind: vskLine)
     of "q":
       return LogViewerResult(kind: lvrQuit)
     of "j":
