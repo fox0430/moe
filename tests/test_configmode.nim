@@ -1932,9 +1932,9 @@ suite "ConfigMode - descriptor completeness":
     ## If a new section is added to EditorConfig, this test fails until it is
     ## added to either `tested` or `excluded`.
     let tested = [
-      "standard", "clipboard", "statusLine", "highlight", "autoBackup", "notification",
-      "filer", "autocomplete", "autoSave", "git", "syntaxChecker", "smoothScroll",
-      "theme", "lsp",
+      "standard", "bufferBackend", "clipboard", "statusLine", "highlight", "autoBackup",
+      "notification", "filer", "autocomplete", "autoSave", "git", "syntaxChecker",
+      "smoothScroll", "theme", "lsp",
     ].toHashSet
     let excluded = [
       "buildOnSave", "tabLine", "quickRun", "persist", "startUpFileOpen",
@@ -1957,6 +1957,7 @@ suite "ConfigMode - descriptor completeness":
     # Collect all simple fields from sections that config mode covers
     var allFields: HashSet[(string, string)]
     collectFieldNames(cfg.standard, "Standard", allFields)
+    collectFieldNames(cfg.bufferBackend, "BufferBackend", allFields)
     collectFieldNames(cfg.clipboard, "Clipboard", allFields)
     collectFieldNames(cfg.statusLine, "StatusLine", allFields)
     collectFieldNames(cfg.highlight, "Highlight", allFields)

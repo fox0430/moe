@@ -1,7 +1,5 @@
 [Standard]
 
-bufferBackend = "auto"                 # Buffer data structure. The default is auto: "auto", "gapBuffer", "sqrtDecomp", "rope", "pieceTable"
-
 number = true                          # Line numbers
 
 relativeNumber = false                 # Relative line numbers
@@ -65,6 +63,10 @@ mouse = false                           # Enable mouse support
 lineWrap = true                        # Wrap long lines
 
 timeoutlen = 1000                      # Key mapping timeout in ms (0 = no timeout)
+
+[BufferBackend]
+
+kind = "auto"                          # Buffer data structure: "auto", "gapBuffer", "sqrtDecomp", "rope", "pieceTable"
 
 [Clipboard]
 

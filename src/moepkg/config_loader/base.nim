@@ -126,7 +126,7 @@ proc parseLspTraceLevel*(s: string): LspTraceLevel =
   of "verbose": ltVerbose
   else: ltOff
 
-proc parseBufferBackend*(s: string): BufferBackendConfig =
+proc parseBufferBackendKind*(s: string): BufferBackendKind =
   case s
   of "auto": bbcAuto
   of "gapBuffer": bbcGapBuffer
@@ -360,5 +360,5 @@ const
   ValidClipboardTools* = ["xsel", "xclip", "wl-clipboard", "win32yank", "pbcopy"]
   ValidSplitTypes* = ["horizontal", "vertical"]
   ValidLspTraceLevels* = ["off", "messages", "verbose"]
-  ValidBufferBackends* = ["auto", "gapBuffer", "sqrtDecomp", "rope", "pieceTable"]
+  ValidBufferBackendKinds* = ["auto", "gapBuffer", "sqrtDecomp", "rope", "pieceTable"]
   ValidBracketSplitModes* = ["disable", "noIndent", "indent"]

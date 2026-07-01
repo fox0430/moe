@@ -31,7 +31,7 @@ type CmdLineConfig* = object ## Command line configuration
   clearLog*: bool ## Clear existing log file on start
   isReadonly*: bool ## Open files in readonly mode
   filePaths*: seq[string] ## File paths to open (supports multiple files)
-  bufferBackend*: Option[BufferBackendConfig]
+  bufferBackend*: Option[BufferBackendKind]
     ## Override of the configured buffer backend. `none` keeps the TOML value.
 
 proc generateVersionInfoMessage(): string =
@@ -73,7 +73,7 @@ proc showUnknownArgsError(arg: string) =
   echo """Please check "moe -h""""
   quit(1)
 
-proc parseBufferBackendArg(value: string): BufferBackendConfig =
+proc parseBufferBackendArg(value: string): BufferBackendKind =
   case value
   of "auto":
     bbcAuto
@@ -108,7 +108,7 @@ proc parseCmdLine*(): CmdLineConfig =
     clearLog: false,
     isReadonly: false,
     filePaths: @[],
-    bufferBackend: none(BufferBackendConfig),
+    bufferBackend: none(BufferBackendKind),
   )
 
   for i in 1 .. paramCount():
