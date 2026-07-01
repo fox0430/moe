@@ -205,6 +205,9 @@ proc maybeReloadConfig*(e: Editor) =
   if vr.hasErrors:
     for msg in vr.toErrorMessages:
       logWarn("editor", "Config warning: " & msg)
+  if vr.hasDeprecations:
+    for msg in vr.toDeprecationMessages:
+      logInfo("editor", "Config notice: " & msg)
 
   # Apply the new settings
   e.applyConfigSettings(newConfig)

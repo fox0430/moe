@@ -449,6 +449,16 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     for msg in errorMessages:
       addMessageLog("Config error: " & msg)
 
+  # Deprecation notices are not errors: the loader accepted the value. Log
+  # them, and surface the first one only if no error already claimed the
+  # status message.
+  if configVr.hasDeprecations:
+    let deprecationMessages = configVr.toDeprecationMessages
+    if result.state.statusMessage.len == 0:
+      result.state.statusMessage = "Config notice: " & deprecationMessages[0]
+    for msg in deprecationMessages:
+      addMessageLog("Config notice: " & msg)
+
   # Check for crash recovery files from a previous crash
   if hasCrashRecoveryFiles():
     let msg = "Crash recovery files found. See " & getCrashRecoveryBaseDir()
