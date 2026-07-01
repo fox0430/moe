@@ -22,6 +22,10 @@
 ## This module provides the data structures for the log viewer mode.
 ## The actual log content is stored in a TextBuffer.
 
+import std/[strformat, times]
+
+import pkg/results
+
 type
   LogContentKind* = enum
     lckEditor # Editor messages
@@ -34,3 +38,21 @@ type
 proc newLogViewerState*(kind: LogContentKind = lckEditor): LogViewerState =
   ## Create a new log viewer state
   LogViewerState(contentKind: kind)
+
+proc logViewerSaveFileName*(kind: LogContentKind, at: DateTime): string =
+  ## Timestamped filename used when saving log viewer content to disk.
+  ## Format: `moe-{editor|lsp}-YYYYMMDD-HHMMSS.log`.
+  let prefix =
+    case kind
+    of lckEditor: "editor"
+    of lckLsp: "lsp"
+  &"moe-{prefix}-{at.format(\"yyyyMMdd-HHmmss\")}.log"
+
+proc saveLogViewerContentToFile*(content: string, path: string): Result[void, string] =
+  ## Write `content` to `path`, always overwriting.
+  ## Returns Ok on success, Err with the exception message otherwise.
+  try:
+    writeFile(path, content)
+    ok()
+  except CatchableError as e:
+    err(e.msg)
