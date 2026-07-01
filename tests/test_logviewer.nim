@@ -20,7 +20,9 @@
 ## Tests for log_viewer.nim
 ## This module tests the Log Viewer state management functionality.
 
-import std/unittest
+import std/[os, times, unittest]
+
+import pkg/results
 
 import ../src/moepkg/log_viewer
 
@@ -78,3 +80,48 @@ suite "log_viewer: LogViewerState fields":
 
     check state1.contentKind == lckLsp
     check state2.contentKind == lckLsp
+
+suite "log_viewer: logViewerSaveFileName":
+  let sampleAt = dateTime(2026, mJan, 1, 15, 30, 45, 0, utc())
+
+  test "editor kind uses `editor` prefix and timestamp":
+    check logViewerSaveFileName(lckEditor, sampleAt) == "moe-editor-20260101-153045.log"
+
+  test "lsp kind uses `lsp` prefix":
+    check logViewerSaveFileName(lckLsp, sampleAt) == "moe-lsp-20260101-153045.log"
+
+  test "zero-pads month/day/time":
+    let padded = dateTime(2026, mMar, 9, 4, 5, 6, 0, utc())
+    check logViewerSaveFileName(lckEditor, padded) == "moe-editor-20260309-040506.log"
+
+suite "log_viewer: saveLogViewerContentToFile":
+  test "writes content to the given path and returns Ok":
+    let path = getTempDir() / "moe_test_log_save_ok.log"
+    removeFile(path)
+    defer:
+      removeFile(path)
+
+    let r = saveLogViewerContentToFile("hello\nworld\n", path)
+
+    check r.isOk
+    check fileExists(path)
+    check readFile(path) == "hello\nworld\n"
+
+  test "overwrites an existing file":
+    let path = getTempDir() / "moe_test_log_save_overwrite.log"
+    writeFile(path, "stale")
+    defer:
+      removeFile(path)
+
+    let r = saveLogViewerContentToFile("fresh", path)
+
+    check r.isOk
+    check readFile(path) == "fresh"
+
+  test "returns Err when the target directory does not exist":
+    let path = getTempDir() / "moe_test_missing_dir_xyz_123" / "moe_test_log.log"
+
+    let r = saveLogViewerContentToFile("data", path)
+
+    check r.isErr
+    check not fileExists(path)

@@ -22,7 +22,7 @@
 ## This module handles the command-line overlay mode (`:` commands).
 ## Extracted from handler.nim to reduce file size.
 
-import std/[options, os, strutils, unicode, monotimes]
+import std/[options, os, strutils, times, unicode, monotimes]
 
 import pkg/[celina, results, chronos]
 
@@ -36,6 +36,21 @@ import
     window_manager, registers, unicode_utils, git_conflict, status_line,
   ]
 import handler_manager
+
+proc trySaveLogViewerBuffer*(e: Editor): string =
+  ## When the active window is showing the log viewer, persist its content
+  ## to a timestamped file in the current directory. Returns a status message
+  ## describing the outcome, or an empty string when not in LogViewer mode.
+  let activeWin = e.activeWindow
+  if e.state.mode != EditorMode.LogViewer or activeWin.modeState.kind != mskLogViewer:
+    return ""
+  let
+    kind = activeWin.modeState.logViewer.contentKind
+    path = getCurrentDir() / logViewerSaveFileName(kind, now())
+    writeRes = saveLogViewerContentToFile(activeWin.buffer.getTextString(), path)
+  if writeRes.isOk:
+    return "Log saved: " & path
+  return "Log save failed: " & writeRes.error
 
 proc getBufferInfos*(e: Editor): seq[BufferInfo] =
   ## Extract buffer information from the buffer list for BufferManager
@@ -852,7 +867,12 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         # Set pending background flag to be handled by handleEventAsync
         e.state.pending.background = true
       of hrSave:
-        if e.state.mode == EditorMode.Config:
+        if e.state.mode == EditorMode.LogViewer:
+          # LogViewer has no backing file; treat :w as a save-to-current-dir.
+          let msg = e.trySaveLogViewerBuffer()
+          if msg.len > 0:
+            e.state.statusMessage = msg
+        elif e.state.mode == EditorMode.Config:
           # In Config mode, :w saves the configuration file instead of a buffer
           let configPath = getConfigPath()
 
@@ -927,10 +947,32 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       of hrSaveAll:
         e.processSaveAllResult(r)
       of hrSaveAndQuit:
-        # On success the editor quits; on failure (e.g. externally modified)
-        # fall through so command mode is exited and the error is shown.
-        if not e.processSaveAndQuitResult(r):
-          return false
+        if e.state.mode == EditorMode.LogViewer:
+          # LogViewer has no backing file; save to current dir then close the
+          # window as if `:q` had been issued.
+          let msg = e.trySaveLogViewerBuffer()
+          let activeWin = e.activeWindow
+          let splitBuf = activeWin.buffer
+          activeWin.clearModeState(e.state.mode)
+          if not e.state.mode.isFileEditMode and e.windowManager.windows.len > 1:
+            let idx = e.bufferIndexById(splitBuf.id)
+            if idx >= 0:
+              evictGitCacheForBuffer(splitBuf)
+              e.deleteBufferAt(idx)
+              e.pruneBufferIdFromAllWindows(splitBuf.id)
+          e.state.previousMode = EditorMode.Normal
+          activeWin.mode = EditorMode.Normal
+          e.setMode(EditorMode.Normal)
+          if msg.len > 0:
+            e.state.statusMessage = msg
+          let shouldQuit = e.closeWindow
+          if shouldQuit:
+            return false
+        else:
+          # On success the editor quits; on failure (e.g. externally modified)
+          # fall through so command mode is exited and the error is shown.
+          if not e.processSaveAndQuitResult(r):
+            return false
       of hrSaveAllAndQuit:
         if not e.processSaveAllAndQuitResult(r):
           return false
