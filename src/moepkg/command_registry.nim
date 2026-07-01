@@ -257,6 +257,17 @@ proc executeCommand*(
       )
     discard ctx.buffer.foldState.openFoldsInRange(selLo, selHi)
 
+  # Block buffer-modifying commands on read-only buffers (log viewer, quick-run
+  # output, etc.). Yanks and motions stay allowed so the user can still copy.
+  if (isEditCommand or isVisualEditCommand) and ctx.buffer.readOnly:
+    if isVisualEditCommand:
+      # Cancel the visual selection so the user returns to a stable state.
+      ctx.state.visualSelection.active = false
+      ctx.state.mode = ctx.state.previousMode
+    ctx.state.editState.pendingOperator = none(PendingOperator)
+    ctx.state.statusMessage = "Buffer is read-only"
+    return ok(())
+
   case cmd.kind
   of ctMotion:
     # ; / , replay the last f/F/t/T (resolved from editState), reusing the same

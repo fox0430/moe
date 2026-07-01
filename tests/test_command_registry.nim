@@ -738,6 +738,93 @@ suite "CommandRegistry - Edge cases":
     # Too many args should fail
     check registry.execute(nil, "optional.args", @["1", "2", "3", "4"]).isErr
 
+suite "CommandRegistry - readOnly buffer guard":
+  proc createReadOnlyTestContext(buffer: TextBuffer): CommandContext =
+    let state = EditorState(activeWindow: EditorWindow())
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.mode = EditorMode.Normal
+    state.previousMode = EditorMode.LogViewer
+
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let motionController = newMotionController(buffer, state, viewport)
+
+    result = CommandContext(
+      buffer: buffer,
+      state: state,
+      motionController: motionController,
+      clipboardConfig: ClipboardConfig(enable: false),
+      keyBindingRegistry: newKeyBindingRegistry(),
+    )
+
+  test "delete-char is blocked on read-only buffer":
+    let buffer = newTextBuffer("hello")
+    buffer.readOnly = true
+    let ctx = createReadOnlyTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let cmd = Command(
+      name: "delete-char",
+      description: "Delete character",
+      kind: ctAction,
+      commandId: "delete.char",
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+
+    check r.isOk
+    check buffer[0] == "hello"
+    check ctx.state.statusMessage == "Buffer is read-only"
+
+  test "visual-delete is blocked and exits visual mode":
+    let buffer = newTextBuffer("hello")
+    buffer.readOnly = true
+    let ctx = createReadOnlyTestContext(buffer)
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let cmd = Command(
+      name: "visual-delete",
+      description: "Delete selection",
+      kind: ctAction,
+      commandId: "visual.delete",
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+
+    check r.isOk
+    check buffer[0] == "hello"
+    check not ctx.state.visualSelection.active
+    check ctx.state.mode == EditorMode.LogViewer
+    check ctx.state.statusMessage == "Buffer is read-only"
+
+  test "motion command still works on read-only buffer":
+    let buffer = newTextBuffer("hello world")
+    buffer.readOnly = true
+    let ctx = createReadOnlyTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let cmd = Command(
+      name: "motion-right",
+      description: "Move right",
+      kind: ctMotion,
+      motion: Motion.Right,
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+
+    check r.isOk
+    check ctx.state.statusMessage != "Buffer is read-only"
+
 suite "findAllCharPositions":
   test "Single occurrence":
     let buffer = newTextBuffer("abcdef")
