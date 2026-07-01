@@ -111,7 +111,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     newEditorRegistries(editorConfig, configVr)
 
   # Set buffer backend from configuration
-  case editorConfig.standard.bufferBackend
+  case editorConfig.bufferBackend.kind
   of bbcAuto:
     setAutoBackendMode(true)
     setConfiguredBackend(GapBuffer)
@@ -127,7 +127,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   of bbcPieceTable:
     setAutoBackendMode(false)
     setConfiguredBackend(PieceTable)
-  logDebug("editor", "Buffer backend: " & $editorConfig.standard.bufferBackend)
+  logDebug("editor", "Buffer backend: " & $editorConfig.bufferBackend.kind)
 
   # Initialize LSP integration with current working directory as workspace root
   let lspIntegration = newLspIntegration(getCurrentDir())

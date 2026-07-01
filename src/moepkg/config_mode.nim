@@ -89,6 +89,9 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   # Standard section
   generateConfigDescriptors(result, EditorConfig, standard)
 
+  # BufferBackend section
+  generateConfigDescriptors(result, EditorConfig, bufferBackend)
+
   # Clipboard section
   generateConfigDescriptors(result, EditorConfig, clipboard)
 

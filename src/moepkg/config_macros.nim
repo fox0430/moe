@@ -38,7 +38,7 @@
 ##     - a `proc parseXxx(s: string): XxxType` to convert string -> variant
 ##     - a `const ValidXxxs = [...]` listing accepted TOML string values
 ##   A trailing `Config` in the enum type name is stripped: e.g.
-##   `BufferBackendConfig` looks up `parseBufferBackend` / `ValidBufferBackends`.
+##   `ClipboardTool` looks up `parseClipboardTool` / `ValidClipboardTools`.
 ##   Both must be defined in (or imported into) `config_loader.nim` before the
 ##   macro expands; otherwise the generated code will fail to compile.
 ##
@@ -269,7 +269,7 @@ iterator sectionFields(
 
 proc enumParseName(typeIdent: NimNode): NimNode =
   ## For enum type `ClipboardTool` -> `parseClipboardTool`.
-  ## For `BufferBackendConfig` -> `parseBufferBackend` (strips trailing `Config`).
+  ## Trailing `Config` is stripped (e.g. `FooConfig` -> `parseFoo`).
   let bare = typeIdent.strVal
   let stripped =
     if bare.endsWith("Config"):

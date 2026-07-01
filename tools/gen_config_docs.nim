@@ -132,6 +132,7 @@ macro defineSections(specs: untyped): untyped =
 
 defineSections:
   ("Standard", cfg.standard, StandardConfig)
+  ("BufferBackend", cfg.bufferBackend, BufferBackendConfig)
   ("Clipboard", cfg.clipboard, ClipboardConfig)
   ("TabLine", cfg.tabLine, TabLineConfig)
   ("BuildOnSave", cfg.buildOnSave, BuildOnSaveConfig)

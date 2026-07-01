@@ -70,7 +70,7 @@ type
     stHorizontal = "horizontal"
     stVertical = "vertical"
 
-  BufferBackendConfig* = enum
+  BufferBackendKind* = enum
     bbcAuto = "auto"
     bbcGapBuffer = "gapBuffer"
     bbcSqrtDecomp = "sqrtDecomp"
@@ -155,17 +155,20 @@ type
       cfgMax: 10000,
       cfgDocDescription: "Key mapping timeout in milliseconds (0 = no timeout)"
     .}: int ## Key mapping timeout in ms (0 = no timeout)
-    bufferBackend* {.
-      cfg,
-      cfgDocDescription:
-        "Buffer data structure. \"auto\" selects backend based on file size"
-    .}: BufferBackendConfig
     bracketSplit* {.
       cfg,
       cfgDocDescription:
         "Behavior when pressing Enter between matching bracket pairs " &
         "(disable/noIndent/indent)"
     .}: BracketSplitMode
+
+  # Buffer backend settings
+  BufferBackendConfig* {.cfgSection: "BufferBackend".} = object
+    kind* {.
+      cfg,
+      cfgDocDescription:
+        "Buffer data structure. \"auto\" selects backend based on file size"
+    .}: BufferBackendKind
 
   # Clipboard settings
   ClipboardConfig* {.cfgSection: "Clipboard".} = object
@@ -673,6 +676,7 @@ type
   # Main configuration
   EditorConfig* = ref object
     standard*: StandardConfig
+    bufferBackend*: BufferBackendConfig
     clipboard*: ClipboardConfig
     buildOnSave*: BuildOnSaveConfig
     tabLine*: TabLineConfig
@@ -766,9 +770,9 @@ proc newEditorConfig*(): EditorConfig =
       mouse: false,
       lineWrap: true,
       timeoutlen: 1000,
-      bufferBackend: bbcAuto,
       bracketSplit: bsmDisable,
     ),
+    bufferBackend: BufferBackendConfig(kind: bbcAuto),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(
       enable: false, workspaceRoot: none(string), command: none(string)

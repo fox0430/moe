@@ -343,60 +343,61 @@ defaultCursor = "invalid"
     check "Standard.defaultCursor" in vr.errors[0].name
     check config.standard.defaultCursor == ctTerminalDefault # Default value
 
+suite "Config Validation - BufferBackend section":
   test "Valid bufferBackend auto":
     let tomlStr = """
-[Standard]
-bufferBackend = "auto"
+[BufferBackend]
+kind = "auto"
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
-    check config.standard.bufferBackend == bbcAuto
+    check config.bufferBackend.kind == bbcAuto
 
   test "Valid bufferBackend gapBuffer":
     let tomlStr = """
-[Standard]
-bufferBackend = "gapBuffer"
+[BufferBackend]
+kind = "gapBuffer"
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
-    check config.standard.bufferBackend == bbcGapBuffer
+    check config.bufferBackend.kind == bbcGapBuffer
 
   test "Valid bufferBackend sqrtDecomp":
     let tomlStr = """
-[Standard]
-bufferBackend = "sqrtDecomp"
+[BufferBackend]
+kind = "sqrtDecomp"
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
-    check config.standard.bufferBackend == bbcSqrtDecomp
+    check config.bufferBackend.kind == bbcSqrtDecomp
 
   test "Valid bufferBackend rope":
     let tomlStr = """
-[Standard]
-bufferBackend = "rope"
+[BufferBackend]
+kind = "rope"
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
-    check config.standard.bufferBackend == bbcRope
+    check config.bufferBackend.kind == bbcRope
 
   test "Valid bufferBackend pieceTable":
     let tomlStr = """
-[Standard]
-bufferBackend = "pieceTable"
+[BufferBackend]
+kind = "pieceTable"
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
-    check config.standard.bufferBackend == bbcPieceTable
+    check config.bufferBackend.kind == bbcPieceTable
 
   test "Invalid bufferBackend enum is detected":
     let tomlStr = """
-[Standard]
-bufferBackend = "invalid"
+[BufferBackend]
+kind = "invalid"
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
-    check "Standard.bufferBackend" in vr.errors[0].name
-    check config.standard.bufferBackend == bbcAuto # Default value
+    check "BufferBackend.kind" in vr.errors[0].name
+    check config.bufferBackend.kind == bbcAuto # Default value
 
 suite "Config Validation - Clipboard section":
   test "Valid Clipboard config passes validation":

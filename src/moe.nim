@@ -294,7 +294,7 @@ proc main() =
 
   # Apply command-line overrides on top of the TOML-loaded config.
   if cmdLineConfig.bufferBackend.isSome:
-    editorConfig.standard.bufferBackend = cmdLineConfig.bufferBackend.get
+    editorConfig.bufferBackend.kind = cmdLineConfig.bufferBackend.get
 
   # Initialize file logging system for debugging
   # clearOnStart is enabled if set via command line or config file
