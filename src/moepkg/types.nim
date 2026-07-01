@@ -49,6 +49,8 @@ import
   terminal_mode,
   config
 
+from lsp/protocol/types import SemanticTokensLegend
+
 export
   buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
   filetree_types, log_viewer, help_viewer_types, buffer_manager_types,
@@ -306,6 +308,44 @@ type
       # interval (exponential backoff) so a persistently failing server is not
       # retried every base interval.
 
+  PendingSemanticTokensRequest* = object
+    ## Snapshot of the in-flight `textDocument/semanticTokens` request. When
+    ## the response arrives the fields here are compared to the current buffer
+    ## state, so a mid-flight edit, buffer switch, or legend re-registration
+    ## does not cause a stale response to paint the wrong overlay.
+    requestId*: int
+      # 0 = no pending request. LSP request ids are always non-zero for live
+      # requests, so this doubles as the presence sentinel.
+    filePath*: string
+      # Absolute path the request was issued for; guards against buffer swaps
+      # that leave the response pointing at the wrong buffer.
+    changeSeq*: int
+      # Buffer.changeSeq at request-send time; stamped into the cache on
+      # response so a mid-flight edit does not label the overlay as valid
+      # for content the server never saw. `-1` when no pending (distinct
+      # from a legitimate pristine changeSeq=0).
+    contentVersion*: int
+      # Buffer.contentVersion at request-send time; passed through to
+      # applySemanticTokens so updateHighlight's stale-drop can fire once the
+      # buffer's version advances past this. `-1` when no pending.
+    rangeFirst*: int
+    rangeLast*: int
+      # Inclusive row bounds of a range-scoped request. Both `-1` for a
+      # full-document request. Bound the overlay row-set the response is
+      # authoritative over; rows outside are preserved from prior responses.
+    legend*: SemanticTokensLegend
+      # Legend snapshot at request-send time. A dynamic
+      # `client/registerCapability` between send and receive would leave the
+      # response's tokenType indices pointing at THIS legend, not the
+      # current one -- rejecting on mismatch avoids decoding against the
+      # wrong table.
+    viewportTopLine*: int
+    viewportBottomLine*: int
+      # Viewport at request-send time. Stamped into `semanticTokensCache`
+      # instead of the response-time viewport so a scroll in flight does
+      # not falsely validate the current viewport against tokens computed
+      # for the prior viewport. `-1` when no pending.
+
   LspCacheState* = object ## LSP cache and picker state grouped together
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
     codeLensPicker*: CodeLensPicker # CodeLens selection UI state
@@ -334,8 +374,10 @@ type
     pendingDocumentHighlightRequestId*: int
       # Request ID for pending document highlight request (0 = none)
     pendingCodeLensRequestId*: int # Request ID for pending code lens request (0 = none)
-    pendingSemanticTokensRequestId*: int
-      # Request ID for pending semantic tokens request (0 = none)
+    pendingSemanticTokens*: PendingSemanticTokensRequest
+      # Snapshot of the in-flight `textDocument/semanticTokens` request so
+      # the response can be validated against the state at request-send time.
+      # `requestId = 0` means no pending request; sentinel int fields are -1.
     pendingInlayHintRequestId*: int
       # Request ID for pending inlay hint request (0 = none)
     pendingInlayHintBufferId*: BufferId

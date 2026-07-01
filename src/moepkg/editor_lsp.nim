@@ -23,7 +23,7 @@ import std/[options, json, os]
 
 import pkg/results
 
-import types/editor_types, lsp_integration, motion
+import types/editor_types, lsp_integration, motion, editor_codelens
 import command_handlers/[handler_manager, insert_handler]
 
 proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =
@@ -415,6 +415,16 @@ proc restartLspServer*(e: Editor): bool =
     return false
 
   let langId = langIdOpt.get
+
+  # Wipe any pending request state BEFORE stopping the worker. `stopWorker`
+  # clears the service-side request tables, but the editor-side
+  # `pendingXxxRequestId` fields keep dangling ids, and the next
+  # `checkResponse` for them would return `lrsPending` forever, freezing
+  # the corresponding feature until an edit forced an unrelated invalidate.
+  invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
+  invalidateInlayHintCache(e.lsp, e.state.lspCache)
+  invalidateDocumentHighlightCache(e.state.lspCache)
+  invalidateCodeLensCache(e.state.lspCache)
 
   # Stop the worker if it exists. Stopping a not-yet-running server is benign,
   # so keep this quiet (LSP log only) rather than surfacing to the status line.

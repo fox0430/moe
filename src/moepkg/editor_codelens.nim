@@ -23,7 +23,7 @@ import std/[options, monotimes, tables, json, times, algorithm]
 
 import pkg/[results, chronos]
 
-import types/editor_types, logger, highlight, lsp_integration
+import types/editor_types, logger, highlight, lsp_integration, unicode_utils
 import lsp/rust_runnable
 
 proc hasCodeLensSupport*(e: Editor): bool =
@@ -480,37 +480,129 @@ proc viewportRequestRange(e: Editor): (int, int) =
   let bottomLine = min(e.viewport.topLine + e.viewport.height + 10, lastLine)
   (topLine, bottomLine)
 
+proc resetPendingSemanticTokens(cache: var LspCacheState) =
+  ## Wipe the pending-request snapshot to its sentinels. `-1` for
+  ## changeSeq/contentVersion so a stray response cannot spuriously validate
+  ## against a pristine buffer whose real values also happen to be 0.
+  cache.pendingSemanticTokens = PendingSemanticTokensRequest(
+    requestId: 0,
+    filePath: "",
+    changeSeq: -1,
+    contentVersion: -1,
+    rangeFirst: -1,
+    rangeLast: -1,
+    legend: SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[]),
+    viewportTopLine: -1,
+    viewportBottomLine: -1,
+  )
+
 proc invalidateSemanticTokensCache*(lsp: LspIntegration, cache: var LspCacheState) =
   ## Invalidate the semantic tokens cache, forcing re-request on next update
   cache.semanticTokensCache = SemanticTokensCache(isValid: false)
-  if cache.pendingSemanticTokensRequestId != 0:
-    lsp.cancelRequest(cache.pendingSemanticTokensRequestId)
-    cache.pendingSemanticTokensRequestId = 0
+  if cache.pendingSemanticTokens.requestId != 0:
+    lsp.cancelRequest(cache.pendingSemanticTokens.requestId)
+  resetPendingSemanticTokens(cache)
 
 proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
-  ## Process semantic tokens response and apply to buffer's highlight
+  ## Build the semantic overlay from a `textDocument/semanticTokens` response
+  ## and swap it into the active buffer's Highlight.
+
+  # Every conclusion bumps `lastSemanticTokensUpdate` so a persistent reject
+  # (including the transient "no legend" case) is throttled by the debounce
+  # interval rather than firing per render frame. Bumped BEFORE the nil-guard
+  # so a transient nil highlight cannot busy-loop the LSP request.
+  e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
+
   let activeBuffer = e.activeBuffer()
   if activeBuffer.isNil or activeBuffer.highlight.isNil:
     return
 
-  let legendOpt = e.lsp.getSemanticTokensLegend(activeBuffer)
-  if legendOpt.isNone:
+  # Drop the response if the active buffer moved between request and
+  # response (buffer switch, live reload); otherwise tokens computed against
+  # a different file would paint here. Compare unconditionally: an empty
+  # `pendingPath` means we have no reliable identity for the request, so
+  # rejecting is the safe default.
+  let pendingPath = e.state.lspCache.pendingSemanticTokens.filePath
+  if pendingPath.len == 0 or activeBuffer.filePath.get("") != pendingPath:
+    return
+
+  let requestChangeSeq = e.state.lspCache.pendingSemanticTokens.changeSeq
+  let requestContentVersion = e.state.lspCache.pendingSemanticTokens.contentVersion
+  # Sentinel guard: `-1` marks "no valid pending request". A stray response
+  # arriving after invalidateSemanticTokensCache has nothing to key off of.
+  if requestChangeSeq < 0 or requestContentVersion < 0:
+    return
+
+  let colorTabOpt = e.lsp.getSemanticTypeColorTable(activeBuffer)
+  if colorTabOpt.isNone:
     logDebug("editor", "Semantic tokens: no legend available")
     return
 
-  # Parse and apply semantic tokens
-  let tokens = parseSemanticTokens(resp)
-  applySemanticTokens(activeBuffer.highlight, tokens, legendOpt.get)
+  # A dynamic client/registerCapability between request send and now could
+  # have swapped the server's legend. The response's tokenType indices refer
+  # to the request-time legend; decoding them against a new legend would
+  # paint every token with the wrong colour. Compare unconditionally so an
+  # empty request-time snapshot (server registered its legend AFTER the
+  # request was sent) is rejected against a now-non-empty legend instead of
+  # being silently decoded as though it matched.
+  let pendingLegend = e.state.lspCache.pendingSemanticTokens.legend
+  if colorTabOpt.get.legend != pendingLegend:
+    logLspDegraded(
+      "Semantic tokens", "legend changed while request was in flight; dropping response"
+    )
+    return
 
-  # Mark cache as valid
+  # Capture the buffer so the closure survives the caller's stack frame; the
+  # apply loop reads line lengths to split multi-line tokens into per-row
+  # entries and reads line text to convert UTF-16 code-unit positions from
+  # the LSP response into rune indices for the overlay.
+  let buf = activeBuffer
+  let lineRuneCount: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+    if row < 0 or row >= buf.len:
+      -1
+    else:
+      buf.getLineLen(row)
+  let lineText: LineTextFn = proc(row: int): string {.gcsafe, raises: [].} =
+    if row < 0 or row >= buf.len:
+      ""
+    else:
+      buf.getLine(row)
+
+  # Pass the REQUEST-time contentVersion (not the current one). If the buffer
+  # advanced in flight, the stamp is older than the current contentVersion,
+  # and the next `updateHighlight` will drop the stale overlay via
+  # `semanticContentVersion != contentVersion`.
+  let outcome = applySemanticTokens(
+    activeBuffer.highlight, resp, colorTabOpt.get, requestContentVersion, lineRuneCount,
+    e.state.lspCache.pendingSemanticTokens.rangeFirst,
+    e.state.lspCache.pendingSemanticTokens.rangeLast, lineText,
+  )
+
+  case outcome
+  of saoDone:
+    discard
+  of saoRejectedCap:
+    logLspDegraded(
+      "Semantic tokens", "token count exceeds cap (" & $MaxSemanticTokens & ")"
+    )
+    return
+  of saoRejectedMalformed:
+    logLspDegraded("Semantic tokens", "malformed response (missing or invalid data)")
+    return
+  of saoRejectedNoLegend:
+    logDebug("editor", "Semantic tokens: legend not yet available")
+    return
+
+  # Stamp with the request-time changeSeq / viewport so an edit or scroll in
+  # flight does not mark the cache valid for content or a viewport the server
+  # never saw.
   e.state.lspCache.semanticTokensCache = SemanticTokensCache(
-    changeSeq: activeBuffer.changeSeq,
+    changeSeq: requestChangeSeq,
     filePath: activeBuffer.filePath.get(""),
     isValid: true,
-    topLine: e.viewport.topLine,
-    bottomLine: e.viewport.topLine + e.viewport.height,
+    topLine: e.state.lspCache.pendingSemanticTokens.viewportTopLine,
+    bottomLine: e.state.lspCache.pendingSemanticTokens.viewportBottomLine,
   )
-  e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
 
 proc doUpdateSemanticTokensCache(e: Editor) =
   ## Internal: Start an async semantic tokens request (non-blocking)
@@ -522,10 +614,44 @@ proc doUpdateSemanticTokensCache(e: Editor) =
   # Request semantic tokens for visible range (with margin)
   let (topLine, bottomLine) = e.viewportRequestRange()
 
+  let langIdOpt = e.lsp.service.getLanguageIdFromPath(activeBuffer.filePath.get)
+  let isRangeReq =
+    langIdOpt.isSome and e.lsp.service.hasSemanticTokensRangeSupport(langIdOpt.get)
+
+  # Snapshot the legend at request-send time. If the server dynamically
+  # re-registers with a different legend, the response's tokenType indices
+  # still refer to THIS snapshot; processSemanticTokensResponse rejects on
+  # mismatch instead of decoding against a different legend.
+  let requestLegend =
+    if langIdOpt.isSome:
+      e.lsp.service.getSemanticTokensLegend(langIdOpt.get).get(
+        SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[])
+      )
+    else:
+      SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[])
+
   # Start async request
   let reqResult = e.lsp.startSemanticTokensRequest(activeBuffer, topLine, bottomLine)
   if reqResult.isOk:
-    e.state.lspCache.pendingSemanticTokensRequestId = reqResult.get
+    e.state.lspCache.pendingSemanticTokens.requestId = reqResult.get
+    e.state.lspCache.pendingSemanticTokens.filePath = activeBuffer.filePath.get("")
+    e.state.lspCache.pendingSemanticTokens.changeSeq = activeBuffer.changeSeq
+    e.state.lspCache.pendingSemanticTokens.contentVersion = activeBuffer.contentVersion
+    e.state.lspCache.pendingSemanticTokens.legend = requestLegend
+    # Stamp the cache-validity check with the SAME `topLine`/`bottomLine`
+    # the server was asked for (which already includes the +/-10-line
+    # margin from `viewportRequestRange`). Using raw
+    # `viewport.topLine + viewport.height` would spuriously invalidate the
+    # cache on any small scroll even though the overlay covers the
+    # scrolled-into rows from the margin.
+    e.state.lspCache.pendingSemanticTokens.viewportTopLine = topLine
+    e.state.lspCache.pendingSemanticTokens.viewportBottomLine = bottomLine
+    if isRangeReq:
+      e.state.lspCache.pendingSemanticTokens.rangeFirst = topLine
+      e.state.lspCache.pendingSemanticTokens.rangeLast = bottomLine
+    else:
+      e.state.lspCache.pendingSemanticTokens.rangeFirst = -1
+      e.state.lspCache.pendingSemanticTokens.rangeLast = -1
   else:
     logDebug("editor", "Semantic tokens request failed: " & reqResult.error)
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
@@ -553,24 +679,40 @@ proc updateSemanticTokensCache*(e: Editor) =
   if not e.lsp.service.hasSemanticTokensSupport(langIdOpt.get):
     return
 
+  # Pending request from a different buffer (e.g. user switched buffers
+  # mid-flight): cancel so we don't block behind an unrelated response.
+  if e.state.lspCache.pendingSemanticTokens.requestId != 0 and
+      e.state.lspCache.pendingSemanticTokens.filePath.len > 0 and
+      e.state.lspCache.pendingSemanticTokens.filePath != path:
+    invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
+
   # Check if there's a pending request - try to get response
-  if e.state.lspCache.pendingSemanticTokensRequestId != 0:
+  if e.state.lspCache.pendingSemanticTokens.requestId != 0:
     let (status, resultOpt, errorOpt) =
-      e.lsp.checkResponse(e.state.lspCache.pendingSemanticTokensRequestId)
+      e.lsp.checkResponse(e.state.lspCache.pendingSemanticTokens.requestId)
     case status
     of lrsPending:
       # Still waiting for response, don't start a new request
       return
     of lrsSuccess:
-      # Got response, process it
-      e.state.lspCache.pendingSemanticTokensRequestId = 0
-      if resultOpt.isSome and resultOpt.get.kind != JNull:
-        e.processSemanticTokensResponse(resultOpt.get)
-      # Continue to check if we need to start a new request
+      # processSemanticTokensResponse reads pendingSemantic* fields, so wipe
+      # them AFTER the call. It also bumps lastSemanticTokensUpdate itself,
+      # covering the null-result path. `try/finally` guarantees the reset
+      # runs even if the processor raises, otherwise the pending id would
+      # zombie and freeze the feature on this buffer.
+      try:
+        if resultOpt.isSome and resultOpt.get.kind != JNull:
+          e.processSemanticTokensResponse(resultOpt.get)
+        else:
+          # Null result: debounce the retry so a persistently null-answering
+          # server does not fire per render frame.
+          e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
+      finally:
+        resetPendingSemanticTokens(e.state.lspCache)
     of lrsError, lrsTimeout:
-      # Request failed or timed out, clear and continue
       logLspDegraded("Semantic tokens", status, errorOpt.get(""))
-      e.state.lspCache.pendingSemanticTokensRequestId = 0
+      resetPendingSemanticTokens(e.state.lspCache)
+      e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
 
   # Check if cache is still valid
   let cache = e.state.lspCache.semanticTokensCache

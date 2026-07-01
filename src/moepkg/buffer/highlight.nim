@@ -23,6 +23,8 @@
 ## - Incremental re-highlight on edit
 ## - Reserved-word configuration (TODO/NOTE/FIXME etc.)
 
+import std/tables
+
 import ../[highlight, uri_utils]
 import ./core
 import ./markers
@@ -183,6 +185,20 @@ proc updateHighlight*(b: TextBuffer) =
   ## Update syntax highlighting if needed
   ## This should be called before rendering
   if b.highlightNeedsUpdate and not b.isUtilityBuffer:
+    # Keep the Highlight ref alive across reparse so the LSP semantic overlay
+    # (living in the same object) does not need saving. Only colorSegments
+    # is rewritten below.
+    if b.highlight == nil:
+      b.highlight = Highlight(colorSegments: @[])
+
+    # Drop a stale overlay: an edit advances contentVersion, so row/col
+    # coords the server computed against the old snapshot would paint on
+    # shifted positions until the next response.
+    if b.highlight.semantic.len > 0 and
+        b.highlight.semanticContentVersion != b.contentVersion:
+      b.highlight.semantic.clear()
+      b.highlight.semanticContentVersion = -1
+
     # Track whether the highlight was rebuilt from scratch. When true, all
     # previously-applied URI modifiers outside the inline scan range are lost
     # and the progressive scan must restart from the beginning. When false
@@ -212,8 +228,7 @@ proc updateHighlight*(b: TextBuffer) =
           b.maxHighlightLineLength,
         )
 
-        # Convert IncrementalHighlight segments to Highlight
-        b.highlight = Highlight(colorSegments: b.incrementalHighlight.segments)
+        b.highlight.colorSegments = b.incrementalHighlight.segments
         highlightRebuilt = false
       else:
         # Cache invalid or first time - parse once with incremental
@@ -234,32 +249,30 @@ proc updateHighlight*(b: TextBuffer) =
             b.maxHighlightLineLength,
           )
 
-          b.highlight = Highlight(colorSegments: segments)
+          b.highlight.colorSegments = segments
           b.incrementalHighlight = IncrementalHighlight(
             segments: segments,
             lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
             parsedUpTo: b.len - 1,
           )
         else:
-          b.highlight = Highlight(colorSegments: @[])
+          b.highlight.colorSegments = @[]
           b.incrementalHighlight = nil
     else:
       # Plain text - single default segment covering all lines
       if b.len > 0:
-        b.highlight = Highlight(
-          colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: b.len - 1,
-              lastColumn: max(0, b.getLine(b.len - 1).len - 1),
-              color: EditorColorPairIndex.default,
-              style: defaultStyle,
-            )
-          ]
-        )
+        b.highlight.colorSegments = @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: b.len - 1,
+            lastColumn: max(0, b.getLine(b.len - 1).len - 1),
+            color: EditorColorPairIndex.default,
+            style: defaultStyle,
+          )
+        ]
       else:
-        b.highlight = Highlight(colorSegments: @[])
+        b.highlight.colorSegments = @[]
 
     # Apply underline to URIs/URLs in a limited range around the change point.
     # Scanning all lines from the change point to EOF is O(n) and blocks
@@ -279,7 +292,7 @@ proc updateHighlight*(b: TextBuffer) =
       b.highlight.addUnderlineRanges(inlineRanges)
 
     # Persist URI modifiers into incrementalHighlight.segments. Without this,
-    # the next incremental update's `b.highlight = Highlight(...)` assignment
+    # the next incremental update's `b.highlight.colorSegments = ...` reassign
     # would drop URI modifiers in the unchanged region, forcing a full rescan.
     if not highlightRebuilt and b.incrementalHighlight != nil:
       b.incrementalHighlight.segments = b.highlight.colorSegments

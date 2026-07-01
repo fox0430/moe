@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils, os, strutils, strformat, unicode, algorithm, options, tables]
+import
+  std/[sequtils, os, strutils, strformat, unicode, algorithm, options, tables, json]
 
 import pkg/celina
 
-import color
+import color, unicode_utils
 import syntax/tokenizer
 import lsp/protocol/types
 
@@ -36,8 +37,38 @@ type
     color*: EditorColorPairIndex
     style*: Style # Changed from attribute to style
 
+  SemanticOverlayToken* = object
+    ## LSP semantic token resolved to a colour, sorted by `firstColumn` per row.
+    firstColumn*: int
+    length*: int
+    color*: EditorColorPairIndex
+    style*: Style
+
+  SemanticOverlayLine* = object
+    ## Overlay tokens for one row. Invariant: `tokens` is sorted by
+    ## `firstColumn` ascending, and every pair of tokens is disjoint
+    ## (`t[i].firstColumn + t[i].length <= t[i+1].firstColumn`).
+    ## `findOverlayToken`'s binary search relies on both properties.
+    ## Maintained by `addOverlayToken`, which truncates or drops any prior
+    ## token whose range would overlap a newly-appended one.
+    tokens*: seq[SemanticOverlayToken]
+
   Highlight* = ref object
     colorSegments*: seq[ColorSegment]
+    semantic*: Table[int, SemanticOverlayLine]
+      ## Residual LSP semantic overlay, composed with `colorSegments` at render.
+    semanticContentVersion*: int = -1
+      ## `buffer.contentVersion` of the last successful `applySemanticTokens`.
+      ## `-1` is the sentinel for "no overlay applied yet"; a legitimate
+      ## `contentVersion=0` (fresh newTextBuffer) would otherwise alias with
+      ## the post-drop reset state and mask a real version mismatch. The
+      ## Nim 2 field default keeps every `Highlight(colorSegments: ...)`
+      ## construction site correct without repetition.
+    semanticLegend*: SemanticTokensLegend
+      ## Legend under which the current overlay entries were decoded. When a
+      ## later apply arrives with a different legend (dynamic re-registration),
+      ## the overlay is wiped BEFORE the new tokens are added so range-scoped
+      ## applies do not leave stale-legend colours on the rows they don't touch.
 
   ReservedWord* = object
     word*: string
@@ -91,17 +122,39 @@ type
     ## addModifier, addUnderlineRanges). Disambiguates from celina's geometry
     ## Position and lsp/protocol/types Position.
 
-const DefaultMaxHighlightLineLength* = 3000
-  ## Default per-line tokenization cap (in runes). A single huge line (e.g.
-  ## minified JS collapsed onto one line) would otherwise stall a frame, since
-  ## the chunk drivers budget by line count, not bytes within a line. Beyond
-  ## this column the line is rendered as plain text. `<= 0` disables the cap.
-  ## Mirrors vim's `synmaxcol` (default 3000).
-  ##
-  ## Tradeoff (same as vim): a multi-line construct (block comment, triple-quoted
-  ## string) that opens before the cap but *closes past it* on the same line is
-  ## seen as still-open, bleeding its color onto following lines until the next
-  ## real close. Detecting this needs tokenizing past the cap — the work it avoids.
+  SemanticTypeColorTable* = ref object
+    ## Precomputed `(tokenType, modifiers) -> (colour, style)` cache for one
+    ## legend. The zero-modifier row is a dense seq (fast path — the common
+    ## case); modifier-bearing tokens fall through to a lazy Table keyed by
+    ## `(tokenType shl 32) or modifiers`, resolved on first use via the
+    ## stored legend. Cached per language server on `LspIntegration`.
+    baseColors*: seq[EditorColorPairIndex]
+    legend*: SemanticTokensLegend
+    resolved*:
+      Table[uint64, tuple[color: EditorColorPairIndex, style: set[StyleModifier]]]
+
+  SemanticApplyOutcome* = enum
+    saoDone
+    saoRejectedCap # response exceeded `MaxSemanticTokens`
+    saoRejectedMalformed # missing/invalid `data` array, length not %5, etc.
+    saoRejectedNoLegend # legend transiently missing; prior overlay preserved
+
+const
+  DefaultMaxHighlightLineLength* = 3000
+    ## Default per-line tokenization cap (in runes). A single huge line (e.g.
+    ## minified JS collapsed onto one line) would otherwise stall a frame, since
+    ## the chunk drivers budget by line count, not bytes within a line. Beyond
+    ## this column the line is rendered as plain text. `<= 0` disables the cap.
+    ## Mirrors vim's `synmaxcol` (default 3000).
+    ##
+    ## Tradeoff (same as vim): a multi-line construct (block comment, triple-quoted
+    ## string) that opens before the cap but *closes past it* on the same line is
+    ## seen as still-open, bleeding its color onto following lines until the next
+    ## real close. Detecting this needs tokenizing past the cap — the work it avoids.
+
+  MaxSemanticTokens* = 200_000
+    ## Hard cap on tokens per response. Above this, `applySemanticTokens` rejects
+    ## the response before parsing (see design/semantic_tokens_overlay_design.md).
 
 let defaultStyle* =
   Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
@@ -171,6 +224,23 @@ proc `$`*(highlight: Highlight): string =
     if i < highlight.colorSegments.high:
       result.add ", "
   result.add "]"
+  if highlight.semantic.len > 0:
+    result.add fmt" semantic(v={$highlight.semanticContentVersion}): {{"
+    # Table iteration order is unspecified; sort rows for reproducible output.
+    var rows: seq[int]
+    for row in highlight.semantic.keys:
+      rows.add(row)
+    rows.sort()
+    for i, row in rows:
+      if i > 0:
+        result.add ", "
+      result.add fmt"{$row}: ["
+      for j, t in highlight.semantic[row].tokens:
+        if j > 0:
+          result.add ", "
+        result.add fmt"({$t.firstColumn}+{$t.length}={t.color})"
+      result.add "]"
+    result.add "}"
 
 proc len*(highlight: Highlight): int {.inline.} =
   highlight.colorSegments.len
@@ -208,36 +278,72 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
 
   return lb
 
-proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
-  ## Get the color at the specified position using binary search.
-  ## Returns default color if the position is out of bounds.
+proc findOverlayToken(tokens: openArray[SemanticOverlayToken], col: int): int =
+  ## Index of the token containing `col`, or -1. Tokens are sorted and disjoint.
+  ## Takes `openArray` so callers can pass a seq borrowed from a Table entry
+  ## without a per-cell value copy on the hot render path.
+  if tokens.len == 0:
+    return -1
+  var lo = 0
+  var hi = tokens.len - 1
+  var idx = -1
+  while lo <= hi:
+    let mid = (lo + hi) div 2
+    if tokens[mid].firstColumn <= col:
+      idx = mid
+      lo = mid + 1
+    else:
+      hi = mid - 1
+  if idx < 0:
+    return -1
+  let t = tokens[idx]
+  if col < t.firstColumn + t.length:
+    return idx
+  return -1
 
-  # Handle empty highlight
+proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
+  ## Color at (line, col). Semantic overlay wins over `colorSegments` on a hit.
+  if highlight.semantic.len > 0:
+    # `withValue` aliases the stored entry via a pointer, avoiding the seq
+    # ref-count bump that `getOrDefault` would incur on this per-cell path.
+    var hitColor = EditorColorPairIndex.default
+    var hit = false
+    highlight.semantic.withValue(line, lineOv):
+      let ovIdx = findOverlayToken(lineOv.tokens, col)
+      if ovIdx >= 0:
+        hitColor = lineOv.tokens[ovIdx].color
+        hit = true
+    if hit:
+      return hitColor
+
   if highlight.colorSegments.len == 0:
     return EditorColorPairIndex.default
 
-  # Check if position is within valid range
   if (line, col) < (highlight[0].firstRow, highlight[0].firstColumn) or
       (line, col) > (highlight[^1].lastRow, highlight[^1].lastColumn):
     return EditorColorPairIndex.default
 
-  # Use binary search to find the segment
   let idx = highlight.indexOf(line, col)
   return highlight[idx].color
 
 proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifier] =
-  ## Get the style modifiers at the specified position using binary search.
-  ## Returns empty set if the position is out of bounds.
+  ## Modifiers at (line, col). Syntax and overlay modifiers are unioned so
+  ## e.g. URI underline survives a semantic-token colour hit.
+  var mods: set[StyleModifier] = {}
 
-  if highlight.colorSegments.len == 0:
-    return {}
+  if highlight.colorSegments.len > 0 and
+      (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
+      (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
+    let idx = highlight.indexOf(line, col)
+    mods = highlight[idx].style.modifiers
 
-  if (line, col) < (highlight[0].firstRow, highlight[0].firstColumn) or
-      (line, col) > (highlight[^1].lastRow, highlight[^1].lastColumn):
-    return {}
+  if highlight.semantic.len > 0:
+    highlight.semantic.withValue(line, lineOv):
+      let ovIdx = findOverlayToken(lineOv.tokens, col)
+      if ovIdx >= 0:
+        mods = mods + lineOv.tokens[ovIdx].style.modifiers
 
-  let idx = highlight.indexOf(line, col)
-  return highlight[idx].style.modifiers
+  return mods
 
 template isIntersect(s, t: ColorSegment): bool =
   not (
@@ -1734,162 +1840,409 @@ proc semanticTokenTypeToColor*(
     # Unknown token type - use default
     EditorColorPairIndex.default
 
-proc semanticTokenToColorSegment*(
-    token: SemanticToken, legend: SemanticTokensLegend
-): ColorSegment =
-  ## Convert a single SemanticToken to a ColorSegment.
-  let
-    typeName = getSemanticTokenType(token, legend)
-    modifiers = getSemanticTokenModifiers(token, legend)
-    color = semanticTokenTypeToColor(typeName, modifiers)
+proc buildSemanticTypeColorTable*(
+    legend: SemanticTokensLegend
+): SemanticTypeColorTable =
+  result = SemanticTypeColorTable(legend: legend)
+  result.baseColors = newSeq[EditorColorPairIndex](legend.tokenTypes.len)
+  for i, name in legend.tokenTypes:
+    result.baseColors[i] = semanticTokenTypeToColor(name, @[])
 
-  result = ColorSegment(
-    firstRow: token.line,
-    firstColumn: token.startChar,
-    lastRow: token.line, # Semantic tokens are typically single-line
-    lastColumn: token.endChar - 1, # endChar is exclusive, lastColumn is inclusive
-    color: color,
-    style: defaultStyle,
+proc semanticModifierStyle(modifiers: seq[string]): set[StyleModifier] =
+  ## Map LSP standard token modifiers to celina text-attribute set. Only the
+  ## text-attribute modifiers are honoured here; `readonly`/`static` shifts
+  ## the base colour instead (see `semanticTokenTypeToColor`).
+  for m in modifiers:
+    case m
+    of "deprecated":
+      result.incl StyleModifier.Crossed
+    of "abstract":
+      result.incl StyleModifier.Italic
+    of "definition", "declaration":
+      result.incl StyleModifier.Bold
+    else:
+      discard
+
+proc resolveTokenColor*(
+    tab: SemanticTypeColorTable, tokenType: int, modBitmask: int
+): tuple[color: EditorColorPairIndex, style: set[StyleModifier]] {.inline.} =
+  ## Resolve `(colour, style)` from `(tokenType, modBitmask)`, lazily decoding
+  ## modifier names on the first sighting of each unique combination.
+  if tokenType < 0 or tokenType >= tab.baseColors.len:
+    return (EditorColorPairIndex.default, {})
+  # Zero-modifier fast path. Callers must pre-filter negatives (a negative
+  # bitmask is a spec violation; applySemanticTokens rejects the whole
+  # response). Defensive fallback for direct callers of this API: bail to
+  # default rather than folding into base colour or poisoning the cache via
+  # `.uint32` sign-extension.
+  if modBitmask == 0:
+    return (tab.baseColors[tokenType], {})
+  if modBitmask < 0:
+    return (EditorColorPairIndex.default, {})
+  let key = (uint64(tokenType) shl 32) or uint64(uint32(modBitmask))
+  if key in tab.resolved:
+    return tab.resolved[key]
+  # First hit for this (type, mods) pair; decode names and cache.
+  var mods: seq[string]
+  var m = modBitmask
+  var idx = 0
+  while m != 0 and idx < tab.legend.tokenModifiers.len:
+    if (m and 1) != 0:
+      mods.add(tab.legend.tokenModifiers[idx])
+    m = m shr 1
+    inc idx
+  let entry = (
+    color: semanticTokenTypeToColor(tab.legend.tokenTypes[tokenType], mods),
+    style: semanticModifierStyle(mods),
   )
+  tab.resolved[key] = entry
+  return entry
+
+type
+  LineRuneCountFn* = proc(row: int): int {.gcsafe, raises: [].}
+    ## Row -> rune count callback used by `applySemanticTokens` for multi-line
+    ## token splitting. Return the number of Unicode characters (runes) on
+    ## `row`, or `-1` if `row` is out of buffer bounds (signals the splitter
+    ## to stop advancing). Must be pure and non-raising.
+
+  LineTextFn* = proc(row: int): string {.gcsafe, raises: [].}
+    ## Row -> line text callback used by `applySemanticTokens` to convert
+    ## LSP UTF-16 code-unit positions into rune indices. Return "" when
+    ## `row` is out of buffer bounds (OOB detection stays with
+    ## `LineRuneCountFn`); callers with only ASCII content can omit this
+    ## callback to skip the per-token conversion pass. Must be pure and
+    ## non-raising.
+
+proc deleteRowsInRange(
+    overlay: var Table[int, SemanticOverlayLine], firstRow, lastRow: int
+): tuple[deleted: int, outside: int] =
+  ## Delete overlay rows in `[firstRow, lastRow]`. Iterates the range rather
+  ## than the whole key-set: viewport-sized range applies (~60 rows) stay
+  ## cheap even when the overlay covers thousands of populated rows.
+  let beforeLen = overlay.len
+  for row in firstRow .. lastRow:
+    if overlay.hasKey(row):
+      overlay.del(row)
+  result.deleted = beforeLen - overlay.len
+  result.outside = overlay.len
+
+proc addOverlayToken(
+    overlay: var Table[int, SemanticOverlayLine],
+    row, col, length: int,
+    color: EditorColorPairIndex,
+    modifiers: set[StyleModifier] = {},
+) =
+  ## Insert a token into `overlay[row].tokens` while preserving the
+  ## sorted-AND-disjoint invariant `SemanticOverlayLine` documents. The
+  ## multi-line splitter's per-row unroll can collide with later single-line
+  ## tokens on the same row; the new token wins over every overlapping prior,
+  ## but each overlapping prior keeps its own head (up to `col`) and tail
+  ## (past `col + length`) as separate segments so colours don't leak.
+  let tokStyle = Style(
+    fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: modifiers
+  )
+  let newTok = SemanticOverlayToken(
+    firstColumn: col, length: length, color: color, style: tokStyle
+  )
+  if not overlay.hasKey(row):
+    overlay[row] = SemanticOverlayLine(tokens: @[newTok])
+    return
+
+  let prior = overlay[row].tokens
+  # Fast path: LSP delta encoding is monotonically increasing per row, so most
+  # additions land past the last token with no overlap. Skip the rebuild.
+  if prior.len == 0 or prior[^1].firstColumn + prior[^1].length <= col:
+    overlay[row].tokens.add(newTok)
+    return
+
+  # Slow path: rebuild the row. A back-walk cannot correctly handle the case
+  # where an inner prior (e.g. a single-line token nested inside a multi-line
+  # wrap's carved-out tail) extends past `newEnd` at the same time as a
+  # further-right prior — the tail's colour must come from the inner prior at
+  # position `newEnd`, not from the outermost prior that gets walked first.
+  let newEnd = col + length
+  var newTokens: seq[SemanticOverlayToken] = @[]
+  var inserted = false
+  for t in prior:
+    let tEnd = t.firstColumn + t.length
+    if tEnd <= col:
+      # Entirely before the new token; keep intact.
+      newTokens.add(t)
+      continue
+    if t.firstColumn >= newEnd:
+      # Entirely past the new token; keep intact, insert new token before it.
+      if not inserted:
+        newTokens.add(newTok)
+        inserted = true
+      newTokens.add(t)
+      continue
+    # Overlaps: split into head (kept), overlap (replaced), tail (kept).
+    if t.firstColumn < col:
+      newTokens.add(
+        SemanticOverlayToken(
+          firstColumn: t.firstColumn,
+          length: col - t.firstColumn,
+          color: t.color,
+          style: t.style,
+        )
+      )
+    if not inserted:
+      newTokens.add(newTok)
+      inserted = true
+    if tEnd > newEnd:
+      newTokens.add(
+        SemanticOverlayToken(
+          firstColumn: newEnd, length: tEnd - newEnd, color: t.color, style: t.style
+        )
+      )
+  if not inserted:
+    newTokens.add(newTok)
+  overlay[row].tokens = newTokens
 
 proc applySemanticTokens*(
-    highlight: var Highlight, tokens: SemanticTokens, legend: SemanticTokensLegend
-) =
-  ## Apply semantic tokens to an existing Highlight, overwriting the relevant segments.
-  ## Semantic tokens from LSP take precedence over local syntax highlighting.
+    highlight: Highlight,
+    resp: JsonNode,
+    colorTab: SemanticTypeColorTable,
+    contentVersion: int,
+    getLineRuneCount: LineRuneCountFn = nil,
+    updateFirstRow: int = -1,
+    updateLastRow: int = -1,
+    getLineText: LineTextFn = nil,
+): SemanticApplyOutcome =
+  ## Build a semantic overlay from an LSP `textDocument/semanticTokens` response
+  ## and swap it into `highlight.semantic`. Never touches `colorSegments`.
   ##
-  ## Performance: O(n + m) where n = existing segments, m = semantic tokens
-  ## Uses batch processing instead of individual overwrite calls.
-  let decodedTokens = decodeSemanticTokens(tokens)
-  if decodedTokens.len == 0:
-    return
+  ## `updateFirstRow`/`updateLastRow`: when non-negative, the response is
+  ## treated as authoritative over that inclusive row range only; entries on
+  ## rows outside the range are preserved from prior responses. Use for
+  ## `semanticTokens/range` replies. Leave at `-1` for a full-document reply
+  ## (full replace).
+  if resp.isNil or resp.kind != JObject or not resp.hasKey("data"):
+    return saoRejectedMalformed
+  let dataNode = resp["data"]
+  if dataNode.kind != JArray:
+    return saoRejectedMalformed
 
-  # Convert all tokens to ColorSegments and index by line for O(1) lookup
-  var tokensByLine = initTable[int, seq[ColorSegment]]()
-  for token in decodedTokens:
-    let segment = semanticTokenToColorSegment(token, legend)
-    if segment.lastColumn >= segment.firstColumn:
-      if token.line notin tokensByLine:
-        tokensByLine[token.line] = @[]
-      tokensByLine[token.line].add(segment)
+  # Range apply requires BOTH bounds set; a partial pair (one -1, one >=0)
+  # is a caller bug that used to be silently treated as full-doc replace.
+  # An inverted range (first > last) is likewise a caller bug — it would
+  # silently no-op (empty Nim slice iteration + filter-none merge) and the
+  # caller would stamp the cache as valid.
+  if (updateFirstRow < 0) != (updateLastRow < 0):
+    return saoRejectedMalformed
+  if updateFirstRow >= 0 and updateFirstRow > updateLastRow:
+    return saoRejectedMalformed
 
-  if tokensByLine.len == 0:
-    return
+  # No legend means we cannot trust ANY server assertion for this stream,
+  # including "empty" replies. Check BEFORE the mod-5/cap branches so the
+  # actionable "legend not yet available" outcome is not shadowed by a
+  # simultaneously malformed-length response.
+  if colorTab.baseColors.len == 0:
+    return saoRejectedNoLegend
 
-  # Sort tokens within each line by column
-  for line in tokensByLine.keys:
-    tokensByLine[line].sort do(a, b: ColorSegment) -> int:
-      cmp(a.firstColumn, b.firstColumn)
+  let dataLen = dataNode.len
+  if dataLen mod 5 != 0:
+    return saoRejectedMalformed
+  if dataLen > MaxSemanticTokens * 5:
+    return saoRejectedCap
+  # Deferred legend-swap: a server dynamically re-registered with a different
+  # legend invalidates every existing overlay entry (their stored colour was
+  # resolved against the prior legend). Compute the intent up front but only
+  # apply it AFTER parsing succeeds, so a mid-parse malformed byte does not
+  # wipe the prior overlay across the whole buffer.
+  # Only fire on a real legend change (both sides non-empty).
+  let needsLegendWipe =
+    highlight.semantic.len > 0 and colorTab.legend.tokenTypes.len > 0 and
+    highlight.semanticLegend.tokenTypes.len > 0 and
+    highlight.semanticLegend != colorTab.legend
+  if dataLen == 0:
+    # Empty range reply = "no tokens in this range"; clear just that range.
+    if needsLegendWipe:
+      highlight.semantic.clear()
+      highlight.semanticContentVersion = -1
+    highlight.semanticLegend = colorTab.legend
+    if updateFirstRow >= 0 and updateLastRow >= 0:
+      discard deleteRowsInRange(highlight.semantic, updateFirstRow, updateLastRow)
+      # Range reply: rows outside the range retain their prior stamp, so
+      # advance semanticContentVersion only when the overlay is empty (no
+      # older rows survive to be mis-labelled as fresh).
+      if highlight.semantic.len == 0:
+        highlight.semanticContentVersion = contentVersion
+    else:
+      # Full-doc empty reply = "no tokens in this document" per LSP spec.
+      # Clearing the whole overlay honours that; the earlier design that
+      # preserved it left ghost tokens visible after config changes /
+      # semantic-tokens teardown.
+      highlight.semantic.clear()
+      highlight.semanticContentVersion = contentVersion
+    return saoDone
 
-  # Build new segment list by merging existing segments with tokens
-  var newSegments: seq[ColorSegment] = @[]
+  var overlay = initTable[int, SemanticOverlayLine]()
+  var currentLine = 0
+  var currentChar = 0
+  var i = 0
+  # Per-row memoization for `getLineText`. Clustered tokens (dozens per row is
+  # typical) would otherwise fetch and re-walk the same line's text once per
+  # token; cache it across adjacent tokens on the same row.
+  var cachedTextRow = -1
+  var cachedText = ""
 
-  for seg in highlight.colorSegments:
-    # Check if this segment's line has any tokens
-    if seg.firstRow notin tokensByLine and seg.lastRow notin tokensByLine:
-      # No tokens on this line, keep segment as-is
-      newSegments.add(seg)
+  while i < dataLen:
+    # Non-JInt entries would getInt-fallthrough to 0 and corrupt the delta
+    # chain silently.
+    if dataNode[i].kind != JInt or dataNode[i + 1].kind != JInt or
+        dataNode[i + 2].kind != JInt or dataNode[i + 3].kind != JInt or
+        dataNode[i + 4].kind != JInt:
+      return saoRejectedMalformed
+    let deltaLine = dataNode[i].getInt
+    let deltaStart = dataNode[i + 1].getInt
+    let length = dataNode[i + 2].getInt
+    let tokenType = dataNode[i + 3].getInt
+    let tokenModifiers = dataNode[i + 4].getInt
+    i += 5
+
+    # LSP spec: deltaLine/deltaStart/length/tokenModifiers are uinteger. A
+    # negative from a buggy server would silently corrupt the delta chain or
+    # poison the (type,mods) cache; reject the whole response so the caller
+    # can retry cleanly instead of painting a scrambled overlay. Also reject
+    # tokenModifiers above uint32 so the (type<<32)|mods cache key cannot
+    # silently collide (LSP spec caps at uint32; would need >=33 modifiers
+    # in a legend, but the truncation would be silent).
+    if deltaLine < 0 or deltaStart < 0 or tokenModifiers < 0 or
+        tokenModifiers > int(high(uint32)):
+      return saoRejectedMalformed
+
+    if deltaLine > 0:
+      currentLine += deltaLine
+      currentChar = deltaStart
+    else:
+      currentChar += deltaStart
+
+    if length <= 0 or currentLine < 0 or currentChar < 0:
+      continue
+    # Range-scoped reply: `deltaLine` is monotonically non-negative per LSP
+    # spec, so once `currentLine` passes `updateLastRow` no later token can
+    # land inside the range. Break early to skip utf16 conversion +
+    # resolveTokenColor + addOverlayToken for the tail.
+    if updateLastRow >= 0 and currentLine > updateLastRow:
+      break
+    let (color, style) = resolveTokenColor(colorTab, tokenType, tokenModifiers)
+    if color == EditorColorPairIndex.default and style == {}:
       continue
 
-    # For simplicity, handle single-line segments (most common case)
-    if seg.firstRow == seg.lastRow:
-      let line = seg.firstRow
-      if line notin tokensByLine:
-        newSegments.add(seg)
+    # LSP positions are UTF-16 code units by default (positionEncoding); the
+    # overlay stores rune indices. Convert per-row so wrap rows with non-BMP
+    # runes are counted correctly.
+    var applyCol = currentChar
+    var startRowRunes = length # rune count for the start row's portion
+    var utf16Remaining = 0 # UTF-16 units left to distribute over wrap rows
+    if getLineText != nil:
+      if cachedTextRow != currentLine:
+        cachedText = getLineText(currentLine)
+        cachedTextRow = currentLine
+      let (startRune, _) = utf16OffsetToRune(cachedText, currentChar)
+      let (endRune, endUtf16Walked) =
+        utf16OffsetToRune(cachedText, currentChar + length)
+      applyCol = startRune
+      startRowRunes = endRune - startRune
+      utf16Remaining = max(0, (currentChar + length) - endUtf16Walked)
+
+    if getLineRuneCount == nil:
+      # No splitter callback: paint only the start-row portion. Stamping a
+      # phantom oversized overlay entry pinned to `currentLine` would violate
+      # the SemanticOverlayLine invariant.
+      overlay.addOverlayToken(currentLine, applyCol, startRowRunes, color, style)
+    else:
+      # Multi-line token split; buffer-end break bounds the loop.
+      # Range-scoped replies: the splitter stops at `updateLastRow`; rows past
+      # the request range would be dropped by the merge below, so unrolling
+      # into them is wasted work AND would risk stomping a subsequent same-row
+      # token via `addOverlayToken`'s truncation.
+      let firstRowLen = getLineRuneCount(currentLine)
+      # Drop stale-position tokens whose start is at or past current EOL.
+      # `>=` (not `>`) so a token starting exactly at EOL is dropped instead
+      # of spilling onto the next row with a wrong colour.
+      if firstRowLen < 0 or applyCol >= firstRowLen:
+        continue
+      # If the token starts outside a range apply, drop it entirely.
+      if updateLastRow >= 0 and currentLine > updateLastRow:
         continue
 
-      # Split segment around tokens on this line
-      let lineTokens = tokensByLine[line]
-      var currentCol = seg.firstColumn
-
-      for token in lineTokens:
-        # Skip tokens completely before current position
-        if token.lastColumn < currentCol:
+      # Paint the start row (rune-based split when no getLineText; else the
+      # UTF-16-derived rune count clipped to the row).
+      let startAvail = max(0, firstRowLen - applyCol)
+      var startPaint = min(startRowRunes, startAvail)
+      var runeOverflow = 0
+      if getLineText == nil:
+        # Positions treated as runes: split the total length rune-by-rune.
+        if length <= startAvail:
+          overlay.addOverlayToken(currentLine, applyCol, length, color, style)
           continue
+        startPaint = startAvail
+        runeOverflow = length - startAvail
+      overlay.addOverlayToken(currentLine, applyCol, startPaint, color, style)
+      if utf16Remaining == 0 and runeOverflow == 0:
+        continue
 
-        # Skip tokens completely outside segment bounds
-        if token.lastColumn < seg.firstColumn or token.firstColumn > seg.lastColumn:
-          continue
-
-        # Effective token start (clipped to current position and segment bounds)
-        let effectiveStart = max(token.firstColumn, max(currentCol, seg.firstColumn))
-        let effectiveEnd = min(token.lastColumn, seg.lastColumn)
-
-        # Skip if no valid range after clipping
-        if effectiveStart > effectiveEnd:
-          continue
-
-        # Add portion before token (if any)
-        if currentCol < effectiveStart:
-          newSegments.add(
-            ColorSegment(
-              firstRow: line,
-              firstColumn: currentCol,
-              lastRow: line,
-              lastColumn: effectiveStart - 1,
-              color: seg.color,
-              style: seg.style,
-            )
-          )
-
-        # Add the token itself
-        newSegments.add(
-          ColorSegment(
-            firstRow: line,
-            firstColumn: effectiveStart,
-            lastRow: line,
-            lastColumn: effectiveEnd,
-            color: token.color,
-            style: token.style,
-          )
-        )
-        currentCol = effectiveEnd + 1
-
-        # Stop if we've covered the entire segment
-        if currentCol > seg.lastColumn:
+      # Wrap rows: distribute the UTF-16 remainder precisely when getLineText
+      # is wired, else fall back to rune-based distribution.
+      var row = currentLine + 1
+      while utf16Remaining > 0 or runeOverflow > 0:
+        if updateLastRow >= 0 and row > updateLastRow:
           break
+        let rowLen = getLineRuneCount(row)
+        if rowLen < 0:
+          break
+        if getLineText != nil:
+          # Convert this row's UTF-16 length once, then consume up to it.
+          let rowText = getLineText(row)
+          let (rowRunes, rowUtf16) = utf16OffsetToRune(rowText, high(int32))
+          if utf16Remaining >= rowUtf16:
+            if rowRunes > 0:
+              overlay.addOverlayToken(row, 0, rowRunes, color, style)
+            utf16Remaining -= rowUtf16
+            inc row
+          else:
+            let (partialRunes, _) = utf16OffsetToRune(rowText, utf16Remaining)
+            if partialRunes > 0:
+              overlay.addOverlayToken(row, 0, partialRunes, color, style)
+            utf16Remaining = 0
+        else:
+          if rowLen == 0:
+            inc row
+            continue
+          if runeOverflow <= rowLen:
+            overlay.addOverlayToken(row, 0, runeOverflow, color, style)
+            runeOverflow = 0
+          else:
+            overlay.addOverlayToken(row, 0, rowLen, color, style)
+            runeOverflow -= rowLen
+            inc row
 
-      # Add remaining portion after last token (if any)
-      if currentCol <= seg.lastColumn:
-        newSegments.add(
-          ColorSegment(
-            firstRow: line,
-            firstColumn: currentCol,
-            lastRow: line,
-            lastColumn: seg.lastColumn,
-            color: seg.color,
-            style: seg.style,
-          )
-        )
-    else:
-      # Multi-line segment: for now, use the slower individual overwrite
-      # This is rare in practice
-      var tempHighlight = Highlight(colorSegments: @[seg])
-      for line in seg.firstRow .. seg.lastRow:
-        if line in tokensByLine:
-          for token in tokensByLine[line]:
-            tempHighlight.overwrite(token)
-      newSegments.add(tempHighlight.colorSegments)
+  # LSP delta encoding is monotonically increasing per row (deltaLine and
+  # deltaStart are uinteger by spec), so tokens land in order without a sort.
 
-  highlight.colorSegments = newSegments
+  # Parse succeeded: now apply the deferred legend-swap wipe and legend
+  # adoption, so a rejected parse above leaves the prior overlay intact.
+  if needsLegendWipe:
+    highlight.semantic.clear()
+    highlight.semanticContentVersion = -1
+  highlight.semanticLegend = colorTab.legend
 
-proc semanticTokensToHighlight*(
-    tokens: SemanticTokens, legend: SemanticTokensLegend, bufferLen: int
-): Highlight =
-  ## Create a new Highlight from semantic tokens only.
-  ## This creates a sparse highlight - positions not covered by tokens will have default color.
-  result = Highlight(colorSegments: @[])
-  let decodedTokens = decodeSemanticTokens(tokens)
-
-  for token in decodedTokens:
-    if token.line < bufferLen:
-      let segment = semanticTokenToColorSegment(token, legend)
-      if segment.lastColumn >= segment.firstColumn:
-        result.colorSegments.add(segment)
-
-  # Sort segments by position
-  result.colorSegments.sort do(a, b: ColorSegment) -> int:
-    if a.firstRow != b.firstRow:
-      return cmp(a.firstRow, b.firstRow)
-    else:
-      return cmp(a.firstColumn, b.firstColumn)
+  if updateFirstRow < 0 or updateLastRow < 0:
+    # Full-doc reply: every row is fresh at this contentVersion. `swap` avoids
+    # copying every bucket + per-row token seq that `=` would incur.
+    swap(highlight.semantic, overlay)
+    highlight.semanticContentVersion = contentVersion
+  else:
+    # Range reply: drop existing entries in the request range, then merge.
+    # `deleteRowsInRange` also tells us if any outside-range rows survived
+    # (their older resolved colours must keep the older stamp).
+    let (_, outsideRows) =
+      deleteRowsInRange(highlight.semantic, updateFirstRow, updateLastRow)
+    for row, line in overlay.pairs:
+      if row >= updateFirstRow and row <= updateLastRow:
+        highlight.semantic[row] = line
+    if outsideRows == 0:
+      highlight.semanticContentVersion = contentVersion
+  return saoDone

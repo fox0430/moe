@@ -26,7 +26,14 @@ import std/[options, monotimes, times]
 import pkg/results
 
 import
-  types/editor_types, editor_file, editor_lsp, git_diff, git_conflict, motion, logger
+  types/editor_types,
+  editor_file,
+  editor_lsp,
+  editor_codelens,
+  git_diff,
+  git_conflict,
+  motion,
+  logger
 
 proc clampCursorAfterReload(e: Editor, buf: TextBuffer) =
   ## A reload swaps the buffer contents wholesale without touching the cursor.
@@ -52,6 +59,13 @@ proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
   buf.refreshConflicts()
   e.state.timing.lastConflictScan = getMonoTime()
   e.state.timing.lastConflictScanSeq = buf.changeSeq
+  # A pre-reload LSP response would land on the fresh buffer with stale row/col
+  # coords; drop all four caches (loadFile clears highlightNeedsUpdate, so the
+  # frame-loop invalidation path does not fire). Matches `restartLspServer`.
+  invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
+  invalidateInlayHintCache(e.lsp, e.state.lspCache)
+  invalidateDocumentHighlightCache(e.state.lspCache)
+  invalidateCodeLensCache(e.state.lspCache)
   e.resyncBufferAfterReload(buf)
 
 proc maybeReloadExternallyModifiedFile*(e: Editor) =

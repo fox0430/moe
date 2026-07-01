@@ -25,7 +25,7 @@ from std/os import absolutePath, normalizedPath
 
 import pkg/[results, chronos]
 
-import buffer, types, lsp_service, message_log, unicode_utils
+import buffer, types, lsp_service, message_log, unicode_utils, highlight
 import lsp/protocol/types as lspTypes
 
 export lsp_service
@@ -70,6 +70,10 @@ type
     lastProgressCleanupTime: float
     # Server status per language (langId -> status)
     serverStatus*: Table[string, LspStatusState]
+    # Per-language cache of SemanticTokensLegend -> colour table. Built lazily
+    # on first apply so `applySemanticTokens` avoids per-token legend-name
+    # string lookup + case dispatch.
+    semanticTypeColorTables: Table[string, SemanticTypeColorTable]
 
   WorkspaceEditResult* = object ## Outcome of applyWorkspaceEdit
     modifiedCount*: int ## Total files modified (buffers + on-disk files)
@@ -115,6 +119,7 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
     activeProgress: initTable[string, LspProgressState](),
     lastProgressCleanupTime: 0.0,
     serverStatus: initTable[string, LspStatusState](),
+    semanticTypeColorTables: initTable[string, SemanticTypeColorTable](),
   )
 
   # Set up internal callback to collect LSP log messages for display
@@ -774,24 +779,6 @@ proc runeIndexToUtf16*(line: string, runeIndex: int): int =
       result.inc
     runeCount.inc
 
-proc utf16ToRuneIndex*(line: string, utf16Offset: int): int =
-  ## Convert a UTF-16 code unit offset to a rune (character) index.
-  ## Buffer columns are rune indexes; LSP positions are UTF-16 code units.
-  ## Clamped to the number of runes in the line.
-  if utf16Offset <= 0 or line.len == 0:
-    return 0
-
-  var utf16Count = 0
-
-  for rune in line.runes:
-    if utf16Count >= utf16Offset:
-      break
-    if rune.int >= 0x10000:
-      utf16Count += 2 # Surrogate pair
-    else:
-      utf16Count += 1
-    result.inc
-
 proc toUtf16Column(buffer: TextBuffer, line, column: int): int =
   ## Helper to convert a buffer position (rune index) to a UTF-16 code unit offset
   let lineText =
@@ -960,6 +947,26 @@ proc getSemanticTokensLegend*(
   if langId.isNone:
     return none(SemanticTokensLegend)
   lsp.service.getSemanticTokensLegend(langId.get)
+
+proc getSemanticTypeColorTable*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Option[SemanticTypeColorTable] =
+  ## Cached `tokenType -> colour` table for the buffer's language. Rebuilt if
+  ## the server dynamically re-registered a different legend.
+  let langId = requireLangId(lsp, buffer)
+  if langId.isNone:
+    return none(SemanticTypeColorTable)
+  let legendOpt = lsp.service.getSemanticTokensLegend(langId.get)
+  if legendOpt.isNone:
+    return none(SemanticTypeColorTable)
+  let currentLegend = legendOpt.get
+  if lsp.semanticTypeColorTables.hasKey(langId.get):
+    let cached = lsp.semanticTypeColorTables[langId.get]
+    if cached.legend == currentLegend:
+      return some(cached)
+  let tab = buildSemanticTypeColorTable(currentLegend)
+  lsp.semanticTypeColorTables[langId.get] = tab
+  return some(tab)
 
 proc startSemanticTokensRequest*(
     lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
