@@ -305,12 +305,12 @@ suite "Semantic Tokens Cache":
     e.state.lspCache.semanticTokensCache.isValid = true
     e.state.lspCache.semanticTokensCache.changeSeq = 5
     e.state.lspCache.semanticTokensCache.filePath = "/test/file.nim"
-    e.state.lspCache.pendingSemanticTokensRequestId = 123
+    e.state.lspCache.pendingSemanticTokens.requestId = 123
 
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.pendingSemanticTokensRequestId == 0
+    check e.state.lspCache.pendingSemanticTokens.requestId == 0
 
   test "updateSemanticTokensCache - LSP disabled":
     let e = createTestEditor()
@@ -333,7 +333,7 @@ suite "Semantic Tokens Cache":
     e.updateSemanticTokensCache()
 
     check e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.pendingSemanticTokensRequestId == 0
+    check e.state.lspCache.pendingSemanticTokens.requestId == 0
 
 suite "CodeLens Item":
   test "CodeLensItem with arguments":

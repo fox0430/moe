@@ -17,13 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, unicode, os, strutils]
+import std/[unittest, unicode, os, strutils, json, tables]
 
 import pkg/celina
 
 import ../src/moepkg/highlight
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/lsp/protocol/types as lspTypes
 
 suite "Highlight - Basic Initialization":
   test "initHighlight with empty buffer":
@@ -2510,3 +2511,1124 @@ suite "Highlight - line-length cap (synmaxcol)":
     # comment, past the cap renders as default — proving the load path capped.
     check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.comment
     check buf.highlight.getColorPair(0, 30) == EditorColorPairIndex.default
+
+suite "Highlight - Semantic overlay":
+  # Small legend used across the tests; index 0=variable, 1=function, 2=type.
+  let legend = SemanticTokensLegend(
+    tokenTypes: @["variable", "function", "type"], tokenModifiers: @[]
+  )
+  let colorTab = buildSemanticTypeColorTable(legend)
+
+  proc mkResp(data: seq[int]): JsonNode =
+    let arr = newJArray()
+    for v in data:
+      arr.add(newJInt(v))
+    result = %*{"data": arr}
+
+  test "buildSemanticTypeColorTable maps each type once":
+    check colorTab.baseColors.len == 3
+    check colorTab.baseColors[0] == EditorColorPairIndex.variable
+    check colorTab.baseColors[1] == EditorColorPairIndex.function
+    check colorTab.baseColors[2] == EditorColorPairIndex.typeName
+
+  test "Empty data leaves an empty overlay":
+    let h = Highlight(colorSegments: @[])
+    let outcome = applySemanticTokens(h, mkResp(@[]), colorTab, 1)
+    check outcome == saoDone
+    check h.semantic.len == 0
+    check h.semanticContentVersion == 1
+
+  test "Single-row token becomes one overlay entry":
+    # [deltaLine=0, deltaStart=2, len=3, type=1(function), mods=0]
+    let h = Highlight(colorSegments: @[])
+    let outcome = applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 5)
+    check outcome == saoDone
+    check h.semanticContentVersion == 5
+    check h.semantic.len == 1
+    check h.semantic[0].tokens.len == 1
+    let t = h.semantic[0].tokens[0]
+    check t.firstColumn == 2
+    check t.length == 3
+    check t.color == EditorColorPairIndex.function
+    # Overlay wins over empty colorSegments.
+    check h.getColorPair(0, 3) == EditorColorPairIndex.function
+    check h.getColorPair(0, 5) == EditorColorPairIndex.default
+
+  test "Delta encoding across rows produces separate SemanticOverlayLine":
+    # Token A: line 0, col 0, len 2, type 0(variable)
+    # Token B: line 2, col 4, len 3, type 2(type)
+    let h = Highlight(colorSegments: @[])
+    let outcome =
+      applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 2, 4, 3, 2, 0]), colorTab, 1)
+    check outcome == saoDone
+    check h.semantic.len == 2
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.variable
+    check h.semantic[2].tokens[0].firstColumn == 4
+    check h.semantic[2].tokens[0].color == EditorColorPairIndex.typeName
+    # Row 1 has no overlay.
+    check h.getColorPair(1, 0) == EditorColorPairIndex.default
+
+  test "Overlay wins over syntax colorSegments":
+    let h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 9,
+          color: EditorColorPairIndex.keyword,
+          style: defaultStyle,
+        )
+      ]
+    )
+    # Function token at col 2..4.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 1)
+    check outcome == saoDone
+    check h.getColorPair(0, 0) == EditorColorPairIndex.keyword
+    check h.getColorPair(0, 3) == EditorColorPairIndex.function
+    check h.getColorPair(0, 5) == EditorColorPairIndex.keyword
+
+  test "getSegmentModifiers unions overlay + syntax modifiers":
+    # Syntax segment has Undercurl (e.g. diagnostic); overlay carries Bold.
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 9,
+          color: EditorColorPairIndex.default,
+          style: Style(modifiers: {StyleModifier.Undercurl}),
+        )
+      ]
+    )
+    var line: SemanticOverlayLine
+    line.tokens.add(
+      SemanticOverlayToken(
+        firstColumn: 2,
+        length: 3,
+        color: EditorColorPairIndex.function,
+        style: Style(modifiers: {StyleModifier.Bold}),
+      )
+    )
+    h.semantic[0] = line
+    # Position under the overlay: colour switches, both modifiers survive.
+    check h.getColorPair(0, 3) == EditorColorPairIndex.function
+    check h.getSegmentModifiers(0, 3) == {StyleModifier.Undercurl, StyleModifier.Bold}
+    # Outside the overlay: syntax only.
+    check h.getColorPair(0, 6) == EditorColorPairIndex.default
+    check h.getSegmentModifiers(0, 6) == {StyleModifier.Undercurl}
+
+  test "Malformed data.len (not multiple of 5) is rejected":
+    let h = Highlight(colorSegments: @[])
+    h.semantic[0] = SemanticOverlayLine(tokens: @[])
+    let outcome = applySemanticTokens(h, mkResp(@[0, 1, 2, 0]), colorTab, 1)
+    check outcome == saoRejectedMalformed
+
+  test "Response above MaxSemanticTokens cap is rejected without decoding":
+    let h = Highlight(colorSegments: @[])
+    # Craft an over-cap response cheaply: length = cap*5 + 5.
+    let overCap = newSeq[int](MaxSemanticTokens * 5 + 5)
+    let outcome = applySemanticTokens(h, mkResp(overCap), colorTab, 1)
+    check outcome == saoRejectedCap
+    # Overlay remains empty; version stays at the "no overlay applied yet"
+    # sentinel (-1), distinct from a legitimate contentVersion of 0.
+    check h.semantic.len == 0
+    check h.semanticContentVersion == -1
+
+  test "Second apply replaces the whole overlay":
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 0, 3, 0, 0]), colorTab, 1)
+    check h.semantic.len == 1
+    # Second response has one token on a different line.
+    discard applySemanticTokens(h, mkResp(@[3, 0, 2, 1, 0]), colorTab, 2)
+    check h.semantic.len == 1
+    check 3 in h.semantic
+    check 0 notin h.semantic
+
+  test "Overlay in sync with contentVersion survives incremental reparse":
+    # An LSP response applied at the current buffer.contentVersion must not be
+    # wiped by a reparse that is not triggered by a real edit.
+    var buf = newTextBuffer("let x = 1\nlet y = 2\n")
+    buf.language = SourceLanguage.langNim
+    buf.updateHighlight()
+    check buf.highlight != nil
+    let outcome = applySemanticTokens(
+      buf.highlight, mkResp(@[0, 4, 1, 1, 0]), colorTab, buf.contentVersion
+    )
+    check outcome == saoDone
+    check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.function
+
+    # Reparse without an edit: contentVersion unchanged, overlay survives.
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+    check buf.highlight.semantic.len == 1
+    check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.function
+
+  test "Stale overlay is dropped when the buffer edits past the apply version":
+    # updateHighlight must invalidate an overlay whose row/col coords are
+    # stale, else it would paint on shifted positions until the next response.
+    var buf = newTextBuffer("let x = 1\nlet y = 2\n")
+    buf.language = SourceLanguage.langNim
+    buf.updateHighlight()
+    discard applySemanticTokens(
+      buf.highlight, mkResp(@[0, 4, 1, 1, 0]), colorTab, buf.contentVersion
+    )
+    check buf.highlight.semantic.len == 1
+    # Edit advances contentVersion past the overlay's snapshot.
+    check buf.insertText(BufferPosition(line: 1, column: 0), "z").isOk
+    buf.updateHighlight()
+    check buf.highlight.semantic.len == 0
+    check buf.highlight.getColorPair(0, 4) != EditorColorPairIndex.function
+
+  test "loadFile clears any prior overlay":
+    var buf = newTextBuffer("let x = 1\n")
+    buf.language = SourceLanguage.langNim
+    buf.updateHighlight()
+    discard applySemanticTokens(buf.highlight, mkResp(@[0, 4, 1, 1, 0]), colorTab, 7)
+    check buf.highlight.semantic.len == 1
+
+    let path = getTempDir() / "moe_test_semantic_overlay_reload.nim"
+    defer:
+      removeFile(path)
+    writeFile(path, "let y = 2\n")
+    check buf.loadFile(path).isOk
+    # `loadFile` replaces `b.highlight` with a fresh one; overlay is gone.
+    check buf.highlight.semantic.len == 0
+    check buf.highlight.getColorPair(0, 4) != EditorColorPairIndex.function
+
+  test "Rejected apply preserves the prior overlay":
+    let h = Highlight(colorSegments: @[])
+    # Prime the overlay with a valid apply.
+    discard applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 3)
+    check h.semantic.len == 1
+    let priorLen = h.semantic[0].tokens.len
+    let priorColor = h.semantic[0].tokens[0].color
+    let priorVersion = h.semanticContentVersion
+
+    # Malformed response leaves the overlay untouched.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 1, 2, 0]), colorTab, 4)
+    check outcome == saoRejectedMalformed
+    check h.semantic.len == 1
+    check h.semantic[0].tokens.len == priorLen
+    check h.semantic[0].tokens[0].color == priorColor
+    check h.semanticContentVersion == priorVersion
+
+    # Over-cap response also leaves the overlay untouched.
+    let overCap = newSeq[int](MaxSemanticTokens * 5 + 5)
+    check applySemanticTokens(h, mkResp(overCap), colorTab, 5) == saoRejectedCap
+    check h.semantic.len == 1
+    check h.semantic[0].tokens[0].color == priorColor
+    check h.semanticContentVersion == priorVersion
+
+  test "findOverlayToken boundaries (start / end-exclusive / gap)":
+    let h = Highlight(colorSegments: @[])
+    # Two tokens: [2..4] variable, [6..8] function. Gap at col 5.
+    discard applySemanticTokens(h, mkResp(@[0, 2, 3, 0, 0, 0, 4, 3, 1, 0]), colorTab, 1)
+    check h.semantic[0].tokens.len == 2
+    # Before the first token.
+    check h.getColorPair(0, 0) == EditorColorPairIndex.default
+    check h.getColorPair(0, 1) == EditorColorPairIndex.default
+    # Exactly at token start.
+    check h.getColorPair(0, 2) == EditorColorPairIndex.variable
+    # Inside.
+    check h.getColorPair(0, 3) == EditorColorPairIndex.variable
+    # Last covered column (start + length - 1).
+    check h.getColorPair(0, 4) == EditorColorPairIndex.variable
+    # Gap between tokens (length is exclusive at the far end).
+    check h.getColorPair(0, 5) == EditorColorPairIndex.default
+    # Second token.
+    check h.getColorPair(0, 6) == EditorColorPairIndex.function
+    check h.getColorPair(0, 8) == EditorColorPairIndex.function
+    # After all tokens.
+    check h.getColorPair(0, 9) == EditorColorPairIndex.default
+
+  test "Multiple tokens on one line stay sorted by firstColumn":
+    let h = Highlight(colorSegments: @[])
+    # Three in-order tokens on the same line (LSP delta encoding is monotonic).
+    discard applySemanticTokens(
+      h, mkResp(@[0, 0, 2, 0, 0, 0, 3, 2, 1, 0, 0, 3, 2, 2, 0]), colorTab, 1
+    )
+    let toks = h.semantic[0].tokens
+    check toks.len == 3
+    check toks[0].firstColumn < toks[1].firstColumn
+    check toks[1].firstColumn < toks[2].firstColumn
+    # Distinct colours in position order.
+    check toks[0].color == EditorColorPairIndex.variable
+    check toks[1].color == EditorColorPairIndex.function
+    check toks[2].color == EditorColorPairIndex.typeName
+
+  test "Empty legend preserves prior overlay and rejects":
+    # A transiently-empty legend (mid registerCapability) must not wipe the
+    # existing colouring.
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 0, 3, 0, 0]), colorTab, 1)
+    check h.semantic.len == 1
+    let priorVersion = h.semanticContentVersion
+    let emptyTab = buildSemanticTypeColorTable(
+      SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[])
+    )
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 3, 0, 0]), emptyTab, 2)
+    check outcome == saoRejectedNoLegend
+    check h.semantic.len == 1
+    check h.semanticContentVersion == priorVersion
+
+  test "Unknown tokenType / non-positive length / default-colour type are skipped":
+    let h = Highlight(colorSegments: @[])
+    # Token A: tokenType=99 (out of range) — skipped.
+    # Token B: length=0 — skipped.
+    # Token C: tokenType=0(variable), length=2, col=6 — kept.
+    # Delta encoding: A@col0 len1, B@col2 len0, C@col6 len2.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 1, 99, 0, 0, 2, 0, 0, 0, 0, 4, 2, 0, 0]), colorTab, 1
+    )
+    check outcome == saoDone
+    # Only C survives.
+    check h.semantic.len == 1
+    check h.semantic[0].tokens.len == 1
+    check h.semantic[0].tokens[0].firstColumn == 6
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.variable
+
+    # A tokenType that maps to `default` colour is also skipped. Extend the
+    # legend so a real (mapped) type is co-located with an unknown-name type
+    # that resolves to `default`.
+    let legendWithDefault = SemanticTokensLegend(
+      tokenTypes: @["variable", "somethingUnknown"], tokenModifiers: @[]
+    )
+    let tabWithDefault = buildSemanticTypeColorTable(legendWithDefault)
+    check tabWithDefault.baseColors[1] == EditorColorPairIndex.default
+
+    let h2 = Highlight(colorSegments: @[])
+    # Two tokens: type=1(default) at col 0, type=0(variable) at col 5.
+    discard applySemanticTokens(
+      h2, mkResp(@[0, 0, 3, 1, 0, 0, 5, 2, 0, 0]), tabWithDefault, 1
+    )
+    check h2.semantic.len == 1
+    check h2.semantic[0].tokens.len == 1
+    check h2.semantic[0].tokens[0].firstColumn == 5
+
+  test "Multi-line token splits into per-row entries with getLineRuneCount":
+    # Row 0 has 10 runes, row 1 has 8 runes, row 2 has 20 runes.
+    let widths = @[10, 8, 20]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+
+    let h = Highlight(colorSegments: @[])
+    # Token starts at (row=0, col=6) with length 15 — spans rows 0, 1, and into 2.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 6, 15, 1, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    # Row 0: cols 6..9 (4 runes to end of row).
+    check h.semantic.len == 3
+    check h.semantic[0].tokens.len == 1
+    check h.semantic[0].tokens[0].firstColumn == 6
+    check h.semantic[0].tokens[0].length == 4
+    # Row 1: full row (0..7, 8 runes).
+    check h.semantic[1].tokens[0].firstColumn == 0
+    check h.semantic[1].tokens[0].length == 8
+    # Row 2: 15 - 4 - 8 = 3 remaining runes at col 0.
+    check h.semantic[2].tokens[0].firstColumn == 0
+    check h.semantic[2].tokens[0].length == 3
+    # All three carry the same colour.
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.function
+    check h.semantic[1].tokens[0].color == EditorColorPairIndex.function
+    check h.semantic[2].tokens[0].color == EditorColorPairIndex.function
+
+  test "Single-line tokens still work when getLineRuneCount is supplied":
+    let widths = @[100]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 1, getLen)
+    check h.semantic.len == 1
+    check h.semantic[0].tokens.len == 1
+    check h.semantic[0].tokens[0].firstColumn == 2
+    check h.semantic[0].tokens[0].length == 3
+
+  test "Multi-line token clipped when buffer ends mid-token":
+    let widths = @[5, 3] # only 2 rows, 8 runes total starting from (0,0)
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+    let h = Highlight(colorSegments: @[])
+    # 20-rune token from (0,0) — buffer runs out at row 2.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 20, 1, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    check h.semantic.len == 2
+    check h.semantic[0].tokens[0].length == 5
+    check h.semantic[1].tokens[0].length == 3
+
+  test "resolveTokenColor uses modifiers (readonly variable -> constParameter)":
+    let modLegend = SemanticTokensLegend(
+      tokenTypes: @["variable"], tokenModifiers: @["declaration", "readonly", "static"]
+    )
+    let tab = buildSemanticTypeColorTable(modLegend)
+    # No modifiers: base variable colour.
+    check tab.resolveTokenColor(0, 0).color == EditorColorPairIndex.variable
+    # readonly bit set (bit 1 => value 2): switches to constParameter.
+    check tab.resolveTokenColor(0, 2).color == EditorColorPairIndex.constParameter
+    # static bit set (bit 2 => value 4): also constParameter.
+    check tab.resolveTokenColor(0, 4).color == EditorColorPairIndex.constParameter
+    # declaration only (bit 0 => value 1): still base variable.
+    check tab.resolveTokenColor(0, 1).color == EditorColorPairIndex.variable
+    # Cache hit: second call returns the same colour.
+    check tab.resolveTokenColor(0, 2).color == EditorColorPairIndex.constParameter
+    # `declaration` maps to Bold style modifier.
+    check tab.resolveTokenColor(0, 1).style == {StyleModifier.Bold}
+
+  test "applySemanticTokens threads modifiers through to the overlay":
+    let modLegend = SemanticTokensLegend(
+      tokenTypes: @["variable"], tokenModifiers: @["declaration", "readonly"]
+    )
+    let tab = buildSemanticTypeColorTable(modLegend)
+    let h = Highlight(colorSegments: @[])
+    # tokenModifiers = 2 (bit 1 = readonly)
+    discard applySemanticTokens(h, mkResp(@[0, 0, 3, 0, 2]), tab, 1)
+    check h.semantic.len == 1
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.constParameter
+
+  test "Empty full-doc reply clears the whole overlay":
+    # Per LSP spec, {data: []} means "no tokens in this document" -- the
+    # authoritative full-doc reply. Clear the overlay and adopt the reply's
+    # contentVersion so ghost tokens don't linger after the server disables
+    # semantic tokens or otherwise reports an empty file.
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 3)
+    check h.semantic.len == 1
+    let outcome = applySemanticTokens(h, mkResp(@[]), colorTab, 4)
+    check outcome == saoDone
+    check h.semantic.len == 0
+    check h.semanticContentVersion == 4
+
+  test "Non-JInt entry in data is rejected without corrupting the overlay":
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 1)
+    let priorLen = h.semantic[0].tokens.len
+    # data: [0, "bad", 3, 1, 0] — deltaStart is a JString.
+    let badResp = %*{"data": [%0, %"bad", %3, %1, %0]}
+    let outcome = applySemanticTokens(h, badResp, colorTab, 2)
+    check outcome == saoRejectedMalformed
+    check h.semantic[0].tokens.len == priorLen
+
+  test "Multi-line token beyond 64 rows is not truncated (safety cap removed)":
+    const rows = 200
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= rows: -1 else: 10
+    let h = Highlight(colorSegments: @[])
+    let outcome =
+      applySemanticTokens(h, mkResp(@[0, 0, 10 * rows, 1, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    check h.semantic.len == rows
+    check h.semantic[rows - 1].tokens[0].length == 10
+
+  test "Stale-position multi-line token whose start is past EOL is dropped":
+    let widths = @[3, 10]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+    let h = Highlight(colorSegments: @[])
+    let outcome = applySemanticTokens(h, mkResp(@[0, 5, 4, 1, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    check h.semantic.len == 0
+
+  test "Negative modBitmask returns default without poisoning the cache":
+    # Negative bitmasks are spec violations. resolveTokenColor bails to
+    # `default` (rather than folding into the zero-modifier base colour) and
+    # never touches the modifier cache so a subsequent legitimate call still
+    # resolves. Production callers (applySemanticTokens) reject the whole
+    # response before this fallback fires; this exercises the direct API.
+    let modLegend = SemanticTokensLegend(
+      tokenTypes: @["variable"], tokenModifiers: @["declaration", "readonly"]
+    )
+    let tab = buildSemanticTypeColorTable(modLegend)
+    check tab.resolveTokenColor(0, -1).color == EditorColorPairIndex.default
+    check tab.resolveTokenColor(0, -1 shl 5).color == EditorColorPairIndex.default
+    # Cache was not poisoned: a subsequent legitimate call still resolves.
+    check tab.resolveTokenColor(0, 2).color == EditorColorPairIndex.constParameter
+
+  test "Range-scoped apply preserves overlay entries outside the range":
+    let h = Highlight(colorSegments: @[])
+    # Prime rows 0 and 5 with a full-document apply.
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1, 0]), colorTab, 1)
+    check h.semantic.len == 2
+    check 0 in h.semantic
+    check 5 in h.semantic
+    # Range reply for rows 4..6 with a new token on row 5.
+    let outcome =
+      applySemanticTokens(h, mkResp(@[5, 0, 2, 2, 0]), colorTab, 2, nil, 4, 6)
+    check outcome == saoDone
+    # Row 0 (outside range) is preserved; row 5 is replaced.
+    check 0 in h.semantic
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.variable
+    check 5 in h.semantic
+    check h.semantic[5].tokens[0].color == EditorColorPairIndex.typeName
+
+  test "Range-scoped empty reply clears the range but preserves outside rows":
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1, 0]), colorTab, 1)
+    discard applySemanticTokens(h, mkResp(@[]), colorTab, 2, nil, 4, 6)
+    check 0 in h.semantic
+    check 5 notin h.semantic
+
+  test "Full-document empty reply clears the whole overlay":
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 1)
+    check h.semantic.len == 1
+    discard applySemanticTokens(h, mkResp(@[]), colorTab, 2)
+    check h.semantic.len == 0
+    check h.semanticContentVersion == 2
+
+  test "SemanticTypeColorTable retains its legend for invalidation checks":
+    # LspIntegration.getSemanticTypeColorTable compares `cached.legend` to the
+    # current server legend and rebuilds on mismatch. Guard that field.
+    let legA = SemanticTokensLegend(tokenTypes: @["variable"], tokenModifiers: @[])
+    let legB = SemanticTokensLegend(tokenTypes: @["function"], tokenModifiers: @[])
+    let tabA = buildSemanticTypeColorTable(legA)
+    check tabA.legend == legA
+    check tabA.legend != legB
+
+  test "In-flight edit race: apply with request-time version drops on next reparse":
+    # Simulates the real caller race: user edits BEFORE the response arrives.
+    # processSemanticTokensResponse must stamp with the REQUEST-time contentVersion
+    # (captured when the request was sent) so updateHighlight's stale-drop fires
+    # once buffer.contentVersion has advanced past that stamp. Passing the
+    # response-time contentVersion instead would falsely mark the overlay fresh
+    # and leave wrong-position colours until the next edit or response.
+    var buf = newTextBuffer("let x = 1\nlet y = 2\n")
+    buf.language = SourceLanguage.langNim
+    buf.updateHighlight()
+    let requestVersion = buf.contentVersion
+    # Edit BEFORE the apply — simulates the buffer advancing while the LSP
+    # request is in flight.
+    check buf.insertText(BufferPosition(line: 1, column: 0), "z").isOk
+    check buf.contentVersion > requestVersion
+    # Apply with the OLDER (request-time) version, as the fixed caller does.
+    let outcome = applySemanticTokens(
+      buf.highlight, mkResp(@[0, 4, 1, 1, 0]), colorTab, requestVersion
+    )
+    check outcome == saoDone
+    # Overlay is present but stamped with the older version.
+    check buf.highlight.semantic.len == 1
+    check buf.highlight.semanticContentVersion == requestVersion
+    # updateHighlight's stale-drop fires because semanticContentVersion !=
+    # buf.contentVersion, closing the visible-frame gap.
+    buf.updateHighlight()
+    check buf.highlight.semantic.len == 0
+
+  test "Multi-line token starting exactly at EOL is dropped (F3)":
+    # Guard is `>=` so a token whose start equals firstRowLen never enters the
+    # split loop. The old `>` guard would push the token onto row+1 with a
+    # wrong colour.
+    let widths = @[5, 10]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+    let h = Highlight(colorSegments: @[])
+    # Token starts at (row=0, col=5) with length=4. col == firstRowLen(5).
+    let outcome = applySemanticTokens(h, mkResp(@[0, 5, 4, 1, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    # Neither row 0 nor row 1 should carry this token.
+    check h.semantic.len == 0
+
+  test "Multi-line splitter terminates on empty rows (F3 safety)":
+    # A 10-rune buffer where every row is empty. A malformed token from a
+    # buggy server (length=100 starting at row 0 col 0) must not iterate the
+    # whole buffer at availOnRow=0 per row.
+    const rows = 500
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= rows: -1 else: 0
+    let h = Highlight(colorSegments: @[])
+    # Empty first row: EOL guard drops the token (currentChar 0 >= firstRowLen 0).
+    let outcome =
+      applySemanticTokens(h, mkResp(@[0, 0, 100, 1, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    check h.semantic.len == 0
+
+  test "Negative deltaLine is rejected as malformed (F8)":
+    let h = Highlight(colorSegments: @[])
+    let outcome = applySemanticTokens(h, mkResp(@[-1, 0, 2, 1, 0]), colorTab, 1)
+    check outcome == saoRejectedMalformed
+
+  test "Negative deltaStart is rejected as malformed (F8)":
+    let h = Highlight(colorSegments: @[])
+    let outcome = applySemanticTokens(h, mkResp(@[0, -1, 2, 1, 0]), colorTab, 1)
+    check outcome == saoRejectedMalformed
+
+  test "Range apply preserves older semanticContentVersion when outside rows retained (F5)":
+    # Prior full-doc apply populated rows 0 and 5 at version=5. A later range
+    # apply for rows 4..6 at version=7 leaves row 0 in place; its coords are
+    # still for version 5, so the OVERALL overlay is only as fresh as row 0.
+    # Stamping the newer 7 would defeat updateHighlight's stale-drop on the
+    # next edit.
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1, 0]), colorTab, 5)
+    check h.semantic.len == 2
+    check h.semanticContentVersion == 5
+    # Range reply for rows 4..6 with a new token on row 5.
+    let outcome =
+      applySemanticTokens(h, mkResp(@[5, 0, 2, 2, 0]), colorTab, 7, nil, 4, 6)
+    check outcome == saoDone
+    check 0 in h.semantic
+    check 5 in h.semantic
+    # Stamp stays at 5 (the age of the surviving outside-range row).
+    check h.semanticContentVersion == 5
+
+  test "Range apply adopts new version when overlay had no outside rows (F5)":
+    # No prior outside rows -> the range apply's rows are the only rows;
+    # they're fresh at the new version, so the stamp advances.
+    let h = Highlight(colorSegments: @[])
+    let outcome =
+      applySemanticTokens(h, mkResp(@[5, 0, 2, 2, 0]), colorTab, 7, nil, 4, 6)
+    check outcome == saoDone
+    check h.semantic.len == 1
+    check h.semanticContentVersion == 7
+
+  test "Empty range reply preserves stamp when outside rows retained (F5)":
+    # Full-doc apply populates rows 0 and 5 at version=5.
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1, 0]), colorTab, 5)
+    check h.semanticContentVersion == 5
+    # Empty range reply for rows 4..6 clears row 5 but preserves row 0.
+    let outcome = applySemanticTokens(h, mkResp(@[]), colorTab, 8, nil, 4, 6)
+    check outcome == saoDone
+    check 0 in h.semantic
+    check 5 notin h.semantic
+    # Stamp stays at 5 because row 0 (older data) still lives here.
+    check h.semanticContentVersion == 5
+
+  test "Multi-line unroll + overlapping single-line token stays disjoint":
+    # A spec-noncompliant server (or a moe wrap that collides with a real
+    # single-line token further along the same row) can produce two tokens
+    # on the same row that overlap. `addOverlayToken` must truncate the
+    # earlier one so `findOverlayToken`'s binary search stays correct.
+    let widths = @[20, 20, 20]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+
+    let h = Highlight(colorSegments: @[])
+    # Token A: row=0, col=0, length=60 (spans rows 0..2, each row fully).
+    # Token B: deltaLine=2, deltaStart=15, length=3 => row=2, col=15
+    # A's row-2 unroll is (col=0, len=20); B starts at col=15 inside it.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 60, 0, 0, 2, 15, 3, 1, 0]), colorTab, 1, getLen
+    )
+    check outcome == saoDone
+    # Three disjoint segments on row 2: A_head [0..14], B [15..17], A_tail [18..19].
+    check h.semantic[2].tokens.len == 3
+    let t0 = h.semantic[2].tokens[0]
+    let t1 = h.semantic[2].tokens[1]
+    let t2 = h.semantic[2].tokens[2]
+    check t0.firstColumn + t0.length <= t1.firstColumn
+    check t1.firstColumn + t1.length <= t2.firstColumn
+    check t0.firstColumn == 0
+    check t0.length == 15
+    check t0.color == EditorColorPairIndex.variable
+    check t1.firstColumn == 15
+    check t1.length == 3
+    check t1.color == EditorColorPairIndex.function
+    check t2.firstColumn == 18
+    check t2.length == 2
+    check t2.color == EditorColorPairIndex.variable
+    # getColorPair returns the right token for every column, including the tail.
+    check h.getColorPair(2, 14) == EditorColorPairIndex.variable
+    check h.getColorPair(2, 15) == EditorColorPairIndex.function
+    check h.getColorPair(2, 17) == EditorColorPairIndex.function
+    check h.getColorPair(2, 18) == EditorColorPairIndex.variable
+    check h.getColorPair(2, 19) == EditorColorPairIndex.variable
+
+  test "UTF-16 deltaStart is converted to rune index when getLineText is supplied":
+    # Line: "let <U+1F600> = 1"  ('let '=4 runes, U+1F600=1 rune (2 UTF-16
+    # units), ' = 1'=4 runes) -> 9 runes total / 10 UTF-16 units.
+    # Server sends token for '=' at UTF-16 col 6 length 1. Without conversion
+    # this lands at rune col 6 (' '), off by one; with conversion at rune 5.
+    let lineText: LineTextFn = proc(row: int): string {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0: "let \u{1F600} = 1" else: ""
+    let lineRunes: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0: 9 else: -1
+
+    let h = Highlight(colorSegments: @[])
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 6, 1, 1, 0]), colorTab, 1, lineRunes, -1, -1, lineText
+    )
+    check outcome == saoDone
+    check h.semantic[0].tokens.len == 1
+    check h.semantic[0].tokens[0].firstColumn == 5
+    check h.semantic[0].tokens[0].length == 1
+
+  test "Multi-line token with getLineText still unrolls across rows":
+    # Regression: earlier code clamped applyLen to the start row's rune count
+    # when getLineText was supplied, defeating the multi-line splitter for the
+    # production caller (which always supplies both callbacks).
+    let widths = @[5, 5, 5]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+    let lineText: LineTextFn = proc(row: int): string {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0:
+          "hello"
+        elif row == 1:
+          "world"
+        elif row == 2:
+          "again"
+        else:
+          ""
+
+    let h = Highlight(colorSegments: @[])
+    # Token from (row=0, col=1) UTF-16, length=12 UTF-16 -> spans rows 0..2.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 1, 12, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+    )
+    check outcome == saoDone
+    # All three rows must carry the token colour.
+    check h.semantic.len == 3
+    check h.semantic[0].tokens[0].firstColumn == 1
+    check h.semantic[0].tokens[0].length == 4
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.function
+    check h.semantic[1].tokens[0].firstColumn == 0
+    check h.semantic[1].tokens[0].length == 5
+    check h.semantic[1].tokens[0].color == EditorColorPairIndex.function
+    check h.semantic[2].tokens[0].firstColumn == 0
+    check h.semantic[2].tokens[0].length == 3
+    check h.semantic[2].tokens[0].color == EditorColorPairIndex.function
+
+  test "Multi-line token with getLineText and non-BMP start row unrolls correctly":
+    # Start row contains a non-BMP character (emoji): UTF-16 length differs
+    # from rune length. Later rows are ASCII. The overflow-as-runes approx
+    # keeps the splitter working; the residual off-by-few on wrap rows is
+    # only for non-BMP characters in those wrap rows (none here).
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0:
+          5
+        elif row == 1:
+          5
+        else:
+          -1
+    let lineText: LineTextFn = proc(row: int): string {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0:
+          "he\u{1F600}lo" # 5 runes, 6 UTF-16 units
+        elif row == 1:
+          "world" # 5 runes, 5 UTF-16 units
+        else:
+          ""
+
+    let h = Highlight(colorSegments: @[])
+    # Token starts at UTF-16 col 0, length 11 UTF-16 units -> covers the whole
+    # start row (6 UTF-16 = 5 runes) plus 5 UTF-16 units into row 1.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 11, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+    )
+    check outcome == saoDone
+    check h.semantic.len == 2
+    check h.semantic[0].tokens[0].firstColumn == 0
+    check h.semantic[0].tokens[0].length == 5
+    check h.semantic[1].tokens[0].firstColumn == 0
+    check h.semantic[1].tokens[0].length == 5
+
+  test "Legend swap between two non-empty legends wipes prior overlay":
+    # A range-scoped apply under L2 would otherwise leave rows outside the
+    # request range coloured against L1's index-to-name mapping. Verify the
+    # full prior overlay is dropped when the current legend differs.
+    let legendA = SemanticTokensLegend(
+      tokenTypes: @["variable", "function", "type"], tokenModifiers: @[]
+    )
+    let tabA = buildSemanticTypeColorTable(legendA)
+    let h = Highlight(colorSegments: @[])
+    # Populate rows 0 and 5 under legend A.
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1, 0]), tabA, 1)
+    check h.semantic.len == 2
+
+    # Server dynamically re-registers with a permuted legend B.
+    let legendB = SemanticTokensLegend(
+      tokenTypes: @["function", "type", "variable"], tokenModifiers: @[]
+    )
+    let tabB = buildSemanticTypeColorTable(legendB)
+    # Range apply under B for rows 4..6 (only touches row 5).
+    let outcome = applySemanticTokens(h, mkResp(@[5, 0, 2, 0, 0]), tabB, 2, nil, 4, 6)
+    check outcome == saoDone
+    # Row 0 (under legend A) is wiped by the legend-swap detection. Only the
+    # newly applied row 5 under B survives.
+    check 0 notin h.semantic
+    check 5 in h.semantic
+    check h.semantic[5].tokens[0].color == EditorColorPairIndex.function
+
+  test "Mid-parse rejection under legend swap preserves prior overlay":
+    # Regression: legend-swap wipe used to fire BEFORE the parse loop, so a
+    # malformed byte mid-response wiped the whole prior overlay across the
+    # buffer even though the caller expects rejected replies to preserve state.
+    let legendA = SemanticTokensLegend(
+      tokenTypes: @["variable", "function", "type"], tokenModifiers: @[]
+    )
+    let legendB = SemanticTokensLegend(
+      tokenTypes: @["function", "type", "variable"], tokenModifiers: @[]
+    )
+    let tabA = buildSemanticTypeColorTable(legendA)
+    let tabB = buildSemanticTypeColorTable(legendB)
+    let h = Highlight(colorSegments: @[])
+    # Populate under legend A.
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1, 0]), tabA, 1)
+    check h.semantic.len == 2
+    let priorVersion = h.semanticContentVersion
+    # Response under legend B whose data is well-formed prefix but ends
+    # on a non-multiple-of-5 tail -- rejected as malformed.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1]), tabB, 5)
+    check outcome == saoRejectedMalformed
+    # Prior overlay must survive; semanticLegend must NOT have flipped to B.
+    check h.semantic.len == 2
+    check h.semanticContentVersion == priorVersion
+    check h.semanticLegend == legendA
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.variable
+    check h.semantic[5].tokens[0].color == EditorColorPairIndex.function
+
+  test "Mid-parse non-JInt rejection under legend swap preserves prior overlay":
+    # Same class as above, but the malformed byte fires inside the token
+    # loop (line/deltaStart/etc kind check), not from the up-front length
+    # check. Deferred legend-swap must not have mutated highlight yet.
+    let legendA = SemanticTokensLegend(
+      tokenTypes: @["variable", "function", "type"], tokenModifiers: @[]
+    )
+    let legendB = SemanticTokensLegend(
+      tokenTypes: @["function", "type", "variable"], tokenModifiers: @[]
+    )
+    let tabA = buildSemanticTypeColorTable(legendA)
+    let tabB = buildSemanticTypeColorTable(legendB)
+    let h = Highlight(colorSegments: @[])
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0]), tabA, 1)
+    check h.semantic.len == 1
+    # Second token in the data array has a JString deltaStart.
+    let badResp = %*{"data": [%0, %0, %2, %0, %0, %0, %"bad", %2, %1, %0]}
+    let outcome = applySemanticTokens(h, badResp, tabB, 2)
+    check outcome == saoRejectedMalformed
+    check h.semantic.len == 1
+    check h.semanticLegend == legendA
+    check h.semantic[0].tokens[0].color == EditorColorPairIndex.variable
+
+  test "Empty range reply against empty legend rejects noLegend and preserves rows":
+    # Regression: empty-reply branch used to run BEFORE the noLegend check,
+    # so a transiently-empty legend + empty range reply would delete rows in
+    # the range and advance the version. Now the noLegend check fires first.
+    let h = Highlight(colorSegments: @[])
+    # Prime rows 0 and 5 with a real legend.
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0, 5, 0, 3, 1, 0]), colorTab, 1)
+    check h.semantic.len == 2
+    let priorVersion = h.semanticContentVersion
+    let emptyTab = buildSemanticTypeColorTable(
+      SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[])
+    )
+    # Empty range reply against empty legend -> rejected, no mutation.
+    check applySemanticTokens(h, mkResp(@[]), emptyTab, 5, nil, 4, 6) ==
+      saoRejectedNoLegend
+    check h.semantic.len == 2
+    check h.semanticContentVersion == priorVersion
+    # Empty full-doc reply against empty legend -> rejected, no mutation.
+    check applySemanticTokens(h, mkResp(@[]), emptyTab, 5) == saoRejectedNoLegend
+    check h.semantic.len == 2
+    check h.semanticContentVersion == priorVersion
+
+  test "XOR range args (one -1, one non-negative) is rejected as malformed":
+    let h = Highlight(colorSegments: @[])
+    # Populate first so we can check the overlay was NOT mutated.
+    discard applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0]), colorTab, 1)
+    check h.semantic.len == 1
+    let priorVersion = h.semanticContentVersion
+    # (5, -1): first is a range, last is full-doc sentinel -> malformed.
+    check applySemanticTokens(h, mkResp(@[5, 0, 2, 1, 0]), colorTab, 2, nil, 5, -1) ==
+      saoRejectedMalformed
+    check applySemanticTokens(h, mkResp(@[5, 0, 2, 1, 0]), colorTab, 2, nil, -1, 5) ==
+      saoRejectedMalformed
+    # Prior overlay preserved on both.
+    check h.semantic.len == 1
+    check h.semanticContentVersion == priorVersion
+
+  test "Two later tokens carve two holes in a multi-line unroll":
+    # Recursive splitting: A spans row 1 fully; B and C are two disjoint
+    # single-line tokens carving holes into A on row 1. Expected: A_head,
+    # B, A_mid, C, A_tail.
+    let widths = @[20, 20]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+
+    let h = Highlight(colorSegments: @[])
+    # A: row=0, col=0, length=40 -> spans rows 0..1, both fully.
+    # B: deltaLine=1, deltaStart=5, length=3 -> row=1, col=5, len=3.
+    # C: deltaLine=0, deltaStart=5, length=3 -> row=1, col=10, len=3.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 40, 0, 0, 1, 5, 3, 1, 0, 0, 5, 3, 2, 0]), colorTab, 1, getLen
+    )
+    check outcome == saoDone
+    check h.semantic[1].tokens.len == 5
+    check h.semantic[1].tokens[0].firstColumn == 0
+    check h.semantic[1].tokens[0].length == 5
+    check h.semantic[1].tokens[0].color == EditorColorPairIndex.variable
+    check h.semantic[1].tokens[1].firstColumn == 5
+    check h.semantic[1].tokens[1].length == 3
+    check h.semantic[1].tokens[1].color == EditorColorPairIndex.function
+    check h.semantic[1].tokens[2].firstColumn == 8
+    check h.semantic[1].tokens[2].length == 2
+    check h.semantic[1].tokens[2].color == EditorColorPairIndex.variable
+    check h.semantic[1].tokens[3].firstColumn == 10
+    check h.semantic[1].tokens[3].length == 3
+    check h.semantic[1].tokens[3].color == EditorColorPairIndex.typeName
+    check h.semantic[1].tokens[4].firstColumn == 13
+    check h.semantic[1].tokens[4].length == 7
+    check h.semantic[1].tokens[4].color == EditorColorPairIndex.variable
+
+  test "Multi-line unroll fully consumed by a later same-start token":
+    # Degenerate case exercised via applySemanticTokens: two tokens whose
+    # positions collide at the same starting column on a wrap row. Prior
+    # token would truncate to length 0 -> dropped.
+    let widths = @[20, 20]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+
+    let h = Highlight(colorSegments: @[])
+    # A: row=0, col=0, length=40 -> spans rows 0 (all 20) and 1 (all 20).
+    # B: deltaLine=1, deltaStart=0, length=3 -> row=1, col=0, colliding with
+    # A's unroll on row 1. B supersedes A's head; A's tail past B is preserved.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 40, 0, 0, 1, 0, 3, 1, 0]), colorTab, 1, getLen
+    )
+    check outcome == saoDone
+    check h.semantic[1].tokens.len == 2
+    check h.semantic[1].tokens[0].firstColumn == 0
+    check h.semantic[1].tokens[0].length == 3
+    check h.semantic[1].tokens[0].color == EditorColorPairIndex.function
+    check h.semantic[1].tokens[1].firstColumn == 3
+    check h.semantic[1].tokens[1].length == 17
+    check h.semantic[1].tokens[1].color == EditorColorPairIndex.variable
+
+  test "Multi-line splitter continues past an empty middle row":
+    # Regression: an empty middle row (blank line inside a block comment or
+    # heredoc) used to break out of the splitter and drop every subsequent
+    # row of the same multi-line token.
+    let widths = @[10, 0, 15]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+
+    let h = Highlight(colorSegments: @[])
+    # Row 0: 10 runes; row 1: empty; row 2: 15 runes. Token covers all 25 runes.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 25, 0, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    check 0 in h.semantic
+    check 2 in h.semantic
+    check h.semantic[0].tokens[0].length == 10
+    check h.semantic[2].tokens[0].length == 15
+
+  test "Three-way same-row overlap keeps the sorted-disjoint invariant":
+    # Regression: addOverlayToken only inspected tokens[^1], so a multi-line
+    # unroll interleaved with two same-row single tokens produced overlapping
+    # segments that broke findOverlayToken's binary search.
+    let widths = @[20, 20]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+
+    let h = Highlight(colorSegments: @[])
+    # A row=0 col=0 len=40 unrolls to rows 0 (0..20) and 1 (0..20).
+    # B row=1 col=5 len=3 truncates A on row 1 into head/tail.
+    # C row=1 col=7 len=3 lands inside A's tail AND overlaps B; must
+    # carve cleanly so tokens on row 1 stay sorted-disjoint.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 40, 0, 0, 1, 5, 3, 1, 0, 0, 2, 3, 2, 0]), colorTab, 1, getLen
+    )
+    check outcome == saoDone
+    let toks = h.semantic[1].tokens
+    # Verify strictly sorted, strictly disjoint.
+    for i in 0 ..< toks.high:
+      check toks[i].firstColumn + toks[i].length <= toks[i + 1].firstColumn
+
+  test "Modifier `declaration` unions StyleModifier.Bold into overlay":
+    let modLegend =
+      SemanticTokensLegend(tokenTypes: @["variable"], tokenModifiers: @["declaration"])
+    let tab = buildSemanticTypeColorTable(modLegend)
+    let h = Highlight(colorSegments: @[])
+    # deltaLine=0, deltaStart=0, length=3, tokenType=0 (variable),
+    # tokenModifiers=1 (declaration bit).
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 3, 0, 1]), tab, 1)
+    check outcome == saoDone
+    check h.getSegmentModifiers(0, 0) == {StyleModifier.Bold}
+
+  test "Inverted range (first > last) is rejected as malformed":
+    let h = Highlight(colorSegments: @[])
+    let outcome =
+      applySemanticTokens(h, mkResp(@[0, 0, 2, 0, 0]), colorTab, 1, nil, 50, 10)
+    check outcome == saoRejectedMalformed
+
+  test "Negative tokenModifiers is rejected as malformed":
+    let h = Highlight(colorSegments: @[])
+    # tokenModifiers = -1 (spec violation).
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 2, 0, -1]), colorTab, 1)
+    check outcome == saoRejectedMalformed
+    # Overlay unchanged, sentinel preserved.
+    check h.semantic.len == 0
+    check h.semanticContentVersion == -1
+
+  test "tokenModifiers past uint32 range is rejected as malformed":
+    # (type<<32)|mods cache key would silently truncate; reject up front.
+    let h = Highlight(colorSegments: @[])
+    let bigMod = int(high(uint32)) + 1
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 2, 0, bigMod]), colorTab, 1)
+    check outcome == saoRejectedMalformed
+
+  test "No-legend response is reported before mod-5 check":
+    # A transiently-empty legend must surface as saoRejectedNoLegend even when
+    # the response is simultaneously malformed (length not a multiple of 5).
+    let emptyLegend = SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[])
+    let emptyTab = buildSemanticTypeColorTable(emptyLegend)
+    let h = Highlight(colorSegments: @[])
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 2, 0]), emptyTab, 1)
+    check outcome == saoRejectedNoLegend
+
+  test "Fresh Highlight starts with semanticContentVersion == -1 sentinel":
+    let h = Highlight(colorSegments: @[])
+    check h.semanticContentVersion == -1
+    # A contentVersion of 0 (fresh newTextBuffer) can still successfully apply.
+    discard applySemanticTokens(h, mkResp(@[0, 0, 3, 0, 0]), colorTab, 0)
+    check h.semanticContentVersion == 0
+
+  test "Multi-line UTF-16 wrap distributes overflow per row not as runes":
+    # Regression: applyLen fallback added UTF-16 overflow to a rune count and
+    # split by runes, over-counting when wrap rows had non-BMP characters. The
+    # new per-row conversion consumes exact UTF-16 units per wrap row.
+    let widths = @[3, 3]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+    # Row 0: 3 ASCII runes (3 UTF-16 units).
+    # Row 1: emoji + ASCII = 3 runes but 4 UTF-16 units (surrogate pair).
+    let lineText: LineTextFn = proc(row: int): string {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0:
+          "abc"
+        elif row == 1:
+          "\u{1F600}xy"
+        else:
+          ""
+
+    let h = Highlight(colorSegments: @[])
+    # Length = 7 UTF-16 units: consumes all of row 0 (3 units) then all of
+    # row 1 (4 units, = 3 runes on that row).
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 7, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+    )
+    check outcome == saoDone
+    check h.semantic[0].tokens[0].length == 3
+    check h.semantic[1].tokens[0].length == 3
+
+  test "getLineText without getLineRuneCount caps at start-row runes":
+    # No splitter callback: paint the start-row portion only rather than
+    # stamping a phantom oversized overlay entry pinned to `currentLine`.
+    let lineText: LineTextFn = proc(row: int): string {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0:
+          "abc" # 3 runes, 3 UTF-16 units
+        else:
+          ""
+
+    let h = Highlight(colorSegments: @[])
+    # Length = 10 UTF-16 units spilling past start row; nil splitter callback.
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 10, 1, 0]), colorTab, 1, nil, -1, -1, lineText
+    )
+    check outcome == saoDone
+    # Only row 0 gets an overlay; length is clipped to the row's rune count.
+    check h.semantic.len == 1
+    check 0 in h.semantic
+    check h.semantic[0].tokens[0].length <= 3
+
+  test "Small token inside a carved multi-line unroll keeps middle token's color":
+    # Regression: addOverlayToken's back-walk assumed only the outermost prior
+    # could extend past `newEnd`, so the tail was coloured from whichever prior
+    # was walked first. When state was [A_head, B, A_tail] (a multi-line wrap
+    # A carved by an inner single-line token B) and a smaller C landed inside
+    # B, cols between C.end and B.end were painted A.color instead of B.color.
+    let widths = @[10, 20]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+
+    let h = Highlight(colorSegments: @[])
+    # A row=0 col=0 len=30 unrolls to row 0 (0..9) and row 1 (0..19).
+    # B row=1 col=5 len=10 carves A on row 1 into [A_head(0,5), B(5,10),
+    #                                              A_tail(15,5)].
+    # C row=1 col=7 len=2 lands inside B (7..8, entirely inside [5..14]).
+    # Expected on row 1: A_head(0,5), B_head(5,2), C(7,2), B_tail(9,6), A_tail(15,5).
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 30, 0, 0, 1, 5, 10, 1, 0, 0, 2, 2, 2, 0]), colorTab, 1, getLen
+    )
+    check outcome == saoDone
+    let toks = h.semantic[1].tokens
+    # Sorted-disjoint invariant.
+    for i in 0 ..< toks.high:
+      check toks[i].firstColumn + toks[i].length <= toks[i + 1].firstColumn
+    check toks.len == 5
+    check toks[0].firstColumn == 0
+    check toks[0].length == 5
+    check toks[0].color == EditorColorPairIndex.variable
+    check toks[1].firstColumn == 5
+    check toks[1].length == 2
+    check toks[1].color == EditorColorPairIndex.function
+    check toks[2].firstColumn == 7
+    check toks[2].length == 2
+    check toks[2].color == EditorColorPairIndex.typeName
+    # The regression: this segment must be B (function), not A (variable).
+    check toks[3].firstColumn == 9
+    check toks[3].length == 6
+    check toks[3].color == EditorColorPairIndex.function
+    check toks[4].firstColumn == 15
+    check toks[4].length == 5
+    check toks[4].color == EditorColorPairIndex.variable
+    # getColorPair spot-checks around the previously-miscoloured span.
+    check h.getColorPair(1, 9) == EditorColorPairIndex.function
+    check h.getColorPair(1, 14) == EditorColorPairIndex.function
+    check h.getColorPair(1, 15) == EditorColorPairIndex.variable

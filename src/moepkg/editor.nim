@@ -279,6 +279,17 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         documentHighlightUpdateInterval: 200, # 200ms debounce
         lastSemanticTokensUpdate: getMonoTime(),
         semanticTokensUpdateInterval: 500, # 500ms debounce for semantic tokens
+        pendingSemanticTokens: PendingSemanticTokensRequest(
+          requestId: 0,
+          filePath: "",
+          changeSeq: -1,
+          contentVersion: -1,
+          rangeFirst: -1,
+          rangeLast: -1,
+          legend: SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[]),
+          viewportTopLine: -1,
+          viewportBottomLine: -1,
+        ),
         inlayHintCache: InlayHintCache(isValid: false),
         lastInlayHintUpdate: getMonoTime(),
         inlayHintUpdateInterval: 500, # 500ms debounce for inlay hints

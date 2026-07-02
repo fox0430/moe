@@ -314,6 +314,35 @@ proc findMatchingCloseOnLine*(line: string, openCol: int): int =
         return col
   return -1
 
+proc utf16OffsetToRune*(
+    line: string, utf16Offset: int
+): tuple[runeIdx: int, utf16Walked: int] {.inline.} =
+  ## Convert a UTF-16 code-unit offset into a rune index. Returns the rune
+  ## index clamped to the line's rune count and the UTF-16 units actually
+  ## walked. `utf16Walked < utf16Offset` signals that the target position
+  ## lies past the line's end -- callers that need to distribute the
+  ## remainder over subsequent rows (multi-line tokens) must add the
+  ## overflow themselves.
+  if utf16Offset <= 0 or line.len == 0:
+    return (0, 0)
+  var utf16Count = 0
+  var runeIdx = 0
+  for rune in line.runes:
+    if utf16Count >= utf16Offset:
+      break
+    if rune.int >= 0x10000:
+      utf16Count += 2
+    else:
+      utf16Count += 1
+    inc runeIdx
+  return (runeIdx, utf16Count)
+
+proc utf16ToRuneIndex*(line: string, utf16Offset: int): int {.inline.} =
+  ## Convert a UTF-16 code-unit offset into a rune index (clamped to the
+  ## line's rune count). Thin wrapper over `utf16OffsetToRune` for callers
+  ## that don't need the walked count.
+  utf16OffsetToRune(line, utf16Offset).runeIdx
+
 proc findMatchingOpenOnLine*(line: string, closeCol: int): int =
   ## Find the matching opening bracket for a closing bracket at closeCol.
   ## Uses nesting-aware matching. Only searches within the same line.

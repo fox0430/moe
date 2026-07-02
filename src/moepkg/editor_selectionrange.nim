@@ -30,7 +30,7 @@
 
 import std/options
 
-import types/editor_types, lsp_integration
+import types/editor_types, lsp_integration, unicode_utils
 
 proc normalizedSelection(sel: VisualSelection): tuple[first, last: BufferPosition] =
   ## Order the selection endpoints so `first` precedes `last`.

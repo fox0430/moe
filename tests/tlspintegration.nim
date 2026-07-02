@@ -21,9 +21,9 @@ import std/[unittest, json, options, tables, times, strutils, importutils]
 
 import pkg/results
 
-import ../src/moepkg/lsp_integration
+import ../src/moepkg/[lsp_integration, unicode_utils]
+import ../src/moepkg/buffer/[core, edit, fold, markers, undo]
 import ../src/moepkg/lsp/protocol/types as lspTypes
-import ../src/moepkg/buffer
 
 suite "LspIntegration Progress":
   test "hasActiveProgress - no progress":
