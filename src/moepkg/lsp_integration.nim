@@ -986,7 +986,8 @@ proc startSemanticTokensRequest*(
     # Clamp line numbers to valid range
     let actualLastLine = min(lastLine, buffer.len - 1)
     let actualFirstLine = min(firstLine, actualLastLine)
-    let endChar = buffer.getLine(actualLastLine).charLen
+    let endChar =
+      buffer.toUtf16Column(actualLastLine, buffer.getLine(actualLastLine).charLen)
     return lsp.service.startSemanticTokensRangeRequest(
       path, actualFirstLine, 0, actualLastLine, endChar
     )
