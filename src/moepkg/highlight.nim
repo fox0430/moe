@@ -317,10 +317,9 @@ proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
       (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
     let segColor = highlight[highlight.indexOf(line, col)].color
     if segColor in {
-        EditorColorPairIndex.syntaxCheckErr,
-        EditorColorPairIndex.syntaxCheckWarn,
-        EditorColorPairIndex.syntaxCheckInfo,
-        EditorColorPairIndex.syntaxCheckHint}:
+      EditorColorPairIndex.syntaxCheckErr, EditorColorPairIndex.syntaxCheckWarn,
+      EditorColorPairIndex.syntaxCheckInfo, EditorColorPairIndex.syntaxCheckHint,
+    }:
       return segColor
 
   if highlight.semantic.len > 0:
