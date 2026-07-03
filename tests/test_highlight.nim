@@ -2946,6 +2946,22 @@ suite "Highlight - Semantic overlay":
     check h.semantic.len == rows
     check h.semantic[rows - 1].tokens[0].length == 10
 
+  test "Full-doc pathological length is bounded by MaxSemanticTokenRowSpan":
+    # Guards against a buggy server sending length=2^31 in a full-doc reply:
+    # without a per-token row-span cap the splitter would walk every row of
+    # the buffer (500k+) in one frame.
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      # Unbounded synthetic buffer: every row has 1 rune.
+      1
+    let h = Highlight(colorSegments: @[])
+    # length far exceeds MaxSemanticTokenRowSpan; splitter must stop.
+    let outcome =
+      applySemanticTokens(h, mkResp(@[0, 0, 1_000_000, 1, 0]), colorTab, 1, getLen)
+    check outcome == saoDone
+    # start row + up to MaxSemanticTokenRowSpan wrap rows.
+    check h.semantic.len <= MaxSemanticTokenRowSpan + 1
+    check h.semantic.len >= 2 # at least the wrap loop ran
+
   test "Stale-position multi-line token whose start is past EOL is dropped":
     let widths = @[3, 10]
     let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =

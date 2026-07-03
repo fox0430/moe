@@ -156,6 +156,12 @@ const
     ## Hard cap on tokens per response. Above this, `applySemanticTokens` rejects
     ## the response before parsing (see design/semantic_tokens_overlay_design.md).
 
+  MaxSemanticTokenRowSpan* = 4096
+    ## Hard cap on rows a single semantic token may unroll across in the
+    ## multi-line splitter. The token-count cap does not bound per-token
+    ## `length`, so a pathological value (e.g. 2^31 from a buggy server) would
+    ## otherwise walk every row of the buffer in a full-doc reply.
+
 let defaultStyle* =
   Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
   ## Default style for highlighting
@@ -2188,8 +2194,11 @@ proc applySemanticTokens*(
       # multilineTokenSupport=true: LSP length counts each \n boundary as 1
       # UTF-16 unit; consume one per row transition.
       var row = currentLine + 1
+      let maxRow = currentLine + MaxSemanticTokenRowSpan
       while utf16Remaining > 0 or runeOverflow > 0:
         if updateLastRow >= 0 and row > updateLastRow:
+          break
+        if row > maxRow:
           break
         let rowLen = getLineRuneCount(row)
         if rowLen < 0:
