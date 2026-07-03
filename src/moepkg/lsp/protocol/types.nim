@@ -400,19 +400,6 @@ type
     range*: Option[JsonNode] # bool | {}
     full*: Option[JsonNode] # bool | { delta?: bool }
 
-  SemanticTokens* = object ## Result of semantic tokens request
-    resultId*: Option[string]
-    data*: seq[int]
-      # Encoded token data (deltaLine, deltaStart, length, tokenType, tokenModifiers)
-
-  SemanticToken* = object ## Decoded individual semantic token
-    line*: int
-    startChar*: int
-    endChar*: int ## startChar + length (exclusive)
-    length*: int
-    tokenType*: int
-    tokenModifiers*: int
-
   # Work Done Progress types
   WorkDoneProgressKind* = enum
     ## The kind of work done progress
@@ -987,67 +974,6 @@ proc parseExecuteCommandOptions*(node: JsonNode): ExecuteCommandOptions =
   if node.hasKey("workDoneProgress"):
     result.workDoneProgress = some(node["workDoneProgress"].getBool)
 
-proc parseSemanticTokens*(node: JsonNode): SemanticTokens =
-  ## Parse SemanticTokens response from JSON
-  if node.hasKey("resultId") and node["resultId"].kind == JString:
-    result.resultId = some(node["resultId"].getStr)
-  if node.hasKey("data") and node["data"].kind == JArray:
-    for item in node["data"]:
-      result.data.add(item.getInt)
-
-proc decodeSemanticTokens*(tokens: SemanticTokens): seq[SemanticToken] =
-  ## Decode encoded semantic tokens data into SemanticToken objects
-  ## The data array is encoded as: [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
-  ## Each group of 5 integers represents one token
-  if tokens.data.len == 0 or tokens.data.len mod 5 != 0:
-    return @[]
-
-  var currentLine = 0
-  var currentChar = 0
-
-  for i in countup(0, tokens.data.len - 1, 5):
-    let deltaLine = tokens.data[i]
-    let deltaStart = tokens.data[i + 1]
-    let length = tokens.data[i + 2]
-    let tokenType = tokens.data[i + 3]
-    let tokenModifiers = tokens.data[i + 4]
-
-    # Update position
-    if deltaLine > 0:
-      currentLine += deltaLine
-      currentChar = deltaStart
-    else:
-      currentChar += deltaStart
-
-    result.add(
-      SemanticToken(
-        line: currentLine,
-        startChar: currentChar,
-        endChar: currentChar + length,
-        length: length,
-        tokenType: tokenType,
-        tokenModifiers: tokenModifiers,
-      )
-    )
-
-proc getSemanticTokenType*(token: SemanticToken, legend: SemanticTokensLegend): string =
-  ## Get the token type name from the legend
-  if token.tokenType >= 0 and token.tokenType < legend.tokenTypes.len:
-    return legend.tokenTypes[token.tokenType]
-  return ""
-
-proc getSemanticTokenModifiers*(
-    token: SemanticToken, legend: SemanticTokensLegend
-): seq[string] =
-  ## Get the token modifier names from the legend (tokenModifiers is a bitmask)
-  var modifiers = token.tokenModifiers
-  var idx = 0
-  while modifiers > 0 and idx < legend.tokenModifiers.len:
-    if (modifiers and 1) != 0:
-      result.add(legend.tokenModifiers[idx])
-    modifiers = modifiers shr 1
-    inc idx
-
 proc parseWorkDoneProgressBegin*(node: JsonNode): WorkDoneProgressBegin =
   ## Parse WorkDoneProgressBegin from JSON
   result.title = node["title"].getStr
@@ -1097,110 +1023,6 @@ proc getProgressToken*(params: WorkDoneProgressParams): string =
     $params.token.getInt
   else:
     params.token.getStr
-
-proc toSemanticTokenType*(typeName: string): Option[SemanticTokenTypes] =
-  ## Convert a token type name string to SemanticTokenTypes enum
-  case typeName
-  of "namespace":
-    some(sttNamespace)
-  of "type":
-    some(sttType)
-  of "class":
-    some(sttClass)
-  of "enum":
-    some(sttEnum)
-  of "interface":
-    some(sttInterface)
-  of "struct":
-    some(sttStruct)
-  of "typeParameter":
-    some(sttTypeParameter)
-  of "parameter":
-    some(sttParameter)
-  of "variable":
-    some(sttVariable)
-  of "property":
-    some(sttProperty)
-  of "enumMember":
-    some(sttEnumMember)
-  of "event":
-    some(sttEvent)
-  of "function":
-    some(sttFunction)
-  of "method":
-    some(sttMethod)
-  of "macro":
-    some(sttMacro)
-  of "keyword":
-    some(sttKeyword)
-  of "modifier":
-    some(sttModifier)
-  of "comment":
-    some(sttComment)
-  of "string":
-    some(sttString)
-  of "number":
-    some(sttNumber)
-  of "regexp":
-    some(sttRegexp)
-  of "operator":
-    some(sttOperator)
-  of "decorator":
-    some(sttDecorator)
-  else:
-    none(SemanticTokenTypes)
-
-proc toSemanticTokenModifier*(modifierName: string): Option[SemanticTokenModifiers] =
-  ## Convert a token modifier name string to SemanticTokenModifiers enum
-  case modifierName
-  of "declaration":
-    some(stmDeclaration)
-  of "definition":
-    some(stmDefinition)
-  of "readonly":
-    some(stmReadonly)
-  of "static":
-    some(stmStatic)
-  of "deprecated":
-    some(stmDeprecated)
-  of "abstract":
-    some(stmAbstract)
-  of "async":
-    some(stmAsync)
-  of "modification":
-    some(stmModification)
-  of "documentation":
-    some(stmDocumentation)
-  of "defaultLibrary":
-    some(stmDefaultLibrary)
-  else:
-    none(SemanticTokenModifiers)
-
-proc getSemanticTokenTypeEnum*(
-    token: SemanticToken, legend: SemanticTokensLegend
-): Option[SemanticTokenTypes] =
-  ## Get the token type as SemanticTokenTypes enum
-  let typeName = getSemanticTokenType(token, legend)
-  if typeName.len > 0:
-    return toSemanticTokenType(typeName)
-  return none(SemanticTokenTypes)
-
-proc getSemanticTokenModifierEnums*(
-    token: SemanticToken, legend: SemanticTokensLegend
-): seq[SemanticTokenModifiers] =
-  ## Get the token modifiers as SemanticTokenModifiers enum sequence
-  let modifierNames = getSemanticTokenModifiers(token, legend)
-  for name in modifierNames:
-    let enumOpt = toSemanticTokenModifier(name)
-    if enumOpt.isSome:
-      result.add(enumOpt.get)
-
-proc hasModifier*(
-    token: SemanticToken, legend: SemanticTokensLegend, modifier: SemanticTokenModifiers
-): bool =
-  ## Check if a token has a specific modifier
-  let modifiers = getSemanticTokenModifierEnums(token, legend)
-  return modifier in modifiers
 
 proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   # Return empty capabilities if node is not a JObject
