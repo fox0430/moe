@@ -59,13 +59,9 @@ proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
   buf.refreshConflicts()
   e.state.timing.lastConflictScan = getMonoTime()
   e.state.timing.lastConflictScanSeq = buf.changeSeq
-  # A pre-reload LSP response would land on the fresh buffer with stale row/col
-  # coords; drop all four caches (loadFile clears highlightNeedsUpdate, so the
-  # frame-loop invalidation path does not fire). Matches `restartLspServer`.
-  invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
-  invalidateInlayHintCache(e.lsp, e.state.lspCache)
-  invalidateDocumentHighlightCache(e.state.lspCache)
-  invalidateCodeLensCache(e.state.lspCache)
+  # Reload clears highlightNeedsUpdate; drop caches so a pre-reload response
+  # cannot paint stale coords onto the fresh buffer.
+  e.invalidateAllLspCaches()
   e.resyncBufferAfterReload(buf)
 
 proc maybeReloadExternallyModifiedFile*(e: Editor) =

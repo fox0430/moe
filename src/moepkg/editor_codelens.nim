@@ -756,6 +756,15 @@ proc invalidateInlayHintCache*(lsp: LspIntegration, cache: var LspCacheState) =
     lsp.cancelRequest(cache.pendingInlayHintRequestId)
     cache.pendingInlayHintRequestId = 0
 
+proc invalidateAllLspCaches*(e: Editor) =
+  ## Drop all per-buffer LSP overlay caches. Use after buffer identity changes
+  ## (loadFile, reload, LSP restart) so a pre-swap response cannot paint stale
+  ## coords onto the fresh buffer.
+  invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
+  invalidateInlayHintCache(e.lsp, e.state.lspCache)
+  invalidateDocumentHighlightCache(e.state.lspCache)
+  invalidateCodeLensCache(e.state.lspCache)
+
 proc processInlayHintResponse(e: Editor, hints: seq[InlayHint]) =
   ## Internal: convert an inlay hint response into the cached, per-line format.
   let activeBuffer = e.activeBuffer()
