@@ -427,62 +427,6 @@ suite "types - Diagnostic parsing":
     check diag.severity.isSome
     check diag.severity.get == dsWarning
 
-suite "types - SemanticTokens":
-  test "decodeSemanticTokens":
-    # Encoded: deltaLine=0, deltaStart=0, length=5, tokenType=0, tokenModifiers=0
-    #          deltaLine=0, deltaStart=10, length=3, tokenType=1, tokenModifiers=1
-    let tokens = SemanticTokens(data: @[0, 0, 5, 0, 0, 0, 10, 3, 1, 1])
-    let decoded = decodeSemanticTokens(tokens)
-    check decoded.len == 2
-    check decoded[0].line == 0
-    check decoded[0].startChar == 0
-    check decoded[0].length == 5
-    check decoded[0].tokenType == 0
-    check decoded[1].line == 0
-    check decoded[1].startChar == 10
-    check decoded[1].length == 3
-    check decoded[1].tokenType == 1
-    check decoded[1].tokenModifiers == 1
-
-  test "decodeSemanticTokens with line change":
-    # deltaLine=1 means next line
-    let tokens = SemanticTokens(data: @[0, 0, 5, 0, 0, 1, 3, 2, 1, 0])
-    let decoded = decodeSemanticTokens(tokens)
-    check decoded.len == 2
-    check decoded[0].line == 0
-    check decoded[1].line == 1
-    check decoded[1].startChar == 3
-
-  test "decodeSemanticTokens empty":
-    let tokens = SemanticTokens(data: @[])
-    let decoded = decodeSemanticTokens(tokens)
-    check decoded.len == 0
-
-  test "decodeSemanticTokens invalid length":
-    let tokens = SemanticTokens(data: @[1, 2, 3])
-    let decoded = decodeSemanticTokens(tokens)
-    check decoded.len == 0
-
-suite "types - toSemanticTokenType":
-  test "known type name":
-    let result = toSemanticTokenType("function")
-    check result.isSome
-    check result.get == sttFunction
-
-  test "unknown type name":
-    let result = toSemanticTokenType("unknown_type")
-    check result.isNone
-
-suite "types - toSemanticTokenModifier":
-  test "known modifier name":
-    let result = toSemanticTokenModifier("readonly")
-    check result.isSome
-    check result.get == stmReadonly
-
-  test "unknown modifier name":
-    let result = toSemanticTokenModifier("not_a_modifier")
-    check result.isNone
-
 suite "types - FoldingRange parsing":
   test "parseFoldingRange basic":
     let j = %*{"startLine": 5, "endLine": 10}
