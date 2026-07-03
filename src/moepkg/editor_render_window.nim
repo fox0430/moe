@@ -41,27 +41,36 @@ import
   editor_codelens
 import command_handlers/visual_handler
 
-type LineStyleContext* = object
-  ## Per-line state used while rendering one buffer line. Values are
-  ## computed once at the start of the line and then read by the per-character
-  ## style pipeline, replacing what used to be 7+ individually-threaded
-  ## parameters across getSelectionStyle / baseStyleWithOverlay / overlayPatchSyntax.
-  ##
-  ## Two construction paths exist:
-  ## - `newLineStyleContext`: full context built once per rendered line. Required
-  ##   for `getSelectionStyle` / `renderLineSegmentWithSelection`.
-  ## - Manual partial construction: `fillLineBackground` only calls
-  ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`, and
-  ##   `useTwoColor`; the remaining fields can be left at their defaults.
-  lineIndex*: int
-  isActiveWindow*: bool
-  isCursorLine*: bool
-  lineConflict*: ConflictMarkerKind
-  useTwoColor*: bool
-  searchRanges*: seq[ColumnRange]
-  wordRanges*: seq[ColumnRange]
-  colorCodeMatches*: seq[ColorCodeMatch]
-  trailingSpaceStart*: int
+type
+  LineStyleContext* = object
+    ## Per-line state used while rendering one buffer line. Values are
+    ## computed once at the start of the line and then read by the per-character
+    ## style pipeline, replacing what used to be 7+ individually-threaded
+    ## parameters across getSelectionStyle / baseStyleWithOverlay / overlayPatchSyntax.
+    ##
+    ## Two construction paths exist:
+    ## - `newLineStyleContext`: full context built once per rendered line. Required
+    ##   for `getSelectionStyle` / `renderLineSegmentWithSelection`.
+    ## - Manual partial construction: `fillLineBackground` only calls
+    ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`, and
+    ##   `useTwoColor`; the remaining fields can be left at their defaults.
+    lineIndex*: int
+    isActiveWindow*: bool
+    isCursorLine*: bool
+    lineConflict*: ConflictMarkerKind
+    useTwoColor*: bool
+    searchRanges*: seq[ColumnRange]
+    wordRanges*: seq[ColumnRange]
+    colorCodeMatches*: seq[ColorCodeMatch]
+    trailingSpaceStart*: int
+
+  LinePrecomputed* = object
+    ## Per-logical-line values reused across wrap segments. The wrap path builds
+    ## this once and hands it to every segment call so the O(line) scans in
+    ## `newLineStyleContext` / `analyzeIndentation` do not fire per segment.
+    fullLine*: string
+    indentInfo*: IndentInfo
+    lineCtx*: LineStyleContext
 
 template hasSyntaxHighlight(
     e: Editor, buffer: TextBuffer, windowMode: EditorMode
@@ -509,6 +518,7 @@ proc renderLineSegmentWithSelection*(
     ctx: RenderContext,
     useRunes: bool = true,
     appendVirtualText: bool = true,
+    precomputed: Option[LinePrecomputed] = none(LinePrecomputed),
 ) =
   ## Render a line segment with selection highlighting and syntax highlighting
   ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
@@ -516,20 +526,23 @@ proc renderLineSegmentWithSelection*(
   ## appendVirtualText: when true, end-of-line virtual text (inlay hints, etc.)
   ##   is drawn after the real text and before the trailing fill. In wrapped mode
   ##   the caller passes false for every segment except the last.
+  ## precomputed: caller-supplied fullLine/indentInfo/lineCtx shared across wrap
+  ##   segments of the same logical line. When set, the caller is responsible
+  ##   for having already called `updateHighlight`.
 
-  # Update syntax highlighting once per line (not per character)
-  if e.hasSyntaxHighlight(textBuffer, ctx.windowMode):
-    textBuffer.updateHighlight()
-
-  # Get the full line for indentation guide checking
-  let fullLine = textBuffer.getLine(lineIndex)
-  # Analyze indentation once (O(n)) to avoid repeated scanning (O(n²))
-  let indentInfo = analyzeIndentation(fullLine)
-
-  # Bundle all per-line state (search/word ranges, conflict kind, colorcode
-  # matches, trailingSpaceStart, isCursorLine) into a single value so that
-  # the style pipeline reads it instead of receiving 7+ individual params.
-  let lineCtx = e.newLineStyleContext(textBuffer, lineIndex, fullLine, ctx)
+  let (fullLine, indentInfo, lineCtx) =
+    if precomputed.isSome:
+      let p = precomputed.get
+      (p.fullLine, p.indentInfo, p.lineCtx)
+    else:
+      if e.hasSyntaxHighlight(textBuffer, ctx.windowMode):
+        textBuffer.updateHighlight()
+      let fl = textBuffer.getLine(lineIndex)
+      (
+        fl,
+        analyzeIndentation(fl),
+        e.newLineStyleContext(textBuffer, lineIndex, fl, ctx),
+      )
 
   # Always render character by character to apply syntax highlighting
   var displayX = 0
@@ -730,6 +743,17 @@ proc renderWindowLineWrapped*(
 
   let tabStop = e.state.display.tabStop
 
+  # Build per-logical-line state once so each wrap segment can reuse it.
+  if e.hasSyntaxHighlight(window.buffer, ctx.windowMode):
+    window.buffer.updateHighlight()
+  let precomputed = some(
+    LinePrecomputed(
+      fullLine: line,
+      indentInfo: analyzeIndentation(line),
+      lineCtx: e.newLineStyleContext(window.buffer, lineIndex, line, ctx),
+    )
+  )
+
   # Skip leading wrap segments scrolled off the top (partial first line). Keep
   # wrapLineCount advancing so the resumed first visible row is treated as a
   # continuation row (blank line number, vim-style) rather than the first wrap.
@@ -784,6 +808,7 @@ proc renderWindowLineWrapped*(
           ctx,
           useRunes = true,
           appendVirtualText = endCharCol >= lineCharLen,
+          precomputed = precomputed,
         )
 
     inc screenY

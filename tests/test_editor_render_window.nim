@@ -362,6 +362,51 @@ suite "renderWindowLineWrapped - Basic behavior":
     check fullBuffer[2, 0].symbol == "1"
     check fullBuffer[4, 0].symbol == "0" # segment 0 text
 
+  test "Per-line search highlight applies on every wrap segment":
+    # Guards the precomputed LinePrecomputed path: the wrap loop builds
+    # lineCtx once and reuses it across segments, so a match in each segment
+    # must still carry the searchHighlight bg.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.display.showSidebar = false
+    e.state.display.scrollbar = false
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.lastText = "AA"
+    e.state.mode = EditorMode.Normal
+
+    # 30 chars => 3 wrap segments at maxWidth 10, each starting with "AA".
+    let line = "AA12345678AA34567890AA56789012"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), line)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 10
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.cursor.line = 5
+
+    let ctx = RenderContext(
+      cursorLine: 5,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 10,
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+    e.renderWindowLineWrapped(buffer, window, 0, ctx, screenY, lineIndex, 20, 0)
+
+    check screenY == 3
+    let sh = searchHighlightStyle()
+    for y in 0 ..< 3:
+      check buffer[0, y].style.bg == sh.bg
+      check buffer[1, y].style.bg == sh.bg
+
 suite "renderWindowLineNoWrap - Basic behavior":
   test "Render empty line":
     let e = createTestEditor()
