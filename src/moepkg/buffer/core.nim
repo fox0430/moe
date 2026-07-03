@@ -19,7 +19,7 @@
 
 ## Core buffer types: TextBuffer, BufferChange, FoldState, and supporting enums.
 
-import std/[algorithm, deques, hashes, options, times, unicode]
+import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
 import ../[encoding, highlight, primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
@@ -699,6 +699,70 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
   of ckSnapshot:
     return change.snapshotCursorPos
 
+proc countNewlines(s: string): int {.inline.} =
+  for c in s:
+    if c == '\n':
+      inc result
+
+proc shiftSemanticOverlayForChange*(b: TextBuffer, change: BufferChange) =
+  ## Extmark-style shift of the LSP semantic overlay after a forward edit.
+  ## Design doc §6 chooses stale-but-close colouring over per-keystroke
+  ## flicker; this shifts row keys / column offsets so most of the screen
+  ## keeps its previous colours until the debounced re-request lands.
+  ## Complex or ambiguous cases (ckSnapshot) fall through to the clear-on-
+  ## version-mismatch safety net in `buffer/highlight.updateHighlight`.
+  if b.highlight.isNil or b.highlight.semantic.len == 0:
+    return
+  case change.kind
+  of ckInsertText:
+    let nl = countNewlines(change.insertText)
+    if nl == 0:
+      let colDelta = change.insertText.runeLen
+      let newLen = b.getLine(change.insertPos.line).charLen
+      b.highlight.semanticShiftForSingleLineEdit(
+        change.insertPos.line, change.insertPos.column, colDelta, newLen
+      )
+    else:
+      b.highlight.semanticShiftForMultiLineEdit(
+        change.insertPos.line, change.insertPos.line, change.insertPos.line + nl
+      )
+  of ckDeleteText:
+    let nl = countNewlines(change.deletedText)
+    if nl == 0:
+      let colDelta = -change.deletedText.runeLen
+      let newLen = b.getLine(change.deletePos.line).charLen
+      b.highlight.semanticShiftForSingleLineEdit(
+        change.deletePos.line, change.deletePos.column, colDelta, newLen
+      )
+    else:
+      b.highlight.semanticShiftForMultiLineEdit(
+        change.deletePos.line, change.deletePos.line + nl, change.deletePos.line
+      )
+  of ckInsertLine:
+    b.highlight.semanticShiftForMultiLineEdit(
+      change.insertLineIdx, change.insertLineIdx - 1, change.insertLineIdx
+    )
+  of ckDeleteLine:
+    b.highlight.semanticShiftForMultiLineEdit(
+      change.deleteLineIdx, change.deleteLineIdx, change.deleteLineIdx - 1
+    )
+  of ckDeleteRange:
+    b.highlight.semanticShiftForMultiLineEdit(
+      change.deleteStartPos.line, change.deleteEndPos.line, change.deleteStartPos.line
+    )
+  of ckReplaceLine:
+    b.highlight.semanticShiftForMultiLineEdit(
+      change.replaceLineIdx, change.replaceLineIdx, change.replaceLineIdx
+    )
+  of ckTransaction:
+    for inner in change.transactionChanges:
+      b.shiftSemanticOverlayForChange(inner)
+  of ckSnapshot:
+    b.highlight.semantic.clear()
+    b.highlight.semanticContentVersion = -1
+    return
+  b.highlight.semanticContentVersion = b.contentVersion
+
 # Memory usage monitoring
 proc estimateMemoryUsage*(buffer: TextBuffer): int =
   result = sizeof(TextBuffer)
@@ -827,6 +891,11 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   b.changeSeq.inc
   b.advanceContentVersion()
   let postSeq = b.changeSeq
+
+  # Shift the semantic overlay to match the new content BEFORE the frame
+  # reaches updateHighlight; without this the version bump above would trip
+  # updateHighlight's mismatch guard and wipe the overlay every keystroke.
+  b.shiftSemanticOverlayForChange(change)
 
   # Mark highlight as needing update and track changed range
   b.highlightNeedsUpdate = true

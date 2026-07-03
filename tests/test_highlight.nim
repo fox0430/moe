@@ -2717,9 +2717,11 @@ suite "Highlight - Semantic overlay":
     check buf.highlight.semantic.len == 1
     check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.function
 
-  test "Stale overlay is dropped when the buffer edits past the apply version":
-    # updateHighlight must invalidate an overlay whose row/col coords are
-    # stale, else it would paint on shifted positions until the next response.
+  test "Forward edit preserves overlay via the extmark shift (design doc §6)":
+    # Design doc §6: stale-but-close colouring beats flicker on every keystroke.
+    # `pushUndoChange` calls `shiftSemanticOverlayForChange`, which advances
+    # `semanticContentVersion` so `updateHighlight`'s fallback clear stays quiet
+    # for rows untouched by the edit.
     var buf = newTextBuffer("let x = 1\nlet y = 2\n")
     buf.language = SourceLanguage.langNim
     buf.updateHighlight()
@@ -2727,8 +2729,27 @@ suite "Highlight - Semantic overlay":
       buf.highlight, mkResp(@[0, 4, 1, 1, 0]), colorTab, buf.contentVersion
     )
     check buf.highlight.semantic.len == 1
-    # Edit advances contentVersion past the overlay's snapshot.
+    # Edit on row 1 (col 0) leaves row 0's token untouched.
     check buf.insertText(BufferPosition(line: 1, column: 0), "z").isOk
+    buf.updateHighlight()
+    check buf.highlight.semantic.len == 1
+    check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.function
+    check buf.highlight.semanticContentVersion == buf.contentVersion
+
+  test "Undo triggers the safety-net clear (no extmark inversion)":
+    # Undo/redo bypass `pushUndoChange`, so the safety net in
+    # `buffer/highlight.updateHighlight` still clears the overlay on version
+    # mismatch — this is intentional: undo can reshuffle many lines.
+    var buf = newTextBuffer("let x = 1\nlet y = 2\n")
+    buf.language = SourceLanguage.langNim
+    buf.updateHighlight()
+    # Prime an edit so there's something to undo.
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    discard applySemanticTokens(
+      buf.highlight, mkResp(@[0, 4, 1, 1, 0]), colorTab, buf.contentVersion
+    )
+    check buf.highlight.semantic.len == 1
+    check buf.undo().isOk
     buf.updateHighlight()
     check buf.highlight.semantic.len == 0
     check buf.highlight.getColorPair(0, 4) != EditorColorPairIndex.function
@@ -3741,3 +3762,211 @@ suite "Highlight - Semantic overlay":
     check h.getColorPair(1, 9) == EditorColorPairIndex.function
     check h.getColorPair(1, 14) == EditorColorPairIndex.function
     check h.getColorPair(1, 15) == EditorColorPairIndex.variable
+
+suite "Highlight - Semantic overlay edit shift":
+  # Helpers to build a Highlight with a known overlay so shift semantics can
+  # be exercised without going through the full applySemanticTokens path.
+  proc mkTok(
+      col, len: int, color = EditorColorPairIndex.function
+  ): SemanticOverlayToken =
+    SemanticOverlayToken(
+      firstColumn: col, length: len, color: color, style: defaultStyle
+    )
+
+  proc mkH(rows: openArray[(int, seq[SemanticOverlayToken])], version = 42): Highlight =
+    result = Highlight(colorSegments: @[])
+    for (row, toks) in rows:
+      result.semantic[row] = SemanticOverlayLine(tokens: toks)
+    result.semanticContentVersion = version
+
+  test "single-line insert shifts tokens right of editCol":
+    let h = mkH({0: @[mkTok(2, 3), mkTok(10, 4)]})
+    # Insert 2 runes at col 5 on row 0. New line length: 20.
+    h.semanticShiftForSingleLineEdit(0, 5, 2, 20)
+    check h.semantic[0].tokens.len == 2
+    check h.semantic[0].tokens[0].firstColumn == 2 # untouched
+    check h.semantic[0].tokens[0].length == 3
+    check h.semantic[0].tokens[1].firstColumn == 12 # shifted by +2
+    check h.semantic[0].tokens[1].length == 4
+
+  test "single-line delete shifts tokens left of editCol and drops straddler":
+    # Row 0: tokens at [0..2), [5..9), [12..15). Delete 3 runes at col 6.
+    # Straddler [5..9) drops. [12..15) shifts to [9..12).
+    let h = mkH({0: @[mkTok(0, 2), mkTok(5, 4), mkTok(12, 3)]})
+    h.semanticShiftForSingleLineEdit(0, 6, -3, 17)
+    check h.semantic[0].tokens.len == 2
+    check h.semantic[0].tokens[0].firstColumn == 0
+    check h.semantic[0].tokens[1].firstColumn == 9
+    check h.semantic[0].tokens[1].length == 3
+
+  test "single-line straddling token dropped":
+    # Token [4..10) straddles editCol=6 → dropped.
+    let h = mkH({0: @[mkTok(4, 6)]})
+    h.semanticShiftForSingleLineEdit(0, 6, 2, 12)
+    check not h.semantic.hasKey(0)
+
+  test "single-line shift clips token whose tail exceeds new line length":
+    # Token [10..20), new line length 15 → clipped to length 5.
+    let h = mkH({0: @[mkTok(10, 10)]})
+    h.semanticShiftForSingleLineEdit(0, 5, 0, 15) # colDelta=0 short-circuits
+    # colDelta=0 short-circuits; try non-zero delta forcing clip.
+    # Actually with colDelta 0 nothing changes. Use colDelta -2:
+    h.semanticShiftForSingleLineEdit(0, 5, -2, 15)
+    # After shift: token at firstColumn=8, length would be 10, clipped to 7.
+    check h.semantic[0].tokens.len == 1
+    check h.semantic[0].tokens[0].firstColumn == 8
+    check h.semantic[0].tokens[0].length == 7
+
+  test "single-line shift drops token whose start pushed past new line end":
+    let h = mkH({0: @[mkTok(10, 3)]})
+    # Delete 12 runes starting at col 5; new line length 3. Token would shift
+    # to firstColumn = -2 → drop.
+    h.semanticShiftForSingleLineEdit(0, 5, -12, 3)
+    check not h.semantic.hasKey(0)
+
+  test "single-line no-op when colDelta is zero":
+    let h = mkH({0: @[mkTok(0, 5)]})
+    h.semanticShiftForSingleLineEdit(0, 0, 0, 5)
+    check h.semantic[0].tokens[0].firstColumn == 0
+
+  test "single-line no-op when row has no entry":
+    let h = mkH({0: @[mkTok(0, 5)]})
+    h.semanticShiftForSingleLineEdit(9, 0, 2, 10)
+    check h.semantic.len == 1
+
+  test "multi-line insert shifts rows below down":
+    # Overlay on rows 0, 3, 7. Insert 2 rows at row 3 (splitting between).
+    # firstAffected=3, lastAffectedBefore=3, lastAffectedAfter=5.
+    # Row 3 dropped. Rows > 3 shift by +2. Row 0 stays.
+    let h = mkH({0: @[mkTok(0, 3)], 3: @[mkTok(1, 2)], 7: @[mkTok(4, 5)]})
+    h.semanticShiftForMultiLineEdit(3, 3, 5)
+    check h.semantic.hasKey(0)
+    check not h.semantic.hasKey(3)
+    check not h.semantic.hasKey(7)
+    check h.semantic.hasKey(9)
+    check h.semantic[9].tokens[0].firstColumn == 4
+
+  test "multi-line delete drops range and shifts rows below up":
+    # Overlay on rows 0, 5, 6, 9. Delete rows 5..6 (range collapse).
+    # firstAffected=5, lastAffectedBefore=6, lastAffectedAfter=5.
+    # Rows 5 and 6 dropped. Row 9 shifts to 8 (delta = -1).
+    let h =
+      mkH({0: @[mkTok(0, 3)], 5: @[mkTok(0, 2)], 6: @[mkTok(0, 1)], 9: @[mkTok(2, 4)]})
+    h.semanticShiftForMultiLineEdit(5, 6, 5)
+    check h.semantic.hasKey(0)
+    check not h.semantic.hasKey(5)
+    check not h.semantic.hasKey(6)
+    check not h.semantic.hasKey(9)
+    check h.semantic.hasKey(8)
+    check h.semantic[8].tokens[0].firstColumn == 2
+
+  test "multi-line insert of a single new line shifts existing overlay":
+    # ckInsertLine(idx=2): rows >= 2 shift by +1. Emulated with
+    # firstAffected=2, lastAffectedBefore=1 (empty clear range),
+    # lastAffectedAfter=2.
+    let h = mkH({0: @[mkTok(0, 2)], 2: @[mkTok(1, 3)], 4: @[mkTok(5, 2)]})
+    h.semanticShiftForMultiLineEdit(2, 1, 2)
+    check h.semantic.hasKey(0) # unchanged
+    check h.semantic.hasKey(3)
+    check h.semantic.hasKey(5)
+    check h.semantic[3].tokens[0].firstColumn == 1
+    check h.semantic[5].tokens[0].firstColumn == 5
+
+  test "multi-line delete of a single row drops it and shifts below":
+    # ckDeleteLine(idx=2): row 2 dropped, rows > 2 shift by -1.
+    let h = mkH({0: @[mkTok(0, 2)], 2: @[mkTok(1, 3)], 5: @[mkTok(5, 2)]})
+    h.semanticShiftForMultiLineEdit(2, 2, 1)
+    check h.semantic.hasKey(0)
+    check not h.semantic.hasKey(2)
+    check h.semantic.hasKey(4)
+    check h.semantic[4].tokens[0].firstColumn == 5
+
+  test "multi-line ckReplaceLine drops only that row":
+    let h = mkH({0: @[mkTok(0, 2)], 3: @[mkTok(1, 3)], 5: @[mkTok(5, 2)]})
+    h.semanticShiftForMultiLineEdit(3, 3, 3)
+    check h.semantic.hasKey(0)
+    check not h.semantic.hasKey(3)
+    check h.semantic.hasKey(5)
+
+  test "multi-line no-op on empty overlay":
+    let h = Highlight(colorSegments: @[])
+    h.semanticShiftForMultiLineEdit(1, 3, 5)
+    check h.semantic.len == 0
+
+  # Integration: verify pushUndoChange -> shiftSemanticOverlayForChange keeps
+  # the overlay consistent so updateHighlight's fallback clear stays quiet.
+  test "insertText integration keeps unaffected rows and shifts columns":
+    let b = newTextBuffer("hello\nworld\nfoo bar\n")
+    b.highlight.semantic[0] = SemanticOverlayLine(tokens: @[mkTok(0, 5)])
+    b.highlight.semantic[1] = SemanticOverlayLine(tokens: @[mkTok(0, 5)])
+    b.highlight.semantic[2] = SemanticOverlayLine(tokens: @[mkTok(4, 3)])
+    b.highlight.semanticContentVersion = b.contentVersion
+    let priorVersion = b.contentVersion
+    # Insert "XX" at row 1, col 2. Row 1 token straddles col 2 → dropped.
+    let r = b.insertText(BufferPosition(line: 1, column: 2), "XX")
+    check r.isOk
+    check b.contentVersion == priorVersion + 1
+    check b.highlight.semanticContentVersion == b.contentVersion
+    check b.highlight.semantic.hasKey(0) # untouched
+    check not b.highlight.semantic.hasKey(1) # straddler dropped
+    check b.highlight.semantic.hasKey(2) # untouched
+    check b.highlight.semantic[2].tokens[0].firstColumn == 4
+
+  test "insertText with newline shifts rows below down":
+    let b = newTextBuffer("hello\nworld\nfoo bar\n")
+    b.highlight.semantic[0] = SemanticOverlayLine(tokens: @[mkTok(0, 5)])
+    b.highlight.semantic[2] = SemanticOverlayLine(tokens: @[mkTok(4, 3)])
+    b.highlight.semanticContentVersion = b.contentVersion
+    # Split row 0 at col 3 by inserting \n. Row 0 -> row 0 (kept truncated),
+    # rows >= 1 shift by +1.
+    let r = b.insertText(BufferPosition(line: 0, column: 3), "\n")
+    check r.isOk
+    check b.highlight.semanticContentVersion == b.contentVersion
+    check not b.highlight.semantic.hasKey(0) # the split row is dropped
+    check not b.highlight.semantic.hasKey(2) # was shifted away
+    check b.highlight.semantic.hasKey(3) # row 2 -> row 3
+    check b.highlight.semantic[3].tokens[0].firstColumn == 4
+
+  test "deleteLine integration drops that row and shifts below up":
+    let b = newTextBuffer("aa\nbb\ncc\ndd\n")
+    b.highlight.semantic[1] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semantic[3] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semanticContentVersion = b.contentVersion
+    let r = b.deleteLine(1)
+    check r.isOk
+    check b.highlight.semanticContentVersion == b.contentVersion
+    check not b.highlight.semantic.hasKey(1)
+    check not b.highlight.semantic.hasKey(3)
+    check b.highlight.semantic.hasKey(2) # row 3 -> row 2
+
+  test "replaceLine integration clears only that row":
+    let b = newTextBuffer("aa\nbb\ncc\n")
+    b.highlight.semantic[0] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semantic[1] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semantic[2] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semanticContentVersion = b.contentVersion
+    let r = b.replaceLine(1, "zz")
+    check r.isOk
+    check b.highlight.semanticContentVersion == b.contentVersion
+    check b.highlight.semantic.hasKey(0)
+    check not b.highlight.semantic.hasKey(1)
+    check b.highlight.semantic.hasKey(2)
+
+  test "deleteRange spanning multiple lines collapses and shifts below":
+    let b = newTextBuffer("aa\nbb\ncc\ndd\nee\n")
+    b.highlight.semantic[0] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semantic[1] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semantic[2] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semantic[4] = SemanticOverlayLine(tokens: @[mkTok(0, 2)])
+    b.highlight.semanticContentVersion = b.contentVersion
+    # Delete from (1,0) to (2,1) inclusive — collapses row 1 and 2.
+    let r = b.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: 1)
+    )
+    check r.isOk
+    check b.highlight.semanticContentVersion == b.contentVersion
+    check b.highlight.semantic.hasKey(0)
+    check not b.highlight.semantic.hasKey(1)
+    check not b.highlight.semantic.hasKey(2)
+    check not b.highlight.semantic.hasKey(4)
+    check b.highlight.semantic.hasKey(3) # row 4 -> row 3

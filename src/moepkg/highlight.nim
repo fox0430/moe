@@ -2028,6 +2028,70 @@ proc addOverlayToken(
     newTokens.add(newTok)
   overlay[row].tokens = newTokens
 
+proc semanticShiftForSingleLineEdit*(
+    h: Highlight, row, editCol, colDelta, lineRuneLenAfter: int
+) =
+  ## Adjust overlay tokens on `row` after an edit that inserts (`colDelta > 0`)
+  ## or deletes (`colDelta < 0`) `|colDelta|` runes at column `editCol`, without
+  ## changing the buffer's line count. Tokens fully before `editCol` are kept;
+  ## tokens fully at/after `editCol` are shifted by `colDelta` and clipped to
+  ## `lineRuneLenAfter`; tokens straddling `editCol` are dropped (their extent
+  ## no longer corresponds to a single semantic entity).
+  if h.isNil:
+    return
+  if colDelta == 0:
+    return
+  if not h.semantic.hasKey(row):
+    return
+  var kept: seq[SemanticOverlayToken] = @[]
+  for tok in h.semantic[row].tokens:
+    let tokEnd = tok.firstColumn + tok.length
+    if tokEnd <= editCol:
+      kept.add tok
+    elif tok.firstColumn >= editCol:
+      var shifted = tok
+      shifted.firstColumn += colDelta
+      if shifted.firstColumn < 0:
+        continue
+      if shifted.firstColumn >= lineRuneLenAfter:
+        continue
+      if shifted.firstColumn + shifted.length > lineRuneLenAfter:
+        shifted.length = lineRuneLenAfter - shifted.firstColumn
+        if shifted.length <= 0:
+          continue
+      kept.add shifted
+    # Straddling: drop.
+  if kept.len == 0:
+    h.semantic.del(row)
+  else:
+    h.semantic[row].tokens = kept
+
+proc semanticShiftForMultiLineEdit*(
+    h: Highlight, firstAffectedRow, lastAffectedRowBefore, lastAffectedRowAfter: int
+) =
+  ## Adjust overlay row keys after an edit that changes the buffer's line
+  ## count. Rows in `[firstAffectedRow, lastAffectedRowBefore]` are dropped;
+  ## rows `> lastAffectedRowBefore` are shifted by
+  ## `lastAffectedRowAfter - lastAffectedRowBefore`. When
+  ## `firstAffectedRow > lastAffectedRowBefore` (net insertion), nothing is
+  ## dropped and only the tail shift applies.
+  if h.isNil or h.semantic.len == 0:
+    return
+  let delta = lastAffectedRowAfter - lastAffectedRowBefore
+  var newOverlay = initTable[int, SemanticOverlayLine]()
+  for row, line in h.semantic.pairs:
+    if row >= firstAffectedRow and row <= lastAffectedRowBefore:
+      continue
+    let newRow =
+      if row > lastAffectedRowBefore:
+        row + delta
+      else:
+        row
+    if newRow < 0:
+      continue
+    newOverlay[newRow] = line
+  h.semantic = newOverlay
+
 proc applySemanticTokens*(
     highlight: Highlight,
     resp: JsonNode,
