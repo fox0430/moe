@@ -3580,6 +3580,21 @@ suite "Highlight - Semantic overlay":
     for i in 0 ..< toks.high:
       check toks[i].firstColumn + toks[i].length <= toks[i + 1].firstColumn
 
+  test "Row token count is capped at MaxSemanticTokensPerRow":
+    # Bounds addOverlayToken slow-path cost: without the cap, a non-compliant
+    # server sending many overlapping tokens on one row incurs O(k^2) work.
+    let h = Highlight(colorSegments: @[])
+    let n = MaxSemanticTokensPerRow + 128
+    var data = newSeqOfCap[int](n * 5)
+    # First token at (row=0, col=0, len=1); each subsequent one is disjoint at
+    # the next column (deltaStart=1). Fast-path adds hit the cap; excess drops.
+    data.add(@[0, 0, 1, 0, 0])
+    for i in 1 ..< n:
+      data.add(@[0, 1, 1, 0, 0])
+    let outcome = applySemanticTokens(h, mkResp(data), colorTab, 1)
+    check outcome == saoDone
+    check h.semantic[0].tokens.len == MaxSemanticTokensPerRow
+
   test "Modifier `declaration` unions StyleModifier.Bold into overlay":
     let modLegend =
       SemanticTokensLegend(tokenTypes: @["variable"], tokenModifiers: @["declaration"])
