@@ -365,6 +365,43 @@ suite "NormalModeHandler - Insert Mode Entry fold auto-expand":
       check result.kind == nmrHandled
       check buf.foldState.folds[0].collapsed == false
 
+suite "NormalModeHandler - Insert Mode Entry readOnly guard":
+  ## A read-only buffer (log viewer, quick-run output, etc.) must reject every
+  ## insert-entry command (o, O, a, A, I, i) before Insert mode is reached,
+  ## otherwise the follow-up typed characters slip past command_registry's
+  ## readOnly gate straight into buffer.insertText.
+  for insertType in [
+    "insert", "append", "append-end", "insert-first-non-blank", "open-below",
+    "open-above",
+  ]:
+    test "'" & insertType & "' is blocked on a read-only buffer":
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+      buf.readOnly = true
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.cursor = BufferPosition(line: 0, column: 0)
+
+      let result = handler.handleInsertModeEntry(buf, state, insertType)
+
+      check result.kind == nmrHandled
+      check result.modeTransition.isNone
+      check state.statusMessage == "Buffer is read-only"
+      check buf[0] == "Hello" # open-below/open-above must not modify buffer
+
+  test "handleModeSwitch to Insert is blocked on a read-only buffer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    buf.readOnly = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    let result = handler.handleModeSwitch(EditorMode.Insert, state, buf)
+
+    check result.kind == nmrHandled
+    check result.modeTransition.isNone
+    check state.statusMessage == "Buffer is read-only"
+
 suite "NormalModeHandler - Result Helpers":
   test "isHandled returns true for handled results":
     let result = NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
