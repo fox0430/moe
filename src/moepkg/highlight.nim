@@ -2185,8 +2185,8 @@ proc applySemanticTokens*(
       if utf16Remaining == 0 and runeOverflow == 0:
         continue
 
-      # Wrap rows: distribute the UTF-16 remainder precisely when getLineText
-      # is wired, else fall back to rune-based distribution.
+      # multilineTokenSupport=true: LSP length counts each \n boundary as 1
+      # UTF-16 unit; consume one per row transition.
       var row = currentLine + 1
       while utf16Remaining > 0 or runeOverflow > 0:
         if updateLastRow >= 0 and row > updateLastRow:
@@ -2195,7 +2195,9 @@ proc applySemanticTokens*(
         if rowLen < 0:
           break
         if getLineText != nil:
-          # Convert this row's UTF-16 length once, then consume up to it.
+          dec utf16Remaining
+          if utf16Remaining == 0:
+            break
           let rowText = getLineText(row)
           let (rowRunes, rowUtf16) = utf16OffsetToRune(rowText, high(int32))
           if utf16Remaining >= rowUtf16:
@@ -2209,6 +2211,9 @@ proc applySemanticTokens*(
               overlay.addOverlayToken(row, 0, partialRunes, color, style)
             utf16Remaining = 0
         else:
+          dec runeOverflow
+          if runeOverflow == 0:
+            break
           if rowLen == 0:
             inc row
             continue

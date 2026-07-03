@@ -2830,8 +2830,8 @@ suite "Highlight - Semantic overlay":
           widths[row]
 
     let h = Highlight(colorSegments: @[])
-    # Token starts at (row=0, col=6) with length 15 — spans rows 0, 1, and into 2.
-    let outcome = applySemanticTokens(h, mkResp(@[0, 6, 15, 1, 0]), colorTab, 1, getLen)
+    # length = 4 (row 0 tail) + 1\n + 8 (row 1) + 1\n + 3 (row 2 head) = 17.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 6, 17, 1, 0]), colorTab, 1, getLen)
     check outcome == saoDone
     # Row 0: cols 6..9 (4 runes to end of row).
     check h.semantic.len == 3
@@ -2938,8 +2938,10 @@ suite "Highlight - Semantic overlay":
       {.cast(gcsafe).}:
         if row < 0 or row >= rows: -1 else: 10
     let h = Highlight(colorSegments: @[])
-    let outcome =
-      applySemanticTokens(h, mkResp(@[0, 0, 10 * rows, 1, 0]), colorTab, 1, getLen)
+    # length: 10 runes per row + 1 UTF-16 per row boundary (newline).
+    let outcome = applySemanticTokens(
+      h, mkResp(@[0, 0, 10 * rows + (rows - 1), 1, 0]), colorTab, 1, getLen
+    )
     check outcome == saoDone
     check h.semantic.len == rows
     check h.semantic[rows - 1].tokens[0].length == 10
@@ -3140,11 +3142,9 @@ suite "Highlight - Semantic overlay":
           widths[row]
 
     let h = Highlight(colorSegments: @[])
-    # Token A: row=0, col=0, length=60 (spans rows 0..2, each row fully).
-    # Token B: deltaLine=2, deltaStart=15, length=3 => row=2, col=15
-    # A's row-2 unroll is (col=0, len=20); B starts at col=15 inside it.
+    # A: length = 3*20 + 2 newlines = 62. B: single-line at (row=2, col=15).
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 0, 60, 0, 0, 2, 15, 3, 1, 0]), colorTab, 1, getLen
+      h, mkResp(@[0, 0, 62, 0, 0, 2, 15, 3, 1, 0]), colorTab, 1, getLen
     )
     check outcome == saoDone
     # Three disjoint segments on row 2: A_head [0..14], B [15..17], A_tail [18..19].
@@ -3214,12 +3214,11 @@ suite "Highlight - Semantic overlay":
           ""
 
     let h = Highlight(colorSegments: @[])
-    # Token from (row=0, col=1) UTF-16, length=12 UTF-16 -> spans rows 0..2.
+    # length = 4 ("ello") + 1\n + 5 ("world") + 1\n + 3 ("aga") = 14.
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 1, 12, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+      h, mkResp(@[0, 1, 14, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
     )
     check outcome == saoDone
-    # All three rows must carry the token colour.
     check h.semantic.len == 3
     check h.semantic[0].tokens[0].firstColumn == 1
     check h.semantic[0].tokens[0].length == 4
@@ -3254,10 +3253,9 @@ suite "Highlight - Semantic overlay":
           ""
 
     let h = Highlight(colorSegments: @[])
-    # Token starts at UTF-16 col 0, length 11 UTF-16 units -> covers the whole
-    # start row (6 UTF-16 = 5 runes) plus 5 UTF-16 units into row 1.
+    # length = 6 ("he😀lo" UTF-16) + 1\n + 5 ("world") = 12.
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 0, 11, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+      h, mkResp(@[0, 0, 12, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
     )
     check outcome == saoDone
     check h.semantic.len == 2
@@ -3265,6 +3263,46 @@ suite "Highlight - Semantic overlay":
     check h.semantic[0].tokens[0].length == 5
     check h.semantic[1].tokens[0].firstColumn == 0
     check h.semantic[1].tokens[0].length == 5
+
+  test "Multi-line token length includes the \\n boundary per LSP spec":
+    # multilineTokenSupport=true: server counts each \n as 1 UTF-16 unit.
+    # A token from row 0 col 0 with length 6 covers "hello" (5) + \n (1),
+    # ending exactly at row 1's start — row 1 gets no paint.
+    let widths = @[5, 5]
+    let getLen: LineRuneCountFn = proc(row: int): int {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row < 0 or row >= widths.len:
+          -1
+        else:
+          widths[row]
+    let lineText: LineTextFn = proc(row: int): string {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        if row == 0:
+          "hello"
+        elif row == 1:
+          "world"
+        else:
+          ""
+
+    block ends_on_newline:
+      let h = Highlight(colorSegments: @[])
+      let outcome = applySemanticTokens(
+        h, mkResp(@[0, 0, 6, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+      )
+      check outcome == saoDone
+      check h.semantic.len == 1
+      check h.semantic[0].tokens[0].length == 5
+
+    block one_past_newline:
+      let h = Highlight(colorSegments: @[])
+      let outcome = applySemanticTokens(
+        h, mkResp(@[0, 0, 7, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+      )
+      check outcome == saoDone
+      check h.semantic.len == 2
+      check h.semantic[0].tokens[0].length == 5
+      check h.semantic[1].tokens[0].firstColumn == 0
+      check h.semantic[1].tokens[0].length == 1
 
   test "Legend swap between two non-empty legends wipes prior overlay":
     # A range-scoped apply under L2 would otherwise leave rows outside the
@@ -3394,11 +3432,9 @@ suite "Highlight - Semantic overlay":
           widths[row]
 
     let h = Highlight(colorSegments: @[])
-    # A: row=0, col=0, length=40 -> spans rows 0..1, both fully.
-    # B: deltaLine=1, deltaStart=5, length=3 -> row=1, col=5, len=3.
-    # C: deltaLine=0, deltaStart=5, length=3 -> row=1, col=10, len=3.
+    # A: 2*20 + 1 newline = 41. B/C: single-line on row 1.
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 0, 40, 0, 0, 1, 5, 3, 1, 0, 0, 5, 3, 2, 0]), colorTab, 1, getLen
+      h, mkResp(@[0, 0, 41, 0, 0, 1, 5, 3, 1, 0, 0, 5, 3, 2, 0]), colorTab, 1, getLen
     )
     check outcome == saoDone
     check h.semantic[1].tokens.len == 5
@@ -3431,11 +3467,9 @@ suite "Highlight - Semantic overlay":
           widths[row]
 
     let h = Highlight(colorSegments: @[])
-    # A: row=0, col=0, length=40 -> spans rows 0 (all 20) and 1 (all 20).
-    # B: deltaLine=1, deltaStart=0, length=3 -> row=1, col=0, colliding with
-    # A's unroll on row 1. B supersedes A's head; A's tail past B is preserved.
+    # A: 2*20 + 1 newline = 41. B collides at (row=1, col=0).
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 0, 40, 0, 0, 1, 0, 3, 1, 0]), colorTab, 1, getLen
+      h, mkResp(@[0, 0, 41, 0, 0, 1, 0, 3, 1, 0]), colorTab, 1, getLen
     )
     check outcome == saoDone
     check h.semantic[1].tokens.len == 2
@@ -3459,8 +3493,8 @@ suite "Highlight - Semantic overlay":
           widths[row]
 
     let h = Highlight(colorSegments: @[])
-    # Row 0: 10 runes; row 1: empty; row 2: 15 runes. Token covers all 25 runes.
-    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 25, 0, 0]), colorTab, 1, getLen)
+    # Row 0: 10, row 1: empty, row 2: 15. length = 25 content + 2 newlines = 27.
+    let outcome = applySemanticTokens(h, mkResp(@[0, 0, 27, 0, 0]), colorTab, 1, getLen)
     check outcome == saoDone
     check 0 in h.semantic
     check 2 in h.semantic
@@ -3480,12 +3514,9 @@ suite "Highlight - Semantic overlay":
           widths[row]
 
     let h = Highlight(colorSegments: @[])
-    # A row=0 col=0 len=40 unrolls to rows 0 (0..20) and 1 (0..20).
-    # B row=1 col=5 len=3 truncates A on row 1 into head/tail.
-    # C row=1 col=7 len=3 lands inside A's tail AND overlaps B; must
-    # carve cleanly so tokens on row 1 stay sorted-disjoint.
+    # A: 2*20 + 1 newline = 41. B, C overlap on row 1.
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 0, 40, 0, 0, 1, 5, 3, 1, 0, 0, 2, 3, 2, 0]), colorTab, 1, getLen
+      h, mkResp(@[0, 0, 41, 0, 0, 1, 5, 3, 1, 0, 0, 2, 3, 2, 0]), colorTab, 1, getLen
     )
     check outcome == saoDone
     let toks = h.semantic[1].tokens
@@ -3565,10 +3596,9 @@ suite "Highlight - Semantic overlay":
           ""
 
     let h = Highlight(colorSegments: @[])
-    # Length = 7 UTF-16 units: consumes all of row 0 (3 units) then all of
-    # row 1 (4 units, = 3 runes on that row).
+    # length = 3 (row 0) + 1\n + 4 (row 1 UTF-16 = 3 runes) = 8.
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 0, 7, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
+      h, mkResp(@[0, 0, 8, 1, 0]), colorTab, 1, getLen, -1, -1, lineText
     )
     check outcome == saoDone
     check h.semantic[0].tokens[0].length == 3
@@ -3610,13 +3640,9 @@ suite "Highlight - Semantic overlay":
           widths[row]
 
     let h = Highlight(colorSegments: @[])
-    # A row=0 col=0 len=30 unrolls to row 0 (0..9) and row 1 (0..19).
-    # B row=1 col=5 len=10 carves A on row 1 into [A_head(0,5), B(5,10),
-    #                                              A_tail(15,5)].
-    # C row=1 col=7 len=2 lands inside B (7..8, entirely inside [5..14]).
-    # Expected on row 1: A_head(0,5), B_head(5,2), C(7,2), B_tail(9,6), A_tail(15,5).
+    # A: 10 + 20 + 1 newline = 31. B carves A on row 1; C lands inside B.
     let outcome = applySemanticTokens(
-      h, mkResp(@[0, 0, 30, 0, 0, 1, 5, 10, 1, 0, 0, 2, 2, 2, 0]), colorTab, 1, getLen
+      h, mkResp(@[0, 0, 31, 0, 0, 1, 5, 10, 1, 0, 0, 2, 2, 2, 0]), colorTab, 1, getLen
     )
     check outcome == saoDone
     let toks = h.semantic[1].tokens
