@@ -120,14 +120,9 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   e.state.timing.lastConflictScanSeq = e.activeBuffer.changeSeq
   e.state.timing.lastConflictScan = getMonoTime()
 
-  # A pre-loadFile LSP response would land on the fresh buffer with stale
-  # row/col coords. `loadFile` clears `highlightNeedsUpdate`, so the frame-loop
-  # invalidation cascade would not fire on this frame; invalidate directly.
-  # Matches `finishReload` and `restartLspServer`.
-  invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
-  invalidateInlayHintCache(e.lsp, e.state.lspCache)
-  invalidateDocumentHighlightCache(e.state.lspCache)
-  invalidateCodeLensCache(e.state.lspCache)
+  # `loadFile` clears `highlightNeedsUpdate`, so the frame-loop invalidation
+  # cascade would not fire; drop caches directly to avoid stale-coord overlays.
+  e.invalidateAllLspCaches()
 
   # LSP initialization - non-blocking, will start in background
   if e.lsp.enabled:

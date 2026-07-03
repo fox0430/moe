@@ -416,15 +416,10 @@ proc restartLspServer*(e: Editor): bool =
 
   let langId = langIdOpt.get
 
-  # Wipe any pending request state BEFORE stopping the worker. `stopWorker`
-  # clears the service-side request tables, but the editor-side
-  # `pendingXxxRequestId` fields keep dangling ids, and the next
-  # `checkResponse` for them would return `lrsPending` forever, freezing
-  # the corresponding feature until an edit forced an unrelated invalidate.
-  invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
-  invalidateInlayHintCache(e.lsp, e.state.lspCache)
-  invalidateDocumentHighlightCache(e.state.lspCache)
-  invalidateCodeLensCache(e.state.lspCache)
+  # Wipe pending request state BEFORE `stopWorker`: it clears the service-side
+  # tables but editor-side `pendingXxxRequestId` fields would keep dangling ids,
+  # freezing the feature until an unrelated edit invalidates.
+  e.invalidateAllLspCaches()
 
   # Stop the worker if it exists. Stopping a not-yet-running server is benign,
   # so keep this quiet (LSP log only) rather than surfacing to the status line.
