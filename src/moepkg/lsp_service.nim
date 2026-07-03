@@ -646,7 +646,10 @@ proc checkResponse*(
   ## Returns (lrsPending, none, none) if not yet received
   ## Returns (lrsSuccess, some(result), none) on success
   ## Returns (lrsError, none, some(error)) on error
-  ## Returns (lrsTimeout, none, some("timeout")) if timed out
+  ## Returns (lrsTimeout, none, some("timeout")) if timed out, or if the id is
+  ## unknown to the service (already swept by cleanupTimedOutRequests, or
+  ## consumed by an earlier checkResponse). Reporting unknown ids as timeout
+  ## lets pollers reset their pending state instead of looping on lrsPending.
 
   # Check if response has arrived
   if requestId in svc.pendingResponses:
@@ -671,8 +674,13 @@ proc checkResponse*(
     if elapsed > req.timeoutMs.float:
       svc.activeRequests.del(requestId)
       return (lrsTimeout, none(JsonNode), some("Request timed out"))
+    return (lrsPending, none(JsonNode), none(string))
 
-  return (lrsPending, none(JsonNode), none(string))
+  # Unknown id: treat as timeout so the poller drops its pending state. This
+  # is the sweep-then-poll case — cleanupTimedOutRequests already dropped the
+  # activeRequests entry, and returning lrsPending here would freeze the
+  # feature until an unrelated invalidate (e.g. a buffer edit) cleared the id.
+  return (lrsTimeout, none(JsonNode), some("Request timed out"))
 
 proc checkResponseRaw*(
     svc: LspService, requestId: int
@@ -696,8 +704,10 @@ proc checkResponseRaw*(
     if elapsed > req.timeoutMs.float:
       svc.activeRequests.del(requestId)
       return (lrsTimeout, none(string), some("Request timed out"))
+    return (lrsPending, none(string), none(string))
 
-  return (lrsPending, none(string), none(string))
+  # Unknown id — see checkResponse for the sweep-then-poll rationale.
+  return (lrsTimeout, none(string), some("Request timed out"))
 
 proc hasPendingRequests*(svc: LspService): bool =
   ## Check if there are any pending requests waiting for responses

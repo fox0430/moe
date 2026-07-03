@@ -352,10 +352,31 @@ suite "LspService - Pending Request Management":
     let svc = newLspService()
     check svc.getPendingRequestCount == 0
 
-  test "checkResponse returns pending for unknown request":
+  test "checkResponse reports unknown ids as timeout":
+    # An unknown id means the request was already swept (or the response was
+    # already consumed by an earlier checkResponse). Reporting it as timeout
+    # lets pollers reset their pending id instead of looping on lrsPending —
+    # otherwise the feature freezes until an unrelated invalidate clears it.
     let svc = newLspService()
-    let (status, _, _) = svc.checkResponse(999)
-    check status == lrsPending
+    let (status, _, err) = svc.checkResponse(999)
+    check status == lrsTimeout
+    check err.isSome
+    let (rawStatus, _, rawErr) = svc.checkResponseRaw(999)
+    check rawStatus == lrsTimeout
+    check rawErr.isSome
+
+  test "checkResponse after sweep returns timeout for the dropped id":
+    # Simulates the sweep-then-poll flow: an in-flight semantic tokens
+    # request survives a buffer switch to a non-LSP buffer, times out on the
+    # sweep, then the user switches back and the poller queries the id.
+    let svc = newLspService()
+    svc.activeRequests[42] =
+      LspPendingRequest(requestId: 42, langId: "nim", startTime: 0.0, timeoutMs: 1)
+    svc.cleanupTimedOutRequests()
+    check 42 notin svc.activeRequests
+    let (status, _, err) = svc.checkResponse(42)
+    check status == lrsTimeout
+    check err.isSome
 
   test "cleanupTimedOutRequests works with no requests":
     let svc = newLspService()
