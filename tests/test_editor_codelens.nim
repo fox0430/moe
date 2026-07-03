@@ -427,6 +427,32 @@ suite "Semantic Tokens Cache":
     invalid.isValid = false
     check not e.semanticTokensCacheCoversViewport(invalid, "/test/file.nim")
 
+  test "invalidateSemanticTokensCache resets reject streak":
+    # A buffer switch / register-capability drop is a fresh start; drop the
+    # backoff so the next request fires at the normal cadence.
+    let e = createTestEditor()
+    e.state.lspCache.semanticTokensRejectStreak = 5
+    invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
+    check e.state.lspCache.semanticTokensRejectStreak == 0
+
+  test "semanticTokensDebounceThreshold - streak 0 uses base interval":
+    var cache =
+      LspCacheState(semanticTokensUpdateInterval: 500, semanticTokensRejectStreak: 0)
+    check semanticTokensDebounceThreshold(cache) == initDuration(milliseconds = 500)
+
+  test "semanticTokensDebounceThreshold - streak scales exponentially":
+    var cache =
+      LspCacheState(semanticTokensUpdateInterval: 500, semanticTokensRejectStreak: 3)
+    # 500ms << 3 == 4000ms
+    check semanticTokensDebounceThreshold(cache) == initDuration(milliseconds = 4_000)
+
+  test "semanticTokensDebounceThreshold - streak clamped at SemanticTokensMaxRejectShift":
+    var cache =
+      LspCacheState(semanticTokensUpdateInterval: 500, semanticTokensRejectStreak: 999)
+    let expectedMs = 500'i64 shl SemanticTokensMaxRejectShift
+    check semanticTokensDebounceThreshold(cache) ==
+      initDuration(milliseconds = expectedMs)
+
 suite "CodeLens Item":
   test "CodeLensItem with arguments":
     let item = CodeLensItem(

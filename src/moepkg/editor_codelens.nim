@@ -26,6 +26,15 @@ import pkg/[results, chronos]
 import types/editor_types, logger, highlight, lsp_integration, unicode_utils
 import lsp/rust_runnable
 
+const SemanticTokensMaxRejectShift* = 6
+  ## Max exponent for the reject-streak backoff (500ms << 6 ~= 32s).
+
+proc semanticTokensDebounceThreshold*(cache: LspCacheState): times.Duration =
+  ## Debounce interval scaled by the reject streak so a persistently failing
+  ## server backs off exponentially instead of firing every debounce tick.
+  let shift = min(cache.semanticTokensRejectStreak, SemanticTokensMaxRejectShift)
+  initDuration(milliseconds = cache.semanticTokensUpdateInterval shl shift)
+
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
   if not e.lsp.enabled:
@@ -502,6 +511,9 @@ proc invalidateSemanticTokensCache*(lsp: LspIntegration, cache: var LspCacheStat
   if cache.pendingSemanticTokens.requestId != 0:
     lsp.cancelRequest(cache.pendingSemanticTokens.requestId)
   resetPendingSemanticTokens(cache)
+  # Explicit invalidation (buffer switch, register-capability etc.) is a fresh
+  # start; drop the backoff so the next request fires at the normal cadence.
+  cache.semanticTokensRejectStreak = 0
 
 proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
   ## Build the semantic overlay from a `textDocument/semanticTokens` response
@@ -589,12 +601,15 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
     logLspDegraded(
       "Semantic tokens", "token count exceeds cap (" & $MaxSemanticTokens & ")"
     )
+    inc e.state.lspCache.semanticTokensRejectStreak
     return
   of saoRejectedMalformed:
     logLspDegraded("Semantic tokens", "malformed response (missing or invalid data)")
+    inc e.state.lspCache.semanticTokensRejectStreak
     return
   of saoRejectedNoLegend:
     logDebug("editor", "Semantic tokens: legend not yet available")
+    inc e.state.lspCache.semanticTokensRejectStreak
     return
 
   # Stamp with the request-time changeSeq / viewport so an edit or scroll in
@@ -607,6 +622,7 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
     topLine: e.state.lspCache.pendingSemanticTokens.viewportTopLine,
     bottomLine: e.state.lspCache.pendingSemanticTokens.viewportBottomLine,
   )
+  e.state.lspCache.semanticTokensRejectStreak = 0
 
 proc doUpdateSemanticTokensCache(e: Editor) =
   ## Internal: Start an async semantic tokens request (non-blocking)
@@ -722,21 +738,22 @@ proc updateSemanticTokensCache*(e: Editor) =
           # Null result: debounce the retry so a persistently null-answering
           # server does not fire per render frame.
           e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
+          inc e.state.lspCache.semanticTokensRejectStreak
       finally:
         resetPendingSemanticTokens(e.state.lspCache)
     of lrsError, lrsTimeout:
       logLspDegraded("Semantic tokens", status, errorOpt.get(""))
       resetPendingSemanticTokens(e.state.lspCache)
       e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
+      inc e.state.lspCache.semanticTokensRejectStreak
 
   if e.semanticTokensCacheCoversViewport(e.state.lspCache.semanticTokensCache, path):
     return
 
-  # Debounce - only update if enough time has passed since last update
+  # Debounce with exponential backoff on the reject streak.
   let now = getMonoTime()
   let elapsed = now - e.state.lspCache.lastSemanticTokensUpdate
-  let threshold =
-    initDuration(milliseconds = e.state.lspCache.semanticTokensUpdateInterval)
+  let threshold = semanticTokensDebounceThreshold(e.state.lspCache)
   if elapsed >= threshold:
     e.doUpdateSemanticTokensCache()
 

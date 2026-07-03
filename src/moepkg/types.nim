@@ -364,6 +364,8 @@ type
       # Debounce interval for document highlight updates
     lastSemanticTokensUpdate*: MonoTime # Timestamp of last semantic tokens update
     semanticTokensUpdateInterval*: int64 # Debounce interval for semantic tokens updates
+    semanticTokensRejectStreak*: int
+      # Consecutive reject/error/null since last saoDone; scales debounce threshold.
     inlayHintCache*: InlayHintCache # Cached inlay hints for current viewport
     lastInlayHintUpdate*: MonoTime # Timestamp of last inlay hint update
     inlayHintUpdateInterval*: int64 # Debounce interval for inlay hint updates
