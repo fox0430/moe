@@ -656,6 +656,17 @@ proc doUpdateSemanticTokensCache(e: Editor) =
     logDebug("editor", "Semantic tokens request failed: " & reqResult.error)
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
+proc semanticTokensCacheCoversViewport(
+    e: Editor, cache: SemanticTokensCache, path: string
+): bool =
+  ## RHS is clamped to EOF to mirror `viewportRequestRange`. Without the clamp
+  ## a visible EOF (short buffer, or `G` scrolled to end) makes this check
+  ## permanently unsatisfiable and re-fires the request every debounce tick.
+  let activeBuffer = e.activeBuffer()
+  let viewportBottom = min(e.viewport.topLine + e.viewport.height, activeBuffer.len - 1)
+  cache.isValid and cache.changeSeq == activeBuffer.changeSeq and cache.filePath == path and
+    cache.topLine <= e.viewport.topLine and cache.bottomLine >= viewportBottom
+
 proc updateSemanticTokensCache*(e: Editor) =
   ## Update the semantic tokens cache (with debouncing)
   ## Called during render to update LSP-based syntax highlighting
@@ -714,12 +725,7 @@ proc updateSemanticTokensCache*(e: Editor) =
       resetPendingSemanticTokens(e.state.lspCache)
       e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
 
-  # Check if cache is still valid
-  let cache = e.state.lspCache.semanticTokensCache
-  if cache.isValid and cache.changeSeq == activeBuffer.changeSeq and
-      cache.filePath == path and cache.topLine <= e.viewport.topLine and
-      cache.bottomLine >= e.viewport.topLine + e.viewport.height:
-    # Cache is valid and covers current viewport
+  if e.semanticTokensCacheCoversViewport(e.state.lspCache.semanticTokensCache, path):
     return
 
   # Debounce - only update if enough time has passed since last update

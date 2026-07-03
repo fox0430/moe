@@ -335,6 +335,79 @@ suite "Semantic Tokens Cache":
     check e.state.lspCache.semanticTokensCache.isValid
     check e.state.lspCache.pendingSemanticTokens.requestId == 0
 
+  test "semanticTokensCacheCoversViewport - visible EOF is a cache hit":
+    # Regression: previously the check compared cache.bottomLine against the
+    # unclamped `viewport.topLine + viewport.height`, but the stamped value is
+    # clamped to `activeBuffer.len - 1`. Whenever EOF was visible the check
+    # was permanently unsatisfiable and the request re-fired every debounce
+    # tick.
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/file.nim")
+    e.viewport.topLine = 0
+    e.viewport.height = 24
+    # Fresh buffer is a single empty line, so lastLine == 0 < height.
+
+    let cache = SemanticTokensCache(
+      isValid: true,
+      changeSeq: e.activeBuffer().changeSeq,
+      filePath: "/test/file.nim",
+      topLine: 0,
+      bottomLine: e.activeBuffer().len - 1,
+    )
+
+    check e.semanticTokensCacheCoversViewport(cache, "/test/file.nim")
+
+  test "semanticTokensCacheCoversViewport - short bottomLine misses on large buffer":
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/file.nim")
+    var text = ""
+    for _ in 0 ..< 99:
+      text.add('\n')
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), text)
+    e.viewport.topLine = 0
+    e.viewport.height = 24
+
+    let cache = SemanticTokensCache(
+      isValid: true,
+      changeSeq: e.activeBuffer().changeSeq,
+      filePath: "/test/file.nim",
+      topLine: 0,
+      bottomLine: 10,
+    )
+
+    check not e.semanticTokensCacheCoversViewport(cache, "/test/file.nim")
+
+  test "semanticTokensCacheCoversViewport - rejects on filePath/changeSeq/topLine":
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/file.nim")
+    e.viewport.topLine = 0
+    e.viewport.height = 24
+
+    let base = SemanticTokensCache(
+      isValid: true,
+      changeSeq: e.activeBuffer().changeSeq,
+      filePath: "/test/file.nim",
+      topLine: 0,
+      bottomLine: e.activeBuffer().len - 1,
+    )
+
+    var wrongPath = base
+    wrongPath.filePath = "/other.nim"
+    check not e.semanticTokensCacheCoversViewport(wrongPath, "/test/file.nim")
+
+    var stale = base
+    stale.changeSeq = e.activeBuffer().changeSeq + 1
+    check not e.semanticTokensCacheCoversViewport(stale, "/test/file.nim")
+
+    e.viewport.topLine = 0
+    var scrolled = base
+    scrolled.topLine = 5
+    check not e.semanticTokensCacheCoversViewport(scrolled, "/test/file.nim")
+
+    var invalid = base
+    invalid.isValid = false
+    check not e.semanticTokensCacheCoversViewport(invalid, "/test/file.nim")
+
 suite "CodeLens Item":
   test "CodeLensItem with arguments":
     let item = CodeLensItem(
