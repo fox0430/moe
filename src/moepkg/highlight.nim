@@ -156,6 +156,13 @@ const
     ## Hard cap on tokens per response. Above this, `applySemanticTokens` rejects
     ## the response before parsing (see design/semantic_tokens_overlay_design.md).
 
+  MaxSemanticTokensPerRow* = 1024
+    ## Per-row overlay-token cap. Bounds the O(k) slow-path rebuild in
+    ## `addOverlayToken`: without it, a non-compliant server (moe advertises
+    ## `overlappingTokenSupport: false`) sending k overlapping tokens on one row
+    ## incurs O(k^2) work under the global `MaxSemanticTokens` cap. Tokens
+    ## beyond the cap on a single row are silently dropped.
+
   MaxSemanticTokenRowSpan* = 4096
     ## Hard cap on rows a single semantic token may unroll across in the
     ## multi-line splitter. The token-count cap does not bound per-token
@@ -1955,6 +1962,9 @@ proc addOverlayToken(
     return
 
   let prior = overlay[row].tokens
+  # Drop once the row is at `MaxSemanticTokensPerRow`. Bounds slow-path cost.
+  if prior.len >= MaxSemanticTokensPerRow:
+    return
   # Fast path: LSP delta encoding is monotonically increasing per row, so most
   # additions land past the last token with no overlap. Skip the rebuild.
   if prior.len == 0 or prior[^1].firstColumn + prior[^1].length <= col:
