@@ -312,6 +312,25 @@ suite "Semantic Tokens Cache":
     check not e.state.lspCache.semanticTokensCache.isValid
     check e.state.lspCache.pendingSemanticTokens.requestId == 0
 
+  test "processSemanticTokensResponse - drops response when contentVersion advanced":
+    # Lock in the belt-and-braces guard: a mid-flight edit bumps
+    # activeBuffer.contentVersion past the request-time snapshot, so the
+    # response is stale and must not stamp the cache as valid.
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.filePath = some("/test/file.nim")
+
+    e.state.lspCache.pendingSemanticTokens.filePath = "/test/file.nim"
+    e.state.lspCache.pendingSemanticTokens.requestId = 1
+    e.state.lspCache.pendingSemanticTokens.changeSeq = buf.changeSeq
+    e.state.lspCache.pendingSemanticTokens.contentVersion = buf.contentVersion
+
+    buf.advanceContentVersion()
+
+    e.processSemanticTokensResponse(newJObject())
+
+    check not e.state.lspCache.semanticTokensCache.isValid
+
   test "updateSemanticTokensCache - LSP disabled":
     let e = createTestEditor()
     e.state.lspCache.semanticTokensCache.isValid = true

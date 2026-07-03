@@ -533,6 +533,10 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
   if requestChangeSeq < 0 or requestContentVersion < 0:
     return
 
+  # Belt-and-braces: reject if the buffer advanced between request and response.
+  if requestContentVersion != activeBuffer.contentVersion:
+    return
+
   let colorTabOpt = e.lsp.getSemanticTypeColorTable(activeBuffer)
   if colorTabOpt.isNone:
     logDebug("editor", "Semantic tokens: no legend available")
