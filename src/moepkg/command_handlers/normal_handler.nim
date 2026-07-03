@@ -361,6 +361,9 @@ proc handleModeSwitch*(
   ## Handle mode switching commands
   case targetMode
   of EditorMode.Insert:
+    if buffer.readOnly:
+      state.statusMessage = "Buffer is read-only"
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     # Plain `i`: honour a [count] prefix by replaying the typed text on exit.
     return NormalModeResult(
       kind: nmrHandled,
@@ -443,6 +446,9 @@ proc handleInsertModeEntry*(
   ## Handle different types of insert mode entry (i, a, o, O, etc.)
   ## `count` is the numeric prefix for [count]a/[count]o etc.; the typed text is
   ## replayed (count - 1) more times when Insert mode is left.
+  if buffer.readOnly:
+    state.statusMessage = "Buffer is read-only"
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   # Expand a collapsed fold at the cursor so inserted text is never hidden
   # behind a fold marker.
   discard buffer.foldState.openFold(state.cursor.line)

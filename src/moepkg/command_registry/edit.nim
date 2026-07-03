@@ -1086,6 +1086,9 @@ proc handleTextObjectInner*(ctx: CommandContext, count: int = 1): Result[(), str
     return ok(())
   else:
     # No pending operator - enter Insert mode
+    if ctx.buffer.readOnly:
+      ctx.state.statusMessage = "Buffer is read-only"
+      return ok(())
     ctx.state.mode = EditorMode.Insert
     # Begin transaction for insert mode edit (guard for insert-normal mode)
     if not ctx.buffer.inTransaction:
@@ -1121,6 +1124,9 @@ proc handleTextObjectAround*(ctx: CommandContext, count: int = 1): Result[(), st
     return ok(())
   else:
     # No pending operator - enter Append mode (move cursor right, then Insert)
+    if ctx.buffer.readOnly:
+      ctx.state.statusMessage = "Buffer is read-only"
+      return ok(())
     # Move cursor one position to the right if not at end of line
     if ctx.cursor.line < ctx.buffer.len:
       let currentLine = ctx.buffer.getLine(ctx.cursor.line)

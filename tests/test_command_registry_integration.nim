@@ -1867,6 +1867,43 @@ suite "Handler - Text Object operations":
     check ctx.state.mode == EditorMode.Insert
     check ctx.cursor.column == 1 # Cursor moved right for append
 
+  test "textobject.inner is blocked on read-only buffer (plain i fallback)":
+    let buffer = newTextBuffer("hello world")
+    buffer.readOnly = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("textobject.inner")).isOk
+    check ctx.state.mode == EditorMode.Normal
+    check ctx.state.statusMessage == "Buffer is read-only"
+
+  test "textobject.around is blocked on read-only buffer (plain a fallback)":
+    let buffer = newTextBuffer("hello world")
+    buffer.readOnly = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("textobject.around")).isOk
+    check ctx.state.mode == EditorMode.Normal
+    check ctx.cursor.column == 0 # Cursor must not move
+    check ctx.state.statusMessage == "Buffer is read-only"
+
+  test "mode.insert builtin is blocked on read-only buffer":
+    let buffer = newTextBuffer("hello world")
+    buffer.readOnly = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcModeInsert)).isOk
+    check ctx.state.mode == EditorMode.Normal
+    check ctx.state.statusMessage == "Buffer is read-only"
+
   test "textobject.inner with pending operator sets text object modifier":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)

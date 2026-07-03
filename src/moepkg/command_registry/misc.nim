@@ -34,6 +34,9 @@ proc handleModeSwitch*(
     ctx: CommandContext, targetMode: EditorMode
 ): Result[(), string] =
   ## Handle switching between editor modes
+  if targetMode == EditorMode.Insert and ctx.buffer.readOnly:
+    ctx.state.statusMessage = "Buffer is read-only"
+    return ok(())
   switchMode(ctx.state, targetMode, ctx.keyBindingRegistry)
   Result[(), string].ok ()
 
