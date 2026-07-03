@@ -2625,6 +2625,18 @@ suite "Highlight - Semantic overlay":
     let outcome = applySemanticTokens(h, mkResp(@[0, 1, 2, 0]), colorTab, 1)
     check outcome == saoRejectedMalformed
 
+  test "Out-of-range deltaLine/deltaStart/length are rejected (no OverflowDefect)":
+    let h = Highlight(colorSegments: @[])
+    let over = int(high(uint32)) + 1
+    check applySemanticTokens(h, mkResp(@[over, 0, 3, 0, 0]), colorTab, 1) ==
+      saoRejectedMalformed
+    check applySemanticTokens(h, mkResp(@[0, over, 3, 0, 0]), colorTab, 1) ==
+      saoRejectedMalformed
+    check applySemanticTokens(h, mkResp(@[0, 0, over, 0, 0]), colorTab, 1) ==
+      saoRejectedMalformed
+    check applySemanticTokens(h, mkResp(@[0, 0, -1, 0, 0]), colorTab, 1) ==
+      saoRejectedMalformed
+
   test "Response above MaxSemanticTokens cap is rejected without decoding":
     let h = Highlight(colorSegments: @[])
     # Craft an over-cap response cheaply: length = cap*5 + 5.

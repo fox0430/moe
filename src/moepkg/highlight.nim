@@ -2108,8 +2108,9 @@ proc applySemanticTokens*(
     # tokenModifiers above uint32 so the (type<<32)|mods cache key cannot
     # silently collide (LSP spec caps at uint32; would need >=33 modifiers
     # in a legend, but the truncation would be silent).
-    if deltaLine < 0 or deltaStart < 0 or tokenModifiers < 0 or
-        tokenModifiers > int(high(uint32)):
+    if deltaLine < 0 or deltaStart < 0 or length < 0 or tokenModifiers < 0 or
+        deltaLine > int(high(uint32)) or deltaStart > int(high(uint32)) or
+        length > int(high(uint32)) or tokenModifiers > int(high(uint32)):
       return saoRejectedMalformed
 
     if deltaLine > 0:
