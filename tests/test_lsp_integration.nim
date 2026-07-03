@@ -23,8 +23,10 @@ import
 
 import pkg/results
 
-import ../src/moepkg/[lsp_integration, buffer, message_log]
+import ../src/moepkg/[lsp_integration, buffer, message_log, unicode_utils]
 import ../src/moepkg/lsp/protocol/types
+
+let tmpDir = getTempDir()
 
 suite "LspIntegration - UTF-16/UTF-8 Conversion":
   test "utf16OffsetToUtf8 with ASCII text":
@@ -108,6 +110,81 @@ suite "LspIntegration - UTF-16/UTF-8 Conversion":
       let utf8Pos = utf16OffsetToUtf8(line, utf16Pos)
       let backToUtf16 = utf8OffsetToUtf16(line, utf8Pos)
       check backToUtf16 == utf16Pos
+
+  test "roundtrip UTF-8 -> UTF-16 -> UTF-8 at valid byte boundaries":
+    let line = "hello世界🌍end"
+    # "hello" = 5 bytes, "世" = 3, "界" = 3, "🌍" = 4, "end" = 3.
+    for utf8Offset in [0, 5, 8, 11, 15, 18]:
+      let utf16 = utf8OffsetToUtf16(line, utf8Offset)
+      check utf16OffsetToUtf8(line, utf16) == utf8Offset
+
+  test "runeIndexToUtf16 with empty string":
+    check runeIndexToUtf16("", 0) == 0
+    check runeIndexToUtf16("", 5) == 0
+
+  test "runeIndexToUtf16 with ASCII":
+    let line = "hello world"
+    check runeIndexToUtf16(line, 0) == 0
+    check runeIndexToUtf16(line, 5) == 5
+    check runeIndexToUtf16(line, 11) == 11
+
+  test "runeIndexToUtf16 with BMP characters":
+    # Each hiragana is 1 rune = 1 UTF-16 unit = 3 UTF-8 bytes.
+    let line = "こんにちは"
+    check runeIndexToUtf16(line, 0) == 0
+    check runeIndexToUtf16(line, 1) == 1
+    check runeIndexToUtf16(line, 5) == 5
+
+  test "runeIndexToUtf16 with mixed ASCII and Japanese":
+    let line = "ABCあいう"
+    check runeIndexToUtf16(line, 3) == 3
+    check runeIndexToUtf16(line, 4) == 4
+    check runeIndexToUtf16(line, 6) == 6
+
+  test "runeIndexToUtf16 with surrogate pairs":
+    let line = "a😀b"
+    check runeIndexToUtf16(line, 0) == 0
+    check runeIndexToUtf16(line, 1) == 1
+    check runeIndexToUtf16(line, 2) == 3 # After emoji (2 UTF-16 units)
+    check runeIndexToUtf16(line, 3) == 4
+
+  test "runeIndexToUtf16 clamps to line length":
+    check runeIndexToUtf16("abc", 100) == 3
+    check runeIndexToUtf16("a😀b", 100) == 4
+
+  test "utf16ToRuneIndex with empty string":
+    check utf16ToRuneIndex("", 0) == 0
+    check utf16ToRuneIndex("", 5) == 0
+
+  test "utf16ToRuneIndex with ASCII":
+    let line = "hello"
+    check utf16ToRuneIndex(line, 0) == 0
+    check utf16ToRuneIndex(line, 3) == 3
+    check utf16ToRuneIndex(line, 5) == 5
+
+  test "utf16ToRuneIndex with BMP characters":
+    let line = "こんにちは"
+    check utf16ToRuneIndex(line, 0) == 0
+    check utf16ToRuneIndex(line, 2) == 2
+    check utf16ToRuneIndex(line, 5) == 5
+
+  test "utf16ToRuneIndex with surrogate pairs":
+    let line = "a😀b"
+    check utf16ToRuneIndex(line, 0) == 0
+    check utf16ToRuneIndex(line, 1) == 1
+    check utf16ToRuneIndex(line, 3) == 2 # After emoji (2 UTF-16 units)
+    check utf16ToRuneIndex(line, 4) == 3
+
+  test "utf16ToRuneIndex clamps to rune count":
+    check utf16ToRuneIndex("abc", 100) == 3
+    check utf16ToRuneIndex("a😀b", 100) == 3
+
+  test "rune/UTF-16 roundtrip":
+    let line = "hello世界🌍end"
+    # Rune indexes: h(0) e(1) l(2) l(3) o(4) 世(5) 界(6) 🌍(7) e(8) n(9) d(10).
+    for runeIndex in [0, 3, 5, 6, 7, 8, 11]:
+      let utf16 = runeIndexToUtf16(line, runeIndex)
+      check utf16ToRuneIndex(line, utf16) == runeIndex
 
 suite "LspIntegration - Status Text":
   test "getStatusText returns empty for ok and quiescent":
@@ -343,7 +420,7 @@ suite "LspIntegration - newLspIntegration":
     check lsp.activeProgress.len == 0
 
   test "creates integration with custom workspace":
-    let lsp = newLspIntegration("/tmp/test")
+    let lsp = newLspIntegration(tmpDir / "test")
     check lsp.enabled
 
 suite "LspIntegration - Message Management":
@@ -368,6 +445,10 @@ suite "LspIntegration - Progress Management":
   test "hasActiveProgress with no progress":
     let lsp = newLspIntegration()
     check not lsp.hasActiveProgress()
+
+  test "getActiveProgressList with no progress":
+    let lsp = newLspIntegration()
+    check lsp.getActiveProgressList().len == 0
 
   test "hasActiveProgress with progress":
     let lsp = newLspIntegration()
@@ -704,6 +785,70 @@ suite "LspIntegration - applyTextEdits":
     check not buffer.isModified
     check buffer.undoStack.len == 0
 
+  test "applyTextEdits same-position inserts keep array order":
+    # Per LSP spec, multiple edits at the same position appear in the
+    # document in array order: A then B => "AB", not "BA".
+    let buffer = newTextBuffer("xy")
+    let edits = @[
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "A"),
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "B"),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isOk
+    check buffer.getTextString() == "xABy"
+
+  test "applyTextEdits three same-position inserts keep array order":
+    let buffer = newTextBuffer("()")
+    let edits = @[
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "1"),
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "2"),
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "3"),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isOk
+    check buffer.getTextString() == "(123)"
+
+  test "applyTextEdits insert newline":
+    let buffer = newTextBuffer("hello world")
+    let edit = TextEdit(range: newRange(0, 5, 0, 5), newText: "\n")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.len == 2
+    check buffer.getLine(0) == "hello"
+    check buffer.getLine(1) == " world"
+
+  test "applyTextEdits with UTF-16 position handling":
+    # "abc日本" - "abc" = 3 UTF-16 units, "日本" = 2 UTF-16 units.
+    let buffer = newTextBuffer("abc日本")
+    let edit = TextEdit(range: newRange(0, 3, 0, 5), newText: "XY")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "abcXY"
+
+  test "applyTextEdits multibyte prefix (rune vs byte columns)":
+    # Regression: treating UTF-16 offsets as byte offsets fails when the
+    # rune index (1) differs from the UTF-8 byte offset (3).
+    let buffer = newTextBuffer("あいうえお")
+    let edit = TextEdit(range: newRange(0, 1, 0, 3), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "あXえお"
+
+  test "applyTextEdits insertion after multibyte characters":
+    let buffer = newTextBuffer("日本語abc")
+    let edit = TextEdit(range: newRange(0, 3, 0, 3), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "日本語Xabc"
+
+  test "applyTextEdits surrogate pair handling":
+    # 😀 is 2 UTF-16 units but 1 rune.
+    let buffer = newTextBuffer("a😀bc")
+    let edit = TextEdit(range: newRange(0, 1, 0, 3), newText: "Z")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "aZbc"
+
 suite "LspIntegration - applyLspFoldingRanges":
   test "applyLspFoldingRanges with empty ranges":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -757,34 +902,179 @@ suite "LspIntegration - applyLspFoldingRanges":
     check count == 1
     check buffer.foldState.folds[0].collapsed
 
+  test "applyLspFoldingRanges with multiple non-overlapping folds":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ranges = @[
+      FoldingRange(
+        startLine: 1,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+      FoldingRange(
+        startLine: 5,
+        endLine: 7,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+    ]
+    let count = buffer.applyLspFoldingRanges(ranges)
+    check count == 2
+    check buffer.foldState.folds.len == 2
+
+  test "applyLspFoldingRanges preserves collapsedText":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let ranges = @[
+      FoldingRange(
+        startLine: 1,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: some("{ ... }"),
+      )
+    ]
+    let count = buffer.applyLspFoldingRanges(ranges)
+    check count == 1
+    check buffer.foldState.folds[0].collapsedText == some("{ ... }")
+
+  test "applyLspFoldingRanges with clearExisting = false keeps prior folds":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7")
+    let ranges1 = @[
+      FoldingRange(
+        startLine: 0,
+        endLine: 1,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    discard buffer.applyLspFoldingRanges(ranges1)
+    check buffer.foldState.folds.len == 1
+
+    let ranges2 = @[
+      FoldingRange(
+        startLine: 4,
+        endLine: 6,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    let count = buffer.applyLspFoldingRanges(ranges2, clearExisting = false)
+    check count == 1
+    check buffer.foldState.folds.len == 2
+
+  test "applyLspFoldingRanges preserves nested ranges":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5")
+    let ranges = @[
+      FoldingRange(
+        startLine: 0,
+        endLine: 5,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+      FoldingRange(
+        startLine: 1,
+        endLine: 3,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+    ]
+    let count = buffer.applyLspFoldingRanges(ranges)
+    check count == 2
+    check buffer.foldState.folds.len == 2
+
+  test "applyLspFoldingRanges skips degenerate single-line ranges":
+    let buffer = newTextBuffer("0\n1\n2\n3")
+    let ranges = @[
+      FoldingRange(
+        startLine: 2,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    let count = buffer.applyLspFoldingRanges(ranges)
+    check count == 0
+    check buffer.foldState.folds.len == 0
+
+  test "applyLspFoldingRanges keeps manual folds, replaces lsp folds":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7")
+    check buffer.foldState.addFold(6, 7, source = fsManual) == true
+
+    let rangesA = @[
+      FoldingRange(
+        startLine: 0,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    check buffer.applyLspFoldingRanges(rangesA) == 1
+    check buffer.foldState.folds.len == 2
+
+    let rangesB = @[
+      FoldingRange(
+        startLine: 3,
+        endLine: 4,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    check buffer.applyLspFoldingRanges(rangesB) == 1
+    check buffer.foldState.folds.len == 2
+
+    let manual = buffer.foldState.getFoldAt(6)
+    check manual.isSome
+    check manual.get.source == fsManual
+    check buffer.foldState.getFoldAt(0).isNone
+    check buffer.foldState.getFoldAt(3).isSome
+
 suite "LspIntegration - Buffer Operations (disabled)":
   privateAccess(LspIntegration)
 
   test "onBufferOpen returns ok when disabled":
     let lsp = newLspIntegration()
     lsp.enabled = false
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.onBufferOpen(buffer)
     check result.isOk
 
   test "onBufferClose returns ok when disabled":
     let lsp = newLspIntegration()
     lsp.enabled = false
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.onBufferClose(buffer)
     check result.isOk
 
   test "onBufferChange returns ok when disabled":
     let lsp = newLspIntegration()
     lsp.enabled = false
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.onBufferChange(buffer)
     check result.isOk
 
   test "onBufferSave returns ok when disabled":
     let lsp = newLspIntegration()
     lsp.enabled = false
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.onBufferSave(buffer)
     check result.isOk
 
@@ -794,11 +1084,93 @@ suite "LspIntegration - Buffer Operations (disabled)":
     let result = lsp.onBufferOpen(buffer)
     check result.isOk
 
+  test "onBufferClose returns ok for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    let result = lsp.onBufferClose(buffer)
+    check result.isOk
+
+  test "onBufferSave returns ok for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    let result = lsp.onBufferSave(buffer)
+    check result.isOk
+
+suite "LspIntegration - Buffer Version Tracking":
+  privateAccess(LspIntegration)
+
+  # onBufferOpen below spawns a real worker thread (nim is configured by
+  # default), so each test tears the integration down to join that thread and
+  # avoid leaking worker threads / nimlangserver processes.
+  var lsp: LspIntegration
+  setup:
+    lsp = newLspIntegration(tmpDir)
+  teardown:
+    lsp.shutdown()
+
+  proc markReady(lsp: LspIntegration) =
+    ## Pretend a server would receive the change so onBufferChange advances
+    ## the version/shadow without a live worker.
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      true
+
+  test "didOpen starts at version 1":
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "test.nim") == some(1)
+
+  test "version increases monotonically on every change":
+    lsp.markReady()
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    for expected in [2, 3, 4]:
+      # Mutate the content: an unchanged buffer is skipped as a no-op.
+      check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+      check lsp.onBufferChange(buffer).isOk
+      check lsp.sentDocumentVersion(tmpDir / "test.nim") == some(expected)
+
+  test "version does not regress when changeSeq rolls back":
+    # Undo rolls buffer.changeSeq back; the version sent to the server must
+    # keep increasing regardless.
+    lsp.markReady()
+    let buffer = newTextBuffer("hello", some(tmpDir / "test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check lsp.onBufferChange(buffer).isOk
+    let versionBeforeUndo = lsp.sentDocumentVersion(tmpDir / "test.nim").get
+    check buffer.undo().isOk # changeSeq rolls back here
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "test.nim").get > versionBeforeUndo
+
+  test "per-document tracking":
+    lsp.markReady()
+    let bufferA = newTextBuffer("a", some(tmpDir / "a.nim"))
+    let bufferB = newTextBuffer("b", some(tmpDir / "b.nim"))
+    check lsp.onBufferOpen(bufferA).isOk
+    check lsp.onBufferOpen(bufferB).isOk
+    check bufferA.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check lsp.onBufferChange(bufferA).isOk
+    check bufferA.insertText(BufferPosition(line: 0, column: 0), "y").isOk
+    check lsp.onBufferChange(bufferA).isOk
+    check lsp.sentDocumentVersion(tmpDir / "a.nim") == some(3)
+    check lsp.sentDocumentVersion(tmpDir / "b.nim") == some(1)
+
+  test "version cleared on close":
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.onBufferClose(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "test.nim").isNone
+
+  test "change without open sends didOpen with version 1":
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "test.nim") == some(1)
+
 suite "LspIntegration - Request Methods (disabled)":
   test "startCompletionRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startCompletionRequest(buffer, 0, 0)
     check result.isErr
     check "disabled" in result.error
@@ -806,21 +1178,21 @@ suite "LspIntegration - Request Methods (disabled)":
   test "startHoverRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startHoverRequest(buffer, 0, 0)
     check result.isErr
 
   test "startDefinitionRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startDefinitionRequest(buffer, 0, 0)
     check result.isErr
 
   test "startReferencesRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startReferencesRequest(buffer, 0, 0)
     check result.isErr
 
@@ -831,48 +1203,96 @@ suite "LspIntegration - Request Methods (disabled)":
     check result.isErr
     check "file path" in result.error
 
+  test "startDefinitionRequest returns error for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    let result = lsp.startDefinitionRequest(buffer, 0, 0)
+    check result.isErr
+
+  test "startDocumentSymbolsRequest returns error for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    let result = lsp.startDocumentSymbolsRequest(buffer)
+    check result.isErr
+
+  test "startSemanticTokensRequest returns error for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test\nline2")
+    let result = lsp.startSemanticTokensRequest(buffer, 0, 1)
+    check result.isErr
+
+  test "startSemanticTokensRequest returns error for empty buffer":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("", some(tmpDir / "test.nim"))
+    let result = lsp.startSemanticTokensRequest(buffer, 0, 0)
+    check result.isErr
+    # Error can be "Buffer is empty" or "Semantic tokens not supported"
+    # depending on check order.
+    check "empty" in result.error or "not supported" in result.error
+
 suite "LspIntegration - Feature Support Checks (disabled)":
   test "hasCodeLensSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasCodeLensSupport(buffer)
 
   test "hasDocumentHighlightSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasDocumentHighlightSupport(buffer)
 
   test "hasDocumentSymbolSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasDocumentSymbolSupport(buffer)
 
   test "hasFoldingRangeSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasFoldingRangeSupport(buffer)
 
   test "hasRenameSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasRenameSupport(buffer)
 
   test "hasCallHierarchySupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasCallHierarchySupport(buffer)
 
   test "hasDocumentLinkSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasDocumentLinkSupport(buffer)
+
+  test "hasExecuteCommandSupport returns false when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check not lsp.hasExecuteCommandSupport(buffer)
+
+  test "hasDocumentLinkSupport returns false for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    check not lsp.hasDocumentLinkSupport(buffer)
+
+  test "hasCallHierarchySupport returns false for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    check not lsp.hasCallHierarchySupport(buffer)
+
+  test "hasExecuteCommandSupport returns false for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    check not lsp.hasExecuteCommandSupport(buffer)
 
 suite "LspIntegration - Completion/SignatureHelp capability gating":
   privateAccess(LspService)
@@ -880,12 +1300,12 @@ suite "LspIntegration - Completion/SignatureHelp capability gating":
   test "hasCompletionSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasCompletionSupport(buffer)
 
   test "hasCompletionSupport reflects the advertised server capability":
     let lsp = newLspIntegration()
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     # Enabled (the default) but the server has not advertised completion yet.
     check not lsp.hasCompletionSupport(buffer)
     lsp.service.capabilities["nim"] =
@@ -895,12 +1315,12 @@ suite "LspIntegration - Completion/SignatureHelp capability gating":
   test "hasSignatureHelpSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasSignatureHelpSupport(buffer)
 
   test "hasSignatureHelpSupport reflects the advertised server capability":
     let lsp = newLspIntegration()
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasSignatureHelpSupport(buffer)
     lsp.service.capabilities["nim"] =
       ServerCapabilities(signatureHelpProvider: some(SignatureHelpOptions()))
@@ -981,7 +1401,7 @@ suite "LspIntegration - Shutdown":
 
   test "shutdown clears all state":
     let lsp = newLspIntegration()
-    lsp.documents["/tmp/test.nim"] = (version: 1, shadow: "code")
+    lsp.documents[tmpDir / "test.nim"] = (version: 1, shadow: "code")
     lsp.activeProgress["token1"] = LspProgressState(
       token: "token1",
       langId: "nim",
@@ -1064,9 +1484,9 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.get.modifiedCount == 0
 
   test "applyWorkspaceEdit with changes field":
-    var buffers = @[newTextBuffer("hello", some("/tmp/test.txt"))]
+    var buffers = @[newTextBuffer("hello", some(tmpDir / "test.txt"))]
     var changes = initTable[string, seq[TextEdit]]()
-    changes["file:///tmp/test.txt"] = @[
+    changes[pathToUri(tmpDir / "test.txt")] = @[
       TextEdit(
         range: Range(
           start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
@@ -1083,11 +1503,11 @@ suite "LspIntegration - applyWorkspaceEdit":
     check buffers[0].getLine(0) == "world"
 
   test "applyWorkspaceEdit documentChanges takes precedence":
-    var buffers = @[newTextBuffer("aaa", some("/tmp/test.txt"))]
+    var buffers = @[newTextBuffer("aaa", some(tmpDir / "test.txt"))]
 
     # Create changes that would modify to "bbb"
     var changes = initTable[string, seq[TextEdit]]()
-    changes["file:///tmp/test.txt"] = @[
+    changes[pathToUri(tmpDir / "test.txt")] = @[
       TextEdit(
         range: Range(
           start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 3)
@@ -1100,7 +1520,7 @@ suite "LspIntegration - applyWorkspaceEdit":
     let docChanges = @[
       TextDocumentEdit(
         textDocument: OptionalVersionedTextDocumentIdentifier(
-          uri: "file:///tmp/test.txt", version: some(1)
+          uri: pathToUri(tmpDir / "test.txt"), version: some(1)
         ),
         edits: @[
           TextEdit(
@@ -1119,6 +1539,172 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.isOk
     # documentChanges should take precedence
     check buffers[0].getLine(0) == "ccc"
+
+  test "applyWorkspaceEdit with multiple buffers":
+    var buffers: seq[TextBuffer] = @[
+      newTextBuffer("aaa", some(tmpDir / "a.txt")),
+      newTextBuffer("bbb", some(tmpDir / "b.txt")),
+    ]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "a.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]
+    changes[pathToUri(tmpDir / "b.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "BBB")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedCount == 2
+    check buffers[0].getTextString() == "AAA"
+    check buffers[1].getTextString() == "BBB"
+
+  test "applyWorkspaceEdit matches a relative-path buffer against an absolute URI":
+    # A buffer opened with a relative path (e.g. `moe foo.nim`) stores the path
+    # verbatim, but WorkspaceEdit URIs always decode to an absolute path. The
+    # open buffer must still be matched and edited in memory, not mistaken for
+    # an unopened file and written straight to disk.
+    let relPath = "rel_rename_target.nim"
+    var buffers: seq[TextBuffer] = @[newTextBuffer("foo bar", some(relPath))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(relPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "baz")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedCount == 1
+    check result.get.modifiedBufferIndexes == @[0]
+    check result.get.modifiedFilePaths.len == 0
+    check buffers[0].getTextString() == "baz bar"
+
+  test "applyWorkspaceEdit matches a relative-path buffer via documentChanges":
+    let relPath = "rel_rename_doc.nim"
+    var buffers: seq[TextBuffer] = @[newTextBuffer("foo bar", some(relPath))]
+    let docEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: pathToUri(relPath), version: some(1)
+      ),
+      edits: @[TextEdit(range: newRange(0, 4, 0, 7), newText: "baz")],
+    )
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(@[docEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedBufferIndexes == @[0]
+    check result.get.modifiedFilePaths.len == 0
+    check buffers[0].getTextString() == "foo baz"
+
+  test "applyWorkspaceEdit with custom transaction name":
+    var buffers: seq[TextBuffer] =
+      @[newTextBuffer("old text", some(tmpDir / "custom.txt"))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "custom.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "new")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit, "CustomRename")
+    check result.isOk
+    check result.get.modifiedCount == 1
+    check buffers[0].getTextString() == "new text"
+
+  test "applyWorkspaceEdit refuses file operations without applying edits":
+    var buffers: seq[TextBuffer] = @[newTextBuffer("hello", some(tmpDir / "ro.txt"))]
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]),
+      documentChanges: some(newSeq[TextDocumentEdit]()),
+      resourceOperations: @["rename"],
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("file operations")
+    check result.error.contains("rename")
+    check buffers[0].getTextString() == "hello"
+
+  test "parseWorkspaceEdit records resource operations":
+    let node = %*{
+      "documentChanges": [
+        {
+          "textDocument": {"uri": pathToUri(tmpDir / "a.txt"), "version": 1},
+          "edits": [
+            {
+              "range": {
+                "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}
+              },
+              "newText": "x",
+            }
+          ],
+        },
+        {"kind": "create", "uri": pathToUri(tmpDir / "new.txt")},
+        {
+          "kind": "rename",
+          "oldUri": pathToUri(tmpDir / "a.txt"),
+          "newUri": pathToUri(tmpDir / "b.txt"),
+        },
+      ]
+    }
+    let edit = parseWorkspaceEdit(node)
+    check edit.documentChanges.isSome
+    check edit.documentChanges.get.len == 1 # only the textDocument edit
+    check edit.resourceOperations == @["create", "rename"]
+
+  test "applyWorkspaceEdit reports modified buffer indexes":
+    var buffers: seq[TextBuffer] = @[
+      newTextBuffer("aaa", some(tmpDir / "a.txt")),
+      newTextBuffer("bbb", some(tmpDir / "b.txt")),
+      newTextBuffer("ccc", some(tmpDir / "c.txt")),
+    ]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "a.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]
+    changes[pathToUri(tmpDir / "c.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "CCC")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedCount == 2
+    check result.get.modifiedBufferIndexes.len == 2
+    check 0 in result.get.modifiedBufferIndexes
+    check 2 in result.get.modifiedBufferIndexes
+    check 1 notin result.get.modifiedBufferIndexes
+    check result.get.modifiedFilePaths.len == 0
+
+  test "collectWorkspaceEditPaths from changes field":
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "a.txt")] = @[]
+    changes[pathToUri(tmpDir / "b.txt")] = @[]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let paths = collectWorkspaceEditPaths(edit)
+    check paths.len == 2
+    check tmpDir / "a.txt" in paths
+    check tmpDir / "b.txt" in paths
+
+  test "collectWorkspaceEditPaths: documentChanges takes precedence":
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "from_changes.txt")] = @[]
+    let docEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: pathToUri(tmpDir / "from_doc.txt"), version: some(1)
+      ),
+      edits: @[],
+    )
+    let edit = WorkspaceEdit(changes: some(changes), documentChanges: some(@[docEdit]))
+    let paths = collectWorkspaceEditPaths(edit)
+    check paths == @[tmpDir / "from_doc.txt"]
+
+  test "collectWorkspaceEditPaths with an empty edit":
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]),
+      documentChanges: none(seq[TextDocumentEdit]),
+    )
+    check collectWorkspaceEditPaths(edit).len == 0
 
 suite "LspIntegration - applyDiagnosticsToBuffer":
   test "applyDiagnosticsToBuffer sets error markers":
@@ -1227,74 +1813,148 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
     # Should not crash, line 0 should have no marker
     check buffer.getLineMarker(0).isNone
 
+  test "applyDiagnosticsToBuffer stores BufferDiagnostics":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(1, 2, 1, 8),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "undeclared identifier",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(0, 0, 0, 5),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "unused variable",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 2
+    check buffer.diagnostics[0].startLine == 1
+    check buffer.diagnostics[0].startCol == 2
+    check buffer.diagnostics[0].endLine == 1
+    # endCol 8 exceeds "line2" (5 runes) and is clamped to the line length.
+    check buffer.diagnostics[0].endCol == 5
+    check buffer.diagnostics[0].severity == bdsError
+    check buffer.diagnostics[0].message == "undeclared identifier"
+    check buffer.diagnostics[1].severity == bdsWarning
+    check buffer.diagnostics[1].message == "unused variable"
+
+  test "applyDiagnosticsToBuffer converts UTF-16 columns to rune indexes":
+    # "あいう abc": each hiragana is 1 UTF-16 unit = 1 rune, so a diagnostic
+    # on "abc" starts at UTF-16 column 4 = rune index 4 (byte offset 10).
+    # For an emoji, UTF-16 units (2) differ from runes (1).
+    let buffer = newTextBuffer("あいう abc\na😀bc")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(0, 4, 0, 7),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "error on abc",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(1, 3, 1, 5),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "warning on bc",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 2
+    check buffer.diagnostics[0].startCol == 4
+    check buffer.diagnostics[0].endCol == 7
+    check buffer.diagnostics[1].startCol == 2 # a(0) 😀(1) b(2)
+    check buffer.diagnostics[1].endCol == 4
+
 suite "LspIntegration - Additional Request Methods (disabled)":
   test "startDeclarationRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startDeclarationRequest(buffer, 0, 0)
     check result.isErr
 
   test "startTypeDefinitionRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startTypeDefinitionRequest(buffer, 0, 0)
     check result.isErr
 
   test "startImplementationRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startImplementationRequest(buffer, 0, 0)
     check result.isErr
 
   test "startSignatureHelpRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startSignatureHelpRequest(buffer, 0, 0)
     check result.isErr
 
   test "startDocumentHighlightRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startDocumentHighlightRequest(buffer, 0, 0)
     check result.isErr
 
   test "startCodeLensRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startCodeLensRequest(buffer)
     check result.isErr
 
   test "startDocumentSymbolsRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startDocumentSymbolsRequest(buffer)
     check result.isErr
 
   test "startDocumentLinkRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startDocumentLinkRequest(buffer)
     check result.isErr
 
   test "startSelectionRangeRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startSelectionRangeRequest(buffer, 0, 0)
     check result.isErr
 
   test "startSemanticTokensRequest returns error when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     let result = lsp.startSemanticTokensRequest(buffer, 0, 10)
     check result.isErr
 
@@ -1302,19 +1962,19 @@ suite "LspIntegration - Additional Feature Support Checks":
   test "hasCodeLensResolveSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasCodeLensResolveSupport(buffer)
 
   test "hasDocumentLinkResolveSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasDocumentLinkResolveSupport(buffer)
 
   test "hasExecuteCommandSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasExecuteCommandSupport(buffer)
 
   test "feature checks return false for buffer without path":
@@ -1328,18 +1988,18 @@ suite "LspIntegration - Additional Feature Support Checks":
 suite "LspIntegration - Server Path Checks":
   test "hasServerForPath with known extension":
     let lsp = newLspIntegration()
-    check lsp.hasServerForPath("/tmp/test.nim")
-    check lsp.hasServerForPath("/tmp/test.py")
-    check lsp.hasServerForPath("/tmp/test.rs")
+    check lsp.hasServerForPath(tmpDir / "test.nim")
+    check lsp.hasServerForPath(tmpDir / "test.py")
+    check lsp.hasServerForPath(tmpDir / "test.rs")
 
   test "hasServerForPath with unknown extension":
     let lsp = newLspIntegration()
-    check not lsp.hasServerForPath("/tmp/test.xyz")
-    check not lsp.hasServerForPath("/tmp/noextension")
+    check not lsp.hasServerForPath(tmpDir / "test.xyz")
+    check not lsp.hasServerForPath(tmpDir / "noextension")
 
   test "isServerRunningForPath returns false when no server running":
     let lsp = newLspIntegration()
-    check not lsp.isServerRunningForPath("/tmp/test.nim")
+    check not lsp.isServerRunningForPath(tmpDir / "test.nim")
 
   test "getRunningServers returns empty when no servers":
     let lsp = newLspIntegration()
@@ -1379,7 +2039,7 @@ suite "LspIntegration - getSemanticTokensLegend":
   test "getSemanticTokensLegend returns none when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check lsp.getSemanticTokensLegend(buffer).isNone
 
   test "getSemanticTokensLegend returns none for buffer without path":
@@ -1637,7 +2297,7 @@ suite "LspIntegration - computeIncrementalChange":
 suite "LspIntegration - incremental didChange":
   privateAccess(LspIntegration)
 
-  const Path = "/tmp/test.nim"
+  let Path = tmpDir / "test.nim"
 
   # onBufferOpen below spawns a real worker thread (nim is configured by
   # default), so each test tears the integration down to join that thread and
@@ -1740,3 +2400,184 @@ suite "LspIntegration - incremental didChange":
       let buf = newTextBuffer(raw, some(Path))
       check lsp.onBufferChange(buf).isOk
       check lsp.documents[Path].shadow == buf.getTextString()
+
+suite "LspIntegration - getDiagnosticsAt":
+  test "returns diagnostics at cursor position":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 0,
+        endLine: 1,
+        endCol: 5,
+        severity: bdsError,
+        message: "error here",
+      )
+    ]
+    let diags = buffer.getDiagnosticsAt(1, 3)
+    check diags.len == 1
+    check diags[0].message == "error here"
+
+  test "returns empty for position outside diagnostic range":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 0,
+        endLine: 1,
+        endCol: 5,
+        severity: bdsError,
+        message: "error here",
+      )
+    ]
+    check buffer.getDiagnosticsAt(0, 0).len == 0
+    check buffer.getDiagnosticsAt(2, 0).len == 0
+    # endCol is exclusive (LSP spec): col == endCol should be outside.
+    check buffer.getDiagnosticsAt(1, 5).len == 0
+    check buffer.getDiagnosticsAt(1, 4).len == 1
+
+  test "multi-line diagnostic - middle line matches at any column":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 3,
+        endLine: 3,
+        endCol: 2,
+        severity: bdsError,
+        message: "multi-line error",
+      )
+    ]
+    check buffer.getDiagnosticsAt(2, 0).len == 1
+    check buffer.getDiagnosticsAt(2, 99).len == 1
+
+  test "multi-line diagnostic - start line respects startCol":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 3,
+        endLine: 3,
+        endCol: 2,
+        severity: bdsError,
+        message: "multi-line error",
+      )
+    ]
+    check buffer.getDiagnosticsAt(1, 2).len == 0
+    check buffer.getDiagnosticsAt(1, 3).len == 1
+    check buffer.getDiagnosticsAt(1, 10).len == 1
+
+  test "multi-line diagnostic - end line respects exclusive endCol":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 3,
+        endLine: 3,
+        endCol: 2,
+        severity: bdsError,
+        message: "multi-line error",
+      )
+    ]
+    check buffer.getDiagnosticsAt(3, 0).len == 1
+    check buffer.getDiagnosticsAt(3, 1).len == 1
+    check buffer.getDiagnosticsAt(3, 2).len == 0 # exclusive
+
+  test "returns multiple diagnostics at same position":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 0,
+        endLine: 1,
+        endCol: 10,
+        severity: bdsError,
+        message: "error",
+      ),
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 2,
+        endLine: 1,
+        endCol: 8,
+        severity: bdsWarning,
+        message: "warning",
+      ),
+    ]
+    let diags = buffer.getDiagnosticsAt(1, 3)
+    check diags.len == 2
+
+suite "LspIntegration - formatDiagnosticsForHover":
+  test "formats a single diagnostic":
+    let diags = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "undeclared identifier",
+      )
+    ]
+    check formatDiagnosticsForHover(diags) == "[Error] undeclared identifier"
+
+  test "formats multiple diagnostics":
+    let diags = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "error msg",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsWarning,
+        message: "warning msg",
+      ),
+    ]
+    check formatDiagnosticsForHover(diags) == "[Error] error msg\n[Warning] warning msg"
+
+  test "formats all severity levels":
+    let diags = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsError,
+        message: "e",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsWarning,
+        message: "w",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsInformation,
+        message: "i",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsHint,
+        message: "h",
+      ),
+    ]
+    check formatDiagnosticsForHover(diags) ==
+      "[Error] e\n[Warning] w\n[Info] i\n[Hint] h"
+
+  test "empty diagnostics returns empty string":
+    check formatDiagnosticsForHover(@[]) == ""
