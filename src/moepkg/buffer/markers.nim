@@ -118,6 +118,8 @@ proc applyDiagnosticHighlights*(
     highlight: var Highlight, diagnostics: seq[BufferDiagnostic]
 ) =
   ## Overwrite highlight segments in diagnostic ranges with undercurl styles.
+  if diagnostics.len > 0:
+    highlight.hasDiagnostics = true
   for d in diagnostics:
     let color =
       case d.severity

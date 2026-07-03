@@ -69,6 +69,8 @@ type
       ## later apply arrives with a different legend (dynamic re-registration),
       ## the overlay is wiped BEFORE the new tokens are added so range-scoped
       ## applies do not leave stale-legend colours on the rows they don't touch.
+    hasDiagnostics*: bool = false
+      ## Gates `getColorPair`'s diagnostic-severity priority over the overlay.
 
   ReservedWord* = object
     word*: string
@@ -308,7 +310,18 @@ proc findOverlayToken(tokens: openArray[SemanticOverlayToken], col: int): int =
   return -1
 
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
-  ## Color at (line, col). Semantic overlay wins over `colorSegments` on a hit.
+  ## Color at (line, col). Diagnostic severity in `colorSegments` overrides
+  ## the semantic overlay; otherwise the overlay wins on a hit.
+  if highlight.hasDiagnostics and highlight.colorSegments.len > 0 and
+      (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
+      (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
+    let segColor = highlight[highlight.indexOf(line, col)].color
+    if segColor in {
+      EditorColorPairIndex.syntaxCheckErr, EditorColorPairIndex.syntaxCheckWarn,
+      EditorColorPairIndex.syntaxCheckInfo, EditorColorPairIndex.syntaxCheckHint,
+    }:
+      return segColor
+
   if highlight.semantic.len > 0:
     # `withValue` aliases the stored entry via a pointer, avoiding the seq
     # ref-count bump that `getOrDefault` would incur on this per-cell path.

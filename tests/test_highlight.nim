@@ -2588,6 +2588,46 @@ suite "Highlight - Semantic overlay":
     check h.getColorPair(0, 3) == EditorColorPairIndex.function
     check h.getColorPair(0, 5) == EditorColorPairIndex.keyword
 
+  test "Diagnostic severity in colorSegments beats overlay when hasDiagnostics":
+    # Regression: getColorPair used to short-circuit on any overlay hit, so
+    # syntaxCheckErr on a semantic-token-covered identifier stayed invisible.
+    let h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 9,
+          color: EditorColorPairIndex.syntaxCheckErr,
+          style: Style(modifiers: {StyleModifier.Undercurl}),
+        )
+      ],
+      hasDiagnostics: true,
+    )
+    let outcome = applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 1)
+    check outcome == saoDone
+    check h.getColorPair(0, 3) == EditorColorPairIndex.syntaxCheckErr
+    check h.getSegmentModifiers(0, 3) == {StyleModifier.Undercurl}
+
+  test "Overlay still wins when hasDiagnostics is false":
+    # Guard: the priority check must not activate on a non-diagnostic segment
+    # that happens to share the colour path.
+    let h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 9,
+          color: EditorColorPairIndex.syntaxCheckErr,
+          style: defaultStyle,
+        )
+      ]
+    )
+    let outcome = applySemanticTokens(h, mkResp(@[0, 2, 3, 1, 0]), colorTab, 1)
+    check outcome == saoDone
+    check h.getColorPair(0, 3) == EditorColorPairIndex.function
+
   test "getSegmentModifiers unions overlay + syntax modifiers":
     # Syntax segment has Undercurl (e.g. diagnostic); overlay carries Bold.
     var h = Highlight(

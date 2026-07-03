@@ -297,6 +297,7 @@ proc updateHighlight*(b: TextBuffer) =
     if not highlightRebuilt and b.incrementalHighlight != nil:
       b.incrementalHighlight.segments = b.highlight.colorSegments
 
+    b.highlight.hasDiagnostics = false
     if b.diagnostics.len > 0:
       applyDiagnosticHighlights(b.highlight, b.diagnostics)
 
