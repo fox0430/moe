@@ -518,7 +518,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorRow = max(0, grid.cursorRow - n)
+    grid.cursorRow = max(0, grid.cursorRow - min(n, grid.cursorRow))
   of 'B':
     # Cursor Down
     let n =
@@ -526,7 +526,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorRow = min(grid.rows - 1, grid.cursorRow + n)
+    grid.cursorRow = min(grid.rows - 1, grid.cursorRow + min(n, grid.rows - 1))
   of 'C':
     # Cursor Forward
     let n =
@@ -534,7 +534,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorCol = min(grid.cols - 1, grid.cursorCol + n)
+    grid.cursorCol = min(grid.cols - 1, grid.cursorCol + min(n, grid.cols - 1))
   of 'D':
     # Cursor Back
     let n =
@@ -542,7 +542,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorCol = max(0, grid.cursorCol - n)
+    grid.cursorCol = max(0, grid.cursorCol - min(n, grid.cursorCol))
   of 'H', 'f':
     # Cursor Position
     let

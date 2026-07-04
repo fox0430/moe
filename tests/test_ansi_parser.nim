@@ -1040,3 +1040,28 @@ suite "TerminalGrid - CSI sequences":
       inc reads
     check grid.parserState == apsNormal # aborted once the payload crossed the cap
     check grid.escapeBuffer.len == 0
+
+suite "TerminalGrid - CSI overflow guard (regression)":
+  ## Large CSI parameters must not cause integer overflow in cursor math.
+
+  test "ESC[999999999999999999B (cursor down) clamps to grid bottom":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[999999999999999999B")
+    check grid.cursorRow == grid.rows - 1
+
+  test "ESC[999999999999999999A (cursor up) clamps to grid top":
+    let grid = newTerminalGrid(80, 24)
+    grid.cursorRow = 10
+    grid.processOutput("\x1b[999999999999999999A")
+    check grid.cursorRow == 0
+
+  test "ESC[999999999999999999C (cursor forward) clamps to last column":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[999999999999999999C")
+    check grid.cursorCol == grid.cols - 1
+
+  test "ESC[999999999999999999D (cursor back) clamps to first column":
+    let grid = newTerminalGrid(80, 24)
+    grid.cursorCol = 10
+    grid.processOutput("\x1b[999999999999999999D")
+    check grid.cursorCol == 0
