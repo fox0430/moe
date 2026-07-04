@@ -1089,6 +1089,30 @@ suite "Visual Commands - visualPaste":
     check buf.getLine(0) == "NAMED world"
     check state.pendingRegister.isNone
 
+  test "Paste block selection from named register preserves register content":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    discard buf.insertText(BufferPosition(line: 1, column: 7), "\ntest line")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    discard state.registers.setNamedRegister('a', "REG_A_CONTENT", false)
+    state.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualPaste(buf, state)
+
+    # Bug: deleteBlockSelection must NOT overwrite named register 'a'
+    # with the deleted block text.
+    check state.registers.getNamedRegister('a').getContent() == "REG_A_CONTENT"
+    check state.pendingRegister.isNone
+    check state.visualSelection.active == false
+
 suite "Visual Commands - Block Selection":
   test "Delete block selection":
     let buf = newTextBuffer()
