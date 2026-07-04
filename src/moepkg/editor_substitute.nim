@@ -30,6 +30,8 @@ proc startSubstitutePreview*(e: Editor) =
     return
 
   let buffer = e.activeBuffer()
+  if buffer.readOnly:
+    return
   e.state.ui.substitutePreview.originalLines = newSeqOfCap[string](buffer.len)
   for line in buffer.lines:
     e.state.ui.substitutePreview.originalLines.add(line)
