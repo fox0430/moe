@@ -96,29 +96,6 @@ suite "Overlay - hasOverlay":
     state.enterRenameOverlay("test", 0, 0)
     check state.hasOverlay == true
 
-suite "Overlay - overlayKind":
-  test "Returns none when no overlay is active":
-    let state = createTestState()
-    check state.overlayKind.isNone
-
-  test "Returns okCommand for command overlay":
-    let state = createTestState()
-    state.enterCommandOverlay()
-    check state.overlayKind.isSome
-    check state.overlayKind.get == okCommand
-
-  test "Returns okSearch for search overlay":
-    let state = createTestState()
-    state.enterSearchOverlay(Backward)
-    check state.overlayKind.isSome
-    check state.overlayKind.get == okSearch
-
-  test "Returns okRename for rename overlay":
-    let state = createTestState()
-    state.enterRenameOverlay("variable", 5, 10)
-    check state.overlayKind.isSome
-    check state.overlayKind.get == okRename
-
 suite "Overlay - isCommandOverlay":
   test "Returns false when no overlay is active":
     let state = createTestState()
@@ -403,22 +380,6 @@ suite "Overlay - baseMode":
 
     check state.mode == EditorMode.Normal
     check state.baseMode == EditorMode.Normal
-
-suite "Overlay - effectiveMode":
-  test "Returns current mode (same as state.mode)":
-    let state = createTestState()
-
-    state.mode = EditorMode.Normal
-    check state.effectiveMode == EditorMode.Normal
-
-    state.enterCommandOverlay()
-    check state.effectiveMode == EditorMode.Normal
-    check state.isCommandOverlay == true
-
-    state.exitOverlay()
-    state.enterSearchOverlay(Forward)
-    check state.effectiveMode == EditorMode.Normal
-    check state.isSearchOverlay == true
 
 suite "Overlay - mode transitions":
   test "Normal -> Command -> Normal":

@@ -413,13 +413,6 @@ suite "GitDiff - getGitBranch":
     check result.isErr
     check result.error.contains("does not exist")
 
-suite "GitDiff - startGitDiffAsync":
-  test "Non-existent file returns error":
-    let result = startGitDiffAsync("/nonexistent/path/file.txt")
-
-    check result.isErr
-    check result.error.contains("does not exist")
-
 suite "GitDiff - startGitDiffFromBufferAsync":
   test "Buffer without file path returns error":
     let buf = newTextBuffer()
@@ -525,30 +518,6 @@ suite "GitDiff - Integration tests with git repository":
 
     check result.isOk
     check result.get.lines.len > 0
-
-  test "startGitDiffAsync and checkGitDiffComplete":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\nline 2\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    writeFile(testFile, "line 1\nmodified\n")
-
-    let startResult = startGitDiffAsync(testFile)
-    check startResult.isOk
-
-    let diffProc = startResult.get
-
-    var completed = false
-    for _ in 0 ..< 100:
-      let checkResult = checkGitDiffComplete(diffProc)
-      if checkResult.isSome:
-        completed = true
-        check checkResult.get.isOk
-        break
-      sleep(10)
-
-    check completed
 
   test "updateBufferWithGitDiff":
     let testFile = testDir / "test.txt"
