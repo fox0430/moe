@@ -309,25 +309,11 @@ type
       # retried every base interval.
 
   PendingSemanticTokensRequest* = object
-    ## Snapshot of the in-flight `textDocument/semanticTokens` request. When
-    ## the response arrives the fields here are compared to the current buffer
-    ## state, so a mid-flight edit, buffer switch, or legend re-registration
-    ## does not cause a stale response to paint the wrong overlay.
-    requestId*: int
-      # 0 = no pending request. LSP request ids are always non-zero for live
-      # requests, so this doubles as the presence sentinel.
-    filePath*: string
-      # Absolute path the request was issued for; guards against buffer swaps
-      # that leave the response pointing at the wrong buffer.
-    changeSeq*: int
-      # Buffer.changeSeq at request-send time; stamped into the cache on
-      # response so a mid-flight edit does not label the overlay as valid
-      # for content the server never saw. `-1` when no pending (distinct
-      # from a legitimate pristine changeSeq=0).
-    contentVersion*: int
-      # Buffer.contentVersion at request-send time; passed through to
-      # applySemanticTokens so updateHighlight's stale-drop can fire once the
-      # buffer's version advances past this. `-1` when no pending.
+    ## Snapshot of the in-flight `textDocument/semanticTokens` request.
+    ## Request-id, file-path, change-seq and content-version live in
+    ## `DebouncedLspPoll` (`LspCacheState.semanticTokensPoll`); the fields
+    ## here are semantic-tokens-specific extras that the generic poll type
+    ## does not model.
     rangeFirst*: int
     rangeLast*: int
       # Inclusive row bounds of a range-scoped request. Both `-1` for a
@@ -354,36 +340,21 @@ type
     hoverPopup*: HoverPopupManager # Hover popup manager
     locations*: Option[LspLocationsResult]
       # LSP locations for references/definitions picker
-    lastCodeLensUpdate*: MonoTime # Timestamp of last CodeLens update
-    codeLensUpdateInterval*: int64 # Debounce interval for CodeLens updates
-    codeLensResponseGen*: int
-      # Generation counter for in-flight CodeLens response processing; a spawned
-      # processCodeLensResponse only writes the cache if it is still the latest generation
-    lastDocumentHighlightUpdate*: MonoTime # Timestamp of last document highlight update
-    documentHighlightUpdateInterval*: int64
-      # Debounce interval for document highlight updates
-    lastSemanticTokensUpdate*: MonoTime # Timestamp of last semantic tokens update
-    semanticTokensUpdateInterval*: int64 # Debounce interval for semantic tokens updates
-    semanticTokensRejectStreak*: int
-      # Consecutive reject/error/null since last saoDone; scales debounce threshold.
+    codeLensPoll*: DebouncedLspPoll
+      # Debounce / backoff / request-time snapshot for `textDocument/codeLens`.
+    documentHighlightPoll*: DebouncedLspPoll
+      # Debounce / backoff / request-time snapshot for `textDocument/documentHighlight`.
+    semanticTokensPoll*: DebouncedLspPoll
+      # Debounce / backoff / request-time snapshot for `textDocument/semanticTokens`.
+    semanticTokensPendingExtras*: PendingSemanticTokensRequest
+      # Semantic-tokens-specific extras (legend, viewport, range) that the
+      # generic `DebouncedLspPoll` does not model.
+    inlayHintPoll*: DebouncedLspPoll
+      # Debounce / backoff / request-time snapshot for `textDocument/inlayHint`.
     inlayHintCache*: InlayHintCache # Cached inlay hints for current viewport
-    lastInlayHintUpdate*: MonoTime # Timestamp of last inlay hint update
-    inlayHintUpdateInterval*: int64 # Debounce interval for inlay hint updates
     signatureHelp*: SignatureHelpRequestState # Auto signature help request tracking
-    # Pending async request IDs for non-blocking LSP operations
     pendingSignatureHelpRequestId*: int
       # Request ID for pending signature help request (0 = none)
-    pendingDocumentHighlightRequestId*: int
-      # Request ID for pending document highlight request (0 = none)
-    pendingCodeLensRequestId*: int # Request ID for pending code lens request (0 = none)
-    pendingSemanticTokens*: PendingSemanticTokensRequest
-      # Snapshot of the in-flight `textDocument/semanticTokens` request so
-      # the response can be validated against the state at request-send time.
-      # `requestId = 0` means no pending request; sentinel int fields are -1.
-    pendingInlayHintRequestId*: int
-      # Request ID for pending inlay hint request (0 = none)
-    pendingInlayHintBufferId*: BufferId
-      # BufferId the pending inlay hint request was made for
     pendingHoverRequestId*: int # Request ID for pending hover request (0 = none)
     pendingHoverBufferId*: BufferId # BufferId the pending hover request was made for
     pendingHoverCursorLine*: int # Cursor line when the hover request was made
@@ -858,46 +829,64 @@ type
     windowDisplay*: WindowDisplayState
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
 
+  DebouncedLspPoll* = object
+    ## Debounce + exponential backoff + request-time snapshot for a single LSP
+    ## poll feature.  Shared across semantic tokens, inlay hints, code lens,
+    ## and document highlight so every feature gets the same robustness:
+    ## exponential backoff on persistent reject (#2880) and contentVersion
+    ## stale-response drop (#2875).
+    lastUpdate*: MonoTime
+    interval*: int64
+    rejectStreak*: int
+    pendingRequestId*: int
+    pendingFilePath*: string
+    pendingChangeSeq*: int
+    pendingContentVersion*: int
+    generation*: int
+
+const MaxLspDebounceBackoffShift* = 6
+  ## Max exponent for the reject-streak backoff (interval << 6).
+
 # Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
 # This eliminates the dual-state sync problem — EditorWindow is the single source of truth.
 
-proc cursor*(s: EditorState): var BufferPosition {.inline.} =
+proc cursor*(s: EditorState): var BufferPosition =
   ## Get cursor position from the active window (returns var for in-place mutation)
   s.activeWindow.cursor
 
-proc `cursor=`*(s: EditorState, pos: BufferPosition) {.inline.} =
+proc `cursor=`*(s: EditorState, pos: BufferPosition) =
   ## Set cursor position on the active window
   s.activeWindow.cursor = pos
 
-proc mode*(s: EditorState): EditorMode {.inline.} =
+proc mode*(s: EditorState): EditorMode =
   ## Get current mode from the active window
   s.activeWindow.mode
 
-proc `mode=`*(s: EditorState, m: EditorMode) {.inline.} =
+proc `mode=`*(s: EditorState, m: EditorMode) =
   ## Set current mode on the active window
   s.activeWindow.mode = m
 
-proc previousMode*(s: EditorState): EditorMode {.inline.} =
+proc previousMode*(s: EditorState): EditorMode =
   ## Get previous mode from the active window
   s.activeWindow.previousMode
 
-proc `previousMode=`*(s: EditorState, m: EditorMode) {.inline.} =
+proc `previousMode=`*(s: EditorState, m: EditorMode) =
   ## Set previous mode on the active window
   s.activeWindow.previousMode = m
 
-proc preferredColumn*(s: EditorState): int {.inline.} =
+proc preferredColumn*(s: EditorState): int =
   ## Get preferred column from the active window
   s.activeWindow.preferredColumn
 
-proc `preferredColumn=`*(s: EditorState, v: int) {.inline.} =
+proc `preferredColumn=`*(s: EditorState, v: int) =
   ## Set preferred column on the active window
   s.activeWindow.preferredColumn = v
 
-proc screenCursor*(s: EditorState): var CursorPosition {.inline.} =
+proc screenCursor*(s: EditorState): var CursorPosition =
   ## Get screen cursor from the active window (returns var for in-place mutation)
   s.activeWindow.screenCursor
 
-proc `screenCursor=`*(s: EditorState, v: CursorPosition) {.inline.} =
+proc `screenCursor=`*(s: EditorState, v: CursorPosition) =
   ## Set screen cursor on the active window
   s.activeWindow.screenCursor = v
 
@@ -1038,3 +1027,17 @@ proc modeStateKind*(mode: EditorMode): ModeStateKind =
   of EditorMode.RecentFile: mskRecentFile
   of EditorMode.Terminal: mskTerminal
   else: mskNone
+
+proc resetPending*(poll: var DebouncedLspPoll) =
+  poll.pendingRequestId = 0
+  poll.pendingFilePath = ""
+  poll.pendingChangeSeq = -1
+  poll.pendingContentVersion = -1
+
+proc debounceThreshold*(poll: DebouncedLspPoll): times.Duration =
+  let shift = min(poll.rejectStreak, MaxLspDebounceBackoffShift)
+  initDuration(milliseconds = poll.interval shl shift)
+
+proc initDebouncedLspPoll*(interval: int64): DebouncedLspPoll =
+  result = DebouncedLspPoll(lastUpdate: getMonoTime(), interval: interval)
+  result.resetPending()

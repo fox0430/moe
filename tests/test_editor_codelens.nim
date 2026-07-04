@@ -123,11 +123,11 @@ suite "CodeLens Cache":
     # debounce.
     let e = createTestEditor()
     let old = getMonoTime() - initDuration(seconds = 10)
-    e.state.lspCache.lastCodeLensUpdate = old
+    e.state.lspCache.codeLensPoll.lastUpdate = old
 
     e.doUpdateCodeLensCache()
 
-    check e.state.lspCache.lastCodeLensUpdate > old
+    check e.state.lspCache.codeLensPoll.lastUpdate > old
 
 suite "CodeLens Picker":
   test "showCodeLensPicker":
@@ -305,12 +305,12 @@ suite "Semantic Tokens Cache":
     e.state.lspCache.semanticTokensCache.isValid = true
     e.state.lspCache.semanticTokensCache.changeSeq = 5
     e.state.lspCache.semanticTokensCache.filePath = "/test/file.nim"
-    e.state.lspCache.pendingSemanticTokens.requestId = 123
+    e.state.lspCache.semanticTokensPoll.pendingRequestId = 123
 
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.pendingSemanticTokens.requestId == 0
+    check e.state.lspCache.semanticTokensPoll.pendingRequestId == 0
 
   test "processSemanticTokensResponse - drops response when contentVersion advanced":
     # Lock in the belt-and-braces guard: a mid-flight edit bumps
@@ -320,10 +320,13 @@ suite "Semantic Tokens Cache":
     let buf = e.activeBuffer()
     buf.filePath = some("/test/file.nim")
 
-    e.state.lspCache.pendingSemanticTokens.filePath = "/test/file.nim"
-    e.state.lspCache.pendingSemanticTokens.requestId = 1
-    e.state.lspCache.pendingSemanticTokens.changeSeq = buf.changeSeq
-    e.state.lspCache.pendingSemanticTokens.contentVersion = buf.contentVersion
+    e.state.lspCache.semanticTokensPoll.pendingFilePath = "/test/file.nim"
+    e.state.lspCache.semanticTokensPoll.pendingRequestId = 1
+    e.state.lspCache.semanticTokensPoll.pendingChangeSeq = buf.changeSeq
+    e.state.lspCache.semanticTokensPoll.pendingContentVersion = buf.contentVersion
+    # processSemanticTokensResponse reads rangeFirst/Last from extras
+    e.state.lspCache.semanticTokensPendingExtras =
+      PendingSemanticTokensRequest(rangeFirst: -1, rangeLast: -1)
 
     buf.advanceContentVersion()
 
@@ -352,7 +355,7 @@ suite "Semantic Tokens Cache":
     e.updateSemanticTokensCache()
 
     check e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.pendingSemanticTokens.requestId == 0
+    check e.state.lspCache.semanticTokensPoll.pendingRequestId == 0
 
   test "semanticTokensCacheCoversViewport - visible EOF is a cache hit":
     # Regression: previously the check compared cache.bottomLine against the
@@ -431,27 +434,23 @@ suite "Semantic Tokens Cache":
     # A buffer switch / register-capability drop is a fresh start; drop the
     # backoff so the next request fires at the normal cadence.
     let e = createTestEditor()
-    e.state.lspCache.semanticTokensRejectStreak = 5
+    e.state.lspCache.semanticTokensPoll.rejectStreak = 5
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
-    check e.state.lspCache.semanticTokensRejectStreak == 0
+    check e.state.lspCache.semanticTokensPoll.rejectStreak == 0
 
-  test "semanticTokensDebounceThreshold - streak 0 uses base interval":
-    var cache =
-      LspCacheState(semanticTokensUpdateInterval: 500, semanticTokensRejectStreak: 0)
-    check semanticTokensDebounceThreshold(cache) == initDuration(milliseconds = 500)
+  test "debounceThreshold - streak 0 uses base interval":
+    let poll = DebouncedLspPoll(interval: 500)
+    check poll.debounceThreshold() == initDuration(milliseconds = 500)
 
-  test "semanticTokensDebounceThreshold - streak scales exponentially":
-    var cache =
-      LspCacheState(semanticTokensUpdateInterval: 500, semanticTokensRejectStreak: 3)
+  test "debounceThreshold - streak scales exponentially":
+    let poll = DebouncedLspPoll(interval: 500, rejectStreak: 3)
     # 500ms << 3 == 4000ms
-    check semanticTokensDebounceThreshold(cache) == initDuration(milliseconds = 4_000)
+    check poll.debounceThreshold() == initDuration(milliseconds = 4_000)
 
-  test "semanticTokensDebounceThreshold - streak clamped at SemanticTokensMaxRejectShift":
-    var cache =
-      LspCacheState(semanticTokensUpdateInterval: 500, semanticTokensRejectStreak: 999)
-    let expectedMs = 500'i64 shl SemanticTokensMaxRejectShift
-    check semanticTokensDebounceThreshold(cache) ==
-      initDuration(milliseconds = expectedMs)
+  test "debounceThreshold - streak clamped at MaxLspDebounceBackoffShift":
+    let poll = DebouncedLspPoll(interval: 500, rejectStreak: 999)
+    let expectedMs = 500'i64 shl MaxLspDebounceBackoffShift
+    check poll.debounceThreshold() == initDuration(milliseconds = expectedMs)
 
 suite "CodeLens Item":
   test "CodeLensItem with arguments":
@@ -484,17 +483,18 @@ suite "CodeLens Response Generation":
   test "stale generation does not overwrite a newer cache":
     let e = createTestEditor()
     e.activeBuffer().filePath = some("/test/file.nim")
+    let reqVer = e.activeBuffer().contentVersion
 
     # Generation 2 represents the latest in-flight response.
-    e.state.lspCache.codeLensResponseGen = 2
+    e.state.lspCache.codeLensPoll.generation = 2
     check not e.state.lspCache.codeLensCache.isValid
 
     # An older (slower) response with a stale generation must not write the cache.
-    waitFor e.processCodeLensResponse(@[], 1)
+    waitFor e.processCodeLensResponse(@[], 1, reqVer)
     check not e.state.lspCache.codeLensCache.isValid
 
     # The latest generation is allowed to write the cache.
-    waitFor e.processCodeLensResponse(@[], 2)
+    waitFor e.processCodeLensResponse(@[], 2, reqVer)
     check e.state.lspCache.codeLensCache.isValid
 
 suite "Document Highlight Item":
@@ -553,6 +553,8 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
+    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
+      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -584,6 +586,8 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
+    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
+      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -622,6 +626,8 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
+    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
+      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -649,6 +655,8 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
+    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
+      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -707,8 +715,10 @@ suite "CodeLens Column Extraction":
     e.activeBuffer().filePath = some("/test/file.nim")
     # "a😀b": rune indexes a=0, 😀=1, b=2; UTF-16 offsets a=0, 😀=1..2, b=3
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "a😀b")
-    e.state.lspCache.codeLensResponseGen = 1
-    waitFor e.processCodeLensResponse(@[lensWithCommand(0, 3, "5 refs")], 1)
+    e.state.lspCache.codeLensPoll.generation = 1
+    waitFor e.processCodeLensResponse(
+      @[lensWithCommand(0, 3, "5 refs")], 1, e.activeBuffer().contentVersion
+    )
 
     let items = e.state.lspCache.getCodeLensItemsForLine(0)
     check items.len == 1
@@ -719,9 +729,11 @@ suite "CodeLens Column Extraction":
     let e = createTestEditor()
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "abcdefgh")
-    e.state.lspCache.codeLensResponseGen = 1
+    e.state.lspCache.codeLensPoll.generation = 1
     waitFor e.processCodeLensResponse(
-      @[lensWithCommand(0, 5, "second"), lensWithCommand(0, 2, "first")], 1
+      @[lensWithCommand(0, 5, "second"), lensWithCommand(0, 2, "first")],
+      1,
+      e.activeBuffer().contentVersion,
     )
 
     let items = e.state.lspCache.getCodeLensItemsForLine(0)
@@ -740,9 +752,11 @@ suite "CodeLens Column Extraction":
     check not e.lsp.enabled
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "let x = 1")
-    e.state.lspCache.codeLensResponseGen = 1
+    e.state.lspCache.codeLensPoll.generation = 1
 
-    waitFor e.processCodeLensResponse(@[lensWithoutCommand(0, 0)], 1)
+    waitFor e.processCodeLensResponse(
+      @[lensWithoutCommand(0, 0)], 1, e.activeBuffer().contentVersion
+    )
 
     check e.state.lspCache.codeLensCache.isValid
     check e.state.lspCache.getCodeLensItemsForLine(0).len == 0
