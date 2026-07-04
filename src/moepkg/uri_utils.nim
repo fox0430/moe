@@ -184,7 +184,8 @@ proc openExternalUri*(uri: string): bool =
   let cmd = when defined(macosx): "open" else: "xdg-open"
 
   try:
-    discard startProcess(cmd, args = @[uri], options = {poUsePath})
+    let p = startProcess(cmd, args = @[uri], options = {poUsePath})
+    p.close()
     return true
   except OSError:
     return false
