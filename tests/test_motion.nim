@@ -702,6 +702,30 @@ suite "Text Objects - Quoted":
     check range.endPos.column == 9
 
 suite "Text Objects - Parenthesis":
+  test "findMatchingParen cursor on close paren":
+    let buffer = newTextBuffer("(x)")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 1
+    check range.endPos.column == 1
+
+  test "findMatchingParen cursor on close paren around":
+    let buffer = newTextBuffer("(x)")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 0
+    check range.endPos.column == 2
+
+  test "findMatchingParen cursor on close paren empty":
+    let buffer = newTextBuffer("()")
+    let cursor = BufferPosition(line: 0, column: 1)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check result.isOk
+
   test "findMatchingParen inner":
     let buffer = newTextBuffer("func(arg)")
     let cursor = BufferPosition(line: 0, column: 6)

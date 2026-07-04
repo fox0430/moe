@@ -2117,6 +2117,10 @@ proc findMatchingParen(
               break searchBackward
             else:
               depth.dec
+              if depth == 0:
+                startLine = searchLine
+                startCol = searchCol
+                break searchBackward
         searchCol.dec
 
       searchLine.dec
