@@ -137,23 +137,33 @@ proc getHeadContent(relativePath, gitRoot: string): Result[string, string] =
   ## exact byte sequence. execCmdEx reads line-by-line and appends "\n"
   ## per iteration, which fabricates a trailing newline for files that
   ## were committed without one.
-  let process =
-    try:
-      startProcess(
-        "git",
-        workingDir = gitRoot,
-        args = ["show", "HEAD:" & relativePath],
-        options = {poUsePath},
-      )
-    except OSError as e:
-      return err("Failed to execute git show: " & e.msg)
+  var process: Process = nil
+  var headContent = ""
+  var showExitCode: int = -1
+  try:
+    process =
+      try:
+        startProcess(
+          "git",
+          workingDir = gitRoot,
+          args = ["show", "HEAD:" & relativePath],
+          options = {poUsePath},
+        )
+      except OSError as e:
+        return err("Failed to execute git show: " & e.msg)
 
-  let headContent = process.outputStream.readAll()
-  let showExitCode = process.waitForExit()
-  process.close()
+    headContent = process.outputStream.readAll()
+    showExitCode = process.waitForExit()
+  finally:
+    if not process.isNil:
+      try:
+        process.close()
+      except CatchableError:
+        logWarn(
+          "git diff", "Failed to close git show process: " & getCurrentExceptionMsg()
+        )
 
   if showExitCode != 0:
-    # File not in git yet
     return err("File is not in git repository")
 
   return ok(headContent)
