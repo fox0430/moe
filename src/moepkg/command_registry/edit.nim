@@ -1209,8 +1209,12 @@ proc handleIncrementNumber*(
   if not found:
     return err("No number found")
 
-  # Increment the number
-  let newValue = value + 1
+  # Increment the number (saturate at high(int) to avoid overflow)
+  let newValue =
+    if value == high(int):
+      value
+    else:
+      value + 1
   let newNumStr = $newValue
 
   # Replace the number in the line
@@ -1259,8 +1263,12 @@ proc handleDecrementNumber*(
   if not found:
     return err("No number found")
 
-  # Decrement the number
-  let newValue = value - 1
+  # Decrement the number (saturate at low(int) to avoid overflow)
+  let newValue =
+    if value == low(int):
+      value
+    else:
+      value - 1
   let newNumStr = $newValue
 
   # Replace the number in the line
