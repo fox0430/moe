@@ -98,12 +98,12 @@ proc readFromPrimarySelectionSync*(tool: ClipboardTool): Result[string, string] 
     return Result[string, string].err("Clipboard tool not available: " & $tool)
 
   let cmd = cmdOpt.get()
+  var process: Process = nil
   try:
-    let process =
+    process =
       startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath, poStdErrToStdOut})
     let output = process.outputStream.readAll()
     let exitCode = process.waitForExit()
-    process.close()
 
     if exitCode == 0:
       return Result[string, string].ok(output)
@@ -113,6 +113,12 @@ proc readFromPrimarySelectionSync*(tool: ClipboardTool): Result[string, string] 
       )
   except CatchableError as e:
     return Result[string, string].err("Failed to read from primary selection: " & e.msg)
+  finally:
+    if not process.isNil:
+      try:
+        process.close()
+      except CatchableError:
+        discard
 
 proc getPrimarySelectionWriteCommand*(tool: ClipboardTool): Option[seq[string]] =
   ## Get the command to write to X11 PRIMARY selection.
@@ -136,24 +142,23 @@ proc writeToPrimarySelectionSync*(
     return Result[void, string].err("Clipboard tool not available: " & $tool)
 
   let cmd = cmdOpt.get()
+  var process: Process = nil
   try:
     if tool == cbtWlClipboard:
       # wl-copy stays running to serve the selection content, so we must not
       # call waitForExit (it would block forever). Pass text via stdin and
       # close the handle; wl-copy will keep running in the background.
-      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
-      process.close()
       # Don't waitForExit — wl-copy exits automatically when another
       # wl-copy instance claims the selection.
       return Result[void, string].ok()
     else:
-      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
       let exitCode = process.waitForExit()
-      process.close()
       if exitCode == 0:
         return Result[void, string].ok()
       else:
@@ -162,6 +167,12 @@ proc writeToPrimarySelectionSync*(
         )
   except CatchableError as e:
     return Result[void, string].err("Failed to write to primary selection: " & e.msg)
+  finally:
+    if not process.isNil:
+      try:
+        process.close()
+      except CatchableError:
+        discard
 
 proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
   ## Read text from system clipboard synchronously
@@ -171,12 +182,12 @@ proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
     return Result[string, string].err("Clipboard tool not available: " & $tool)
 
   let cmd = cmdOpt.get()
+  var process: Process = nil
   try:
-    let process =
+    process =
       startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath, poStdErrToStdOut})
     let output = process.outputStream.readAll()
     let exitCode = process.waitForExit()
-    process.close()
 
     if exitCode == 0:
       return Result[string, string].ok(output)
@@ -186,6 +197,12 @@ proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
       )
   except CatchableError as e:
     return Result[string, string].err("Failed to read from clipboard: " & e.msg)
+  finally:
+    if not process.isNil:
+      try:
+        process.close()
+      except CatchableError:
+        discard
 
 proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, string] =
   ## Write text to system clipboard synchronously using osproc
@@ -195,6 +212,7 @@ proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, stri
     return Result[void, string].err("Clipboard tool not available: " & $tool)
 
   let cmd = cmdOpt.get()
+  var process: Process = nil
   try:
     if tool == cbtWlClipboard:
       # wl-copy stays running to serve the clipboard content, so we must not
@@ -202,18 +220,16 @@ proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, stri
       # Pass text via stdin and close the handle; wl-copy will keep running
       # in the background and exit automatically when another wl-copy
       # instance claims the clipboard.
-      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
-      process.close()
       return Result[void, string].ok()
     else:
       # Other tools (xclip, xsel, pbcopy, win32yank) use stdin
-      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
       let exitCode = process.waitForExit()
-      process.close()
 
       if exitCode == 0:
         return Result[void, string].ok()
@@ -223,6 +239,12 @@ proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, stri
         )
   except CatchableError as e:
     return Result[void, string].err("Failed to write to clipboard: " & e.msg)
+  finally:
+    if not process.isNil:
+      try:
+        process.close()
+      except CatchableError:
+        discard
 
 proc readFromClipboard*(
     tool: ClipboardTool

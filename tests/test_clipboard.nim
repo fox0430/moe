@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, osproc]
+import std/[unittest, options, os, osproc, streams]
 
 import pkg/results
 
@@ -225,3 +225,47 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let readResult = readClipboardWithRetry(cbtWlClipboard, testText)
       check readResult.isOk
       check readResult.get() == testText
+
+suite "clipboard: error handling (fd/zombie leak regression)":
+  test "readFromClipboardSync returns err when tool not found":
+    let r = readFromClipboardSync(cbtWin32yank)
+    check r.isErr
+
+  test "writeToClipboardSync returns err when tool not found":
+    let r = writeToClipboardSync(cbtWin32yank, "test")
+    check r.isErr
+
+  test "readFromPrimarySelectionSync returns err when tool not found":
+    let r = readFromPrimarySelectionSync(cbtWin32yank)
+    check r.isErr
+
+  test "writeToPrimarySelectionSync returns err when tool not found":
+    let r = writeToPrimarySelectionSync(cbtWin32yank, "test")
+    check r.isErr
+
+  test "process lifecycle with try/finally pattern (normal exit)":
+    var process: Process = nil
+    try:
+      process = startProcess("true", options = {poUsePath})
+      discard process.waitForExit()
+    except CatchableError:
+      discard
+    finally:
+      if not process.isNil:
+        process.close()
+    check true
+
+  test "process lifecycle with readAll and waitForExit (normal exit)":
+    var process: Process = nil
+    try:
+      process =
+        startProcess("echo", args = @["hello"], options = {poUsePath, poStdErrToStdOut})
+      let output = process.outputStream.readAll()
+      let exitCode = process.waitForExit()
+      check output.len > 0
+      check exitCode == 0
+    except CatchableError:
+      check false
+    finally:
+      if not process.isNil:
+        process.close()
