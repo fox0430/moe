@@ -20,7 +20,7 @@
 ## URI/URL detection and external program launching utilities.
 ## Used by the `gf` command to open URIs under the cursor.
 
-import std/[options, osproc, sequtils, strutils, unicode]
+import std/[options, osproc, sequtils, strutils, unicode, uri]
 
 const
   UriSchemes* = ["https://", "http://", "file://", "mailto:", "ftp://", "ssh://"]
@@ -172,9 +172,9 @@ proc isExternalUri*(uri: string): bool =
     uri.startsWith("ftp://") or uri.startsWith("ssh://")
 
 proc fileUriToPath*(uri: string): string =
-  ## Convert a file:// URI to a local file path.
+  ## Convert a file:// URI to a local file path, percent-decoding it.
   if uri.startsWith("file://"):
-    return uri[7 ..^ 1]
+    return decodeUrl(uri[7 ..^ 1], decodePlus = false)
   return uri
 
 proc openExternalUri*(uri: string): bool =

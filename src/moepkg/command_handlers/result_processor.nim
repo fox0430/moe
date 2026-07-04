@@ -34,8 +34,8 @@ import
   ../[
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
-    config_loader, message_log, uri_utils, primitives, syntax_checker, status_line,
-    cursor_util, quick_run_utils,
+    config_loader, lsp_service, message_log, uri_utils, primitives, syntax_checker,
+    status_line, cursor_util, quick_run_utils,
   ]
 import ../key_bindings except Command
 import ./[command_mode_handler, handler_result]
@@ -354,11 +354,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrCallHierarchyJumpTo:
     # Jump to selected call hierarchy item. Restore the pre-viewer cursor first
     # so the jump list anchors at the original position (enabling jump-back).
-    let path =
-      if r.callHierarchyJumpUri.startsWith("file://"):
-        r.callHierarchyJumpUri[7 ..^ 1]
-      else:
-        r.callHierarchyJumpUri
+    let path = lsp_service.uriToPath(r.callHierarchyJumpUri)
     if e.state.lspCache.pendingCallHierarchyRequestId != 0:
       e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
       e.state.lspCache.pendingCallHierarchyRequestId = 0
