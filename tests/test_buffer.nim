@@ -1782,6 +1782,53 @@ suite "Buffer - contentVersion monotonicity":
     check buf.changeSeq == 0 # reload resets changeSeq
     check buf.contentVersion > vBefore # but contentVersion only advances
 
+  test "NoUndo mutators leave changeSeq unchanged":
+    # Regression guard for LSP format/rename stale-guard: NoUndo operations
+    # (used by substitute preview etc.) change the buffer content and advance
+    # contentVersion but skip changeSeq. A stale-guard keyed on changeSeq would
+    # miss the content change and accept a stale LSP response.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello\nworld\n")
+    let cs = buf.changeSeq
+    let cv = buf.contentVersion
+
+    buf.replaceLineNoUndo(0, "salut")
+    check buf.changeSeq == cs
+    check buf.contentVersion > cv
+
+    buf.insertLineNoUndo(1, "monde")
+    check buf.changeSeq == cs
+    check buf.contentVersion > cv
+
+    buf.deleteLineNoUndo(2)
+    check buf.changeSeq == cs
+    check buf.contentVersion > cv
+
+  test "Reload then edit makes changeSeq re-ascend but contentVersion monotonic":
+    # Regression guard for LSP format/rename stale-guard: reload resets
+    # changeSeq to 0, then subsequent edits can bring it back to a value
+    # that matches a pre-reload snapshot, letting a stale guard pass.
+    # contentVersion never resets, so it always catches the change.
+    let path = getTempDir() / "moe_test_changeseq_aba.txt"
+    writeFile(path, "fresh\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer(backend = GapBuffer)
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abc\n")
+    let csPre = buf.changeSeq
+    let cvPre = buf.contentVersion
+
+    # Reload resets changeSeq to 0 but contentVersion only advances.
+    check buf.loadFile(path).isOk
+    check buf.changeSeq == 0
+    check buf.contentVersion > cvPre
+
+    # A subsequent edit pushes changeSeq back up. It can (by ABA) land
+    # on csPre again; contentVersion, being monotonic, cannot repeat.
+    discard buf.insertText(BufferPosition(line: 0, column: 5), " edited\n")
+    check buf.contentVersion > cvPre
+
 suite "Buffer - reload preserves identity across a backend swap":
   # A reload that changes the backend reassigns only TextBuffer.storage, leaving
   # every sibling field in place. Identity and detected state must survive the
