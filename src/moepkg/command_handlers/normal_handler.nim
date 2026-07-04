@@ -385,6 +385,9 @@ proc handleModeSwitch*(
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.VisualLine))
   of EditorMode.Replace:
+    if buffer.readOnly:
+      state.statusMessage = "Buffer is read-only"
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Replace))
   of EditorMode.Filer:
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Filer))

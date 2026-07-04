@@ -34,16 +34,22 @@ import core, internal_mutations, undo
 # changed, so any content-keyed cache must invalidate.
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Replace line content without recording undo. Used by substitute preview etc.
+  if b.readOnly:
+    return
   b.backendReplaceLine(lineNumber, content)
   b.advanceContentVersion()
 
 proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
   ## Delete a line without recording undo. Used by substitute preview etc.
+  if b.readOnly:
+    return
   b.backendDeleteLine(lineNumber)
   b.advanceContentVersion()
 
 proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Insert a line without recording undo. Used by substitute preview etc.
+  if b.readOnly:
+    return
   b.backendInsertLine(lineNumber, content)
   b.advanceContentVersion()
 
@@ -51,6 +57,8 @@ proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), s
   ## Replace line content with undo recording.
   ## Line content must not contain line separators; any stray CR is stripped
   ## defensively so it cannot corrupt terminal rendering.
+  if b.readOnly:
+    return err("Buffer is read-only")
   if lineNumber < 0 or lineNumber >= b.len:
     return err("Line index out of bounds: " & $lineNumber)
   let oldContent = b.getLine(lineNumber)
@@ -89,6 +97,8 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
   ## CRLF / lone CR in `text` are normalized to LF (matching loadFile) so pasted
   ## or LSP-supplied content never embeds a raw \r in line content.
   ## Returns error if position is out of bounds
+  if b.readOnly:
+    return err("Buffer is read-only")
   if text.len == 0:
     return ok(())
 
@@ -121,6 +131,8 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
 proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
   ## Delete a single Unicode character at the specified position
   ## Returns error if position is out of bounds
+  if b.readOnly:
+    return err("Buffer is read-only")
   if pos.line < 0 or pos.line >= b.len:
     return err("Line position out of bounds: " & $pos.line)
 
@@ -162,6 +174,8 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
   ## Returns error if lineIndex is out of valid range [0..len]
   ## Line content must not contain line separators; any stray CR is stripped
   ## defensively so it cannot corrupt terminal rendering.
+  if b.readOnly:
+    return err("Buffer is read-only")
   if lineIndex < 0 or lineIndex > b.len:
     return err("Line index out of valid range [0.." & $b.len & "]: " & $lineIndex)
 
@@ -205,6 +219,8 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
 proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
   ## Delete the line at the specified index
   ## Returns error if lineIndex is out of bounds
+  if b.readOnly:
+    return err("Buffer is read-only")
   if lineIndex < 0 or lineIndex >= b.len:
     return err("Line index out of bounds: " & $lineIndex)
 
@@ -301,6 +317,8 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
   ## If selection extends to/past line end, includes the newline
   ## Returns error if positions are out of bounds
 
+  if b.readOnly:
+    return err("Buffer is read-only")
   if startPos.line < 0 or startPos.line >= b.len:
     return err("Start line position out of bounds: " & $startPos.line)
 
@@ -354,6 +372,8 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
   ## Example: count=1 joins 2 lines, count=2 joins 3 lines, etc.
   ## Returns error if there aren't enough lines to join
 
+  if b.readOnly:
+    return err("Buffer is read-only")
   if startLine < 0 or startLine >= b.len:
     return err("Line index out of bounds: " & $startLine)
 

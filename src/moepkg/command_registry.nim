@@ -257,17 +257,18 @@ proc executeCommand*(
       )
     discard ctx.buffer.foldState.openFoldsInRange(selLo, selHi)
 
-  # Block buffer-modifying commands on read-only buffers (log viewer, quick-run
-  # output, etc.). Yanks and motions stay allowed so the user can still copy.
+  # Primitive-level checks in moepkg/buffer/edit.nim reject writes on readOnly
+  # buffers at the choke point, but several operators (indent, outdent, case
+  # conversion, visual replace/surround) discard the primitive results so the
+  # user would never see the rejection. Keep this gate as defense-in-depth to
+  # surface a status message and cancel any visual selection or pending operator.
   if (isEditCommand or isVisualEditCommand) and ctx.buffer.readOnly:
     if isVisualEditCommand:
-      # Cancel the visual selection so the user returns to a stable state.
       ctx.state.visualSelection.active = false
       ctx.state.mode = ctx.state.previousMode
     ctx.state.editState.pendingOperator = none(PendingOperator)
     ctx.state.statusMessage = "Buffer is read-only"
     return ok(())
-
   case cmd.kind
   of ctMotion:
     # ; / , replay the last f/F/t/T (resolved from editState), reusing the same
