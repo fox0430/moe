@@ -151,6 +151,22 @@ suite "CrossBackend - Editing Operations":
       )
       check b[0] == "Hello"
 
+    test "deleteRange join line from end [" & $be & "]":
+      let b = buf("foo\nbar", be)
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 3), BufferPosition(line: 0, column: 3)
+      )
+      check b.len == 1
+      check b[0] == "foobar"
+
+    test "deleteRange at end of last line [" & $be & "]":
+      let b = buf("foo", be)
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 3), BufferPosition(line: 0, column: 3)
+      )
+      check b.len == 1
+      check b[0] == "foo"
+
     test "deleteRange multi line [" & $be & "]":
       let b = buf("Line1\nLine2\nLine3", be)
       discard b.deleteRange(
@@ -234,6 +250,16 @@ suite "CrossBackend - Undo/Redo":
       check b[0] == "Line1"
       check b[1] == "Line2"
       check b[2] == "Line3"
+
+    test "undo deleteRange join line from end [" & $be & "]":
+      let b = buf("foo\nbar", be)
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 3), BufferPosition(line: 0, column: 3)
+      )
+      discard b.undo()
+      check b.len == 2
+      check b[0] == "foo"
+      check b[1] == "bar"
 
     test "multiple undo/redo [" & $be & "]":
       let b = buf("Hello", be)

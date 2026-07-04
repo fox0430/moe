@@ -175,7 +175,7 @@ proc deleteRangeSingleLine*(
       # Multi-line: join with next line
       let nextLine = b.getLine(endPos.line + 1)
       let prefix =
-        if startPos.column < lineLen:
+        if startPos.column <= lineLen:
           line.runeSubStr(0, startPos.column)
         else:
           ""
@@ -188,7 +188,7 @@ proc deleteRangeSingleLine*(
     else:
       # Last line: just delete to end
       let newLine =
-        if startPos.column < lineLen:
+        if startPos.column <= lineLen:
           line.runeSubStr(0, startPos.column)
         else:
           ""
