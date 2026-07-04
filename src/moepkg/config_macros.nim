@@ -81,6 +81,8 @@
 
 import std/[macros, strutils]
 
+import help_description
+
 ## Apply to a section type to give it a TOML section name.
 ##   StandardConfig* {.cfgSection: "Standard".} = object
 template cfgSection*(name: string) {.pragma.}
@@ -166,22 +168,6 @@ template cfgDocDefault*(v: untyped) {.pragma.}
 ## the macro raises a compile-time error to prevent silently undocumented
 ## settings.
 template cfgDocSkip*() {.pragma.}
-
-proc escapeMarkdownCell*(s: string): string =
-  ## Escape characters that would corrupt a single markdown table cell:
-  ## unescaped `|` ends the cell, and a literal newline starts a new row.
-  ## Backslash is escaped so a stray `\|` in source data round-trips faithfully.
-  result = newStringOfCap(s.len)
-  for c in s:
-    case c
-    of '\\':
-      result.add("\\\\")
-    of '|':
-      result.add("\\|")
-    of '\n', '\r':
-      result.add(' ')
-    else:
-      result.add(c)
 
 proc unwrapName(node: NimNode): NimNode =
   ## Strip `*` postfix from an ident.
@@ -1081,9 +1067,9 @@ macro generateSectionMarkdown*(
 
     # Static cells (name / type / description) are known at macro-expansion
     # time, so escape them now and emit literals — no runtime cost.
-    let nameLit = newLit(escapeMarkdownCell(fieldName))
-    let typeLit = newLit(escapeMarkdownCell(docTypeLabel(typeNode)))
-    let descLit = newLit(escapeMarkdownCell(descArg.strVal))
+    let nameLit = newLit(escapeMdCell(fieldName))
+    let typeLit = newLit(escapeMdCell(docTypeLabel(typeNode)))
+    let descLit = newLit(escapeMdCell(descArg.strVal))
 
     # Default value: prefer cfgDocDefault override if present (for fields
     # whose runtime default varies by environment), otherwise read the
@@ -1113,6 +1099,6 @@ macro generateSectionMarkdown*(
     result.add quote do:
       `resVar` &=
         "| " & `nameLit` & " | " & `typeLit` & " | " &
-        escapeMarkdownCell(formatDocDefault(`defaultExpr`)) & " | " & `descLit` & " |\n"
+        escapeMdCell(formatDocDefault(`defaultExpr`)) & " | " & `descLit` & " |\n"
 
   result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(result, resVar))
