@@ -389,22 +389,6 @@ proc nodeToFileEntry(node: FileTreeNode): FileEntry =
     targetKind: node.targetKind,
   )
 
-proc truncateToWidth(text: string, maxWidth: int): string =
-  ## Truncate a string to fit within maxWidth display columns.
-  ## Adds "~" suffix if truncated.
-  if maxWidth <= 0:
-    return ""
-  if displayWidth(text) <= maxWidth:
-    return text
-  var currentWidth = 0
-  for r in text.runes:
-    let w = runeWidth(r)
-    if currentWidth + w >= maxWidth:
-      result.add("~")
-      return
-    currentWidth += w
-    result.add($r)
-
 proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffer =
   ## Create a TextBuffer from the flat list for rendering via normal view path.
   var content = ""
@@ -433,7 +417,7 @@ proc createFileTreeTextBuffer*(state: FileTreeState, showIcons: bool): TextBuffe
 
     var line = indent & marker & icon & name
     if state.width > 0 and displayWidth(line) > state.width:
-      line = truncateToWidth(line, state.width)
+      line = truncateToWidthWithSuffix(line, state.width, "~")
     lines.add(line)
     if i > 0:
       content.add('\n')

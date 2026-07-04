@@ -1007,3 +1007,45 @@ suite "unicode_utils - setRuneCell":
     check x == 2
     check buf[0, 0].symbol == "e" & $Rune(0x0301)
     check buf[1, 0].symbol == "X"
+
+suite "truncateToWidthWithSuffix":
+  test "returns empty string when maxWidth <= 0":
+    check truncateToWidthWithSuffix("hello", 0) == ""
+    check truncateToWidthWithSuffix("hello", -2) == ""
+
+  test "returns empty string when suffix is wider than maxWidth":
+    let suffix = "~~~~" # display width 4
+    check truncateToWidthWithSuffix("hello", 2, suffix) == ""
+
+  test "returns original text when it fits within maxWidth":
+    check truncateToWidthWithSuffix("hello", 10) == "hello"
+    check truncateToWidthWithSuffix("hello", 5) == "hello"
+
+  test "handles empty text":
+    check truncateToWidthWithSuffix("", 10) == ""
+    check truncateToWidthWithSuffix("", 0) == ""
+
+  test "uses default suffix \"...\"":
+    let result = truncateToWidthWithSuffix("hello world", 8)
+    check result == "hello..."
+    check displayWidth(result) <= 8
+
+  test "truncates ASCII text correctly":
+    let result = truncateToWidthWithSuffix("hello world", 8, "~")
+    check result == "hello w~"
+    check displayWidth(result) <= 8
+
+  test "truncates mixed half/full-width text":
+    let result = truncateToWidthWithSuffix("ab漢cd", 4, "~")
+    check result == "ab~"
+    check displayWidth(result) <= 4
+
+  test "truncates full-width chars exactly at boundary with suffix":
+    let result = truncateToWidthWithSuffix("日本語", 5, "~")
+    check result == "日本~"
+    check displayWidth(result) <= 5
+
+  test "suffix fits exactly when text is one full-width char":
+    let result = truncateToWidthWithSuffix("日本", 3, "~")
+    check result == "日~"
+    check displayWidth(result) <= 3

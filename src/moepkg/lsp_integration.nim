@@ -298,19 +298,6 @@ proc getLatestActiveProgress*(lsp: LspIntegration): Option[LspProgressState] =
     return some(latest)
   return none(LspProgressState)
 
-proc truncateToWidth(s: string, maxWidth: int): string =
-  ## Truncate string to fit within maxWidth display columns
-  ## Adds "..." if truncated (single pass through runes)
-  var currentWidth = 0
-  for r in s.runes:
-    let runeWidth = displayWidth($r)
-    if currentWidth + runeWidth + 3 > maxWidth: # +3 for "..."
-      result.add("...")
-      return
-    currentWidth += runeWidth
-    result.add($r)
-  # If we get here, no truncation needed
-
 proc getProgressText*(state: LspProgressState): string =
   ## Format progress state as a display string with length limit
   result = state.title
@@ -320,7 +307,7 @@ proc getProgressText*(state: LspProgressState): string =
     result &= " (" & $state.percentage.get & "%)"
 
   # Truncate if too long
-  result = truncateToWidth(result, MaxProgressTextLen)
+  result = truncateToWidthWithSuffix(result, MaxProgressTextLen)
 
 proc setDiagnosticsCallback*(
     lsp: LspIntegration,
