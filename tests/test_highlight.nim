@@ -2719,7 +2719,7 @@ suite "Highlight - Semantic overlay":
 
   test "Forward edit preserves overlay via the extmark shift (design doc §6)":
     # Design doc §6: stale-but-close colouring beats flicker on every keystroke.
-    # `pushUndoChange` calls `shiftSemanticOverlayForChange`, which advances
+    # `pushUndoChange` calls `emitRowColRemapEvents`, which advances
     # `semanticContentVersion` so `updateHighlight`'s fallback clear stays quiet
     # for rows untouched by the edit.
     var buf = newTextBuffer("let x = 1\nlet y = 2\n")
@@ -3893,7 +3893,7 @@ suite "Highlight - Semantic overlay edit shift":
     h.semanticShiftForMultiLineEdit(1, 3, 5)
     check h.semantic.len == 0
 
-  # Integration: verify pushUndoChange -> shiftSemanticOverlayForChange keeps
+  # Integration: verify pushUndoChange -> emitRowColRemapEvents keeps
   # the overlay consistent so updateHighlight's fallback clear stays quiet.
   test "insertText integration keeps unaffected rows and shifts columns":
     let b = newTextBuffer("hello\nworld\nfoo bar\n")

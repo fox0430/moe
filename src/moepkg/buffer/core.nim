@@ -177,6 +177,22 @@ type
         ## tree restore is absolute; only this side array is delta-encoded.
       snapshotFoldState*: FoldState
 
+  RowColRemapEventKind* = enum
+    rrekSingleLine
+    rrekMultiLine
+    rrekClear
+
+  RowColRemapEvent* = object
+    case kind*: RowColRemapEventKind
+    of rrekSingleLine:
+      row*, editCol*, colDelta*, lineRuneLenAfter*: int
+    of rrekMultiLine:
+      firstAffectedRow*, lastAffectedRowBefore*, lastAffectedRowAfter*: int
+    of rrekClear:
+      nil
+
+  RowColRemapCallback* = proc(b: TextBuffer, event: RowColRemapEvent) {.closure.}
+
   BufferTransaction* = object ## Transaction for grouping multiple changes
     changes*: seq[BufferChange]
     description*: string
@@ -256,6 +272,9 @@ type
     # Modified line tracking (session-based, cleared on save)
     modifiedLines*: seq[LineModificationKind]
       # How each line was modified since last save
+
+    # Row/col remap subscribers (decoration shift on buffer mutation)
+    remapCallbacks: seq[RowColRemapCallback]
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -531,6 +550,10 @@ iterator lines*(b: TextBuffer): string =
     for line in b.storage.pieceTable.lines:
       yield line
 
+# Forward declaration for the semantic overlay remap callback. Registered
+# in newTextBuffer and driven by emitRowColRemapEvents below.
+proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent)
+
 proc newBufferStorage*(backend: BufferBackend, content: sink string): BufferStorage =
   ## Build a fresh backend value of `backend` from `content` (consumed exactly
   ## once). Assigning the whole result to `TextBuffer.storage` both constructs a
@@ -574,6 +597,9 @@ proc newTextBuffer*(
   for line in result.lines:
     runesBuffer.add(line.toRunes())
   result.highlight = initHighlight(runesBuffer)
+
+  result.remapCallbacks = @[]
+  result.remapCallbacks.add(semanticRemapCallback)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =
   ## Bracket operator for accessing lines by index
@@ -704,64 +730,128 @@ proc countNewlines(s: string): int {.inline.} =
     if c == '\n':
       inc result
 
-proc shiftSemanticOverlayForChange*(b: TextBuffer, change: BufferChange) =
-  ## Extmark-style shift of the LSP semantic overlay after a forward edit.
-  ## Design doc §6 chooses stale-but-close colouring over per-keystroke
-  ## flicker; this shifts row keys / column offsets so most of the screen
-  ## keeps its previous colours until the debounced re-request lands.
-  ## Complex or ambiguous cases (ckSnapshot) fall through to the clear-on-
-  ## version-mismatch safety net in `buffer/highlight.updateHighlight`.
+proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Subscriber callback that shifts the LSP semantic overlay row/col keys
+  ## to stay approximately correct across edits.
   if b.highlight.isNil or b.highlight.semantic.len == 0:
     return
+  case event.kind
+  of rrekSingleLine:
+    b.highlight.semanticShiftForSingleLineEdit(
+      event.row, event.editCol, event.colDelta, event.lineRuneLenAfter
+    )
+  of rrekMultiLine:
+    b.highlight.semanticShiftForMultiLineEdit(
+      event.firstAffectedRow, event.lastAffectedRowBefore, event.lastAffectedRowAfter
+    )
+  of rrekClear:
+    b.highlight.semantic.clear()
+    b.highlight.semanticContentVersion = -1
+    return
+  b.highlight.semanticContentVersion = b.contentVersion
+
+proc emitRowColRemapEvents*(b: TextBuffer, change: BufferChange) =
+  ## Compute row/col remap events from a forward edit and notify all
+  ## subscribers. Row-keyed decorations (semantic overlay, inline diagnostics,
+  ## etc.) register a RowColRemapCallback to keep their line/column offsets
+  ## approximately in sync between LSP re-requests.
   case change.kind
+  of ckTransaction:
+    for inner in change.transactionChanges:
+      b.emitRowColRemapEvents(inner)
+    return
+  of ckSnapshot:
+    let event = RowColRemapEvent(kind: rrekClear)
+    for cb in b.remapCallbacks:
+      cb(b, event)
+    return
   of ckInsertText:
     let nl = countNewlines(change.insertText)
     if nl == 0:
       let colDelta = change.insertText.runeLen
       let newLen = b.getLine(change.insertPos.line).charLen
-      b.highlight.semanticShiftForSingleLineEdit(
-        change.insertPos.line, change.insertPos.column, colDelta, newLen
+      let event = RowColRemapEvent(
+        kind: rrekSingleLine,
+        row: change.insertPos.line,
+        editCol: change.insertPos.column,
+        colDelta: colDelta,
+        lineRuneLenAfter: newLen,
       )
+      for cb in b.remapCallbacks:
+        cb(b, event)
     else:
-      b.highlight.semanticShiftForMultiLineEdit(
-        change.insertPos.line, change.insertPos.line, change.insertPos.line + nl
+      let event = RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.insertPos.line,
+        lastAffectedRowBefore: change.insertPos.line,
+        lastAffectedRowAfter: change.insertPos.line + nl,
       )
+      for cb in b.remapCallbacks:
+        cb(b, event)
   of ckDeleteText:
     let nl = countNewlines(change.deletedText)
     if nl == 0:
       let colDelta = -change.deletedText.runeLen
       let newLen = b.getLine(change.deletePos.line).charLen
-      b.highlight.semanticShiftForSingleLineEdit(
-        change.deletePos.line, change.deletePos.column, colDelta, newLen
+      let event = RowColRemapEvent(
+        kind: rrekSingleLine,
+        row: change.deletePos.line,
+        editCol: change.deletePos.column,
+        colDelta: colDelta,
+        lineRuneLenAfter: newLen,
       )
+      for cb in b.remapCallbacks:
+        cb(b, event)
     else:
-      b.highlight.semanticShiftForMultiLineEdit(
-        change.deletePos.line, change.deletePos.line + nl, change.deletePos.line
+      let event = RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.deletePos.line,
+        lastAffectedRowBefore: change.deletePos.line + nl,
+        lastAffectedRowAfter: change.deletePos.line,
       )
+      for cb in b.remapCallbacks:
+        cb(b, event)
   of ckInsertLine:
-    b.highlight.semanticShiftForMultiLineEdit(
-      change.insertLineIdx, change.insertLineIdx - 1, change.insertLineIdx
+    let event = RowColRemapEvent(
+      kind: rrekMultiLine,
+      firstAffectedRow: change.insertLineIdx,
+      lastAffectedRowBefore: change.insertLineIdx - 1,
+      lastAffectedRowAfter: change.insertLineIdx,
     )
+    for cb in b.remapCallbacks:
+      cb(b, event)
   of ckDeleteLine:
-    b.highlight.semanticShiftForMultiLineEdit(
-      change.deleteLineIdx, change.deleteLineIdx, change.deleteLineIdx - 1
+    let event = RowColRemapEvent(
+      kind: rrekMultiLine,
+      firstAffectedRow: change.deleteLineIdx,
+      lastAffectedRowBefore: change.deleteLineIdx,
+      lastAffectedRowAfter: change.deleteLineIdx - 1,
     )
+    for cb in b.remapCallbacks:
+      cb(b, event)
   of ckDeleteRange:
-    b.highlight.semanticShiftForMultiLineEdit(
-      change.deleteStartPos.line, change.deleteEndPos.line, change.deleteStartPos.line
+    let event = RowColRemapEvent(
+      kind: rrekMultiLine,
+      firstAffectedRow: change.deleteStartPos.line,
+      lastAffectedRowBefore: change.deleteEndPos.line,
+      lastAffectedRowAfter: change.deleteStartPos.line,
     )
+    for cb in b.remapCallbacks:
+      cb(b, event)
   of ckReplaceLine:
-    b.highlight.semanticShiftForMultiLineEdit(
-      change.replaceLineIdx, change.replaceLineIdx, change.replaceLineIdx
+    let event = RowColRemapEvent(
+      kind: rrekMultiLine,
+      firstAffectedRow: change.replaceLineIdx,
+      lastAffectedRowBefore: change.replaceLineIdx,
+      lastAffectedRowAfter: change.replaceLineIdx,
     )
-  of ckTransaction:
-    for inner in change.transactionChanges:
-      b.shiftSemanticOverlayForChange(inner)
-  of ckSnapshot:
-    b.highlight.semantic.clear()
-    b.highlight.semanticContentVersion = -1
-    return
-  b.highlight.semanticContentVersion = b.contentVersion
+    for cb in b.remapCallbacks:
+      cb(b, event)
+
+proc registerRowColRemapCallback*(b: TextBuffer, cb: RowColRemapCallback) =
+  ## Register a callback to receive row/col remap events. All registered
+  ## callbacks are invoked on every forward edit, before the frame repaints.
+  b.remapCallbacks.add(cb)
 
 # Memory usage monitoring
 proc estimateMemoryUsage*(buffer: TextBuffer): int =
@@ -895,7 +985,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # Shift the semantic overlay to match the new content BEFORE the frame
   # reaches updateHighlight; without this the version bump above would trip
   # updateHighlight's mismatch guard and wipe the overlay every keystroke.
-  b.shiftSemanticOverlayForChange(change)
+  b.emitRowColRemapEvents(change)
 
   # Mark highlight as needing update and track changed range
   b.highlightNeedsUpdate = true
