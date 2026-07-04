@@ -24,7 +24,7 @@
 
 import std/[strformat, strutils, options]
 
-import buffer, list_viewer
+import buffer, list_viewer, lsp_service
 import lsp/protocol/types as lspTypes
 import types/callhierarchy_viewer_types
 
@@ -46,9 +46,7 @@ proc newCallHierarchyViewerState*(
 
 proc uriToPath(uri: string): string =
   ## Convert file:// URI to path
-  if uri.startsWith("file://"):
-    return uri[7 ..^ 1]
-  return uri
+  lsp_service.uriToPath(uri)
 
 proc formatLine*(item: lspTypes.CallHierarchyItem): string =
   ## Format a call hierarchy item as a display line

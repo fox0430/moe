@@ -337,6 +337,10 @@ suite "fileUriToPath":
   test "file:// URI":
     check fileUriToPath("file:///home/user/test.txt") == "/home/user/test.txt"
 
+  test "Percent-encoded URI":
+    check fileUriToPath("file:///home/user/my%20file.txt") == "/home/user/my file.txt"
+    check fileUriToPath("file:///path/%E3%81%82.txt") == "/path/あ.txt"
+
   test "Plain path passthrough":
     check fileUriToPath("/tmp/test.txt") == "/tmp/test.txt"
 
