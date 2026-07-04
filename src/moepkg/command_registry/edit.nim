@@ -1540,16 +1540,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
   # Undo/Redo commands
   proc clampCursorToBuffer(ctx: CommandContext) =
-    ## Clamp cursor position to valid buffer range
-    if ctx.buffer.len == 0:
-      ctx.cursor = BufferPosition(line: 0, column: 0)
-    else:
-      if ctx.cursor.line >= ctx.buffer.len:
-        ctx.cursor.line = ctx.buffer.len - 1
-      let line = ctx.buffer.getLine(ctx.cursor.line)
-      let maxCol = max(0, line.charLen - 1)
-      if ctx.cursor.column > maxCol:
-        ctx.cursor.column = maxCol
+    ## Clamp cursor position to valid buffer range (delegates to CursorManager)
+    let mgr = ctx.motionController.cursorManager
+    let pos = CursorPosition(y: ctx.cursor.line, x: ctx.cursor.column)
+    let clamped = mgr.clampPosition(pos, ctx.buffer)
+    ctx.cursor = BufferPosition(line: clamped.y, column: clamped.x)
 
   registry.register(
     builtin(bcEditUndo),

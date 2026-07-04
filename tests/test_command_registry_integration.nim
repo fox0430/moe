@@ -3379,25 +3379,122 @@ suite "Handler - Basic Motion Commands":
     check ctx.cursor.line == 4
 
 suite "Handler - Undo/Redo Commands":
-  test "undo (u)":
+  test "undo with nothing to undo returns error":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    discard registry.execute(ctx, builtin(bcEditUndo))
-    # Undo may fail if there's nothing to undo
-    check true # Just verify no crash
+    let r = registry.execute(ctx, builtin(bcEditUndo))
+    check r.isErr
 
-  test "redo (Ctrl+r)":
+  test "redo with nothing to redo returns error":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    discard registry.execute(ctx, builtin(bcEditRedo))
-    # Redo may fail if there's nothing to redo
-    check true # Just verify no crash
+    let r = registry.execute(ctx, builtin(bcEditRedo))
+    check r.isErr
+
+  test "undo after insert restores content and cursor":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 5)
+    let registry = createTestRegistry()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), " world")
+    check buffer[0] == "hello world"
+
+    check registry.execute(ctx, builtin(bcEditUndo)).isOk
+    check buffer[0] == "hello"
+    check ctx.cursor.line == 0
+    # After undo, cursor is clamped to max(0, charLen - 1) = 4 (Normal mode)
+    check ctx.cursor.column == 4
+
+  test "undo after end-of-line insert clamps column":
+    let buffer = newTextBuffer("ab")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 2)
+    let registry = createTestRegistry()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 2), "cd")
+    check buffer[0] == "abcd"
+
+    check registry.execute(ctx, builtin(bcEditUndo)).isOk
+    check buffer[0] == "ab"
+    # Undo returns cursor at column 2 (max(0, 2 - 1) = 1 for Normal mode)
+    check ctx.cursor.column == 1
+
+  test "undo with count 2":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 5)
+    let registry = createTestRegistry()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), "A")
+    discard buffer.insertText(BufferPosition(line: 0, column: 6), "B")
+    check buffer[0] == "helloAB"
+
+    let cmd = Command(kind: ctAction, commandId: "edit.undo", count: 2)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello"
+
+  test "undo count larger than stack stops at limit":
+    let buffer = newTextBuffer("x")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 1)
+    let registry = createTestRegistry()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 1), "y")
+    check buffer[0] == "xy"
+
+    let cmd = Command(kind: ctAction, commandId: "edit.undo", count: 5)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "x"
+
+  test "redo after undo restores content and cursor":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 5)
+    let registry = createTestRegistry()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), " world")
+    check buffer[0] == "hello world"
+
+    check registry.execute(ctx, builtin(bcEditUndo)).isOk
+    check buffer[0] == "hello"
+
+    check registry.execute(ctx, builtin(bcEditRedo)).isOk
+    check buffer[0] == "hello world"
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 5
+
+  test "redo with count 2":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 5)
+    let registry = createTestRegistry()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), "A")
+    discard buffer.insertText(BufferPosition(line: 0, column: 6), "B")
+    check buffer[0] == "helloAB"
+
+    # Undo both
+    let undoCmd = Command(kind: ctAction, commandId: "edit.undo", count: 2)
+    check registry.executeCommand(ctx, undoCmd).isOk
+    check buffer[0] == "hello"
+
+    # Redo both
+    let redoCmd = Command(kind: ctAction, commandId: "edit.redo", count: 2)
+    check registry.executeCommand(ctx, redoCmd).isOk
+    check buffer[0] == "helloAB"
 
 suite "Handler - Jump Commands":
   test "jump back (Ctrl+o)":
