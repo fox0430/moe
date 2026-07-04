@@ -15,7 +15,7 @@
 
 import std/[macros, options, os, sequtils, strutils]
 
-import ../src/moepkg/[color, config, config_macros]
+import ../src/moepkg/[color, config, config_macros, help_description]
 
 # default-value formatters used by `generateSectionMarkdown`
 
@@ -199,8 +199,8 @@ proc generateColorsMarkdown(): string =
   for index in EditorColorPairIndex:
     if index == EditorColorPairIndex.default:
       continue
-    let key = escapeMarkdownCell(toTomlColorKey(index))
-    let desc = escapeMarkdownCell(EditorColorPairDocDescription[index])
+    let key = escapeMdCell(toTomlColorKey(index))
+    let desc = escapeMdCell(EditorColorPairDocDescription[index])
     result &= "| " & key & " | " & desc & " |\n"
 
 const ExtraSectionNames* = @["Colors"]

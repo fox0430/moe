@@ -21,8 +21,7 @@ import std/[unittest, macros, options, sequtils, strutils, tables]
 
 import pkg/parsetoml
 
-import ../src/moepkg/config_macros
-import ../src/moepkg/config
+import ../src/moepkg/[config_macros, config, help_description]
 import ../src/moepkg/config_loader {.all.}
 
 # Sample annotated type — proves the pragma vocabulary parses and is reflectable
@@ -420,19 +419,19 @@ suite "config_macros: cfgDeprecated":
     check "Invalid value" in vr.toErrorMessages[0]
     check vr.toDeprecationMessages.len == 1
 
-suite "config_macros: escapeMarkdownCell":
+suite "config_macros: escapeMdCell":
   test "passes through plain text unchanged":
-    check escapeMarkdownCell("hello world") == "hello world"
-    check escapeMarkdownCell("") == ""
+    check escapeMdCell("hello world") == "hello world"
+    check escapeMdCell("") == ""
 
   test "escapes pipe so the cell cannot terminate":
-    check escapeMarkdownCell("a|b") == "a\\|b"
-    check escapeMarkdownCell("|") == "\\|"
+    check escapeMdCell("a|b") == "a\\|b"
+    check escapeMdCell("|") == "\\|"
 
   test "escapes backslash before pipe escaping (preserves round-trip)":
-    check escapeMarkdownCell("a\\b") == "a\\\\b"
-    check escapeMarkdownCell("\\|") == "\\\\\\|"
+    check escapeMdCell("a\\b") == "a\\\\b"
+    check escapeMdCell("\\|") == "\\\\\\|"
 
   test "collapses newlines to spaces so the row cannot break":
-    check escapeMarkdownCell("a\nb") == "a b"
-    check escapeMarkdownCell("a\r\nb") == "a  b"
+    check escapeMdCell("a\nb") == "a b"
+    check escapeMdCell("a\r\nb") == "a  b"
