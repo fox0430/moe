@@ -638,3 +638,25 @@ suite "GitDiff - Integration tests with git repository":
 
     check completed
     check diffLineCount == 0
+
+  test "getHeadContent returns committed content":
+    let testFile = testDir / "test.txt"
+    let content = "line 1\nline 2\nline 3\n"
+    writeFile(testFile, content)
+    discard execCmdEx("git add test.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
+
+    let result = getHeadContent("test.txt", testDir)
+
+    check result.isOk
+    check result.get == content
+
+  test "getHeadContent returns error for untracked file":
+    discard
+      execCmdEx("git commit --allow-empty -m 'Initial commit'", workingDir = testDir)
+    let testFile = testDir / "untracked.txt"
+    writeFile(testFile, "content\n")
+
+    let result = getHeadContent("untracked.txt", testDir)
+
+    check result.isErr
