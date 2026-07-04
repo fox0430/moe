@@ -192,10 +192,10 @@ proc updateHighlight*(b: TextBuffer) =
       b.highlight = Highlight(colorSegments: @[])
 
     # Fallback: drop a stale overlay when the forward-edit path (`pushUndoChange`
-    # -> `shiftSemanticOverlayForChange`) did not shift the overlay to the new
+    # -> `emitRowColRemapEvents`) did not shift the overlay to the new
     # `contentVersion`. Catches undo/redo, NoUndo previews, reload, and the
     # ckSnapshot bail — the design doc §6 stale-but-close preservation lives
-    # in `shiftSemanticOverlayForChange`, not here.
+    # in `emitRowColRemapEvents`, not here.
     if b.highlight.semantic.len > 0 and
         b.highlight.semanticContentVersion != b.contentVersion:
       b.highlight.semantic.clear()
