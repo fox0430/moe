@@ -144,8 +144,7 @@ proc moveCursorToLspPosition(e: Editor, buffer: TextBuffer, lspLine, lspColumn: 
     else:
       ""
   # Convert LSP UTF-16 character offset to character index
-  let utf8Col = utf16OffsetToUtf8(lineText, lspColumn)
-  let charCol = byteToCharPos(lineText, utf8Col)
+  let charCol = utf16ToRuneIndex(lineText, lspColumn)
   let targetCol = min(charCol, max(0, lineText.charLen - 1))
   e.activeWindow.cursor.line = targetLine
   e.activeWindow.cursor.column = max(0, targetCol)
