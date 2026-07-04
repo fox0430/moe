@@ -150,6 +150,29 @@ proc displayWidthUpTo*(text: string, charPos: int): int =
     result += runeWidth(rune)
     currentChar += 1
 
+proc truncateToWidthWithSuffix*(
+    text: string, maxWidth: int, suffix: string = "..."
+): string =
+  ## Truncate `text` so the result (including `suffix`) fits within
+  ## `maxWidth` display columns.  If the text already fits, it is returned
+  ## unchanged.
+  if maxWidth <= 0:
+    return ""
+  let suffixWidth = displayWidth(suffix)
+  let textWidth = displayWidth(text)
+  if textWidth <= maxWidth:
+    return text
+  if suffixWidth > maxWidth:
+    return ""
+  var currentWidth = 0
+  for r in text.runes:
+    let w = runeWidth(r)
+    if currentWidth + w + suffixWidth > maxWidth:
+      result.add(suffix)
+      return
+    currentWidth += w
+    result.add($r)
+
 proc charToBytePosCached*(
     text: string, charPos: int, cache: var CursorPosCache, lineNum: int, changeSeq: int
 ): int =

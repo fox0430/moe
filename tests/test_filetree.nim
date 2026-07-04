@@ -792,17 +792,17 @@ suite "FileTreeState":
     check selectedPath.isSome
     check selectedPath.get() == tmpDir / "sub" / "file.txt"
 
-  test "truncateToWidth does not truncate when full-width chars fit exactly":
+  test "truncateToWidthWithSuffix does not truncate when full-width chars fit exactly":
     # 5 CJK chars = 10 columns, maxWidth = 10 → should fit without "~"
     let text = "日本語全角" # 5 chars × 2 columns = 10
-    let result = truncateToWidth(text, 10)
+    let result = truncateToWidthWithSuffix(text, 10, "~")
     check result == text
     check not result.endsWith("~")
 
-  test "truncateToWidth truncates full-width chars that exceed maxWidth":
+  test "truncateToWidthWithSuffix truncates full-width chars that exceed maxWidth":
     # 6 CJK chars = 12 columns, maxWidth = 10 → needs truncation
     let text = "日本語全角文" # 6 chars × 2 columns = 12
-    let result = truncateToWidth(text, 10)
+    let result = truncateToWidthWithSuffix(text, 10, "~")
     check displayWidth(result) <= 10
     check result.endsWith("~")
 
