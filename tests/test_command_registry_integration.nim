@@ -1797,6 +1797,26 @@ suite "Handler - Increment/Decrement":
     check buffer[0] == "あいう41"
     check ctx.cursor.column == 3 # Character index of '4' in the new line
 
+  test "Ctrl-A on high(int) does not crash":
+    let h = $high(int)
+    let buffer = newTextBuffer(h)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcEditIncrementNumber)).isOk
+    check buffer[0] == h
+
+  test "Ctrl-X on low(int) does not crash":
+    let l = $low(int)
+    let buffer = newTextBuffer(l)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcEditDecrementNumber)).isOk
+    check buffer[0] == l
+
 suite "Handler - Indent/Dedent":
   test "indent line (>>)":
     let buffer = newTextBuffer("hello")
