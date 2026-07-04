@@ -955,10 +955,6 @@ proc hasOverlay*(state: EditorState): bool =
   ## Check if an overlay is currently active
   state.overlay.isSome
 
-proc overlayKind*(state: EditorState): Option[OverlayKind] =
-  ## Get the kind of active overlay, if any
-  state.overlay
-
 proc isCommandOverlay*(state: EditorState): bool =
   ## Check if command overlay is active
   state.overlay == some(okCommand)
@@ -1018,12 +1014,6 @@ proc exitOverlay*(state: EditorState) =
 proc baseMode*(state: EditorState): EditorMode =
   ## Get the base mode (the mode under the overlay)
   ## With overlays, state.mode always holds the base mode
-  state.mode
-
-proc effectiveMode*(state: EditorState): EditorMode =
-  ## Get the effective mode for display purposes
-  ## Returns the overlay mode if active, otherwise the base mode
-  ## This is for backward compatibility with code that checks state.mode
   state.mode
 
 proc modeStateKind*(mode: EditorMode): ModeStateKind =

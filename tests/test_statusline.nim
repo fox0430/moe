@@ -278,23 +278,6 @@ suite "StatusLine - setEncodingVisible":
 
     check state.display.showEncoding == false
 
-suite "StatusLine - toggleLineEnding":
-  test "Toggle from false to true":
-    var state = createTestState()
-    check state.display.showLineEnding == false
-
-    toggleLineEnding(state)
-
-    check state.display.showLineEnding == true
-
-  test "Toggle from true to false":
-    var state = createTestState()
-    state.display.showLineEnding = true
-
-    toggleLineEnding(state)
-
-    check state.display.showLineEnding == false
-
 suite "StatusLine - setLineEndingVisible":
   test "Set visible to true":
     var state = createTestState()

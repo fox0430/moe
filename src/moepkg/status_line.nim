@@ -107,10 +107,6 @@ proc setEncodingVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of encoding in status line
   state.display.showEncoding = visible
 
-proc toggleLineEnding*(state: var EditorState) =
-  ## Toggle the visibility of line ending in status line
-  state.display.showLineEnding = not state.display.showLineEnding
-
 proc setLineEndingVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of line ending in status line
   state.display.showLineEnding = visible

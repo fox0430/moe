@@ -365,47 +365,6 @@ proc getGitDiff*(filePath: string): Result[GitDiffInfo, string] =
   # Parse git diff output using shared parser
   return ok(parseDiffOutput(output))
 
-proc startGitDiffAsync*(filePath: string): Result[GitDiffProcess, string] =
-  ## Start git diff as a background process
-  ## Returns GitDiffProcess object that can be polled for completion
-  ## Use checkGitDiffComplete() to check if the process has finished
-  # Check if file exists
-  if not fileExists(filePath):
-    return err("File does not exist: " & filePath)
-
-  # Get the directory containing the file
-  let fileDir = filePath.parentDir()
-  let fileName = filePath.extractFilename()
-
-  # Prepare git diff command
-  let gitCmd = "git"
-  let args = ["diff", "--unified=0", "--", fileName]
-
-  # Start the process in background
-  let process =
-    try:
-      startProcess(
-        gitCmd,
-        workingDir = fileDir,
-        args = args,
-        options = {poUsePath, poStdErrToStdOut},
-      )
-    except OSError as e:
-      return err("Failed to start git process: " & e.msg)
-
-  # Create and return the process object
-  let diffProc = GitDiffProcess(
-    process: process,
-    startTime: epochTime(),
-    filePath: filePath,
-    workingDir: fileDir,
-    isBufferDiff: false,
-    tempOriginal: "",
-    tempModified: "",
-  )
-
-  return ok(diffProc)
-
 proc checkGitDiffComplete*(
     diffProc: GitDiffProcess, timeout: float = DEFAULT_GIT_DIFF_TIMEOUT
 ): Option[Result[GitDiffInfo, string]] =

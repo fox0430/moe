@@ -161,10 +161,6 @@ proc snippetTabStopStyle*(): Style =
   ## Get active snippet tabstop placeholder style from theme
   getThemeStyle(EditorColorPairIndex.snippetTabStop)
 
-proc codeLensStyle*(): Style =
-  ## Get code lens style from theme
-  getThemeStyle(EditorColorPairIndex.codeLens)
-
 # Document Highlight styles (LSP textDocument/documentHighlight)
 proc documentHighlightTextStyle*(): Style =
   ## Style for generic text occurrence (DocumentHighlightKind.Text)
