@@ -1023,6 +1023,11 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
 
     let pasteText = state.registers.getRegisterContent(regName).normalizeNewlines()
 
+    # Clear pending register immediately so downstream delete operations
+    # (e.g. deleteBlockSelection) don't overwrite the named/clipboard register
+    # that we just read from.
+    state.pendingRegister = none(char)
+
     if pasteText.len == 0:
       # Nothing to paste, just exit visual mode
       state.visualSelection.active = false
