@@ -217,7 +217,7 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       # Snapshot the buffer state before awaiting: the server's edits are
       # positioned against this state and must not be applied if the user
       # typed while the request was in flight
-      let seqBeforeRequest = activeBuffer.changeSeq
+      let versionBeforeRequest = activeBuffer.contentVersion
 
       # Get formatting result from LSP
       let formatResult = await e.lsp.requestFormatting(activeBuffer)
@@ -230,7 +230,7 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         e.state.statusMessage = "No formatting changes"
         return true
 
-      if activeBuffer.changeSeq != seqBeforeRequest:
+      if activeBuffer.contentVersion != versionBeforeRequest:
         e.state.statusMessage = "Buffer changed during format; edits discarded"
         return false
 
@@ -312,17 +312,17 @@ proc requestLspRename*(
       let line = e.state.renameState.cursorLine
       let col = e.state.renameState.cursorColumn
 
-      # Snapshot every open buffer's changeSeq before awaiting: the
+      # Snapshot every open buffer's contentVersion before awaiting: the
       # server's edits are positioned against this state. If any target
       # buffer changes while the request is in flight, applying the stale
       # coordinates would corrupt text, so the whole edit is discarded
       # (aborting beats partial application).
       # Key by buffer id, not path: two buffers can share a file path (one
       # opened relative, one absolute), and a path-keyed snapshot would let
-      # one buffer's changeSeq shadow the other's, rejecting valid renames.
-      var seqSnapshot: Table[BufferId, int]
+      # one buffer's contentVersion shadow the other's, rejecting valid renames.
+      var versionSnapshot: Table[BufferId, int]
       for buf in e.buffers:
-        seqSnapshot[buf.id] = buf.changeSeq
+        versionSnapshot[buf.id] = buf.contentVersion
 
       # Get rename result from LSP
       let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
@@ -338,13 +338,13 @@ proc requestLspRename*(
       let workspaceEdit = workspaceEditOpt.get
 
       # Reject the edit if any targeted open buffer changed during the await.
-      # Compare each buffer against its OWN pre-await changeSeq (keyed by id).
+      # Compare each buffer against its OWN pre-await contentVersion (keyed by id).
       for path in collectWorkspaceEditPaths(workspaceEdit):
         let absPath = normalizedPath(absolutePath(path))
         for buf in e.buffers:
           if buf.filePath.isSome and
               normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-              buf.changeSeq != seqSnapshot.getOrDefault(buf.id, buf.changeSeq):
+              buf.contentVersion != versionSnapshot.getOrDefault(buf.id, buf.contentVersion):
             e.state.statusMessage = "Buffer changed during rename; edits discarded"
             return
 
