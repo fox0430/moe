@@ -344,7 +344,8 @@ proc requestLspRename*(
         for buf in e.buffers:
           if buf.filePath.isSome and
               normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-              buf.contentVersion != versionSnapshot.getOrDefault(buf.id, buf.contentVersion):
+              buf.contentVersion !=
+              versionSnapshot.getOrDefault(buf.id, buf.contentVersion):
             e.state.statusMessage = "Buffer changed during rename; edits discarded"
             return
 
