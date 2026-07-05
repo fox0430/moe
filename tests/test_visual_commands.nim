@@ -473,6 +473,23 @@ suite "Visual Commands - visualDelete":
     check buf.len == 1
     check buf.getLine(0) == "world"
 
+  test "Delete characterwise multiline selection stores as charwise register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nde")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 1),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check state.registers.getNoNamedRegister().getContent() == "bc\nde\n"
+    check state.registers.getNoNamedRegister().isLine == false
+
 suite "Visual Commands - visualIndent":
   test "Indent single line selection":
     let buf = newTextBuffer()
