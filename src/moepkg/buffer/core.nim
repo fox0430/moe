@@ -134,7 +134,9 @@ type
 
   BufferChange* = object
     savedModifiedLines*: seq[LineModificationKind]
-      ## Pre-mutation modifiedLines snapshot for undo/redo (1 byte per line)
+      ## Pre-mutation modifiedLines snapshot for undo/redo (non-PieceTable, 1 byte per line)
+    savedLineMarkers*: CowSeq[Option[LineMarkerKind]]
+      ## Pre-mutation lineMarkers snapshot for undo/redo (non-PieceTable)
     startSeq*: int
       ## changeSeq value BEFORE this entry was applied. undo() restores changeSeq
       ## to this so a transaction collapsing N mutations is reverted atomically.
@@ -240,6 +242,10 @@ type
     # Pre-mutation modifiedLines snapshot (for non-PieceTable undo/redo)
     pendingModifiedLinesSnapshot*: seq[LineModificationKind]
     hasPendingModifiedLinesSnapshot*: bool
+
+    # Pre-mutation lineMarkers snapshot (for non-PieceTable undo/redo)
+    pendingLineMarkersSnapshot*: CowSeq[Option[LineMarkerKind]]
+    hasPendingLineMarkersSnapshot*: bool
 
     # Change sequence tracking for modified flag
     changeSeq*: int # Current change sequence number
@@ -923,6 +929,9 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
   if b.backendKind != PieceTable and not b.hasPendingModifiedLinesSnapshot:
     b.pendingModifiedLinesSnapshot = b.modifiedLines
     b.hasPendingModifiedLinesSnapshot = true
+  if b.backendKind != PieceTable and not b.hasPendingLineMarkersSnapshot:
+    b.pendingLineMarkersSnapshot = b.lineMarkers
+    b.hasPendingLineMarkersSnapshot = true
 
 proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   ## Drop every pending snapshot artifact captured for a mutation that ended up
@@ -935,6 +944,8 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.pendingSnapshotFolds = initFoldState()
   b.hasPendingModifiedLinesSnapshot = false
   b.pendingModifiedLinesSnapshot.setLen(0)
+  b.hasPendingLineMarkersSnapshot = false
+  b.pendingLineMarkersSnapshot.clear()
 
 proc resetCursorCache*(b: TextBuffer) {.inline.} =
   ## Invalidate the char->byte position cache (line=-1 forces a recompute on the
@@ -1012,6 +1023,9 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   if b.hasPendingModifiedLinesSnapshot:
     changeWithSnapshot.savedModifiedLines = b.pendingModifiedLinesSnapshot
     b.hasPendingModifiedLinesSnapshot = false
+  if b.hasPendingLineMarkersSnapshot:
+    changeWithSnapshot.savedLineMarkers = b.pendingLineMarkersSnapshot
+    b.hasPendingLineMarkersSnapshot = false
 
   if b.inTransaction and b.currentTransaction.isSome:
     # Add to current transaction

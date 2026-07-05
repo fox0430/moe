@@ -274,6 +274,75 @@ suite "CrossBackend - Undo/Redo":
       discard b.redo()
       check b[0] == "Hello World!"
 
+    test "undo deleteLine restores lineMarkers at correct positions [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      b.setLineMarker(2, SyntaxError)
+      check b.lineMarkers[2] == some(SyntaxError)
+
+      discard b.deleteLine(0)
+      check b.lineMarkers.len == 2
+      check b.lineMarkers[1] == some(SyntaxError)
+
+      discard b.undo()
+      check b.len == 3
+      check b[0] == "aaa"
+      check b[1] == "bbb"
+      check b[2] == "ccc"
+      check b.lineMarkers[0].isNone
+      check b.lineMarkers[1].isNone
+      check b.lineMarkers[2] == some(SyntaxError)
+
+    test "undo deleteLine (variant) restores lineMarkers at correct positions [" & $be &
+      "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      b.setLineMarker(0, SyntaxError)
+      b.setLineMarker(2, Bookmark)
+      check b.lineMarkers[0] == some(SyntaxError)
+      check b.lineMarkers[2] == some(Bookmark)
+
+      discard b.deleteLine(1)
+      check b.lineMarkers.len == 2
+      check b.lineMarkers[0] == some(SyntaxError)
+      check b.lineMarkers[1] == some(Bookmark)
+
+      discard b.undo()
+      check b.len == 3
+      check b[0] == "aaa"
+      check b[1] == "bbb"
+      check b[2] == "ccc"
+      check b.lineMarkers[0] == some(SyntaxError)
+      check b.lineMarkers[1].isNone
+      check b.lineMarkers[2] == some(Bookmark)
+
+    test "undo insertLine restores lineMarkers at correct positions [" & $be & "]":
+      let b = buf("aaa\nccc", be)
+      b.setLineMarker(1, GitChanged)
+      check b.lineMarkers[1] == some(GitChanged)
+
+      discard b.insert(1, "bbb")
+      check b.lineMarkers.len == 3
+      check b.lineMarkers[2] == some(GitChanged)
+
+      discard b.undo()
+      check b.len == 2
+      check b[0] == "aaa"
+      check b[1] == "ccc"
+      check b.lineMarkers[0].isNone
+      check b.lineMarkers[1] == some(GitChanged)
+
+    test "redo after undo restores lineMarkers to post-edit state [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      b.setLineMarker(2, Bookmark)
+      discard b.deleteLine(0)
+      discard b.undo()
+      check b.lineMarkers[2] == some(Bookmark)
+      discard b.redo()
+      check b.len == 2
+      check b[0] == "bbb"
+      check b[1] == "ccc"
+      check b.lineMarkers[0].isNone
+      check b.lineMarkers[1] == some(Bookmark)
+
 suite "CrossBackend - replaceLine Undo/Redo":
   for be in BufferBackend:
     test "undo replaceLine [" & $be & "]":
