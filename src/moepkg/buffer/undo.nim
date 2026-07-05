@@ -110,6 +110,10 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
       b.modifiedLines = change.savedModifiedLines
 
+    # For non-snapshot: restore lineMarkers from pre-mutation snapshot
+    if change.kind != ckSnapshot and change.savedLineMarkers.len > 0:
+      b.lineMarkers = change.savedLineMarkers
+
     # Ensure lineMarkers and modifiedLines stay in sync after undo operations
     b.ensureMarkersSize()
     b.ensureModifiedLinesSize()
@@ -316,9 +320,10 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
         b.makeInverseSnapshotEntry(change)
       else:
         change
-    # For non-snapshot: save current modifiedLines so redo can undo back
+    # For non-snapshot: save current modifiedLines and lineMarkers so redo can undo back
     if change.kind != ckSnapshot:
       redoEntry.savedModifiedLines = b.modifiedLines
+      redoEntry.savedLineMarkers = b.lineMarkers
 
     let r = b.undoChange(change)
     if r.isErr:
@@ -446,6 +451,10 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
       b.modifiedLines = change.savedModifiedLines
 
+    # For non-snapshot: restore lineMarkers from pre-mutation snapshot
+    if change.kind != ckSnapshot and change.savedLineMarkers.len > 0:
+      b.lineMarkers = change.savedLineMarkers
+
     # Ensure lineMarkers and modifiedLines stay in sync after redo operations
     b.ensureMarkersSize()
     b.ensureModifiedLinesSize()
@@ -482,9 +491,10 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
         b.makeInverseSnapshotEntry(change)
       else:
         change
-    # For non-snapshot: save current modifiedLines so undo can restore
+    # For non-snapshot: save current modifiedLines and lineMarkers so undo can restore
     if change.kind != ckSnapshot:
       undoEntry.savedModifiedLines = b.modifiedLines
+      undoEntry.savedLineMarkers = b.lineMarkers
 
     let r = b.redoChange(change)
     if r.isErr:
