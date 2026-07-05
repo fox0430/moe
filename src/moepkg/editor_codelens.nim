@@ -26,15 +26,6 @@ import pkg/[results, chronos]
 import types/editor_types, logger, highlight, lsp_integration, unicode_utils
 import lsp/rust_runnable
 
-const SemanticTokensMaxRejectShift* = 6
-  ## Max exponent for the reject-streak backoff (500ms << 6 ~= 32s).
-
-proc semanticTokensDebounceThreshold*(cache: LspCacheState): times.Duration =
-  ## Debounce interval scaled by the reject streak so a persistently failing
-  ## server backs off exponentially instead of firing every debounce tick.
-  let shift = min(cache.semanticTokensRejectStreak, SemanticTokensMaxRejectShift)
-  initDuration(milliseconds = cache.semanticTokensUpdateInterval shl shift)
-
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
   if not e.lsp.enabled:
@@ -43,19 +34,26 @@ proc hasCodeLensSupport*(e: Editor): bool =
   return e.lsp.hasCodeLensSupport(activeBuffer)
 
 proc processCodeLensResponse(
-    e: Editor, lenses: seq[CodeLens], gen: int
+    e: Editor, lenses: seq[CodeLens], gen: int, reqContentVersion: int
 ): Future[void] {.async: (raises: []).} =
   ## Internal: Process code lens response from LSP
   ## `gen` is the response generation captured at spawn time. Because resolving
   ## lenses awaits the LSP, multiple invocations can be in flight at once; only the
   ## latest generation is allowed to write the cache so an older (slower) response
   ## cannot clobber a newer one.
+  ## `reqContentVersion` is the buffer contentVersion at spawn time; if the
+  ## buffer advanced in flight the response is stale and must be dropped.
   try:
     let activeBuffer = e.activeBuffer()
     if activeBuffer.filePath.isNone:
       return
 
     let filePath = activeBuffer.filePath.get
+
+    # Stale-response guard: reject if the buffer content advanced between spawn
+    # and handler execution (an edit, undo, reload, etc.).
+    if reqContentVersion != activeBuffer.contentVersion:
+      return
 
     # Resolve support is queried lazily and memoized for this response: servers
     # like rust-analyzer inline every command, so the (Table + JSON) capability
@@ -126,9 +124,10 @@ proc processCodeLensResponse(
 
     # A newer response has been spawned while we were awaiting resolves; discard
     # this stale result rather than overwriting the newer cache.
-    if gen != e.state.lspCache.codeLensResponseGen:
+    if gen != e.state.lspCache.codeLensPoll.generation:
       return
 
+    e.state.lspCache.codeLensPoll.rejectStreak = 0
     e.state.lspCache.codeLensCache = CodeLensCache(
       itemsByLine: itemsByLine,
       changeSeq: activeBuffer.changeSeq,
@@ -150,9 +149,10 @@ proc doUpdateCodeLensCache(e: Editor) =
   ## filePath). Stamping only on completion would let the debounce gate in
   ## `updateCodeLensCache` read a stale timestamp on the frame a response
   ## arrives and fire a fresh request on every round-trip. Stamping on
-  ## initiation guarantees at most one request per `codeLensUpdateInterval`,
+  ## initiation guarantees at most one request per `codeLensPoll.interval`,
   ## regardless of async completion timing.
-  e.state.lspCache.lastCodeLensUpdate = getMonoTime()
+  var poll = addr e.state.lspCache.codeLensPoll
+  poll.lastUpdate = getMonoTime()
 
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
@@ -166,7 +166,10 @@ proc doUpdateCodeLensCache(e: Editor) =
   # Start async request
   let reqResult = e.lsp.startCodeLensRequest(activeBuffer)
   if reqResult.isOk:
-    e.state.lspCache.pendingCodeLensRequestId = reqResult.get
+    poll.pendingRequestId = reqResult.get
+    poll.pendingFilePath = activeBuffer.filePath.get("")
+    poll.pendingChangeSeq = activeBuffer.changeSeq
+    poll.pendingContentVersion = activeBuffer.contentVersion
   else:
     e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
 
@@ -182,33 +185,35 @@ proc updateCodeLensCache*(e: Editor) =
     return
 
   let filePath = activeBuffer.filePath.get
+  var poll = addr e.state.lspCache.codeLensPoll
 
   # Check if there's a pending request - try to get response
-  if e.state.lspCache.pendingCodeLensRequestId != 0:
-    let (status, resultOpt, errorOpt) =
-      e.lsp.checkResponse(e.state.lspCache.pendingCodeLensRequestId)
+  if poll.pendingRequestId != 0:
+    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(poll.pendingRequestId)
     case status
     of lrsPending:
       # Still waiting for response, don't start a new request
       return
     of lrsSuccess:
       # Got response, process it
-      e.state.lspCache.pendingCodeLensRequestId = 0
+      poll.pendingRequestId = 0
       if resultOpt.isSome:
         let lenses = parseCodeLensResponse(resultOpt.get)
-        inc e.state.lspCache.codeLensResponseGen
-        asyncSpawn e.processCodeLensResponse(
-          lenses, e.state.lspCache.codeLensResponseGen
-        )
+        inc poll.generation
+        # Capture contentVersion at spawn time so the async handler can
+        # reject if the buffer advanced in flight.
+        let reqContentVersion = poll.pendingContentVersion
+        asyncSpawn e.processCodeLensResponse(lenses, poll.generation, reqContentVersion)
       # Continue to check if we need to start a new request (buffer might have changed)
     of lrsError, lrsTimeout:
       # Request failed or timed out, mark cache as valid but empty to prevent retry loop
       logLspDegraded("CodeLens", status, errorOpt.get(""))
-      e.state.lspCache.pendingCodeLensRequestId = 0
+      poll[].resetPending()
+      inc poll.rejectStreak
+      poll.lastUpdate = getMonoTime()
       e.state.lspCache.codeLensCache = CodeLensCache(
         isValid: true, filePath: filePath, changeSeq: activeBuffer.changeSeq
       )
-      e.state.lspCache.lastCodeLensUpdate = getMonoTime()
       return
 
   # Check if cache is still valid (no changes needed)
@@ -217,12 +222,10 @@ proc updateCodeLensCache*(e: Editor) =
       e.state.lspCache.codeLensCache.changeSeq == activeBuffer.changeSeq:
     return
 
-  # Debounce: check if enough time has passed since last update
+  # Debounce with exponential backoff on the reject streak.
   let now = getMonoTime()
-  let elapsed = now - e.state.lspCache.lastCodeLensUpdate
-  let threshold = initDuration(milliseconds = e.state.lspCache.codeLensUpdateInterval)
-
-  if elapsed >= threshold:
+  let elapsed = now - poll.lastUpdate
+  if elapsed >= poll[].debounceThreshold():
     e.doUpdateCodeLensCache()
 
 proc getCodeLensItemsForLine*(cache: var LspCacheState, line: int): seq[CodeLensItem] =
@@ -328,7 +331,11 @@ proc invalidateDocumentHighlightCache*(cache: var LspCacheState) =
   cache.documentHighlightCache.itemsByLine.clear()
 
 proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlight]) =
-  ## Internal: Process document highlights from LSP response
+  ## Internal: Process document highlights from LSP response.
+  ## Updates the debounce timer (including on reject) so a persistently
+  ## failing server does not busy-loop on every render frame.
+  e.state.lspCache.documentHighlightPoll.lastUpdate = getMonoTime()
+
   let activeBuffer = e.activeBuffer()
 
   # Convert LSP DocumentHighlight to our cached format
@@ -397,7 +404,7 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
     changeSeq: activeBuffer.changeSeq,
     isValid: true,
   )
-  e.state.lspCache.lastDocumentHighlightUpdate = getMonoTime()
+  e.state.lspCache.documentHighlightPoll.rejectStreak = 0
 
 proc doUpdateDocumentHighlightCache(e: Editor) =
   ## Internal: Start an async Document Highlight request (non-blocking)
@@ -417,7 +424,12 @@ proc doUpdateDocumentHighlightCache(e: Editor) =
   let reqResult =
     e.lsp.startDocumentHighlightRequest(activeBuffer, e.cursor.line, e.cursor.column)
   if reqResult.isOk:
-    e.state.lspCache.pendingDocumentHighlightRequestId = reqResult.get
+    e.state.lspCache.documentHighlightPoll.pendingRequestId = reqResult.get
+    e.state.lspCache.documentHighlightPoll.pendingFilePath =
+      activeBuffer.filePath.get("")
+    e.state.lspCache.documentHighlightPoll.pendingChangeSeq = activeBuffer.changeSeq
+    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
+      activeBuffer.contentVersion
   else:
     e.state.lspCache.invalidateDocumentHighlightCache()
 
@@ -433,26 +445,37 @@ proc updateDocumentHighlightCache*(e: Editor) =
   if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
     if e.state.lspCache.documentHighlightCache.isValid:
       e.state.lspCache.invalidateDocumentHighlightCache()
-    if e.state.lspCache.pendingDocumentHighlightRequestId != 0:
-      e.lsp.cancelRequest(e.state.lspCache.pendingDocumentHighlightRequestId)
-      e.state.lspCache.pendingDocumentHighlightRequestId = 0
+    var poll = addr e.state.lspCache.documentHighlightPoll
+    if poll.pendingRequestId != 0:
+      e.lsp.cancelRequest(poll.pendingRequestId)
+      poll[].resetPending()
     return
 
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return
 
+  var poll = addr e.state.lspCache.documentHighlightPoll
+
   # Check if there's a pending request - try to get response
-  if e.state.lspCache.pendingDocumentHighlightRequestId != 0:
-    let (status, resultOpt, errorOpt) =
-      e.lsp.checkResponse(e.state.lspCache.pendingDocumentHighlightRequestId)
+  if poll.pendingRequestId != 0:
+    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(poll.pendingRequestId)
     case status
     of lrsPending:
       # Still waiting for response, don't start a new request
       return
     of lrsSuccess:
       # Got response, process it
-      e.state.lspCache.pendingDocumentHighlightRequestId = 0
+      poll.pendingRequestId = 0
+
+      # Discard the response if the active buffer changed while in flight:
+      # checkResponse routes by request id only, so without this guard file A's
+      # highlights would be stamped onto (and self-validate against) file B's cache
+      # and render inside B. Compare by filePath and contentVersion.
+      if e.activeBuffer().filePath.get("") != poll.pendingFilePath or
+          e.activeBuffer().contentVersion != poll.pendingContentVersion:
+        return
+
       if resultOpt.isSome:
         let highlights = parseDocumentHighlightResponse(resultOpt.get)
         e.processDocumentHighlightResponse(highlights)
@@ -460,7 +483,9 @@ proc updateDocumentHighlightCache*(e: Editor) =
     of lrsError, lrsTimeout:
       # Request failed or timed out, clear and continue
       logLspDegraded("Document highlight", status, errorOpt.get(""))
-      e.state.lspCache.pendingDocumentHighlightRequestId = 0
+      poll[].resetPending()
+      inc poll.rejectStreak
+      poll.lastUpdate = getMonoTime()
 
   # Check if cursor position changed
   # (same line and column means no need to update)
@@ -470,12 +495,10 @@ proc updateDocumentHighlightCache*(e: Editor) =
       e.state.lspCache.documentHighlightCache.changeSeq == activeBuffer.changeSeq:
     return
 
-  # Debounce - only update if enough time has passed since last update
+  # Debounce with exponential backoff on the reject streak.
   let now = getMonoTime()
-  let elapsed = now - e.state.lspCache.lastDocumentHighlightUpdate
-  let threshold =
-    initDuration(milliseconds = e.state.lspCache.documentHighlightUpdateInterval)
-  if elapsed >= threshold:
+  let elapsed = now - poll.lastUpdate
+  if elapsed >= poll[].debounceThreshold():
     e.doUpdateDocumentHighlightCache()
 
 # Semantic Tokens (LSP-based syntax highlighting)
@@ -493,11 +516,8 @@ proc resetPendingSemanticTokens(cache: var LspCacheState) =
   ## Wipe the pending-request snapshot to its sentinels. `-1` for
   ## changeSeq/contentVersion so a stray response cannot spuriously validate
   ## against a pristine buffer whose real values also happen to be 0.
-  cache.pendingSemanticTokens = PendingSemanticTokensRequest(
-    requestId: 0,
-    filePath: "",
-    changeSeq: -1,
-    contentVersion: -1,
+  cache.semanticTokensPoll.resetPending()
+  cache.semanticTokensPendingExtras = PendingSemanticTokensRequest(
     rangeFirst: -1,
     rangeLast: -1,
     legend: SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[]),
@@ -508,46 +528,41 @@ proc resetPendingSemanticTokens(cache: var LspCacheState) =
 proc invalidateSemanticTokensCache*(lsp: LspIntegration, cache: var LspCacheState) =
   ## Invalidate the semantic tokens cache, forcing re-request on next update
   cache.semanticTokensCache = SemanticTokensCache(isValid: false)
-  if cache.pendingSemanticTokens.requestId != 0:
-    lsp.cancelRequest(cache.pendingSemanticTokens.requestId)
+  if cache.semanticTokensPoll.pendingRequestId != 0:
+    lsp.cancelRequest(cache.semanticTokensPoll.pendingRequestId)
   resetPendingSemanticTokens(cache)
   # Explicit invalidation (buffer switch, register-capability etc.) is a fresh
   # start; drop the backoff so the next request fires at the normal cadence.
-  cache.semanticTokensRejectStreak = 0
+  cache.semanticTokensPoll.rejectStreak = 0
 
 proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
   ## Build the semantic overlay from a `textDocument/semanticTokens` response
   ## and swap it into the active buffer's Highlight.
 
-  # Every conclusion bumps `lastSemanticTokensUpdate` so a persistent reject
-  # (including the transient "no legend" case) is throttled by the debounce
-  # interval rather than firing per render frame. Bumped BEFORE the nil-guard
-  # so a transient nil highlight cannot busy-loop the LSP request.
-  e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
+  # Every conclusion bumps `lastUpdate` so a persistent reject (including the
+  # transient "no legend" case) is throttled by the debounce interval rather
+  # than firing per render frame. Bumped BEFORE the nil-guard so a transient
+  # nil highlight cannot busy-loop the LSP request.
+  e.state.lspCache.semanticTokensPoll.lastUpdate = getMonoTime()
 
   let activeBuffer = e.activeBuffer()
   if activeBuffer.isNil or activeBuffer.highlight.isNil:
     return
+
+  let poll = addr e.state.lspCache.semanticTokensPoll
+  let extras = addr e.state.lspCache.semanticTokensPendingExtras
 
   # Drop the response if the active buffer moved between request and
   # response (buffer switch, live reload); otherwise tokens computed against
   # a different file would paint here. Compare unconditionally: an empty
   # `pendingPath` means we have no reliable identity for the request, so
   # rejecting is the safe default.
-  let pendingPath = e.state.lspCache.pendingSemanticTokens.filePath
+  let pendingPath = poll.pendingFilePath
   if pendingPath.len == 0 or activeBuffer.filePath.get("") != pendingPath:
     return
 
-  let requestChangeSeq = e.state.lspCache.pendingSemanticTokens.changeSeq
-  let requestContentVersion = e.state.lspCache.pendingSemanticTokens.contentVersion
-  # Sentinel guard: `-1` marks "no valid pending request". A stray response
-  # arriving after invalidateSemanticTokensCache has nothing to key off of.
-  if requestChangeSeq < 0 or requestContentVersion < 0:
-    return
-
-  # Belt-and-braces: reject if the buffer advanced between request and response.
-  if requestContentVersion != activeBuffer.contentVersion:
-    return
+  let requestChangeSeq = poll.pendingChangeSeq
+  let requestContentVersion = poll.pendingContentVersion
 
   let colorTabOpt = e.lsp.getSemanticTypeColorTable(activeBuffer)
   if colorTabOpt.isNone:
@@ -561,7 +576,7 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
   # empty request-time snapshot (server registered its legend AFTER the
   # request was sent) is rejected against a now-non-empty legend instead of
   # being silently decoded as though it matched.
-  let pendingLegend = e.state.lspCache.pendingSemanticTokens.legend
+  let pendingLegend = extras.legend
   if colorTabOpt.get.legend != pendingLegend:
     logLspDegraded(
       "Semantic tokens", "legend changed while request was in flight; dropping response"
@@ -590,8 +605,7 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
   # `semanticContentVersion != contentVersion`.
   let outcome = applySemanticTokens(
     activeBuffer.highlight, resp, colorTabOpt.get, requestContentVersion, lineRuneCount,
-    e.state.lspCache.pendingSemanticTokens.rangeFirst,
-    e.state.lspCache.pendingSemanticTokens.rangeLast, lineText,
+    extras.rangeFirst, extras.rangeLast, lineText,
   )
 
   case outcome
@@ -601,15 +615,15 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
     logLspDegraded(
       "Semantic tokens", "token count exceeds cap (" & $MaxSemanticTokens & ")"
     )
-    inc e.state.lspCache.semanticTokensRejectStreak
+    inc poll.rejectStreak
     return
   of saoRejectedMalformed:
     logLspDegraded("Semantic tokens", "malformed response (missing or invalid data)")
-    inc e.state.lspCache.semanticTokensRejectStreak
+    inc poll.rejectStreak
     return
   of saoRejectedNoLegend:
     logDebug("editor", "Semantic tokens: legend not yet available")
-    inc e.state.lspCache.semanticTokensRejectStreak
+    inc poll.rejectStreak
     return
 
   # Stamp with the request-time changeSeq / viewport so an edit or scroll in
@@ -619,10 +633,10 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
     changeSeq: requestChangeSeq,
     filePath: activeBuffer.filePath.get(""),
     isValid: true,
-    topLine: e.state.lspCache.pendingSemanticTokens.viewportTopLine,
-    bottomLine: e.state.lspCache.pendingSemanticTokens.viewportBottomLine,
+    topLine: extras.viewportTopLine,
+    bottomLine: extras.viewportBottomLine,
   )
-  e.state.lspCache.semanticTokensRejectStreak = 0
+  poll.rejectStreak = 0
 
 proc doUpdateSemanticTokensCache(e: Editor) =
   ## Internal: Start an async semantic tokens request (non-blocking)
@@ -653,25 +667,27 @@ proc doUpdateSemanticTokensCache(e: Editor) =
   # Start async request
   let reqResult = e.lsp.startSemanticTokensRequest(activeBuffer, topLine, bottomLine)
   if reqResult.isOk:
-    e.state.lspCache.pendingSemanticTokens.requestId = reqResult.get
-    e.state.lspCache.pendingSemanticTokens.filePath = activeBuffer.filePath.get("")
-    e.state.lspCache.pendingSemanticTokens.changeSeq = activeBuffer.changeSeq
-    e.state.lspCache.pendingSemanticTokens.contentVersion = activeBuffer.contentVersion
-    e.state.lspCache.pendingSemanticTokens.legend = requestLegend
+    let poll = addr e.state.lspCache.semanticTokensPoll
+    let extras = addr e.state.lspCache.semanticTokensPendingExtras
+    poll.pendingRequestId = reqResult.get
+    poll.pendingFilePath = activeBuffer.filePath.get("")
+    poll.pendingChangeSeq = activeBuffer.changeSeq
+    poll.pendingContentVersion = activeBuffer.contentVersion
+    extras.legend = requestLegend
     # Stamp the cache-validity check with the SAME `topLine`/`bottomLine`
     # the server was asked for (which already includes the +/-10-line
     # margin from `viewportRequestRange`). Using raw
     # `viewport.topLine + viewport.height` would spuriously invalidate the
     # cache on any small scroll even though the overlay covers the
     # scrolled-into rows from the margin.
-    e.state.lspCache.pendingSemanticTokens.viewportTopLine = topLine
-    e.state.lspCache.pendingSemanticTokens.viewportBottomLine = bottomLine
+    extras.viewportTopLine = topLine
+    extras.viewportBottomLine = bottomLine
     if isRangeReq:
-      e.state.lspCache.pendingSemanticTokens.rangeFirst = topLine
-      e.state.lspCache.pendingSemanticTokens.rangeLast = bottomLine
+      extras.rangeFirst = topLine
+      extras.rangeLast = bottomLine
     else:
-      e.state.lspCache.pendingSemanticTokens.rangeFirst = -1
-      e.state.lspCache.pendingSemanticTokens.rangeLast = -1
+      extras.rangeFirst = -1
+      extras.rangeLast = -1
   else:
     logDebug("editor", "Semantic tokens request failed: " & reqResult.error)
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
@@ -710,24 +726,24 @@ proc updateSemanticTokensCache*(e: Editor) =
   if not e.lsp.service.hasSemanticTokensSupport(langIdOpt.get):
     return
 
+  let poll = addr e.state.lspCache.semanticTokensPoll
+
   # Pending request from a different buffer (e.g. user switched buffers
   # mid-flight): cancel so we don't block behind an unrelated response.
-  if e.state.lspCache.pendingSemanticTokens.requestId != 0 and
-      e.state.lspCache.pendingSemanticTokens.filePath.len > 0 and
-      e.state.lspCache.pendingSemanticTokens.filePath != path:
+  if poll.pendingRequestId != 0 and poll.pendingFilePath.len > 0 and
+      poll.pendingFilePath != path:
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
   # Check if there's a pending request - try to get response
-  if e.state.lspCache.pendingSemanticTokens.requestId != 0:
-    let (status, resultOpt, errorOpt) =
-      e.lsp.checkResponse(e.state.lspCache.pendingSemanticTokens.requestId)
+  if poll.pendingRequestId != 0:
+    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(poll.pendingRequestId)
     case status
     of lrsPending:
       # Still waiting for response, don't start a new request
       return
     of lrsSuccess:
-      # processSemanticTokensResponse reads pendingSemantic* fields, so wipe
-      # them AFTER the call. It also bumps lastSemanticTokensUpdate itself,
+      # processSemanticTokensResponse reads pending* fields, so wipe
+      # them AFTER the call. It also bumps lastUpdate itself,
       # covering the null-result path. `try/finally` guarantees the reset
       # runs even if the processor raises, otherwise the pending id would
       # zombie and freeze the feature on this buffer.
@@ -737,24 +753,23 @@ proc updateSemanticTokensCache*(e: Editor) =
         else:
           # Null result: debounce the retry so a persistently null-answering
           # server does not fire per render frame.
-          e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
-          inc e.state.lspCache.semanticTokensRejectStreak
+          poll.lastUpdate = getMonoTime()
+          inc poll.rejectStreak
       finally:
         resetPendingSemanticTokens(e.state.lspCache)
     of lrsError, lrsTimeout:
       logLspDegraded("Semantic tokens", status, errorOpt.get(""))
       resetPendingSemanticTokens(e.state.lspCache)
-      e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
-      inc e.state.lspCache.semanticTokensRejectStreak
+      poll.lastUpdate = getMonoTime()
+      inc poll.rejectStreak
 
   if e.semanticTokensCacheCoversViewport(e.state.lspCache.semanticTokensCache, path):
     return
 
   # Debounce with exponential backoff on the reject streak.
   let now = getMonoTime()
-  let elapsed = now - e.state.lspCache.lastSemanticTokensUpdate
-  let threshold = semanticTokensDebounceThreshold(e.state.lspCache)
-  if elapsed >= threshold:
+  let elapsed = now - poll.lastUpdate
+  if elapsed >= poll[].debounceThreshold():
     e.doUpdateSemanticTokensCache()
 
 # Inlay Hints
@@ -773,9 +788,9 @@ proc hasInlayHintSupport*(e: Editor): bool =
 proc invalidateInlayHintCache*(lsp: LspIntegration, cache: var LspCacheState) =
   ## Invalidate the inlay hint cache and cancel any in-flight request
   cache.inlayHintCache = InlayHintCache(isValid: false)
-  if cache.pendingInlayHintRequestId != 0:
-    lsp.cancelRequest(cache.pendingInlayHintRequestId)
-    cache.pendingInlayHintRequestId = 0
+  if cache.inlayHintPoll.pendingRequestId != 0:
+    lsp.cancelRequest(cache.inlayHintPoll.pendingRequestId)
+  cache.inlayHintPoll.resetPending()
 
 proc invalidateAllLspCaches*(e: Editor) =
   ## Drop all per-buffer LSP overlay caches. Use after buffer identity changes
@@ -788,6 +803,10 @@ proc invalidateAllLspCaches*(e: Editor) =
 
 proc processInlayHintResponse(e: Editor, hints: seq[InlayHint]) =
   ## Internal: convert an inlay hint response into the cached, per-line format.
+  ## Updates the debounce timer (including on reject) so a persistently
+  ## failing server does not busy-loop on every render frame.
+  e.state.lspCache.inlayHintPoll.lastUpdate = getMonoTime()
+
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return
@@ -832,7 +851,7 @@ proc processInlayHintResponse(e: Editor, hints: seq[InlayHint]) =
     bottomLine: e.viewport.topLine + e.viewport.height,
     isValid: true,
   )
-  e.state.lspCache.lastInlayHintUpdate = getMonoTime()
+  e.state.lspCache.inlayHintPoll.rejectStreak = 0
 
 proc doUpdateInlayHintCache(e: Editor) =
   ## Internal: Start an async inlay hint request for the visible range (non-blocking)
@@ -846,8 +865,11 @@ proc doUpdateInlayHintCache(e: Editor) =
 
   let reqResult = e.lsp.startInlayHintRequest(activeBuffer, topLine, bottomLine)
   if reqResult.isOk:
-    e.state.lspCache.pendingInlayHintRequestId = reqResult.get
-    e.state.lspCache.pendingInlayHintBufferId = activeBuffer.id
+    let poll = addr e.state.lspCache.inlayHintPoll
+    poll.pendingRequestId = reqResult.get
+    poll.pendingFilePath = activeBuffer.filePath.get("")
+    poll.pendingChangeSeq = activeBuffer.changeSeq
+    poll.pendingContentVersion = activeBuffer.contentVersion
   else:
     invalidateInlayHintCache(e.lsp, e.state.lspCache)
 
@@ -869,26 +891,30 @@ proc updateInlayHintCache*(e: Editor) =
   if not e.lsp.service.hasInlayHintSupport(langIdOpt.get):
     return
 
+  var poll = addr e.state.lspCache.inlayHintPoll
+
   # Check if there's a pending request - try to get response
-  if e.state.lspCache.pendingInlayHintRequestId != 0:
-    let (status, resultOpt, errorOpt) =
-      e.lsp.checkResponse(e.state.lspCache.pendingInlayHintRequestId)
+  if poll.pendingRequestId != 0:
+    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(poll.pendingRequestId)
     case status
     of lrsPending:
       return
     of lrsSuccess:
-      e.state.lspCache.pendingInlayHintRequestId = 0
+      poll.pendingRequestId = 0
       # Discard the response if the active buffer changed while in flight:
       # checkResponse routes by request id only, so without this guard file A's
       # hints would be stamped onto (and self-validate against) file B's cache
-      # and render inside B. Mirrors the pendingHoverBufferId guard.
-      if e.activeBuffer().id != e.state.lspCache.pendingInlayHintBufferId:
+      # and render inside B. Compare by filePath and contentVersion.
+      if e.activeBuffer().filePath.get("") != poll.pendingFilePath or
+          e.activeBuffer().contentVersion != poll.pendingContentVersion:
         return
       if resultOpt.isSome and resultOpt.get.kind != JNull:
         e.processInlayHintResponse(parseInlayHintResponse(resultOpt.get))
     of lrsError, lrsTimeout:
       logLspDegraded("Inlay hint", status, errorOpt.get(""))
-      e.state.lspCache.pendingInlayHintRequestId = 0
+      poll[].resetPending()
+      inc poll.rejectStreak
+      poll.lastUpdate = getMonoTime()
 
   # Check if cache is still valid and covers the current viewport
   let cache = e.state.lspCache.inlayHintCache
@@ -897,11 +923,10 @@ proc updateInlayHintCache*(e: Editor) =
       cache.bottomLine >= e.viewport.topLine + e.viewport.height:
     return
 
-  # Debounce - only update if enough time has passed since last update
+  # Debounce with exponential backoff on the reject streak.
   let now = getMonoTime()
-  let elapsed = now - e.state.lspCache.lastInlayHintUpdate
-  let threshold = initDuration(milliseconds = e.state.lspCache.inlayHintUpdateInterval)
-  if elapsed >= threshold:
+  let elapsed = now - poll.lastUpdate
+  if elapsed >= poll[].debounceThreshold():
     e.doUpdateInlayHintCache()
 
 proc getInlayHintsForLine*(cache: var LspCacheState, line: int): seq[InlayHintItem] =

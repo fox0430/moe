@@ -273,26 +273,18 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         semanticTokensCache: SemanticTokensCache(isValid: false),
         hoverPopup: newHoverPopupManager(),
         locations: none(LspLocationsResult),
-        lastCodeLensUpdate: getMonoTime(),
-        codeLensUpdateInterval: 1000, # 1 second debounce
-        lastDocumentHighlightUpdate: getMonoTime(),
-        documentHighlightUpdateInterval: 200, # 200ms debounce
-        lastSemanticTokensUpdate: getMonoTime(),
-        semanticTokensUpdateInterval: 500, # 500ms debounce for semantic tokens
-        pendingSemanticTokens: PendingSemanticTokensRequest(
-          requestId: 0,
-          filePath: "",
-          changeSeq: -1,
-          contentVersion: -1,
+        codeLensPoll: initDebouncedLspPoll(1000),
+        documentHighlightPoll: initDebouncedLspPoll(200),
+        semanticTokensPoll: initDebouncedLspPoll(500),
+        semanticTokensPendingExtras: PendingSemanticTokensRequest(
           rangeFirst: -1,
           rangeLast: -1,
           legend: SemanticTokensLegend(tokenTypes: @[], tokenModifiers: @[]),
           viewportTopLine: -1,
           viewportBottomLine: -1,
         ),
+        inlayHintPoll: initDebouncedLspPoll(500),
         inlayHintCache: InlayHintCache(isValid: false),
-        lastInlayHintUpdate: getMonoTime(),
-        inlayHintUpdateInterval: 500, # 500ms debounce for inlay hints
         signatureHelp: SignatureHelpRequestState(
           lastUpdate: getMonoTime(),
           interval: 100, # 100ms debounce for signature help
