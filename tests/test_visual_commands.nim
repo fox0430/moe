@@ -1150,9 +1150,7 @@ suite "Visual Commands - Block Selection":
 
     visualYank(buf, state)
 
-    # Block selection from column 0 to 2 (inclusive) gives 3 characters per line
-    # substr(startCol, endCol - startCol + 1) = substr(0, 3) = 4 chars due to LineBuffer.substr behavior
-    check state.registers.getNoNamedRegister().getContent() == "hell\nworl"
+    check state.registers.getNoNamedRegister().getContent() == "hel\nwor"
     check state.visualSelection.active == false
 
   test "Lowercase block selection":
@@ -1341,6 +1339,106 @@ suite "Visual Commands - Block Selection":
     check '\n' notin buf.getLine(0)
     check '\n' notin buf.getLine(1)
 
+  # Regression: substr(startCol, endCol - startCol + 1) passed length as end
+  # index to substr (which expects last index), producing empty string when
+  # startCol > 0. Also used byte offsets for rune-based column indices.
+  test "Yank block selection from non-zero start column (substr regression)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar baz")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 4),
+      current: BufferPosition(line: 1, column: 6),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualYank(buf, state)
+
+    # Old code: substr(4, 6-4+1) = substr(4, 3) → first>last → ""
+    # Correct: 3 runes from col 4 → "o w" and "bar"
+    check state.registers.getNoNamedRegister().getContent() == "o w\nbar"
+
+  test "Yank block selection with multibyte characters (rune offset regression)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abcあいうdef")
+    discard buf.insertText(BufferPosition(line: 0, column: 9), "\nghiかきくjkl")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 3),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualYank(buf, state)
+
+    # Old code: substr(3, 3) → byte at index 3 (first byte of 3-byte UTF-8 char)
+    # Correct: 3 runes from col 3 → "あいう" and "かきく"
+    check state.registers.getNoNamedRegister().getContent() == "あいう\nかきく"
+
+  test "Delete block selection from non-zero start column (substr regression)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualDelete(buf, state)
+
+    # Deletes columns 2-4 (inclusive) → 3 chars per line
+    # "hello world": delete 'l','l','o' → "he world"
+    # "foo bar":     delete 'o',' ','b' → "foar"
+    check buf.getLine(0) == "he world"
+    check buf.getLine(1) == "foar"
+
+  test "Lowercase block selection from non-zero start column (substr regression)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO WORLD")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFOO BAR")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 4),
+      current: BufferPosition(line: 1, column: 6),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualLowercase(buf, state)
+
+    # Lowercase columns 4-6 → "O W" → "o w" and "BAR" → "bar"
+    check buf.getLine(0) == "HELLo wORLD"
+    check buf.getLine(1) == "FOO bar"
+
+  test "Uppercase block selection from non-zero start column (substr regression)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 4),
+      current: BufferPosition(line: 1, column: 6),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualUppercase(buf, state)
+
+    # Uppercase columns 4-6 → "o w" → "O W" and "bar" → "BAR"
+    check buf.getLine(0) == "hellO World"
+    check buf.getLine(1) == "foo BAR"
+
 suite "Visual Commands - Edge Cases":
   test "Yank with inactive selection (no-op)":
     let buf = newTextBuffer()
@@ -1469,9 +1567,13 @@ suite "Visual Commands - Edge Cases":
 
     visualYank(buf, state)
 
-    # Second line "hi" is shorter than column 5, so it contributes empty string
-    # The result should have 3 lines (one per selected line)
-    check state.registers.getNoNamedRegister().getContent().split('\n').len == 3
+    # Second line "hi" is shorter than column 5, so it contributes empty string.
+    # Old bug: substr(5, 4) with first>last also produced "" for lines 0 and 2.
+    let lines = state.registers.getNoNamedRegister().getContent().split('\n')
+    check lines.len == 3
+    check lines[0] == " wor"
+    check lines[1] == ""
+    check lines[2] == "line"
 
   test "visualMoveRight at exact line length":
     let buf = newTextBuffer()

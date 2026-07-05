@@ -22,7 +22,7 @@
 ## This module provides Visual mode specific command implementations
 ## that are independent of CommandContext for better testability
 
-import std/[options, strutils]
+import std/[options, strutils, unicode]
 
 import pkg/results
 
@@ -112,10 +112,10 @@ proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
       lines.add("")
     elif endCol >= lineLen:
       # Line is shorter than end column, take from start to end of line
-      lines.add($line.substr(startCol))
+      lines.add($line.runeSubStr(startCol))
     else:
       # Normal case
-      lines.add($line.substr(startCol, endCol - startCol + 1))
+      lines.add($line.runeSubStr(startCol, endCol - startCol + 1))
   result = lines.join("\n")
 
 proc getLineText(buffer: TextBuffer, selection: VisualSelection): string =
