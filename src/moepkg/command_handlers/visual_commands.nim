@@ -292,9 +292,9 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
         elif regName.isClipboardRegisterName:
           state.registers.setClipboardRegister(regName, selectedText, false)
         else:
-          state.registers.setDeletedRegister(selectedText, isMultiLine)
+          state.registers.setDeletedRegister(selectedText, false)
       else:
-        state.registers.setDeletedRegister(selectedText, isMultiLine)
+        state.registers.setDeletedRegister(selectedText, false)
 
       let result = buffer.deleteRange(selStart, selEnd)
       if result.isErr:
