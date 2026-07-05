@@ -328,7 +328,7 @@ proc ensureFresh*(
   ## `(buffer, maxWidth, tabStop)` and bump the generation if anything
   ## changed. Hot loops should call this once before entering the loop,
   ## then call `cachedWrapCount` per line.
-  if cache.bufferId != buffer.id or cache.bufferChangeSeq != buffer.changeSeq or
+  if cache.bufferId != buffer.id or cache.bufferContentVersion != buffer.contentVersion or
       cache.viewportWidth != maxWidth or cache.tabStop != tabStop:
     if cache.bufferId != buffer.id:
       # All gens become stale on the gen bump below, so drop the storage
@@ -337,7 +337,7 @@ proc ensureFresh*(
       cache.gens.setLen(0)
     cache.currentGen.inc
     cache.bufferId = buffer.id
-    cache.bufferChangeSeq = buffer.changeSeq
+    cache.bufferContentVersion = buffer.contentVersion
     cache.viewportWidth = maxWidth
     cache.tabStop = tabStop
 

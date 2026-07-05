@@ -134,7 +134,7 @@ type
     gens*: seq[int]
     currentGen*: int
     bufferId*: BufferId
-    bufferChangeSeq*: int
+    bufferContentVersion*: int
     viewportWidth*: int
     tabStop*: int
 

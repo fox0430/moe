@@ -465,7 +465,7 @@ suite "getWrapCount":
     check cache.gens.len >= 1
     check cache.gens[0] == cache.currentGen
     check cache.bufferId == buf.id
-    check cache.bufferChangeSeq == buf.changeSeq
+    check cache.bufferContentVersion == buf.contentVersion
     check cache.viewportWidth == 5
     check cache.tabStop == 4
     check cache.currentGen >= 1
@@ -477,7 +477,7 @@ suite "getWrapCount":
     cache.counts[0] = 999 # poison
     check getWrapCount(cache, buf, 0, 7, 4) == 999
 
-  test "invalidates on buffer changeSeq change":
+  test "invalidates on buffer contentVersion change":
     var buf = newTextBuffer("aaa bbb ccc")
     let cache = WrapCountCache()
     discard getWrapCount(cache, buf, 0, 5, 4)
@@ -485,7 +485,31 @@ suite "getWrapCount":
     let r = buf.insertText(BufferPosition(line: 0, column: 0), "X")
     check r.isOk
     check getWrapCount(cache, buf, 0, 5, 4) != 999
-    check cache.bufferChangeSeq == buf.changeSeq
+    check cache.bufferContentVersion == buf.contentVersion
+
+  test "invalidates after replaceLineNoUndo (changeSeq unchanged)":
+    var buf = newTextBuffer("aaa bbb ccc")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 5, 4)
+    cache.counts[0] = 999
+    buf.replaceLineNoUndo(0, "X Y")
+    check getWrapCount(cache, buf, 0, 5, 4) != 999
+
+  test "invalidates after insertLineNoUndo (changeSeq unchanged)":
+    var buf = newTextBuffer("aaa bbb ccc")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 5, 4)
+    cache.counts[0] = 999
+    buf.insertLineNoUndo(0, "X Y")
+    check getWrapCount(cache, buf, 0, 5, 4) != 999
+
+  test "invalidates after deleteLineNoUndo (changeSeq unchanged)":
+    var buf = newTextBuffer("aaa bbb ccc\nXXX")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 5, 4)
+    cache.counts[0] = 999
+    buf.deleteLineNoUndo(0)
+    check getWrapCount(cache, buf, 0, 5, 4) != 999
 
   test "invalidates on viewportWidth change":
     let buf = newTextBuffer("aaaaaaaaaabbbbbbbbbb")
