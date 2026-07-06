@@ -282,7 +282,6 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
 
       # Get the text before deleting (Vim behavior)
       let selectedText = buffer.getTextInRange(selStart, selEnd)
-      let isMultiLine = selStart.line != selEnd.line
 
       # Store in register system
       if state.pendingRegister.isSome and state.pendingRegister.get != '\0':

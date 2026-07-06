@@ -151,7 +151,6 @@ proc handleBackspace*(
     # Check if auto-delete paren is enabled
     if state.display.autoDeleteParen:
       let currentLine = buffer.getLine(pos.line)
-      let charBeforeCursor = currentLine.runeAtPos(pos.column - 1)
 
       try:
         # Auto-delete adjacent pairs only: cursor must be between open and close

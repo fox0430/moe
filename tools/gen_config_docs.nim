@@ -227,7 +227,7 @@ proc regenerateConfigDocs*(input: string): string =
   for name in ExtraSectionNames:
     result = replaceMarkers(result, name, bodyForExtra(name))
 
-proc main() =
+proc main() {.used.} =
   if not fileExists(DocsPath):
     echo "missing: ", DocsPath
     quit 1

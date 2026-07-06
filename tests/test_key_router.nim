@@ -23,7 +23,7 @@
 ## command resolution is still owned by mode-specific dispatchers via
 ## `KeyBindingRegistry.processKey` and is covered by `test_key_bindings.nim`.
 
-import std/[unittest, options]
+import std/unittest
 
 import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/key_router {.all.}

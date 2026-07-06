@@ -220,7 +220,7 @@ Notes:
   Comments and any non-[Colors] sections in the input are not preserved;
   the output is rebuilt from the parsed TOML AST."""
 
-proc main() =
+proc main() {.used.} =
   var
     inPlace = false
     check = false

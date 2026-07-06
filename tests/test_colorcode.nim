@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, hashes]
+import std/[unittest, options]
 
 import pkg/celina
 

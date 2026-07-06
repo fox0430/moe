@@ -25,14 +25,14 @@ import
   ../src/moepkg/
     [keybind_config, key_router, modes, command_line, command_config, buffer]
 import ../src/moepkg/command_handlers/command_handler
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/motion {.all.}
-import ../src/moepkg/command_registry {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/command_handlers/handler_manager {.all.}
-import ../src/moepkg/command_handlers/visual_handler {.all.}
-import ../src/moepkg/command_handlers/insert_handler {.all.}
+import ../src/moepkg/key_bindings
+import ../src/moepkg/types
+import ../src/moepkg/motion
+import ../src/moepkg/command_registry
+import ../src/moepkg/registers
+import ../src/moepkg/command_handlers/handler_manager
+import ../src/moepkg/command_handlers/visual_handler
+import ../src/moepkg/command_handlers/insert_handler
 from ../src/moepkg/types/editor_types import Editor
 
 import editor_test_helper

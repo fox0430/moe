@@ -21,15 +21,13 @@
 
 import std/[unittest, options, tables]
 
-import pkg/results
-
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/syntax/tokenizer {.all.}
-import ../src/moepkg/command_handlers/insert_commands {.all.}
-import ../src/moepkg/command_handlers/smart_indent {.all.}
+import ../src/moepkg/buffer
+import ../src/moepkg/types
+import ../src/moepkg/modes
+import ../src/moepkg/registers
+import ../src/moepkg/syntax/tokenizer
+import ../src/moepkg/command_handlers/insert_commands
+import ../src/moepkg/command_handlers/smart_indent
 
 proc createSmartIndentState(): EditorState =
   ## Minimal EditorState with autoIndent + smartIndent + 2-space expandTab.

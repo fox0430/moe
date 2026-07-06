@@ -21,9 +21,8 @@
 
 import std/[unittest, options, tables, strutils]
 
+import ../src/moepkg/[modes, types]
 import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/modes
-import ../src/moepkg/types
 
 # Note: eventToKeyCombo is not tested here due to celina.KeyModifier
 # namespace conflicts. The function is tested indirectly through integration
@@ -1181,7 +1180,7 @@ suite "KeyBindingRegistry - processKey additional cases":
     registry.setupDefaultBindings()
 
     # In Insert mode, digit keys should NOT be treated as numeric prefix
-    let result = registry.processKey(EditorMode.Insert, toKeyCombo('8'))
+    discard registry.processKey(EditorMode.Insert, toKeyCombo('8'))
     # processKey returns none (no binding for '8' in Insert mode) but
     # numeric prefix must NOT be set
     check registry.sequenceState.numericPrefix == ""
@@ -1190,7 +1189,7 @@ suite "KeyBindingRegistry - processKey additional cases":
     let registry = newKeyBindingRegistry()
     registry.setupDefaultBindings()
 
-    let result = registry.processKey(EditorMode.Replace, toKeyCombo('5'))
+    discard registry.processKey(EditorMode.Replace, toKeyCombo('5'))
     check registry.sequenceState.numericPrefix == ""
 
   test "Escape after digit in Insert mode triggers switch-to-normal":

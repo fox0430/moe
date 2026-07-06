@@ -131,9 +131,6 @@ proc insertB(pt: PieceTable, index: int, text: string) =
   let (line, col) = pt.offsetToLineCol(clamped)
   pt.insertIntoLine(line, col, text)
 
-proc insertB(pt: PieceTable, index: int, ch: char) =
-  pt.insertB(index, $ch)
-
 proc deleteB(pt: PieceTable, index: int, count: int = 1) =
   ## Byte-offset delete, mirroring the removed `delete(index, count)`.
   ## Out-of-range index is a no-op. Maps to deleteAtLineCol, which calls the

@@ -1816,7 +1816,6 @@ suite "Buffer - contentVersion monotonicity":
 
     let buf = newTextBuffer(backend = GapBuffer)
     discard buf.insertText(BufferPosition(line: 0, column: 0), "abc\n")
-    let csPre = buf.changeSeq
     let cvPre = buf.contentVersion
 
     # Reload resets changeSeq to 0 but contentVersion only advances.

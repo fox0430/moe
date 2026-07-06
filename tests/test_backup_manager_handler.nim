@@ -22,9 +22,8 @@
 
 import std/[unittest, times, os]
 
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/backup_manager {.all.}
-import ../src/moepkg/command_handlers/backup_manager_handler {.all.}
+import ../src/moepkg/[key_bindings, backup_manager]
+import ../src/moepkg/command_handlers/backup_manager_handler
 
 const TestViewportHeight = 24
 

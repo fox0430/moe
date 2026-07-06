@@ -19,18 +19,18 @@
 
 ## Tests for command_handlers/search_mode_handler.nim
 
-import std/[unittest, options, unicode]
+import std/[unittest, unicode]
 
 import pkg/celina
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/editor {.all.}
-import ../src/moepkg/config {.all.}
-import ../src/moepkg/config_mode {.all.}
-import ../src/moepkg/help_viewer {.all.}
-import ../src/moepkg/search_utils {.all.}
+import ../src/moepkg/buffer
+import ../src/moepkg/types
+import ../src/moepkg/modes
+import ../src/moepkg/editor
+import ../src/moepkg/config
+import ../src/moepkg/config_mode
+import ../src/moepkg/help_viewer
+import ../src/moepkg/search_utils
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 
 proc setSearchText(e: Editor, text: string) =
@@ -299,8 +299,6 @@ suite "Search mode - Help mode incremental search sync":
     # Add more characters to narrow search
     handleSearchCharacterInput(e, " ")
     handleSearchCharacterInput(e, "m")
-
-    let narrowedLine = e.cursor.line
 
     # Backspace to widen search again
     handleSearchBackspace(e)

@@ -50,11 +50,11 @@
 
 import std/[strutils, unittest, options, sets]
 
+import ../src/moepkg/[help_generator, help_markdown]
 import ../src/moepkg/key_bindings/registry
 import ../src/moepkg/key_bindings/normal_bindings {.all.}
 import ../src/moepkg/key_bindings/visual_bindings {.all.}
 import ../src/moepkg/key_bindings/insert_bindings {.all.}
-import ../src/moepkg/[help_generator, help_markdown]
 
 proc keyComboTokens(kc: KeyCombo): seq[string] =
   ## Map one `KeyCombo` to the same token vocabulary `tokenizeKey` produces,

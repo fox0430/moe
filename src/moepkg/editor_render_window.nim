@@ -530,7 +530,7 @@ proc renderLineSegmentWithSelection*(
   ##   segments of the same logical line. When set, the caller is responsible
   ##   for having already called `updateHighlight`.
 
-  let (fullLine, indentInfo, lineCtx) =
+  let (_, indentInfo, lineCtx) =
     if precomputed.isSome:
       let p = precomputed.get
       (p.fullLine, p.indentInfo, p.lineCtx)

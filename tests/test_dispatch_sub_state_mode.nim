@@ -25,27 +25,19 @@
 ##   * isSome smoke for Filer (template happy path)
 ##   * Early-return branches (migrated modes + Command/RecentFile/Debug/QuickRun)
 
-import std/[unittest, options, os]
+import std/[unittest, os]
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/config_mode {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/motion {.all.}
-import ../src/moepkg/command_registry {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/command_line {.all.}
-import ../src/moepkg/command_config {.all.}
-import ../src/moepkg/filer {.all.}
-import ../src/moepkg/filetree {.all.}
-import ../src/moepkg/help_viewer {.all.}
+import
+  ../src/moepkg/[
+    buffer, types, config_mode, key_bindings, command_registry, registers, command_line,
+    command_config, filer, filetree, help_viewer, motion,
+  ]
+import
+  ../src/moepkg/command_handlers/[
+    handler_manager, mode_dispatchers, command_handler, visual_handler, insert_handler,
+    filetree_handler,
+  ]
 import ../src/moepkg/types/editor_types except Command
-import ../src/moepkg/command_handlers/handler_manager {.all.}
-import ../src/moepkg/command_handlers/mode_dispatchers {.all.}
-import ../src/moepkg/command_handlers/command_handler {.all.}
-import ../src/moepkg/command_handlers/visual_handler {.all.}
-import ../src/moepkg/command_handlers/insert_handler {.all.}
-import ../src/moepkg/command_handlers/filetree_handler {.all.}
 import editor_test_helper
 
 proc createTestState(): EditorState =
@@ -248,7 +240,7 @@ suite "dispatchSubStateMode - Config search highlight clear":
     # window/mode via the shared EditorState.search gate, not just the active
     # Config window. Previously the dispatcher only forced a redraw, so
     # buffer/Help windows kept their highlight.
-    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Config)
+    let (manager, editor, _) = setupDispatchTest(EditorMode.Config)
     editor.activeWindow.modeState =
       ModeState(kind: mskConfig, config: newConfigModeState(newEditorConfig()))
     editor.state.input.search.hlsearchTempDisabled = false
@@ -266,7 +258,7 @@ suite "dispatchSubStateMode - Config search highlight clear":
   test "Config 'n' re-enables the global hlsearch gate after a clear":
     # After a highlight clear, jumping to a match with n must bring the
     # highlight back across all windows (like Vim's n after :noh).
-    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Config)
+    let (manager, editor, _) = setupDispatchTest(EditorMode.Config)
     let configState = newConfigModeState(newEditorConfig())
     var idx = -1
     for i, item in configState.items:
@@ -289,7 +281,7 @@ suite "dispatchSubStateMode - FileTree search highlight clear":
     # FileTree search is self-contained (its own match list, not the global
     # hlsearch gate), so the handler only reports the clear intent and the
     # dispatcher performs the actual clearSearch.
-    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.FileTree)
+    let (manager, editor, _) = setupDispatchTest(EditorMode.FileTree)
     let fileTreeState = newFileTreeState(getTempDir())
     fileTreeState.searchText = "x"
     fileTreeState.searchMatches = @[0]

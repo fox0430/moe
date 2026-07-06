@@ -31,18 +31,12 @@ import config_test_helper
 import pkg/celina
 import pkg/celina/core/mouse_logic
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/editor {.all.}
-import ../src/moepkg/config {.all.}
-import ../src/moepkg/filer {.all.}
+import
+  ../src/moepkg/[
+    buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
+    render_utils, clipboard,
+  ]
 import ../src/moepkg/handler {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/config_loader {.all.}
-import ../src/moepkg/render_utils
-import ../src/moepkg/clipboard {.all.}
 
 proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
   ViewPort(

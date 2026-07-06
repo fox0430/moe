@@ -21,15 +21,11 @@ import std/[unittest, options, tables, strutils]
 
 import pkg/results
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/motion {.all.}
-import ../src/moepkg/command_registry {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/config {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/git_conflict {.all.}
-import ../src/moepkg/registers {.all.}
+import
+  ../src/moepkg/[
+    buffer, types, motion, command_registry, key_bindings, config, modes, git_conflict,
+    registers,
+  ]
 
 suite "CommandRegistry - CommandId":
   test "builtin creates CommandId from BuiltinCommandId":

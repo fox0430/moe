@@ -23,10 +23,7 @@ import std/[unittest, monotimes, times]
 
 import pkg/celina
 
-import ../src/moepkg/notification_popup {.all.}
-import ../src/moepkg/color {.all.}
-import ../src/moepkg/theme {.all.}
-import ../src/moepkg/unicode_utils
+import ../src/moepkg/[notification_popup, color, theme, unicode_utils]
 
 # Initialize theme colors for tests
 setThemeColors(DefaultColors)
