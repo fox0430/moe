@@ -549,6 +549,93 @@ suite "executeCommand - Operator + Motion":
     check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 1
 
+suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
+  test "dh at column 0 is a no-op":
+    let buffer = newTextBuffer("abc\ndef")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.Left, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "abc"
+    check buffer[1] == "def"
+    check ctx.state.editState.pendingOperator.isNone
+
+  test "dk on line 0 is a no-op":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    ctx.state.preferredColumn = -1
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.Up, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 3
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+    check buffer[2] == "line3"
+    check ctx.state.editState.pendingOperator.isNone
+
+  test "dj on last line is a no-op":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 3
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+    check buffer[2] == "line3"
+    check ctx.state.editState.pendingOperator.isNone
+
+  test "dh at column 0 does not clobber the unnamed register":
+    let buffer = newTextBuffer("abc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    # Prime the unnamed register with a previous yank ("xyz").
+    ctx.state.registers.setNoNamedRegister("xyz", false)
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.Left, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "abc"
+    check ctx.state.registers.noNamed.getContent == "xyz"
+
+  test "dl at last column of last line still deletes (not caught by guard)":
+    let buffer = newTextBuffer("abc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.Right, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "ab"
+
 suite "executeCommand - Delete with find motion":
   test "delete find character (df)":
     let buffer = newTextBuffer("hello world")

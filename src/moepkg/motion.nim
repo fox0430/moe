@@ -1385,6 +1385,14 @@ const ExclusiveMotions* = {
   Motion.FirstNonBlank, # ^
 }
 
+const NoMoveNoOpMotions* =
+  LinewiseMotions + {
+    Motion.Left, Motion.Home, Motion.FirstNonBlank, Motion.WordBackward
+  }
+  ## Motions whose "no move" outcome must be treated as a no-op by an operator
+  ## (vim rings the bell). Excludes forward inclusive/right-exclusive motions
+  ## (`l`, `w`, `e`, `$`) where the char under cursor is still a valid target.
+
 func isLinewiseMotion*(motion: Motion): bool {.inline.} =
   ## True if the motion operates on whole lines for operator+motion semantics
   ## (e.g. `dj` deletes both lines fully). Vim-compatible classification.

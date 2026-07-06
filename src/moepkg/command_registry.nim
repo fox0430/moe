@@ -305,6 +305,13 @@ proc executeCommand*(
         ctx.state.editState.pendingOperator = none(PendingOperator)
         return err(r.error)
 
+      # Boundary-clamped no-move motion (dh at col 0, dk on first line, dj on
+      # last line): vim treats as no-op. Without this, calculateOperatorRange
+      # returns a zero-move inclusive range and the operator eats one char/line.
+      if r.value == op.startPos and cmd.motion in NoMoveNoOpMotions:
+        ctx.state.editState.pendingOperator = none(PendingOperator)
+        return ok(())
+
       block:
         # Apply the operator over the motion span (range calc + fold opening +
         # operator execution are shared with the find/till and `.` paths).

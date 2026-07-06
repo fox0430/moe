@@ -1674,6 +1674,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
           ctx.state.editState.pendingOperator = none(PendingOperator)
           return err(r.error)
 
+        # Mirrors the live operator+motion no-move guard (dh/dj/dk at boundary).
+        if r.value == ctx.cursor and lastCmd.motion in NoMoveNoOpMotions:
+          ctx.state.editState.pendingOperator = none(PendingOperator)
+          return ok(())
+
         # Apply the operator over the motion span (shared pipeline).
         let op = ctx.state.editState.pendingOperator.get
         ctx.state.editState.pendingOperator = none(PendingOperator)
