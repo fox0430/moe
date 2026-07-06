@@ -263,6 +263,47 @@ suite "ModifiedLines - deleteRange":
     discard b.undo()
     check b.modifiedLines[0] == lmkUnmodified
 
+suite "ModifiedLines - multi-line edit-point shift":
+  test "insertText with newline shifts existing modifiedLines below the edit":
+    let b = newTextBuffer("aaa\nbbb\nccc")
+    discard b.insertText(BufferPosition(line: 2, column: 3), "!")
+    check b.modifiedLines == @[lmkUnmodified, lmkUnmodified, lmkModified]
+
+    discard b.insertText(BufferPosition(line: 0, column: 1), "\n")
+    check b.modifiedLines == @[lmkModified, lmkInserted, lmkUnmodified, lmkModified]
+
+  test "insertText with newline shifts lineMarkers below the edit":
+    let b = newTextBuffer("aaa\nbbb\nccc")
+    b.setLineMarker(2, LineMarkerKind.SyntaxError)
+    check b.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+
+    discard b.insertText(BufferPosition(line: 0, column: 1), "\n")
+    check b.getLineMarker(0).isNone
+    check b.getLineMarker(1).isNone
+    check b.getLineMarker(2).isNone
+    check b.getLineMarker(3) == some(LineMarkerKind.SyntaxError)
+
+  test "multi-line deleteRange preserves marker below the range":
+    let b = newTextBuffer("a\nb\nc\nd\ne")
+    b.setLineMarker(4, LineMarkerKind.SyntaxError)
+
+    discard b.deleteRange(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 2, column: 1)
+    )
+    check b.getLineMarker(b.len - 1) == some(LineMarkerKind.SyntaxError)
+
+  test "single-line deleteRange joining next line drops the joined-away marker":
+    let b = newTextBuffer("aa\nbb\ncc")
+    b.setLineMarker(1, LineMarkerKind.SyntaxError)
+    b.setLineMarker(2, LineMarkerKind.Bookmark)
+
+    discard b.deleteRange(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 5)
+    )
+    check b.len == 2
+    check b.getLineMarker(0).isNone
+    check b.getLineMarker(1) == some(LineMarkerKind.Bookmark)
+
 suite "ModifiedLines - joinLines":
   test "joinLines marks resulting line as inserted (delete+insert internally)":
     let b = newTextBuffer("line1\nline2\nline3")
