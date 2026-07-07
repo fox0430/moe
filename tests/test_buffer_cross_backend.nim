@@ -343,6 +343,39 @@ suite "CrossBackend - Undo/Redo":
       check b.lineMarkers[0].isNone
       check b.lineMarkers[1] == some(Bookmark)
 
+  # PieceTable takes a separate ckSnapshot path that does not restore bookmarks
+  # or folds; the ckInsertText branch of undoChange is only reached for the
+  # operation-based backends, so these regression tests exclude PieceTable.
+  for be in [GapBuffer, SqrtDecomp, Rope]:
+    test "undo multi-line insertText shifts bookmarks back [" & $be & "]":
+      let b = buf("l0\nl1\nl2\nl3\nl4", be)
+      b.bookmarks = @[3]
+      discard b.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+      check b.bookmarks == @[5]
+      discard b.undo()
+      check b.len == 5
+      check b.bookmarks == @[3]
+
+    test "undo/redo cycle does not drift bookmarks [" & $be & "]":
+      let b = buf("l0\nl1\nl2\nl3\nl4", be)
+      b.bookmarks = @[3]
+      discard b.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+      for _ in 0 ..< 3:
+        discard b.undo()
+        check b.bookmarks == @[3]
+        discard b.redo()
+        check b.bookmarks == @[5]
+
+    test "undo multi-line insertText shifts folds back [" & $be & "]":
+      let b = buf("l0\nl1\nl2\nl3\nl4", be)
+      b.foldState.folds.add(Fold(startLine: 3, endLine: 4, collapsed: false))
+      discard b.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+      check b.foldState.folds[0].startLine == 5
+      check b.foldState.folds[0].endLine == 6
+      discard b.undo()
+      check b.foldState.folds[0].startLine == 3
+      check b.foldState.folds[0].endLine == 4
+
 suite "CrossBackend - replaceLine Undo/Redo":
   for be in BufferBackend:
     test "undo replaceLine [" & $be & "]":
