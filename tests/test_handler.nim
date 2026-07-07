@@ -2222,6 +2222,141 @@ suite "Command Mode - History Navigation":
 
     check e.state.input.commandState.historyIndex == -1
 
+suite "Command Mode - History Navigation (prefix match)":
+  test "Up with typed prefix skips non-matching entries":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["git status", "cd /tmp", "git commit", "ls"]
+    # Type "git" before pressing Up
+    discard handleCommandModeEvent(e, makeCharEvent("g"))
+    discard handleCommandModeEvent(e, makeCharEvent("i"))
+    discard handleCommandModeEvent(e, makeCharEvent("t"))
+
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.input.commandText == ":git status"
+    check e.state.input.commandState.historyIndex == 0
+    check e.state.input.commandState.historyPrefix == "git"
+
+  test "Successive Up keeps the same locked prefix":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["git status", "cd /tmp", "git commit", "ls"]
+    discard handleCommandModeEvent(e, makeCharEvent("g"))
+    discard handleCommandModeEvent(e, makeCharEvent("i"))
+    discard handleCommandModeEvent(e, makeCharEvent("t"))
+
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.input.commandText == ":git commit"
+    check e.state.input.commandState.historyIndex == 2
+    check e.state.input.commandState.historyPrefix == "git"
+
+  test "Up with no more matches leaves state unchanged":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["git status", "ls"]
+    discard handleCommandModeEvent(e, makeCharEvent("g"))
+    discard handleCommandModeEvent(e, makeCharEvent("i"))
+    discard handleCommandModeEvent(e, makeCharEvent("t"))
+
+    # First Up lands on "git status" (index 0)
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    # Second Up: no other "git" entries; state must not change
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.input.commandText == ":git status"
+    check e.state.input.commandState.historyIndex == 0
+
+  test "Up with prefix that matches nothing does not move":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["w", "q"]
+    discard handleCommandModeEvent(e, makeCharEvent("z"))
+
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.input.commandText == ":z"
+    check e.state.input.commandState.historyIndex == -1
+
+  test "Down past newest match restores the locked prefix":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["git status", "cd /tmp", "git commit"]
+    discard handleCommandModeEvent(e, makeCharEvent("g"))
+    discard handleCommandModeEvent(e, makeCharEvent("i"))
+    discard handleCommandModeEvent(e, makeCharEvent("t"))
+
+    # Navigate to "git status"
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    # Down past newest match: restore prefix, not empty
+    let cont = handleCommandModeEvent(e, makeDownArrowEvent())
+
+    check cont == true
+    check e.state.input.commandText == ":git"
+    check e.state.input.commandCursor == 3
+    check e.state.input.commandState.historyIndex == -1
+
+  test "Down between two matches skips non-matching newer entry":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["git status", "cd /tmp", "git commit"]
+    discard handleCommandModeEvent(e, makeCharEvent("g"))
+    discard handleCommandModeEvent(e, makeCharEvent("i"))
+    discard handleCommandModeEvent(e, makeCharEvent("t"))
+
+    # Up twice: land on "git commit" (index 2), skipping "cd /tmp"
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    check e.state.input.commandState.historyIndex == 2
+
+    # Down: back to "git status" (index 0), skipping "cd /tmp"
+    let cont = handleCommandModeEvent(e, makeDownArrowEvent())
+
+    check cont == true
+    check e.state.input.commandText == ":git status"
+    check e.state.input.commandState.historyIndex == 0
+
+  test "Editing after Up locks a new prefix on the next Up":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["git status", "cd /tmp"]
+    discard handleCommandModeEvent(e, makeCharEvent("g"))
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    check e.state.input.commandText == ":git status"
+
+    # Backspace back to empty prefix, then type "cd"
+    discard handleCommandModeEvent(e, makeBackspaceEvent())
+    while e.state.input.commandText.len > 1:
+      discard handleCommandModeEvent(e, makeBackspaceEvent())
+    discard handleCommandModeEvent(e, makeCharEvent("c"))
+    discard handleCommandModeEvent(e, makeCharEvent("d"))
+
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.input.commandText == ":cd /tmp"
+    check e.state.input.commandState.historyIndex == 1
+    check e.state.input.commandState.historyPrefix == "cd"
+
+  test "Empty prefix matches every entry (unchanged behavior)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.input.commandState.history = @["w", "q"]
+
+    # No text typed: prefix is empty
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check e.state.input.commandText == ":q"
+    check e.state.input.commandState.historyIndex == 1
+    check e.state.input.commandState.historyPrefix == ""
+
 suite "adjustCursorAfterInsertExit":
   test "Cursor moves one position left (middle of line)":
     var cursor = BufferPosition(line: 0, column: 3)
