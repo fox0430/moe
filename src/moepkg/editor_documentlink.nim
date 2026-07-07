@@ -125,7 +125,7 @@ proc startLspDocumentLinks*(e: Editor): bool =
       ""
   e.state.lspCache.pendingDocumentLinkCursorLine = e.activeWindow.cursor.line
   e.state.lspCache.pendingDocumentLinkCursorCol =
-    utf8OffsetToUtf16(lineText, e.activeWindow.cursor.column)
+    runeIndexToUtf16(lineText, e.activeWindow.cursor.column)
 
   let reqResult = e.lsp.startDocumentLinkRequest(activeBuffer)
   if reqResult.isErr:
