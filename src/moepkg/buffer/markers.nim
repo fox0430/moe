@@ -19,7 +19,7 @@
 
 ## Sidebar markers, git-change navigation, and LSP diagnostic queries.
 
-import std/options
+import std/[options, algorithm]
 
 import pkg/celina
 
@@ -118,8 +118,11 @@ proc applyDiagnosticHighlights*(
     highlight: var Highlight, diagnostics: seq[BufferDiagnostic]
 ) =
   ## Overwrite highlight segments in diagnostic ranges with undercurl styles.
-  if diagnostics.len > 0:
-    highlight.hasDiagnostics = true
+  if diagnostics.len == 0:
+    return
+  highlight.hasDiagnostics = true
+
+  var overlays = newSeqOfCap[ColorSegment](diagnostics.len)
   for d in diagnostics:
     let color =
       case d.severity
@@ -128,7 +131,7 @@ proc applyDiagnosticHighlights*(
       of bdsInformation: EditorColorPairIndex.syntaxCheckInfo
       of bdsHint: EditorColorPairIndex.syntaxCheckHint
 
-    highlight.overwrite(
+    overlays.add(
       ColorSegment(
         firstRow: d.startLine,
         firstColumn: d.startCol,
@@ -138,3 +141,22 @@ proc applyDiagnosticHighlights*(
         style: Style(modifiers: {StyleModifier.Undercurl}),
       )
     )
+
+  # Batch-apply in one O(N + M) pass when overlays are disjoint; fall back to
+  # sequential overwrite (in original order) when they overlap.
+  var sorted = overlays
+  sorted.sort do(a, b: ColorSegment) -> int:
+    cmp((a.firstRow, a.firstColumn), (b.firstRow, b.firstColumn))
+
+  var disjoint = true
+  for i in 1 ..< sorted.len:
+    if (sorted[i].firstRow, sorted[i].firstColumn) <=
+        (sorted[i - 1].lastRow, sorted[i - 1].lastColumn):
+      disjoint = false
+      break
+
+  if disjoint:
+    highlight.overwriteBatch(sorted)
+  else:
+    for ov in overlays:
+      highlight.overwrite(ov)

@@ -2014,6 +2014,79 @@ suite "Highlight - overwrite":
     check h.colorSegments[1].firstColumn == 20
     check h.colorSegments[1].color == EditorColorPairIndex.default
 
+suite "Highlight - overwriteBatch":
+  proc seg(fr, fc, lr, lc: int, color = EditorColorPairIndex.default): ColorSegment =
+    ColorSegment(
+      firstRow: fr,
+      firstColumn: fc,
+      lastRow: lr,
+      lastColumn: lc,
+      color: color,
+      style: defaultStyle,
+    )
+
+  # overwriteBatch must produce exactly what a sequential overwrite loop does
+  # for disjoint, sorted overlays.
+  proc sequential(base, overlays: seq[ColorSegment]): seq[ColorSegment] =
+    var h = Highlight(colorSegments: base)
+    for ov in overlays:
+      h.overwrite(ov)
+    h.colorSegments
+
+  proc batched(base, overlays: seq[ColorSegment]): seq[ColorSegment] =
+    var h = Highlight(colorSegments: base)
+    h.overwriteBatch(overlays)
+    h.colorSegments
+
+  test "Empty overlays leaves segments unchanged":
+    let base = @[seg(0, 0, 0, 20)]
+    check batched(base, @[]) == base
+
+  test "Multiple disjoint overlays on a single wide segment":
+    let base = @[seg(0, 0, 0, 100, EditorColorPairIndex.default)]
+    let overlays = @[
+      seg(0, 5, 0, 10, EditorColorPairIndex.syntaxCheckErr),
+      seg(0, 20, 0, 25, EditorColorPairIndex.syntaxCheckWarn),
+      seg(0, 40, 0, 40, EditorColorPairIndex.syntaxCheckInfo),
+    ]
+    check batched(base, overlays) == sequential(base, overlays)
+
+  test "Overlay spanning multiple base segments":
+    let base = @[
+      seg(0, 0, 0, 10, EditorColorPairIndex.default),
+      seg(1, 0, 1, 10, EditorColorPairIndex.keyword),
+      seg(2, 0, 2, 10, EditorColorPairIndex.default),
+    ]
+    let overlays = @[seg(0, 5, 2, 5, EditorColorPairIndex.syntaxCheckErr)]
+    check batched(base, overlays) == sequential(base, overlays)
+
+  test "Multiple overlays each spanning several segments":
+    var base: seq[ColorSegment]
+    for r in 0 ..< 10:
+      base.add(seg(r, 0, r, 15, EditorColorPairIndex.default))
+    let overlays = @[
+      seg(0, 3, 1, 8, EditorColorPairIndex.syntaxCheckErr),
+      seg(3, 0, 3, 15, EditorColorPairIndex.syntaxCheckWarn),
+      seg(5, 10, 7, 2, EditorColorPairIndex.syntaxCheckHint),
+    ]
+    check batched(base, overlays) == sequential(base, overlays)
+
+  test "Overlay starting at column 0 of a later row":
+    let base = @[seg(0, 0, 3, 20, EditorColorPairIndex.default)]
+    let overlays = @[seg(2, 0, 2, 5, EditorColorPairIndex.syntaxCheckErr)]
+    check batched(base, overlays) == sequential(base, overlays)
+
+  test "Overlays in gaps between non-contiguous segments":
+    let base = @[
+      seg(0, 0, 0, 10, EditorColorPairIndex.default),
+      seg(5, 0, 5, 10, EditorColorPairIndex.default),
+    ]
+    let overlays = @[
+      seg(0, 2, 0, 4, EditorColorPairIndex.syntaxCheckErr),
+      seg(5, 6, 5, 8, EditorColorPairIndex.syntaxCheckWarn),
+    ]
+    check batched(base, overlays) == sequential(base, overlays)
+
 suite "Highlight - Progressive Initial Highlighting":
   test "continueInitialHighlight parses remaining lines":
     # A buffer larger than InitialChunkSize (1000 lines) should be
