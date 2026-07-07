@@ -21,7 +21,7 @@
 ## PieceTable, and the inverse-application helpers used by both undo()
 ## and redo().
 
-import std/[deques, options]
+import std/[deques, options, strutils]
 
 import pkg/results
 
@@ -56,6 +56,13 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
       )
       b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
+      # Reverse the fold/bookmark shift that insertTextWithNewlines applied on
+      # the forward path. Without this, folds and bookmarks below the insert
+      # point stay shifted after undo and drift further on every redo/undo cycle.
+      let newlineCount = change.insertText.count('\n')
+      if newlineCount > 0:
+        b.foldState.adjustFoldsAfterDelete(change.insertPos.line, newlineCount)
+        b.adjustBookmarksForDelete(change.insertPos.line, newlineCount)
     of ckDeleteText:
       # Undo delete by inserting the deleted text
       let line = b.getLine(change.deletePos.line)
