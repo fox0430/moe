@@ -1095,6 +1095,68 @@ suite "Handler - Paste operations":
     # Cursor should be at column 4 + 3 chars = 7
     check ctx.cursor.column == 7
 
+  test "paste after cursor (p) - charwise multi-line":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("xy\nab", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer.len == 2
+    check buffer[0] == "hxy"
+    check buffer[1] == "abello"
+    # Cursor lands on last char of pasted text ('b') on the new line
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 1
+
+  test "paste after cursor (p) - charwise multi-line count=2":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("xy\nab", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after"), @["2"]).isOk
+    # First p pastes after column 0, second p pastes right after the previous
+    # last char, giving: h|xy\nab|xy\nab|ello
+    check buffer.len == 3
+    check buffer[0] == "hxy"
+    check buffer[1] == "abxy"
+    check buffer[2] == "abello"
+    check ctx.cursor.line == 2
+    check ctx.cursor.column == 1
+
+  test "paste before cursor (P) - charwise multi-line":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    ctx.state.registers.setYankedRegister("xy\nab", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before")).isOk
+    check buffer.len == 2
+    check buffer[0] == "hexy"
+    check buffer[1] == "abllo"
+    # Cursor lands on last char of pasted text ('b') on the new line
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 1
+
+  test "paste after cursor (p) - charwise multi-line multibyte":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("あい\nうえお", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer.len == 2
+    check buffer[0] == "hあい"
+    check buffer[1] == "うえおello"
+    # Cursor at last rune of paste 'お' = column 2 on the new line
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 2
+
 suite "Handler - Delete char operations":
   test "delete char at cursor (x)":
     let buffer = newTextBuffer("hello")

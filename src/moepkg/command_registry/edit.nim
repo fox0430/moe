@@ -39,6 +39,17 @@ proc firstNonBlankColumn*(line: seq[Rune]): int =
     return line.len - 1
   return 0
 
+proc pasteEndPos(startPos: BufferPosition, pasteText: string): BufferPosition =
+  ## Position one past the last inserted rune when `pasteText` is inserted at
+  ## `startPos`. Splits on '\n' so multi-line paste lands on the final inserted
+  ## line instead of treating '\n' as a column-adding rune.
+  let nlCount = pasteText.count('\n')
+  if nlCount == 0:
+    BufferPosition(line: startPos.line, column: startPos.column + pasteText.charLen)
+  else:
+    let lastSeg = pasteText.substr(pasteText.rfind('\n') + 1)
+    BufferPosition(line: startPos.line + nlCount, column: lastSeg.charLen)
+
 proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Paste text from internal register or system clipboard after cursor (p command)
   ## Mimics Vim's 'p' behavior
@@ -132,11 +143,16 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
           discard ctx.buffer.commitTransaction()
         return err(insertResult.error)
 
-      # Update cursor position for next paste
-      ctx.cursor.column = pastePos.column + pasteText.charLen
+      # Advance cursor past the inserted text so the next iteration inserts
+      # immediately after it. For multi-line paste, land on the final inserted
+      # line at column = last-segment charLen (not startCol + total charLen,
+      # which would treat '\n' as a column-adding rune).
+      let endPos = pasteEndPos(pastePos, pasteText)
+      ctx.cursor.line = endPos.line
+      ctx.cursor.column = endPos.column
 
   # Adjust cursor to last character of pasted text
-  if not isFullLine and pasteText.charLen > 0:
+  if not isFullLine and ctx.cursor.column > 0:
     ctx.cursor.column = ctx.cursor.column - 1
 
   # Commit transaction if we started one
@@ -237,11 +253,16 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
           discard ctx.buffer.commitTransaction()
         return err(insertResult.error)
 
-      # Update cursor position for next paste
-      ctx.cursor.column = pastePos.column + pasteText.charLen
+      # Advance cursor past the inserted text so the next iteration inserts
+      # immediately after it. For multi-line paste, land on the final inserted
+      # line at column = last-segment charLen (not startCol + total charLen,
+      # which would treat '\n' as a column-adding rune).
+      let endPos = pasteEndPos(pastePos, pasteText)
+      ctx.cursor.line = endPos.line
+      ctx.cursor.column = endPos.column
 
   # Adjust cursor to last character of pasted text
-  if not isFullLine and pasteText.charLen > 0:
+  if not isFullLine and ctx.cursor.column > 0:
     ctx.cursor.column = ctx.cursor.column - 1
 
   # Commit transaction if we started one
