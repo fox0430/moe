@@ -110,13 +110,12 @@ proc newLineStyleContext*(
     ctx: RenderContext,
 ): LineStyleContext =
   ## Compute all per-line state needed by the style pipeline in one place.
-  # Trailing-space highlighting only fires on non-cursor lines in file-edit mode
-  # when enabled (see styleOverrideAt). Skip the whole-line scan when it cannot
-  # fire. Don't clip to the cap: trailing whitespace lives at the line *end*,
-  # past the cap, so the input must stay the full line.
+  # Trailing-space highlighting fires in file-edit mode when enabled (see
+  # styleOverrideAt). Skip the whole-line scan when it cannot fire. Don't clip
+  # to the cap: trailing whitespace lives at the line *end*, past the cap, so
+  # the input must stay the full line.
   let trailingSpaceStart =
-    if e.config.highlight.trailingSpaces and ctx.windowMode.isFileEditMode and
-        lineIndex != ctx.cursorLine:
+    if e.config.highlight.trailingSpaces and ctx.windowMode.isFileEditMode:
       findTrailingSpaceStart(fullLine)
     else:
       high(int) # disabled: `col >= trailingSpaceStart` never matches
@@ -392,7 +391,7 @@ proc charOverridePatch(
       ctx.windowMode.isFileEditMode:
     patch = full(fullWidthSpaceStyle())
   if e.config.highlight.trailingSpaces and col >= lineCtx.trailingSpaceStart and
-      ctx.windowMode.isFileEditMode and not lineCtx.isCursorLine and
+      ctx.windowMode.isFileEditMode and
       (rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE):
     patch = full(trailingSpacesStyle())
   for ccm in lineCtx.colorCodeMatches:
