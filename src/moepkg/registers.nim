@@ -87,8 +87,10 @@ proc isValidRegisterName*(c: char): bool =
     c.isClipboardRegisterName or c == '"'
 
 proc isEmpty*(r: Register): bool =
-  ## Check if register is empty
-  r.buffer.len == 0 or (r.buffer.len == 1 and r.buffer[0].len == 0)
+  ## Check if register is empty.
+  ## A linewise register holding a single empty line ([""]) is NOT empty —
+  ## it represents one empty line, which Vim's p/P inserts verbatim.
+  r.buffer.len == 0 or (r.buffer.len == 1 and r.buffer[0].len == 0 and not r.isLine)
 
 proc getContent*(r: Register): string =
   ## Get register content as a single string

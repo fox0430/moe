@@ -1622,6 +1622,61 @@ suite "Handler - Yank line operations":
     check pasteResult.isOk
     check "world" in buffer[3]
 
+  test "yy on empty line stores linewise empty line in register":
+    let buffer = newTextBuffer("line1\n\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("yank.line")).isOk
+    let reg = ctx.state.registers.getNoNamedRegister()
+    check reg.isLine == true
+    check reg.getLines() == @[""]
+    check not reg.isEmpty
+
+  test "yy then p on empty line inserts blank line below (Vim parity)":
+    let buffer = newTextBuffer("line1\n\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("yank.line")).isOk
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer.len == 4
+    check buffer[0] == "line1"
+    check buffer[1] == ""
+    check buffer[2] == ""
+    check buffer[3] == "line3"
+    check ctx.cursor.line == 2
+
+  test "dd then p on empty line inserts blank line below":
+    let buffer = newTextBuffer("line1\n\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isOk
+    # buffer is now: "line1\nline3", cursor on old line 2 (now line 1)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer.len == 3
+    check buffer[0] == "line1"
+    check buffer[1] == ""
+    check buffer[2] == "line3"
+
+  test "P on linewise empty-line register inserts blank line above":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.registers.setYankedRegister("", true)
+    check registry.execute(ctx, custom("paste.before")).isOk
+    check buffer.len == 3
+    check buffer[0] == "line1"
+    check buffer[1] == ""
+    check buffer[2] == "line2"
+
 suite "Handler - Substitute operations":
   test "substitute char (s)":
     let buffer = newTextBuffer("hello")
