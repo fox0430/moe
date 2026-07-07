@@ -192,7 +192,6 @@ suite "Inlay Hint Response processing":
       ServerCapabilities(inlayHintProvider: some(newJBool(true)))
 
     const reqId = 78
-    let buf = e.activeBuffer()
     e.lsp.service.pendingResponses[reqId] = (
       result: some($(%*[{"position": {"line": 0, "character": 5}, "label": ": int"}])),
       error: none(string),

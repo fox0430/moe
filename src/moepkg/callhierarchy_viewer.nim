@@ -22,7 +22,7 @@
 ## This module provides the data structures and operations for the call hierarchy viewer mode.
 ## Used to display and navigate LSP call hierarchy results (incoming/outgoing calls).
 
-import std/[strformat, strutils, options]
+import std/[strformat, options]
 
 import buffer, list_viewer, lsp_service
 import lsp/protocol/types as lspTypes

@@ -21,9 +21,8 @@
 
 import std/[unittest, options]
 
-import ../src/moepkg/buffer_manager {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/command_handlers/buffer_manager_handler {.all.}
+import ../src/moepkg/[buffer_manager, key_bindings]
+import ../src/moepkg/command_handlers/buffer_manager_handler
 
 proc createTestBufferManagerState(): BufferManagerState =
   ## Create a BufferManagerState with test entries

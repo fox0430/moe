@@ -24,14 +24,8 @@ import std/[unittest, options, strutils, tables, sets]
 
 import pkg/results
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/motion {.all.}
+import ../src/moepkg/[buffer, types, motion, key_bindings, config, modes, registers]
 import ../src/moepkg/command_registry {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/config {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/registers {.all.}
 
 proc createTestContext(buffer: TextBuffer): CommandContext =
   let state = EditorState(activeWindow: EditorWindow())
@@ -4364,7 +4358,6 @@ suite "Multibyte character support":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
-    let registry = createTestRegistry()
 
     let range = OperatorRange(
       start: BufferPosition(line: 0, column: 0),
@@ -4382,7 +4375,6 @@ suite "Multibyte character support":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
-    let registry = createTestRegistry()
 
     let range = OperatorRange(
       start: BufferPosition(line: 0, column: 0),
@@ -4401,7 +4393,6 @@ suite "Multibyte character support":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4) # On 'A'
     ctx.state.mode = EditorMode.Normal
-    let registry = createTestRegistry()
 
     let range = OperatorRange(
       start: BufferPosition(line: 0, column: 4),
@@ -4417,7 +4408,6 @@ suite "Multibyte character support":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
     ctx.state.mode = EditorMode.Normal
-    let registry = createTestRegistry()
 
     let range = OperatorRange(
       start: BufferPosition(line: 0, column: 4),

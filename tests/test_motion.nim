@@ -23,8 +23,7 @@ import std/[unittest, strutils]
 
 import pkg/results
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
+import ../src/moepkg/[buffer, types]
 import ../src/moepkg/motion {.all.}
 
 suite "TillChar Motion":

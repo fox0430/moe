@@ -22,9 +22,8 @@
 
 import std/unittest
 
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/help_viewer {.all.}
-import ../src/moepkg/command_handlers/help_handler {.all.}
+import ../src/moepkg/[key_bindings, help_viewer]
+import ../src/moepkg/command_handlers/help_handler
 
 const TestViewportHeight = 24
 

@@ -23,9 +23,7 @@
 
 import std/[unittest, options, tables]
 
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/registers {.all.}
+import ../src/moepkg/[types, modes, registers]
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing

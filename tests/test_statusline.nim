@@ -23,13 +23,9 @@ import std/[unittest, options, tables, strutils, os]
 
 import pkg/celina
 
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/[types, modes, registers, buffer, config]
+import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
-import ../src/moepkg/config {.all.}
-import ../src/moepkg/syntax/tokenizer {.all.}
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -389,7 +385,7 @@ suite "StatusLine - buildFileDisplay":
 
   test "Display absolute directory path with trailing slash in Filer mode":
     # Use an existing directory so dirExists returns true
-    let absPath = getCurrentDir() / "src"
+    let absPath = getCurrentDir()
     let textBuffer = createTestTextBuffer(absPath)
     let config = createTestStatusLineConfig()
 

@@ -22,22 +22,15 @@
 
 import std/[unittest, options, tables, strutils, os, tempfiles]
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/motion {.all.}
-import ../src/moepkg/command_registry {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/command_line {.all.}
-import ../src/moepkg/command_config {.all.}
-import ../src/moepkg/filetree {.all.}
+import
+  ../src/moepkg/[
+    buffer, types, key_bindings, modes, motion, command_registry, registers,
+    command_line, command_config, filetree,
+  ]
+import
+  ../src/moepkg/command_handlers/
+    [handler_manager, command_handler, visual_handler, insert_handler, filetree_handler]
 import ../src/moepkg/types/editor_types except Command
-import ../src/moepkg/command_handlers/handler_manager {.all.}
-import ../src/moepkg/command_handlers/command_handler {.all.}
-import ../src/moepkg/command_handlers/visual_handler {.all.}
-import ../src/moepkg/command_handlers/insert_handler {.all.}
-import ../src/moepkg/command_handlers/filetree_handler {.all.}
 import editor_test_helper
 
 proc createTestState(): EditorState =
@@ -1279,7 +1272,6 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    let viewport = createTestViewport()
 
     enterInsertMode(buffer, state)
     check buffer.inTransaction
@@ -2162,7 +2154,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'y' twice (yy = yank line)
     let yKey = KeyCombo(isSpecial: false, char: "y", modifiers: {})
-    let result1 = manager.handleKeyCombo(
+    discard manager.handleKeyCombo(
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), yKey
     )
     check state.insertNormalMode

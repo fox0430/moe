@@ -17,12 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, tables, algorithm, sequtils, importutils]
+import std/[unittest, os, tables, algorithm, strutils]
 
 import pkg/celina
 
-import ../src/moepkg/command_completion {.all.}
 import ../src/moepkg/[command_line, command_config, fuzzy_match]
+import ../src/moepkg/command_completion {.all.}
 
 suite "CommandCompletion - extractCommandPrefix":
   test "Extract prefix from simple command :wq":

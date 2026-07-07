@@ -19,11 +19,11 @@
 
 ## Tests for editor_lsp.nim
 
-import std/[unittest, os, options, strutils, monotimes, times, tables]
+import std/[unittest, os, options, tables]
 
-import ../src/moepkg/[editor, buffer, config, config_loader, types, hover_popup]
 import pkg/chronos
 
+import ../src/moepkg/[editor, buffer, config, config_loader, types]
 import ../src/moepkg/editor_lsp {.all.}
 import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes

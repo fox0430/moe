@@ -22,10 +22,8 @@
 
 import std/[unittest, options, strutils]
 
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/recent_file_mode {.all.}
-import ../src/moepkg/command_handlers/recent_file_mode_handler {.all.}
+import ../src/moepkg/[key_bindings, modes, recent_file_mode]
+import ../src/moepkg/command_handlers/recent_file_mode_handler
 
 const TestViewportHeight = 24
 

@@ -1284,7 +1284,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     check g.commentDepth == 1
 
     # Second line: simulate continuation by setting buf/pos directly
-    let line2 = "second line\"\"\""
+    const line2 = "second line\"\"\""
     g.buf = line2
     g.pos = 0
     g.pythonNextToken()
@@ -1302,7 +1302,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     check g.commentDepth == 2
 
     # Second line: simulate continuation
-    let line2 = "second line'''"
+    const line2 = "second line'''"
     g.buf = line2
     g.pos = 0
     g.pythonNextToken()
@@ -1388,7 +1388,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     check g.state == gtDocLongComment
 
     # Line 2: middle (no open/close)
-    let line2 = "middle line"
+    const line2 = "middle line"
     g.buf = line2
     g.pos = 0
     g.pythonNextToken()
@@ -1396,7 +1396,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     check g.state == gtDocLongComment
 
     # Line 3: closing
-    let line3 = "last\"\"\""
+    const line3 = "last\"\"\""
     g.buf = line3
     g.pos = 0
     g.pythonNextToken()
@@ -1459,7 +1459,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     check g.commentDepth == 1
 
     # Continuation with ''' should NOT close
-    let line2 = "has ''' inside"
+    const line2 = "has ''' inside"
     g.buf = line2
     g.pos = 0
     g.pythonNextToken()
@@ -1467,7 +1467,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     check g.state == gtDocLongComment
 
     # Close with correct """
-    let line3 = "end\"\"\""
+    const line3 = "end\"\"\""
     g.buf = line3
     g.pos = 0
     g.pythonNextToken()
@@ -1482,7 +1482,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
 
     # Simulate being called again with no more input (end-of-buffer).
     # Previously this would assert due to producing an empty token.
-    let emptyBuf = ""
+    const emptyBuf = ""
     g.buf = emptyBuf
     g.pos = 0
     g.pythonNextToken()
@@ -1495,7 +1495,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     check g.state == gtDocLongComment
 
     # Closing + more tokens on same line
-    let line2 = "end\"\"\" + y"
+    const line2 = "end\"\"\" + y"
     g.buf = line2
     g.pos = 0
     g.pythonNextToken()

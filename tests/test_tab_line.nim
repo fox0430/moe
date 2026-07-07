@@ -23,11 +23,7 @@ import std/[unittest, options, tables, strutils]
 
 import pkg/celina
 
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/unicode_utils {.all.}
+import ../src/moepkg/[types, modes, registers, buffer, unicode_utils]
 import ../src/moepkg/tab_line {.all.}
 
 proc createTestState(): EditorState =

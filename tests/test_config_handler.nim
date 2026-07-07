@@ -21,11 +21,8 @@
 
 import std/unittest
 
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/config_mode {.all.}
-import ../src/moepkg/config {.all.}
-import ../src/moepkg/command_handlers/config_handler {.all.}
+import ../src/moepkg/[types, key_bindings, config_mode, config]
+import ../src/moepkg/command_handlers/config_handler
 
 proc createTestConfigState(): ConfigModeState =
   ## Create a minimal ConfigModeState for testing
