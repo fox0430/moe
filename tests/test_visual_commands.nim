@@ -21,7 +21,7 @@
 
 import std/[unittest, options, tables, strutils]
 
-import ../src/moepkg/[buffer, types, modes.registers]
+import ../src/moepkg/[buffer, types, modes, registers]
 import ../src/moepkg/command_handlers/visual_commands
 
 proc createTestState(): EditorState =
@@ -1327,6 +1327,51 @@ suite "Visual Commands - Block Selection":
     # No raw CR should leak into line content.
     check '\r' notin buf.getLine(0)
     check '\r' notin buf.getLine(1)
+
+  test "Paste linewise content with trailing newline does not insert blank line":
+    # Regression: real yy stores linewise content with a trailing \n.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "old line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 10), "\nold line 3")
+    let state = createTestState()
+    state.registers.setYankedRegister("new line A\nnew line B\n", true)
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.len == 4
+    check buf.getLine(0) == "new line A"
+    check buf.getLine(1) == "new line B"
+    check buf.getLine(2) == "old line 2"
+    check buf.getLine(3) == "old line 3"
+
+  test "Paste single-line linewise register over line selection":
+    # Regression: single-line yy stores "foo\n".
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "old line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
+    let state = createTestState()
+    state.registers.setYankedRegister("foo\n", true)
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.len == 2
+    check buf.getLine(0) == "foo"
+    check buf.getLine(1) == "old line 2"
 
   test "Paste charwise multi-line content over line selection splits into lines":
     let buf = newTextBuffer()
