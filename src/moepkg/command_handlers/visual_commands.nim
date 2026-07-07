@@ -26,7 +26,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[buffer, types, registers, motion, modes]
+import ../[buffer, types, registers, motion, modes, config, clipboard]
 import insert_commands
 
 proc getSelectionRange*(
@@ -1010,7 +1010,11 @@ proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
     state.visualSelection.current = temp
     state.cursor = state.visualSelection.current
 
-proc visualPaste*(buffer: TextBuffer, state: EditorState) =
+proc visualPaste*(
+    buffer: TextBuffer,
+    state: EditorState,
+    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
+) =
   ## Delete selection and paste register content (p/P command)
   if state.visualSelection.active:
     # Get register content
@@ -1020,14 +1024,28 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
       else:
         '"' # Default unnamed register
 
-    let pasteText = state.registers.getRegisterContent(regName).normalizeNewlines()
+    let reg = state.registers.getRegister(regName)
+    var pasteText = reg.getContent().normalizeNewlines()
+    let isFullLine = reg.isLine
+    let registerEmpty = reg.isEmpty
 
     # Clear pending register immediately so downstream delete operations
     # (e.g. deleteBlockSelection) don't overwrite the named/clipboard register
     # that we just read from.
     state.pendingRegister = none(char)
 
-    if pasteText.len == 0:
+    # If register is truly empty, try system clipboard (if enabled).
+    # A linewise register with a single empty line ([""]) is not empty — it
+    # represents one empty line and must not trigger the clipboard fallback.
+    if registerEmpty and clipboardConfig.enable:
+      let readResult = readFromClipboardSync(clipboardConfig.tool)
+      if readResult.isOk:
+        pasteText = readResult.get.normalizeNewlines()
+
+    # Linewise paste of an empty line is legitimate for line-visual selection
+    # (Vim inserts a blank line). All other empty combinations are a no-op.
+    let allowEmptyLinewise = isFullLine and state.visualSelection.kind == vskLine
+    if pasteText.len == 0 and not allowEmptyLinewise:
       # Nothing to paste, just exit visual mode
       state.visualSelection.active = false
       state.pendingRegister = none(char)
