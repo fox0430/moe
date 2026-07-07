@@ -19,9 +19,11 @@
 
 ## Tests for visual_commands.nim
 
-import std/[unittest, options, tables, strutils]
+import std/[unittest, options, tables, strutils, os, osproc]
 
-import ../src/moepkg/[buffer, types, modes, registers]
+import pkg/results
+
+import ../src/moepkg/[buffer, types, modes, registers, config, clipboard]
 import ../src/moepkg/command_handlers/visual_commands
 
 proc createTestState(): EditorState =
@@ -78,6 +80,45 @@ proc createTestState(): EditorState =
       kind: vskChar,
     ),
   )
+
+proc isToolAvailable(cmd: string): bool =
+  try:
+    let (_, exitCode) = execCmdEx("which " & cmd)
+    result = exitCode == 0
+  except CatchableError:
+    result = false
+
+proc getAvailableClipboardTool(): (bool, ClipboardTool) =
+  if existsEnv("WAYLAND_DISPLAY") and isToolAvailable("wl-copy"):
+    return (true, cbtWlClipboard)
+  elif existsEnv("DISPLAY") and isToolAvailable("xsel"):
+    return (true, cbtXsel)
+  elif existsEnv("DISPLAY") and isToolAvailable("xclip"):
+    return (true, cbtXclip)
+  return (false, cbtXsel)
+
+proc readClipboardWithRetry(
+    tool: ClipboardTool, expected: string, maxRetries: int = 10, delayMs: int = 100
+): Result[string, string] =
+  ## Retry reading CLIPBOARD until the write is visible (may lag in CI).
+  for i in 0 ..< maxRetries:
+    result = readFromClipboardSync(tool)
+    if result.isOk and result.get() == expected:
+      return
+    sleep(delayMs)
+  return readFromClipboardSync(tool)
+
+proc cleanupClipboardProcs(tool: ClipboardTool) =
+  ## Kill lingering async clipboard-writer children spawned by this test proc.
+  let pid = getCurrentProcessId()
+  case tool
+  of cbtXsel:
+    discard execCmdEx("pkill -P " & $pid & " xsel")
+  of cbtXclip:
+    discard execCmdEx("pkill -P " & $pid & " xclip")
+  else:
+    discard
+  sleep(100)
 
 suite "Visual Commands - getSelectionRange":
   test "Get selection range when start equals current":
@@ -1126,6 +1167,77 @@ suite "Visual Commands - visualPaste":
     check state.registers.getNamedRegister('a').getContent() == "REG_A_CONTENT"
     check state.pendingRegister.isNone
     check state.visualSelection.active == false
+
+  test "V-mode paste of linewise empty register replaces line with blank line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line1\nline2\nline3")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    # Linewise register holding a single empty line (Vim's dd on a blank line
+    # or yy on an empty line produces this).
+    state.registers.setYankedRegister("", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 1, column: 0),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "line1"
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == "line3"
+    check state.visualSelection.active == false
+
+  test "Charwise paste of linewise empty register is a no-op":
+    # Non-line visual selections keep the pre-fix no-op behavior for empty
+    # linewise registers — Vim's semantics there are gnarly and out of scope.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.registers.setYankedRegister("", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "hello world" # unchanged
+    check state.visualSelection.active == false
+
+  test "visualPaste falls back to system clipboard when register empty":
+    let (available, tool) = getAvailableClipboardTool()
+    if not available:
+      skip()
+    else:
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+      let state = createTestState()
+      # No register set — unnamed register is empty.
+
+      let testText = "FROM_CLIPBOARD"
+      check writeToClipboardSync(tool, testText).isOk
+      let ready = readClipboardWithRetry(tool, testText)
+      check ready.isOk and ready.get() == testText
+
+      state.visualSelection = VisualSelection(
+        start: BufferPosition(line: 0, column: 0),
+        current: BufferPosition(line: 0, column: 4),
+        active: true,
+        kind: vskChar,
+      )
+
+      let cfg = ClipboardConfig(enable: true, tool: tool)
+      visualPaste(buf, state, cfg)
+
+      check buf.getLine(0) == "FROM_CLIPBOARD world"
+      check state.visualSelection.active == false
+
+      cleanupClipboardProcs(tool)
 
 suite "Visual Commands - Block Selection":
   test "Delete block selection":

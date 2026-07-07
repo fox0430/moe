@@ -202,7 +202,7 @@ proc handleVisualSwapSelection*(ctx: CommandContext): Result[(), string] =
 
 proc handleVisualPaste*(ctx: CommandContext): Result[(), string] =
   ## Paste over selection
-  visualPaste(ctx.buffer, ctx.state)
+  visualPaste(ctx.buffer, ctx.state, ctx.clipboardConfig)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
