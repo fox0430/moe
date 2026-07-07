@@ -1068,10 +1068,11 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
       for _ in startLine .. endLine:
         discard buffer.deleteLine(startLine)
 
-      # Insert paste content. Split on \n so multi-line content (linewise, or a
-      # charwise register pasted over a line selection) is inserted as separate
-      # lines and never stores a raw \n inside one line.
-      let lines = pasteText.split('\n')
+      # Linewise register stores a trailing \n, so split yields an empty tail
+      # element -- drop it or an extra blank line gets inserted.
+      var lines = pasteText.split('\n')
+      if lines.len > 1 and lines[^1].len == 0:
+        lines.setLen(lines.len - 1)
       for i, line in lines:
         discard buffer.insert(startLine + i, line)
       state.cursor.line = startLine
