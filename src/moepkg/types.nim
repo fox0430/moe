@@ -217,6 +217,9 @@ type
   CommandState* = object ## Command mode (ex-mode) state grouped together
     history*: seq[string] # Command history (most recent first)
     historyIndex*: int # Current position in command history (-1 when not navigating)
+    historyPrefix*: string
+      # Prefix captured when history navigation started; only entries starting
+      # with this prefix are surfaced by Up/Down. Empty means "match any".
 
   MacroState* = object ## Macro recording and playback state grouped together
     isRecording*: bool # Whether currently recording a macro
@@ -963,6 +966,7 @@ proc enterCommandOverlay*(state: EditorState) =
   state.input.commandText = ":"
   state.input.commandCursor = 0
   state.input.commandState.historyIndex = -1
+  state.input.commandState.historyPrefix = ""
 
 proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   ## Enter search mode overlay
@@ -996,6 +1000,7 @@ proc exitOverlay*(state: EditorState) =
     state.input.commandText = ""
     state.input.commandCursor = 0
     state.input.commandState.historyIndex = -1
+    state.input.commandState.historyPrefix = ""
     state.input.search.text = ""
     state.input.search.cursor = 0
     state.input.search.historyIndex = -1

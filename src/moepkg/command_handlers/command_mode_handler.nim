@@ -384,6 +384,18 @@ proc handleCommandModeEvent*(e: Editor, event: Event): bool =
 
   return e.handleCommandModeKeyCombo(keyComboOpt.get)
 
+proc findHistoryMatch(
+    history: seq[string], prefix: string, startIndex, step: int
+): int =
+  ## Find the next history entry starting with `prefix`, scanning from
+  ## `startIndex` by `step` (+1 = older, -1 = newer). Returns -1 if none.
+  var i = startIndex
+  while i >= 0 and i <= history.high:
+    if history[i].startsWith(prefix):
+      return i
+    i += step
+  return -1
+
 proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in command-line mode, with runtime mapping support.
   ##
@@ -1658,43 +1670,49 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.state.commandCompletionManager.cancelCompletion()
     return true
 
-  # Up arrow: Navigate to previous (older) command in history
+  # Up arrow: Navigate to previous (older) command in history, restricted to
+  # entries starting with the prefix captured when navigation began.
   if keyCombo.isSpecial and keyCombo.special == skUp:
     if e.state.input.commandState.history.len > 0:
-      # If not yet navigating history, start from the most recent entry
-      if e.state.input.commandState.historyIndex == -1:
-        e.state.input.commandState.historyIndex = 0
-      # Otherwise, move to the next older entry
-      elif e.state.input.commandState.historyIndex <
-          e.state.input.commandState.history.high:
-        e.state.input.commandState.historyIndex += 1
-
-      # Update command text with history entry
-      e.state.input.commandText =
-        ":" & e.state.input.commandState.history[
-          e.state.input.commandState.historyIndex
-        ]
-      e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
-      e.state.commandCompletionManager.cancelCompletion()
-      e.updateSubstitutePreviewIfNeeded()
+      let startIndex =
+        if e.state.input.commandState.historyIndex == -1:
+          # First Up: lock the current text as the prefix filter.
+          e.state.input.commandState.historyPrefix = e.state.input.commandText[1 ..^ 1]
+          0
+        else:
+          e.state.input.commandState.historyIndex + 1
+      let idx = findHistoryMatch(
+        e.state.input.commandState.history, e.state.input.commandState.historyPrefix,
+        startIndex, 1,
+      )
+      if idx >= 0:
+        e.state.input.commandState.historyIndex = idx
+        e.state.input.commandText = ":" & e.state.input.commandState.history[idx]
+        e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
+        e.state.commandCompletionManager.cancelCompletion()
+        e.updateSubstitutePreviewIfNeeded()
     return true
 
-  # Down arrow: Navigate to next (newer) command in history
+  # Down arrow: Navigate to next (newer) command in history, restricted to
+  # entries starting with the locked prefix. Falling off the newest match
+  # restores the original prefix instead of clearing the line.
   if keyCombo.isSpecial and keyCombo.special == skDown:
     if e.state.input.commandState.history.len > 0 and
         e.state.input.commandState.historyIndex >= 0:
-      # Move to newer entry
-      if e.state.input.commandState.historyIndex > 0:
-        e.state.input.commandState.historyIndex -= 1
-        e.state.input.commandText =
-          ":" &
-          e.state.input.commandState.history[e.state.input.commandState.historyIndex]
+      let idx = findHistoryMatch(
+        e.state.input.commandState.history,
+        e.state.input.commandState.historyPrefix,
+        e.state.input.commandState.historyIndex - 1,
+        -1,
+      )
+      if idx >= 0:
+        e.state.input.commandState.historyIndex = idx
+        e.state.input.commandText = ":" & e.state.input.commandState.history[idx]
         e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
       else:
-        # Reached the newest entry, clear to empty command
         e.state.input.commandState.historyIndex = -1
-        e.state.input.commandText = ":"
-        e.state.input.commandCursor = 0
+        e.state.input.commandText = ":" & e.state.input.commandState.historyPrefix
+        e.state.input.commandCursor = e.state.input.commandState.historyPrefix.runeLen
       e.state.commandCompletionManager.cancelCompletion()
       e.updateSubstitutePreviewIfNeeded()
     return true
