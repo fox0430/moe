@@ -244,6 +244,23 @@ suite "Registers":
 
     check r.getNamedRegister('e').getContent() == "first\nsecond"
 
+  test "setNamedRegister uppercase linewise + charwise appends as new line":
+    let r = initRegisters()
+    discard r.setNamedRegister('f', @["line1", "line2"], true)
+    discard r.setNamedRegister('F', "abc", false)
+
+    check r.getNamedRegister('f').isLine
+    check r.getNamedRegister('f').getLines() == @["line1", "line2", "abc"]
+    check r.getNamedRegister('f').getContent() == "line1\nline2\nabc"
+
+  test "setNamedRegister uppercase charwise + linewise appends as new lines":
+    let r = initRegisters()
+    discard r.setNamedRegister('g', "hello", false)
+    discard r.setNamedRegister('G', @["line1", "line2"], true)
+
+    check r.getNamedRegister('g').isLine
+    check r.getNamedRegister('g').getLines() == @["hello", "line1", "line2"]
+
   test "setNamedRegister invalid name returns error":
     let r = initRegisters()
     let result = r.setNamedRegister('0', "content", false)

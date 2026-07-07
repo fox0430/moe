@@ -119,18 +119,14 @@ proc setRegister(r: var Register, lines: seq[string], isLine: bool) =
   r.buffer = lines
 
 proc appendRegister(r: var Register, content: string, isLine: bool) =
-  ## Append content to register
+  ## Append content to register (vim `"A` semantics: linewise wins).
   if r.buffer.len == 0:
     r.setRegister(content, isLine)
-  elif isLine:
-    let newLines = content.splitLines()
-    r.buffer.add(newLines)
+  elif isLine or r.isLine:
+    r.buffer.add(content.splitLines())
     r.isLine = true
   else:
-    if r.buffer.len > 0:
-      r.buffer[^1].add(content)
-    else:
-      r.buffer = @[content]
+    r.buffer[^1].add(content)
 
 # Clipboard integration (uses async clipboard module)
 
