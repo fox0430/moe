@@ -417,19 +417,19 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
     # Delete the current line and insert the joined line
     let deleteResult = b.deleteLine(startLine)
     if deleteResult.isErr:
-      discard b.commitTransaction()
+      discard b.rollbackTransaction()
       return err(deleteResult.error)
 
     # Delete the next line (which is now at startLine position)
     let deleteNextResult = b.deleteLine(startLine)
     if deleteNextResult.isErr:
-      discard b.commitTransaction()
+      discard b.rollbackTransaction()
       return err(deleteNextResult.error)
 
     # Insert the joined line
     let insertResult = b.insert(startLine, joinedLine)
     if insertResult.isErr:
-      discard b.commitTransaction()
+      discard b.rollbackTransaction()
       return err(insertResult.error)
 
   # Commit transaction
