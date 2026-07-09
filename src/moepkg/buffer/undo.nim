@@ -420,7 +420,13 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       let endPos = change.deleteEndPos
 
       if startPos.line == endPos.line:
-        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+        # Mirror the forward path: shift folds/bookmarks when the single-line
+        # delete joined this line with the next.
+        let joinedWithNext =
+          b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+        if joinedWithNext:
+          b.foldState.adjustFoldsAfterDelete(startPos.line + 1, 1)
+          b.adjustBookmarksForDelete(startPos.line + 1, 1)
       else:
         b.deleteRangeMultiLine(startPos, endPos)
         # Adjust fold and bookmark positions for multi-line delete
