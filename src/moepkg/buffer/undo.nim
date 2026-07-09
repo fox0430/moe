@@ -111,6 +111,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # b.modifiedLines currently holds the post-mutation state; reverse it.
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
+      b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
@@ -147,6 +148,7 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     snapshotLineMarkers: b.lineMarkers,
     modifiedLinesDelta: change.modifiedLinesDelta,
     snapshotFoldState: b.foldState,
+    snapshotBookmarks: b.bookmarks,
   )
 
 proc clearMarkersIfAtSavedState(b: TextBuffer) {.inline.} =
@@ -221,6 +223,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
           modifiedLinesDelta:
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
           snapshotFoldState: b.pendingSnapshotFolds,
+          snapshotBookmarks: b.pendingSnapshotBookmarks,
         )
       )
       # Pending snapshot state is now consumed into the entry; reset it all.
@@ -274,6 +277,7 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.lineMarkers = b.pendingSnapshotMarkers
     b.modifiedLines = b.pendingSnapshotModifiedLines
     b.foldState = b.pendingSnapshotFolds
+    b.bookmarks = b.pendingSnapshotBookmarks
     # Drop every pending-snapshot artifact, matching commit/push cleanup, so a
     # later ckSnapshot delta is never computed against a rolled-back base.
     b.discardPendingSnapshot()
@@ -458,6 +462,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # b.modifiedLines currently holds the pre-mutation state; re-apply it.
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
+      b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot

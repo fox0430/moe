@@ -178,6 +178,9 @@ type
         ## keeps O(changed lines) instead of a full O(lines) copy. The piece
         ## tree restore is absolute; only this side array is delta-encoded.
       snapshotFoldState*: FoldState
+      snapshotBookmarks*: seq[int]
+        ## Restored wholesale like snapshotLineMarkers / snapshotFoldState;
+        ## the non-snapshot line-op branches shift via adjustBookmarksFor*.
 
   RowColRemapEventKind* = enum
     rrekSingleLine
@@ -268,6 +271,7 @@ type
     pendingSnapshotMarkers*: CowSeq[Option[LineMarkerKind]]
     pendingSnapshotModifiedLines*: seq[LineModificationKind]
     pendingSnapshotFolds*: FoldState
+    pendingSnapshotBookmarks*: seq[int]
 
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
     lineMarkers*: CowSeq[Option[LineMarkerKind]] # Each line can have at most one marker
@@ -924,6 +928,7 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
     b.pendingSnapshotMarkers = b.lineMarkers
     b.pendingSnapshotModifiedLines = b.modifiedLines
     b.pendingSnapshotFolds = b.foldState
+    b.pendingSnapshotBookmarks = b.bookmarks
   # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry).
   # PieceTable diffs pendingSnapshotModifiedLines into a ckSnapshot delta instead.
   if b.backendKind != PieceTable and not b.hasPendingModifiedLinesSnapshot:
@@ -942,6 +947,7 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.pendingSnapshotMarkers.clear()
   b.pendingSnapshotModifiedLines.setLen(0)
   b.pendingSnapshotFolds = initFoldState()
+  b.pendingSnapshotBookmarks.setLen(0)
   b.hasPendingModifiedLinesSnapshot = false
   b.pendingModifiedLinesSnapshot.setLen(0)
   b.hasPendingLineMarkersSnapshot = false
@@ -1045,6 +1051,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
         modifiedLinesDelta:
           computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
         snapshotFoldState: b.pendingSnapshotFolds,
+        snapshotBookmarks: b.pendingSnapshotBookmarks,
       )
     )
     # Pending snapshot state is now consumed into the entry; reset it all.
