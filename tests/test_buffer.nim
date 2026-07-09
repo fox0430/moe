@@ -1722,6 +1722,80 @@ suite "Buffer - CRLF Line Ending Handling":
     let saved = readFile(path)
     check saved == "aaa\rnew\rbbb\r"
 
+  test "mixed CRLF + standalone CR: standalone CR becomes a line break":
+    # CRLF-first file with an isolated CR in the middle: the CR must produce
+    # its own line break instead of being silently stripped.
+    let path = getTempDir() / "moe_test_mixed_crlf_first.txt"
+    writeFile(path, "a\r\nb\rc")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+
+  test "mixed CR + embedded CRLF: CRLF stays a single line break":
+    # CR-first file with an embedded CRLF: the CRLF pair must not double
+    # into two line breaks.
+    let path = getTempDir() / "moe_test_mixed_cr_first.txt"
+    writeFile(path, "a\rb\r\nc")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+
+  test "mixed line endings: consecutive CRLF-CR-CRLF produces three breaks":
+    let path = getTempDir() / "moe_test_mixed_triple.txt"
+    writeFile(path, "a\r\nb\rc\r\nd")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf.len == 4
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+    check buf[3] == "d"
+
+  test "consecutive standalone CRs produce consecutive line breaks":
+    let path = getTempDir() / "moe_test_double_cr.txt"
+    writeFile(path, "a\r\rb")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CR
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == ""
+    check buf[2] == "b"
+
+  test "trailing CR at end of buffer is treated as a line break":
+    let path = getTempDir() / "moe_test_trailing_cr.txt"
+    writeFile(path, "a\r")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CR
+    check buf.endOfLine
+    check buf.len == 1
+    check buf[0] == "a"
+
 suite "Buffer - contentVersion monotonicity":
   # contentVersion is the completion cache's invalidation key. Unlike changeSeq
   # (restored by undo, reset to 0 by reload) it must only ever increase, so a
