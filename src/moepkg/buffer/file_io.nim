@@ -32,42 +32,42 @@ const ExternalModErrorMsg* =
   "File was modified externally. Use :w! to force save, or :e! to reload."
 
 proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
-  ## Detect line ending style, detect trailing newline, and normalize \r
-  ## to \n in a single pass. Backends only handle \n as line separator;
-  ## \r in line content causes terminal rendering corruption.
+  ## Detect line ending style and normalize to \n in a single pass.
+  ## Each \r is classified per-occurrence: \r\n pairs are stripped to \n,
+  ## standalone \r is converted to \n. Mixed line endings are preserved
+  ## as separate line breaks instead of being lost or duplicated.
 
-  # Detect if file ends with newline (before modifying content)
   if content.len > 0:
     b.endOfLine =
       content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")
 
-  # Single-pass detection + normalization: scan for \r
   var hasCR = false
   var hasCRLF = false
-  for i in 0 ..< content.len:
-    if content[i] == '\r':
-      hasCR = true
-      if i + 1 < content.len and content[i + 1] == '\n':
+  var writePos = 0
+  var readPos = 0
+  while readPos < content.len:
+    let c = content[readPos]
+    if c == '\r':
+      if readPos + 1 < content.len and content[readPos + 1] == '\n':
         hasCRLF = true
-      # Replace \r with \n (for CR-only) or skip \r (for CRLF, handled below)
-      break # One \r is enough to determine the line ending style
+        content[writePos] = '\n'
+        inc writePos
+        readPos += 2
+      else:
+        hasCR = true
+        content[writePos] = '\n'
+        inc writePos
+        inc readPos
+    else:
+      content[writePos] = c
+      inc writePos
+      inc readPos
+  content.setLen(writePos)
 
   if hasCRLF:
     b.lineEnding = CRLF
-    # Strip \r in-place: copy non-\r bytes forward
-    var writePos = 0
-    for readPos in 0 ..< content.len:
-      if content[readPos] != '\r':
-        content[writePos] = content[readPos]
-        inc writePos
-      # Skip \r (only occurs before \n in CRLF files)
-    content.setLen(writePos)
   elif hasCR:
     b.lineEnding = CR
-    # Replace \r with \n in-place
-    for i in 0 ..< content.len:
-      if content[i] == '\r':
-        content[i] = '\n'
   else:
     b.lineEnding = LF
 
