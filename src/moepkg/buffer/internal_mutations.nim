@@ -168,8 +168,10 @@ proc buildMergedLine*(prefix: string, suffix: string): string {.inline.} =
 
 proc deleteRangeSingleLine*(
     b: TextBuffer, line: string, startPos, endPos: BufferPosition
-) =
-  ## Handle single-line deletion
+): bool {.discardable.} =
+  ## Handle single-line deletion.
+  ## Returns true if the deletion joined this line with the next one
+  ## (so callers can shift folds/bookmarks accordingly).
   let lineLen = line.charLen
   var joinedWithNext = false
 
@@ -223,6 +225,8 @@ proc deleteRangeSingleLine*(
   if startPos.line < b.modifiedLines.len:
     if b.modifiedLines[startPos.line] != lmkInserted:
       b.modifiedLines[startPos.line] = lmkModified
+
+  return joinedWithNext
 
 proc deleteRangeMultiLine*(b: TextBuffer, startPos, endPos: BufferPosition) =
   ## Handle multi-line deletion

@@ -333,11 +333,13 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
 
   b.captureSnapshotIfNeeded()
 
+  var joinedWithNext = false
   case b.backendKind
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       if startPos.line == endPos.line:
-        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+        joinedWithNext =
+          b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
       else:
         b.deleteRangeMultiLine(startPos, endPos)
     except IndexDefect as e:
@@ -354,10 +356,15 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
     )
   )
 
-  # Adjust fold and bookmark positions if multiple lines were deleted
+  # Adjust fold and bookmark positions when lines were removed. The multi-line
+  # branch always drops `endPos.line - startPos.line` lines; the single-line
+  # branch drops one line only when it joined with the next.
   if endPos.line > startPos.line:
     b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
     b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
+  elif joinedWithNext:
+    b.foldState.adjustFoldsAfterDelete(startPos.line + 1, 1)
+    b.adjustBookmarksForDelete(startPos.line + 1, 1)
 
   return ok(())
 

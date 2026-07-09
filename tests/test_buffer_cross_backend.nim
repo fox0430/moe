@@ -376,6 +376,83 @@ suite "CrossBackend - Undo/Redo":
       check b.foldState.folds[0].startLine == 3
       check b.foldState.folds[0].endLine == 4
 
+  # deleteRange single-line branch that ends past line end joins with next line.
+  # This still shrinks line count by 1 and must shift folds/bookmarks like the
+  # multi-line branch. All backends share the same edit.nim guard, so include
+  # PieceTable here (unlike ckInsertText undo, which is snapshot-only there).
+  for be in BufferBackend:
+    test "deleteRange single-line joined with next shifts bookmarks [" & $be & "]":
+      let b = buf("abc\n\ndef", be)
+      b.bookmarks = @[2]
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.len == 2
+      check b[0] == "ab"
+      check b[1] == "def"
+      check b.bookmarks == @[1]
+
+    test "deleteRange single-line joined with next shifts folds [" & $be & "]":
+      let b = buf("abc\n\ndef\nghi", be)
+      b.foldState.folds.add(Fold(startLine: 2, endLine: 3, collapsed: false))
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.len == 3
+      check b.foldState.folds[0].startLine == 1
+      check b.foldState.folds[0].endLine == 2
+
+    test "deleteRange single-line joined with next drops bookmark on merged line [" & $be &
+      "]":
+      let b = buf("abc\nlost\nkeep", be)
+      b.bookmarks = @[1, 2]
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.len == 2
+      check b[0] == "ablost"
+      check b[1] == "keep"
+      check b.bookmarks == @[1]
+
+    test "deleteRange single-line joined undo/redo cycle does not drift bookmarks [" &
+      $be & "]":
+      # PieceTable's ckSnapshot fast path does not currently restore bookmarks
+      # (see code_review_editor_20260705.md #3), so skip it here.
+      if be == PieceTable:
+        skip()
+      else:
+        let b = buf("abc\n\ndef", be)
+        b.bookmarks = @[2]
+        discard b.deleteRange(
+          BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+        )
+        check b.bookmarks == @[1]
+        for _ in 0 ..< 3:
+          discard b.undo()
+          check b.bookmarks == @[2]
+          discard b.redo()
+          check b.bookmarks == @[1]
+
+    test "deleteRange single-line joined undo/redo cycle does not drift folds [" & $be &
+      "]":
+      if be == PieceTable:
+        skip()
+      else:
+        let b = buf("abc\n\ndef\nghi", be)
+        b.foldState.folds.add(Fold(startLine: 2, endLine: 3, collapsed: false))
+        discard b.deleteRange(
+          BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+        )
+        check b.foldState.folds[0].startLine == 1
+        check b.foldState.folds[0].endLine == 2
+        for _ in 0 ..< 3:
+          discard b.undo()
+          check b.foldState.folds[0].startLine == 2
+          check b.foldState.folds[0].endLine == 3
+          discard b.redo()
+          check b.foldState.folds[0].startLine == 1
+          check b.foldState.folds[0].endLine == 2
+
 suite "CrossBackend - replaceLine Undo/Redo":
   for be in BufferBackend:
     test "undo replaceLine [" & $be & "]":
