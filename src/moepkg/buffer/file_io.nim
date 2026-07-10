@@ -28,7 +28,7 @@ import std/[options, os, strutils, times]
 import pkg/[celina, results]
 
 import ../[encoding, highlight, logger, uri_utils]
-import core
+import core, atomic_write
 
 const ExternalModErrorMsg* =
   "File was modified externally. Use :w! to force save, or :e! to reload."
@@ -353,13 +353,13 @@ proc saveFile*(
         buffer.isExternallyModified():
       return Result[(), string].err ExternalModErrorMsg
 
-    # Write to file
-    try:
-      writeFile(path, content)
-      logDebug("buffer", "File written successfully: " & path)
-    except IOError as e:
-      logError("buffer", "Failed to write file " & path & ": " & e.msg)
-      return Result[(), string].err e.msg
+    # Atomic-ish write: temp+rename with hardlink/symlink fallback plus fsync.
+    # Guards against truncation on crash and durability loss on power failure.
+    let wr = writeAtomic(path, content)
+    if wr.isErr:
+      logError("buffer", "Failed to write file " & path & ": " & wr.error)
+      return Result[(), string].err wr.error
+    logDebug("buffer", "File written successfully: " & path)
 
     buffer.markSaved()
     buffer.filePath = some(path)
