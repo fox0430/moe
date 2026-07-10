@@ -18,8 +18,10 @@
 #[############################################################################]#
 
 ## File I/O: loadFile / saveFile / getFileContent / reloadFile,
-## plus encoding detection, line-ending normalization, and progressive
-## syntax-highlight initialization for the first chunk of the file.
+## plus encoding detection/transcoding (UTF-16/32 are stored as UTF-8
+## internally and encoded back on save), line-ending normalization, and
+## progressive syntax-highlight initialization for the first chunk of
+## the file.
 
 import std/[options, os, strutils, times]
 
@@ -89,9 +91,56 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
-  # Detect line ending, normalize \r, and detect encoding before backend init.
+  # Detect the encoding on the RAW bytes, before any line-ending rewrite:
+  # in UTF-16/32 a \r byte is only part of a wider code unit, so normalizing
+  # first would rewrite code units (e.g. UTF-16LE CRLF `0D 00 0A 00` read as
+  # a lone \r) and corrupt the file on save. Decode to UTF-8 for internal
+  # storage, then normalize line endings on the decoded text.
+  var encoding = detectCharacterEncoding(content)
+  var hasBom = false
+  var bomLen = 0
+  case encoding
+  of CharacterEncoding.utf16:
+    # BOM present; resolve the endianness it encodes
+    hasBom = true
+    bomLen = 2
+    encoding =
+      if content.startsWith("\xFF\xFE"):
+        CharacterEncoding.utf16Le
+      else:
+        CharacterEncoding.utf16Be
+  of CharacterEncoding.utf32:
+    hasBom = true
+    bomLen = 4
+    encoding =
+      if content.startsWith("\xFF\xFE"):
+        CharacterEncoding.utf32Le
+      else:
+        CharacterEncoding.utf32Be
+  else:
+    discard
+
+  if encoding in {
+    CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
+    CharacterEncoding.utf32Be,
+  }:
+    # Detection only samples the head of the file, so decoding can still fail;
+    # fall back to raw bytes then (the pre-transcoding behavior).
+    let decoded = decodeToUtf8(content[bomLen .. ^1], encoding)
+    if decoded.isOk:
+      content = decoded.get
+    else:
+      logWarn(
+        "buffer",
+        "Failed to decode " & path & " as " & encodingToString(encoding) & ": " &
+          decoded.error & "; keeping raw bytes",
+      )
+      encoding = CharacterEncoding.unknown
+      hasBom = false
+
+  b.encoding = encoding
+  b.hasBom = hasBom
   b.detectAndNormalizeLineEnding(content)
-  b.encoding = detectCharacterEncoding(content)
 
   # Reassign only the backend storage. Because the backend variant lives in the
   # embedded `storage` field (not as a discriminant on TextBuffer), this single
@@ -217,7 +266,8 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 proc getFileContent*(buffer: TextBuffer): string =
   ## Get the buffer content as it would be written to a file,
   ## with proper trailing newline handling based on endOfLine setting.
-  ## Internal \n line endings are restored to the original line ending style.
+  ## Internal \n line endings are restored to the original line ending style
+  ## and internal UTF-8 is encoded back to the buffer's on-disk encoding.
   result = buffer.getTextString
 
   # Restore original line ending style (internal representation uses \n only)
@@ -254,6 +304,17 @@ proc getFileContent*(buffer: TextBuffer): string =
         result.setLen(result.len - 2)
       elif result.endsWith("\n") or result.endsWith("\r"):
         result.setLen(result.len - 1)
+
+  # Restore the on-disk encoding (internal representation is UTF-8).
+  # A UTF-8 BOM is kept verbatim in the buffer content, so only UTF-16/32
+  # need the BOM re-emitted here.
+  if buffer.encoding in {
+    CharacterEncoding.utf16, CharacterEncoding.utf16Le, CharacterEncoding.utf16Be,
+    CharacterEncoding.utf32, CharacterEncoding.utf32Le, CharacterEncoding.utf32Be,
+  }:
+    result = encodeFromUtf8(result, buffer.encoding)
+    if buffer.hasBom:
+      result = bomBytes(buffer.encoding) & result
 
 proc isExternallyModified*(b: TextBuffer): bool =
   ## Check if the file was modified externally (outside the editor)

@@ -117,8 +117,12 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
       buffer.encoding = utf8
     of "utf-16be":
       buffer.encoding = utf16Be
+      # UTF-16 files are conventionally written with a BOM (and moe's own
+      # encoding detection needs it to identify ASCII-only UTF-16 on reload)
+      buffer.hasBom = true
     of "utf-16le":
       buffer.encoding = utf16Le
+      buffer.hasBom = true
     of "latin1":
       # latin1 is not directly supported, keep as utf8
       discard
