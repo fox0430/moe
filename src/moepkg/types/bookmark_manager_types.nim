@@ -23,12 +23,14 @@
 ## (notably `types` and its importers) do not transitively pull in `picker/nav`
 ## via the full `bookmark_manager` module.
 
+import ../buffer
 import list_viewer_types
 export list_viewer_types
+export buffer.BufferId
 
 type
   BookmarkEntry* = object ## Represents a bookmark entry in the bookmark manager list
-    bufferIndex*: int # Index in the buffer list
+    bufferId*: BufferId # Stable id of the buffer that owns this bookmark
     filePath*: string # File path ("No Name" if none)
     line*: int # Line number (0-based)
     text*: string # Line text preview (truncated to 50 chars)

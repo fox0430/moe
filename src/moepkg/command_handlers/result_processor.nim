@@ -441,12 +441,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.setMode(EditorMode.Normal)
     return true
   of hrBookmarkManagerJump:
-    # Jump to the selected bookmark (buffer + line)
-    let bufferIndex = r.bookmarkJumpBufferIndex
+    # Resolve BufferId at jump time to survive buffer-list mutations.
     let jumpLine = r.bookmarkJumpLine
     let activeWin = e.activeWindow
     activeWin.restoreOriginalBuffer(EditorMode.BookmarkManager)
-    if bufferIndex >= 0 and bufferIndex < e.buffers.len:
+    let bufferIndex = e.bufferIndexById(r.bookmarkJumpBufferId)
+    if bufferIndex >= 0:
       e.switchToBufferByIndex(bufferIndex)
       let buf = e.activeBuffer()
       let clampedLine = min(jumpLine, max(0, buf.len - 1))
