@@ -246,7 +246,7 @@ type
     of hrEnterBufferManager:
       discard
     of hrBookmarkManagerJump:
-      bookmarkJumpBufferIndex*: int
+      bookmarkJumpBufferId*: BufferId
       bookmarkJumpLine*: int
     of hrBookmarkManagerDelete:
       bookmarkDeleteEntryIndex*: int

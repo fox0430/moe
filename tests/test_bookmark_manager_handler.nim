@@ -52,10 +52,11 @@ suite "bookmark_manager_handler: Result Types":
     check result.kind == bkmrHandled
 
   test "bkmrJumpToBookmark result":
-    let result =
-      BookmarkManagerResult(kind: bkmrJumpToBookmark, jumpBufferIndex: 2, jumpLine: 5)
+    let result = BookmarkManagerResult(
+      kind: bkmrJumpToBookmark, jumpBufferId: BufferId(42), jumpLine: 5
+    )
     check result.kind == bkmrJumpToBookmark
-    check result.jumpBufferIndex == 2
+    check result.jumpBufferId == BufferId(42)
     check result.jumpLine == 5
 
   test "bkmrDeleteBookmark result":
@@ -185,7 +186,7 @@ suite "bookmark_manager_handler: Jump to Bookmark":
     let result = handleBookmarkManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bkmrJumpToBookmark
-    check result.jumpBufferIndex == 0
+    check result.jumpBufferId == bmState.items[1].bufferId
     check result.jumpLine == 3
 
   test "Jump to bookmark in second buffer":
@@ -196,7 +197,7 @@ suite "bookmark_manager_handler: Jump to Bookmark":
     let result = handleBookmarkManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bkmrJumpToBookmark
-    check result.jumpBufferIndex == 1
+    check result.jumpBufferId == bmState.items[2].bufferId
     check result.jumpLine == 0
 
   test "Enter with empty entries returns handled":
@@ -491,7 +492,7 @@ suite "bookmark_manager_handler: Edge Cases":
     let result = handleBookmarkManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bkmrJumpToBookmark
-    check result.jumpBufferIndex == 0
+    check result.jumpBufferId == buf.id
     check result.jumpLine == 0
 
   test "Single entry - D returns correct delete":
@@ -536,7 +537,7 @@ suite "bookmark_manager_handler: Edge Cases":
     let result = handleBookmarkManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bkmrJumpToBookmark
-    check result.jumpBufferIndex == 0
+    check result.jumpBufferId == bmState.items[0].bufferId
     check result.jumpLine == 1
 
   test "Delete bookmark at index 0":
@@ -582,7 +583,7 @@ suite "bookmark_manager_handler: Integration":
     let keyEnter = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
     let result5 = handleBookmarkManagerModeKey(bmState, 24, keyEnter)
     check result5.kind == bkmrJumpToBookmark
-    check result5.jumpBufferIndex == 1
+    check result5.jumpBufferId == bmState.items[2].bufferId
     check result5.jumpLine == 0
 
   test "Navigate with arrow keys and half-page scrolling":

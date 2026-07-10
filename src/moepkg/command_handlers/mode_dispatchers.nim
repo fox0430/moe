@@ -1077,7 +1077,7 @@ proc handleBookmarkManagerMode*(
   of bkmrJumpToBookmark:
     return HandlerResult(
       kind: hrBookmarkManagerJump,
-      bookmarkJumpBufferIndex: r.jumpBufferIndex,
+      bookmarkJumpBufferId: r.jumpBufferId,
       bookmarkJumpLine: r.jumpLine,
     )
   of bkmrDeleteBookmark:

@@ -41,7 +41,7 @@ type
   BookmarkManagerResult* = object
     case kind*: BookmarkManagerResultKind
     of bkmrJumpToBookmark:
-      jumpBufferIndex*: int
+      jumpBufferId*: BufferId
       jumpLine*: int
     of bkmrDeleteBookmark:
       deleteEntryIndex*: int
@@ -76,7 +76,7 @@ proc handleBookmarkManagerModeKey*(
     if entry.isSome:
       return BookmarkManagerResult(
         kind: bkmrJumpToBookmark,
-        jumpBufferIndex: entry.get.bufferIndex,
+        jumpBufferId: entry.get.bufferId,
         jumpLine: entry.get.line,
       )
     return BookmarkManagerResult(kind: bkmrHandled)
