@@ -142,6 +142,12 @@ type
       ## to this so a transaction collapsing N mutations is reverted atomically.
     endSeq*: int
       ## changeSeq value AFTER this entry was applied. redo() restores to this.
+    id*: int64
+      ## Monotonic identity for this undo-tree node, assigned on push and
+      ## preserved across undo/redo. Used by isModified to catch changeSeq
+      ## collisions (undo -> different edit re-hitting savedSeq). Inner
+      ## transaction changes carry 0; only the wrapper that lands on
+      ## undoStack gets an id. 0 = initial state.
     case kind*: BufferChangeKind
     of ckInsertText:
       insertPos*: BufferPosition
@@ -253,6 +259,11 @@ type
     # Change sequence tracking for modified flag
     changeSeq*: int # Current change sequence number
     savedSeq*: int # Sequence number when file was last saved
+    nextChangeId*: int64
+      ## BufferChange.id counter. Monotonic; only reload resets. First id = 1.
+    savedChangeId*: int64
+      ## undoStack top id at last save (0 for initial state / empty stack).
+      ## isModified uses this instead of savedSeq to defeat the collision.
 
     contentVersion*: int
       ## Monotonic content generation. Advanced via `advanceContentVersion` on
@@ -497,15 +508,33 @@ proc adjustBookmarksForDelete*(b: TextBuffer, line: int, count: int = 1) =
   for i in countdown(toRemove.high, 0):
     b.bookmarks.delete(toRemove[i])
 
+proc currentChangeId*(b: TextBuffer): int64 {.inline.} =
+  ## Id of the undoStack top, or 0 for initial state (empty stack).
+  if b.undoStack.len > 0: b.undoStack.peekLast.id else: 0
+
+proc isAtSavedState*(b: TextBuffer): bool {.inline.} =
+  ## Both signals must match. Id is authoritative; changeSeq compare kept as an
+  ## AND so direct writes to changeSeq (test harnesses) still count as dirty.
+  b.currentChangeId == b.savedChangeId and b.changeSeq == b.savedSeq
+
 proc isModified*(b: TextBuffer): bool {.inline.} =
-  ## Check if buffer has unsaved changes
-  b.changeSeq != b.savedSeq
+  ## In-flight transactions have not yet reached undoStack, so inner-change
+  ## count is checked explicitly before the saved-state compare.
+  if b.inTransaction and b.currentTransaction.isSome and
+      b.currentTransaction.get.changes.len > 0:
+    return true
+  not b.isAtSavedState
 
 proc markSaved*(b: TextBuffer) {.inline.} =
-  ## Mark the buffer as unmodified by syncing savedSeq to changeSeq.
   b.savedSeq = b.changeSeq
+  b.savedChangeId = b.currentChangeId
   for i in 0 ..< b.modifiedLines.len:
     b.modifiedLines[i] = lmkUnmodified
+
+proc allocateChangeId*(b: TextBuffer): int64 {.inline.} =
+  ## Preinc so 0 stays reserved for "initial state".
+  b.nextChangeId.inc
+  b.nextChangeId
 
 # Core text operations
 proc getTextString*(b: TextBuffer): string =
@@ -970,6 +999,9 @@ proc clearUndoRedoState*(b: TextBuffer) =
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
   b.discardPendingSnapshot()
+  # Reset id state too so post-reload isModified starts clean (0 == 0).
+  b.nextChangeId = 0
+  b.savedChangeId = 0
 
 proc advanceContentVersion*(b: TextBuffer) {.inline.} =
   ## Advance the monotonic content version. Call from EVERY content-mutating
@@ -1034,7 +1066,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
     b.hasPendingLineMarkersSnapshot = false
 
   if b.inTransaction and b.currentTransaction.isSome:
-    # Add to current transaction
+    # Inner changes carry id 0; the wrapper committed later gets the id.
     var transaction = b.currentTransaction.get
     transaction.changes.add(changeWithSnapshot)
     b.currentTransaction = some(transaction)
@@ -1044,6 +1076,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
       BufferChange(
         startSeq: preSeq,
         endSeq: postSeq,
+        id: b.allocateChangeId(),
         kind: ckSnapshot,
         snapshotData: b.pendingSnapshot.get,
         snapshotCursorPos: getChangePosition(change),
@@ -1058,4 +1091,5 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
     b.discardPendingSnapshot()
   else:
     # Add directly to undo stack
+    changeWithSnapshot.id = b.allocateChangeId()
     b.undoStack.addLast(changeWithSnapshot)

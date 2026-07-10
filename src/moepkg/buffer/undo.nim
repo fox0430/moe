@@ -142,6 +142,7 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
   BufferChange(
     startSeq: change.startSeq,
     endSeq: change.endSeq,
+    id: change.id, # preserve identity across undo/redo
     kind: ckSnapshot,
     snapshotData: b.storage.pieceTable.takeSnapshot(),
     snapshotCursorPos: change.snapshotCursorPos,
@@ -152,12 +153,11 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
   )
 
 proc clearMarkersIfAtSavedState(b: TextBuffer) {.inline.} =
-  ## After undo/redo lands on the saved sequence the buffer matches disk, so no
-  ## line is session-modified. The pre-delta code restored this implicitly via
-  ## the wholesale modifiedLines copy; the delta-based restore must make it
-  ## explicit on BOTH paths (redo() previously lacked this, leaving a stale
-  ## lmkModified marker after edit -> save -> undo -> redo).
-  if b.changeSeq == b.savedSeq:
+  ## After undo/redo lands on the saved undo-tree node the buffer matches disk,
+  ## so no line is session-modified. The pre-delta code restored this implicitly
+  ## via the wholesale modifiedLines copy; the delta-based restore must do it
+  ## on BOTH paths (redo() previously lacked this).
+  if b.isAtSavedState:
     for i in 0 ..< b.modifiedLines.len:
       b.modifiedLines[i] = lmkUnmodified
 
@@ -212,6 +212,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         BufferChange(
           startSeq: preTxnSeq,
           endSeq: postTxnSeq,
+          id: b.allocateChangeId(),
           kind: ckSnapshot,
           snapshotData: b.pendingSnapshot.get,
           snapshotCursorPos:
@@ -232,6 +233,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
       let transactionChange = BufferChange(
         startSeq: preTxnSeq,
         endSeq: postTxnSeq,
+        id: b.allocateChangeId(),
         kind: ckTransaction,
         transactionChanges: transaction.changes,
         transactionDescription: transaction.description,

@@ -440,6 +440,57 @@ suite "Buffer - Modified Flag":
     check b.changeSeq == b.savedSeq
     check not b.isModified
 
+  test "isModified after save -> undo -> different edit (savedSeq collision)":
+    # Regression: undo restores changeSeq, so a subsequent different edit can
+    # re-hit the saved value and mask a dirty buffer (silent loss on :q).
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "C")
+    check b.getLine(0) == "ABC"
+    b.markSaved()
+    check not b.isModified
+
+    discard b.undo()
+    check b.getLine(0) == "AB"
+    check b.isModified
+
+    discard b.insertText(BufferPosition(line: 0, column: 2), "D")
+    check b.getLine(0) == "ABD"
+    check b.isModified
+
+  test "isModified restored to false after undo/redo lands on saved state":
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    b.markSaved()
+    check not b.isModified
+
+    discard b.undo()
+    check b.isModified
+
+    discard b.redo()
+    check b.getLine(0) == "AB"
+    check not b.isModified
+
+  test "isModified after save -> undo -> different edit (PieceTable)":
+    setConfiguredBackend(PieceTable)
+    defer:
+      setConfiguredBackend(GapBuffer)
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "C")
+    b.markSaved()
+    check not b.isModified
+
+    discard b.undo()
+    check b.isModified
+
+    discard b.insertText(BufferPosition(line: 0, column: 2), "D")
+    check b.getLine(0) == "ABD"
+    check b.isModified
+
 suite "Buffer - Cursor Position Suggestion":
   test "undo returns suggested cursor position":
     let b = newTextBuffer("test")
