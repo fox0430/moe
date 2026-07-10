@@ -19,7 +19,10 @@
 
 import std/[unittest, os, options, json, strutils, sequtils]
 
-import ../src/moepkg/[editor, editor_window, buffer, config, config_loader, emergency]
+import
+  ../src/moepkg/
+    [editor, editor_buffers, editor_window, buffer, config, config_loader, emergency]
+import ../src/moepkg/types/editor_types
 
 let TestRecoveryDir = getTempDir() / "moe_test_crash_recovery"
 
@@ -190,6 +193,61 @@ suite "emergency - emergencySaveBuffers":
 
     let filename = extractFilename(savedPaths[0])
     check filename == extractFilename(testFile1)
+
+  test "Save modified buffer in background tab of same window":
+    # Regression: emergency save previously iterated only windowManager.windows,
+    # missing modified buffers that live in a window's per-window tab list
+    # (bufferIds) but are not the currently-displayed .buffer.
+    let e = createTestEditor()
+
+    let testFileFg = getTempDir() / "moe_test_emergency_fg.txt"
+    let testFileBg = getTempDir() / "moe_test_emergency_bg.txt"
+    writeFile(testFileFg, "foreground content")
+    writeFile(testFileBg, "background content")
+    defer:
+      removeFile(testFileFg)
+      removeFile(testFileBg)
+
+    discard e.loadFile(testFileFg)
+    let fgBuf = e.activeBuffer()
+    fgBuf.changeSeq = fgBuf.savedSeq + 1
+
+    # Register a second buffer in e.buffers and the same window's tab list
+    # WITHOUT activating it, so it stays a background tab (not window.buffer).
+    let bgBuf = newTextBuffer("background content", some(testFileBg))
+    e.addBuffer(bgBuf)
+    e.addBufferToWindowList(bgBuf)
+    bgBuf.changeSeq = bgBuf.savedSeq + 1
+
+    check e.activeWindow.buffer == fgBuf
+    check bgBuf.id in e.activeWindow.bufferIds
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 2
+
+    let filenames = savedPaths.mapIt(extractFilename(it))
+    check filenames.anyIt(it == extractFilename(testFileFg))
+    check filenames.anyIt(it == extractFilename(testFileBg))
+
+  test "Save modified buffer not attached to any window":
+    # Regression: a buffer that lives in e.buffers but no window currently
+    # displays it (or has it in its tab list) must still be crash-saved.
+    let e = createTestEditor()
+
+    let testFile = getTempDir() / "moe_test_emergency_orphan.txt"
+    writeFile(testFile, "orphan content")
+    defer:
+      removeFile(testFile)
+
+    let orphan = newTextBuffer("orphan content", some(testFile))
+    e.addBuffer(orphan)
+    orphan.changeSeq = orphan.savedSeq + 1
+
+    check e.activeWindow.buffer != orphan
+    check orphan.id notin e.activeWindow.bufferIds
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.anyIt(extractFilename(it) == extractFilename(testFile))
 
   test "No modified buffers removes empty directory":
     let e = createTestEditor()
