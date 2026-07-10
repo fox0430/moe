@@ -1,5 +1,7 @@
 import std/unittest
 
+import pkg/results
+
 import ../src/moepkg/encoding
 
 suite "Encoding Detection":
@@ -92,3 +94,70 @@ suite "Encoding Detection":
     # Ensure all enum values have string representations
     for enc in CharacterEncoding:
       check encodingToString(enc).len > 0
+
+suite "Encoding Transcoding":
+  test "UTF-16LE decodes to UTF-8":
+    # "He" in UTF-16 LE
+    let bytes = "\x48\x00\x65\x00"
+    check decodeToUtf8(bytes, CharacterEncoding.utf16Le).get == "He"
+
+  test "UTF-16BE decodes to UTF-8":
+    # "こん" in UTF-16 BE (U+3053 U+3093)
+    let bytes = "\x30\x53\x30\x93"
+    check decodeToUtf8(bytes, CharacterEncoding.utf16Be).get == "こん"
+
+  test "UTF-16 surrogate pair decodes to UTF-8":
+    # "😀" (U+1F600) in UTF-16 LE: D83D DE00
+    let bytes = "\x3D\xD8\x00\xDE"
+    check decodeToUtf8(bytes, CharacterEncoding.utf16Le).get == "😀"
+
+  test "UTF-16 decode rejects odd byte length":
+    check decodeToUtf8("\x48\x00\x65", CharacterEncoding.utf16Le).isErr
+
+  test "UTF-16 decode rejects unpaired surrogates":
+    # Lone high surrogate D800 followed by a non-surrogate
+    check decodeToUtf8("\x00\xD8\x41\x00", CharacterEncoding.utf16Le).isErr
+    # Lone low surrogate DC00
+    check decodeToUtf8("\x00\xDC", CharacterEncoding.utf16Le).isErr
+    # Truncated pair (high surrogate at end of input)
+    check decodeToUtf8("\x00\xD8", CharacterEncoding.utf16Le).isErr
+
+  test "UTF-32 decodes to UTF-8":
+    # "a😀" in UTF-32 LE
+    let bytes = "\x61\x00\x00\x00\x00\xF6\x01\x00"
+    check decodeToUtf8(bytes, CharacterEncoding.utf32Le).get == "a😀"
+
+  test "UTF-32 decode rejects out-of-range code points":
+    # U+110000 (one past the Unicode maximum)
+    check decodeToUtf8("\x00\x11\x00\x00", CharacterEncoding.utf32Be).isErr
+
+  test "UTF-32 decode rejects length not multiple of 4":
+    check decodeToUtf8("\x61\x00\x00", CharacterEncoding.utf32Le).isErr
+
+  test "decode is identity for UTF-8 and unknown":
+    check decodeToUtf8("héllo", CharacterEncoding.utf8).get == "héllo"
+    check decodeToUtf8("\x80\x81", CharacterEncoding.unknown).get == "\x80\x81"
+
+  test "encode/decode round-trips for all UTF-16/32 variants":
+    let text = "Hello, 世界! 🌍\nsecond line\r\n"
+    for enc in [
+      CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
+      CharacterEncoding.utf32Be,
+    ]:
+      check decodeToUtf8(encodeFromUtf8(text, enc), enc).get == text
+
+  test "encode is identity for UTF-8 and unknown":
+    check encodeFromUtf8("héllo", CharacterEncoding.utf8) == "héllo"
+    check encodeFromUtf8("\x80\x81", CharacterEncoding.unknown) == "\x80\x81"
+
+  test "generic utf16/utf32 encode as big endian":
+    check encodeFromUtf8("A", CharacterEncoding.utf16) == "\x00\x41"
+    check encodeFromUtf8("A", CharacterEncoding.utf32) == "\x00\x00\x00\x41"
+
+  test "bomBytes returns the BOM for each encoding":
+    check bomBytes(CharacterEncoding.utf8) == "\xEF\xBB\xBF"
+    check bomBytes(CharacterEncoding.utf16Le) == "\xFF\xFE"
+    check bomBytes(CharacterEncoding.utf16Be) == "\xFE\xFF"
+    check bomBytes(CharacterEncoding.utf32Le) == "\xFF\xFE\x00\x00"
+    check bomBytes(CharacterEncoding.utf32Be) == "\x00\x00\xFE\xFF"
+    check bomBytes(CharacterEncoding.unknown) == ""

@@ -2422,3 +2422,105 @@ suite "Buffer - reload path convergence":
       )
     check diverged.len == 0
     check uncomparable.len == 0
+
+suite "Buffer - UTF-16/32 file transcoding":
+  test "UTF-16LE BOM file with CRLF survives load/save round-trip":
+    # "ab\r\ncd\r\n" in UTF-16 LE with BOM. Before transcoding, the \r byte
+    # of each CRLF (`0D 00 0A 00`) was classified as a lone \r on the raw
+    # bytes and the file was corrupted by a plain open + save.
+    let original = "\xFF\xFE" & "a\x00b\x00\x0D\x00\x0A\x00c\x00d\x00\x0D\x00\x0A\x00"
+    let testFile = getTempDir() / "moe_test_utf16le_crlf.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf16Le
+    check buf.hasBom
+    check buf.lineEnding == CRLF
+    check buf.endOfLine
+    check buf.len == 2
+    check buf[0] == "ab"
+    check buf[1] == "cd"
+    check buf.getFileContent == original
+
+  test "UTF-16BE BOM file survives load/save round-trip":
+    # "あ\ni\n" in UTF-16 BE with BOM
+    let original = "\xFE\xFF" & "\x30\x42\x00\x0A\x00\x69\x00\x0A"
+    let testFile = getTempDir() / "moe_test_utf16be.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf16Be
+    check buf.lineEnding == LF
+    check buf[0] == "あ"
+    check buf[1] == "i"
+    check buf.getFileContent == original
+
+  test "UTF-32LE BOM file survives load/save round-trip":
+    # "a\r\nb\r\n" in UTF-32 LE with BOM
+    let original =
+      "\xFF\xFE\x00\x00" & "\x61\x00\x00\x00\x0D\x00\x00\x00\x0A\x00\x00\x00" &
+      "\x62\x00\x00\x00\x0D\x00\x00\x00\x0A\x00\x00\x00"
+    let testFile = getTempDir() / "moe_test_utf32le.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf32Le
+    check buf.hasBom
+    check buf.lineEnding == CRLF
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf.getFileContent == original
+
+  test "BOM-less UTF-16LE detected via validation decodes and round-trips":
+    # "Ø\nØ" in UTF-16 LE without BOM: invalid as UTF-8 and as UTF-16 BE
+    # (D800 would be an unpaired surrogate), so detection resolves utf16Le.
+    let original = "\xD8\x00\x0A\x00\xD8\x00"
+    let testFile = getTempDir() / "moe_test_utf16le_nobom.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf16Le
+    check not buf.hasBom
+    check buf[0] == "Ø"
+    check buf[1] == "Ø"
+    check buf.getFileContent == original
+
+  test "Editing a UTF-16LE buffer saves valid UTF-16LE bytes":
+    let original = "\xFF\xFE" & "a\x00\x0D\x00\x0A\x00"
+    let testFile = getTempDir() / "moe_test_utf16le_edit.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    discard buf.insertText(BufferPosition(line: 0, column: 1), "😀")
+    check buf.saveFile(testFile).isOk
+    # "a😀\r\n" in UTF-16 LE with BOM (😀 = D83D DE00)
+    check readFile(testFile) == "\xFF\xFE" & "a\x00\x3D\xD8\x00\xDE\x0D\x00\x0A\x00"
+
+  test "Undecodable UTF-16 BOM file falls back to raw bytes":
+    # BOM claims UTF-16 LE but the payload has an odd byte count
+    let original = "\xFF\xFE\x41"
+    let testFile = getTempDir() / "moe_test_utf16_invalid.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.unknown
+    check not buf.hasBom
+    check buf.getFileContent == original
