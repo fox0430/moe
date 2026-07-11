@@ -345,6 +345,28 @@ suite "types - parseServerCapabilities":
     check caps.completionProvider.get.resolveProvider == some(true)
     check caps.completionProvider.get.triggerCharacters == some(@["."])
 
+  test "semanticTokensProvider: false is treated as unsupported":
+    let caps = parseServerCapabilities(%*{"semanticTokensProvider": false})
+    check caps.semanticTokensProvider.isNone
+
+  test "semanticTokensProvider: null is treated as unsupported":
+    let caps = parseServerCapabilities(%*{"semanticTokensProvider": nil})
+    check caps.semanticTokensProvider.isNone
+
+  test "semanticTokensProvider object is parsed":
+    let caps = parseServerCapabilities(
+      %*{
+        "semanticTokensProvider": {
+          "legend": {"tokenTypes": ["keyword"], "tokenModifiers": ["static"]},
+          "full": true,
+        }
+      }
+    )
+    check caps.semanticTokensProvider.isSome
+    check caps.semanticTokensProvider.get.legend.tokenTypes == @["keyword"]
+    check caps.semanticTokensProvider.get.legend.tokenModifiers == @["static"]
+    check caps.semanticTokensProvider.get.full.isSome
+
 suite "types - parseLocations":
   test "parse single location object":
     let j = %*{

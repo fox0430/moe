@@ -1094,8 +1094,10 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.executeCommandProvider =
       some(parseExecuteCommandOptions(node["executeCommandProvider"]))
   if node.hasKey("semanticTokensProvider"):
-    result.semanticTokensProvider =
-      some(parseSemanticTokensOptions(node["semanticTokensProvider"]))
+    let stp = node["semanticTokensProvider"]
+    # Some servers send a bare `false` / `null` instead of an options object.
+    if stp.kind == JObject:
+      result.semanticTokensProvider = some(parseSemanticTokensOptions(stp))
   if node.hasKey("inlayHintProvider"):
     result.inlayHintProvider = some(node["inlayHintProvider"])
   if node.hasKey("selectionRangeProvider"):
