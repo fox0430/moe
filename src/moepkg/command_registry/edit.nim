@@ -1674,8 +1674,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx.state.windowDisplay.savedViewportTopLine =
           ctx.motionController.viewportManager.viewport.topLine
 
-        # Execute the motion with combined count (motionCount * operatorCount)
-        let effectiveCount = lastCmd.motionCount * lastCmd.operatorCount
+        # LastLine with no prefix replays as count=0 (bare G); else combine counts.
+        let effectiveCount =
+          if lastCmd.motion == Motion.LastLine and not lastCmd.motionHasCount:
+            0
+          else:
+            lastCmd.motionCount * lastCmd.operatorCount
 
         # f/F/t/T motions need the same no-move / till-adjacency guards as the
         # live df{char}/dt{char} path; without them a repeat whose target is

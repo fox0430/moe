@@ -91,6 +91,7 @@ type
     name*: string
     description*: string
     count*: int ## Numeric prefix (e.g., 2 in "2w"), defaults to 1
+    hasCount*: bool ## True iff the user typed a numeric prefix; lets `1G` mean line 1.
     case kind*: CommandType
     of ctMotion:
       motion*: Motion

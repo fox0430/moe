@@ -293,7 +293,11 @@ proc executeCommand*(
 
       # Multiply motion count by operator count for correct Vim behavior
       # e.g., 3dw = d3w (delete 3 words), 2d3w = 6 words
-      let effectiveCount = cmd.count * op.operatorCount
+      let effectiveCount =
+        if cmd.motion == Motion.LastLine and not cmd.hasCount:
+          0
+        else:
+          cmd.count * op.operatorCount
       let motionCmd = MotionCommand(motion: cmd.motion, count: effectiveCount)
 
       # Execute motion to get end position
@@ -331,6 +335,7 @@ proc executeCommand*(
               operator: op.operatorType,
               motion: cmd.motion,
               motionCount: cmd.count,
+              motionHasCount: cmd.hasCount,
               operatorCount: op.operatorCount,
             )
           )
@@ -338,7 +343,9 @@ proc executeCommand*(
       return ok(())
     else:
       # No pending operator - just move cursor
-      let motionCmd = MotionCommand(motion: cmd.motion, count: cmd.count)
+      let motionCount =
+        if cmd.motion == Motion.LastLine and not cmd.hasCount: 0 else: cmd.count
+      let motionCmd = MotionCommand(motion: cmd.motion, count: motionCount)
       logDebug(
         "command",
         "Executing motion, current cursor=(" & $ctx.cursor.line & "," &
@@ -559,9 +566,10 @@ proc executeCommand*(
     # Debug: log the count
     logDebug("command", "Executing " & cmd.commandId & " with count=" & $count)
 
-    # Prepare args with count as first argument if count > 1
+    # Pass count as arg when explicitly typed, so `1G` (visual) reaches the
+    # handler as count=1 instead of falling back to the "no count" default.
     var finalArgs = cmd.args
-    if count > 1:
+    if count > 1 or (cmd.hasCount and count > 0):
       finalArgs = @[$count] & cmd.args
     logDebug("command", "finalArgs (count=" & $count & "): " & $finalArgs)
 
