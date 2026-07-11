@@ -210,8 +210,30 @@ proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth
     if wm.windows[idx].fixedWidth.isSome:
       wm.windows[idx].viewport.width = wm.windows[idx].fixedWidth.get
     else:
-      let minX = wm.windows[idx].viewport.x
-      wm.windows[idx].viewport.width = newWidth - minX
+      # A single-element horizontal group can still have vertically-overlapping
+      # right neighbors (grouper requires matching y AND height); stop at them.
+      let
+        win = wm.windows[idx]
+        minX = win.viewport.x
+        winTop = win.viewport.y
+        winBottom = win.viewport.y + win.viewport.height
+      var rightBoundary = newWidth
+      for i in 0 ..< wm.windows.len:
+        if i == idx:
+          continue
+        let
+          other = wm.windows[i]
+          otherTop = other.viewport.y
+          otherBottom = other.viewport.y + other.viewport.height
+        if winTop < otherBottom and otherTop < winBottom and other.viewport.x > minX and
+            other.viewport.x < rightBoundary:
+          rightBoundary = other.viewport.x
+      let width =
+        if rightBoundary < newWidth:
+          rightBoundary - WindowSeparatorWidth - minX
+        else:
+          newWidth - minX
+      wm.windows[idx].viewport.width = max(1, width)
     return
 
   var sortedGroup = group
