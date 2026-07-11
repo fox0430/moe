@@ -2470,6 +2470,65 @@ suite "Config - saveConfigToToml saves theme file":
     let result = saveConfigToToml(config, configFile)
     check result.isOk
 
+  test "Existing theme file is preserved when initTheme fell back to defaults":
+    # Regression: pre-fix, saveConfigToToml unconditionally overwrote the
+    # user's theme file with DefaultColors after any tkConfig load failure.
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_theme_survive_" & $testFileCounter & ".toml"
+    let themeFile =
+      getTempDir() / "moe_test_save_cfg_theme_survive_colors_" & $testFileCounter &
+      ".toml"
+    defer:
+      removeFile(configFile)
+      removeFile(themeFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    let userThemeToml = """
+[Colors]
+foreground = "#abcdef"
+background = "#123456"
+"""
+    writeFile(themeFile, userThemeToml)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+
+    setThemeColors(DefaultColors)
+    themeColorsFromFile = false
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk
+    check readFile(themeFile) == userThemeToml
+
+  test "Bootstrap: theme file is written when it doesn't exist yet":
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_theme_bootstrap_" & $testFileCounter & ".toml"
+    let themeFile =
+      getTempDir() / "moe_test_save_cfg_theme_bootstrap_colors_" & $testFileCounter &
+      ".toml"
+    defer:
+      removeFile(configFile)
+      if fileExists(themeFile):
+        removeFile(themeFile)
+
+    check not fileExists(themeFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+
+    setThemeColors(DefaultColors)
+    themeColorsFromFile = false
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk
+    check fileExists(themeFile)
+    check loadThemeFromToml(themeFile).isOk
+
 suite "Config Validation - KeyMapping section":
   test "Normal key mappings":
     let toml = """

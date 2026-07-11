@@ -211,6 +211,11 @@ proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
   var vr = newValidationResult()
   loadTheme(config, vr)
 
+# True iff `themeColors` mirrors a successful `tkConfig` load from
+# `config.theme.path`. Consulted by `saveConfigToToml` so a fallback-to-defaults
+# load doesn't stamp bundled defaults over the user's theme file.
+var themeColorsFromFile* = false
+
 proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
   ## Initialize the theme based on configuration.
   ## Falls back to default theme on error; both file-level errors and any
@@ -221,6 +226,7 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
   let themeResult = loadTheme(config, vr)
   if themeResult.isOk:
     setThemeColors(themeResult.get)
+    themeColorsFromFile = config.theme.kind == tkConfig
   else:
     case config.theme.kind
     of tkConfig:
@@ -230,6 +236,7 @@ proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
     of tkDefault:
       discard
     initDefaultTheme()
+    themeColorsFromFile = false
 
 proc initTheme*(config: EditorConfig) =
   ## Backwards-compatible wrapper that discards validation errors.

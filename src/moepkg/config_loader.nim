@@ -178,11 +178,15 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   except CatchableError as e:
     return Result[void, string].err("Failed to write config file: " & e.msg)
 
-  # Save theme colors to the theme file if using config theme with a path
+  # Skip the theme write when the user's file is on disk but `themeColors`
+  # doesn't mirror it (initTheme fell back to defaults); the `not fileExists`
+  # branch keeps the bootstrap case working.
   if config.theme.kind == tkConfig and config.theme.path.len > 0:
-    let themeResult = saveThemeToToml(themeColors, config.theme.path)
-    if themeResult.isErr:
-      return Result[void, string].err(themeResult.error)
+    let expandedThemePath = expandTilde(config.theme.path)
+    if themeColorsFromFile or not fileExists(expandedThemePath):
+      let themeResult = saveThemeToToml(themeColors, config.theme.path)
+      if themeResult.isErr:
+        return Result[void, string].err(themeResult.error)
 
   return Result[void, string].ok()
 
