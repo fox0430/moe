@@ -147,6 +147,7 @@ type
     rustInByteString*: bool
     rustInRawString*: bool
     rustAttrBracketDepth*: int
+    commitSubjectSeen*: bool
 
   SourceLanguage* = enum
     langNone
@@ -247,6 +248,7 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.rustInByteString = false
   g.rustInRawString = false
   g.rustAttrBracketDepth = 0
+  g.commitSubjectSeen = false
   g.pos = 0
 
 proc scanToTerminator*(buf: cstring, pos: var int, t0, t1, t2: char): bool =

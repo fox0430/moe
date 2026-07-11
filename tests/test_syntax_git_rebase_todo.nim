@@ -247,3 +247,169 @@ suite "syntax_git_rebase_todo - Multiple lines":
 
     g.gitRebaseTodoNextToken()
     check g.kind == gtEof
+
+suite "syntax_git_rebase_todo - Identifier-arg commands":
+  test "label <name> emits identifier, not hash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("label my-label\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtKeyword
+    check g.length == 5 # "label"
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtWhitespace
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 8 # "my-label"
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtNone # "\n"
+
+  test "reset <label> emits identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("reset onto\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtKeyword
+    check g.length == 5
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtWhitespace
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 4 # "onto"
+
+  test "update-ref <ref> emits identifier including slashes":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("update-ref refs/heads/main\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtKeyword
+    check g.length == 10 # "update-ref"
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtWhitespace
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 15 # "refs/heads/main"
+
+  test "merge <label> emits identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("merge feature\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtKeyword
+    check g.length == 5 # "merge"
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtWhitespace
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 7 # "feature"
+
+  test "short-form 'l' (label) also uses identifier arg":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("l my-label\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtKeyword
+    check g.length == 1
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtWhitespace
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 8
+
+  test "hash-arg commands still emit gtDecNumber (regression check)":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("pick abc1234 msg\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtKeyword
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtWhitespace
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 7 # "abc1234"
+
+suite "syntax_git_rebase_todo - Sha in comments":
+  test "abbreviated hash inside comment is highlighted":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# Rebase abc1234 onto def5678\n")
+
+    # `#`
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment
+    check g.length == 1
+
+    # ` Rebase `
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment
+
+    # `abc1234`
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 7
+
+    # ` onto `
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment
+
+    # `def5678`
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 7
+
+    # `\n`
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtEof
+
+  test "short hex-only word (< 7 chars) is not treated as a hash":
+    # "abed" is 4 hex-only chars but too short to be a hash.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# the abed cat\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment
+    check g.length == 15 # whole line, still one token because there's no hash
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtEof
+
+  test "hex run inside a longer word is not a hash":
+    # `abc1234x` — trailing 'x' means this is not a hash boundary.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# tag abc1234x here\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment
+    check g.length == 20
+
+  test "hash separated by '..' is split into two hashes":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# Rebase abc1234..def5678 onto\n")
+
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment # '#'
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment # ' Rebase '
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtDecNumber # 'abc1234'
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment # '..'
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtDecNumber # 'def5678'
+    g.gitRebaseTodoNextToken()
+    check g.kind == gtComment # ' onto\n'
