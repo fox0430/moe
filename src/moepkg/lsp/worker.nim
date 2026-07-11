@@ -1337,7 +1337,35 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
     # Check if this is a response (has "id", no "method")
     if response.hasKey("id") and not response.hasKey("method"):
-      let lspId = response["id"].getInt
+      # JSON-RPC 2.0 allows id to be Number, String, or null. moe emits integer
+      # ids, but accept string ids from lenient servers to keep correlation.
+      let idNode = response["id"]
+      var lspId: int
+      case idNode.kind
+      of JInt:
+        lspId = idNode.getInt
+      of JString:
+        try:
+          lspId = parseInt(idNode.getStr)
+        except ValueError:
+          sendLogMessage(
+            mtWarning,
+            "Dropped LSP response with non-numeric string id: " & idNode.getStr,
+          )
+          return
+      else:
+        let errText =
+          if response.hasKey("error") and response["error"].kind == JObject:
+            response["error"]{"message"}.getStr("unknown error")
+          else:
+            "no error field"
+        sendLogMessage(
+          mtWarning,
+          "Dropped LSP response with unhandled id kind (" & $idNode.kind & "): " &
+            errText,
+        )
+        return
+
       if lspId in pendingRequests:
         let (ourId, _) = pendingRequests[lspId]
         pendingRequests.del(lspId)

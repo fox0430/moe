@@ -146,6 +146,21 @@ proc parseHeaders*(headerBlock: string): Result[Table[string, string], string] =
   return ok(headers)
 
 # Message parsing
+
+proc idNodeToRequestId(node: JsonNode): Result[RequestId, string] =
+  ## JSON-RPC 2.0 allows id to be a Number or a String. moe uses ints, but
+  ## accept string ids from lenient servers so correlation still works.
+  case node.kind
+  of JInt:
+    ok(RequestId(node.getInt))
+  of JString:
+    try:
+      ok(RequestId(parseInt(node.getStr)))
+    except ValueError:
+      err("Non-numeric string id: " & node.getStr)
+  else:
+    err("Unsupported id kind: " & $node.kind)
+
 proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
   ## Parse a JSON-RPC message from body string
   var jsonNode: JsonNode
@@ -169,7 +184,10 @@ proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
     let errNode = jsonNode["error"]
     var errId: Option[RequestId] = none(RequestId)
     if hasId:
-      errId = some(jsonNode["id"].getInt)
+      let idRes = idNodeToRequestId(jsonNode["id"])
+      if idRes.isErr:
+        return err(idRes.error)
+      errId = some(idRes.get)
 
     var data: Option[JsonNode] = none(JsonNode)
     if errNode.hasKey("data"):
@@ -186,11 +204,12 @@ proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
     )
   elif hasResult and hasId:
     # Response
+    let idRes = idNodeToRequestId(jsonNode["id"])
+    if idRes.isErr:
+      return err(idRes.error)
     return ok(
       JsonRpcMessage(
-        kind: jrmkResponse,
-        respId: jsonNode["id"].getInt,
-        respResult: jsonNode["result"],
+        kind: jrmkResponse, respId: idRes.get, respResult: jsonNode["result"]
       )
     )
   elif hasMethod:
@@ -203,12 +222,12 @@ proc parseJsonRpcMessage*(body: string): Result[JsonRpcMessage, string] =
 
     if hasId:
       # Request
+      let idRes = idNodeToRequestId(jsonNode["id"])
+      if idRes.isErr:
+        return err(idRes.error)
       return ok(
         JsonRpcMessage(
-          kind: jrmkRequest,
-          reqId: jsonNode["id"].getInt,
-          reqMethod: meth,
-          reqParams: params,
+          kind: jrmkRequest, reqId: idRes.get, reqMethod: meth, reqParams: params
         )
       )
     else:
