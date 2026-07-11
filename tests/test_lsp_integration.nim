@@ -849,6 +849,24 @@ suite "LspIntegration - applyTextEdits":
     check result.isOk
     check buffer.getTextString() == "aZbc"
 
+  test "applyTextEdits end past EOF with character > 0":
+    # Regression: server-reported end line past the last buffer line combined
+    # with character > 0 used to pass buffer.len as an end line to deleteRange.
+    let buffer = newTextBuffer("abc\ndef")
+    let edit = TextEdit(range: newRange(0, 0, 5, 3), newText: "XYZ")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "XYZ"
+
+  test "applyTextEdits end past EOF with character == 0":
+    # Regression: end.line strictly greater than buffer.len also used to feed
+    # an out-of-bounds line into deleteRange via the else branch.
+    let buffer = newTextBuffer("abc\ndef")
+    let edit = TextEdit(range: newRange(0, 0, 9, 0), newText: "Q")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "Q"
+
 suite "LspIntegration - applyLspFoldingRanges":
   test "applyLspFoldingRanges with empty ranges":
     let buffer = newTextBuffer("line1\nline2\nline3")
