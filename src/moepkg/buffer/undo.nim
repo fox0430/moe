@@ -535,10 +535,10 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     if b.changeListIndex < b.changeList.len - 1:
       b.changeListIndex.inc
 
-  # Add redone changes back to undo stack in reverse order
-  # This restores the original undo stack order after redo
-  for i in countdown(redoneChanges.len - 1, 0):
-    b.undoStack.addLast(redoneChanges[i])
+  # Symmetric with undo(): push in the order the changes were redone so the
+  # last-applied change sits on top of undoStack.
+  for change in redoneChanges:
+    b.undoStack.addLast(change)
 
   # Mark highlight as needing update after redo
   if redoneChanges.len > 0:
