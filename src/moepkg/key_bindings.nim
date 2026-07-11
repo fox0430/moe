@@ -39,6 +39,10 @@ export registry
 # `setupDefaultBindings` below.
 import key_bindings/[commands, normal_bindings, visual_bindings, insert_bindings]
 
+const MaxNumericPrefix* = 1_000_000
+  ## Cap on the count prefix. Iterative motions loop `count` times even when
+  ## the cursor is stuck, so an unbounded value (e.g. `99999999w`) locks up.
+
 proc unbindKey*(registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo) =
   ## Remove a key binding
   if mode in registry.bindings:
@@ -443,7 +447,13 @@ proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   if registry.sequenceState.numericPrefix.len > 0:
     try:
       let num = parseInt(registry.sequenceState.numericPrefix)
-      let prefixValue = if num > 0: num else: 1
+      let prefixValue =
+        if num <= 0:
+          1
+        elif num > MaxNumericPrefix:
+          MaxNumericPrefix
+        else:
+          num
       logDebug("keybind", "getNumericPrefix returning: " & $prefixValue)
       return prefixValue
     except ValueError:
