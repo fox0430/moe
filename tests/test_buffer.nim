@@ -2524,3 +2524,34 @@ suite "Buffer - UTF-16/32 file transcoding":
     check buf.encoding == CharacterEncoding.unknown
     check not buf.hasBom
     check buf.getFileContent == original
+
+  test "UTF-8 BOM file: BOM stripped from buffer, re-emitted on save":
+    let original = "\xEF\xBB\xBF" & "ab\ncd\n"
+    let testFile = getTempDir() / "moe_test_utf8_bom.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf8
+    check buf.hasBom
+    check buf.lineEnding == LF
+    check buf.endOfLine
+    check buf.len == 2
+    check buf[0] == "ab"
+    check buf[1] == "cd"
+    check buf.getFileContent == original
+
+  test "BOM-less UTF-8 file stays BOM-less on save":
+    let original = "ab\ncd\n"
+    let testFile = getTempDir() / "moe_test_utf8_nobom.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf8
+    check not buf.hasBom
+    check buf.getFileContent == original

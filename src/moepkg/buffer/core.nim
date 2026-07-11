@@ -238,7 +238,7 @@ type
     isUtilityBuffer*: bool # Utility buffers (jumplist, log, etc.) disable decorations
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
-    hasBom*: bool # Re-emit a BOM on save (UTF-16/32; a UTF-8 BOM stays in content)
+    hasBom*: bool # BOM stripped on load, re-emitted on save (UTF-8/16/32)
     endOfLine*: bool # Whether file should end with newline
     lastFileModTime*: Option[Time]
       # File modification time when loaded (for external change detection)

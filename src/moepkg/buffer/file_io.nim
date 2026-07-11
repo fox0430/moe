@@ -100,6 +100,11 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   var hasBom = false
   var bomLen = 0
   case encoding
+  of CharacterEncoding.utf8:
+    # detectCharacterEncoding returns utf8 for BOM-tagged and plain alike.
+    if content.startsWith("\xEF\xBB\xBF"):
+      hasBom = true
+      content = content[3 .. ^1]
   of CharacterEncoding.utf16:
     # BOM present; resolve the endianness it encodes
     hasBom = true
@@ -306,15 +311,13 @@ proc getFileContent*(buffer: TextBuffer): string =
         result.setLen(result.len - 1)
 
   # Restore the on-disk encoding (internal representation is UTF-8).
-  # A UTF-8 BOM is kept verbatim in the buffer content, so only UTF-16/32
-  # need the BOM re-emitted here.
   if buffer.encoding in {
     CharacterEncoding.utf16, CharacterEncoding.utf16Le, CharacterEncoding.utf16Be,
     CharacterEncoding.utf32, CharacterEncoding.utf32Le, CharacterEncoding.utf32Be,
   }:
     result = encodeFromUtf8(result, buffer.encoding)
-    if buffer.hasBom:
-      result = bomBytes(buffer.encoding) & result
+  if buffer.hasBom:
+    result = bomBytes(buffer.encoding) & result
 
 proc isExternallyModified*(b: TextBuffer): bool =
   ## Check if the file was modified externally (outside the editor)
