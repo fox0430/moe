@@ -1384,14 +1384,19 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     # `flushTimeout` never returns these variants; guard for exhaustiveness.
     return true
   of rrExecuteRuntimeCommand:
-    if not inCommandOverlay:
-      let cmdResult = e.handlerManager.executeCommandDirect(route.commandName)
-      if cmdResult.isSome:
-        # Route through `processResult` so bridge-produced `hrExecCommand`
-        # (and other non-trivial kinds) are dispatched the same way as in the
-        # main feedKey path. Without this, `K = "bdelete"` would silently no-op
-        # when fired via timeout flush.
-        shouldContinue = e.processResult(cmdResult.get, e.activeBuffer)
+    # `mappingsFor(Command)` filters rmkCommand out, so `flushTimeout(Command)`
+    # cannot return this variant. If the invariant is ever broken, prefer a
+    # loud failure over a silent drop that would swallow the mapping.
+    doAssert not inCommandOverlay,
+      "flushTimeout(Command) returned rrExecuteRuntimeCommand; " &
+        "mappingsFor(Command) must filter rmkCommand out (see key_router.mappingsFor)"
+    let cmdResult = e.handlerManager.executeCommandDirect(route.commandName)
+    if cmdResult.isSome:
+      # Route through `processResult` so bridge-produced `hrExecCommand`
+      # (and other non-trivial kinds) are dispatched the same way as in the
+      # main feedKey path. Without this, `K = "bdelete"` would silently no-op
+      # when fired via timeout flush.
+      shouldContinue = e.processResult(cmdResult.get, e.activeBuffer)
   of rrExecuteRuntimeKeySequence:
     if inCommandOverlay:
       # Command overlay replays through a different dispatcher
