@@ -19,7 +19,7 @@
 
 ## Common helper procedures for rendering
 
-import std/[options, strutils, unicode, tables]
+import std/[options, unicode, tables]
 
 import pkg/celina
 
