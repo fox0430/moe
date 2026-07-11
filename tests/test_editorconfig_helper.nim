@@ -111,8 +111,10 @@ suite "EditorConfig Support":
     var props = initTable[string, string]()
     props["charset"] = "utf-8"
     let buf = newTextBuffer()
+    buf.hasBom = true
     applyEditorConfig(buf, props)
     check buf.encoding == utf8
+    check buf.hasBom == false
 
   test "applyEditorConfig with insert_final_newline true":
     var props = initTable[string, string]()
@@ -317,6 +319,7 @@ suite "EditorConfig Support":
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.encoding == utf8
+    check buf.hasBom == true
 
   test "applyEditorConfig with charset utf-16be":
     var props = initTable[string, string]()
@@ -324,6 +327,7 @@ suite "EditorConfig Support":
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.encoding == utf16Be
+    check buf.hasBom == true
 
   test "applyEditorConfig with charset utf-16le":
     var props = initTable[string, string]()
@@ -331,6 +335,7 @@ suite "EditorConfig Support":
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.encoding == utf16Le
+    check buf.hasBom == true
 
   test "applyEditorConfig with charset latin1 keeps default":
     var props = initTable[string, string]()
