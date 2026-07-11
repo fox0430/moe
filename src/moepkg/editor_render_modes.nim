@@ -24,7 +24,13 @@ import std/[options, strutils]
 import pkg/celina
 
 import
-  types/editor_types, color, colorcode, render_utils, config_mode, editor_window_layout
+  types/editor_types,
+  color,
+  colorcode,
+  render_utils,
+  config_mode,
+  editor_window_layout,
+  unicode_utils
 import terminal/ansi_parser
 
 proc renderConfig*(
@@ -95,16 +101,17 @@ proc renderConfig*(
     if isBeingEdited:
       # Show edit buffer
       let indent = "  ".repeat(item.depth)
-      let name = item.displayName.alignLeft(maxNameWidth - item.depth * 2)
+      let name = item.displayName.alignLeft(max(0, maxNameWidth - item.depth * 2))
       displayLine = indent & name & " : " & editInfo.buffer
     else:
       displayLine = formatItemForDisplay(item, maxNameWidth)
 
-    # Truncate if too long, or pad to full width for consistent background
-    if displayLine.len > width:
-      displayLine = displayLine[0 ..< width - 3] & "..."
-    elif displayLine.len < width:
-      displayLine = displayLine & ' '.repeat(width - displayLine.len)
+    # Truncate or pad in display columns (rune-safe, width <= 0 safe).
+    let contentWidth = displayWidth(displayLine)
+    if contentWidth > width:
+      displayLine = displayLine.truncateToWidthWithSuffix(width, "...")
+    elif contentWidth < width:
+      displayLine = displayLine & ' '.repeat(width - contentWidth)
 
     # Apply style (use theme background color to match clearBuffer)
     let style =
@@ -156,7 +163,7 @@ proc renderConfig*(
     inc screenY
 
   # Clear remaining lines (when sections are collapsed)
-  let emptyLine = ' '.repeat(width)
+  let emptyLine = ' '.repeat(max(0, width))
   while screenY < listEndY:
     buffer.setString(startX, screenY, emptyLine, normalStyle())
     inc screenY

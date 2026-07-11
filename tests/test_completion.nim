@@ -1918,3 +1918,55 @@ suite "Completion - snippet display label":
   test "Buffer entries with no label fall back to the word for display":
     let entry = CompletionEntry(word: "template", source: csBuffer)
     check entry.displayText == "template"
+
+suite "Completion - renderCompletionPopup narrow width":
+  test "Narrow popup width does not crash (word only)":
+    let menu = CompletionMenu(
+      entries: @[CompletionEntry(word: "println", matchScore: 100, source: csBuffer)],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [0, 1, 2, 3, 4]:
+      let pos = PopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = true)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+  test "Narrow popup width does not crash (word + detail)":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "println", matchScore: 100, source: csLsp, detail: some("fn(args)")
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [0, 1, 2, 3, 4, 8]:
+      let pos = PopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = true)
+
+  test "Multibyte word/detail truncate without crashing":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "あいうえおかき",
+          matchScore: 100,
+          source: csLsp,
+          detail: some("さしすせそ"),
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [4, 6, 8, 10]:
+      let pos = PopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = true)

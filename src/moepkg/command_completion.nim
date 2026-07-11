@@ -586,11 +586,16 @@ proc renderCommandCompletionPopup*(
           else:
             cmdPopupDescNormalStyle()
 
-        # Truncate command if needed
-        var displayCmd = entry.command
+        # Truncate command (rune-safe, cmdDisplayWidth <= 0 safe)
         let cmdDisplayWidth = min(maxCmdWidth, contentWidth - DescriptionGap - 1)
-        if displayCmd.runeLen > cmdDisplayWidth:
-          displayCmd = $displayCmd.toRunes[0 ..< cmdDisplayWidth - 1] & "…"
+        let cmdRunes = entry.command.toRunes
+        var displayCmd = entry.command
+        if cmdRunes.len > cmdDisplayWidth:
+          displayCmd =
+            if cmdDisplayWidth >= 1:
+              $cmdRunes[0 ..< cmdDisplayWidth - 1] & "…"
+            else:
+              ""
 
         # Draw command
         var x =
@@ -600,13 +605,17 @@ proc renderCommandCompletionPopup*(
         let cmdEndX = contentX + min(maxCmdWidth, cmdDisplayWidth) + DescriptionGap
         x = fillCells(termBuffer, x, y, min(cmdEndX, contentLimit), cmdStyle)
 
-        # Draw description if available
+        # Draw description if available (rune-safe, remainingWidth <= 0 safe)
         if entry.description.len > 0:
           let remainingWidth = contentLimit - x
+          let descRunes = entry.description.toRunes
           var displayDesc = entry.description
-          if displayDesc.runeLen > remainingWidth:
-            displayDesc = $displayDesc.toRunes[0 ..< remainingWidth - 1] & "…"
-
+          if descRunes.len > remainingWidth:
+            displayDesc =
+              if remainingWidth >= 1:
+                $descRunes[0 ..< remainingWidth - 1] & "…"
+              else:
+                ""
           x = drawClippedRunes(termBuffer, x, y, contentLimit, displayDesc, descStyle)
 
         # Fill remaining space with background

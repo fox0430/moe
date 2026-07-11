@@ -1150,3 +1150,29 @@ suite "CommandCompletion - renderCommandCompletionPopup wide char":
     check termBuffer[3, 1].symbol == "本"
     check termBuffer[4, 1].symbol == ""
     check termBuffer[4, 1].style == termBuffer[3, 1].style
+
+suite "CommandCompletion - renderCommandCompletionPopup narrow width":
+  test "Narrow popup width does not crash (command with description)":
+    let menu = CommandCompletionMenu(
+      entries:
+        @[CommandCompletionEntry(command: "write", description: "save the buffer")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [2, 3, 4, 5, 6, 8]:
+      let pos = CommandPopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCommandCompletionPopup(termBuffer, menu, pos, showBorder = true)
+
+  test "Zero-width popup does not crash":
+    let menu = CommandCompletionMenu(
+      entries: @[CommandCompletionEntry(command: "quit", description: "")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [0, 1, 2]:
+      let pos = CommandPopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCommandCompletionPopup(termBuffer, menu, pos, showBorder = false)

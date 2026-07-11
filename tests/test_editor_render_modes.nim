@@ -20,9 +20,12 @@
 ## Tests for editor_render_modes.nim
 
 import std/unittest
+
 import pkg/celina
+
 import ../src/moepkg/[editor, config, config_loader, config_mode, render_utils, color]
 import ../src/moepkg/editor_render_modes
+import ../src/moepkg/types/config_mode_types
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -247,3 +250,35 @@ suite "renderConfig - enum popup border":
               inc highlightOnBorder
       check highlightCells > 0
       check highlightOnBorder == 0
+
+suite "renderConfig - narrow viewport / multibyte":
+  test "Narrow viewport width does not crash":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
+    for w in [0, 1, 2, 3, 4]:
+      e.activeWindow.viewport.width = w
+      e.renderConfig(buffer, e.activeWindow, true, 0)
+
+  test "Multibyte string value truncates without crashing":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+    var mbIdx = -1
+    for i, item in configState.items:
+      if item.kind == cvkString:
+        configState.items[i].stringValue =
+          "あいうえおかきくけこさしすせそ"
+        mbIdx = i
+        break
+    if mbIdx < 0:
+      skip()
+    else:
+      configState.selectedIndex = mbIdx
+      e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+        ModeState(kind: mskConfig, config: configState)
+      for w in [4, 8, 12]:
+        e.activeWindow.viewport.width = w
+        e.renderConfig(buffer, e.activeWindow, true, 0)

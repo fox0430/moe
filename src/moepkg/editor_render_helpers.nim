@@ -101,7 +101,3 @@ proc getDocumentHighlightStyle*(kind: int): Style =
     documentHighlightWriteStyle()
   else: # Text or unknown
     documentHighlightTextStyle()
-
-proc fillLine*(buffer: var Buffer, x, y, width: int, style: Style) =
-  ## Fill a line with spaces at the given position and width
-  buffer.setString(x, y, " ".repeat(width), style)
