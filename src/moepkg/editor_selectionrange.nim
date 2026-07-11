@@ -139,6 +139,8 @@ proc startLspSelectionRange*(e: Editor): bool =
     return false
 
   e.state.lspCache.pendingSelectionRangeRequestId = reqResult.get
+  e.state.lspCache.pendingSelectionRangeBufferId = activeBuffer.id
+  e.state.lspCache.pendingSelectionRangeContentVersion = activeBuffer.contentVersion
   return true
 
 proc pollLspSelectionRange*(e: Editor) =
@@ -158,6 +160,14 @@ proc pollLspSelectionRange*(e: Editor) =
     discard # Still waiting
   of lrsSuccess:
     e.state.lspCache.pendingSelectionRangeRequestId = 0
+
+    # Ranges are anchored to the originating buffer's content; a buffer switch
+    # or edit in flight would misapply them.
+    let buf = e.activeBuffer()
+    if buf.id != e.state.lspCache.pendingSelectionRangeBufferId or
+        buf.contentVersion != e.state.lspCache.pendingSelectionRangeContentVersion:
+      return
+
     var applied = false
     if resultOpt.isSome:
       let ranges = parseSelectionRangeResponse(resultOpt.get)

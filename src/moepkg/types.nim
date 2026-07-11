@@ -372,6 +372,8 @@ type
     pendingDocumentSymbolsRequestId*: int # Request ID (0 = none)
     # Pending selection range request
     pendingSelectionRangeRequestId*: int # Request ID (0 = none)
+    pendingSelectionRangeBufferId*: BufferId # BufferId the request was made for
+    pendingSelectionRangeContentVersion*: int # contentVersion at request time
     # Selection range expansion chain (innermost -> outermost), rune indexes.
     # Lets repeated Ctrl-s walk the parent chain without re-querying the server.
     selectionRangeChain*: seq[tuple[first, last: BufferPosition]]
