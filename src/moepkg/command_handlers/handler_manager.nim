@@ -461,6 +461,10 @@ proc playbackMacro*(
   ## Editor-based macro playback. Iterates keys and dispatches each through
   ## the Editor-aware handleKeyCombo so migrated modes (Insert/Visual/Replace)
   ## are handled correctly during playback.
+  ##
+  ## Do NOT clear the built-in sequence FSM here: the `:map` expansion path
+  ## needs an outer `numericPrefix` to survive so the RHS's first
+  ## count-consuming command can consume it.
   let state = editor.state
 
   if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
@@ -471,7 +475,6 @@ proc playbackMacro*(
     )
 
   state.macroState.playbackDepth += 1
-  editor.keyRouter.clearBuiltinSequence()
   let wasRecording = state.macroState.isRecording
   state.macroState.isRecording = false
 
@@ -495,5 +498,4 @@ proc playbackMacro*(
 
   state.macroState.isRecording = wasRecording
   state.macroState.playbackDepth -= 1
-  editor.keyRouter.clearBuiltinSequence()
   HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
