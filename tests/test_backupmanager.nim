@@ -525,3 +525,33 @@ suite "backup_manager - restoreBackup (edge cases)":
 
     check success == false
     check readFile(sourcePath) == "original" # Should remain unchanged
+
+  test "Restore backup preserves destination permissions":
+    let
+      sourcePath = TestBackupDir / "perms_dest.txt"
+      backupDir = createBackupSubDir("restore_perms", sourcePath)
+    writeFile(sourcePath, "original")
+    createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00", "backup content")
+    discard chmod(sourcePath.cstring, 0o640)
+
+    let state = initBackupManagerState(TestBackupDir, sourcePath)
+    check state.restoreBackup(0) == true
+    check readFile(sourcePath) == "backup content"
+
+    var st: Stat
+    check stat(sourcePath.cstring, st) == 0
+    check (st.st_mode.int and 0o777) == 0o640
+
+  test "Restore backup preserves a symlinked destination":
+    let
+      realPath = TestBackupDir / "symlink_target.txt"
+      sourcePath = TestBackupDir / "symlink.txt"
+      backupDir = createBackupSubDir("restore_sym", sourcePath)
+    writeFile(realPath, "original")
+    createSymlink(realPath, sourcePath)
+    createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00", "backup content")
+
+    let state = initBackupManagerState(TestBackupDir, sourcePath)
+    check state.restoreBackup(0) == true
+    check symlinkExists(sourcePath)
+    check readFile(realPath) == "backup content"
