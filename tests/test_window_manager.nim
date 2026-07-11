@@ -523,6 +523,27 @@ suite "EditorWindowManager - resizeWindows":
       check win.viewport.y == 0
       check win.viewport.height == 30 - steadyBottomAreaHeight()
 
+  test "tall-left + stacked-right upscale keeps neighbors visible":
+    # Regression: equalizeWidthsForResize used to stretch single-element
+    # groups to newWidth, overlapping mismatched-height right neighbors.
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 20, active = true))
+    wm.windows.add(createTestWindow(41, 0, 39, 10))
+    wm.windows.add(createTestWindow(41, 11, 39, 9))
+    wm.activeWindowIndex = 0
+
+    wm.resizeWindows(180, 45, 80, 20, multiStatusLine = false)
+
+    let
+      tall = wm.windows[0]
+      top = wm.windows[1]
+      bot = wm.windows[2]
+    check tall.viewport.x == 0
+    check tall.viewport.x + tall.viewport.width <= top.viewport.x
+    check tall.viewport.x + tall.viewport.width <= bot.viewport.x
+    check top.viewport.x + top.viewport.width == 180
+    check bot.viewport.x + bot.viewport.width == 180
+
 suite "EditorWindowManager - Integration":
   test "Multiple vsplits create equal width windows":
     let wm = createSingleWindowManager(80, 24)
