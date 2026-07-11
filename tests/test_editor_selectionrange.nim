@@ -22,8 +22,10 @@
 import std/[unittest, json, options, importutils]
 
 import
-  ../src/moepkg/
-    [editor, config, config_loader, buffer, modes, lsp_service, editor_selectionrange]
+  ../src/moepkg/[
+    editor, config, config_loader, buffer, modes, lsp_service, editor_selectionrange,
+    types,
+  ]
 
 privateAccess(LspService)
 
@@ -95,6 +97,8 @@ suite "editor_selectionrange - pollLspSelectionRange":
 
     let requestId = 1
     e.state.lspCache.pendingSelectionRangeRequestId = requestId
+    e.state.lspCache.pendingSelectionRangeBufferId = buf.id
+    e.state.lspCache.pendingSelectionRangeContentVersion = buf.contentVersion
     e.lsp.service.activeRequests[requestId] = LspPendingRequest(
       requestId: requestId,
       langId: "",
@@ -114,6 +118,83 @@ suite "editor_selectionrange - pollLspSelectionRange":
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 3)
     check e.cursor == BufferPosition(line: 0, column: 3)
 
+  test "Discards response when the active buffer changed while waiting":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo")
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+      }
+    ]
+
+    const reqId = 7
+    e.state.lspCache.pendingSelectionRangeRequestId = reqId
+    # Simulate a buffer switch: the request was sent for a different buffer.
+    e.state.lspCache.pendingSelectionRangeBufferId = BufferId(int(buf.id) + 1)
+    e.state.lspCache.pendingSelectionRangeContentVersion = buf.contentVersion
+    e.lsp.service.activeRequests[reqId] = LspPendingRequest(
+      requestId: reqId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($responseJson), error: none(string))
+
+    let modeBefore = e.state.mode
+    e.pollLspSelectionRange()
+
+    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check e.state.mode == modeBefore
+    check not e.state.visualSelection.active
+    check e.state.lspCache.selectionRangeChain.len == 0
+
+  test "Discards response when the buffer was edited while waiting":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo")
+    let versionAtRequest = buf.contentVersion
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+      }
+    ]
+
+    const reqId = 8
+    e.state.lspCache.pendingSelectionRangeRequestId = reqId
+    e.state.lspCache.pendingSelectionRangeBufferId = buf.id
+    e.state.lspCache.pendingSelectionRangeContentVersion = versionAtRequest
+    e.lsp.service.activeRequests[reqId] = LspPendingRequest(
+      requestId: reqId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($responseJson), error: none(string))
+
+    # Edit in flight: contentVersion advances beyond the snapshot.
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "bar")
+    check buf.contentVersion != versionAtRequest
+
+    let modeBefore = e.state.mode
+    e.pollLspSelectionRange()
+
+    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check e.state.mode == modeBefore
+    check not e.state.visualSelection.active
+
 suite "editor_selectionrange - config gate":
   test "startLspSelectionRange returns false when disabled in config":
     let config = newEditorConfig()
@@ -127,7 +208,10 @@ suite "editor_selectionrange - config gate":
 
 suite "editor_selectionrange - chain expansion":
   proc seedResponse(e: Editor, requestId: int, responseJson: JsonNode) =
+    let buf = e.activeBuffer()
     e.state.lspCache.pendingSelectionRangeRequestId = requestId
+    e.state.lspCache.pendingSelectionRangeBufferId = buf.id
+    e.state.lspCache.pendingSelectionRangeContentVersion = buf.contentVersion
     e.lsp.service.activeRequests[requestId] = LspPendingRequest(
       requestId: requestId,
       langId: "",
