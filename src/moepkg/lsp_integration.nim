@@ -1096,15 +1096,22 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
       if lspEndPos.character > 0:
         # Convert UTF-16 to a rune index and decrement by one rune for the
         # inclusive end
-        let endRune = utf16ToRuneIndex(endLineText, lspEndPos.character)
-        adjustedEndPos =
-          BufferPosition(line: lspEndPos.line, column: max(endRune - 1, 0))
+        if lspEndPos.line >= buffer.len:
+          # End points past EOF: clamp to end of last line
+          let last = buffer.len - 1
+          adjustedEndPos =
+            BufferPosition(line: last, column: buffer.getLine(last).charLen)
+        else:
+          let endRune = utf16ToRuneIndex(endLineText, lspEndPos.character)
+          adjustedEndPos =
+            BufferPosition(line: lspEndPos.line, column: max(endRune - 1, 0))
       else:
         # End is at start of a line (character == 0)
         # Need to point to end of previous line to include the newline
         if lspEndPos.line > 0:
-          let prevLineLen = buffer.getLine(lspEndPos.line - 1).charLen
-          adjustedEndPos = BufferPosition(line: lspEndPos.line - 1, column: prevLineLen)
+          let prevIdx = min(lspEndPos.line - 1, buffer.len - 1)
+          adjustedEndPos =
+            BufferPosition(line: prevIdx, column: buffer.getLine(prevIdx).charLen)
         else:
           # Edge case: end is at (0, 0), skip deletion
           adjustedEndPos = startPos
