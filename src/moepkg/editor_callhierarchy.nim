@@ -164,6 +164,15 @@ proc pollLspCallHierarchy*(e: Editor) =
       e.state.lspCache.pendingCallHierarchyRequestId = 0
       e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
+      # Drop stale response if the user has left Normal/Visual (except
+      # re-entry from CallHierarchy itself, which is how the viewer toggles
+      # between Incoming/Outgoing).
+      if e.state.overlay.isSome or (
+        not e.state.mode.isNormalOrVisualMode and
+        e.state.mode != EditorMode.CallHierarchy
+      ):
+        return
+
       if resultOpt.isSome:
         let calls = parseCallHierarchyIncomingCallsResponse(resultOpt.get)
         if calls.len == 0:
@@ -182,6 +191,12 @@ proc pollLspCallHierarchy*(e: Editor) =
       # Second stage complete - show outgoing calls in CallHierarchy mode
       e.state.lspCache.pendingCallHierarchyRequestId = 0
       e.state.lspCache.pendingCallHierarchyKind = chrkNone
+
+      if e.state.overlay.isSome or (
+        not e.state.mode.isNormalOrVisualMode and
+        e.state.mode != EditorMode.CallHierarchy
+      ):
+        return
 
       if resultOpt.isSome:
         let calls = parseCallHierarchyOutgoingCallsResponse(resultOpt.get)

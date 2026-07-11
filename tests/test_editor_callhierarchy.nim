@@ -338,3 +338,40 @@ suite "editor_callhierarchy - config gate":
 
     check not e.requestLspCallHierarchyOutgoing()
     check e.state.statusMessage == "LSP call hierarchy is disabled"
+
+suite "editor_callhierarchy - mode-hijack guard":
+  test "Stale incoming response arriving in Insert does not switch to CallHierarchy":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    let reqId = 8181
+    e.state.lspCache.pendingCallHierarchyRequestId = reqId
+    e.state.lspCache.pendingCallHierarchyKind = chrkIncomingCalls
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.lspCache.pendingCallHierarchyRequestId == 0
+    check e.state.lspCache.pendingCallHierarchyKind == chrkNone
+
+  test "Incoming response arriving during CallHierarchy re-entry is applied":
+    # Toggling Incoming <-> Outgoing from inside the viewer must still work:
+    # here state.mode is already CallHierarchy when the response lands.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let seedItems = @[makeCallHierarchyItem("seed", "file:///seed.nim", 0, 0)]
+    e.enterCallHierarchyMode(seedItems, chvkOutgoing)
+    check e.state.mode == EditorMode.CallHierarchy
+
+    let reqId = 8282
+    e.state.lspCache.pendingCallHierarchyRequestId = reqId
+    e.state.lspCache.pendingCallHierarchyKind = chrkIncomingCalls
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.CallHierarchy
+    check e.activeWindow.modeState.callHierarchy.viewKind == chvkIncoming

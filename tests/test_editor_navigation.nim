@@ -19,9 +19,9 @@
 
 ## Tests for editor_navigation.nim
 
-import std/[unittest, os, strutils]
+import std/[unittest, os, strutils, options, importutils, json]
 
-import ../src/moepkg/[editor, config, config_loader, types]
+import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
 import ../src/moepkg/editor_navigation
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
@@ -759,3 +759,34 @@ suite "editor_navigation - openWindow option":
     check e.windowManager.windows.len == windowsBefore + 1
     check e.activeBuffer().filePath.get == testFile2
     check e.cursor.line == 1
+
+suite "editor_navigation - mode-hijack guard":
+  test "Stale location response arriving in Insert does not jump or enter References":
+    # A location response would move the cursor / open a buffer / enter the
+    # References viewer - all disruptive if the user is now typing in Insert.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    let reqId = 7171
+    e.state.lspCache.pendingLocationRequestId = reqId
+    e.state.lspCache.pendingLocationRequestKind = lrkDefinition
+    let cursorBefore = e.cursor
+    let bufBefore = e.state.activeWindow.buffer
+    privateAccess(LspService)
+    let locJson = %*[
+      {
+        "uri": "file:///tmp/x.nim",
+        "range":
+          {"start": {"line": 3, "character": 0}, "end": {"line": 3, "character": 5}},
+      }
+    ]
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($locJson), error: none(string))
+
+    e.pollLspLocationRequest()
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.lspCache.pendingLocationRequestId == 0
+    check e.state.lspCache.pendingLocationRequestKind == lrkNone
+    check e.cursor == cursorBefore
+    check e.state.activeWindow.buffer == bufBefore

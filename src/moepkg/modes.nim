@@ -118,6 +118,10 @@ proc isVisualAllMode*(mode: EditorMode): bool =
   ## Check if the mode is any visual mode variant
   mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
 
+proc isNormalOrVisualMode*(mode: EditorMode): bool =
+  ## Normal or any Visual variant. Excludes Insert / Replace / viewers.
+  mode == EditorMode.Normal or mode.isVisualAllMode
+
 proc overlayLabel*(o: OverlayKind): string =
   case o
   of okCommand: "COMMAND"
