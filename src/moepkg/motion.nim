@@ -292,22 +292,18 @@ proc moveFirstLine(e: MotionExecutor, currentPos: CursorPosition): CursorPositio
   result.x = 0
 
 proc moveLastLine(
-    e: MotionExecutor, currentPos: CursorPosition, count: int = 1
+    e: MotionExecutor, currentPos: CursorPosition, count: int = 0
 ): CursorPosition =
+  ## count == 0 means "no explicit prefix — go to last line" (bare G).
+  ## count >= 1 means "go to line `count` (1-indexed, clamped)".
   result = currentPos
-  if count == 1:
-    # G without number: go to last line
-    if e.buffer.len > 0:
-      result.y = e.buffer.len - 1
-      result.x = 0
+  if e.buffer.len == 0:
+    return
+  if count <= 0:
+    result.y = e.buffer.len - 1
   else:
-    # 123G: go to specific line number (count), but clamp to buffer bounds
-    if e.buffer.len > 0:
-      result.y = min(count - 1, e.buffer.len - 1) # Convert to 0-based and clamp
-      result.x = 0
-    else:
-      result.y = 0
-      result.x = 0
+    result.y = min(count - 1, e.buffer.len - 1)
+  result.x = 0
 
 proc findChar(
     e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int

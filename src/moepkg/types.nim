@@ -572,6 +572,7 @@ type
       operator*: OperatorType # d, c, y, >, <, ~, gu, gU
       motion*: Motion # h, j, k, l, w, b, e, etc.
       motionCount*: int # Count for motion (3 in "d3w")
+      motionHasCount*: bool # Explicit motion prefix? (dG vs d1G for `.`)
       operatorCount*: int # Count for operator (2 in "2dd")
       targetChar*: string # Target char for f/F/t/T motions (empty otherwise)
     of lecInsertText:

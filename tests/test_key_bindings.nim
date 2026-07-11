@@ -547,6 +547,28 @@ suite "KeyBindingRegistry - numeric prefix":
     registry.sequenceState.numericPrefix = "9".repeat(30)
     check registry.getNumericPrefix() == 1
 
+  test "hasCount distinguishes bare command from explicit 1 prefix":
+    let registry = newKeyBindingRegistry()
+    let cmd = Command(
+      name: "last-line",
+      description: "Go to last line",
+      kind: ctMotion,
+      motion: Motion.LastLine,
+    )
+    registry.registerCommand(cmd)
+    registry.bindKey(EditorMode.Normal, toKeyCombo('G'), cmd)
+
+    let bare = registry.processKey(EditorMode.Normal, toKeyCombo('G'))
+    check bare.isSome
+    check bare.get.count == 1
+    check bare.get.hasCount == false
+
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('1'))
+    let withOne = registry.processKey(EditorMode.Normal, toKeyCombo('G'))
+    check withOne.isSome
+    check withOne.get.count == 1
+    check withOne.get.hasCount == true
+
 suite "KeyBindingRegistry - operator pending":
   test "Find char command waits for character":
     let registry = newKeyBindingRegistry()

@@ -466,8 +466,8 @@ proc getNumericPrefix*(registry: KeyBindingRegistry): int =
 proc applyCountToCommand(registry: KeyBindingRegistry, cmd: Command): Command =
   ## Apply numeric prefix count to a command and clear the prefix
   result = cmd
+  result.hasCount = registry.sequenceState.numericPrefix.len > 0
   result.count = registry.getNumericPrefix()
-  # Clear numeric prefix after applying
   registry.clearNumericPrefix()
   logDebug("keybind", "Applied count=" & $result.count & " to command: " & cmd.name)
 

@@ -396,6 +396,13 @@ suite "First/Last Line Motion":
     let result = executor.moveLastLine(currentPos, 2)
     check result.y == 1 # Line 2 (0-indexed)
 
+  test "moveLastLine with count 1 goes to line 1 (1G, not G)":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 2)
+    let result = executor.moveLastLine(currentPos, 1)
+    check result.y == 0
+
 suite "Matching Bracket":
   test "moveToMatchingBracket forward":
     let buffer = newTextBuffer("(hello)")
