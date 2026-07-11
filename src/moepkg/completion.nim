@@ -1049,10 +1049,15 @@ proc renderCompletionPopup*(
           else:
             popupNormalStyle()
 
-        # Truncate word to fit
+        # Truncate word (rune-safe, contentWidth <= 0 safe)
+        let wordRunes = entry.displayText.toRunes
         var displayWord = entry.displayText
-        if displayWord.runeLen > contentWidth:
-          displayWord = $displayWord.toRunes[0 ..< contentWidth - 1] & "…"
+        if wordRunes.len > contentWidth:
+          displayWord =
+            if contentWidth >= 1:
+              $wordRunes[0 ..< contentWidth - 1] & "…"
+            else:
+              ""
 
         # Draw word
         var x =
@@ -1069,15 +1074,16 @@ proc renderCompletionPopup*(
           let detailStartX = contentX + maxWordW + DetailSeparatorWidth
           x = fillCells(termBuffer, x, y, min(detailStartX, contentLimit), style)
 
-          # Render detail text
-          var displayDetail = entry.detail.get
+          # Render detail (rune-safe, availableDetailWidth <= 0 safe)
           let availableDetailWidth = contentLimit - x
-          if displayDetail.runeLen > availableDetailWidth:
-            if availableDetailWidth > 1:
-              displayDetail = displayDetail[0 ..< availableDetailWidth - 1] & "…"
-            else:
-              displayDetail = ""
-
+          let detailRunes = entry.detail.get.toRunes
+          var displayDetail = entry.detail.get
+          if detailRunes.len > availableDetailWidth:
+            displayDetail =
+              if availableDetailWidth >= 1:
+                $detailRunes[0 ..< availableDetailWidth - 1] & "…"
+              else:
+                ""
           x =
             drawClippedRunes(termBuffer, x, y, contentLimit, displayDetail, detailStyle)
 

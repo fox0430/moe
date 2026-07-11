@@ -566,7 +566,7 @@ proc decrementFloatValue*(state: ConfigModeState) =
 proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
   ## Format a config item for display
   let indent = "  ".repeat(item.depth)
-  let name = item.displayName.alignLeft(maxNameWidth - item.depth * 2)
+  let name = item.displayName.alignLeft(max(0, maxNameWidth - item.depth * 2))
 
   case item.kind
   of cvkSection:

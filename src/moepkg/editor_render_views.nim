@@ -575,13 +575,15 @@ proc renderTempMessages*(e: Editor, buffer: var Buffer) =
     # +2 for border line and "Press ENTER..." prompt
     totalLines = e.state.ui.tempMessages.len + 2
     startY = max(0, buffer.area.height - totalLines)
-    borderLine = " ".repeat(buffer.area.width)
+    borderLine = " ".repeat(max(0, buffer.area.width))
     whiteBorderStyle = getThemeStyle(EditorColorPairIndex.tempMessageBorder)
     theNormalStyle = normalStyle()
 
   # Clear the area where messages will be displayed
   for y in startY ..< buffer.area.height:
-    buffer.setString(buffer.area.x, y, " ".repeat(buffer.area.width), theNormalStyle)
+    buffer.setString(
+      buffer.area.x, y, " ".repeat(max(0, buffer.area.width)), theNormalStyle
+    )
 
   # Render border line at top (white background)
   buffer.setString(buffer.area.x, startY, borderLine, whiteBorderStyle)
