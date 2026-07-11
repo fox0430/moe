@@ -1065,3 +1065,48 @@ suite "TerminalGrid - CSI overflow guard (regression)":
     grid.cursorCol = 10
     grid.processOutput("\x1b[999999999999999999D")
     check grid.cursorCol == 0
+
+  test "ESC[999999999999999999E (cursor next line) clamps to grid bottom":
+    let grid = newTerminalGrid(80, 24)
+    grid.cursorCol = 5
+    grid.processOutput("\x1b[999999999999999999E")
+    check grid.cursorRow == grid.rows - 1
+    check grid.cursorCol == 0
+
+  test "ESC[999999999999999999F (cursor previous line) clamps to grid top":
+    let grid = newTerminalGrid(80, 24)
+    grid.cursorRow = 10
+    grid.cursorCol = 5
+    grid.processOutput("\x1b[999999999999999999F")
+    check grid.cursorRow == 0
+    check grid.cursorCol == 0
+
+  test "ESC[999999999999999999X (erase character) clamps to end of line":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("hello")
+    grid.cursorCol = 1
+    grid.processOutput("\x1b[999999999999999999X")
+    # From col 1 to end of line should be blanked
+    check grid.cells[0][0].ch == "h"
+    for c in 1 ..< grid.cols:
+      check grid.cells[0][c].ch == ""
+
+  test "ESC[999999999999999999P (delete character) clamps to end of line":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("hello")
+    grid.cursorCol = 1
+    grid.processOutput("\x1b[999999999999999999P")
+    # From col 1 to end of line should be blanked (nothing left to shift in)
+    check grid.cells[0][0].ch == "h"
+    for c in 1 ..< grid.cols:
+      check grid.cells[0][c].ch == ""
+
+  test "ESC[999999999999999999@ (insert character) clamps to end of line":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("hello")
+    grid.cursorCol = 1
+    grid.processOutput("\x1b[999999999999999999@")
+    # From col 1 to end of line should be blank (all pushed off)
+    check grid.cells[0][0].ch == "h"
+    for c in 1 ..< grid.cols:
+      check grid.cells[0][c].ch == ""
