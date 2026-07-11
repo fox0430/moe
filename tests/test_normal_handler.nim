@@ -545,6 +545,32 @@ suite "NormalModeHandler - Macro Recording State":
     check state.macroState.registers['a'] == @["d", "d"]
     check state.statusMessage == ""
 
+  test "Do not stop recording when q is f's target char":
+    let buf = newTextBuffer("hello q world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @[]
+    state.macroState.recordStartKey = "q"
+    state.macroState.registers = initTable[char, seq[string]]()
+
+    let fKey = KeyCombo(isSpecial: false, char: "f", modifiers: {})
+    discard handler.handleNormalModeKey(buf, state, viewport, fKey)
+
+    check state.macroState.isRecording == true
+    check handler.keyBindingRegistry.isWaitingForChar() == true
+
+    let qKey = KeyCombo(isSpecial: false, char: "q", modifiers: {})
+    let r = handler.handleNormalModeKey(buf, state, viewport, qKey)
+
+    check r.kind == nmrHandled
+    check state.macroState.isRecording == true
+    check state.macroState.recordedKeys == @["f", "q"]
+    check handler.keyBindingRegistry.isWaitingForChar() == false
+
 suite "NormalModeHandler - Macro Playback State":
   test "Start playback (@) consumed by key binding system":
     let buf = newTextBuffer()
