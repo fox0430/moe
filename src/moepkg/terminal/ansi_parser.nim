@@ -658,7 +658,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorRow = min(grid.rows - 1, grid.cursorRow + n)
+    grid.cursorRow = min(grid.rows - 1, grid.cursorRow + min(n, grid.rows - 1))
     grid.cursorCol = 0
   of 'F':
     # Cursor Previous Line
@@ -667,28 +667,30 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorRow = max(0, grid.cursorRow - n)
+    grid.cursorRow = max(0, grid.cursorRow - min(n, grid.cursorRow))
     grid.cursorCol = 0
   of 'X':
-    # Erase Character
-    let n =
+    # Erase Character - clamp count so cursorCol + n cannot overflow.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.cols - grid.cursorCol)
     grid.cleanWideCharBoundary(grid.cursorRow, grid.cursorCol)
-    let endCol = min(grid.cursorCol + n, grid.cols)
+    let endCol = grid.cursorCol + n
     if endCol < grid.cols:
       grid.cleanWideCharBoundary(grid.cursorRow, endCol)
     for c in grid.cursorCol ..< endCol:
       grid.cells[grid.cursorRow][c] = defaultCell()
   of 'P':
-    # Delete Character
-    let n =
+    # Delete Character - clamp count so cursorCol + n and cols - n stay in range.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.cols - grid.cursorCol)
     let row = grid.cursorRow
     grid.cleanWideCharBoundary(row, grid.cursorCol)
     let srcStart = grid.cursorCol + n
@@ -700,12 +702,14 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     for c in max(grid.cursorCol, grid.cols - n) ..< grid.cols:
       grid.cells[row][c] = defaultCell()
   of '@':
-    # Insert Character (shift right)
-    let n =
+    # Insert Character (shift right) - clamp count so cursorCol + n and cols - n
+    # cannot overflow/underflow.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.cols - grid.cursorCol)
     let row = grid.cursorRow
     # Clean wide char boundary at insertion point
     grid.cleanWideCharBoundary(row, grid.cursorCol)
