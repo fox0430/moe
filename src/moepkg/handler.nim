@@ -19,6 +19,9 @@
 
 import std/[options, os, strutils, sequtils, unicode]
 
+when defined(posix):
+  from std/posix import nil
+
 import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
 
@@ -1323,14 +1326,19 @@ proc handlePendingAsyncOperationsImpl(
       discard stdin.readLine()
       await e.app.resumeAsync()
 
-    # Handle background suspend
+    # Handle background suspend: send SIGTSTP to self so the shell registers moe
+    # as a proper stopped job (visible in `jobs`, resumable via `fg`). Falls back
+    # to a blocking readLine on non-POSIX platforms where SIGTSTP is unavailable.
     if e.state.pending.background:
       e.state.pending.background = false
       await e.app.suspendAsync()
-      stdout.write("\e[H\e[2J")
-      stdout.write("moe suspended. Press Enter to return to moe...")
-      stdout.flushFile()
-      discard stdin.readLine()
+      when defined(posix):
+        discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
+      else:
+        stdout.write("\e[H\e[2J")
+        stdout.write("moe suspended. Press Enter to return to moe...")
+        stdout.flushFile()
+        discard stdin.readLine()
       await e.app.resumeAsync()
 
     # Handle pending build - spawn as background task
