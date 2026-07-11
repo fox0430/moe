@@ -272,7 +272,7 @@ suite "KeyRouter - rmkCommand routing":
     let r = router.feedKey(EditorMode.Command, toKeyCombo('j', ctrl = true))
     check r.kind == rrUnhandled
 
-suite "KeyRouter - withReplay and flushPendingAccumulator":
+suite "KeyRouter - withReplay":
   test "withReplay sets and clears isReplayingMapping":
     let router = newRouter()
     check router.registry.isReplayingMapping == false
@@ -292,28 +292,16 @@ suite "KeyRouter - withReplay and flushPendingAccumulator":
     check raised == true
     check router.registry.isReplayingMapping == false
 
-  test "flushPendingAccumulator returns @[] when mappings table is non-empty":
+  test "feedKey flushes stale accumulator when mappings table becomes empty":
     let router = newRouter()
-    router.registry.addKeySeqMapping(EditorMode.Insert, "jj", "Escape")
-    discard router.feedKey(EditorMode.Insert, toKeyCombo('j'))
-    # Accumulator now holds one key, mappings table is non-empty.
-    let drained = router.flushPendingAccumulator(EditorMode.Insert)
-    check drained.len == 0
-    check router.dispatchState.keys.len == 1 # untouched
-
-  test "flushPendingAccumulator drains accumulator when mappings table is empty":
-    let router = newRouter()
-    # Seed leftover keys directly without registering any mappings.
-    router.dispatchState.keys = @[toKeyCombo('j'), toKeyCombo('k')]
-    let drained = router.flushPendingAccumulator(EditorMode.Command)
-    check drained.len == 2
-    check drained[0] == toKeyCombo('j')
-    check drained[1] == toKeyCombo('k')
+    router.registry.addKeySeqMapping(EditorMode.Insert, "jk", "Escape")
+    let waiting = router.feedKey(EditorMode.Insert, toKeyCombo('j'))
+    check waiting.kind == rrWaiting
+    router.registry.clearRuntimeMappings(EditorMode.Insert)
+    let flushed = router.feedKey(EditorMode.Insert, toKeyCombo('x'))
+    check flushed.kind == rrUnhandledBatch
+    check flushed.keys == @[toKeyCombo('j'), toKeyCombo('x')]
     check router.dispatchState.keys.len == 0
-
-  test "flushPendingAccumulator returns @[] on empty accumulator":
-    let router = newRouter()
-    check router.flushPendingAccumulator(EditorMode.Command).len == 0
 
 proc newBuiltinRegistry(): KeyBindingRegistry =
   ## Registry seeded with a few Normal-mode built-in bindings so resolveBuiltin

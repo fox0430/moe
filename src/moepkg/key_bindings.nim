@@ -342,7 +342,11 @@ proc routeRuntimeMapping*(
 
   if mappings.len == 0:
     if state.keys.len > 0:
+      # Mappings unbound mid-sequence: flush the stale accumulator + current
+      # key so the caller can replay them instead of dropping input.
+      let flushed = state.keys & @[keyCombo]
       clearRuntimeMappingState(state)
+      return RuntimeMappingDecision(kind: rmdNoMatchFlush, accumulatedKeys: flushed)
     return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
 
   state.keys.add(keyCombo)

@@ -1393,6 +1393,27 @@ suite "Integration - mapping removal and clear":
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Normal).len == 0
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Insert).len == 1
 
+  test "Mappings cleared mid-sequence: accumulator flushed, no input lost":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    discard manager.keyBindingRegistry.addRuntimeMapping(Insert, "jk", "Escape")
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
+    let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    discard manager.handleKeyCombo(editor, j)
+    check editor.keyRouter.dispatchState.keys.len == 1
+
+    manager.keyBindingRegistry.clearRuntimeMappings(Insert)
+
+    let x = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    let r = manager.handleKeyCombo(editor, x)
+    check r.kind == hrHandled
+    check editor.keyRouter.dispatchState.keys.len == 0
+
 suite "Timeout flush - exact match with longer match pending":
   test "Exact match and longer match: keys accumulate (wait state)":
     ## When both "j" (exact) and "jj" (longer) are mapped,
