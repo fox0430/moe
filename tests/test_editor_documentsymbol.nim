@@ -19,9 +19,9 @@
 
 ## Tests for editor_documentsymbol.nim
 
-import std/unittest
+import std/[unittest, options, importutils, json]
 
-import ../src/moepkg/[editor, config, config_loader]
+import ../src/moepkg/[editor, config, config_loader, lsp_service]
 import ../src/moepkg/editor_documentsymbol
 
 proc createTestEditor(): Editor =
@@ -87,3 +87,22 @@ suite "editor_documentsymbol - config gate":
 
     check not e.startLspDocumentSymbols()
     check e.state.statusMessage == "LSP document symbol is disabled"
+
+suite "editor_documentsymbol - mode-hijack guard":
+  test "Stale response arriving in Insert does not switch to DocumentSymbol":
+    # A Symbols request initiated from Normal must not force the viewer if the
+    # user has since moved to Insert (or an overlay) - it would hijack input.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.setMode(EditorMode.Insert)
+    e.state.mode = EditorMode.Insert
+    let reqId = 5151
+    e.state.lspCache.pendingDocumentSymbolsRequestId = reqId
+    privateAccess(LspService)
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($newJArray()), error: none(string))
+
+    e.pollLspDocumentSymbols()
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.lspCache.pendingDocumentSymbolsRequestId == 0

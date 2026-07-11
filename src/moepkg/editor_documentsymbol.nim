@@ -74,6 +74,10 @@ proc pollLspDocumentSymbols*(e: Editor) =
     discard # Still waiting
   of lrsSuccess:
     e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+    # Drop stale response if the user has moved past Normal/Visual (e.g. into
+    # Insert or an overlay); forcing DocumentSymbol here would hijack input.
+    if not e.state.mode.isNormalOrVisualMode or e.state.overlay.isSome:
+      return
     if resultOpt.isSome:
       let activeBuffer = e.activeBuffer()
       if activeBuffer.filePath.isNone:
@@ -88,7 +92,6 @@ proc pollLspDocumentSymbols*(e: Editor) =
         e.state.statusMessage = "No symbols found"
         return
 
-      # Enter DocumentSymbol mode
       e.state.previousMode = e.state.mode
       e.setMode(EditorMode.DocumentSymbol)
       let activeWin = e.activeWindow

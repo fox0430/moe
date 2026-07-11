@@ -394,6 +394,10 @@ proc pollLspLocationRequest*(e: Editor) =
   of lrsSuccess:
     e.state.lspCache.pendingLocationRequestId = 0
     e.state.lspCache.pendingLocationRequestKind = lrkNone
+    # Drop stale response if the user is no longer in Normal/Visual: jumping
+    # cursor / opening a file / entering References would hijack input.
+    if not e.state.mode.isNormalOrVisualMode or e.state.overlay.isSome:
+      return
     if resultOpt.isSome:
       let locations = parseLocationsResponse(resultOpt.get)
       let (pluralName, singularName) =

@@ -244,3 +244,29 @@ suite "editor_documentlink - cursor rune -> UTF-16 conversion":
 
     # 1 astral rune = 2 UTF-16 units, + 1 space = 3.
     check e.state.lspCache.pendingDocumentLinkCursorCol == 3
+
+suite "editor_documentlink - mode-hijack guard":
+  test "Stale response arriving in Insert does not jump":
+    # A link jump would swap the active buffer under an Insert session.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    let reqId = 6161
+    e.state.lspCache.pendingDocumentLinkRequestId = reqId
+    let bufBefore = e.state.activeWindow.buffer
+    privateAccess(LspService)
+    let linkJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
+        "target": "file:///tmp/other.nim",
+      }
+    ]
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($linkJson), error: none(string))
+
+    e.pollLspDocumentLinks()
+
+    check e.state.mode == EditorMode.Insert
+    check e.state.lspCache.pendingDocumentLinkRequestId == 0
+    check e.state.activeWindow.buffer == bufBefore

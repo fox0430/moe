@@ -152,6 +152,10 @@ proc pollLspDocumentLinks*(e: Editor) =
     discard # Still waiting
   of lrsSuccess:
     e.state.lspCache.pendingDocumentLinkRequestId = 0
+    # Drop stale response if the user is no longer in Normal/Visual: jumping
+    # to a link would swap the buffer under an Insert / overlay session.
+    if not e.state.mode.isNormalOrVisualMode or e.state.overlay.isSome:
+      return
     if resultOpt.isSome:
       let links = parseDocumentLinksResponse(resultOpt.get)
       if links.len == 0:
@@ -215,6 +219,8 @@ proc pollLspDocumentLinkResolve*(e: Editor) =
     discard # Still waiting
   of lrsSuccess:
     e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+    if not e.state.mode.isNormalOrVisualMode or e.state.overlay.isSome:
+      return
     if resultOpt.isSome:
       let resolvedLink = parseDocumentLinkResolveResponse(resultOpt.get)
       discard e.jumpToDocumentLink(resolvedLink)
