@@ -1284,6 +1284,84 @@ suite "ConfigMode - applyChange":
     # The value should have changed in the config
     check $cfg.standard.colorMode == state.items[colorModeIndex].enumValue
 
+suite "ConfigMode - pendingApply":
+  test "pendingApply defaults to false":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    check state.pendingApply == false
+
+  test "toggleBoolValue sets pendingApply":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    var idx = -1
+    for i, item in state.items:
+      if item.kind == cvkBool and item.displayName == "number":
+        idx = i
+        break
+    check idx >= 0
+    state.selectedIndex = idx
+    state.toggleBoolValue()
+    check state.pendingApply == true
+
+  test "incrementIntValue sets pendingApply":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    var idx = -1
+    for i, item in state.items:
+      if item.kind == cvkInt and item.displayName == "tabStop":
+        idx = i
+        break
+    check idx >= 0
+    state.selectedIndex = idx
+    state.incrementIntValue()
+    check state.pendingApply == true
+
+  test "cycleEnumValue sets pendingApply":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    var idx = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.displayName == "colorMode":
+        idx = i
+        break
+    check idx >= 0
+    state.selectedIndex = idx
+    state.cycleEnumValue(forward = true)
+    check state.pendingApply == true
+
+  test "moveDown / moveUp leave pendingApply false":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.moveDown()
+    state.moveDown()
+    state.moveUp()
+    check state.pendingApply == false
+
+  test "applyChange on section item leaves pendingApply false":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    var sectionIdx = -1
+    for i, item in state.items:
+      if item.kind == cvkSection:
+        sectionIdx = i
+        break
+    check sectionIdx >= 0
+    state.applyChange(sectionIdx)
+    check state.pendingApply == false
+
+  test "applyColorChange does not set pendingApply":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    var colorIdx = -1
+    for i, item in state.items:
+      if item.kind == cvkColor:
+        colorIdx = i
+        break
+    check colorIdx >= 0
+    state.items[colorIdx].colorValue = "#ff0000"
+    state.applyColorChange(colorIdx)
+    check state.pendingApply == false
+
 suite "ConfigMode - Item coverage":
   test "State contains all value kinds":
     let cfg = newEditorConfig()

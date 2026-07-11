@@ -1155,10 +1155,14 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   let r = e.handlerManager.handleEvent(e, event)
 
-  # Sync display settings when in Config mode (config changes update EditorConfig
-  # but the cached display state needs to be kept in sync)
+  # In Config mode, sync display state only when a value was actually mutated.
+  # Plain cursor movement leaves pendingApply false, avoiding a theme reread and
+  # a full re-highlight of every buffer on each keystroke.
   if e.currentMode == EditorMode.Config:
-    e.applyConfigSettings(e.config)
+    let win = e.activeWindow
+    if win.modeState.kind == mskConfig and win.modeState.config.pendingApply:
+      e.applyConfigSettings(e.config)
+      win.modeState.config.pendingApply = false
 
   # For LogViewer mode, update viewport to follow cursor
   # (LogViewer handles cursor directly without using MotionController)

@@ -309,14 +309,19 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
   case item.kind
   of cvkBool:
     desc.boolSet(cfg, item.boolValue)
+    state.pendingApply = true
   of cvkInt:
     desc.intSet(cfg, item.intValue)
+    state.pendingApply = true
   of cvkFloat:
     desc.floatSet(cfg, item.floatValue)
+    state.pendingApply = true
   of cvkEnum:
     desc.enumSet(cfg, item.enumValue)
+    state.pendingApply = true
   of cvkString:
     desc.stringSetter(cfg, item.stringValue)
+    state.pendingApply = true
   else:
     discard
 
@@ -378,6 +383,7 @@ proc newConfigModeState*(config: EditorConfig): ConfigModeState =
     searchQuery: "",
     searchStartIndex: 0,
     config: config,
+    pendingApply: false,
   )
   result.buildItemList()
 
