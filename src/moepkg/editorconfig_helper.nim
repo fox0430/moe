@@ -113,18 +113,20 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
   if props.hasKey("charset"):
     let cs = props["charset"]
     case cs
-    of "utf-8", "utf-8-bom":
+    of "utf-8":
       buffer.encoding = utf8
+      buffer.hasBom = false
+    of "utf-8-bom":
+      buffer.encoding = utf8
+      buffer.hasBom = true
     of "utf-16be":
       buffer.encoding = utf16Be
-      # UTF-16 files are conventionally written with a BOM (and moe's own
-      # encoding detection needs it to identify ASCII-only UTF-16 on reload)
+      # UTF-16 needs a BOM for endianness detection on reload
       buffer.hasBom = true
     of "utf-16le":
       buffer.encoding = utf16Le
       buffer.hasBom = true
     of "latin1":
-      # latin1 is not directly supported, keep as utf8
       discard
     else:
       discard
