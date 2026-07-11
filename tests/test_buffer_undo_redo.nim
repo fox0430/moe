@@ -169,6 +169,27 @@ suite "Buffer - Multiple Undo/Redo":
     check r.isOk
     check b.getLine(0) == "abc"
 
+  test "undo after multi-count redo unwinds most recent change first":
+    let b = newTextBuffer("a")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "b")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "c")
+    discard b.insertText(BufferPosition(line: 0, column: 3), "d")
+    check b.getLine(0) == "abcd"
+
+    discard b.undo(3)
+    check b.getLine(0) == "a"
+
+    let r = b.redo(3)
+    check r.isOk
+    check b.getLine(0) == "abcd"
+
+    discard b.undo()
+    check b.getLine(0) == "abc"
+    discard b.undo()
+    check b.getLine(0) == "ab"
+    discard b.undo()
+    check b.getLine(0) == "a"
+
   test "undo/redo sequence":
     let b = newTextBuffer("test")
     discard b.insertText(BufferPosition(line: 0, column: 4), " 1")
