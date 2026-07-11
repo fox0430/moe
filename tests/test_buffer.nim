@@ -894,6 +894,253 @@ suite "Buffer - Sidebar Markers":
     let buf = newTextBuffer("Line1")
     check buf.getLineMarker(10).isNone
 
+  test "deleteRange multi-line preserves startLine marker (merged row)":
+    # startLine's marker survives; endLine's must not slide into its slot.
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
+    buf.setLineMarker(3, LineMarkerKind.GitDeleted)
+
+    # Delete (1, 3)..(2, 2): merges tail of Line2 with head of Line3.
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+
+    check buf.len == 3
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    # SyntaxError on the surviving merged row (was line 1) must be kept.
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    # GitDeleted (was on line 3, now line 2) shifts up.
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "deleteRange multi-line with join preserves startLine marker":
+    # Multi-line-plus-join: startLine's marker survives too.
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(4, LineMarkerKind.GitAdded)
+
+    # Delete (1, 0)..(2, endOfLine): joins Line4 up into row 1.
+    let line2Len = buf[2].len
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
+    )
+
+    # Line3 dropped, Line4 joined onto Line2's tail — 3 lines total.
+    # Marker on startLine survives; markers below shift up by 2.
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitAdded
+
+  test "undo of multi-line deleteRange restores markers":
+    # Reverse dispatch must reinsert marker slots to match savedLineMarkers.
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
+    buf.setLineMarker(3, LineMarkerKind.GitDeleted)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+
+    check buf.len == 4
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitChanged
+    check buf.getLineMarker(3).get == LineMarkerKind.GitDeleted
+
+  test "redo of multi-line deleteRange re-applies marker shifts":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(3, LineMarkerKind.GitDeleted)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    discard buf.redo()
+
+    check buf.len == 3
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "undo of single-line-join deleteRange restores markers":
+    # Single-line-join reverse must reinsert one marker slot at startLine+1.
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitDeleted)
+
+    # Delete from end of Line1 through Line2's endOfLine → joins Line2 up.
+    let line1Len = buf[0].len
+    discard buf.deleteRange(
+      BufferPosition(line: 0, column: line1Len),
+      BufferPosition(line: 0, column: line1Len),
+    )
+    discard buf.undo()
+
+    check buf.len == 3
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "undo of insertText with newlines restores markers":
+    # Reverse must delete the slots inserted at firstAffectedRow+1..
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitDeleted)
+
+    # Insert "\nX\nY" at (0, 3): line 0 stays, two new lines appear at 1..2,
+    # existing lines 1..2 shift down to 3..4.
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
+    check buf.len == 5
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(3).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(4).get == LineMarkerKind.GitDeleted
+
+    discard buf.undo()
+
+    check buf.len == 3
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
+  # Guards the refactor's promise that folds, bookmarks, lineMarkers, and
+  # modifiedLines all shift through the same emitRowColRemapEvents fan-out.
+  # The marker suite above covers the per-line-array half; these cover the
+  # row-reference half.
+
+  test "fold shifts down after ckInsertText with newlines":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    check buf.foldState.addFold(2, 3) == true
+
+    # Insert two newlines before the fold; fold rows must slide down by 2.
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 4
+    check buf.foldState.folds[0].endLine == 5
+
+  test "fold shifts up after multi-line deleteRange (non-join)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    check buf.foldState.addFold(3, 4) == true
+
+    # Delete (1, 3)..(2, 2): drops one physical row, fold at 3..4 → 2..3.
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "fold shifts up by two after multi-line deleteRange with join":
+    # Regression guard for the undercount-by-one bug the refactor fixed:
+    # the join case drops (endLine - startLine + 1) rows, not (endLine - startLine).
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5\nLine6")
+    check buf.foldState.addFold(4, 5) == true
+
+    let line2Len = buf[2].len
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
+    )
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "undo of multi-line deleteRange restores fold position":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    check buf.foldState.addFold(3, 4) == true
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 3
+    check buf.foldState.folds[0].endLine == 4
+
+  test "redo of multi-line deleteRange re-applies fold shift":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    check buf.foldState.addFold(3, 4) == true
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    discard buf.redo()
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "fold shifts on top-level insert(lineIndex)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    check buf.foldState.addFold(1, 2) == true
+
+    discard buf.insert(0, "New")
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "fold shifts on top-level deleteLine":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    check buf.foldState.addFold(2, 3) == true
+
+    discard buf.deleteLine(0)
+    check buf.foldState.folds[0].startLine == 1
+    check buf.foldState.folds[0].endLine == 2
+
+  test "bookmark shifts down after ckInsertText with newlines":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.toggleBookmark(2)
+
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
+    check buf.bookmarks == @[4]
+
+  test "bookmark shifts up after multi-line deleteRange (non-join)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.toggleBookmark(3)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    check buf.bookmarks == @[2]
+
+  test "bookmark shifts up by two after multi-line deleteRange with join":
+    # Regression guard for the undercount-by-one bug (bookmark twin of the fold test).
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    buf.toggleBookmark(4)
+
+    let line2Len = buf[2].len
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
+    )
+    check buf.bookmarks == @[2]
+
+  test "undo of multi-line deleteRange restores bookmark position":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.toggleBookmark(3)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    check buf.bookmarks == @[3]
+
+  test "bookmark shifts on top-level insert(lineIndex)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.toggleBookmark(1)
+
+    discard buf.insert(0, "New")
+    check buf.bookmarks == @[2]
+
+  test "bookmark shifts on top-level deleteLine":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.toggleBookmark(2)
+
+    discard buf.deleteLine(0)
+    check buf.bookmarks == @[1]
+
 suite "Buffer - Unicode":
   test "insertText Unicode":
     let buf = newTextBuffer("こんにちは")

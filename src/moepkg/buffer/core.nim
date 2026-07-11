@@ -21,7 +21,7 @@
 
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
-import ../[encoding, highlight, primitives, unicode_utils]
+import ../[encoding, highlight, logger, primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta
 
@@ -165,6 +165,9 @@ type
       deleteStartPos*: BufferPosition
       deleteEndPos*: BufferPosition
       deletedRangeText*: string
+      deleteJoinedNextLine*: bool
+        ## True when the range consumed `deleteEndPos.line + 1`. Subscribers
+        ## shift side arrays by `(endLine - startLine + 1)` in that case.
     of ckReplaceLine:
       replaceLineIdx*: int
       replaceLineOldText*: string
@@ -199,8 +202,13 @@ type
       row*, editCol*, colDelta*, lineRuneLenAfter*: int
     of rrekMultiLine:
       firstAffectedRow*, lastAffectedRowBefore*, lastAffectedRowAfter*: int
+      preservesFirstRow*: bool
+        ## True when `firstAffectedRow` keeps its identity across the edit
+        ## (ckInsertText with newlines, ckDeleteRange with a surviving merged
+        ## first row). Per-line-array subscribers use it to shift at
+        ## `firstAffectedRow + 1`; row-reference subscribers ignore it.
     of rrekClear:
-      nil
+      discard
 
   RowColRemapCallback* = proc(b: TextBuffer, event: RowColRemapEvent) {.closure.}
 
@@ -295,8 +303,10 @@ type
     modifiedLines*: seq[LineModificationKind]
       # How each line was modified since last save
 
-    # Row/col remap subscribers (decoration shift on buffer mutation)
+    # Row/col remap subscribers. `sideArrayCallbacks` are skipped on undo/redo
+    # because savedLineMarkers / savedModifiedLines restore them wholesale.
     remapCallbacks: seq[RowColRemapCallback]
+    sideArrayCallbacks: seq[RowColRemapCallback]
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -590,9 +600,13 @@ iterator lines*(b: TextBuffer): string =
     for line in b.storage.pieceTable.lines:
       yield line
 
-# Forward declaration for the semantic overlay remap callback. Registered
-# in newTextBuffer and driven by emitRowColRemapEvents below.
+# Forward declarations for the built-in remap callbacks, registered in
+# newTextBuffer and driven by emitRowColRemapEvents below.
 proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent)
+proc foldShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc bookmarkShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 
 proc newBufferStorage*(backend: BufferBackend, content: sink string): BufferStorage =
   ## Build a fresh backend value of `backend` from `content` (consumed exactly
@@ -640,6 +654,11 @@ proc newTextBuffer*(
 
   result.remapCallbacks = @[]
   result.remapCallbacks.add(semanticRemapCallback)
+  result.remapCallbacks.add(foldShiftCallback)
+  result.remapCallbacks.add(bookmarkShiftCallback)
+  result.sideArrayCallbacks = @[]
+  result.sideArrayCallbacks.add(lineMarkerShiftCallback)
+  result.sideArrayCallbacks.add(modifiedLinesShiftCallback)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =
   ## Bracket operator for accessing lines by index
@@ -771,9 +790,10 @@ proc countNewlines(s: string): int {.inline.} =
       inc result
 
 proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent) =
-  ## Subscriber callback that shifts the LSP semantic overlay row/col keys
-  ## to stay approximately correct across edits.
-  if b.highlight.isNil or b.highlight.semantic.len == 0:
+  ## Shift the LSP semantic overlay to stay approximately in sync with edits.
+  ## `semanticContentVersion` is stamped even on an empty overlay so
+  ## updateHighlight's mismatch guard does not fire an unnecessary re-request.
+  if b.highlight.isNil:
     return
   case event.kind
   of rrekSingleLine:
@@ -790,103 +810,240 @@ proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent) =
     return
   b.highlight.semanticContentVersion = b.contentVersion
 
-proc emitRowColRemapEvents*(b: TextBuffer, change: BufferChange) =
-  ## Compute row/col remap events from a forward edit and notify all
-  ## subscribers. Row-keyed decorations (semantic overlay, inline diagnostics,
-  ## etc.) register a RowColRemapCallback to keep their line/column offsets
-  ## approximately in sync between LSP re-requests.
+template shiftRowRefsForMultiLine(
+    event: RowColRemapEvent, onInsert, onDelete: untyped
+) =
+  ## Shared skeleton for row-referring subscribers (folds, bookmarks). Ignores
+  ## `preservesFirstRow`: the shift procs use the row range directly.
+  case event.kind
+  of rrekSingleLine, rrekClear:
+    return
+  of rrekMultiLine:
+    let delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+    if delta > 0:
+      onInsert(event.firstAffectedRow, delta)
+    elif delta < 0:
+      onDelete(event.firstAffectedRow, -delta)
+
+proc foldShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Shift folds to follow their rows across line-count-changing edits.
+  shiftRowRefsForMultiLine(
+    event, b.foldState.adjustFoldsAfterInsert, b.foldState.adjustFoldsAfterDelete
+  )
+
+proc bookmarkShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Shift bookmarks to follow their rows across line-count-changing edits.
+  shiftRowRefsForMultiLine(
+    event, b.adjustBookmarksForInsert, b.adjustBookmarksForDelete
+  )
+
+template shiftPerLineArray(arr: untyped, freshValue: untyped, event: RowColRemapEvent) =
+  ## Shift a per-line side array to match a line-count-changing edit. When
+  ## `preservesFirstRow` is set, `firstAffectedRow` keeps its slot and the
+  ## insert/delete happens at `firstAffectedRow + 1`. Both branches clamp `idx`
+  ## against `arr.len` so a NoUndo path that leaves the array shorter than the
+  ## buffer degrades gracefully instead of raising IndexDefect.
+  case event.kind
+  of rrekSingleLine, rrekClear:
+    return
+  of rrekMultiLine:
+    let delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+    let idx =
+      if event.preservesFirstRow:
+        event.firstAffectedRow + 1
+      else:
+        event.firstAffectedRow
+    if idx < 0 or idx > arr.len:
+      return
+    if delta > 0:
+      for _ in 0 ..< delta:
+        arr.insert(freshValue, idx)
+    elif delta < 0:
+      let removable = min(-delta, arr.len - idx)
+      for _ in 0 ..< removable:
+        arr.delete(idx)
+
+proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Shift per-line markers to follow their row across insert/delete edits.
+  shiftPerLineArray(b.lineMarkers, none(LineMarkerKind), event)
+
+proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Twin of lineMarkerShiftCallback. New slots default to `lmkInserted` so
+  ## pushUndoChange's "mark changePos as modified" step sees the right state.
+  shiftPerLineArray(b.modifiedLines, lmkInserted, event)
+
+proc reversed(event: RowColRemapEvent): RowColRemapEvent =
+  ## Flip a forward event into its inverse. `lineRuneLenAfter` is preserved:
+  ## emitRowColRemapEvents recomputes it via `getLine` at reverse dispatch time
+  ## (after the backend undo), so it already matches the post-reverse state.
+  case event.kind
+  of rrekMultiLine:
+    RowColRemapEvent(
+      kind: rrekMultiLine,
+      firstAffectedRow: event.firstAffectedRow,
+      lastAffectedRowBefore: event.lastAffectedRowAfter,
+      lastAffectedRowAfter: event.lastAffectedRowBefore,
+      preservesFirstRow: event.preservesFirstRow,
+    )
+  of rrekSingleLine:
+    RowColRemapEvent(
+      kind: rrekSingleLine,
+      row: event.row,
+      editCol: event.editCol,
+      colDelta: -event.colDelta,
+      lineRuneLenAfter: event.lineRuneLenAfter,
+    )
+  of rrekClear:
+    event
+
+proc emitRowColRemapEvents*(
+    b: TextBuffer,
+    change: BufferChange,
+    reverse: bool = false,
+    includeSideArrays: bool = true,
+) =
+  ## Notify subscribers of a buffer edit so they can keep row/col-keyed
+  ## decorations in sync. `reverse=true` flips the event for undo dispatch;
+  ## `includeSideArrays=false` skips lineMarkers/modifiedLines when a wholesale
+  ## restore will overwrite them anyway (undo/redo path).
+  template dispatch(ev: RowColRemapEvent) =
+    # Each callback is isolated: one raising must not skip later shifts,
+    # otherwise side arrays drift silently against the backend. Errors are
+    # logged so drift is diagnosable instead of invisible.
+    let toFire =
+      if reverse:
+        reversed(ev)
+      else:
+        ev
+    for cb in b.remapCallbacks:
+      try:
+        cb(b, toFire)
+      except CatchableError as e:
+        logError("buffer", "remapCallback raised: " & e.msg)
+    if includeSideArrays:
+      for cb in b.sideArrayCallbacks:
+        try:
+          cb(b, toFire)
+        except CatchableError as e:
+          logError("buffer", "sideArrayCallback raised: " & e.msg)
+
   case change.kind
   of ckTransaction:
-    for inner in change.transactionChanges:
-      b.emitRowColRemapEvents(inner)
+    if reverse:
+      for j in countdown(change.transactionChanges.high, 0):
+        b.emitRowColRemapEvents(
+          change.transactionChanges[j],
+          reverse = true,
+          includeSideArrays = includeSideArrays,
+        )
+    else:
+      for inner in change.transactionChanges:
+        b.emitRowColRemapEvents(inner, includeSideArrays = includeSideArrays)
     return
   of ckSnapshot:
-    let event = RowColRemapEvent(kind: rrekClear)
-    for cb in b.remapCallbacks:
-      cb(b, event)
+    dispatch(RowColRemapEvent(kind: rrekClear))
     return
   of ckInsertText:
     let nl = countNewlines(change.insertText)
     if nl == 0:
       let colDelta = change.insertText.runeLen
       let newLen = b.getLine(change.insertPos.line).charLen
-      let event = RowColRemapEvent(
-        kind: rrekSingleLine,
-        row: change.insertPos.line,
-        editCol: change.insertPos.column,
-        colDelta: colDelta,
-        lineRuneLenAfter: newLen,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekSingleLine,
+          row: change.insertPos.line,
+          editCol: change.insertPos.column,
+          colDelta: colDelta,
+          lineRuneLenAfter: newLen,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
     else:
-      let event = RowColRemapEvent(
-        kind: rrekMultiLine,
-        firstAffectedRow: change.insertPos.line,
-        lastAffectedRowBefore: change.insertPos.line,
-        lastAffectedRowAfter: change.insertPos.line + nl,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: change.insertPos.line,
+          lastAffectedRowBefore: change.insertPos.line,
+          lastAffectedRowAfter: change.insertPos.line + nl,
+          preservesFirstRow: true,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
   of ckDeleteText:
     let nl = countNewlines(change.deletedText)
     if nl == 0:
       let colDelta = -change.deletedText.runeLen
       let newLen = b.getLine(change.deletePos.line).charLen
-      let event = RowColRemapEvent(
-        kind: rrekSingleLine,
-        row: change.deletePos.line,
-        editCol: change.deletePos.column,
-        colDelta: colDelta,
-        lineRuneLenAfter: newLen,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekSingleLine,
+          row: change.deletePos.line,
+          editCol: change.deletePos.column,
+          colDelta: colDelta,
+          lineRuneLenAfter: newLen,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
     else:
-      let event = RowColRemapEvent(
-        kind: rrekMultiLine,
-        firstAffectedRow: change.deletePos.line,
-        lastAffectedRowBefore: change.deletePos.line + nl,
-        lastAffectedRowAfter: change.deletePos.line,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: change.deletePos.line,
+          lastAffectedRowBefore: change.deletePos.line + nl,
+          lastAffectedRowAfter: change.deletePos.line,
+          preservesFirstRow: true,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
   of ckInsertLine:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.insertLineIdx,
-      lastAffectedRowBefore: change.insertLineIdx - 1,
-      lastAffectedRowAfter: change.insertLineIdx,
+    dispatch(
+      RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.insertLineIdx,
+        lastAffectedRowBefore: change.insertLineIdx - 1,
+        lastAffectedRowAfter: change.insertLineIdx,
+      )
     )
-    for cb in b.remapCallbacks:
-      cb(b, event)
   of ckDeleteLine:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.deleteLineIdx,
-      lastAffectedRowBefore: change.deleteLineIdx,
-      lastAffectedRowAfter: change.deleteLineIdx - 1,
+    dispatch(
+      RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.deleteLineIdx,
+        lastAffectedRowBefore: change.deleteLineIdx,
+        lastAffectedRowAfter: change.deleteLineIdx - 1,
+      )
     )
-    for cb in b.remapCallbacks:
-      cb(b, event)
   of ckDeleteRange:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.deleteStartPos.line,
-      lastAffectedRowBefore: change.deleteEndPos.line,
-      lastAffectedRowAfter: change.deleteStartPos.line,
-    )
-    for cb in b.remapCallbacks:
-      cb(b, event)
+    # Single-line-join: emit as a drop of `startLine + 1` alone, so
+    # folds/bookmarks/markers at startLine survive (semantic tokens on that
+    # line go stale until the LSP repaints — self-healing).
+    # Other paths: startLine's row identity survives with merged content, so
+    # `preservesFirstRow=true` and drops happen at startLine + 1..
+    let startLine = change.deleteStartPos.line
+    let endLine = change.deleteEndPos.line
+    let event =
+      if startLine == endLine and change.deleteJoinedNextLine:
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: startLine + 1,
+          lastAffectedRowBefore: startLine + 1,
+          lastAffectedRowAfter: startLine,
+        )
+      else:
+        let lastBefore = endLine + (if change.deleteJoinedNextLine: 1 else: 0)
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: startLine,
+          lastAffectedRowBefore: lastBefore,
+          lastAffectedRowAfter: startLine,
+          preservesFirstRow: true,
+        )
+    dispatch(event)
   of ckReplaceLine:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.replaceLineIdx,
-      lastAffectedRowBefore: change.replaceLineIdx,
-      lastAffectedRowAfter: change.replaceLineIdx,
+    dispatch(
+      RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.replaceLineIdx,
+        lastAffectedRowBefore: change.replaceLineIdx,
+        lastAffectedRowAfter: change.replaceLineIdx,
+      )
     )
-    for cb in b.remapCallbacks:
-      cb(b, event)
 
 proc registerRowColRemapCallback*(b: TextBuffer, cb: RowColRemapCallback) =
   ## Register a callback to receive row/col remap events. All registered
@@ -1045,6 +1202,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   b.lastChangedLines = changePos.line
 
   # Mark the changed line as modified
+  b.ensureMarkersSize()
   b.ensureModifiedLinesSize()
   if changePos.line >= 0 and changePos.line < b.modifiedLines.len:
     # Only upgrade to lmkModified if not already marked as inserted
