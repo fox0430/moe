@@ -537,6 +537,16 @@ suite "KeyBindingRegistry - numeric prefix":
     let registry = newKeyBindingRegistry()
     check registry.getNumericPrefix() == 1
 
+  test "getNumericPrefix clamps counts above MaxNumericPrefix":
+    let registry = newKeyBindingRegistry()
+    registry.sequenceState.numericPrefix = "99999999"
+    check registry.getNumericPrefix() == MaxNumericPrefix
+
+  test "getNumericPrefix returns 1 on parseInt overflow":
+    let registry = newKeyBindingRegistry()
+    registry.sequenceState.numericPrefix = "9".repeat(30)
+    check registry.getNumericPrefix() == 1
+
 suite "KeyBindingRegistry - operator pending":
   test "Find char command waits for character":
     let registry = newKeyBindingRegistry()
