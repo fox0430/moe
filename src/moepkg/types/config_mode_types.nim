@@ -82,3 +82,6 @@ type
     config*: EditorConfig # Reference to the config being edited
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
     lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
+    pendingApply*: bool
+      # applyChange writes to EditorConfig; consumed by the
+      # main loop to gate applyConfigSettings so cursor movement is cheap
