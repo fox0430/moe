@@ -612,9 +612,11 @@ proc handleNormalModeKey*(
 
   # Handle macro recording - check if we're in recording mode
   if state.macroState.isRecording:
-    # Check if this key matches the key that started recording (stop recording)
+    # Don't treat the key as "stop recording" while the router is holding
+    # it as an f/t/r/" operand.
     let currentKeyStr = keyComboToString(keyCombo)
-    if currentKeyStr == state.macroState.recordStartKey:
+    if currentKeyStr == state.macroState.recordStartKey and
+        not handler.keyBindingRegistry.isWaitingForChar():
       # Stop recording
       state.macroState.registers[state.macroState.register] =
         state.macroState.recordedKeys
