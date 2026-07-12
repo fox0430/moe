@@ -28,6 +28,9 @@ import pkg/editorconfig
 
 import buffer, config, types, logger
 
+const MaxTabWidth = 16
+  ## Matches the global config cfgMax for Standard.tabStop/shiftWidth.
+
 proc getEditorConfigProperties*(filePath: string): Option[Table[string, string]] =
   ## Get EditorConfig properties for a file path.
   ## Returns none if the file path is empty or properties cannot be retrieved.
@@ -63,7 +66,7 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
   if props.hasKey("tab_width"):
     try:
       let val = parseInt(props["tab_width"])
-      if val > 0:
+      if val > 0 and val <= MaxTabWidth:
         bufEc.tabStop = some(val)
     except ValueError:
       discard
@@ -78,7 +81,7 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
     else:
       try:
         let val = parseInt(sizeStr)
-        if val > 0:
+        if val > 0 and val <= MaxTabWidth:
           bufEc.shiftWidth = some(val)
           # If tab_width was not explicitly set, indent_size also sets tabStop
           if not props.hasKey("tab_width"):
