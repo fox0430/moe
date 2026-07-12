@@ -259,11 +259,11 @@ suite "Document Highlight Cache":
     var config = newEditorConfig()
     config.lsp.documentHighlight.enable = false
     let e = newEditor(config)
-    check not e.state.display.showDocumentHighlight
+    check not e.state.showDocumentHighlight
 
     config.lsp.documentHighlight.enable = true
     let e2 = newEditor(config)
-    check e2.state.display.showDocumentHighlight
+    check e2.state.showDocumentHighlight
 
   test "invalidateDocumentHighlightCache":
     let e = createTestEditor()
@@ -293,7 +293,7 @@ suite "Document Highlight Cache":
     e.state.lspCache.documentHighlightCache.itemsByLine = {
       0: @[DocumentHighlightItem(line: 0, startColumn: 0, endColumn: 5, kind: 1)]
     }.toTable
-    e.state.display.showDocumentHighlight = true
+    e.state.showDocumentHighlight = true
     e.state.mode = EditorMode.Insert
 
     # Note: Without LSP enabled, the function returns early before clearing
@@ -764,8 +764,8 @@ suite "CodeLens Column Extraction":
 suite "CodeLens Virtual Text Provider":
   test "buildVirtualTextProviders adds the provider for the owning file":
     let e = createTestEditor()
-    e.state.display.showCodeLens = true
-    e.state.display.showInlayHint = false
+    e.state.showCodeLens = true
+    e.state.showInlayHint = false
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
@@ -779,8 +779,8 @@ suite "CodeLens Virtual Text Provider":
 
   test "skips a cache owned by another file":
     let e = createTestEditor()
-    e.state.display.showCodeLens = true
-    e.state.display.showInlayHint = false
+    e.state.showCodeLens = true
+    e.state.showInlayHint = false
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
@@ -792,8 +792,8 @@ suite "CodeLens Virtual Text Provider":
 
   test "skips an invalid cache":
     let e = createTestEditor()
-    e.state.display.showCodeLens = true
-    e.state.display.showInlayHint = false
+    e.state.showCodeLens = true
+    e.state.showInlayHint = false
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: false,
@@ -826,8 +826,8 @@ suite "CodeLens Virtual Text Provider":
   test "renders inlay hints left of code lenses on the same line":
     let e = createTestEditor()
     e.activeBuffer().filePath = some("/test/current.nim")
-    e.state.display.showInlayHint = true
-    e.state.display.showCodeLens = true
+    e.state.showInlayHint = true
+    e.state.showCodeLens = true
     e.state.lspCache.inlayHintCache = InlayHintCache(
       isValid: true,
       filePath: "/test/current.nim",

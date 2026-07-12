@@ -303,7 +303,7 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
     return err("Nothing to delete")
 
   # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
-  if ctx.state.display.autoDeleteParen and actualCount == 1:
+  if ctx.state.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
 
     try:
@@ -408,7 +408,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
-  if ctx.state.display.autoDeleteParen and actualCount == 1:
+  if ctx.state.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
 
     try:
@@ -613,7 +613,7 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
         return err("Failed to clear line: " & deleteResult.error)
 
     # Insert indent if auto-indent is enabled
-    if ctx.state.display.autoIndent and indent.len > 0:
+    if ctx.state.autoIndent and indent.len > 0:
       let insertResult =
         ctx.buffer.insertText(BufferPosition(line: startLine, column: 0), indent)
       if insertResult.isErr:

@@ -130,12 +130,10 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   )
 
   generateDisplayInfo(
-    debugLines, e.state.display.showStatusLine, e.state.display.multiStatusLine,
-    e.state.display.showLineNumbers, e.state.display.showCursorLine,
-    e.state.display.showSyntax, e.state.display.showIndentationLines,
-    e.state.display.showSidebar, e.state.display.scrollbarWidth,
-    e.state.display.showModifiedLines, e.state.display.lineWrap,
-    e.state.display.tabStop, debugConfig.editorView.enable,
+    debugLines, e.showStatusLine, e.multiStatusLine, e.showLineNumbers,
+    e.showCursorLine, e.showSyntax, e.showIndentationLines, e.showSidebar,
+    e.scrollbarWidth, e.showModifiedLines, e.lineWrap, e.tabStop,
+    debugConfig.editorView.enable,
   )
 
   generateMacroInfo(
@@ -299,7 +297,7 @@ proc tickGitAndDebug(e: Editor) =
   ## rendering); here we just consume the most recent diff result for the
   ## sidebar gutter, gated on the user's showGitDiff flag.
   ## Depends on `tickFileAndConfig` having refreshed the conflict scan first.
-  if e.state.display.showGitDiff:
+  if e.showGitDiff:
     maybeApplyGitMarkers(e.activeBuffer())
   e.maybeUpdateConflicts()
   e.maybeUpdateDebugBuffer()
@@ -465,8 +463,7 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
   # command-line area, plus one padding row when the status line is shown
   if e.state.notificationPopup.hasActiveNotifications():
     let bottomReserve =
-      e.state.bottomAreaHeight(buffer.area.width) +
-      (if e.state.display.showStatusLine: 1 else: 0)
+      e.state.bottomAreaHeight(buffer.area.width) + (if e.showStatusLine: 1 else: 0)
     let rects = e.state.notificationPopup.calculateNotificationPositions(
       buffer.area.width, buffer.area.height, bottomReserve
     )

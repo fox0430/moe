@@ -28,7 +28,7 @@ import ../src/moepkg/[buffer, types, motion, key_bindings, config, modes, regist
 import ../src/moepkg/command_registry {.all.}
 
 proc createTestContext(buffer: TextBuffer): CommandContext =
-  let state = EditorState(activeWindow: EditorWindow())
+  let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
   state.cursor = BufferPosition(line: 0, column: 0)
   state.mode = EditorMode.Normal
   state.registers = initRegisters()
@@ -1245,7 +1245,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # [] -> x on [ -> empty
     let buffer = newTextBuffer("[]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -1256,7 +1256,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # () -> x on ( -> empty
     let buffer = newTextBuffer("()")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -1267,7 +1267,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # {} -> x on { -> empty
     let buffer = newTextBuffer("{}")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -1278,7 +1278,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # [hello] -> x on [ -> hello]
     let buffer = newTextBuffer("[hello]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -1289,7 +1289,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # [] -> x on ] -> [
     let buffer = newTextBuffer("[]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 1)
     let registry = createTestRegistry()
 
@@ -1300,7 +1300,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # [   ] -> x on ] -> [
     let buffer = newTextBuffer("[   ]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 4)
     let registry = createTestRegistry()
 
@@ -1311,7 +1311,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # a()b -> x on ( -> ab
     let buffer = newTextBuffer("a()b")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 1)
     let registry = createTestRegistry()
 
@@ -1322,7 +1322,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # [] -> x on [ with disabled -> ]
     let buffer = newTextBuffer("[]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = false
+    ctx.state.autoDeleteParen = false
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -1333,7 +1333,7 @@ suite "Handler - Delete char auto-delete paren (x)":
     # "" -> x on first " -> empty
     let buffer = newTextBuffer("\"\"")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
@@ -1345,7 +1345,7 @@ suite "Handler - Delete char before auto-delete paren (X)":
     # [] with cursor after [ -> X deletes both
     let buffer = newTextBuffer("[]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 1)
     let registry = createTestRegistry()
 
@@ -1357,7 +1357,7 @@ suite "Handler - Delete char before auto-delete paren (X)":
     # [hello] with cursor on ] -> X deletes only char before (o not ])
     let buffer = newTextBuffer("[hello]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 6)
     let registry = createTestRegistry()
 
@@ -1368,7 +1368,7 @@ suite "Handler - Delete char before auto-delete paren (X)":
     # {} with cursor after { -> X deletes both
     let buffer = newTextBuffer("{}")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 1)
     let registry = createTestRegistry()
 
@@ -1380,7 +1380,7 @@ suite "Handler - Delete char before auto-delete paren (X)":
     # [] with cursor after [ -> X only deletes [
     let buffer = newTextBuffer("[]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = false
+    ctx.state.autoDeleteParen = false
     ctx.cursor = BufferPosition(line: 0, column: 1)
     let registry = createTestRegistry()
 
@@ -1392,7 +1392,7 @@ suite "Handler - Delete char before auto-delete paren (X)":
     # a()b with cursor between ( and ) -> X deletes both
     let buffer = newTextBuffer("a()b")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 2)
     let registry = createTestRegistry()
 
@@ -1404,7 +1404,7 @@ suite "Handler - Delete char before auto-delete paren (X)":
     # [   ] with cursor on ] -> X deletes space only
     let buffer = newTextBuffer("[   ]")
     let ctx = createTestContext(buffer)
-    ctx.state.display.autoDeleteParen = true
+    ctx.state.autoDeleteParen = true
     ctx.cursor = BufferPosition(line: 0, column: 4)
     let registry = createTestRegistry()
 
@@ -4115,9 +4115,9 @@ suite "Handler - Indent/Outdent operator with text objects":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0)
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # First > sets pending operator
@@ -4135,9 +4135,9 @@ suite "Handler - Indent/Outdent operator with text objects":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 2)
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # First < sets pending operator
@@ -4155,9 +4155,9 @@ suite "Handler - Indent/Outdent operator with text objects":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0)
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # Set pending operator (>)
@@ -4178,9 +4178,9 @@ suite "Handler - Indent/Outdent operator with text objects":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 2)
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # Set pending operator (<)
@@ -4306,9 +4306,9 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0) # Inside braces
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # Set pending operator (>)
@@ -4571,9 +4571,9 @@ suite "Multibyte character support":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # >> (double indent)
@@ -4589,9 +4589,9 @@ suite "Multibyte character support":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 2)
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # << (double outdent)
@@ -4607,9 +4607,9 @@ suite "Multibyte character support":
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0) # Inside braces
     ctx.state.mode = EditorMode.Normal
-    ctx.state.display.expandTab = true
-    ctx.state.display.tabStop = 2
-    ctx.state.display.shiftWidth = 2
+    ctx.state.expandTab = true
+    ctx.state.tabStop = 2
+    ctx.state.shiftWidth = 2
     let registry = createTestRegistry()
 
     # Set pending operator (>)

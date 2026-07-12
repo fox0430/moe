@@ -168,44 +168,6 @@ suite "EditorConfig Support":
     check buf.encoding == utf8
     check buf.endOfLine == true
 
-  test "applyBufferEditorConfig overrides display settings":
-    var display = DisplaySettings(tabStop: 2, shiftWidth: 0, expandTab: false)
-    let conf = newEditorConfig()
-    let buf = newTextBuffer()
-    var bufEc = BufferEditorConfig()
-    bufEc.tabStop = some(4)
-    bufEc.shiftWidth = some(4)
-    bufEc.expandTab = some(true)
-    buf.editorConfig = some(bufEc)
-    applyBufferEditorConfig(display, buf, conf)
-    check display.tabStop == 4
-    check display.shiftWidth == 4
-    check display.expandTab == true
-
-  test "applyBufferEditorConfig falls back to global config":
-    var display = DisplaySettings(tabStop: 8, shiftWidth: 4, expandTab: true)
-    let conf = newEditorConfig()
-    let buf = newTextBuffer()
-    # No editorConfig overrides
-    applyBufferEditorConfig(display, buf, conf)
-    # Should reset to global config values
-    check display.tabStop == conf.standard.tabStop
-    check display.shiftWidth == conf.standard.shiftWidth
-    check display.expandTab == conf.standard.expandTab
-
-  test "applyBufferEditorConfig partial overrides":
-    var display = DisplaySettings(tabStop: 2, shiftWidth: 0, expandTab: false)
-    let conf = newEditorConfig()
-    let buf = newTextBuffer()
-    var bufEc = BufferEditorConfig()
-    bufEc.tabStop = some(4)
-    # shiftWidth and expandTab not set
-    buf.editorConfig = some(bufEc)
-    applyBufferEditorConfig(display, buf, conf)
-    check display.tabStop == 4
-    check display.shiftWidth == conf.standard.shiftWidth
-    check display.expandTab == conf.standard.expandTab
-
   test "shouldTrimTrailingWhitespace returns false with no editorConfig":
     let buf = newTextBuffer()
     check shouldTrimTrailingWhitespace(buf) == false

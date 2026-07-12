@@ -144,6 +144,57 @@ type
     # still treat the fake worker as running. nil in production.
     runningWorkerOverride*: proc(path: string): bool {.gcsafe.}
 
+proc defaultLanguageServerConfigs*(): Table[string, LanguageServerConfig] =
+  ## Built-in default LSP server registrations.
+  ## Extracted so `applyLspServerConfigs` can rebuild the config table from
+  ## scratch on live reload, letting removed [Lsp.<lang>] user sections revert
+  ## to defaults instead of leaving stale overrides in place.
+  result = initTable[string, LanguageServerConfig]()
+
+  result["nim"] = LanguageServerConfig(
+    command: "nimlangserver",
+    args: @[],
+    extensions: @["nim", "nims", "nimble"],
+    enabled: true,
+  )
+
+  result["rust"] = LanguageServerConfig(
+    command: "rust-analyzer", args: @[], extensions: @["rs"], enabled: true
+  )
+
+  result["python"] = LanguageServerConfig(
+    command: "pylsp", args: @[], extensions: @["py", "pyw"], enabled: true
+  )
+
+  result["typescript"] = LanguageServerConfig(
+    command: "typescript-language-server",
+    args: @["--stdio"],
+    extensions: @["ts", "tsx"],
+    enabled: true,
+  )
+
+  result["javascript"] = LanguageServerConfig(
+    command: "typescript-language-server",
+    args: @["--stdio"],
+    extensions: @["js", "jsx", "mjs"],
+    enabled: true,
+  )
+
+  result["go"] = LanguageServerConfig(
+    command: "gopls", args: @[], extensions: @["go"], enabled: true
+  )
+
+  result["c"] = LanguageServerConfig(
+    command: "clangd", args: @[], extensions: @["c", "h"], enabled: true
+  )
+
+  result["cpp"] = LanguageServerConfig(
+    command: "clangd",
+    args: @[],
+    extensions: @["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
+    enabled: true,
+  )
+
 proc newLspService*(workspaceRoot: string = ""): LspService =
   ## Create a new LSP service
   result = LspService(
@@ -189,49 +240,14 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
   )
 
   # Default language server configurations
-  result.configs["nim"] = LanguageServerConfig(
-    command: "nimlangserver",
-    args: @[],
-    extensions: @["nim", "nims", "nimble"],
-    enabled: true,
-  )
+  result.configs = defaultLanguageServerConfigs()
 
-  result.configs["rust"] = LanguageServerConfig(
-    command: "rust-analyzer", args: @[], extensions: @["rs"], enabled: true
-  )
-
-  result.configs["python"] = LanguageServerConfig(
-    command: "pylsp", args: @[], extensions: @["py", "pyw"], enabled: true
-  )
-
-  result.configs["typescript"] = LanguageServerConfig(
-    command: "typescript-language-server",
-    args: @["--stdio"],
-    extensions: @["ts", "tsx"],
-    enabled: true,
-  )
-
-  result.configs["javascript"] = LanguageServerConfig(
-    command: "typescript-language-server",
-    args: @["--stdio"],
-    extensions: @["js", "jsx", "mjs"],
-    enabled: true,
-  )
-
-  result.configs["go"] = LanguageServerConfig(
-    command: "gopls", args: @[], extensions: @["go"], enabled: true
-  )
-
-  result.configs["c"] = LanguageServerConfig(
-    command: "clangd", args: @[], extensions: @["c", "h"], enabled: true
-  )
-
-  result.configs["cpp"] = LanguageServerConfig(
-    command: "clangd",
-    args: @[],
-    extensions: @["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
-    enabled: true,
-  )
+proc resetConfigsToDefaults*(svc: LspService) =
+  ## Replace the configs table with a fresh copy of the built-in defaults.
+  ## Used by live reload so removed [Lsp.<lang>] sections and cleared fields
+  ## revert to defaults instead of retaining stale merged state.
+  ## Already-running workers keep their old command until they restart.
+  svc.configs = defaultLanguageServerConfigs()
 
 proc setRequestTimeout*(svc: LspService, timeoutMs: int) =
   ## Set the per-request timeout (ms). Non-positive values are ignored.

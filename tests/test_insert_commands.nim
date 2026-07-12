@@ -23,7 +23,7 @@ import std/[unittest, options, tables]
 
 import pkg/results
 
-import ../src/moepkg/[buffer, types, modes, registers]
+import ../src/moepkg/[buffer, types, config, modes, registers]
 import ../src/moepkg/command_handlers/insert_commands
 
 proc createTestState(): EditorState =
@@ -37,31 +37,9 @@ proc createTestState(): EditorState =
   )
   EditorState(
     activeWindow: window,
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      shiftWidth: 0,
-      softTabStop: 0,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
@@ -111,64 +89,64 @@ suite "Insert Commands - getLineIndent":
 suite "Insert Commands - getIndentString":
   test "Get indent string with expandTab enabled":
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 4
+    state.expandTab = true
+    state.tabStop = 4
     let indentStr = getIndentString(state)
     check indentStr == "    "
 
   test "Get indent string with expandTab disabled":
     let state = createTestState()
-    state.display.expandTab = false
+    state.expandTab = false
     let indentStr = getIndentString(state)
     check indentStr == "\t"
 
   test "Get indent string with tabStop 2":
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     let indentStr = getIndentString(state)
     check indentStr == "  "
 
 suite "Insert Commands - effectiveShiftWidth":
   test "Returns shiftWidth when set":
     let state = createTestState()
-    state.display.tabStop = 8
-    state.display.shiftWidth = 4
+    state.tabStop = 8
+    state.shiftWidth = 4
     check effectiveShiftWidth(state) == 4
 
   test "Falls back to tabStop when shiftWidth is 0":
     let state = createTestState()
-    state.display.tabStop = 8
-    state.display.shiftWidth = 0
+    state.tabStop = 8
+    state.shiftWidth = 0
     check effectiveShiftWidth(state) == 8
 
 suite "Insert Commands - effectiveSoftTabStop":
   test "Returns softTabStop when set":
     let state = createTestState()
-    state.display.tabStop = 8
-    state.display.softTabStop = 4
+    state.tabStop = 8
+    state.softTabStop = 4
     check effectiveSoftTabStop(state) == 4
 
   test "Falls back to tabStop when softTabStop is 0":
     let state = createTestState()
-    state.display.tabStop = 8
-    state.display.softTabStop = 0
+    state.tabStop = 8
+    state.softTabStop = 0
     check effectiveSoftTabStop(state) == 8
 
 suite "Insert Commands - getIndentString with shiftWidth":
   test "Uses shiftWidth instead of tabStop when set":
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.shiftWidth = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.shiftWidth = 4
     let indentStr = getIndentString(state)
     check indentStr == "    "
 
   test "Falls back to tabStop when shiftWidth is 0":
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.shiftWidth = 0
+    state.expandTab = true
+    state.tabStop = 8
+    state.shiftWidth = 0
     let indentStr = getIndentString(state)
     check indentStr == "        "
 
@@ -177,9 +155,9 @@ suite "Insert Commands - indentLine with shiftWidth":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.shiftWidth = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.shiftWidth = 4
     state.cursor = BufferPosition(line: 0, column: 0)
 
     indentLine(buf, state)
@@ -192,9 +170,9 @@ suite "Insert Commands - dedentLine with shiftWidth":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.shiftWidth = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.shiftWidth = 4
     state.cursor = BufferPosition(line: 0, column: 4)
 
     dedentLine(buf, state)
@@ -312,7 +290,7 @@ suite "Insert Commands - insertNewline":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 5)
 
     insertNewline(buf, state)
@@ -326,7 +304,7 @@ suite "Insert Commands - insertNewline":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello world")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 9)
 
     insertNewline(buf, state)
@@ -340,7 +318,7 @@ suite "Insert Commands - insertNewline":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 5)
 
     insertNewline(buf, state)
@@ -354,8 +332,8 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "test[]")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.bracketSplit = bsmDisable
+    state.autoIndent = true
+    state.bracketSplit = bsmDisable
     state.cursor = BufferPosition(line: 0, column: 5)
 
     insertNewline(buf, state)
@@ -370,10 +348,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = true
-    state.display.tabStop = 4
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 4
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 9)
 
     insertNewline(buf, state)
@@ -389,10 +367,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = true
-    state.display.tabStop = 4
-    state.display.bracketSplit = bsmNoIndent
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 4
+    state.bracketSplit = bsmNoIndent
     state.cursor = BufferPosition(line: 0, column: 9)
 
     insertNewline(buf, state)
@@ -408,10 +386,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "f()")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = true
-    state.display.tabStop = 2
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 2
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertNewline(buf, state)
@@ -426,10 +404,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "{}")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = true
-    state.display.tabStop = 2
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 2
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 1)
 
     insertNewline(buf, state)
@@ -442,8 +420,8 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "\"\"")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 1)
 
     insertNewline(buf, state)
@@ -457,8 +435,8 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "[]")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 0)
 
     insertNewline(buf, state)
@@ -472,8 +450,8 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "test[")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 5)
 
     insertNewline(buf, state)
@@ -486,8 +464,8 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "[)")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 1)
 
     insertNewline(buf, state)
@@ -501,10 +479,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "[[]]")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = true
-    state.display.tabStop = 2
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 2
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertNewline(buf, state)
@@ -520,10 +498,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")
     let state = createTestState()
-    state.display.autoIndent = false
-    state.display.expandTab = true
-    state.display.tabStop = 4
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = false
+    state.expandTab = true
+    state.tabStop = 4
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 9)
 
     insertNewline(buf, state)
@@ -537,10 +515,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "\ttest[]")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = false
-    state.display.tabStop = 4
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.expandTab = false
+    state.tabStop = 4
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 6)
 
     insertNewline(buf, state)
@@ -555,10 +533,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "あ[]")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = true
-    state.display.tabStop = 2
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 2
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertNewline(buf, state)
@@ -573,10 +551,10 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    f()")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.expandTab = true
-    state.display.tabStop = 2
-    state.display.bracketSplit = bsmIndent
+    state.autoIndent = true
+    state.expandTab = true
+    state.tabStop = 2
+    state.bracketSplit = bsmIndent
     state.cursor = BufferPosition(line: 0, column: 6)
 
     insertNewline(buf, state)
@@ -594,8 +572,8 @@ suite "Insert Commands - insertNewline bracket split":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "f()")
     let state = createTestState()
-    state.display.autoIndent = true
-    state.display.bracketSplit = bsmNoIndent
+    state.autoIndent = true
+    state.bracketSplit = bsmNoIndent
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertNewline(buf, state)
@@ -607,7 +585,7 @@ suite "Insert Commands - insertLineBelow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineBelow(buf, state)
@@ -621,7 +599,7 @@ suite "Insert Commands - insertLineBelow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineBelow(buf, state)
@@ -636,7 +614,7 @@ suite "Insert Commands - insertLineAbove":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineAbove(buf, state)
@@ -650,7 +628,7 @@ suite "Insert Commands - insertLineAbove":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineAbove(buf, state)
@@ -703,8 +681,8 @@ suite "Insert Commands - indentLine":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
     indentLine(buf, state)
@@ -716,7 +694,7 @@ suite "Insert Commands - indentLine":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = false
+    state.expandTab = false
     state.cursor = BufferPosition(line: 0, column: 0)
 
     indentLine(buf, state)
@@ -728,8 +706,8 @@ suite "Insert Commands - indentLine":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
     indentLine(buf, state, 2)
@@ -742,8 +720,8 @@ suite "Insert Commands - dedentLine":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 4)
 
     dedentLine(buf, state)
@@ -755,8 +733,8 @@ suite "Insert Commands - dedentLine":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
     dedentLine(buf, state)
@@ -768,8 +746,8 @@ suite "Insert Commands - dedentLine":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 1) # Cursor in indent
 
     dedentLine(buf, state)
@@ -934,7 +912,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineBelow(buf, state)
@@ -956,7 +934,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineBelow(buf, state)
@@ -976,7 +954,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineAbove(buf, state)
@@ -997,7 +975,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 9)
 
     insertNewline(buf, state)
@@ -1018,7 +996,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineBelow(buf, state)
@@ -1029,7 +1007,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     insertLineBelow(buf, state)
@@ -1040,7 +1018,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     # Start transaction (as normal_handler would do for o/O)
@@ -1066,7 +1044,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
     # Start transaction (as normal_handler would do for o/O)
@@ -1092,7 +1070,7 @@ suite "Insert Commands - Undo Cursor Position":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 5)
 
     # Simulate 'o' command: save cursor pos, begin transaction, insert line below
@@ -1118,7 +1096,7 @@ suite "Insert Commands - Undo Cursor Position":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let originalCursor = state.cursor
@@ -1141,7 +1119,7 @@ suite "Insert Commands - Undo Cursor Position":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    indented")
     let state = createTestState()
-    state.display.autoIndent = true
+    state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 6)
 
     let originalCursor = state.cursor
@@ -1164,7 +1142,7 @@ suite "Insert Commands - Undo Cursor Position":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 5)
 
     let originalCursor = state.cursor
@@ -1191,7 +1169,7 @@ suite "Insert Commands - Undo Cursor Position":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 7)
 
     let originalCursor = state.cursor
@@ -1218,7 +1196,7 @@ suite "Insert Commands - Undo Cursor Position":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 2)
 
     let originalCursor = state.cursor

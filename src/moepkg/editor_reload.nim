@@ -56,7 +56,6 @@ proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
   ## maybeUpdateLsp's changeSeq guard would never re-sync on its own.
   # Reload is the user's chance to pick up an edited .editorconfig.
   applyEditorConfigToBuffer(buf, e.config)
-  applyBufferEditorConfig(e.state.display, buf, e.config)
   e.clampCursorAfterReload(buf)
   e.state.statusMessage = "File reloaded: " & filePath
   e.refreshGitDiff(useBuffer = false)

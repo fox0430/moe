@@ -145,41 +145,13 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     state: EditorState(
       # activeWindow will be set after window creation below
       cursorVisible: true,
-      # Display settings (grouped in DisplaySettings)
       display: DisplaySettings(
-        showTabLine: editorConfig.tabLine.enable,
-        showStatusLine: editorConfig.standard.statusLine,
-        multiStatusLine: editorConfig.statusLine.multipleStatusLine,
         showLineCount: true,
         showLinePercentage: true,
         showEncoding: true,
         showLineEnding: true,
-        showLineNumbers: editorConfig.standard.number,
-        relativeLineNumbers: editorConfig.standard.relativeNumber,
-        showCursorLine: editorConfig.highlight.currentLine,
-        showCursorColumn: editorConfig.highlight.currentColumn,
-        showSyntax: editorConfig.standard.syntax,
-        showIndentationLines: editorConfig.standard.indentationLines,
-        showSidebar: editorConfig.standard.sidebar,
-        scrollbar: editorConfig.standard.scrollbar,
-        scrollbarWidth: editorConfig.standard.scrollbarWidth,
-        showModifiedLines: editorConfig.standard.showModifiedLines,
-        showGitDiff: editorConfig.git.showChangedLine,
-        showSyntaxChecker: editorConfig.syntaxChecker.enable,
-        showCodeLens: editorConfig.lsp.codeLens.enable,
-        showDocumentHighlight: editorConfig.lsp.documentHighlight.enable,
-        showInlayHint: editorConfig.lsp.inlayHint.enable,
-        lineWrap: editorConfig.standard.lineWrap,
-        tabStop: editorConfig.standard.tabStop,
-        shiftWidth: editorConfig.standard.shiftWidth,
-        softTabStop: editorConfig.standard.softTabStop,
-        expandTab: editorConfig.standard.expandTab,
-        autoIndent: editorConfig.standard.autoIndent,
-        smartIndent: editorConfig.standard.smartIndent,
-        autoCloseParen: editorConfig.standard.autoCloseParen,
-        autoDeleteParen: editorConfig.standard.autoDeleteParen,
-        bracketSplit: editorConfig.standard.bracketSplit,
       ),
+      config: editorConfig,
       windowDisplay: WindowDisplayState(
         viewportReservedLines: steadyBottomAreaHeight(), # Status+command share same row
         savedViewportTopLine: 0, # Saved viewport position for operators
@@ -380,12 +352,10 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     some(keyRegistry),
   )
 
-  # Create handler manager after executer (which creates motion controller)
   result.handlerManager = newHandlerManager(
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
     cmdRegistry, result.config.clipboard, result.config.smoothScroll,
-    result.config.notification, result.lsp, result.config.autocomplete.enable,
-    result.config.lsp.completion.enable,
+    result.config.notification, result.lsp,
   )
 
   # Set clipboard tool for register system
@@ -398,43 +368,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Apply the user-configured LSP request timeout (config.lsp.timeout, ms).
   result.lsp.service.setRequestTimeout(result.config.lsp.timeout)
 
-  # Propagate per-language server settings from the config ([Lsp.<lang>])
-  # into the LSP service. Without this, user overrides for command,
-  # extensions, or trace were ignored and only the hardcoded defaults ran.
-  # The command string may include arguments; the worker splits it, so args
-  # is cleared when a custom command is given. trace=verbose enables raw
-  # JSON-RPC logging (off by default to avoid the per-keystroke cost).
-  for langId, serverCfg in result.config.lsp.servers:
-    let existing = result.lsp.service.getConfig(langId)
-    if existing.isSome:
-      var c = existing.get
-      if serverCfg.command.len > 0:
-        c.command = serverCfg.command
-        c.args = @[]
-      if serverCfg.extensions.len > 0:
-        c.extensions = serverCfg.extensions
-      if serverCfg.trace == LspTraceLevel.ltVerbose:
-        c.rawJsonLog = true
-      if langId == "rust":
-        # Drive rust-analyzer's run/debug CodeLenses from the user settings.
-        # Sent explicitly (including false) so the lenses are suppressed when
-        # disabled, instead of relying on rust-analyzer's on-by-default lens.
-        c.initializationOptions =
-          "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
-          "},\"debug\":{\"enable\":" & $serverCfg.rustAnalyzerDebugSingle & "}}}"
-      result.lsp.service.setConfig(langId, c)
-    elif serverCfg.command.len > 0:
-      # A language with no built-in default: register it from the user config
-      result.lsp.service.setConfig(
-        langId,
-        LanguageServerConfig(
-          command: serverCfg.command,
-          args: @[],
-          extensions: serverCfg.extensions,
-          enabled: true,
-          rawJsonLog: serverCfg.trace == LspTraceLevel.ltVerbose,
-        ),
-      )
+  result.applyLspServerConfigs()
 
   # Initialize config file modification time for liveReloadOfConf
   let configPath = getConfigPath()

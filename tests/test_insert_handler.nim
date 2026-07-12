@@ -48,33 +48,15 @@ proc createTestState(): EditorState =
     preferredColumn: -1,
     screenCursor: CursorPosition(x: 0, y: 0),
   )
+  let cfg = newEditorConfig()
+  cfg.standard.tabStop = 2
+  cfg.standard.expandTab = true
+  cfg.standard.autoIndent = true
   EditorState(
     activeWindow: window,
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      shiftWidth: 0,
-      softTabStop: 0,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
@@ -106,13 +88,7 @@ proc createTestHandler(buf: TextBuffer): InsertModeHandler =
     newMotionController(buf, createTestState(), createTestViewport())
 
   newInsertModeHandler(
-    keyBindingRegistry,
-    motionController,
-    commandRegistry,
-    nil, # No LSP
-    true, # autocompleteEnabled
-    true, # lspCompletionEnabled
-    NotificationConfig(),
+    keyBindingRegistry, motionController, commandRegistry, nil, NotificationConfig()
   )
 
 suite "InsertModeHandler - Constructor":
@@ -126,43 +102,6 @@ suite "InsertModeHandler - Constructor":
     check handler.commandRegistry != nil
     check handler.completionManager != nil
     check handler.signatureHelpManager != nil
-    check handler.autocompleteEnabled == true
-    check handler.lspCompletionEnabled == true
-
-  test "Create InsertModeHandler with autocomplete disabled":
-    let buf = newTextBuffer()
-    let keyBindingRegistry = newKeyBindingRegistry()
-    let commandRegistry = newCommandRegistry()
-    let motionController =
-      newMotionController(buf, createTestState(), createTestViewport())
-
-    let handler = newInsertModeHandler(
-      keyBindingRegistry,
-      motionController,
-      commandRegistry,
-      nil,
-      false, # autocompleteEnabled
-    )
-
-    check handler.autocompleteEnabled == false
-
-  test "Create InsertModeHandler with LSP completion disabled":
-    let buf = newTextBuffer()
-    let keyBindingRegistry = newKeyBindingRegistry()
-    let commandRegistry = newCommandRegistry()
-    let motionController =
-      newMotionController(buf, createTestState(), createTestViewport())
-
-    let handler = newInsertModeHandler(
-      keyBindingRegistry,
-      motionController,
-      commandRegistry,
-      nil,
-      true, # autocompleteEnabled
-      false, # lspCompletionEnabled
-    )
-
-    check handler.lspCompletionEnabled == false
 
 suite "InsertModeHandler - Character Insertion":
   test "Insert single character":
@@ -197,7 +136,7 @@ suite "InsertModeHandler - Character Insertion":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = true
+    state.autoCloseParen = true
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleCharacterInsertion(buf, state, "(")
@@ -211,7 +150,7 @@ suite "InsertModeHandler - Character Insertion":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "arr")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = true
+    state.autoCloseParen = true
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let result = handler.handleCharacterInsertion(buf, state, "[")
@@ -225,7 +164,7 @@ suite "InsertModeHandler - Character Insertion":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "obj")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = true
+    state.autoCloseParen = true
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let result = handler.handleCharacterInsertion(buf, state, "{")
@@ -239,7 +178,7 @@ suite "InsertModeHandler - Character Insertion":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "say ")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = true
+    state.autoCloseParen = true
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleCharacterInsertion(buf, state, "\"")
@@ -253,7 +192,7 @@ suite "InsertModeHandler - Character Insertion":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = false
+    state.autoCloseParen = false
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleCharacterInsertion(buf, state, "(")
@@ -309,7 +248,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func()")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 5) # Between ()
 
     let result = handler.handleBackspace(buf, state)
@@ -323,7 +262,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "arr[]")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleBackspace(buf, state)
@@ -337,7 +276,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func(x)")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 6) # After 'x'
 
     let result = handler.handleBackspace(buf, state)
@@ -352,7 +291,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 1) # After (
 
     let result = handler.handleBackspace(buf, state)
@@ -367,7 +306,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 7) # After )
 
     let result = handler.handleBackspace(buf, state)
@@ -382,7 +321,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "((hello))")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 2) # After inner (
 
     let result = handler.handleBackspace(buf, state)
@@ -397,7 +336,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func(args)")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 5) # After (
 
     let result = handler.handleBackspace(buf, state)
@@ -412,7 +351,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "(hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 1)
 
     let result = handler.handleBackspace(buf, state)
@@ -427,7 +366,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "[items]")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 7) # After ]
 
     let result = handler.handleBackspace(buf, state)
@@ -442,7 +381,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "{body}")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 6) # After }
 
     let result = handler.handleBackspace(buf, state)
@@ -457,7 +396,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "((inner))")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 8) # After inner )
 
     let result = handler.handleBackspace(buf, state)
@@ -472,7 +411,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "\"\"")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 1) # Between ""
 
     let result = handler.handleBackspace(buf, state)
@@ -487,7 +426,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "[]")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 1) # Between []
 
     let result = handler.handleBackspace(buf, state)
@@ -502,7 +441,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "[]")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 2) # After ]
 
     let result = handler.handleBackspace(buf, state)
@@ -517,7 +456,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = false
+    state.autoDeleteParen = false
     state.cursor = BufferPosition(line: 0, column: 1) # After (
 
     let result = handler.handleBackspace(buf, state)
@@ -532,7 +471,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a(b)c")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 2) # After (
 
     let result = handler.handleBackspace(buf, state)
@@ -547,7 +486,7 @@ suite "InsertModeHandler - Backspace":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a(b)c")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoDeleteParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 4) # After )
 
     let result = handler.handleBackspace(buf, state)
@@ -575,7 +514,7 @@ suite "InsertModeHandler - Newline":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 5)
 
     let result = handler.handleNewline(buf, state)
@@ -589,8 +528,8 @@ suite "InsertModeHandler - Tab":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 4
+    state.expandTab = true
+    state.tabStop = 4
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = handler.handleTab(buf, state)
@@ -604,7 +543,7 @@ suite "InsertModeHandler - Tab":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = false
+    state.expandTab = false
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = handler.handleTab(buf, state)
@@ -619,9 +558,9 @@ suite "InsertModeHandler - Tab with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.softTabStop = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.softTabStop = 4
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = handler.handleTab(buf, state)
@@ -635,9 +574,9 @@ suite "InsertModeHandler - Tab with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), " hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.softTabStop = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.softTabStop = 4
     state.cursor = BufferPosition(line: 0, column: 1)
 
     let result = handler.handleTab(buf, state)
@@ -652,9 +591,9 @@ suite "InsertModeHandler - Tab with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.softTabStop = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.softTabStop = 4
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleTab(buf, state)
@@ -668,9 +607,9 @@ suite "InsertModeHandler - Tab with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 4
-    state.display.softTabStop = 0
+    state.expandTab = true
+    state.tabStop = 4
+    state.softTabStop = 0
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = handler.handleTab(buf, state)
@@ -685,9 +624,9 @@ suite "InsertModeHandler - Backspace with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.softTabStop = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.softTabStop = 4
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleBackspace(buf, state)
@@ -701,9 +640,9 @@ suite "InsertModeHandler - Backspace with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "      hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.softTabStop = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.softTabStop = 4
     state.cursor = BufferPosition(line: 0, column: 6)
 
     let result = handler.handleBackspace(buf, state)
@@ -718,9 +657,9 @@ suite "InsertModeHandler - Backspace with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "he  llo")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 8
-    state.display.softTabStop = 4
+    state.expandTab = true
+    state.tabStop = 8
+    state.softTabStop = 4
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleBackspace(buf, state)
@@ -735,8 +674,8 @@ suite "InsertModeHandler - Backspace with softTabStop":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = false
-    state.display.softTabStop = 4
+    state.expandTab = false
+    state.softTabStop = 4
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = handler.handleBackspace(buf, state)
@@ -915,7 +854,7 @@ suite "InsertModeHandler - Key Handling":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 5)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
@@ -929,8 +868,8 @@ suite "InsertModeHandler - Key Handling":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
@@ -1037,8 +976,8 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "t", modifiers: {kmCtrl})
@@ -1052,8 +991,8 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 2)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {kmCtrl})
@@ -1095,8 +1034,8 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "i", modifiers: {kmCtrl})
@@ -1281,7 +1220,7 @@ suite "InsertModeHandler - Paren Depth Tracking":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = false
+    state.autoCloseParen = false
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let initialDepth = handler.signatureHelpManager.parenDepth
@@ -1294,7 +1233,7 @@ suite "InsertModeHandler - Paren Depth Tracking":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func(x")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = false
+    state.autoCloseParen = false
     state.cursor = BufferPosition(line: 0, column: 6)
 
     handler.signatureHelpManager.incrementParenDepth() # Simulate opening paren
@@ -2716,8 +2655,8 @@ suite "InsertModeHandler - snippet session":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = true
-    state.display.autoDeleteParen = true
+    state.autoCloseParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 6)
     handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
     discard handler.commitCompletion(buf, state)
@@ -2749,8 +2688,8 @@ suite "InsertModeHandler - snippet session":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.display.autoCloseParen = true
-    state.display.autoDeleteParen = true
+    state.autoCloseParen = true
+    state.autoDeleteParen = true
     state.cursor = BufferPosition(line: 0, column: 6)
     handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
     discard handler.commitCompletion(buf, state)
@@ -3076,7 +3015,7 @@ suite "InsertModeHandler - snippet session":
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 6)
-    state.display.bracketSplit = bsmIndent
+    state.bracketSplit = bsmIndent
     handler.setSnippetEntry("f(${1:x}), ${2:y}")
     discard handler.commitCompletion(buf, state)
     check buf.getLine(0) == "    f(x), y"
@@ -3095,7 +3034,7 @@ suite "InsertModeHandler - snippet session":
     check state.snippetSession.stops[1] ==
       SnippetStop(num: 2, pos: BufferPosition(line: 1, column: 7), len: 1)
     # The setting itself is restored.
-    check state.display.bracketSplit == bsmIndent
+    check state.bracketSplit == bsmIndent
 
   test "Ctrl+N keeps the session alive":
     # Manually triggering completion inside a placeholder must not end the
@@ -3175,13 +3114,7 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
     let motionController =
       newMotionController(buf, createTestState(), createTestViewport())
     let handler = newInsertModeHandler(
-      keyBindingRegistry,
-      motionController,
-      commandRegistry,
-      lsp,
-      true,
-      true, # lspCompletionEnabled
-      NotificationConfig(),
+      keyBindingRegistry, motionController, commandRegistry, lsp, NotificationConfig()
     )
 
     let state = createTestState()
@@ -3214,3 +3147,47 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
 
     check buf.getLine(1) == "template"
     check state.cursor.column == 8
+
+suite "InsertModeHandler - autocomplete / lsp completion gates":
+  test "triggerLspCompletionRequest is a no-op when autocomplete.enable is false":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hel")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    state.config.autocomplete.enable = false
+
+    handler.triggerLspCompletionRequest(buf, state)
+
+    # Nothing should activate; menu stays empty.
+    check not handler.completionManager.isActive()
+    check handler.completionManager.menu.entries.len == 0
+
+  test "triggerLspCompletionRequest surfaces buffer completions when autocomplete.enable is true":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world\nhel")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 3)
+    state.config.autocomplete.enable = true
+    state.config.lsp.completion.enable = false
+
+    handler.triggerLspCompletionRequest(buf, state)
+
+    # Buffer completion should have activated with the current prefix.
+    check handler.completionManager.menu.prefix == "hel"
+
+  test "handleInsertModeKey autocomplete branch is gated by autocomplete.enable":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello\n")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+    state.config.autocomplete.enable = false
+
+    let typeH = KeyCombo(isSpecial: false, char: "h", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, typeH)
+
+    # 'h' inserts but no completion menu should activate.
+    check buf.getLine(1) == "h"
+    check not handler.completionManager.isActive()

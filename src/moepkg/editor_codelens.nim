@@ -177,7 +177,7 @@ proc updateCodeLensCache*(e: Editor) =
   ## Update the CodeLens cache for the current buffer (with debouncing)
   ## Only updates if enough time has passed since last update and buffer changed
   ## Uses non-blocking async pattern to avoid freezing the UI
-  if not e.lsp.enabled or not e.state.display.showCodeLens:
+  if not e.lsp.enabled or not e.showCodeLens:
     return
 
   let activeBuffer = e.activeBuffer()
@@ -438,7 +438,7 @@ proc updateDocumentHighlightCache*(e: Editor) =
   ## Called during render to update highlights when cursor moves
   ## Only updates in Normal/Visual modes - cleared in Insert/Replace modes
   ## Uses non-blocking async pattern to avoid freezing the UI
-  if not e.lsp.enabled or not e.state.display.showDocumentHighlight:
+  if not e.lsp.enabled or not e.showDocumentHighlight:
     return
 
   # In Insert/Replace modes, clear highlights to avoid distraction
@@ -876,7 +876,7 @@ proc doUpdateInlayHintCache(e: Editor) =
 proc updateInlayHintCache*(e: Editor) =
   ## Update the inlay hint cache (with debouncing)
   ## Called from tickLsp. Uses non-blocking async pattern to avoid freezing the UI.
-  if not e.lsp.enabled or not e.state.display.showInlayHint:
+  if not e.lsp.enabled or not e.showInlayHint:
     return
 
   let activeBuffer = e.activeBuffer()
@@ -960,7 +960,7 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
   ## Assemble the virtual text providers for the currently enabled features.
   ## New features (inline diagnostics, git blame, ...) push their own provider
   ## here; the renderer stays feature-agnostic.
-  if e.state.display.showInlayHint:
+  if e.showInlayHint:
     # The cache is keyed by file but read per line number, so right after a
     # buffer switch (before the highlightChanged invalidation in updateForFrame
     # runs) it can still hold the previous file's hints. Gate on the owning
@@ -969,7 +969,7 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
     if cache.isValid and some(cache.filePath) == e.activeBuffer().filePath:
       result.add e.inlayHintVirtualTextProvider()
 
-  if e.state.display.showCodeLens:
+  if e.showCodeLens:
     # Same per-file gate as inlay hints: the cache is line-keyed, so right after
     # a buffer switch it can still hold the previous file's lenses. Gate on the
     # owning file once per frame instead of per line.

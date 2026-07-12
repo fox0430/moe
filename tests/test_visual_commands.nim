@@ -37,29 +37,9 @@ proc createTestState(): EditorState =
   )
   EditorState(
     activeWindow: window,
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
@@ -533,8 +513,8 @@ suite "Visual Commands - visualIndent":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.visualSelection = VisualSelection(
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),
@@ -554,8 +534,8 @@ suite "Visual Commands - visualIndent":
     discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
     discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.visualSelection = VisualSelection(
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 2, column: 3),
@@ -573,8 +553,8 @@ suite "Visual Commands - visualIndent":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.visualSelection = VisualSelection(
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),
@@ -591,8 +571,8 @@ suite "Visual Commands - visualDedent":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 2)
     state.visualSelection = VisualSelection(
       start: BufferPosition(line: 0, column: 0),
@@ -610,8 +590,8 @@ suite "Visual Commands - visualDedent":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
-    state.display.expandTab = true
-    state.display.tabStop = 2
+    state.expandTab = true
+    state.tabStop = 2
     state.visualSelection = VisualSelection(
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),

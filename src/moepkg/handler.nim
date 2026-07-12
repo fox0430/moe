@@ -435,7 +435,7 @@ proc screenToBufferPosition(
 
 proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
   ## Calculate line number offset (matching rendering calculation)
-  calculateLineNumOffset(buffer, e.state.display.showLineNumbers)
+  calculateLineNumOffset(buffer, e.showLineNumbers)
 
 proc middleClickPaste(e: Editor) =
   ## Paste clipboard content at current cursor position for middle-click.
@@ -609,7 +609,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     # Multiple windows mode
     if e.windowManager.windows.len > 1:
       # Check tab line click first
-      if e.state.display.showTabLine:
+      if e.showTabLine:
         for i, window in e.windowManager.windows:
           let vp = window.viewport
           if mouse.y == vp.y and mouse.x >= vp.x and mouse.x < vp.x + vp.width:
@@ -642,11 +642,11 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             sidebarWidth = e.calculateSidebarWidth(window.mode)
             scrollbarWidth = e.calculateScrollbarWidth(window.mode)
             # Each window has its own status line
-            reservedLines = if e.state.display.showStatusLine: 1 else: 0
+            reservedLines = if e.showStatusLine: 1 else: 0
             posOpt = screenToBufferPosition(
               vp, window.buffer, mouse.x, mouse.y, lineNumOffset, sidebarWidth,
-              reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
-              scrollbarWidth, window.wrapCountCache,
+              reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+              window.wrapCountCache,
             )
 
           if posOpt.isNone:
@@ -669,7 +669,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
     # Single window mode
     # Check tab line click first
-    if e.state.display.showTabLine and mouse.y == 0:
+    if e.showTabLine and mouse.y == 0:
       var buffersToShow: seq[TextBuffer] = @[]
       for id in e.activeWindow.bufferIds:
         let bufOpt = e.bufferById(id)
@@ -691,12 +691,12 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       # Status line + command line (shared row)
       reservedLines = steadyBottomAreaHeight()
       # Account for tab line offset
-      tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+      tabLineOffset = if e.showTabLine: TabLineHeight else: 0
       adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
         e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, sidebarWidth,
-        reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
-        scrollbarWidth, e.activeWindow.wrapCountCache,
+        reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+        e.activeWindow.wrapCountCache,
       )
 
     if posOpt.isNone:
@@ -713,7 +713,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
   if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
     let filerState = e.activeWindow.modeState.filer
     let
-      tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+      tabLineOffset = if e.showTabLine: TabLineHeight else: 0
       reservedLines = steadyBottomAreaHeight()
       adjustedMouseY = mouse.y - tabLineOffset
 
@@ -1085,7 +1085,7 @@ proc updateViewportReservedLines(e: Editor) =
   e.state.windowDisplay.viewportReservedLines = e.steadyReservedLines(isBottomWindow)
 
   # Add tab line height if shown
-  if e.state.display.showTabLine:
+  if e.showTabLine:
     e.state.windowDisplay.viewportReservedLines += TabLineHeight
 
 proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =

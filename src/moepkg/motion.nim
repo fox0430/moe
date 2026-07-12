@@ -1333,7 +1333,7 @@ proc executeMotion*(
   newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
 
   # Get line wrap state (needed for viewport update and horizontal scroll)
-  let lineWrap = controller.cursorManager.state.display.lineWrap
+  let lineWrap = controller.cursorManager.state.lineWrap
 
   # Update viewport to follow cursor with line wrap support (unless suppressed)
   if updateViewport:
@@ -1343,10 +1343,9 @@ proc executeMotion*(
         viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
 
     controller.viewportManager.updateViewport(
-      newPos, lineCount, controller.cursorManager.state.display.showStatusLine,
+      newPos, lineCount, controller.cursorManager.state.showStatusLine,
       controller.cursorManager.state.windowDisplay.viewportReservedLines, lineWrap,
-      controller.executor.buffer, lineNumOffset,
-      controller.cursorManager.state.display.tabStop,
+      controller.executor.buffer, lineNumOffset, controller.cursorManager.state.tabStop,
     )
 
   # Disable horizontal scrolling when line wrap is enabled

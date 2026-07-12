@@ -68,11 +68,8 @@ proc newInsertModeHandler*(
     motionController: MotionController,
     commandRegistry: CommandRegistry,
     lsp: LspIntegration = nil,
-    autocompleteEnabled: bool = true,
-    lspCompletionEnabled: bool = true,
     notificationConfig: NotificationConfig = NotificationConfig(),
 ): InsertModeHandler =
-  ## Create a new Insert mode handler
   InsertModeHandler(
     keyBindingRegistry: keyBindingRegistry,
     motionController: motionController,
@@ -80,8 +77,6 @@ proc newInsertModeHandler*(
     completionManager: newCompletionManager(),
     signatureHelpManager: newSignatureHelpManager(),
     lsp: lsp,
-    autocompleteEnabled: autocompleteEnabled,
-    lspCompletionEnabled: lspCompletionEnabled,
     notificationConfig: notificationConfig,
   )
 
@@ -123,7 +118,7 @@ proc handleCharacterInsertion*(
       handler.signatureHelpManager.decrementParenDepth()
 
   # Check if auto-close paren is enabled and text is a single character opening paren
-  if state.display.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
+  if state.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
     let openChar = text[0]
     let closeChar = getClosingChar(openChar)
 
@@ -149,7 +144,7 @@ proc handleBackspace*(
 
   if pos.column > 0:
     # Check if auto-delete paren is enabled
-    if state.display.autoDeleteParen:
+    if state.autoDeleteParen:
       let currentLine = buffer.getLine(pos.line)
 
       try:
@@ -165,7 +160,7 @@ proc handleBackspace*(
         discard
 
     # softTabStop-aware backspace: delete to previous boundary in leading whitespace
-    if state.display.expandTab:
+    if state.expandTab:
       let currentLine = buffer.getLine(pos.line)
       # Check if cursor is within leading whitespace
       var allSpaces = true
@@ -241,7 +236,7 @@ proc handleTab*(
   ## When expandTab is true, aligns to the next softTabStop boundary
   let pos = state.cursor
 
-  if state.display.expandTab:
+  if state.expandTab:
     # Insert spaces to align to next softTabStop boundary
     let sts = effectiveSoftTabStop(state)
     let tabWidth = max(1, sts) # Ensure at least 1 space
@@ -382,8 +377,7 @@ proc insertCharInSession(
     elif text[0] == ')':
       handler.signatureHelpManager.decrementParenDepth()
 
-  let autoClose =
-    state.display.autoCloseParen and text.len == 1 and isOpeningParen(text[0])
+  let autoClose = state.autoCloseParen and text.len == 1 and isOpeningParen(text[0])
   let toInsert =
     if autoClose:
       text & $getClosingChar(text[0])
@@ -431,7 +425,7 @@ proc backspaceInSession(
   # Mirrors handleBackspace's own pair check so the remap knows the deleted
   # range in advance.
   let pairDeleted =
-    state.display.autoDeleteParen and before.column > 0 and (
+    state.autoDeleteParen and before.column > 0 and (
       try:
         isAdjacentPair(buffer.getLine(before.line), before.column - 1)
       except IndexDefect, CatchableError:
@@ -703,14 +697,15 @@ proc triggerLspCompletionRequest*(
   ## Shows buffer completions immediately, then switches to LSP when response arrives
 
   # Skip if autocomplete is disabled
-  if not handler.autocompleteEnabled:
+  if not state.config.autocomplete.enable:
     return
 
   # Extract prefix for debounce/skip check
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
 
-  if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled:
+  if not handler.lsp.isNil and handler.lsp.isEnabled and
+      state.config.lsp.completion.enable:
     # If LSP completion is available, check whether we can skip the request and
     # filter client-side. The skip check must run BEFORE the fallback
     # triggerCompletion below, which recollects buffer words. When
@@ -741,7 +736,8 @@ proc triggerLspCompletionRequest*(
     buffer, state.cursor.line, state.cursor.column, buffer.language
   )
 
-  if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled and
+  if not handler.lsp.isNil and handler.lsp.isEnabled and
+      state.config.lsp.completion.enable and
       # If LSP completion is available and the server advertises completion support,
       # start an async request in background. The capability gate lives here (not in
       # the skip branch above) because that branch only filters already-received
@@ -1074,7 +1070,7 @@ proc handleInsertModeKey*(
       discard handler.insertCharInSession(buffer, state, keyCombo.char)
       # Mirror the normal character path's auto-completion trigger so the
       # popup keeps working inside placeholders.
-      if handler.autocompleteEnabled:
+      if state.config.autocomplete.enable:
         let line = buffer.getLine(state.cursor.line)
         let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
         if pathPrefix.len > 0:
@@ -1127,10 +1123,10 @@ proc handleInsertModeKey*(
       # Bracket-pair splitting inserts a second newline past the cursor plus
       # reindentation on both lines, an edit shape the [before, cursor) remap
       # below cannot represent: suppress it for this newline.
-      let savedBracketSplit = state.display.bracketSplit
-      state.display.bracketSplit = bsmDisable
+      let savedBracketSplit = state.bracketSplit
+      state.bracketSplit = bsmDisable
       let res = handler.handleNewline(buffer, state)
-      state.display.bracketSplit = savedBracketSplit
+      state.bracketSplit = savedBracketSplit
       remapAfterEdit(session, before, before, state.cursor)
       # A newline struck inside the current stop's typed content splits it
       # across lines, which the single-line `len` cannot represent: collapse it
@@ -1275,7 +1271,7 @@ proc handleInsertModeKey*(
     discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
     # All auto-triggering (path and word completion alike) is gated on
     # autocomplete.enable so the flag governs both consistently.
-    if handler.autocompleteEnabled:
+    if state.config.autocomplete.enable:
       # Check for path completion first
       let line = buffer.getLine(state.cursor.line)
       let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)

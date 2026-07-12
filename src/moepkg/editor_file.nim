@@ -51,7 +51,7 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Parameters:
   ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
   ##              If false, compare disk file with working tree (saved only)
-  if e.state.display.showGitDiff:
+  if e.showGitDiff:
     let activeBuffer = e.activeBuffer()
     discard updateBufferWithGitDiff(activeBuffer, useBuffer)
 
@@ -76,7 +76,6 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Apply EditorConfig settings if enabled
   applyEditorConfigToBuffer(e.activeBuffer, e.config)
-  applyBufferEditorConfig(e.state.display, e.activeBuffer, e.config)
 
   # Restore cursor position if persisted, otherwise reset to file start
   # Don't restore for temporary git files
@@ -107,7 +106,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Update git diff information if sidebar and git diff are enabled
   # Use useBuffer=false to compare disk file with working tree (not buffer with HEAD)
-  if e.state.display.showGitDiff:
+  if e.showGitDiff:
     let diffResult = updateBufferWithGitDiff(e.activeBuffer, useBuffer = false)
     if diffResult.isErr:
       # Log error but don't fail the file load
@@ -302,7 +301,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
     logInfo("editor", "Saved file: " & savePath)
 
     # Refresh git diff for the saved buffer (mirrors single-file save)
-    if e.state.display.showGitDiff:
+    if e.showGitDiff:
       discard updateBufferWithGitDiff(buffer, useBuffer = false)
 
     if e.lsp.enabled:
@@ -365,7 +364,7 @@ proc autoSave*(e: Editor) =
         savedPaths.add(savePath)
 
         # Refresh git diff after saving
-        if e.state.display.showGitDiff:
+        if e.showGitDiff:
           discard updateBufferWithGitDiff(buffer, useBuffer = false)
 
         # Notify LSP that a document was saved

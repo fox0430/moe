@@ -67,9 +67,8 @@ proc createTestManager(): HandlerManager =
     motionController: motionController,
   )
 
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
-  )
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   let visualHandler = VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,

@@ -59,16 +59,13 @@ type
     smoothScrollConfig*: SmoothScrollConfig
     notificationConfig*: NotificationConfig
 
-  InsertModeHandler* = ref object ## Handler for Insert mode specific commands
+  InsertModeHandler* = ref object
     keyBindingRegistry*: KeyBindingRegistry
     motionController*: MotionController
     commandRegistry*: CommandRegistry
     completionManager*: CompletionManager
     signatureHelpManager*: SignatureHelpManager
-    lsp*: LspIntegration ## LSP integration for completions
-    autocompleteEnabled*: bool ## Whether autocomplete is enabled
-    lspCompletionEnabled*: bool
-      ## Whether LSP completion (lsp.completion.enable) is enabled
+    lsp*: LspIntegration
     notificationConfig*: NotificationConfig
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands

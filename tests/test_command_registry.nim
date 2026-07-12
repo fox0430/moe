@@ -553,7 +553,7 @@ suite "CommandRegistry - registerBuiltinCommands":
 
 suite "CommandRegistry - Command execution with context":
   proc createTestContext(buffer: TextBuffer): CommandContext =
-    let state = EditorState(activeWindow: EditorWindow())
+    let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -736,7 +736,7 @@ suite "CommandRegistry - Edge cases":
 
 suite "CommandRegistry - readOnly buffer guard":
   proc createReadOnlyTestContext(buffer: TextBuffer): CommandContext =
-    let state = EditorState(activeWindow: EditorWindow())
+    let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
     state.previousMode = EditorMode.LogViewer
@@ -859,7 +859,7 @@ suite "findAllCharPositions":
 
 suite "f/F/t/T highlight - executeCommand sets findCharMatches":
   proc createFindTestContext(buffer: TextBuffer): CommandContext =
-    let state = EditorState(activeWindow: EditorWindow())
+    let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -1011,7 +1011,7 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
 
 suite "; / , repeat last find":
   proc createFindTestContext(buffer: TextBuffer): CommandContext =
-    let state = EditorState(activeWindow: EditorWindow())
+    let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
     state.registers = initRegisters()
@@ -1244,7 +1244,7 @@ suite "CommandRegistry - Git conflict navigation (]x / [x)":
     #        7:<<<< 8:a 9:=== 10:b 11:>>>> 12:after
 
   proc createConflictTestContext(buffer: TextBuffer): CommandContext =
-    let state = EditorState(activeWindow: EditorWindow())
+    let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 

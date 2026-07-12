@@ -21,13 +21,9 @@
 
 import std/[unittest, options, tables]
 
-import ../src/moepkg/buffer
-import ../src/moepkg/types
-import ../src/moepkg/modes
-import ../src/moepkg/registers
+import ../src/moepkg/[buffer, types, config, modes, registers]
 import ../src/moepkg/syntax/tokenizer
-import ../src/moepkg/command_handlers/insert_commands
-import ../src/moepkg/command_handlers/smart_indent
+import ../src/moepkg/command_handlers/[insert_commands, smart_indent]
 
 proc createSmartIndentState(): EditorState =
   ## Minimal EditorState with autoIndent + smartIndent + 2-space expandTab.
@@ -38,19 +34,15 @@ proc createSmartIndentState(): EditorState =
     preferredColumn: -1,
     screenCursor: CursorPosition(x: 0, y: 0),
   )
+  let cfg = newEditorConfig()
+  cfg.standard.autoIndent = true
+  cfg.standard.smartIndent = true
+  cfg.standard.tabStop = 2
+  cfg.standard.expandTab = true
   EditorState(
     activeWindow: window,
-    display: DisplaySettings(
-      lineWrap: true,
-      tabStop: 2,
-      shiftWidth: 0,
-      softTabStop: 0,
-      expandTab: true,
-      autoIndent: true,
-      smartIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display: DisplaySettings(),
+    config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
@@ -395,7 +387,7 @@ suite "Insert Commands - insertNewline smart indent (Nim)":
   test "smartIndent=false leaves plain autoIndent behavior":
     let buf = newNimBuffer("    var")
     let state = createSmartIndentState()
-    state.display.smartIndent = false
+    state.smartIndent = false
     state.cursor = BufferPosition(line: 0, column: 7)
 
     insertNewline(buf, state)
@@ -417,7 +409,7 @@ suite "Insert Commands - insertNewline smart indent (Nim)":
   test "autoIndent=false skips extra indent even when smartIndent=true":
     let buf = newNimBuffer("var")
     let state = createSmartIndentState()
-    state.display.autoIndent = false
+    state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 3)
 
     insertNewline(buf, state)
@@ -428,7 +420,7 @@ suite "Insert Commands - insertNewline smart indent (Nim)":
   test "Tab indent unit honored when expandTab=false":
     let buf = newNimBuffer("var")
     let state = createSmartIndentState()
-    state.display.expandTab = false
+    state.expandTab = false
     state.cursor = BufferPosition(line: 0, column: 3)
 
     insertNewline(buf, state)

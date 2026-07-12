@@ -68,18 +68,13 @@ proc newHandlerManager*(
       SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     notificationConfig: NotificationConfig = NotificationConfig(),
     lsp: LspIntegration = nil,
-    autocompleteEnabled: bool = true,
-    lspCompletionEnabled: bool = true,
 ): HandlerManager =
-  ## Create a new handler manager with all mode handlers
-
   let normalHandler = newNormalModeHandler(
     motionController, keyBindingRegistry, commandRegistry, clipboardConfig,
     smoothScrollConfig, notificationConfig,
   )
   let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, lsp, autocompleteEnabled,
-    lspCompletionEnabled, notificationConfig,
+    keyBindingRegistry, motionController, commandRegistry, lsp, notificationConfig
   )
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)

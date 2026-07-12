@@ -26,7 +26,7 @@ import std/[options, tables, strutils, os]
 
 import pkg/editorconfig
 
-import buffer, config, types, logger
+import buffer, config, logger
 
 const MaxTabWidth = 16
   ## Matches the global config cfgMax for Standard.tabStop/shiftWidth.
@@ -146,27 +146,6 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
     "editorconfig",
     "Applied EditorConfig to " & buffer.filePath.get("(unnamed)") & ": " & $props,
   )
-
-proc applyBufferEditorConfig*(
-    display: var DisplaySettings, buffer: TextBuffer, config: EditorConfig
-) =
-  ## Apply per-buffer EditorConfig overrides to DisplaySettings.
-  ## Falls back to global config values for fields not overridden.
-
-  # Always reset to global config values first
-  display.tabStop = config.standard.tabStop
-  display.shiftWidth = config.standard.shiftWidth
-  display.expandTab = config.standard.expandTab
-
-  # Apply per-buffer overrides if present
-  if buffer.editorConfig.isSome:
-    let ec = buffer.editorConfig.get
-    if ec.tabStop.isSome:
-      display.tabStop = ec.tabStop.get
-    if ec.shiftWidth.isSome:
-      display.shiftWidth = ec.shiftWidth.get
-    if ec.expandTab.isSome:
-      display.expandTab = ec.expandTab.get
 
 proc applyEditorConfigToBuffer*(buffer: TextBuffer, config: EditorConfig) =
   ## Convenience proc that gets EditorConfig properties and applies them

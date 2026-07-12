@@ -192,3 +192,48 @@ proc `cursor=`*(e: Editor, pos: BufferPosition) {.inline.} =
 proc setMode*(e: Editor, mode: EditorMode) {.inline.} =
   ## Set the current mode in the active window
   e.activeWindow.mode = mode
+
+# Editor-based config pull-type accessors. State-based ones live in types.nim.
+
+template flag2(name: untyped, T: typedesc, s1, f: untyped) =
+  proc name*(e: Editor): T =
+    e.state.name
+
+  proc `name=`*(e: Editor, v: T) =
+    e.config.s1.f = v
+
+template flag3(name: untyped, T: typedesc, s1, s2, f: untyped) =
+  proc name*(e: Editor): T =
+    e.state.name
+
+  proc `name=`*(e: Editor, v: T) =
+    e.config.s1.s2.f = v
+
+flag2(showTabLine, bool, tabLine, enable)
+flag2(showStatusLine, bool, standard, statusLine)
+flag2(multiStatusLine, bool, statusLine, multipleStatusLine)
+flag2(showLineNumbers, bool, standard, number)
+flag2(relativeLineNumbers, bool, standard, relativeNumber)
+flag2(showCursorLine, bool, highlight, currentLine)
+flag2(showCursorColumn, bool, highlight, currentColumn)
+flag2(showSyntax, bool, standard, syntax)
+flag2(showIndentationLines, bool, standard, indentationLines)
+flag2(showSidebar, bool, standard, sidebar)
+flag2(scrollbar, bool, standard, scrollbar)
+flag2(scrollbarWidth, int, standard, scrollbarWidth)
+flag2(showModifiedLines, bool, standard, showModifiedLines)
+flag2(showGitDiff, bool, git, showChangedLine)
+flag2(showSyntaxChecker, bool, syntaxChecker, enable)
+flag3(showCodeLens, bool, lsp, codeLens, enable)
+flag3(showDocumentHighlight, bool, lsp, documentHighlight, enable)
+flag3(showInlayHint, bool, lsp, inlayHint, enable)
+flag2(lineWrap, bool, standard, lineWrap)
+flag2(tabStop, int, standard, tabStop)
+flag2(shiftWidth, int, standard, shiftWidth)
+flag2(softTabStop, int, standard, softTabStop)
+flag2(expandTab, bool, standard, expandTab)
+flag2(autoIndent, bool, standard, autoIndent)
+flag2(smartIndent, bool, standard, smartIndent)
+flag2(autoCloseParen, bool, standard, autoCloseParen)
+flag2(autoDeleteParen, bool, standard, autoDeleteParen)
+flag2(bracketSplit, BracketSplitMode, standard, bracketSplit)

@@ -285,8 +285,8 @@ suite "renderWindowLineWrapped - Basic behavior":
   test "skipSegments renders from a later wrap segment (sub-line scroll)":
     let e = createTestEditor()
     var buffer = createTestBuffer()
-    e.state.display.showSidebar = false
-    e.state.display.scrollbar = false
+    e.state.showSidebar = false
+    e.state.scrollbar = false
 
     # 30 chars => 3 wrap segments at maxWidth 10: "0123456789" / "ABCDEFGHIJ" / ...
     let line = "0123456789ABCDEFGHIJabcdefghij"
@@ -321,8 +321,8 @@ suite "renderWindowLineWrapped - Basic behavior":
 
   test "Partial top line draws no line number on its first visible row":
     let e = createTestEditor()
-    e.state.display.showSidebar = false
-    e.state.display.scrollbar = false
+    e.state.showSidebar = false
+    e.state.scrollbar = false
 
     let line = "0123456789ABCDEFGHIJabcdefghij"
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), line)
@@ -368,10 +368,10 @@ suite "renderWindowLineWrapped - Basic behavior":
     # must still carry the searchHighlight bg.
     let e = createTestEditor()
     var buffer = createTestBuffer()
-    e.state.display.showSidebar = false
-    e.state.display.scrollbar = false
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showSidebar = false
+    e.state.scrollbar = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
     e.state.input.search.lastText = "AA"
@@ -705,7 +705,7 @@ suite "renderWindow - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
 
     let longLine = "x".repeat(100)
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
@@ -724,7 +724,7 @@ suite "renderWindow - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
 
     let longLine = "x".repeat(100)
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
@@ -743,7 +743,7 @@ suite "renderWindow - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showSidebar = true
+    e.state.showSidebar = true
 
     discard
       e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
@@ -762,7 +762,7 @@ suite "renderWindow - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showSidebar = false
+    e.state.showSidebar = false
 
     discard
       e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
@@ -855,7 +855,7 @@ suite "renderWindowSeparator - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.multiStatusLine = false
+    e.state.multiStatusLine = false
 
     # Create two stacked windows
     let window1 = EditorWindow(
@@ -877,7 +877,7 @@ suite "renderWindowSeparator - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.multiStatusLine = true
+    e.state.multiStatusLine = true
 
     # Create two stacked windows
     let window1 = EditorWindow(
@@ -998,8 +998,8 @@ suite "renderWindow - Visual selection on empty line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = false
-    e.state.display.showSidebar = false
+    e.state.lineWrap = false
+    e.state.showSidebar = false
     e.state.mode = EditorMode.Visual
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
@@ -1035,8 +1035,8 @@ suite "renderWindow - Visual selection on empty line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = true
-    e.state.display.showSidebar = false
+    e.state.lineWrap = true
+    e.state.showSidebar = false
     e.state.mode = EditorMode.Visual
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
@@ -1070,8 +1070,8 @@ suite "renderWindow - Visual selection on empty line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = false
-    e.state.display.showSidebar = false
+    e.state.lineWrap = false
+    e.state.showSidebar = false
     e.state.mode = EditorMode.Normal
     e.state.visualSelection.active = false
     e.state.cursor = BufferPosition(line: 0, column: 0)
@@ -1122,7 +1122,7 @@ suite "renderWindow - Scrolling":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
 
     let longLine = "x".repeat(200)
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
@@ -1212,8 +1212,8 @@ suite "renderWindow - Edge cases":
   test "Tiny terminal: visibleHeight clamped to 0 to prevent negative value":
     let e = createTestEditor()
     var buffer = createTestBuffer()
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
 
@@ -1233,8 +1233,8 @@ suite "Cursor line highlight - Window boundary clipping":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showCursorLine = true
-    e.state.display.lineWrap = false
+    e.state.showCursorLine = true
+    e.state.lineWrap = false
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
@@ -1266,8 +1266,8 @@ suite "Cursor line highlight - Window boundary clipping":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showCursorLine = true
-    e.state.display.lineWrap = true
+    e.state.showCursorLine = true
+    e.state.lineWrap = true
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
@@ -1295,8 +1295,8 @@ suite "Cursor line highlight - Window boundary clipping":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showCursorLine = true
-    e.state.display.lineWrap = false
+    e.state.showCursorLine = true
+    e.state.lineWrap = false
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
@@ -1327,9 +1327,9 @@ suite "Cursor line highlight - Window boundary clipping":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showCursorLine = true
-    e.state.display.showSidebar = false
-    e.state.display.lineWrap = false
+    e.state.showCursorLine = true
+    e.state.showSidebar = false
+    e.state.lineWrap = false
 
     # Empty buffer (single empty line)
     let window = e.windowManager.windows[0]
@@ -1356,7 +1356,7 @@ suite "Cursor line highlight - Window boundary clipping":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
 
     # Call fillLineBackground directly with windowRightEdge=30
     e.fillLineBackground(buffer, 0, 0, 0, 0, 30)
@@ -1374,7 +1374,7 @@ suite "Cursor line highlight - Window boundary clipping":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
 
     # Pre-fill with cursor line highlight to simulate stale content
     let hlStyle = cursorLineHighlightStyle()
@@ -1393,8 +1393,8 @@ suite "Cursor line highlight - Window boundary clipping":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.state.display.showCursorLine = true
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = true
+    e.state.showSyntax = false
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
 
@@ -1425,8 +1425,8 @@ suite "Cursor line highlight - Window boundary clipping":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.state.display.showCursorLine = true
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = true
+    e.state.showSyntax = false
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
 
@@ -1462,8 +1462,8 @@ suite "Cursor line highlight - Window boundary clipping":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showCursorLine = true
-    e.state.display.lineWrap = false
+    e.state.showCursorLine = true
+    e.state.lineWrap = false
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
@@ -1504,8 +1504,8 @@ suite "Cursor line highlight - Window boundary clipping":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showCursorLine = true
-    e.state.display.lineWrap = false
+    e.state.showCursorLine = true
+    e.state.lineWrap = false
 
     # Insert two lines
     discard
@@ -1594,23 +1594,23 @@ suite "getVisualSelection - Detailed":
 suite "shouldShowIndentationGuide - Detailed":
   test "Disabled when showIndentationLines is false":
     let e = createTestEditor()
-    e.state.display.showIndentationLines = false
+    e.state.showIndentationLines = false
     let info = IndentInfo(leadingWhitespaceEnd: 7, hasContent: true)
 
     check e.shouldShowIndentationGuide(info, 4, 2) == false
 
   test "No guide at displayX 0":
     let e = createTestEditor()
-    e.state.display.showIndentationLines = true
-    e.state.display.tabStop = 2
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
     let info = IndentInfo(leadingWhitespaceEnd: 7, hasContent: true)
 
     check e.shouldShowIndentationGuide(info, 0, 0) == false
 
   test "Guide at tabStop multiples":
     let e = createTestEditor()
-    e.state.display.showIndentationLines = true
-    e.state.display.tabStop = 4
+    e.state.showIndentationLines = true
+    e.state.tabStop = 4
     let info = IndentInfo(leadingWhitespaceEnd: 11, hasContent: true)
 
     # displayX=4 is a multiple of 4
@@ -1620,8 +1620,8 @@ suite "shouldShowIndentationGuide - Detailed":
 
   test "No guide at non-tabStop positions":
     let e = createTestEditor()
-    e.state.display.showIndentationLines = true
-    e.state.display.tabStop = 4
+    e.state.showIndentationLines = true
+    e.state.tabStop = 4
     let info = IndentInfo(leadingWhitespaceEnd: 11, hasContent: true)
 
     check e.shouldShowIndentationGuide(info, 1, 0) == false
@@ -1631,8 +1631,8 @@ suite "shouldShowIndentationGuide - Detailed":
 
   test "No guide when hasContent is false":
     let e = createTestEditor()
-    e.state.display.showIndentationLines = true
-    e.state.display.tabStop = 2
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
     let info = IndentInfo(leadingWhitespaceEnd: -1, hasContent: false)
 
     check e.shouldShowIndentationGuide(info, 2, 1) == false
@@ -1640,8 +1640,8 @@ suite "shouldShowIndentationGuide - Detailed":
 
   test "No guide past leadingWhitespaceEnd":
     let e = createTestEditor()
-    e.state.display.showIndentationLines = true
-    e.state.display.tabStop = 2
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
     let info = IndentInfo(leadingWhitespaceEnd: 3, hasContent: true)
 
     # charIdx=4 is past whitespace end (3)
@@ -1651,8 +1651,8 @@ suite "shouldShowIndentationGuide - Detailed":
 
   test "No guide for negative charIdx":
     let e = createTestEditor()
-    e.state.display.showIndentationLines = true
-    e.state.display.tabStop = 2
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
     let info = IndentInfo(leadingWhitespaceEnd: 5, hasContent: true)
 
     check e.shouldShowIndentationGuide(info, 2, -1) == false
@@ -1675,8 +1675,8 @@ suite "getSelectionStyle - Basic":
 
   test "Returns normal style for non-cursor position":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
@@ -1692,7 +1692,7 @@ suite "getSelectionStyle - Basic":
   test "Returns visual selection bg with normal fg when in selection (no syntax)":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
-    e.state.display.showSyntax = false
+    e.state.showSyntax = false
     e.state.visualSelection.active = true
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
@@ -1716,7 +1716,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
   test "Selection uses visual bg with syntax highlight fg":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
-    e.state.display.showSyntax = true
+    e.state.showSyntax = true
     e.state.visualSelection.active = true
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
@@ -1745,7 +1745,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
   test "VisualLine selection preserves syntax highlight fg":
     let e = createTestEditor()
     e.state.mode = EditorMode.VisualLine
-    e.state.display.showSyntax = true
+    e.state.showSyntax = true
     e.state.visualSelection.active = true
     e.state.visualSelection.kind = VisualSelectionKind.vskLine
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
@@ -1771,7 +1771,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
   test "Selection without syntax uses normal fg":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
-    e.state.display.showSyntax = false
+    e.state.showSyntax = false
     e.state.visualSelection.active = true
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
@@ -1826,8 +1826,8 @@ suite "getSelectionStyle - Matching paren":
 suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
   test "Returns findCharMatch style for matched position":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
@@ -1844,8 +1844,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
 
   test "Does not return findCharMatch style for non-matched position":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
@@ -1862,8 +1862,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
 
   test "Does not return findCharMatch style for different line":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard
       e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada\nabacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
@@ -1883,8 +1883,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     # Find-char matches are anchored to the active window's cursor line; an
     # inactive window showing the same line/column must not be painted.
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
@@ -1902,8 +1902,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
 
   test "No findCharMatch style when matches list is empty":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[]
     e.state.ui.findCharMatchLine = 0
@@ -1921,7 +1921,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
   test "Visual selection takes priority over findCharMatch":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
-    e.state.display.showSyntax = false
+    e.state.showSyntax = false
     e.state.visualSelection.active = true
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
@@ -1944,8 +1944,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
 
   test "Matching paren takes priority over findCharMatch":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "(abacada)")
     e.state.matchingParenPos = some(BufferPosition(line: 0, column: 8))
     e.state.ui.findCharMatches = @[1, 3, 5, 7]
@@ -1964,8 +1964,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
   test "No findCharMatch style when findCharHighlight config is false":
     let e = createTestEditor()
     e.config.highlight.findCharHighlight = false
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
@@ -1987,8 +1987,8 @@ suite "getSelectionStyle - Search highlight":
     e.state.input.search.hlsearchTempDisabled = false
     e.state.input.search.lastText = "hello"
     e.state.mode = EditorMode.Normal
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
     discard
       e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
 
@@ -2007,8 +2007,8 @@ suite "getSelectionStyle - Search highlight":
     e.state.input.search.hlsearch = false
     e.state.input.search.lastText = "hello"
     e.state.mode = EditorMode.Normal
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
@@ -2042,9 +2042,9 @@ suite "getSelectionStyle - Search highlight":
 suite "getSelectionStyle - Cursor line":
   test "Returns cursor line style when on cursor line":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
-    e.state.display.showSyntax = false
-    e.state.display.showDocumentHighlight = false
+    e.state.showCursorLine = true
+    e.state.showSyntax = false
+    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
@@ -2059,8 +2059,8 @@ suite "getSelectionStyle - Cursor line":
 
   test "No cursor line style when showCursorLine is false":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
@@ -2075,9 +2075,9 @@ suite "getSelectionStyle - Cursor line":
 
   test "searchResult highlight takes priority over cursor line bg":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
-    e.state.display.showSyntax = true
-    e.state.display.showDocumentHighlight = false
+    e.state.showCursorLine = true
+    e.state.showSyntax = true
+    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Set up highlight with searchResult color on columns 0-4
@@ -2109,9 +2109,9 @@ suite "getSelectionStyle - Cursor line":
 
   test "non-searchResult highlight still gets cursor line bg":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
-    e.state.display.showSyntax = true
-    e.state.display.showDocumentHighlight = false
+    e.state.showCursorLine = true
+    e.state.showSyntax = true
+    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Set up highlight with a normal (non-searchResult) color
@@ -2143,10 +2143,10 @@ suite "getSelectionStyle - Cursor line":
 suite "getSelectionStyle - Cursor column":
   test "Returns cursor column bg when on cursor column":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
-    e.state.display.showDocumentHighlight = false
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
+    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
@@ -2163,9 +2163,9 @@ suite "getSelectionStyle - Cursor column":
 
   test "No cursor column style when showCursorColumn is false":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = false
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorColumn = false
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
@@ -2182,9 +2182,9 @@ suite "getSelectionStyle - Cursor column":
 
   test "No cursor column style when displayCol does not match":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
@@ -2201,10 +2201,10 @@ suite "getSelectionStyle - Cursor column":
 
   test "Cursor line takes priority over cursor column at intersection":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
-    e.state.display.showCursorLine = true
-    e.state.display.showSyntax = false
-    e.state.display.showDocumentHighlight = false
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = true
+    e.state.showSyntax = false
+    e.state.showDocumentHighlight = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # At intersection (same line AND same column): cursorLine wins
@@ -2222,9 +2222,9 @@ suite "getSelectionStyle - Cursor column":
 
   test "No cursor column when displayCol params not provided":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
-    e.state.display.showCursorLine = false
-    e.state.display.showSyntax = false
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSyntax = false
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Without displayCol/cursorDisplayCol params (default -1), no column highlight
@@ -2245,9 +2245,9 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
@@ -2273,9 +2273,9 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
@@ -2301,9 +2301,9 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = true
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = true
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
@@ -2331,9 +2331,9 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("hello   ")
     var buf = newBuffer(80, 1)
@@ -2359,9 +2359,9 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("entry   ")
     var buf = newBuffer(80, 1)
@@ -2384,9 +2384,9 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("diff   ")
     var buf = newBuffer(80, 1)
@@ -2409,9 +2409,9 @@ suite "renderLineSegmentWithSelection - zero-width rune folding":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     result = newEditor(config, vr)
-    result.state.display.showSyntax = false
-    result.state.display.showCursorLine = false
-    result.state.display.showIndentationLines = false
+    result.state.showSyntax = false
+    result.state.showCursorLine = false
+    result.state.showIndentationLines = false
 
   test "Combining mark merges into the preceding base cell":
     var e = plainEditor()
@@ -2460,9 +2460,9 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.fullWidthSpace = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let text = "ab" & $FULLWIDTH_SPACE & "cd"
     let tb = newTextBuffer(text)
@@ -2487,9 +2487,9 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.fullWidthSpace = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let text = "ab" & $FULLWIDTH_SPACE & "cd"
     let tb = newTextBuffer(text)
@@ -2513,9 +2513,9 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.fullWidthSpace = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let text = "ab" & $FULLWIDTH_SPACE & "cd"
     let tb = newTextBuffer(text)
@@ -2540,10 +2540,10 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
-    e.state.display.tabStop = 4
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
+    e.state.tabStop = 4
 
     let text = "ab\t"
     let tb = newTextBuffer(text)
@@ -2568,10 +2568,10 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
-    e.state.display.tabStop = 4
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
+    e.state.tabStop = 4
 
     let text = "ab\t"
     let tb = newTextBuffer(text)
@@ -2596,10 +2596,10 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
-    e.state.display.tabStop = 4
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
+    e.state.tabStop = 4
 
     let text = "ab\t"
     let tb = newTextBuffer(text)
@@ -2619,7 +2619,7 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
 
 # Helpers for priority-chain tests.
 proc setupDocumentHighlight(e: Editor, line, startCol, endCol, kind: int) =
-  e.state.display.showDocumentHighlight = true
+  e.state.showDocumentHighlight = true
   e.state.lspCache.documentHighlightCache.isValid = true
   e.state.lspCache.documentHighlightCache.itemsByLine = {
     line: @[
@@ -2742,40 +2742,40 @@ suite "render layer predicates":
 
   test "cursorLineApplies: both conditions true":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
     let lineCtx = LineStyleContext(isCursorLine: true)
     check e.cursorLineApplies(lineCtx)
 
   test "cursorLineApplies: showCursorLine off":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
+    e.state.showCursorLine = false
     let lineCtx = LineStyleContext(isCursorLine: true)
     check not e.cursorLineApplies(lineCtx)
 
   test "cursorLineApplies: not on cursor line":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
     let lineCtx = LineStyleContext(isCursorLine: false)
     check not e.cursorLineApplies(lineCtx)
 
   test "cursorColumnApplies: all conditions true":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
+    e.state.showCursorColumn = true
     check e.cursorColumnApplies(displayCol = 5, cursorDisplayCol = 5)
 
   test "cursorColumnApplies: config off":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = false
+    e.state.showCursorColumn = false
     check not e.cursorColumnApplies(displayCol = 5, cursorDisplayCol = 5)
 
   test "cursorColumnApplies: displayCol is -1 sentinel":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
+    e.state.showCursorColumn = true
     check not e.cursorColumnApplies(displayCol = -1, cursorDisplayCol = -1)
 
   test "cursorColumnApplies: columns differ":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
+    e.state.showCursorColumn = true
     check not e.cursorColumnApplies(displayCol = 3, cursorDisplayCol = 5)
 
 suite "charOverridePatch":
@@ -2911,7 +2911,7 @@ suite "overlayPatchSyntax priority chain":
 
   test "documentHighlight wins over cursorLine":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
     e.setupDocumentHighlight(line = 0, startCol = 0, endCol = 5, kind = 3) # Write
     let pos = BufferPosition(line: 0, column: 2)
     let patch = e.overlayPatchSyntaxAt(
@@ -2927,7 +2927,7 @@ suite "overlayPatchSyntax priority chain":
 
   test "gitConflict wins over cursorLine":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
     let pos = BufferPosition(line: 0, column: 0)
     let patch = e.overlayPatchSyntaxAt(
       pos = pos,
@@ -2942,7 +2942,7 @@ suite "overlayPatchSyntax priority chain":
 
   test "gitConflict wins over cursorColumn":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
+    e.state.showCursorColumn = true
     let pos = BufferPosition(line: 0, column: 5)
     let patch = e.overlayPatchSyntaxAt(
       pos = pos,
@@ -2957,8 +2957,8 @@ suite "overlayPatchSyntax priority chain":
 
   test "cursorLine wins over cursorColumn":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
-    e.state.display.showCursorColumn = true
+    e.state.showCursorLine = true
+    e.state.showCursorColumn = true
     let pos = BufferPosition(line: 0, column: 5)
     let patch = e.overlayPatchSyntaxAt(
       pos = pos,
@@ -2973,8 +2973,8 @@ suite "overlayPatchSyntax priority chain":
 
   test "searchResult colorPair suppresses cursorLine/cursorColumn":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
-    e.state.display.showCursorColumn = true
+    e.state.showCursorLine = true
+    e.state.showCursorColumn = true
     let pos = BufferPosition(line: 0, column: 5)
     let patch = e.overlayPatchSyntaxAt(
       pos = pos,
@@ -2989,7 +2989,7 @@ suite "overlayPatchSyntax priority chain":
 
   test "searchResult colorPair does not suppress gitConflict":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
     let pos = BufferPosition(line: 0, column: 0)
     let patch = e.overlayPatchSyntaxAt(
       pos = pos,
@@ -3019,8 +3019,8 @@ suite "overlayPatchSyntax priority chain":
 
   test "no overrides returns noPatch":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showCursorColumn = false
+    e.state.showCursorLine = false
+    e.state.showCursorColumn = false
     let pos = BufferPosition(line: 0, column: 0)
     let patch = e.overlayPatchSyntaxAt(
       pos = pos,
@@ -3035,7 +3035,7 @@ suite "overlayPatchSyntax priority chain":
 
   test "cursorLine not applied when showCursorLine is off":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
+    e.state.showCursorLine = false
     let pos = BufferPosition(line: 0, column: 0)
     let patch = e.overlayPatchSyntaxAt(
       pos = pos,
@@ -3050,7 +3050,7 @@ suite "overlayPatchSyntax priority chain":
 
   test "cursorColumn requires non-negative displayCol":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
+    e.state.showCursorColumn = true
     let pos = BufferPosition(line: 0, column: 0)
     # displayCol = -1 means the column position is unknown / not applicable
     let patch = e.overlayPatchSyntaxAt(
@@ -3080,7 +3080,7 @@ suite "lineFillPatch priority chain":
 
   test "visualSelection wins over cursorLine":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
     let patch = e.lineFillPatchAt(
       lineIndex = 0,
       cursorLine = 0,
@@ -3094,7 +3094,7 @@ suite "lineFillPatch priority chain":
 
   test "gitConflict wins over cursorLine":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
+    e.state.showCursorLine = true
     let patch = e.lineFillPatchAt(
       lineIndex = 0,
       cursorLine = 0,
@@ -3108,7 +3108,7 @@ suite "lineFillPatch priority chain":
 
   test "gitConflict wins over cursorColumn":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
+    e.state.showCursorColumn = true
     let patch = e.lineFillPatchAt(
       lineIndex = 0,
       cursorLine = -1,
@@ -3122,8 +3122,8 @@ suite "lineFillPatch priority chain":
 
   test "cursorLine wins over cursorColumn":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
-    e.state.display.showCursorColumn = true
+    e.state.showCursorLine = true
+    e.state.showCursorColumn = true
     let patch = e.lineFillPatchAt(
       lineIndex = 0,
       cursorLine = 0,
@@ -3137,8 +3137,8 @@ suite "lineFillPatch priority chain":
 
   test "cursorColumn applied when only cursorColumn matches":
     let e = createTestEditor()
-    e.state.display.showCursorLine = true
-    e.state.display.showCursorColumn = true
+    e.state.showCursorLine = true
+    e.state.showCursorColumn = true
     let patch = e.lineFillPatchAt(
       lineIndex = 0,
       cursorLine = 1, # different line
@@ -3152,8 +3152,8 @@ suite "lineFillPatch priority chain":
 
   test "no overrides returns noPatch":
     let e = createTestEditor()
-    e.state.display.showCursorLine = false
-    e.state.display.showCursorColumn = false
+    e.state.showCursorLine = false
+    e.state.showCursorColumn = false
     let patch = e.lineFillPatchAt(
       lineIndex = 0,
       cursorLine = 0,
@@ -3167,7 +3167,7 @@ suite "lineFillPatch priority chain":
 
   test "cursorColumn requires non-negative cursorDisplayCol":
     let e = createTestEditor()
-    e.state.display.showCursorColumn = true
+    e.state.showCursorColumn = true
     let patch = e.lineFillPatchAt(
       lineIndex = 0,
       cursorLine = -1,
@@ -3193,9 +3193,9 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("abc")
     var buf = newBuffer(80, 1)
@@ -3235,9 +3235,9 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("abc")
     var buf = newBuffer(80, 1)
@@ -3273,9 +3273,9 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("abc")
     var buf = newBuffer(80, 1)
@@ -3479,9 +3479,9 @@ suite "End-of-line virtual text - cursor line highlight":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = true
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = true
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("abc")
     var buf = newBuffer(80, 1)
@@ -3527,9 +3527,9 @@ suite "End-of-line virtual text - cursor line highlight":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = true
-    e.state.display.showIndentationLines = false
+    e.state.showSyntax = false
+    e.state.showCursorLine = true
+    e.state.showIndentationLines = false
 
     let tb = newTextBuffer("abc\ndef")
     var buf = newBuffer(80, 2)
@@ -3565,10 +3565,10 @@ suite "End-of-line virtual text - cursor line highlight":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
-    e.state.display.showInlayHint = true
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
+    e.state.showInlayHint = true
     e.activeBuffer().filePath = some("/test/file.nim")
 
     # Populate the inlay hint cache so the real provider yields text.
@@ -3616,11 +3616,11 @@ suite "renderWindowLineNoWrap - display-width clipping":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     result = newEditor(config, vr)
-    result.state.display.showSyntax = false
-    result.state.display.showCursorLine = false
-    result.state.display.showIndentationLines = false
-    result.state.display.showSidebar = false
-    result.state.display.scrollbar = false
+    result.state.showSyntax = false
+    result.state.showCursorLine = false
+    result.state.showIndentationLines = false
+    result.state.showSidebar = false
+    result.state.scrollbar = false
 
   proc noWrapCtx(): RenderContext =
     RenderContext(
@@ -3660,7 +3660,7 @@ suite "renderWindowLineNoWrap - display-width clipping":
     # clamped to 25) still emitted runes past col 24; clipping by display width
     # stops at the budget so nothing is drawn beyond it.
     let e = plainNoWrapEditor()
-    e.state.display.tabStop = 8
+    e.state.tabStop = 8
     var buffer = createTestBuffer()
     discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "\t" & "X".repeat(30)

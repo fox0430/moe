@@ -24,7 +24,7 @@ import std/[unittest, options, tables, strutils, os, tempfiles]
 
 import
   ../src/moepkg/[
-    buffer, types, key_bindings, modes, motion, command_registry, registers,
+    buffer, types, config, key_bindings, modes, motion, command_registry, registers,
     command_line, command_config, filetree,
   ]
 import
@@ -40,7 +40,7 @@ proc createTestState(): EditorState =
     mode: EditorMode.Normal,
     previousMode: EditorMode.Normal,
   )
-  result = EditorState(activeWindow: window)
+  result = EditorState(activeWindow: window, config: newEditorConfig())
   result.registers = initRegisters()
 
 proc createTestViewport(): ViewPort =
@@ -62,9 +62,8 @@ proc createTestManager(): HandlerManager =
     motionController: motionController,
   )
 
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
-  )
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   let visualHandler = VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,
@@ -197,6 +196,7 @@ proc createVisualTestState(mode: EditorMode): EditorState =
   )
   result = EditorState(
     activeWindow: window,
+    config: newEditorConfig(),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -356,6 +356,7 @@ proc createBlockVisualTestState(
   )
   result = EditorState(
     activeWindow: window,
+    config: newEditorConfig(),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -936,10 +937,11 @@ suite "HandlerManager - o/O open line with auto-indent":
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
     )
-    result = EditorState(
-      activeWindow: window,
-      display: DisplaySettings(autoIndent: true, tabStop: 2, expandTab: true),
-    )
+    let cfg = newEditorConfig()
+    cfg.standard.autoIndent = true
+    cfg.standard.tabStop = 2
+    cfg.standard.expandTab = true
+    result = EditorState(activeWindow: window, config: cfg)
     result.registers = initRegisters()
 
   let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
@@ -1215,9 +1217,8 @@ proc createTestManagerWithMotion(
     motionController: motionController,
   )
 
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
-  )
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   let visualHandler = VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,

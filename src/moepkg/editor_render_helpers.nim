@@ -79,8 +79,7 @@ proc isPositionInDocumentHighlight*(
   ## Check if position is within any document highlight range
   ## Returns the highlight kind (1=Text, 2=Read, 3=Write) if found, none otherwise
   ## Uses O(1) line lookup + O(m) column search where m is highlights on that line
-  if not state.display.showDocumentHighlight or
-      not state.lspCache.documentHighlightCache.isValid:
+  if not state.showDocumentHighlight or not state.lspCache.documentHighlightCache.isValid:
     return none(int)
 
   # O(1) lookup by line

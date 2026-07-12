@@ -245,9 +245,8 @@ proc renderConfig*(
         # cursor x = startX + indent + name + " : " + edit cursor position.
         # editInfo.cursor is a rune index, so convert the buffer prefix to its
         # display width to keep the cursor aligned with multibyte values.
-        let cursorWidth = displayWidthUpToWithTabs(
-          editInfo.buffer, editInfo.cursor, e.state.display.tabStop
-        )
+        let cursorWidth =
+          displayWidthUpToWithTabs(editInfo.buffer, editInfo.cursor, e.tabStop)
         e.state.screenCursor.x = startX + indent + nameWidth + 3 + cursorWidth
         e.state.screenCursor.y =
           listStartY + (configState.selectedIndex - configState.topLine)
