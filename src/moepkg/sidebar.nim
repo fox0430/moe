@@ -184,20 +184,39 @@ proc setSidebarItem*(
 proc setSidebarLine*(
     sidebar: var Sidebar, line: int, text: string, kind: LineMarkerKind
 ) =
-  ## Set an entire sidebar line with the same indicator
-  if line >= 0 and line < sidebar.buffer.len:
-    let
-      style = getStyleForKind(kind)
-      runes = text.toRunes()
+  ## Set an entire sidebar line with the same indicator.
+  ## Width-2 runes claim two cells (base + empty shadow) to stay compatible
+  ## with celina's wide-char cell model.
+  if line < 0 or line >= sidebar.buffer.len:
+    return
 
-    for col in 0 ..< sidebar.width:
-      let char =
-        if col < runes.len:
-          $runes[col]
-        else:
-          " "
+  let style = getStyleForKind(kind)
+  var col = 0
+
+  for rune in text.runes:
+    if col >= sidebar.width:
+      break
+    let w = runeWidth(rune)
+    if w == 0:
+      if col > 0:
+        sidebar.buffer[line][col - 1].text.add($rune)
+      continue
+    if w == 2:
+      if col + 1 >= sidebar.width:
+        break
       sidebar.buffer[line][col] =
-        SidebarItem(text: char, kind: some(kind), style: style)
+        SidebarItem(text: $rune, kind: some(kind), style: style)
+      sidebar.buffer[line][col + 1] =
+        SidebarItem(text: "", kind: some(kind), style: style)
+      col += 2
+    else:
+      sidebar.buffer[line][col] =
+        SidebarItem(text: $rune, kind: some(kind), style: style)
+      inc col
+
+  while col < sidebar.width:
+    sidebar.buffer[line][col] = SidebarItem(text: " ", kind: some(kind), style: style)
+    inc col
 
 proc clearSidebarLine*(sidebar: var Sidebar, line: int) =
   ## Clear a single sidebar line (set to empty)
