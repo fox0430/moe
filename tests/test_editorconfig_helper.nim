@@ -285,6 +285,22 @@ suite "EditorConfig Support":
     check buf.editorConfig.isSome
     check buf.editorConfig.get.tabStop.isNone
 
+  test "applyEditorConfig with tab_width exceeding upper bound":
+    var props = initTable[string, string]()
+    props["tab_width"] = "999999"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop.isNone
+
+  test "applyEditorConfig with tab_width at upper bound":
+    var props = initTable[string, string]()
+    props["tab_width"] = "16"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop == some(16)
+
   test "applyEditorConfig with indent_size tab without tab_width":
     var props = initTable[string, string]()
     props["indent_size"] = "tab"
@@ -310,6 +326,15 @@ suite "EditorConfig Support":
     applyEditorConfig(buf, props)
     check buf.editorConfig.isSome
     check buf.editorConfig.get.shiftWidth.isNone
+
+  test "applyEditorConfig with indent_size exceeding upper bound":
+    var props = initTable[string, string]()
+    props["indent_size"] = "999999"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth.isNone
+    check buf.editorConfig.get.tabStop.isNone
 
   # charset variants
 
