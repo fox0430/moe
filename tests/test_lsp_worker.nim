@@ -473,6 +473,116 @@ suite "LspWorker - LspEvent object":
     check evt.applyEditReqIdJson == "7"
     check parseJson(evt.applyEditEditJson).hasKey("changes")
 
+suite "LspWorker - notificationToEvents":
+  # Regression: a malformed publishDiagnostics frame used to raise KeyError on
+  # the raw `params["uri"]` access, unwinding the drain loop and stranding
+  # adjacent frames until the next mainLoop tick. It must now resolve to a
+  # warning event instead.
+  test "publishDiagnostics with valid uri returns a diagnostics event":
+    let params = %*{"uri": "file:///t.nim", "diagnostics": [{"message": "x"}]}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagUri == "file:///t.nim"
+    # Serialized array preserves the diagnostics content
+    check parseJson(evt.diagnosticsJson).kind == JArray
+    check parseJson(evt.diagnosticsJson).len == 1
+
+  test "publishDiagnostics with missing uri returns a warning, not a raise":
+    let params = %*{"diagnostics": []}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtWarning
+    check "dropping frame" in evt.message
+
+  test "publishDiagnostics with non-string uri returns a warning":
+    # A JNumber where a string was expected: getStr defaults to "" and we drop.
+    let params = %*{"uri": 42, "diagnostics": []}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtWarning
+
+  test "publishDiagnostics without diagnostics field defaults to empty array":
+    let params = %*{"uri": "file:///t.nim"}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagnosticsJson == "[]"
+
+  test "window/logMessage with missing type defaults to mtLog":
+    let params = %*{"message": "hello"}
+    let evt = notificationToEvents("window/logMessage", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtLog
+    check evt.message == "hello"
+
+  test "window/logMessage with missing message returns empty string":
+    let params = %*{"type": 1}
+    let evt = notificationToEvents("window/logMessage", params)
+    check evt.kind == levLogMessage
+    check evt.message == ""
+
+  test "window/showMessage with empty params does not raise":
+    let evt = notificationToEvents("window/showMessage", newJObject())
+    check evt.kind == levShowMessage
+    check evt.message == ""
+
+  test "$/logTrace with only message":
+    let params = %*{"message": "trace line"}
+    let evt = notificationToEvents("$/logTrace", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtInfo
+    check evt.message == "trace line"
+
+  test "$/logTrace with message and verbose concatenates":
+    let params = %*{"message": "head", "verbose": "detail"}
+    let evt = notificationToEvents("$/logTrace", params)
+    check evt.message == "head\ndetail"
+
+  test "$/logTrace without message returns empty message":
+    let evt = notificationToEvents("$/logTrace", newJObject())
+    check evt.kind == levLogMessage
+    check evt.message == ""
+
+  test "experimental/serverStatus with missing health defaults to shOk":
+    let evt = notificationToEvents("experimental/serverStatus", newJObject())
+    check evt.kind == levStatusUpdate
+    check evt.statusHealth == shOk
+    check evt.statusQuiescent
+    check evt.statusMessage.isNone
+
+  test "experimental/serverStatus maps warning/error strings":
+    let warn = notificationToEvents(
+      "experimental/serverStatus", %*{"health": "warning", "quiescent": false}
+    )
+    check warn.statusHealth == shWarning
+    check not warn.statusQuiescent
+    let err = notificationToEvents(
+      "experimental/serverStatus", %*{"health": "error", "message": "boom"}
+    )
+    check err.statusHealth == shError
+    check err.statusMessage == some("boom")
+
+  test "extension/statusUpdate reports warning when projectErrors are present":
+    let params = %*{"projectErrors": ["cannot resolve foo"], "pendingRequests": []}
+    let evt = notificationToEvents("extension/statusUpdate", params)
+    check evt.kind == levStatusUpdate
+    check evt.statusHealth == shWarning
+    check evt.statusQuiescent
+    check evt.statusMessage == some("cannot resolve foo")
+
+  test "extension/statusUpdate with no projectErrors is healthy":
+    let params = %*{"projectErrors": [], "pendingRequests": ["req1"]}
+    let evt = notificationToEvents("extension/statusUpdate", params)
+    check evt.statusHealth == shOk
+    check not evt.statusQuiescent
+    check evt.statusMessage.isNone
+
+  test "unknown notification method returns an info log event":
+    let evt = notificationToEvents("some/unknown", newJObject())
+    check evt.kind == levLogMessage
+    check evt.msgType == mtInfo
+    check "Unknown LSP notification" in evt.message
+    check "some/unknown" in evt.message
+
 suite "LspWorker - newLspWorker":
   test "creates worker with language id":
     let workerResult = newLspWorker("nim")
