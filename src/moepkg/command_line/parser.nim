@@ -106,8 +106,7 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
       result.args = @[cleanInput]
       return
 
-  # Split into command and arguments
-  var parts = cleanInput.split(WhiteSpace)
+  var parts = cleanInput.splitWhitespace()
   if parts.len == 0:
     result.action = claUnknown
     return
