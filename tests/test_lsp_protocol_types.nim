@@ -401,6 +401,37 @@ suite "types - parseLocations":
     let locs = parseLocations(j)
     check locs.len == 0
 
+  test "malformed entry does not drop other locations":
+    let j = %*[
+      {
+        "uri": "file:///a.nim",
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
+      },
+      {
+        "range":
+          {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 3}}
+      },
+      newJNull(),
+      {
+        "uri": "file:///b.nim",
+        "range":
+          {"start": {"line": 2, "character": 0}, "end": {"line": 2, "character": 4}},
+      },
+    ]
+    let locs = parseLocations(j)
+    check locs.len == 2
+    check locs[0].uri == "file:///a.nim"
+    check locs[1].uri == "file:///b.nim"
+
+  test "single object missing uri yields empty result":
+    let j = %*{
+      "range":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}}
+    }
+    let locs = parseLocations(j)
+    check locs.len == 0
+
 suite "types - LocationLink":
   test "parseLocationLink":
     let j = %*{

@@ -602,14 +602,16 @@ proc parseRange*(node: JsonNode): Range =
   Range(start: parsePosition(node{"start"}), `end`: parsePosition(node{"end"}))
 
 proc parseLocation*(node: JsonNode): Location =
-  Location(uri: node["uri"].getStr, range: parseRange(node["range"]))
+  ## Use `{}` so a missing `uri`/`range` yields an empty URI instead of a
+  ## KeyError that would wipe the whole Location list in parseLocations.
+  Location(uri: node{"uri"}.getStr, range: parseRange(node{"range"}))
 
 proc parseLocationLink*(node: JsonNode): LocationLink =
-  result.targetUri = node["targetUri"].getStr
-  result.targetRange = parseRange(node["targetRange"])
-  result.targetSelectionRange = parseRange(node["targetSelectionRange"])
+  result.targetUri = node{"targetUri"}.getStr
+  result.targetRange = parseRange(node{"targetRange"})
+  result.targetSelectionRange = parseRange(node{"targetSelectionRange"})
   if node.hasKey("originSelectionRange"):
-    result.originSelectionRange = some(parseRange(node["originSelectionRange"]))
+    result.originSelectionRange = some(parseRange(node{"originSelectionRange"}))
 
 proc locationLinkToLocation*(link: LocationLink): Location =
   ## Convert LocationLink to Location (uses targetSelectionRange for precise navigation)
@@ -1282,14 +1284,21 @@ proc parseFoldingRange*(node: JsonNode): FoldingRange =
 # Additional helper functions for LSP client
 
 proc parseLocations*(node: JsonNode): seq[Location] =
-  ## Parse Location or Location[] from JSON (handles both single and array responses)
-  result = @[]
+  ## Parse Location or Location[] from JSON. Malformed entries (non-object or
+  ## missing uri) are skipped so one bad item doesn't drop the whole list.
   case node.kind
   of JArray:
     for item in node:
-      result.add(parseLocation(item))
+      if item.kind != JObject:
+        continue
+      let loc = parseLocation(item)
+      if loc.uri.len == 0:
+        continue
+      result.add(loc)
   of JObject:
-    result.add(parseLocation(node))
+    let loc = parseLocation(node)
+    if loc.uri.len > 0:
+      result.add(loc)
   else:
     discard
 
