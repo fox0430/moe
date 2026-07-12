@@ -107,10 +107,23 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
       return
 
   # Split into command and arguments
-  let parts = cleanInput.split(WhiteSpace)
+  var parts = cleanInput.split(WhiteSpace)
   if parts.len == 0:
     result.action = claUnknown
     return
+
+  # Vim treats ":cmd!arg" as ":cmd! arg" (e.g. ":w!file").
+  block splitEmbeddedBang:
+    let first = parts[0]
+    let bangPos = first.find('!')
+    if bangPos <= 0 or bangPos >= first.high:
+      break splitEmbeddedBang
+    let prefix = first[0 ..< bangPos].toLowerAscii()
+    if prefix notin parser.aliases and prefix notin parser.shellCommands:
+      break splitEmbeddedBang
+    let rest = first[bangPos + 1 ..^ 1]
+    parts[0] = first[0 .. bangPos]
+    parts.insert(rest, 1)
 
   let cmd = parts[0]
 

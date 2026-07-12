@@ -463,6 +463,24 @@ suite "CommandLine - execute":
     check result.editFilename == some("test.nim")
     check result.forceEdit == true
 
+  test "Execute :w!filename (bang glued to filename)":
+    let result = parser.parseAndExecute(":w!myfile.txt")
+    check result.kind == claSave
+    check result.filename == some("myfile.txt")
+    check result.forceSave == true
+
+  test "Execute :e!filename (bang glued to filename)":
+    let result = parser.parseAndExecute(":e!test.nim")
+    check result.kind == claEdit
+    check result.editFilename == some("test.nim")
+    check result.forceEdit == true
+
+  test "Execute :wq!filename (bang glued to filename)":
+    let result = parser.parseAndExecute(":wq!out.txt")
+    check result.kind == claSaveAndQuit
+    check result.saveFilename == some("out.txt")
+    check result.forceSaveAndQuit == true
+
   test "Execute :enew":
     let result = parser.parseAndExecute(":enew")
     check result.kind == claEnew
