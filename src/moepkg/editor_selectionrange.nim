@@ -43,7 +43,9 @@ proc normalizedSelection(sel: VisualSelection): tuple[first, last: BufferPositio
     (b, a)
 
 proc toRuneRange(e: Editor, r: Range): tuple[first, last: BufferPosition] =
-  ## Convert an LSP (UTF-16) range into rune-index buffer positions.
+  ## Convert an LSP half-open UTF-16 range into rune-index buffer positions
+  ## with an inclusive end — Vim visual selection covers the rune under
+  ## `current`, so the exclusive LSP end is stepped back one rune.
   let buf = e.activeBuffer()
   let startLine = r.start.line
   let startText =
@@ -51,18 +53,43 @@ proc toRuneRange(e: Editor, r: Range): tuple[first, last: BufferPosition] =
       buf.getLine(startLine)
     else:
       ""
-  let endLine = r.`end`.line
-  let endText =
-    if endLine >= 0 and endLine < buf.len:
-      buf.getLine(endLine)
-    else:
-      ""
-  (
-    BufferPosition(
-      line: startLine, column: utf16ToRuneIndex(startText, r.start.character)
-    ),
-    BufferPosition(line: endLine, column: utf16ToRuneIndex(endText, r.`end`.character)),
+  let first = BufferPosition(
+    line: startLine, column: utf16ToRuneIndex(startText, r.start.character)
   )
+
+  if buf.len == 0:
+    return (first, first)
+
+  let lspEndLine = r.`end`.line
+  var endLine: int
+  var endColExcl: int
+  if lspEndLine >= buf.len:
+    endLine = buf.len - 1
+    endColExcl = buf.getLine(endLine).charLen
+  else:
+    endLine = lspEndLine
+    let endText =
+      if endLine >= 0:
+        buf.getLine(endLine)
+      else:
+        ""
+    endColExcl = utf16ToRuneIndex(endText, r.`end`.character)
+
+  var last: BufferPosition
+  if endColExcl > 0:
+    last = BufferPosition(line: endLine, column: endColExcl - 1)
+  elif endLine > 0:
+    # End at column 0: the last included rune is the newline at the end of the
+    # previous line.
+    let prev = endLine - 1
+    last = BufferPosition(line: prev, column: buf.getLine(prev).charLen)
+  else:
+    last = first
+
+  if last.line < first.line or (last.line == first.line and last.column < first.column):
+    last = first
+
+  (first, last)
 
 proc flattenSelectionChain(
     e: Editor, sr: SelectionRange
