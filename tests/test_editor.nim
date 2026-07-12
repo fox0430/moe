@@ -480,6 +480,46 @@ suite "Editor - reloadCurrentFile cursor clamp":
     # Normal-mode clamp keeps the cursor on the last character, not past it.
     check e.cursor.column == 1
 
+  test "Reload picks up .editorconfig edits (removed keys clear overrides)":
+    let e = createTestEditor()
+    let testDir = getTempDir() / "moe_test_reload_editorconfig"
+    let path = testDir / "sample.py"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+""",
+    )
+    writeFile(path, "print('hi')\n")
+
+    check e.editFile(path).isOk
+    check e.activeBuffer.editorConfig.isSome
+    check e.activeBuffer.editorConfig.get.expandTab == some(true)
+    check e.state.display.shiftWidth == 4
+
+    # Drop the matching section so a reload should discard the overrides.
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.nim]
+indent_style = space
+""",
+    )
+
+    check e.reloadCurrentFile().isOk
+    check e.activeBuffer.editorConfig.isNone
+    check e.state.display.shiftWidth == e.config.standard.shiftWidth
+
 suite "Editor - Display toggle functions":
   test "Toggle status line visibility":
     let e = createTestEditor()
