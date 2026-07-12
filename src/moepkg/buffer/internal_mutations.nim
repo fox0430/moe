@@ -21,11 +21,11 @@
 ## text mutation helpers used by edit.nim / undo.nim. These do NOT record
 ## undo entries — they are the lowest layer above the backend backends.
 
-import std/[options, strutils, unicode]
+import std/[strutils, unicode]
 
 import ../[primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
-import ./core
+import core
 
 # Backend dispatch helpers for internal use (no undo recording)
 proc backendInsertIntoLine*(b: TextBuffer, line, col: int, text: string) =

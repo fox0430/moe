@@ -20,7 +20,7 @@
 ## Public editing API: insertText / deleteChar / insert / deleteLine /
 ## deleteRange / replaceLine / splitLine / NoUndo bypass procs.
 
-import std/[options, unicode]
+import std/unicode
 
 from std/strutils import replace, contains
 

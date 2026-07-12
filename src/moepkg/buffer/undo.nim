@@ -21,7 +21,7 @@
 ## PieceTable, and the inverse-application helpers used by both undo()
 ## and redo().
 
-import std/[deques, options, strutils]
+import std/[deques, options]
 
 import pkg/results
 
