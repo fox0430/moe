@@ -317,7 +317,22 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         kind: claUnknown, errorMessage: "Usage: :" & cmdName & " {lhs} {rhs}"
       )
     let lhs = cmd.args[0]
-    let rhs = cmd.args[1 ..^ 1].join(" ")
+    # Read the RHS verbatim from rawText — tokenize+join would lose tabs.
+    let rhs = block:
+      var i = 0
+      if i < cmd.rawText.len and cmd.rawText[i] == ':':
+        inc i
+      while i < cmd.rawText.len and cmd.rawText[i] notin Whitespace:
+        inc i
+      while i < cmd.rawText.len and cmd.rawText[i] in Whitespace:
+        inc i
+      if i + lhs.len <= cmd.rawText.len and cmd.rawText[i ..< i + lhs.len] == lhs:
+        i += lhs.len
+        while i < cmd.rawText.len and cmd.rawText[i] in Whitespace:
+          inc i
+        cmd.rawText[i ..^ 1]
+      else:
+        cmd.args[1 ..^ 1].join(" ")
     case cmd.action
     of claMap, claNoremap:
       return CommandLineResult(kind: claMap, mapLhs: lhs, mapRhs: rhs, noremap: noremap)
