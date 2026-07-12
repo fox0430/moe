@@ -39,11 +39,11 @@ proc newCommandLineParser*(): CommandLineParser =
 
 proc addAlias*(parser: CommandLineParser, alias: string, action: CommandLineAction) =
   ## Add a command alias to the parser
-  parser.aliases[alias] = action
+  parser.aliases[alias.toLowerAscii()] = action
 
 proc removeAlias*(parser: CommandLineParser, alias: string) =
   ## Remove a command alias from the parser
-  parser.aliases.del(alias)
+  parser.aliases.del(alias.toLowerAscii())
 
 proc clearAliases*(parser: CommandLineParser) =
   ## Clear all command aliases

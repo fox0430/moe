@@ -72,10 +72,22 @@ suite "CommandConfig - addShellCommand":
   test "Adds a shell command":
     let config = newCommandConfig()
 
-    config.addShellCommand("myCmd", "echo hello")
+    config.addShellCommand("mycmd", "echo hello")
 
     check config.shellCommands.len == 1
-    check config.shellCommands["myCmd"].command == "echo hello"
+    check config.shellCommands["mycmd"].command == "echo hello"
+
+  test "Normalises shell command name to lowercase":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+
+    config.addShellCommand("GitStatus", "git status")
+    config.applyToParser(parser)
+
+    check "gitstatus" in parser.shellCommands
+    let parsed = parser.parseCommandLine(":GitStatus")
+    check parsed.action == claShellCommand
+    check parsed.args == @["git status"]
 
   test "Adds multiple shell commands":
     let config = newCommandConfig()
