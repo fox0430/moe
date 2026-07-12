@@ -296,6 +296,27 @@ suite "Word Motion":
     check result.y == 4
     check result.x == 2 # End of "bar"
 
+  test "moveWordBackward crosses a single empty line":
+    let buffer = newTextBuffer("foo\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 2), 1)
+    check result.y == 0
+    check result.x == 0 # Start of "foo"
+
+  test "moveWordBackward crosses multiple empty lines":
+    let buffer = newTextBuffer("foo\n\n\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 4), 1)
+    check result.y == 0
+    check result.x == 0 # Start of "foo"
+
+  test "moveWordBackward crosses whitespace-only line":
+    let buffer = newTextBuffer("foo\n  \nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 2), 1)
+    check result.y == 0
+    check result.x == 0 # Start of "foo"
+
 suite "Find/Till Char Backward":
   test "findCharBackward finds previous occurrence":
     let buffer = newTextBuffer("abcxabc")
