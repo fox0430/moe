@@ -425,6 +425,61 @@ suite "FileTreeState":
     # The flat list should be finite — a simple length check suffices
     check state.flatList.len < 100
 
+  test "buildFlatList skips descent through symlink resolving to visited dir":
+    let tmpDir = createTempDir("moe_test_", "_symdup")
+    defer:
+      removeDir(tmpDir)
+
+    createDir(tmpDir / "realdir")
+    writeFile(tmpDir / "realdir" / "child.txt", "hi")
+    createSymlink(tmpDir / "realdir", tmpDir / "realdir" / "loop")
+
+    let state = newFileTreeState(tmpDir)
+    for i, node in state.flatList:
+      if node.name == "realdir":
+        state.selectedIndex = i
+        break
+    state.expandSelected()
+    for i, node in state.flatList:
+      if node.name == "loop":
+        state.selectedIndex = i
+        break
+    state.expandSelected()
+
+    # canonical(realdir/loop) == canonical(realdir); the visited guard should
+    # prevent a second traversal, so child.txt appears only once.
+    var childCount = 0
+    for node in state.flatList:
+      if node.name == "child.txt":
+        inc childCount
+    check childCount == 1
+
+  test "buildFlatList dedupes two symlinks pointing at the same real dir":
+    let tmpDir = createTempDir("moe_test_", "_symtwins")
+    defer:
+      removeDir(tmpDir)
+
+    createDir(tmpDir / "real")
+    writeFile(tmpDir / "real" / "leaf.txt", "hi")
+    createSymlink(tmpDir / "real", tmpDir / "linkA")
+    createSymlink(tmpDir / "real", tmpDir / "linkB")
+
+    let state = newFileTreeState(tmpDir)
+    for name in ["real", "linkA", "linkB"]:
+      for i, node in state.flatList:
+        if node.name == name:
+          state.selectedIndex = i
+          break
+      state.expandSelected()
+
+    # All three entries resolve to the same canonical path, so only the first
+    # one visited descends. leaf.txt should appear exactly once.
+    var leafCount = 0
+    for node in state.flatList:
+      if node.name == "leaf.txt":
+        inc leafCount
+    check leafCount == 1
+
   test "createFileTreeTextBuffer ColorSegment lastColumn is rune-based":
     let tmpDir = createTempDir("moe_test_", "_rune")
     defer:

@@ -156,13 +156,21 @@ proc buildFlatList*(state: FileTreeState) =
   state.flatList = @[]
   var visited: HashSet[string]
 
+  proc canonical(path: string): string =
+    # Resolve symlinks so cyclic paths (link -> ancestor) hash to the same key.
+    try:
+      expandFilename(path)
+    except OSError, ValueError:
+      path
+
   proc flatten(nodes: seq[FileTreeNode], state: FileTreeState) =
     for node in nodes:
       state.flatList.add(node)
       if node.isDirectory and node.path in state.expandedDirs:
-        if node.path in visited:
+        let key = canonical(node.path)
+        if key in visited:
           continue # Cyclic symlink — skip
-        visited.incl(node.path)
+        visited.incl(key)
         let children = state.getChildren(node.path, node.depth + 1)
         flatten(children, state)
 
