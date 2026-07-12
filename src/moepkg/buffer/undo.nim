@@ -56,13 +56,6 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
       )
       b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
-      # Reverse the fold/bookmark shift that insertTextWithNewlines applied on
-      # the forward path. Without this, folds and bookmarks below the insert
-      # point stay shifted after undo and drift further on every redo/undo cycle.
-      let newlineCount = change.insertText.count('\n')
-      if newlineCount > 0:
-        b.foldState.adjustFoldsAfterDelete(change.insertPos.line, newlineCount)
-        b.adjustBookmarksForDelete(change.insertPos.line, newlineCount)
     of ckDeleteText:
       # Undo delete by inserting the deleted text
       let line = b.getLine(change.deletePos.line)
@@ -73,13 +66,9 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckInsertLine:
       # Undo insert line by deleting it
       b.backendDeleteLine(change.insertLineIdx)
-      b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
-      b.adjustBookmarksForDelete(change.insertLineIdx)
     of ckDeleteLine:
       # Undo delete line by inserting it
       b.backendInsertLine(change.deleteLineIdx, change.deletedLineText)
-      b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
-      b.adjustBookmarksForInsert(change.deleteLineIdx)
     of ckDeleteRange:
       # Undo delete range by inserting the deleted text
       # Handle both single-line and multi-line deletions correctly
@@ -113,6 +102,13 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
+
+    # Drive the row-remap subscribers backwards. ckSnapshot restored state
+    # wholesale; ckTransaction recurses through its inner changes.
+    # `includeSideArrays=false`: the wholesale savedLineMarkers /
+    # savedModifiedLines restore below would clobber their output.
+    if change.kind notin {ckSnapshot, ckTransaction}:
+      b.emitRowColRemapEvents(change, reverse = true, includeSideArrays = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
@@ -413,12 +409,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       b.backendDeleteAtLineCol(change.deletePos.line, bytePos, change.deletedText.len)
     of ckInsertLine:
       b.backendInsertLine(change.insertLineIdx, change.insertLineText)
-      b.foldState.adjustFoldsAfterInsert(change.insertLineIdx, 1)
-      b.adjustBookmarksForInsert(change.insertLineIdx)
     of ckDeleteLine:
       b.backendDeleteLine(change.deleteLineIdx)
-      b.foldState.adjustFoldsAfterDelete(change.deleteLineIdx, 1)
-      b.adjustBookmarksForDelete(change.deleteLineIdx)
     of ckDeleteRange:
       # Re-apply delete range using the same logic as the original deleteRange
       # Handle both single-line and multi-line deletions correctly
@@ -426,18 +418,9 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       let endPos = change.deleteEndPos
 
       if startPos.line == endPos.line:
-        # Mirror the forward path: shift folds/bookmarks when the single-line
-        # delete joined this line with the next.
-        let joinedWithNext =
-          b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
-        if joinedWithNext:
-          b.foldState.adjustFoldsAfterDelete(startPos.line + 1, 1)
-          b.adjustBookmarksForDelete(startPos.line + 1, 1)
+        discard b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
       else:
-        b.deleteRangeMultiLine(startPos, endPos)
-        # Adjust fold and bookmark positions for multi-line delete
-        b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
-        b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
+        discard b.deleteRangeMultiLine(startPos, endPos)
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineNewText)
     of ckTransaction:
@@ -466,6 +449,12 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       b.foldState = change.snapshotFoldState
       b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
+
+    # Drive the row-remap subscribers forward. Symmetric to undoChange:
+    # ckSnapshot/ckTransaction opt out; savedLineMarkers / savedModifiedLines
+    # below overwrite the two per-line arrays so `includeSideArrays=false`.
+    if change.kind notin {ckSnapshot, ckTransaction}:
+      b.emitRowColRemapEvents(change, includeSideArrays = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:

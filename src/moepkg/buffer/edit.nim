@@ -191,28 +191,12 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
       b.discardPendingSnapshot()
       return err("Failed to insert line: " & e.msg)
 
-  # Insert marker entry (none by default)
-  if lineIndex < b.lineMarkers.len:
-    b.lineMarkers.insert(none(LineMarkerKind), lineIndex)
-  elif lineIndex == b.lineMarkers.len:
-    b.lineMarkers.add(none(LineMarkerKind))
-
-  # Insert modifiedLines entry (inserted for new lines)
-  if lineIndex < b.modifiedLines.len:
-    b.modifiedLines.insert(lmkInserted, lineIndex)
-  elif lineIndex == b.modifiedLines.len:
-    b.modifiedLines.add(lmkInserted)
-
-  # Record change for undo
+  # Side-array shifts run via the emitRowColRemapEvents subscribers.
   b.pushUndoChange(
     BufferChange(
       kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: normalizedContent
     )
   )
-
-  # Adjust fold and bookmark positions
-  b.foldState.adjustFoldsAfterInsert(lineIndex, 1)
-  b.adjustBookmarksForInsert(lineIndex)
 
   return ok(())
 
@@ -237,24 +221,12 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
       b.discardPendingSnapshot()
       return err("Failed to delete line: " & e.msg)
 
-  # Delete corresponding marker entry
-  if lineIndex < b.lineMarkers.len:
-    b.lineMarkers.delete(lineIndex)
-
-  # Delete corresponding modifiedLines entry
-  if lineIndex < b.modifiedLines.len:
-    b.modifiedLines.delete(lineIndex)
-
-  # Record change for undo
+  # Side-array shifts run via the emitRowColRemapEvents subscribers.
   b.pushUndoChange(
     BufferChange(
       kind: ckDeleteLine, deleteLineIdx: lineIndex, deletedLineText: deletedContent
     )
   )
-
-  # Adjust fold and bookmark positions
-  b.foldState.adjustFoldsAfterDelete(lineIndex, 1)
-  b.adjustBookmarksForDelete(lineIndex)
 
   return ok(())
 
@@ -341,30 +313,21 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
         joinedWithNext =
           b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
       else:
-        b.deleteRangeMultiLine(startPos, endPos)
+        joinedWithNext = b.deleteRangeMultiLine(startPos, endPos)
     except IndexDefect as e:
       b.discardPendingSnapshot()
       return err("Failed to delete range: " & e.msg)
 
-  # Record change for undo
+  # Side-array shifts run via the emitRowColRemapEvents subscribers.
   b.pushUndoChange(
     BufferChange(
       kind: ckDeleteRange,
       deleteStartPos: startPos,
       deleteEndPos: endPos,
       deletedRangeText: deletedText,
+      deleteJoinedNextLine: joinedWithNext,
     )
   )
-
-  # Adjust fold and bookmark positions when lines were removed. The multi-line
-  # branch always drops `endPos.line - startPos.line` lines; the single-line
-  # branch drops one line only when it joined with the next.
-  if endPos.line > startPos.line:
-    b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
-    b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
-  elif joinedWithNext:
-    b.foldState.adjustFoldsAfterDelete(startPos.line + 1, 1)
-    b.adjustBookmarksForDelete(startPos.line + 1, 1)
 
   return ok(())
 
