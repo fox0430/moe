@@ -160,6 +160,26 @@ suite "backup - getBackupDirForSource and getBackupFiles":
     let files = getBackupFiles(TestBackupDir, "/nonexistent/file.txt")
     check files.len == 0
 
+  test "Find existing backup directory when baseBackupDir contains glob metachars":
+    # baseBackupDir with `[`, `*`, `?` must be treated as a literal path,
+    # not as a glob pattern. Previously walkPattern would fail to match
+    # and callers would create a fresh Oid dir on every launch,
+    # splitting the backup history.
+    let bracketDir = getTempDir() / "moe_test_backup[bracket]*?"
+    if dirExists(bracketDir):
+      removeDir(bracketDir)
+    createDir(bracketDir)
+    defer:
+      removeDir(bracketDir)
+
+    let backupSubDir = bracketDir / "abc123"
+    createDir(backupSubDir)
+    let jsonContent = %*{"path": "/home/user/glob.txt"}
+    writeFile(backupSubDir / "backup.json", $jsonContent)
+
+    let result = getBackupDirForSource(bracketDir, "/home/user/glob.txt")
+    check result == backupSubDir
+
 suite "backup - backupBuffer":
   setup:
     cleanupTestDir()
