@@ -74,10 +74,18 @@ proc validateBackupInfoJson(jsonNode: JsonNode): bool =
 proc getBackupDirForSource*(baseBackupDir, sourceFilePath: string): string =
   ## Find existing backup directory for a source file
   ## Returns empty string if not found
+  # Use walkDir (not walkPattern) so that glob metacharacters like `[`, `*`,
+  # `?` inside baseBackupDir are treated as literal path characters.
   if not dirExists(baseBackupDir):
     return ""
 
-  for jsonFilePath in walkPattern(baseBackupDir / "*" / BackupJsonFilename):
+  for entry in walkDir(baseBackupDir):
+    if entry.kind notin {PathComponent.pcDir, PathComponent.pcLinkToDir}:
+      continue
+    let jsonFilePath = entry.path / BackupJsonFilename
+    if not fileExists(jsonFilePath):
+      continue
+
     let backupJson =
       try:
         json.parseFile(jsonFilePath)
@@ -86,7 +94,7 @@ proc getBackupDirForSource*(baseBackupDir, sourceFilePath: string): string =
 
     if validateBackupInfoJson(backupJson):
       if backupJson["path"].getStr == sourceFilePath:
-        return jsonFilePath.parentDir
+        return entry.path
 
   return ""
 
