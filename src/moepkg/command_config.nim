@@ -97,17 +97,18 @@ proc addAlias*(
     config: CommandConfig, alias: string, action: CommandLineAction, description = ""
 ) =
   ## Add a command alias with optional description
-  config.aliases[alias] = action
+  let key = alias.toLowerAscii()
+  config.aliases[key] = action
   if description.len > 0:
-    config.aliasDescriptions[alias] = description
+    config.aliasDescriptions[key] = description
   else:
-    config.aliasDescriptions.del(alias)
+    config.aliasDescriptions.del(key)
 
 proc addShellCommand*(
     config: CommandConfig, name: string, command: string, description = ""
 ) =
   ## Add a shell command definition with optional description
-  config.shellCommands[name] =
+  config.shellCommands[name.toLowerAscii()] =
     ShellCommandEntry(command: command, description: description)
 
 proc disableCommand*(config: CommandConfig, action: CommandLineAction) =
