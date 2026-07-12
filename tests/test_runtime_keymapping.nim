@@ -740,6 +740,18 @@ suite "Command mode command parsing - map commands":
     check result.mapRhs == "Escape"
     check result.noremap == true
 
+  test "Parse :nmap preserves tab inside RHS":
+    let result = parser.parseAndExecute(":nmap C-a foo\tbar")
+    check result.kind == claNmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == "foo\tbar"
+
+  test "Parse :nmap preserves multiple tabs and spaces inside RHS":
+    let result = parser.parseAndExecute(":nmap C-a a\t\tb  c")
+    check result.kind == claNmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == "a\t\tb  c"
+
 suite "Command mode command parsing - unmap commands":
   setup:
     let parser = newCommandLineParser()
