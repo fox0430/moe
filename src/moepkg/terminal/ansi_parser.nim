@@ -412,26 +412,30 @@ proc applySgr(grid: TerminalGrid, params: seq[int]) =
       grid.currentFg = indexedColor(uint8(code - 30))
     of 38:
       # Extended foreground: 38;5;N or 38;2;r;g;b
-      if i + 1 < p.len:
-        if p[i + 1] == 5 and i + 2 < p.len:
-          grid.currentFg = indexedColor(uint8(p[i + 2]))
-          i += 2
-        elif p[i + 1] == 2 and i + 4 < p.len:
-          grid.currentFg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
-          i += 4
+      if i + 1 < p.len and p[i + 1] == 5 and i + 2 < p.len:
+        grid.currentFg = indexedColor(uint8(p[i + 2]))
+        i += 2
+      elif i + 1 < p.len and p[i + 1] == 2 and i + 4 < p.len:
+        grid.currentFg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
+        i += 4
+      else:
+        # Truncated/malformed sub-sequence: drop the rest so leftover params
+        # aren't reinterpreted as unrelated SGR codes.
+        break
     of 39:
       grid.currentFg = defaultColor()
     of 40 .. 47:
       grid.currentBg = indexedColor(uint8(code - 40))
     of 48:
       # Extended background: 48;5;N or 48;2;r;g;b
-      if i + 1 < p.len:
-        if p[i + 1] == 5 and i + 2 < p.len:
-          grid.currentBg = indexedColor(uint8(p[i + 2]))
-          i += 2
-        elif p[i + 1] == 2 and i + 4 < p.len:
-          grid.currentBg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
-          i += 4
+      if i + 1 < p.len and p[i + 1] == 5 and i + 2 < p.len:
+        grid.currentBg = indexedColor(uint8(p[i + 2]))
+        i += 2
+      elif i + 1 < p.len and p[i + 1] == 2 and i + 4 < p.len:
+        grid.currentBg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
+        i += 4
+      else:
+        break
     of 49:
       grid.currentBg = defaultColor()
     of 90 .. 97:
