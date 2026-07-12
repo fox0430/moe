@@ -32,7 +32,9 @@ import logger
 export worker, types
 
 const
-  DefaultRequestTimeoutMs* = 5000 ## 5 second timeout for LSP requests
+  DefaultRequestTimeoutMs* = RequestTimeoutSec * 1000
+    ## Matches worker's RequestTimeoutSec; a shorter default would drop
+    ## responses that arrive between the two deadlines (see recordResponse).
   PollIntervalMs = 5 ## Polling interval for async response waiting
   RestartSuppressionSec* = 5.0
     ## Minimum interval between automatic server restarts per language.
@@ -88,9 +90,9 @@ type
     dynamicRegistrations: Table[string, Table[string, Registration]]
     workspaceRoot: string
     enabled*: bool
-    # Consumer-side per-request timeout (ms), from `config.lsp.timeout`. The
-    # worker keeps its own, deliberately longer RequestTimeoutSec (worker.nim);
-    # the two are not meant to match.
+    # Consumer-side per-request timeout (ms), from `config.lsp.timeout`.
+    # Setting this below worker's RequestTimeoutSec drops late replies
+    # (recordResponse discards ids no longer in activeRequests).
     requestTimeoutMs*: int
     # Pending request responses (requestId -> response).
     # The result is kept as the raw JSON string exactly as it crossed the

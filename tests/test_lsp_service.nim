@@ -1277,8 +1277,8 @@ suite "LspService - Callback Setup":
     check called
 
 suite "LspService - Constants":
-  test "DefaultRequestTimeoutMs is defined":
-    check DefaultRequestTimeoutMs == 5000
+  test "DefaultRequestTimeoutMs matches worker RequestTimeoutSec":
+    check DefaultRequestTimeoutMs == RequestTimeoutSec * 1000
 
 suite "LspService - LanguageServerConfig":
   test "LanguageServerConfig has all expected fields":

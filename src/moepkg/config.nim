@@ -929,7 +929,7 @@ proc newEditorConfig*(): EditorConfig =
     theme: ThemeConfig(kind: tkConfig, path: "~/.config/moe/themes/dark.toml"),
     lsp: LspConfig(
       enable: false,
-      timeout: 5000,
+      timeout: 30000,
       completion: LspFeatureConfig(enable: true),
       declaration: LspOpenWindowConfig(enable: true, openWindow: false),
       definition: LspOpenWindowConfig(enable: true, openWindow: false),
