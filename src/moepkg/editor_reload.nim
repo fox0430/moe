@@ -30,6 +30,7 @@ import
   editor_file,
   editor_lsp,
   editor_codelens,
+  editorconfig_helper,
   git_diff,
   git_conflict,
   motion,
@@ -53,6 +54,9 @@ proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
   ## the new content, and re-open the document so the LSP re-publishes diagnostics.
   ## The reload dropped the buffer's diagnostics and reset changeSeq to 0, so
   ## maybeUpdateLsp's changeSeq guard would never re-sync on its own.
+  # Reload is the user's chance to pick up an edited .editorconfig.
+  applyEditorConfigToBuffer(buf, e.config)
+  applyBufferEditorConfig(e.state.display, buf, e.config)
   e.clampCursorAfterReload(buf)
   e.state.statusMessage = "File reloaded: " & filePath
   e.refreshGitDiff(useBuffer = false)

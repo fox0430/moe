@@ -177,6 +177,10 @@ proc applyEditorConfigToBuffer*(buffer: TextBuffer, config: EditorConfig) =
   let props = getEditorConfigProperties(buffer.filePath.get)
   if props.isSome:
     applyEditorConfig(buffer, props.get)
+  else:
+    # No matching section (or file removed) — drop stale overrides so a reload
+    # falls back to the global config.
+    buffer.editorConfig = none(BufferEditorConfig)
 
 proc shouldTrimTrailingWhitespace*(buffer: TextBuffer): bool =
   ## Check if the buffer has EditorConfig trim_trailing_whitespace enabled.

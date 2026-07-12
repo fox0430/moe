@@ -491,6 +491,35 @@ indent_size = 2
     # No properties matched for .txt, so editorConfig should remain none
     check buf.editorConfig.isNone
 
+  test "applyEditorConfigToBuffer drops stale overrides when no section matches":
+    let testDir = getTempDir() / "moe_ec_test_drop_stale"
+    let testFile = testDir / "test.txt"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.nim]
+indent_style = space
+""",
+    )
+    writeFile(testFile, "hello\n")
+
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    buf.filePath = some(testFile)
+    # Simulate an override left over from a prior .editorconfig state.
+    buf.editorConfig =
+      some(BufferEditorConfig(expandTab: some(true), tabStop: some(2)))
+
+    applyEditorConfigToBuffer(buf, conf)
+
+    check buf.editorConfig.isNone
+
   # 3. Negative numeric values
 
   test "applyEditorConfig with negative tab_width":
