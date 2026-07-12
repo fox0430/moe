@@ -78,12 +78,13 @@ proc drawClippedRunes*(
   ## responsible for ensuring y is within bounds.
   result = startX
   for r in text.runes:
-    if result >= limitX or result >= termBuffer.area.width:
+    let w = runeWidth(r)
+    if result + w > limitX or result + w > termBuffer.area.width:
       break
     if result >= 0:
       result += setRuneCell(termBuffer, result, y, r, style)
     else:
-      result += runeWidth(r)
+      result += w
 
 proc fillCells*(termBuffer: var Buffer, startX, y, limitX: int, style: Style): int =
   ## Fill columns [startX, limitX) on row y with spaces in the given style,
