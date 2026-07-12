@@ -1176,3 +1176,116 @@ suite "CommandCompletion - renderCommandCompletionPopup narrow width":
     for w in [0, 1, 2]:
       let pos = CommandPopupPosition(x: 0, y: 0, width: w, height: 3)
       renderCommandCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+suite "CommandCompletion - display-width sizing (CJK/wide chars)":
+  test "calculateMaxCommandWidth reports display cells for CJK commands":
+    # "コマンド" = 4 CJK runes × 2 = 8 cells; "quit" = 4 cells.
+    let entries = @[
+      CommandCompletionEntry(command: "quit", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "コマンド", description: "", matchScore: 90),
+    ]
+    check calculateMaxCommandWidth(entries) == 8
+
+  test "calculateMaxCommandWidth mixes ASCII and CJK by display width":
+    # "abc漢字" = 3 ASCII + 2 CJK × 2 = 7 cells; "abcdef" = 6 cells.
+    let entries = @[
+      CommandCompletionEntry(command: "abcdef", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "abc漢字", description: "", matchScore: 90),
+    ]
+    check calculateMaxCommandWidth(entries) == 7
+
+  test "calculateMaxDescriptionWidth reports display cells for CJK descriptions":
+    # "保存する" = 4 CJK × 2 = 8 cells; "save" = 4 cells.
+    let entries = @[
+      CommandCompletionEntry(command: "a", description: "save", matchScore: 100),
+      CommandCompletionEntry(command: "b", description: "保存する", matchScore: 90),
+    ]
+    check calculateMaxDescriptionWidth(entries) == 8
+
+suite "CommandCompletion - truncation display-width boundaries":
+  test "CJK command truncates by display width, not rune count":
+    # command "日本語" = 6 cells, description "説明" = 4 cells.
+    # cmdDisplayWidth = min(maxCmdWidth=6, contentWidth - DescriptionGap - 1)
+    # With contentWidth=5, cmdDisplayWidth = min(6, 5-2-1) = 2 → "日" alone won't
+    # fit (needs 2 cells for kanji + 1 for "…" = 3 > 2), so ellipsis-only fallback.
+    # Use a wider popup for a meaningful boundary: contentWidth = 8.
+    # cmdDisplayWidth = min(6, 8-2-1) = 5. "日本語"(6) truncated to "日本"(4)+"…"(1)=5.
+    let menu = CommandCompletionMenu(
+      entries: @[CommandCompletionEntry(command: "日本語", description: "説明")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = CommandPopupPosition(x: 0, y: 0, width: 8, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCommandCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    check termBuffer[0, 0].symbol == "日"
+    check termBuffer[2, 0].symbol == "本"
+    check termBuffer[4, 0].symbol == "…"
+
+  test "CJK description truncates by display width, not rune count":
+    # command "q" (1) + gap(2) → description slot from col 3. contentWidth = 8.
+    # remainingWidth = 8 - (1 + gap fill up to 1+2=3) = 5. Description "説明文字列"
+    # = 10 cells, truncated to "説明"(4) + "…"(1) = 5 cells.
+    let menu = CommandCompletionMenu(
+      entries: @[CommandCompletionEntry(command: "q", description: "説明文字列")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = CommandPopupPosition(x: 0, y: 0, width: 8, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCommandCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    check termBuffer[0, 0].symbol == "q"
+    # command padded to maxCmdWidth (1) + gap (2) → description starts at col 3.
+    check termBuffer[3, 0].symbol == "説"
+    check termBuffer[5, 0].symbol == "明"
+    check termBuffer[7, 0].symbol == "…"
+
+  test "CJK command that exactly fits is not truncated":
+    # cmdDisplayWidth = 4 exactly matches "日本" (4 cells).
+    # description empty so contentWidth constraint drives cmdDisplayWidth via
+    # min(maxCmdWidth=4, contentWidth - gap - 1). contentWidth = 7 → 7-2-1 = 4.
+    let menu = CommandCompletionMenu(
+      entries: @[CommandCompletionEntry(command: "日本", description: "")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = CommandPopupPosition(x: 0, y: 0, width: 7, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCommandCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    check termBuffer[0, 0].symbol == "日"
+    check termBuffer[2, 0].symbol == "本"
+    check termBuffer[4, 0].symbol == " "
+
+suite "CommandCompletion - CJK popup sizing":
+  test "calculateCommandPopupPosition sizes popupWidth by display cells for CJK":
+    # command "日本語コマンド" = 7 CJK × 2 = 14 cells; description empty.
+    # contentWidth = max(MinPopupWidth=20, min(14 + PopupPadding, MaxPopupWidth=60))
+    # = max(20, min(16, 60)) = 20 (clamped to MinPopupWidth).
+    let entries = @[
+      CommandCompletionEntry(
+        command: "日本語コマンド", description: "", matchScore: 100
+      )
+    ]
+    let pos = calculateCommandPopupPosition(0, 80, 24, entries)
+
+    check pos.width == 20 + 2 # MinPopupWidth + border
+
+  test "calculateCommandPopupPosition widens beyond MinPopupWidth for wide CJK":
+    # 15 CJK runes × 2 = 30 cells + PopupPadding(2) = 32, above MinPopupWidth.
+    var wide = ""
+    for _ in 0 ..< 15:
+      wide.add("あ")
+    let entries =
+      @[CommandCompletionEntry(command: wide, description: "", matchScore: 100)]
+    let pos = calculateCommandPopupPosition(0, 80, 24, entries)
+
+    check pos.width == 30 + 2 + 2 # content(32) + border(2)

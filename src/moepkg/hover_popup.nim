@@ -95,7 +95,8 @@ proc show*(mgr: HoverPopupManager, hoverText: string, line, col: int) =
   # Cache max line width
   mgr.display.cachedMaxLineWidth = 0
   for line in mgr.display.lines:
-    mgr.display.cachedMaxLineWidth = max(mgr.display.cachedMaxLineWidth, line.runeLen)
+    mgr.display.cachedMaxLineWidth =
+      max(mgr.display.cachedMaxLineWidth, line.displayWidth)
 
 proc hide*(mgr: HoverPopupManager) =
   ## Hide hover popup
@@ -183,10 +184,10 @@ proc calculateHoverPopupPosition*(
   ## Hover popup appears above the cursor line if possible
   ## When scrolling is needed, maximize the popup size to fit available space
 
-  # Calculate content width (max line length)
+  # Calculate content width (max line display width, CJK-aware)
   var maxLineLen = 0
   for line in mgr.display.lines:
-    maxLineLen = max(maxLineLen, line.runeLen)
+    maxLineLen = max(maxLineLen, line.displayWidth)
 
   # Use screen width as max, leaving some margin
   let maxWidth = termWidth - 2 # -2 for some margin

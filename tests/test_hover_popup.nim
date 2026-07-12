@@ -607,12 +607,49 @@ suite "HoverPopup - constants":
 suite "HoverPopup - Unicode support":
   test "Correctly calculates max width with Unicode characters":
     let mgr = newHoverPopupManager()
-    mgr.show("こんにちは", 0, 0) # 5 Unicode characters
+    mgr.show("こんにちは", 0, 0) # 5 CJK runes × 2 columns each = 10 display cells
 
-    check mgr.maxLineWidth == 5
+    check mgr.maxLineWidth == 10
 
   test "Correctly calculates max width with mixed content":
     let mgr = newHoverPopupManager()
-    mgr.show("Hello 世界!", 0, 0) # 6 ASCII + 2 CJK + 1 ASCII = 9 runes
+    mgr.show("Hello 世界!", 0, 0)
+      # "Hello " (6) + "世界" (2×2=4) + "!" (1) = 11 display cells
 
-    check mgr.maxLineWidth == 9
+    check mgr.maxLineWidth == 11
+
+  test "Max width picks the widest line by display width, not rune count":
+    # First line: 12 runes, 12 display cells (ASCII).
+    # Second line: 8 CJK runes = 16 display cells.
+    # A rune-count-based scan would incorrectly report 12.
+    let mgr = newHoverPopupManager()
+    mgr.show("hello_world!\nあいうえおかきく", 0, 0)
+
+    check mgr.maxLineWidth == 16
+
+  test "calculateHoverPopupPosition sizes contentWidth by display cells for CJK":
+    # 10 CJK runes = 20 display cells. Popup content must reserve 20 cells + padding,
+    # not 10. Terminal is wide enough that neither MinPopupWidth nor maxWidth clamp.
+    let mgr = newHoverPopupManager()
+    mgr.show("あいうえおかきくけこ", 0, 0)
+
+    let pos = calculateHoverPopupPosition(
+      cursorX = 5, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
+    )
+
+    # popupWidth = contentWidth + 2 (border); contentWidth = 20 + PopupPadding.
+    check pos.width == 20 + PopupPadding + 2
+    check mgr.display.maxVisibleWidth == 20 + PopupPadding
+
+  test "calculateHoverPopupPosition clamps to termWidth for very wide CJK content":
+    # 15 CJK runes = 30 display cells + padding would exceed a 24-cell terminal;
+    # contentWidth clamps at (termWidth - 2), popupWidth at termWidth.
+    let mgr = newHoverPopupManager()
+    mgr.show("あいうえおかきくけこさしすせそ", 0, 0)
+
+    let pos = calculateHoverPopupPosition(
+      cursorX = 0, cursorY = 12, termWidth = 24, termHeight = 24, mgr = mgr
+    )
+
+    check pos.width == 24
+    check mgr.display.maxVisibleWidth == 22
