@@ -147,7 +147,7 @@ proc getHeadContent(relativePath, gitRoot: string): Result[string, string] =
           "git",
           workingDir = gitRoot,
           args = ["show", "HEAD:" & relativePath],
-          options = {poUsePath},
+          options = {poUsePath, poStdErrToStdOut},
         )
       except OSError as e:
         return err("Failed to execute git show: " & e.msg)
