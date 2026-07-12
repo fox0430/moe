@@ -608,6 +608,148 @@ suite "GitDiff - Integration tests with git repository":
     check completed
     check diffLineCount == 0
 
+  test "startGitDiffFromBufferAsync with modified buffer returns diff":
+    let testFile = testDir / "test.txt"
+    writeFile(testFile, "line 1\nline 2\nline 3\n")
+    discard execCmdEx("git add test.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
+
+    let buf = newTextBuffer()
+    let loadResult = buf.loadFile(testFile)
+    check loadResult.isOk
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 5)
+    )
+    discard buf.insertText(BufferPosition(line: 1, column: 0), "modified")
+
+    let startResult = startGitDiffFromBufferAsync(buf)
+    check startResult.isOk
+
+    let diffProc = startResult.get
+
+    var completed = false
+    var diffLineCount = -1
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        check checkResult.get.isOk
+        diffLineCount = checkResult.get.get.lines.len
+        break
+      sleep(10)
+
+    check completed
+    check diffLineCount > 0
+
+  test "startGitDiffFromBufferAsync with untracked file returns error":
+    discard
+      execCmdEx("git commit --allow-empty -m 'Initial commit'", workingDir = testDir)
+    let testFile = testDir / "untracked.txt"
+    writeFile(testFile, "content\n")
+
+    let buf = newTextBuffer()
+    let loadResult = buf.loadFile(testFile)
+    check loadResult.isOk
+
+    let startResult = startGitDiffFromBufferAsync(buf)
+    check startResult.isOk
+
+    let diffProc = startResult.get
+
+    var completed = false
+    var gotErr = false
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        gotErr = checkResult.get.isErr
+        break
+      sleep(10)
+
+    check completed
+    check gotErr
+
+  test "startGitDiffFromBufferAsync with large HEAD blob does not deadlock":
+    # HEAD blob larger than a typical pipe buffer (~64KB on Linux). The old
+    # sync-in-async path read the pipe with readAll before waitForExit, so it
+    # was safe; the state machine polls peekExitCode without draining, so
+    # `git show` output has to bypass the pipe (redirected to a temp file).
+    let testFile = testDir / "big.txt"
+    var big = ""
+    for i in 0 ..< 10000:
+      big.add("this is a line with some content number " & $i & "\n")
+    writeFile(testFile, big)
+    discard execCmdEx("git add big.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'add big'", workingDir = testDir)
+
+    let buf = newTextBuffer()
+    let loadResult = buf.loadFile(testFile)
+    check loadResult.isOk
+
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "changed ")
+
+    let startResult = startGitDiffFromBufferAsync(buf)
+    check startResult.isOk
+
+    let diffProc = startResult.get
+
+    var completed = false
+    var diffLineCount = -1
+    for _ in 0 ..< 500:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        check checkResult.get.isOk
+        diffLineCount = checkResult.get.get.lines.len
+        break
+      sleep(10)
+
+    check completed
+    check diffLineCount > 0
+
+  test "startGitDiffFromBufferAsync with large diff output does not deadlock":
+    # Bulk edit so `git diff --no-index --unified=0` output blows past the
+    # kernel pipe buffer (~64KB on Linux). The gdsGitDiff stage has to
+    # redirect stdout to a temp file for the same reason gdsGitShow does,
+    # or `git diff` blocks on write while `peekExitCode` polls, and the
+    # pipeline hits its 5s timeout.
+    let testFile = testDir / "bulk.txt"
+    let lineCount = 2000
+    var head = ""
+    for i in 0 ..< lineCount:
+      head.add("original content on line number " & $i & "\n")
+    writeFile(testFile, head)
+    discard execCmdEx("git add bulk.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'add bulk'", workingDir = testDir)
+
+    let buf = newTextBuffer()
+    let loadResult = buf.loadFile(testFile)
+    check loadResult.isOk
+
+    # Prepend a marker to every line so every line differs from HEAD.
+    for lineIdx in 0 ..< lineCount:
+      discard buf.insertText(BufferPosition(line: lineIdx, column: 0), "X ")
+
+    let startResult = startGitDiffFromBufferAsync(buf)
+    check startResult.isOk
+
+    let diffProc = startResult.get
+
+    var completed = false
+    var diffLineCount = -1
+    for _ in 0 ..< 500:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        check checkResult.get.isOk
+        diffLineCount = checkResult.get.get.lines.len
+        break
+      sleep(10)
+
+    check completed
+    check diffLineCount == lineCount
+
   test "getHeadContent returns committed content":
     let testFile = testDir / "test.txt"
     let content = "line 1\nline 2\nline 3\n"
