@@ -62,6 +62,9 @@ type
     apsCsi # Got ESC [ (Control Sequence Introducer)
     apsOsc # Got ESC ] (Operating System Command)
     apsStringSeq # Consuming DCS/APC/PM/SOS string until ST
+    apsDesignateCharset
+      # Awaiting the 1-byte payload after ESC (/)/*/+/#; separate state so
+      # the byte can arrive in a later chunk without leaking into normal text.
 
   TerminalGrid* = ref object
     cells*: seq[seq[TerminalCell]] # [row][col]
@@ -869,14 +872,9 @@ proc processOutput*(grid: TerminalGrid, data: string) =
       of ']':
         grid.parserState = apsOsc
         grid.escapeBuffer = ""
-      of '(':
-        # Designate character set - skip next byte
-        i += 1
-        grid.parserState = apsNormal
-      of ')', '*', '+':
-        # Designate character set - skip next byte
-        i += 1
-        grid.parserState = apsNormal
+      of '(', ')', '*', '+':
+        # Designate G0/G1/G2/G3 character set - 1-byte payload follows.
+        grid.parserState = apsDesignateCharset
       of 'M':
         # Reverse Index (RI): move up, scrolling the region down at the top margin
         if grid.cursorRow == grid.scrollTop:
@@ -915,10 +913,8 @@ proc processOutput*(grid: TerminalGrid, data: string) =
           grid.cells[r] = newRow(grid.cols)
         grid.parserState = apsNormal
       of '#':
-        # DEC line attribute sequences (e.g., ESC # 8) - skip next byte
-        if i + 1 < actualData.len:
-          i += 1
-        grid.parserState = apsNormal
+        # DEC line attribute sequences (e.g., ESC # 8) - 1-byte payload follows.
+        grid.parserState = apsDesignateCharset
       of 'P', '_', '^', 'X':
         # String-type sequences: DCS (P), APC (_), PM (^), SOS (X)
         # Consume everything until ST (ESC \) or BEL
@@ -988,6 +984,8 @@ proc processOutput*(grid: TerminalGrid, data: string) =
       else:
         # Consume and discard the string content
         discard
+    of apsDesignateCharset:
+      grid.parserState = apsNormal
 
     i += 1
   grid.needsRedraw = true

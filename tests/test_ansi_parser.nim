@@ -1110,3 +1110,54 @@ suite "TerminalGrid - CSI overflow guard (regression)":
     check grid.cells[0][0].ch == "h"
     for c in 1 ..< grid.cols:
       check grid.cells[0][c].ch == ""
+
+suite "TerminalGrid - Charset designation across chunk boundaries":
+  test "ESC ( <payload> in one chunk consumes the payload":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("A\x1b(0B")
+    check grid.parserState == apsNormal
+    check grid.cursorCol == 2
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][1].ch == "B"
+
+  test "ESC ( split from its payload preserves the payload across reads":
+    # Chunk ends right after ESC (. Without a persistent state the next chunk's
+    # first byte would be misread as normal text instead of the charset payload.
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("A\x1b(")
+    check grid.parserState == apsDesignateCharset
+    grid.processOutput("0B")
+    check grid.parserState == apsNormal
+    check grid.cursorCol == 2
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][1].ch == "B" # '0' was the payload, not text
+
+  test "ESC ) / ESC * / ESC + all use the same cross-chunk path":
+    for intro in ["\x1b)", "\x1b*", "\x1b+"]:
+      let grid = newTerminalGrid(10, 3)
+      grid.processOutput("X" & intro)
+      check grid.parserState == apsDesignateCharset
+      grid.processOutput("BY")
+      check grid.parserState == apsNormal
+      check grid.cells[0][0].ch == "X"
+      check grid.cells[0][1].ch == "Y"
+
+  test "ESC # split from its payload preserves the payload across reads":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("X\x1b#")
+    check grid.parserState == apsDesignateCharset
+    grid.processOutput("8Y")
+    check grid.parserState == apsNormal
+    check grid.cells[0][0].ch == "X"
+    check grid.cells[0][1].ch == "Y"
+
+  test "CSI following a split charset designation still parses correctly":
+    # Regression: previously the first byte of the next chunk (here ESC) was
+    # eaten as the payload, so the following CSI SGR was misinterpreted.
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("\x1b(")
+    grid.processOutput("0\x1b[31mR")
+    check grid.parserState == apsNormal
+    check grid.currentFg.kind == ckIndexed
+    check grid.currentFg.index == 1
+    check grid.cells[0][0].ch == "R"
