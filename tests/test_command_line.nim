@@ -387,6 +387,21 @@ suite "CommandLine - parseCommandLine":
     check cmd.action == claSet
     check cmd.args == @["tabstop=4"]
 
+  test "Parse : w with leading whitespace":
+    let cmd = parser.parseCommandLine(": w")
+    check cmd.action == claSave
+    check cmd.args.len == 0
+
+  test "Parse :  w  file.txt with leading and repeated whitespace":
+    let cmd = parser.parseCommandLine(":  w  file.txt")
+    check cmd.action == claSave
+    check cmd.args == @["file.txt"]
+
+  test "Parse :w\\tfile.txt with tab separator":
+    let cmd = parser.parseCommandLine(":w\tfile.txt")
+    check cmd.action == claSave
+    check cmd.args == @["file.txt"]
+
 suite "CommandLine - execute":
   setup:
     let parser = newCommandLineParser()
