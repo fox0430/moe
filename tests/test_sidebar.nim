@@ -625,3 +625,39 @@ suite "Sidebar - Bookmark display":
 
     # Restore default
     setBookmarkMarker("♥ ")
+
+suite "Sidebar - setSidebarLine wide characters":
+  test "Width-2 rune claims two cells with an empty shadow":
+    var sidebar = initSidebar(1, 2)
+
+    sidebar.setSidebarLine(0, "🔖", Bookmark)
+
+    check sidebar.buffer[0][0].kind == some(Bookmark)
+    check sidebar.buffer[0][0].text == "🔖"
+    check sidebar.buffer[0][1].kind == some(Bookmark)
+    check sidebar.buffer[0][1].text == ""
+
+  test "Width-2 rune followed by narrow rune drops the overflow":
+    var sidebar = initSidebar(1, 2)
+
+    sidebar.setSidebarLine(0, "🔖X", Bookmark)
+
+    check sidebar.buffer[0][0].text == "🔖"
+    check sidebar.buffer[0][1].text == ""
+
+  test "Width-2 rune that would overflow is skipped and padded":
+    var sidebar = initSidebar(1, 1)
+
+    sidebar.setSidebarLine(0, "🔖", Bookmark)
+
+    check sidebar.buffer[0][0].kind == some(Bookmark)
+    check sidebar.buffer[0][0].text == " "
+
+  test "Zero-width rune folds into the preceding base cell":
+    var sidebar = initSidebar(1, 2)
+
+    # U+FE0F (VS16) is a zero-width variation selector.
+    sidebar.setSidebarLine(0, "!\u{FE0F} ", SyntaxWarning)
+
+    check sidebar.buffer[0][0].text == "!\u{FE0F}"
+    check sidebar.buffer[0][1].text == " "
