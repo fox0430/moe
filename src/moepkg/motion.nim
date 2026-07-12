@@ -539,9 +539,10 @@ proc moveWordEnd(
       # At end of buffer
       break
 
-    # Skip whitespace
-    while pos < runes.len and isWhitespace(runes[pos]):
-      pos += 1
+    # Skip whitespace and empty lines.
+    while true:
+      while pos < runes.len and isWhitespace(runes[pos]):
+        pos += 1
       if pos >= runes.len and result.y + 1 < e.buffer.len:
         result.y += 1
         pos = 0
@@ -552,6 +553,8 @@ proc moveWordEnd(
           else:
             currentLine
         runes = lineContent.toRunes()
+      else:
+        break
 
     # Move to end of word/symbol sequence
     if pos < runes.len:
