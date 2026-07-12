@@ -253,6 +253,78 @@ suite "renderWindowLineWrapped - Basic behavior":
     check screenY > 1
     check lineIndex == 1
 
+  test "Tiny window with lineNumOffset >= viewport.width terminates cleanly":
+    # Smoke test for the maxWidth clamp: raw `viewport.width - sidebar -
+    # scrollbar - lineNumOffset` goes negative. Kept as a regression trap in
+    # case a future change to `startsNewWrapSegment` (currently: `segmentWidth
+    # > 0` gates the first-rune bypass) makes negative maxWidth stop advancing
+    # bytePos and turn this into an infinite loop.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.display.showSidebar = false
+    e.state.display.scrollbar = false
+
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdef")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 4
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 4,
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+
+    # lineNumOffset (6) > viewport.width (4) — raw maxWidth would be -2.
+    e.renderWindowLineWrapped(buffer, window, 6, ctx, screenY, lineIndex, 20, 0)
+
+    check lineIndex == 1
+    check screenY >= 1
+    check screenY <= 20
+
+  test "Tiny window with maxWidth == 0 terminates cleanly":
+    # Boundary companion to the negative case above.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.display.showSidebar = false
+    e.state.display.scrollbar = false
+
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 4
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 4,
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+
+    # lineNumOffset (4) == viewport.width (4) — raw maxWidth would be 0.
+    e.renderWindowLineWrapped(buffer, window, 4, ctx, screenY, lineIndex, 20, 0)
+
+    check lineIndex == 1
+    check screenY >= 1
+    check screenY <= 20
+
   test "Render with tab line offset":
     let e = createTestEditor()
     var buffer = createTestBuffer()

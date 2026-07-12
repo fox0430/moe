@@ -680,7 +680,8 @@ proc renderWindowLineWrapped*(
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window.mode)
     scrollbarWidth = e.calculateScrollbarWidth(window.mode)
-    maxWidth = window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+    maxWidth =
+      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
