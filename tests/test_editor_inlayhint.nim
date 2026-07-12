@@ -158,7 +158,7 @@ suite "Inlay Hint Response processing":
   test "updateInlayHintCache caches an in-flight response for the same buffer":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.display.showInlayHint = true
+    e.state.showInlayHint = true
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "let x = 1")
     e.lsp.service.capabilities["nim"] =
@@ -185,7 +185,7 @@ suite "Inlay Hint Response processing":
     # file A's hints would be stamped onto and render inside file B's cache.
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.display.showInlayHint = true
+    e.state.showInlayHint = true
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "let x = 1")
     e.lsp.service.capabilities["nim"] =
@@ -209,7 +209,7 @@ suite "Inlay Hint Response processing":
 suite "Virtual text provider gating":
   test "buildVirtualTextProviders skips a cache owned by another file":
     let e = createTestEditor()
-    e.state.display.showInlayHint = true
+    e.state.showInlayHint = true
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.inlayHintCache.isValid = true
     e.state.lspCache.inlayHintCache.filePath = "/test/previous.nim"
@@ -218,7 +218,7 @@ suite "Virtual text provider gating":
 
   test "buildVirtualTextProviders adds the provider for the owning file":
     let e = createTestEditor()
-    e.state.display.showInlayHint = true
+    e.state.showInlayHint = true
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.inlayHintCache.isValid = true
     e.state.lspCache.inlayHintCache.filePath = "/test/current.nim"
@@ -227,7 +227,7 @@ suite "Virtual text provider gating":
 
   test "buildVirtualTextProviders skips an invalid cache":
     let e = createTestEditor()
-    e.state.display.showInlayHint = true
+    e.state.showInlayHint = true
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.inlayHintCache.isValid = false
     e.state.lspCache.inlayHintCache.filePath = "/test/current.nim"

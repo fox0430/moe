@@ -30,10 +30,7 @@ proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   if isBottomWindow:
     e.state.bottomAreaHeight(e.screenSize.width)
   else:
-    if e.state.display.showStatusLine and e.state.display.multiStatusLine:
-      StatusLineReserve
-    else:
-      0
+    if e.showStatusLine and e.multiStatusLine: StatusLineReserve else: 0
 
 proc steadyReservedLines*(e: Editor, isBottomWindow: bool): int =
   ## `calculateReservedLines` with the steady bottom-area floor, so it is stable
@@ -63,7 +60,7 @@ proc calculateTerminalAreaDimensions*(
     maxBottomY = findMaxBottomY(e.windowManager.windows)
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
-    tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
   result = (
     cols: window.viewport.width,
     rows: max(1, terminalContentRows(window, isBottomWindow, tabLineOffset)),
@@ -90,12 +87,12 @@ proc calculateWindowCursor*(
   if cursor.line < viewport.topLine:
     return CursorPosition(x: 0, y: 0)
 
-  if e.state.display.lineWrap:
+  if e.lineWrap:
     # WRAP MODE: Calculate cursor position considering line wrapping
     let maxWidth = max(1, viewport.width - lineNumOffset - scrollbarWidth)
 
     if wrapCache != nil:
-      wrapCache.ensureFresh(buffer, maxWidth, e.state.display.tabStop)
+      wrapCache.ensureFresh(buffer, maxWidth, e.tabStop)
 
     # Start above the top edge by the wrap segments skipped on the first line:
     # the loop below adds topLine's full wrap count, so a non-zero offset shifts
@@ -121,9 +118,7 @@ proc calculateWindowCursor*(
           if wrapCache != nil:
             wrapCache.cachedWrapCount(buffer, lineIdx)
           else:
-            calculateWrapCount(
-              buffer.getLine(lineIdx), maxWidth, e.state.display.tabStop
-            )
+            calculateWrapCount(buffer.getLine(lineIdx), maxWidth, e.tabStop)
         screenY += wrappedLines
         inc lineIdx
 
@@ -132,9 +127,8 @@ proc calculateWindowCursor*(
 
     let
       cursorLineText = buffer.getLine(cursor.line)
-      (wrapLineIndex, wrapLineColumn) = cursorWrapPosition(
-        cursorLineText, cursor.column, maxWidth, e.state.display.tabStop
-      )
+      (wrapLineIndex, wrapLineColumn) =
+        cursorWrapPosition(cursorLineText, cursor.column, maxWidth, e.tabStop)
 
     screenY += wrapLineIndex
 
@@ -170,12 +164,10 @@ proc calculateWindowCursor*(
     if screenRow < viewport.height - reservedLines:
       let
         cursorLineText = buffer.getLine(cursor.line)
-        displayWidthUpToCursor = displayWidthUpToWithTabs(
-          cursorLineText, cursor.column, e.state.display.tabStop
-        )
-        displayWidthUpToLeftCol = displayWidthUpToWithTabs(
-          cursorLineText, viewport.leftColumn, e.state.display.tabStop
-        )
+        displayWidthUpToCursor =
+          displayWidthUpToWithTabs(cursorLineText, cursor.column, e.tabStop)
+        displayWidthUpToLeftCol =
+          displayWidthUpToWithTabs(cursorLineText, viewport.leftColumn, e.tabStop)
         screenY = viewport.y + screenRow
         screenX =
           viewport.x + lineNumOffset +
@@ -187,8 +179,8 @@ proc calculateWindowCursor*(
 
 proc calculateSidebarWidth*(e: Editor, mode: EditorMode): int =
   ## Calculate the width occupied by the sidebar (0 if disabled)
-  sidebarWidthFor(mode, e.state.display.showSidebar)
+  sidebarWidthFor(mode, e.showSidebar)
 
 proc calculateScrollbarWidth*(e: Editor, mode: EditorMode): int =
   ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
-  scrollbarWidthFor(mode, e.state.display.scrollbar, e.state.display.scrollbarWidth)
+  scrollbarWidthFor(mode, e.scrollbar, e.scrollbarWidth)

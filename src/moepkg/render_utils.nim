@@ -414,8 +414,8 @@ proc viewportOffsetFor*(buffer: TextBuffer, state: EditorState): int {.inline.} 
   ## so the cache key stays in lockstep with the renderer's sidebar /
   ## scrollbar gating.
   calculateViewportOffset(
-    buffer, state.mode, state.display.showLineNumbers, state.display.showSidebar,
-    state.display.scrollbar, state.display.scrollbarWidth,
+    buffer, state.mode, state.showLineNumbers, state.showSidebar, state.scrollbar,
+    state.scrollbarWidth,
   )
 
 proc findMaxBottomY*(windows: seq[EditorWindow]): int =
@@ -614,7 +614,7 @@ proc bottomAreaHeight*(state: EditorState, width: int): int =
   let h = state.commandLineAreaHeight(width)
   if h <= 1:
     1
-  elif state.display.showStatusLine:
+  elif state.showStatusLine:
     h + 1
   else:
     h

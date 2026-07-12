@@ -721,7 +721,7 @@ suite "Editor - autoBackup":
 suite "Editor - refreshGitDiff":
   test "Refresh git diff does not crash on non-git file":
     let e = createTestEditor()
-    e.state.display.showGitDiff = true
+    e.state.showGitDiff = true
 
     # refreshGitDiff on a non-git file fails silently; the function must
     # not crash regardless.
@@ -731,7 +731,7 @@ suite "Editor - refreshGitDiff":
 
   test "Refresh git diff does nothing when disabled":
     let e = createTestEditor()
-    e.state.display.showGitDiff = false
+    e.state.showGitDiff = false
 
     # Should early-return without touching buffer state or spawning git.
     e.refreshGitDiff()

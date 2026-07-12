@@ -22,7 +22,7 @@ import std/[unittest, strutils, unicode]
 import pkg/results
 
 import ../src/moepkg/render_utils {.all.}
-import ../src/moepkg/[buffer, types, primitives]
+import ../src/moepkg/[buffer, types, config, primitives]
 
 suite "formatLineNumber":
   # formatLineNumber uses: align($(lineIndex + 1), width - 1) & " "
@@ -580,10 +580,9 @@ suite "getWrapCount":
     check cache.currentGen > genAfterFirst
 
 proc newTestState(showStatusLine: bool = true): EditorState =
-  EditorState(
-    activeWindow: EditorWindow(),
-    display: DisplaySettings(showStatusLine: showStatusLine),
-  )
+  let cfg = newEditorConfig()
+  cfg.standard.statusLine = showStatusLine
+  EditorState(activeWindow: EditorWindow(), config: cfg)
 
 suite "wrappedInputCursor":
   test "empty text":

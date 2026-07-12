@@ -54,29 +54,9 @@ proc createTestState(): EditorState =
   )
   EditorState(
     activeWindow: window,
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
     macroState: MacroState(
       isRecording: false,
@@ -1345,8 +1325,8 @@ proc createFilerEditor(
 suite "handleMouseEvent - Left Click Filer Mode":
   test "Click selects correct entry (no tab line)":
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=3 → should select entry 3 (topLine=0, no tab offset)
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
@@ -1356,8 +1336,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click selects correct entry with tab line offset":
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = true
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
 
     # Click on y=3 with tab line → adjustedY = 3 - 1 = 2 → entry 2
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
@@ -1367,8 +1347,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click selects correct entry with topLine offset":
     let e = createFilerEditor(20, topLine = 5)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=2, topLine=5 → entry 5 + 2 = 7
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 2))
@@ -1378,8 +1358,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click selects correct entry with both tab line and topLine":
     let e = createFilerEditor(20, topLine = 5)
-    e.state.display.showTabLine = true
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
 
     # Click on y=4, tab offset=1 → adjustedY=3, topLine=5 → entry 8
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 4))
@@ -1389,8 +1369,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click on tab line area is ignored":
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = true
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
 
     # Click on y=0 (tab line row) → adjustedY = -1 → should be ignored
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 0))
@@ -1401,8 +1381,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
     # viewport height=24, statusLine+cmdLine=2 reserved lines
     # valid filer area: y in [0..21] (without tab line)
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=23 (last row, command line area) → adjustedY=23 >= 24-2=22 → ignored
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 23))
@@ -1411,8 +1391,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click beyond entry count is ignored":
     let e = createFilerEditor(3)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=5, but only 3 entries → clickedIndex=5 >= 3 → ignored
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 5))
@@ -2899,7 +2879,7 @@ suite "updateViewportReservedLines - steady reserve":
     # the screen cursor).
     let e = createTestEditorWithBuffer("line0\nline1\nline2")
     e.screenSize.width = 80
-    e.state.display.showTabLine = false
+    e.state.showTabLine = false
 
     e.state.setStatusQuiet("error 1\nerror 2\nerror 3")
     # The message grew the dynamic reserve the old code would have used...

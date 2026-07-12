@@ -30,11 +30,11 @@ import types, buffer, color, unicode_utils, modes
 
 proc toggleTabLine*(state: var EditorState) =
   ## Toggle the visibility of the tab line
-  state.display.showTabLine = not state.display.showTabLine
+  state.showTabLine = not state.showTabLine
 
 proc setTabLineVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of the tab line
-  state.display.showTabLine = visible
+  state.showTabLine = visible
 
 proc getTabStyle(): Style =
   ## Get the tab style from theme

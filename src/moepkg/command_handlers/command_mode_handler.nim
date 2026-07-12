@@ -75,9 +75,8 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
     lineNumOffset = viewportOffsetFor(activeBuffer, e.state)
 
   e.handlerManager.motionController.viewportManager.updateViewport(
-    cursorPos, lineCount, e.state.display.showStatusLine,
-    e.state.windowDisplay.viewportReservedLines, e.state.display.lineWrap, activeBuffer,
-    lineNumOffset, e.state.display.tabStop,
+    cursorPos, lineCount, e.showStatusLine, e.state.windowDisplay.viewportReservedLines,
+    e.lineWrap, activeBuffer, lineNumOffset, e.tabStop,
   )
 
 proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
@@ -701,49 +700,38 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
             logError("handler", "Reload failed: " & reloadResult.error)
             e.state.statusMessage = "Error: " & reloadResult.error
       of hrSetBoolOption:
-        # Handle boolean option setting
         let opt = r.boolOption
         let val = r.boolValue
         case opt
         of bsoNumber:
           e.config.standard.number = val
-          e.state.display.showLineNumbers = val
           e.state.statusMessage = "number = " & $val
         of bsoRelativeNumber:
           e.config.standard.relativeNumber = val
-          e.state.display.relativeLineNumbers = val
           e.state.statusMessage = "relativenumber = " & $val
         of bsoCursorLine:
           e.config.highlight.currentLine = val
-          e.state.display.showCursorLine = val
           e.state.statusMessage = "cursorline = " & $val
         of bsoCursorColumn:
           e.config.highlight.currentColumn = val
-          e.state.display.showCursorColumn = val
           e.state.statusMessage = "cursorcolumn = " & $val
         of bsoStatusLine:
           e.config.standard.statusLine = val
-          e.state.display.showStatusLine = val
           e.state.statusMessage = "statusline = " & $val
         of bsoSyntax:
           e.config.standard.syntax = val
-          e.state.display.showSyntax = val
           e.state.statusMessage = "syntax = " & $val
         of bsoIndentationLines:
           e.config.standard.indentationLines = val
-          e.state.display.showIndentationLines = val
           e.state.statusMessage = "indentationlines = " & $val
         of bsoAutoIndent:
           e.config.standard.autoIndent = val
-          e.state.display.autoIndent = val
           e.state.statusMessage = "autoindent = " & $val
         of bsoAutoCloseParen:
           e.config.standard.autoCloseParen = val
-          e.state.display.autoCloseParen = val
           e.state.statusMessage = "autocloseparen = " & $val
         of bsoAutoDeleteParen:
           e.config.standard.autoDeleteParen = val
-          e.state.display.autoDeleteParen = val
           e.state.statusMessage = "autodeleteparen = " & $val
         of bsoClipboard:
           e.config.clipboard.enable = val
@@ -759,7 +747,6 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.state.statusMessage = "icon = " & $val
         of bsoHighlightCurrentLine:
           e.config.highlight.currentLine = val
-          e.state.display.showCursorLine = val
           e.state.statusMessage = "highlightcurrentline = " & $val
         of bsoHighlightCurrentWord:
           e.config.highlight.currentWord = val
@@ -783,7 +770,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.highlight.gitConflictTwoColor = val
           e.state.statusMessage = "highlightgitconflicttwocolor = " & $val
         of bsoMultipleStatusLine:
-          e.setMultiStatusLine(val)
+          e.config.statusLine.multipleStatusLine = val
+          e.state.statusMessage = "multiplestatusline = " & $val
         of bsoIgnoreCase:
           e.state.input.search.ignorecase = val
           e.state.statusMessage = "ignorecase = " & $val
@@ -804,36 +792,28 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.state.statusMessage = "showgitinactive = " & $val
         of bsoLineWrap:
           e.config.standard.lineWrap = val
-          e.setLineWrap(val)
           e.state.statusMessage = "wrap = " & $val
         of bsoExpandTab:
-          e.config.standard.expandTab = val
-          e.state.display.expandTab = val
-          e.state.statusMessage = "expandtab = " & $val
+          e.state.expandTab = val
+          e.state.statusMessage = "expandtab = " & $e.state.expandTab
         of bsoScrollbar:
           e.config.standard.scrollbar = val
-          e.state.display.scrollbar = val
           e.state.statusMessage = "scrollbar = " & $val
       of hrSetIntOption:
-        # Handle integer option setting
         let opt = r.intOption
         let val = r.intValue
         case opt
         of isoTabStop:
-          e.config.standard.tabStop = val
-          e.state.display.tabStop = val
-          e.state.statusMessage = "tabstop = " & $val
+          e.state.tabStop = val
+          e.state.statusMessage = "tabstop = " & $e.state.tabStop
         of isoShiftWidth:
-          e.config.standard.shiftWidth = val
-          e.state.display.shiftWidth = val
-          e.state.statusMessage = "shiftwidth = " & $val
+          e.state.shiftWidth = val
+          e.state.statusMessage = "shiftwidth = " & $e.state.shiftWidth
         of isoSoftTabStop:
           e.config.standard.softTabStop = val
-          e.state.display.softTabStop = val
           e.state.statusMessage = "softtabstop = " & $val
         of isoScrollbarWidth:
           e.config.standard.scrollbarWidth = val
-          e.state.display.scrollbarWidth = val
           e.state.statusMessage = "scrollbarwidth = " & $val
       of hrSetFloatOption:
         # Handle float option setting
@@ -1249,12 +1229,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           debugConfig.search.enable,
         )
         generateDisplayInfo(
-          debugLines, e.state.display.showStatusLine, e.state.display.multiStatusLine,
-          e.state.display.showLineNumbers, e.state.display.showCursorLine,
-          e.state.display.showSyntax, e.state.display.showIndentationLines,
-          e.state.display.showSidebar, e.state.display.scrollbarWidth,
-          e.state.display.showModifiedLines, e.state.display.lineWrap,
-          e.state.display.tabStop, debugConfig.editorView.enable,
+          debugLines, e.showStatusLine, e.multiStatusLine, e.showLineNumbers,
+          e.showCursorLine, e.showSyntax, e.showIndentationLines, e.showSidebar,
+          e.scrollbarWidth, e.showModifiedLines, e.lineWrap, e.tabStop,
+          debugConfig.editorView.enable,
         )
         generateMacroInfo(
           debugLines, e.state.macroState.isRecording, e.state.macroState.register,

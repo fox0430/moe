@@ -75,7 +75,7 @@ type
 template hasSyntaxHighlight(
     e: Editor, buffer: TextBuffer, windowMode: EditorMode
 ): bool =
-  e.state.display.showSyntax and not buffer.highlight.isNil and
+  e.showSyntax and not buffer.highlight.isNil and
     (windowMode.isFileEditMode or buffer.language != langNone or buffer.isUtilityBuffer)
 
 proc resolveLineConflict(
@@ -228,10 +228,10 @@ template gitConflictApplies(lineCtx: LineStyleContext): bool =
   lineCtx.lineConflict != cmkNone
 
 template cursorLineApplies(e: Editor, lineCtx: LineStyleContext): bool =
-  e.state.display.showCursorLine and lineCtx.isCursorLine
+  e.showCursorLine and lineCtx.isCursorLine
 
 template cursorColumnApplies(e: Editor, displayCol: int, cursorDisplayCol: int): bool =
-  e.state.display.showCursorColumn and displayCol >= 0 and displayCol == cursorDisplayCol
+  e.showCursorColumn and displayCol >= 0 and displayCol == cursorDisplayCol
 
 proc overlayPatchSyntax(
     e: Editor,
@@ -357,7 +357,7 @@ proc shouldShowIndentationGuide*(
   ## Uses cached indentInfo to avoid O(n²) performance
   ## displayX: the display column position (accounting for tabs)
   ## charIdx: the character index in the line
-  if not e.state.display.showIndentationLines:
+  if not e.showIndentationLines:
     return false
 
   # Don't show indentation guides in utility buffers (jumplist, log, etc.)
@@ -365,7 +365,7 @@ proc shouldShowIndentationGuide*(
     return false
 
   # Only show guides at indent levels (multiples of tabStop)
-  if displayX mod e.state.display.tabStop != 0:
+  if displayX mod e.tabStop != 0:
     return false
 
   # Don't show on column 0
@@ -556,8 +556,7 @@ proc renderLineSegmentWithSelection*(
     # Tab expands to N spaces up to the next tab stop. Each expanded cell
     # honors indentation-guide drawing; the spaces themselves use a style
     # that may carry the trailingSpaces override.
-    let spacesToNextTab =
-      e.state.display.tabStop - (displayX mod e.state.display.tabStop)
+    let spacesToNextTab = e.tabStop - (displayX mod e.tabStop)
     let tabStyle = style.merge(e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col))
     for i in 0 ..< spacesToNextTab:
       if screenX + displayX < ctx.windowRightEdge:
@@ -653,7 +652,7 @@ proc renderLineSegmentWithSelection*(
 proc fmtLineNum(
     state: EditorState, lineIndex: int, cursorLine: int, width: int
 ): string =
-  if state.display.relativeLineNumbers:
+  if state.relativeLineNumbers:
     formatRelativeLineNumber(lineIndex, cursorLine, width)
   else:
     formatLineNumber(lineIndex, width)
@@ -741,7 +740,7 @@ proc renderWindowLineWrapped*(
   if screenY >= maxScreenY:
     return
 
-  let tabStop = e.state.display.tabStop
+  let tabStop = e.tabStop
 
   # Build per-logical-line state once so each wrap segment can reuse it.
   if e.hasSyntaxHighlight(window.buffer, ctx.windowMode):
@@ -870,9 +869,8 @@ proc renderWindowLineNoWrap*(
       # Slicing by byte count would hide content on multibyte/CJK lines and
       # overflow the edge on tab-heavy lines (the lint_string_len hazard).
       let
-        (_, segmentWidth, endByte) = displayWidthSubstrFromByte(
-          displayLine, 0, cellBudget, e.state.display.tabStop
-        )
+        (_, segmentWidth, endByte) =
+          displayWidthSubstrFromByte(displayLine, 0, cellBudget, e.tabStop)
         visibleSlice = displayLine[0 ..< endByte]
       if visibleSlice.len > 0:
         # Append end-of-line virtual text only when the whole line is visible
@@ -1048,7 +1046,7 @@ proc renderWindow*(
   # Generate sidebar dynamically from buffer markers if enabled
   # Note: sidebar needs visibleHeight rows (screenY goes from tabLineOffset to visibleHeight + tabLineOffset)
   let maybeSidebar =
-    if e.state.display.showSidebar:
+    if e.showSidebar:
       # When the git-diff gutter is active for a git-tracked file, it is the
       # authoritative (content-based) change indicator, so suppress the session
       # "modified lines" fallback. Both draw the same `~`/`+` glyphs, and the
@@ -1057,8 +1055,9 @@ proc renderWindow*(
       # flagged), making it look like a stuck git marker. For non-git / untracked
       # files the git gutter shows nothing, so the session fallback is kept.
       let showSessionMarkers =
-        e.state.display.showModifiedLines and
-        not (e.state.display.showGitDiff and isBufferGitTracked(window.buffer))
+        e.showModifiedLines and not (
+          e.showGitDiff and isBufferGitTracked(window.buffer)
+        )
       some(
         generateSidebarFromBuffer(
           window.buffer,
@@ -1077,13 +1076,11 @@ proc renderWindow*(
     e.getVisualSelection(window.mode, window.active)
 
   # Compute cursor's display column (accounting for tabs/wide chars and scroll offset)
-  let leftCol = if e.state.display.lineWrap: 0 else: window.viewport.leftColumn
+  let leftCol = if e.lineWrap: 0 else: window.viewport.leftColumn
   let cursorDisplayCol =
     if window.cursor.line < lineCount:
       let cursorLineText = window.buffer.getLine(window.cursor.line)
-      bufferColToDisplayCol(
-        cursorLineText, window.cursor.column, e.state.display.tabStop, leftCol
-      )
+      bufferColToDisplayCol(cursorLineText, window.cursor.column, e.tabStop, leftCol)
     else:
       window.cursor.column
 
@@ -1138,7 +1135,7 @@ proc renderWindow*(
     if maybeSidebar.isSome:
       renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
 
-    if e.state.display.lineWrap:
+    if e.lineWrap:
       # Only the top logical line skips leading wrap segments (sub-line scroll).
       let skipSegments =
         if lineIndex == window.viewport.topLine: window.viewport.topWrapOffset else: 0
@@ -1184,7 +1181,7 @@ proc renderWindowSeparator*(
       for y in window.viewport.y ..< (window.viewport.y + actualSepHeight):
         if y < buffer.area.height:
           buffer.setString(sepX, y, "│", separatorStyle())
-  elif not e.state.display.multiStatusLine:
+  elif not e.multiStatusLine:
     # Horizontal split - draw horizontal separator at window boundary
     # ONLY when using a single status line
     let sepY = window.viewport.y + window.viewport.height

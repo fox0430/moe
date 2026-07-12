@@ -83,7 +83,7 @@ suite "renderConfig - Basic behavior":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     let e = newEditor(config, vr)
-    e.state.display.showStatusLine = false
+    e.state.showStatusLine = false
     var buffer = createTestBuffer()
 
     let configState = newConfigModeState(e.config)
@@ -97,7 +97,7 @@ suite "renderConfig - Basic behavior":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     let e = newEditor(config, vr)
-    e.state.display.showStatusLine = true
+    e.state.showStatusLine = true
     var buffer = createTestBuffer()
 
     let configState = newConfigModeState(e.config)

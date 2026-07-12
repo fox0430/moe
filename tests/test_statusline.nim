@@ -29,6 +29,8 @@ import ../src/moepkg/status_line {.all.}
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
+  let cfg = newEditorConfig()
+  cfg.statusLine.multipleStatusLine = false
   EditorState(
     activeWindow: EditorWindow(
       cursor: BufferPosition(line: 0, column: 0),
@@ -37,29 +39,9 @@ proc createTestState(): EditorState =
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
     ),
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
@@ -124,53 +106,53 @@ proc getBufferLine(buffer: celina.Buffer, y: int): string =
 suite "StatusLine - toggleStatusLine":
   test "Toggle from true to false":
     var state = createTestState()
-    check state.display.showStatusLine == true
+    check state.showStatusLine == true
 
     toggleStatusLine(state)
 
-    check state.display.showStatusLine == false
+    check state.showStatusLine == false
 
   test "Toggle from false to true":
     var state = createTestState()
-    state.display.showStatusLine = false
+    state.showStatusLine = false
 
     toggleStatusLine(state)
 
-    check state.display.showStatusLine == true
+    check state.showStatusLine == true
 
   test "Toggle twice returns to original state":
     var state = createTestState()
-    let original = state.display.showStatusLine
+    let original = state.showStatusLine
 
     toggleStatusLine(state)
     toggleStatusLine(state)
 
-    check state.display.showStatusLine == original
+    check state.showStatusLine == original
 
 suite "StatusLine - setStatusLineVisible":
   test "Set visible to true":
     var state = createTestState()
-    state.display.showStatusLine = false
+    state.showStatusLine = false
 
     setStatusLineVisible(state, true)
 
-    check state.display.showStatusLine == true
+    check state.showStatusLine == true
 
   test "Set visible to false":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
 
     setStatusLineVisible(state, false)
 
-    check state.display.showStatusLine == false
+    check state.showStatusLine == false
 
   test "Set to same value (idempotent)":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
 
     setStatusLineVisible(state, true)
 
-    check state.display.showStatusLine == true
+    check state.showStatusLine == true
 
 suite "StatusLine - toggleLineCount":
   test "Toggle from true to false":
@@ -294,36 +276,36 @@ suite "StatusLine - setLineEndingVisible":
 suite "StatusLine - toggleMultiStatusLine":
   test "Toggle from false to true":
     var state = createTestState()
-    check state.display.multiStatusLine == false
+    check state.multiStatusLine == false
 
     toggleMultiStatusLine(state)
 
-    check state.display.multiStatusLine == true
+    check state.multiStatusLine == true
 
   test "Toggle from true to false":
     var state = createTestState()
-    state.display.multiStatusLine = true
+    state.multiStatusLine = true
 
     toggleMultiStatusLine(state)
 
-    check state.display.multiStatusLine == false
+    check state.multiStatusLine == false
 
 suite "StatusLine - setMultiStatusLine":
   test "Set enabled to true":
     var state = createTestState()
-    state.display.multiStatusLine = false
+    state.multiStatusLine = false
 
     setMultiStatusLine(state, true)
 
-    check state.display.multiStatusLine == true
+    check state.multiStatusLine == true
 
   test "Set enabled to false":
     var state = createTestState()
-    state.display.multiStatusLine = true
+    state.multiStatusLine = true
 
     setMultiStatusLine(state, false)
 
-    check state.display.multiStatusLine == false
+    check state.multiStatusLine == false
 
 suite "StatusLine - buildFileDisplay":
   test "Display [No Name] for unnamed buffer":
@@ -546,7 +528,7 @@ suite "StatusLine - buildRightSideInfo":
 suite "StatusLine - renderStatusLine":
   test "Does nothing when showStatusLine is false":
     var state = createTestState()
-    state.display.showStatusLine = false
+    state.showStatusLine = false
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -559,7 +541,7 @@ suite "StatusLine - renderStatusLine":
 
   test "Renders status line when showStatusLine is true":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -577,7 +559,7 @@ suite "StatusLine - renderStatusLine":
 
   test "Renders with insert mode":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.mode = EditorMode.Insert
 
     var displayBuffer = createTestBuffer()
@@ -592,7 +574,7 @@ suite "StatusLine - renderStatusLine":
 
   test "Renders with visual mode":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.mode = EditorMode.Visual
 
     var displayBuffer = createTestBuffer()
@@ -607,7 +589,7 @@ suite "StatusLine - renderStatusLine":
 
   test "Renders with command overlay":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.overlay = some(okCommand)
 
     var displayBuffer = createTestBuffer()
@@ -622,7 +604,7 @@ suite "StatusLine - renderStatusLine":
 
   test "Renders [No Name] for unnamed buffer":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("", false, "test content")
@@ -635,7 +617,7 @@ suite "StatusLine - renderStatusLine":
 
   test "Renders modified marker":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", true, "test content")
@@ -650,7 +632,7 @@ suite "StatusLine - renderStatusLine":
 
   test "Does not render mode label when mode is disabled":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -665,8 +647,8 @@ suite "StatusLine - renderStatusLine":
 suite "StatusLine - renderWindowStatusLine":
   test "Does nothing when showStatusLine is false":
     var state = createTestState()
-    state.display.showStatusLine = false
-    state.display.multiStatusLine = true
+    state.showStatusLine = false
+    state.multiStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -681,8 +663,8 @@ suite "StatusLine - renderWindowStatusLine":
 
   test "Does nothing when multiStatusLine is false":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = false
+    state.showStatusLine = true
+    state.multiStatusLine = false
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -697,8 +679,8 @@ suite "StatusLine - renderWindowStatusLine":
 
   test "Renders status line for active window":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = true
+    state.showStatusLine = true
+    state.multiStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -717,8 +699,8 @@ suite "StatusLine - renderWindowStatusLine":
 
   test "Renders status line for inactive window with showModeInactive":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = true
+    state.showStatusLine = true
+    state.multiStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -737,8 +719,8 @@ suite "StatusLine - renderWindowStatusLine":
 
   test "Does not render mode for inactive window without showModeInactive":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = true
+    state.showStatusLine = true
+    state.multiStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -757,8 +739,8 @@ suite "StatusLine - renderWindowStatusLine":
 
   test "Renders at specified position":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = true
+    state.showStatusLine = true
+    state.multiStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -778,8 +760,8 @@ suite "StatusLine - renderWindowStatusLine":
 
   test "Truncates long file path to fit width":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = true
+    state.showStatusLine = true
+    state.multiStatusLine = true
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer(
@@ -917,7 +899,7 @@ suite "StatusLine - parseSetupText additional placeholders":
 suite "StatusLine - renderStatusLine additional modes":
   test "Renders with replace mode":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.mode = EditorMode.Replace
 
     var displayBuffer = createTestBuffer()
@@ -932,7 +914,7 @@ suite "StatusLine - renderStatusLine additional modes":
 
   test "Renders with filer mode":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.mode = EditorMode.Filer
 
     var displayBuffer = createTestBuffer()
@@ -948,7 +930,7 @@ suite "StatusLine - renderStatusLine additional modes":
 
   test "Renders with visual line mode":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.mode = EditorMode.VisualLine
 
     var displayBuffer = createTestBuffer()
@@ -963,7 +945,7 @@ suite "StatusLine - renderStatusLine additional modes":
 
   test "Renders with visual block mode":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.mode = EditorMode.VisualBlock
 
     var displayBuffer = createTestBuffer()
@@ -978,7 +960,7 @@ suite "StatusLine - renderStatusLine additional modes":
 
   test "Renders with search overlay":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.overlay = some(okSearch)
 
     var displayBuffer = createTestBuffer()
@@ -993,7 +975,7 @@ suite "StatusLine - renderStatusLine additional modes":
 
   test "Renders with rename overlay":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.overlay = some(okRename)
 
     var displayBuffer = createTestBuffer()
@@ -1008,7 +990,7 @@ suite "StatusLine - renderStatusLine additional modes":
 
   test "Renders with LSP progress text":
     var state = createTestState()
-    state.display.showStatusLine = true
+    state.showStatusLine = true
     state.ui.lspProgressText = "Loading..."
 
     var displayBuffer = createTestBuffer()
@@ -1158,8 +1140,8 @@ suite "StatusLine - buildRightSideInfo default format":
 suite "StatusLine - renderWindowStatusLine additional":
   test "Renders with overlay in window":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = true
+    state.showStatusLine = true
+    state.multiStatusLine = true
     state.overlay = some(okSearch)
 
     var displayBuffer = createTestBuffer()
@@ -1176,8 +1158,8 @@ suite "StatusLine - renderWindowStatusLine additional":
 
   test "Renders LSP progress only for active window":
     var state = createTestState()
-    state.display.showStatusLine = true
-    state.display.multiStatusLine = true
+    state.showStatusLine = true
+    state.multiStatusLine = true
     state.ui.lspProgressText = "Loading..."
 
     var displayBuffer = createTestBuffer()

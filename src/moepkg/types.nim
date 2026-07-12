@@ -258,42 +258,12 @@ type
       # True when Insert was entered via o/O, so each replay opens a fresh line
       # (newline + the entry line's indent) instead of inserting inline.
 
-  DisplaySettings* = object ## Display and UI settings grouped together
-    showTabLine*: bool # Whether to show the tab line
-    showStatusLine*: bool # Whether to show the status line
-    multiStatusLine*: bool
-      # Status line for each window (true) or only one at bottom (false)
-    showLineCount*: bool # Whether to show line count in status line
-    showLinePercentage*: bool # Whether to show line percentage in status line
-    showEncoding*: bool # Whether to show file encoding in status line
-    showLineEnding*: bool # Whether to show line ending (LF/CRLF/CR) in status line
-    showLineNumbers*: bool # Whether to show line numbers
-    relativeLineNumbers*: bool # Whether to show relative line numbers
-    showCurrentLineNumber*: bool # Whether to highlight current line number
-    showCursorLine*: bool # Whether to highlight the cursor line
-    showCursorColumn*: bool # Whether to highlight the cursor column
-    showSyntax*: bool # Whether to apply syntax highlighting
-    showIndentationLines*: bool # Whether to show indentation guide lines
-    showSidebar*: bool # Whether to show the sidebar
-    scrollbar*: bool # Whether to show the scrollbar
-    scrollbarWidth*: int # Scrollbar width in characters
-    showModifiedLines*: bool # Whether to highlight modified line numbers
-    showGitDiff*: bool # Whether to show git diff indicators in sidebar
-    showSyntaxChecker*: bool # Whether to show syntax checker results in sidebar
-    showCodeLens*: bool # Whether to show CodeLens
-    showDocumentHighlight*: bool # Whether to show document highlights
-    showInlayHint*: bool # Whether to show LSP inlay hints
-    lineWrap*: bool # Whether to wrap long lines
-    tabStop*: int # Tab width (number of spaces per tab character)
-    shiftWidth*: int # Indent width, 0 = use tabStop
-    softTabStop*: int # Tab/Backspace width in insert mode, 0 = use tabStop
-    expandTab*: bool # Insert spaces instead of tab character
-    autoIndent*: bool # Automatically indent new lines
-    smartIndent*: bool # Language-aware extra indent on Enter (currently Nim)
-    autoCloseParen*: bool # Automatically insert closing parenthesis/bracket/quote
-    autoDeleteParen*: bool # Automatically delete matching parenthesis
-    bracketSplit*: BracketSplitMode
-      # Enter behavior when cursor sits between () [] {} pairs
+  DisplaySettings* = object
+    ## Session-only display overrides; config-derived flags are pull accessors.
+    showLineCount*: bool
+    showLinePercentage*: bool
+    showEncoding*: bool
+    showLineEnding*: bool
 
   SignatureHelpRequestState* = object
     ## Debounce + change-detection state for auto signature help requests.
@@ -795,8 +765,10 @@ type
     editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
     visualSelection*: VisualSelection # Visual mode selection state
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
-    display*: DisplaySettings # Display and UI settings
-    timing*: TimingState # Timing and debounce state
+    display*: DisplaySettings
+    config*: EditorConfig
+      ## Aliases `Editor.config`; kept in sync on swap in applyConfigSettings.
+    timing*: TimingState
     lastKeyWasEscape*: bool
       # Track if last key was Escape (for double-Escape to clear highlight)
     # Full register system (vim-style)
@@ -852,6 +824,100 @@ type
 
 const MaxLspDebounceBackoffShift* = 6
   ## Max exponent for the reject-streak backoff (interval << 6).
+
+# State-based config pull-type accessors. Editor-based versions live in
+# types/editor_types.nim. See docs/config_runtime_push_removal_design.md.
+
+template flag2(name: untyped, T: typedesc, s1, f: untyped) =
+  proc name*(s: EditorState): T =
+    s.config.s1.f
+
+  proc `name=`*(s: EditorState, v: T) =
+    s.config.s1.f = v
+
+template flag3(name: untyped, T: typedesc, s1, s2, f: untyped) =
+  proc name*(s: EditorState): T =
+    s.config.s1.s2.f
+
+  proc `name=`*(s: EditorState, v: T) =
+    s.config.s1.s2.f = v
+
+flag2(showTabLine, bool, tabLine, enable)
+flag2(showStatusLine, bool, standard, statusLine)
+flag2(multiStatusLine, bool, statusLine, multipleStatusLine)
+flag2(showLineNumbers, bool, standard, number)
+flag2(relativeLineNumbers, bool, standard, relativeNumber)
+flag2(showCursorLine, bool, highlight, currentLine)
+flag2(showCursorColumn, bool, highlight, currentColumn)
+flag2(showSyntax, bool, standard, syntax)
+flag2(showIndentationLines, bool, standard, indentationLines)
+flag2(showSidebar, bool, standard, sidebar)
+flag2(scrollbar, bool, standard, scrollbar)
+flag2(scrollbarWidth, int, standard, scrollbarWidth)
+flag2(showModifiedLines, bool, standard, showModifiedLines)
+flag2(showGitDiff, bool, git, showChangedLine)
+flag2(showSyntaxChecker, bool, syntaxChecker, enable)
+flag3(showCodeLens, bool, lsp, codeLens, enable)
+flag3(showDocumentHighlight, bool, lsp, documentHighlight, enable)
+flag3(showInlayHint, bool, lsp, inlayHint, enable)
+flag2(lineWrap, bool, standard, lineWrap)
+flag2(softTabStop, int, standard, softTabStop)
+
+# tabStop / shiftWidth / expandTab: read prefers per-buffer .editorconfig
+# overrides, write updates both the global config and the active buffer's
+# override so `:set tabstop=N` is immediately visible even under an
+# .editorconfig override (vim-compatible buffer-local `:set`). activeWindow
+# may be nil in transient states (early init, teardown, test harnesses), so
+# guard before dereferencing its buffer.
+proc tabStop*(s: EditorState): int =
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome and buf.editorConfig.get.tabStop.isSome:
+      return buf.editorConfig.get.tabStop.get
+  s.config.standard.tabStop
+
+proc `tabStop=`*(s: EditorState, v: int) =
+  s.config.standard.tabStop = v
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome:
+      buf.editorConfig.get.tabStop = some(v)
+
+proc shiftWidth*(s: EditorState): int =
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome and
+        buf.editorConfig.get.shiftWidth.isSome:
+      return buf.editorConfig.get.shiftWidth.get
+  s.config.standard.shiftWidth
+
+proc `shiftWidth=`*(s: EditorState, v: int) =
+  s.config.standard.shiftWidth = v
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome:
+      buf.editorConfig.get.shiftWidth = some(v)
+
+proc expandTab*(s: EditorState): bool =
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome and
+        buf.editorConfig.get.expandTab.isSome:
+      return buf.editorConfig.get.expandTab.get
+  s.config.standard.expandTab
+
+proc `expandTab=`*(s: EditorState, v: bool) =
+  s.config.standard.expandTab = v
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome:
+      buf.editorConfig.get.expandTab = some(v)
+
+flag2(autoIndent, bool, standard, autoIndent)
+flag2(smartIndent, bool, standard, smartIndent)
+flag2(autoCloseParen, bool, standard, autoCloseParen)
+flag2(autoDeleteParen, bool, standard, autoDeleteParen)
+flag2(bracketSplit, BracketSplitMode, standard, bracketSplit)
 
 # Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
 # This eliminates the dual-state sync problem — EditorWindow is the single source of truth.

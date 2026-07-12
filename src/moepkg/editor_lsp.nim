@@ -26,6 +26,42 @@ import pkg/results
 import types/editor_types, lsp_integration, motion, editor_codelens
 import command_handlers/[handler_manager, insert_handler]
 
+proc applyLspServerConfigs*(e: Editor) =
+  ## Rebuild the LSP service config table from built-in defaults plus the
+  ## per-language [Lsp.<lang>] entries in e.config. Called from newEditor and
+  ## from applyConfigSettings so live reload picks up server-command /
+  ## trace / rust-analyzer edits including deletions and toggle-offs.
+  ## Already-running workers keep their old command until they restart.
+  e.lsp.service.resetConfigsToDefaults()
+  for langId, serverCfg in e.config.lsp.servers:
+    let existing = e.lsp.service.getConfig(langId)
+    if existing.isSome:
+      var c = existing.get
+      if serverCfg.command.len > 0:
+        c.command = serverCfg.command
+        c.args = @[]
+      if serverCfg.extensions.len > 0:
+        c.extensions = serverCfg.extensions
+      # Sync rawJsonLog to the current trace setting so toggling verbose off
+      # actually disables raw JSON-RPC logging.
+      c.rawJsonLog = serverCfg.trace == LspTraceLevel.ltVerbose
+      if langId == "rust":
+        c.initializationOptions =
+          "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
+          "},\"debug\":{\"enable\":" & $serverCfg.rustAnalyzerDebugSingle & "}}}"
+      e.lsp.service.setConfig(langId, c)
+    elif serverCfg.command.len > 0:
+      e.lsp.service.setConfig(
+        langId,
+        LanguageServerConfig(
+          command: serverCfg.command,
+          args: @[],
+          extensions: serverCfg.extensions,
+          enabled: true,
+          rawJsonLog: serverCfg.trace == LspTraceLevel.ltVerbose,
+        ),
+      )
+
 proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =
   ## Route a server's publishDiagnostics to the buffer it targets, not just
   ## the active one. Diagnostics for a background buffer would otherwise be

@@ -39,17 +39,17 @@ proc getLineIndent*(line: string): string =
 proc effectiveShiftWidth*(state: EditorState): int =
   ## Get the effective shift width (for >>/<<, auto-indent)
   ## Returns shiftWidth if > 0, otherwise tabStop (Vim compatible)
-  if state.display.shiftWidth > 0: state.display.shiftWidth else: state.display.tabStop
+  if state.shiftWidth > 0: state.shiftWidth else: state.tabStop
 
 proc effectiveSoftTabStop*(state: EditorState): int =
   ## Get the effective soft tab stop (for Tab/Backspace in insert mode)
   ## Returns softTabStop if > 0, otherwise tabStop (Vim compatible)
-  if state.display.softTabStop > 0: state.display.softTabStop else: state.display.tabStop
+  if state.softTabStop > 0: state.softTabStop else: state.tabStop
 
 proc getIndentString*(state: EditorState): string =
   ## Get the indent string to use for auto-indentation (>>/<<)
   ## Uses shiftWidth when set, falls back to tabStop
-  if state.display.expandTab:
+  if state.expandTab:
     return " ".repeat(effectiveShiftWidth(state))
   else:
     return "\t"
@@ -105,12 +105,12 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   let currentLineText = buffer.getLine(pos.line)
 
   # Split bracket pair onto three lines when cursor sits between () [] {}
-  if state.display.bracketSplit != bsmDisable and pos.column > 0 and
+  if state.bracketSplit != bsmDisable and pos.column > 0 and
       pos.column < currentLineText.runeLen and
       isAdjacentBracketPair(currentLineText, pos.column - 1):
-    let indented = state.display.bracketSplit == bsmIndent
+    let indented = state.bracketSplit == bsmIndent
     let baseIndent =
-      if state.display.autoIndent:
+      if state.autoIndent:
         getLineIndent(currentLineText)
       else:
         ""
@@ -140,11 +140,11 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   var newLineIndent = ""
 
   # Apply auto-indent if enabled
-  if state.display.autoIndent:
+  if state.autoIndent:
     # Get the indentation from the current line
     let baseIndent = getLineIndent(currentLineText)
     let extraIndent =
-      if state.display.smartIndent:
+      if state.smartIndent:
         extraIndentForNewline(currentLineText, buffer.language, getIndentString(state))
       else:
         ""
@@ -179,10 +179,10 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
   var indentLen = 0
   var newLineIndent = ""
 
-  if state.display.autoIndent:
+  if state.autoIndent:
     let baseIndent = getLineIndent(lineContent)
     let extraIndent =
-      if state.display.smartIndent:
+      if state.smartIndent:
         extraIndentForNewline(lineContent, buffer.language, getIndentString(state))
       else:
         ""
@@ -217,7 +217,7 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
   var textToInsert = "\n"
   var indentLen = 0
 
-  if state.display.autoIndent:
+  if state.autoIndent:
     let indent = getLineIndent(lineContent)
     if indent.len > 0:
       textToInsert = indent & "\n"

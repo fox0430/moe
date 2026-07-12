@@ -27,6 +27,7 @@ import
 import ../src/moepkg/command_handlers/command_handler
 import ../src/moepkg/key_bindings
 import ../src/moepkg/types
+import ../src/moepkg/config
 import ../src/moepkg/motion
 import ../src/moepkg/command_registry
 import ../src/moepkg/registers
@@ -934,6 +935,7 @@ proc createTestState(mode: EditorMode = EditorMode.Normal): EditorState =
       mode: mode,
       previousMode: EditorMode.Normal,
     ),
+    config: newEditorConfig(),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -966,9 +968,8 @@ proc createTestManager(): HandlerManager =
     motionController: motionController,
   )
 
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
-  )
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   let visualHandler = VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,

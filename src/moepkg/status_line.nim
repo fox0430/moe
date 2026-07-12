@@ -76,12 +76,16 @@ var
   gitDiffRefreshIntervalMs: int64 = DefaultGitDiffRefreshIntervalMs
 
 proc toggleStatusLine*(state: var EditorState) =
-  ## Toggle the visibility of the status line
-  state.display.showStatusLine = not state.display.showStatusLine
+  state.showStatusLine = not state.showStatusLine
 
 proc setStatusLineVisible*(state: var EditorState, visible: bool) =
-  ## Set the visibility of the status line
-  state.display.showStatusLine = visible
+  state.showStatusLine = visible
+
+proc toggleMultiStatusLine*(state: var EditorState) =
+  state.multiStatusLine = not state.multiStatusLine
+
+proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
+  state.multiStatusLine = enabled
 
 proc toggleLineCount*(state: var EditorState) =
   ## Toggle the visibility of line count in status line
@@ -110,14 +114,6 @@ proc setEncodingVisible*(state: var EditorState, visible: bool) =
 proc setLineEndingVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of line ending in status line
   state.display.showLineEnding = visible
-
-proc toggleMultiStatusLine*(state: var EditorState) =
-  ## Toggle between single status line (at bottom) and multi status lines (per window)
-  state.display.multiStatusLine = not state.display.multiStatusLine
-
-proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
-  ## Set multi status line mode
-  state.display.multiStatusLine = enabled
 
 static:
   # Verify the `statusLine<Mode>Mode` → `statusLine<Mode>ModeLabel` →
@@ -557,7 +553,7 @@ proc renderStatusLine*(
     config: StatusLineConfig,
 ) =
   ## Render the status line at the specified Y position
-  if not state.display.showStatusLine:
+  if not state.showStatusLine:
     return
 
   # Use overlay styles if an overlay is active, otherwise use mode styles
@@ -652,7 +648,7 @@ proc renderWindowStatusLine*(
     config: StatusLineConfig,
 ) =
   ## Render a status line for a specific window
-  if not state.display.showStatusLine or not state.display.multiStatusLine:
+  if not state.showStatusLine or not state.multiStatusLine:
     return
 
   # Build mode label (show for active window, or inactive if showModeInactive)

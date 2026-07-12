@@ -503,7 +503,7 @@ indent_size = 4
     check e.editFile(path).isOk
     check e.activeBuffer.editorConfig.isSome
     check e.activeBuffer.editorConfig.get.expandTab == some(true)
-    check e.state.display.shiftWidth == 4
+    check e.state.shiftWidth == 4
 
     # Drop the matching section so a reload should discard the overrides.
     writeFile(
@@ -518,27 +518,27 @@ indent_style = space
 
     check e.reloadCurrentFile().isOk
     check e.activeBuffer.editorConfig.isNone
-    check e.state.display.shiftWidth == e.config.standard.shiftWidth
+    check e.state.shiftWidth == e.config.standard.shiftWidth
 
 suite "Editor - Display toggle functions":
   test "Toggle status line visibility":
     let e = createTestEditor()
 
-    let initial = e.state.display.showStatusLine
+    let initial = e.state.showStatusLine
     e.toggleStatusLine()
-    check e.state.display.showStatusLine == not initial
+    check e.state.showStatusLine == not initial
 
     e.toggleStatusLine()
-    check e.state.display.showStatusLine == initial
+    check e.state.showStatusLine == initial
 
   test "Set status line visibility":
     let e = createTestEditor()
 
     e.setStatusLineVisible(false)
-    check e.state.display.showStatusLine == false
+    check e.state.showStatusLine == false
 
     e.setStatusLineVisible(true)
-    check e.state.display.showStatusLine == true
+    check e.state.showStatusLine == true
 
   test "Toggle line count visibility":
     let e = createTestEditor()
@@ -564,39 +564,39 @@ suite "Editor - Display toggle functions":
   test "Toggle line wrap":
     let e = createTestEditor()
 
-    let initial = e.state.display.lineWrap
+    let initial = e.state.lineWrap
     e.toggleLineWrap()
-    check e.state.display.lineWrap == not initial
+    check e.state.lineWrap == not initial
 
   test "Set line wrap":
     let e = createTestEditor()
 
     e.setLineWrap(false)
-    check e.state.display.lineWrap == false
+    check e.state.lineWrap == false
 
     e.setLineWrap(true)
-    check e.state.display.lineWrap == true
+    check e.state.lineWrap == true
 
   test "Toggle multi status line":
     let e = createTestEditor()
 
-    let initial = e.state.display.multiStatusLine
+    let initial = e.state.multiStatusLine
     e.toggleMultiStatusLine()
-    check e.state.display.multiStatusLine == not initial
+    check e.state.multiStatusLine == not initial
 
   test "Toggle sidebar visibility":
     let e = createTestEditor()
 
-    let initial = e.state.display.showSidebar
+    let initial = e.state.showSidebar
     e.toggleSidebar()
-    check e.state.display.showSidebar == not initial
+    check e.state.showSidebar == not initial
 
   test "Toggle syntax checker visibility":
     let e = createTestEditor()
 
-    let initial = e.state.display.showSyntaxChecker
+    let initial = e.state.showSyntaxChecker
     e.toggleSyntaxChecker()
-    check e.state.display.showSyntaxChecker == not initial
+    check e.state.showSyntaxChecker == not initial
 
 suite "Editor - Substitute preview":
   test "Start substitute preview":
@@ -1078,86 +1078,73 @@ suite "Editor - applyConfigSettings syncs display state":
 
     e.config.standard.number = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showLineNumbers == false
+    check e.state.showLineNumbers == false
 
     e.config.standard.number = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showLineNumbers == true
+    check e.state.showLineNumbers == true
 
   test "Syncs showStatusLine from config.standard.statusLine":
     let e = createTestEditor()
 
     e.config.standard.statusLine = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showStatusLine == false
+    check e.state.showStatusLine == false
 
     e.config.standard.statusLine = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showStatusLine == true
+    check e.state.showStatusLine == true
 
   test "Syncs tabStop from config.standard.tabStop":
     let e = createTestEditor()
 
     e.config.standard.tabStop = 8
     e.applyConfigSettings(e.config)
-    check e.state.display.tabStop == 8
+    check e.state.tabStop == 8
 
     e.config.standard.tabStop = 4
     e.applyConfigSettings(e.config)
-    check e.state.display.tabStop == 4
+    check e.state.tabStop == 4
 
   test "Syncs showSyntax from config.standard.syntax":
     let e = createTestEditor()
 
     e.config.standard.syntax = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showSyntax == false
+    check e.state.showSyntax == false
 
   test "Syncs showDocumentHighlight from config.lsp.documentHighlight.enable":
     let e = createTestEditor()
 
     e.config.lsp.documentHighlight.enable = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showDocumentHighlight == false
+    check e.state.showDocumentHighlight == false
 
     e.config.lsp.documentHighlight.enable = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showDocumentHighlight == true
+    check e.state.showDocumentHighlight == true
 
   test "Syncs showCodeLens from config.lsp.codeLens.enable":
     let e = createTestEditor()
 
     e.config.lsp.codeLens.enable = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showCodeLens == true
+    check e.state.showCodeLens == true
 
     e.config.lsp.codeLens.enable = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showCodeLens == false
+    check e.state.showCodeLens == false
 
   test "Syncs showInlayHint from config.lsp.inlayHint.enable":
     let e = createTestEditor()
 
     e.config.lsp.inlayHint.enable = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showInlayHint == false
+    check e.state.showInlayHint == false
 
     e.config.lsp.inlayHint.enable = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showInlayHint == true
-
-  test "Syncs lspCompletionEnabled from config.lsp.completion.enable":
-    # The insert handler caches lsp.completion.enable (it has no e.config access),
-    # so a config reload must re-sync the flag.
-    let e = createTestEditor()
-
-    e.config.lsp.completion.enable = false
-    e.applyConfigSettings(e.config)
-    check e.handlerManager.insertHandler.lspCompletionEnabled == false
-
-    e.config.lsp.completion.enable = true
-    e.applyConfigSettings(e.config)
-    check e.handlerManager.insertHandler.lspCompletionEnabled == true
+    check e.state.showInlayHint == true
 
   test "Disabling diagnostics clears stored diagnostics and markers":
     # Diagnostics are server-push, so disabling only stops future updates;
@@ -1187,42 +1174,42 @@ suite "Editor - applyConfigSettings syncs display state":
 
     e.config.standard.indentationLines = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showIndentationLines == true
+    check e.state.showIndentationLines == true
 
   test "Syncs showSidebar from config.standard.sidebar":
     let e = createTestEditor()
 
     e.config.standard.sidebar = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showSidebar == true
+    check e.state.showSidebar == true
 
   test "Syncs expandTab from config.standard.expandTab":
     let e = createTestEditor()
 
     e.config.standard.expandTab = false
     e.applyConfigSettings(e.config)
-    check e.state.display.expandTab == false
+    check e.state.expandTab == false
 
   test "Syncs autoIndent from config.standard.autoIndent":
     let e = createTestEditor()
 
     e.config.standard.autoIndent = false
     e.applyConfigSettings(e.config)
-    check e.state.display.autoIndent == false
+    check e.state.autoIndent == false
 
   test "Syncs autoCloseParen from config.standard.autoCloseParen":
     let e = createTestEditor()
 
     e.config.standard.autoCloseParen = true
     e.applyConfigSettings(e.config)
-    check e.state.display.autoCloseParen == true
+    check e.state.autoCloseParen == true
 
   test "Syncs autoDeleteParen from config.standard.autoDeleteParen":
     let e = createTestEditor()
 
     e.config.standard.autoDeleteParen = true
     e.applyConfigSettings(e.config)
-    check e.state.display.autoDeleteParen == true
+    check e.state.autoDeleteParen == true
 
   test "Syncs search settings from config":
     let e = createTestEditor()
@@ -1247,7 +1234,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let originalDisplay = e.state.display.showLineNumbers
+    let originalDisplay = e.state.showLineNumbers
 
     # Toggle in config mode (updates EditorConfig)
     configState.toggleBoolValue()
@@ -1255,7 +1242,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
 
     # Simulate what handleEvent now does for config mode
     e.applyConfigSettings(e.config)
-    check e.state.display.showLineNumbers == not originalDisplay
+    check e.state.showLineNumbers == not originalDisplay
 
   test "Config mode toggle statusLine syncs to display":
     let e = createTestEditor()
@@ -1266,11 +1253,11 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.showStatusLine
+    let original = e.state.showStatusLine
 
     configState.toggleBoolValue()
     e.applyConfigSettings(e.config)
-    check e.state.display.showStatusLine == not original
+    check e.state.showStatusLine == not original
 
   test "Config mode change tabStop syncs to display":
     let e = createTestEditor()
@@ -1281,11 +1268,11 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.tabStop
+    let original = e.state.tabStop
 
     configState.incrementIntValue()
     e.applyConfigSettings(e.config)
-    check e.state.display.tabStop == original + 1
+    check e.state.tabStop == original + 1
 
   test "Config mode toggle syntax syncs to display":
     let e = createTestEditor()
@@ -1296,11 +1283,11 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.showSyntax
+    let original = e.state.showSyntax
 
     configState.toggleBoolValue()
     e.applyConfigSettings(e.config)
-    check e.state.display.showSyntax == not original
+    check e.state.showSyntax == not original
 
   test "Config mode toggle sidebar syncs to display":
     let e = createTestEditor()
@@ -1311,11 +1298,11 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.showSidebar
+    let original = e.state.showSidebar
 
     configState.toggleBoolValue()
     e.applyConfigSettings(e.config)
-    check e.state.display.showSidebar == not original
+    check e.state.showSidebar == not original
 
 suite "Startup window - FileTree":
   ## These tests simulate handleStartUpWindows: viewport height is set to

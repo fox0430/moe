@@ -104,12 +104,12 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
   ctx.motionController.viewportManager.updateViewport(
     CursorPosition(x: 0, y: line),
     ctx.buffer.len,
-    ctx.state.display.showStatusLine,
+    ctx.state.showStatusLine,
     ctx.state.windowDisplay.viewportReservedLines,
-    ctx.state.display.lineWrap,
+    ctx.state.lineWrap,
     ctx.buffer,
     lineNumOffset,
-    ctx.state.display.tabStop,
+    ctx.state.tabStop,
   )
 
 proc registerMiscCommands*(registry: CommandRegistry) =
@@ -273,9 +273,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
       ctx.motionController.viewportManager.updateViewport(
-        cursorPos, lineCount, ctx.state.display.showStatusLine,
-        ctx.state.windowDisplay.viewportReservedLines, ctx.state.display.lineWrap,
-        ctx.buffer, lineNumOffset, ctx.state.display.tabStop,
+        cursorPos, lineCount, ctx.state.showStatusLine,
+        ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap, ctx.buffer,
+        lineNumOffset, ctx.state.tabStop,
       )
 
       ctx.state.statusMessage = "Found: " & searchText
@@ -613,9 +613,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
             lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
-            cursorPos, lineCount, ctx.state.display.showStatusLine,
-            ctx.state.windowDisplay.viewportReservedLines, ctx.state.display.lineWrap,
-            ctx.buffer, lineNumOffset, ctx.state.display.tabStop,
+            cursorPos, lineCount, ctx.state.showStatusLine,
+            ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap,
+            ctx.buffer, lineNumOffset, ctx.state.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word
@@ -693,9 +693,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
             lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
-            cursorPos, lineCount, ctx.state.display.showStatusLine,
-            ctx.state.windowDisplay.viewportReservedLines, ctx.state.display.lineWrap,
-            ctx.buffer, lineNumOffset, ctx.state.display.tabStop,
+            cursorPos, lineCount, ctx.state.showStatusLine,
+            ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap,
+            ctx.buffer, lineNumOffset, ctx.state.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word
