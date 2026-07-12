@@ -28,7 +28,7 @@ import pkg/celina
 
 import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,
-  popup_render, color
+  popup_render, color, unicode_utils
 
 import types/command_completion_types
 export command_completion_types
@@ -473,18 +473,18 @@ proc cmdPopupDescSelectedStyle*(): Style =
   )
 
 proc calculateMaxCommandWidth*(entries: seq[CommandCompletionEntry]): int =
-  ## Calculate the maximum command width in the entries
+  ## Calculate the maximum command width (in terminal columns) in the entries
   result = 0
   for entry in entries:
-    let width = entry.command.runeLen
+    let width = entry.command.displayWidth
     if width > result:
       result = width
 
 proc calculateMaxDescriptionWidth*(entries: seq[CommandCompletionEntry]): int =
-  ## Calculate the maximum description width in the entries
+  ## Calculate the maximum description width (in terminal columns) in the entries
   result = 0
   for entry in entries:
-    let width = entry.description.runeLen
+    let width = entry.description.displayWidth
     if width > result:
       result = width
 
@@ -586,16 +586,11 @@ proc renderCommandCompletionPopup*(
           else:
             cmdPopupDescNormalStyle()
 
-        # Truncate command (rune-safe, cmdDisplayWidth <= 0 safe)
+        # Truncate command by display width (CJK/wide-char safe, cmdDisplayWidth <= 0 safe)
         let cmdDisplayWidth = min(maxCmdWidth, contentWidth - DescriptionGap - 1)
-        let cmdRunes = entry.command.toRunes
         var displayCmd = entry.command
-        if cmdRunes.len > cmdDisplayWidth:
-          displayCmd =
-            if cmdDisplayWidth >= 1:
-              $cmdRunes[0 ..< cmdDisplayWidth - 1] & "…"
-            else:
-              ""
+        if displayCmd.displayWidth > cmdDisplayWidth:
+          displayCmd = truncateToWidthWithSuffix(displayCmd, cmdDisplayWidth, "…")
 
         # Draw command
         var x =
@@ -605,17 +600,12 @@ proc renderCommandCompletionPopup*(
         let cmdEndX = contentX + min(maxCmdWidth, cmdDisplayWidth) + DescriptionGap
         x = fillCells(termBuffer, x, y, min(cmdEndX, contentLimit), cmdStyle)
 
-        # Draw description if available (rune-safe, remainingWidth <= 0 safe)
+        # Draw description if available (display-width safe, remainingWidth <= 0 safe)
         if entry.description.len > 0:
           let remainingWidth = contentLimit - x
-          let descRunes = entry.description.toRunes
           var displayDesc = entry.description
-          if descRunes.len > remainingWidth:
-            displayDesc =
-              if remainingWidth >= 1:
-                $descRunes[0 ..< remainingWidth - 1] & "…"
-              else:
-                ""
+          if displayDesc.displayWidth > remainingWidth:
+            displayDesc = truncateToWidthWithSuffix(displayDesc, remainingWidth, "…")
           x = drawClippedRunes(termBuffer, x, y, contentLimit, displayDesc, descStyle)
 
         # Fill remaining space with background

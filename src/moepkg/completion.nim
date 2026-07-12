@@ -29,7 +29,9 @@ import
 
 import pkg/[celina, jsony]
 
-import buffer, word_dictionary, command_completion, fuzzy_match, color, popup_render
+import
+  buffer, word_dictionary, command_completion, fuzzy_match, color, popup_render,
+  unicode_utils
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
@@ -937,19 +939,19 @@ proc isActive*(mgr: CompletionManager): bool =
   mgr.state in {csActive, csPendingLsp}
 
 proc calculateMaxWordWidth*(entries: seq[CompletionEntry]): int =
-  ## Calculate the maximum displayed word width in the entries
+  ## Calculate the maximum displayed word width (in terminal columns) in the entries
   result = 0
   for entry in entries:
-    let width = entry.displayText.runeLen
+    let width = entry.displayText.displayWidth
     if width > result:
       result = width
 
 proc calculateMaxDetailWidth*(entries: seq[CompletionEntry]): int =
-  ## Calculate the maximum detail width in the entries
+  ## Calculate the maximum detail width (in terminal columns) in the entries
   result = 0
   for entry in entries:
     if entry.detail.isSome:
-      let width = entry.detail.get.runeLen
+      let width = entry.detail.get.displayWidth
       if width > result:
         result = width
 
@@ -1049,15 +1051,10 @@ proc renderCompletionPopup*(
           else:
             popupNormalStyle()
 
-        # Truncate word (rune-safe, contentWidth <= 0 safe)
-        let wordRunes = entry.displayText.toRunes
+        # Truncate word by display width (CJK/wide-char safe, contentWidth <= 0 safe)
         var displayWord = entry.displayText
-        if wordRunes.len > contentWidth:
-          displayWord =
-            if contentWidth >= 1:
-              $wordRunes[0 ..< contentWidth - 1] & "…"
-            else:
-              ""
+        if displayWord.displayWidth > contentWidth:
+          displayWord = truncateToWidthWithSuffix(displayWord, contentWidth, "…")
 
         # Draw word
         var x =
@@ -1074,16 +1071,12 @@ proc renderCompletionPopup*(
           let detailStartX = contentX + maxWordW + DetailSeparatorWidth
           x = fillCells(termBuffer, x, y, min(detailStartX, contentLimit), style)
 
-          # Render detail (rune-safe, availableDetailWidth <= 0 safe)
+          # Render detail by display width (CJK/wide-char safe, availableDetailWidth <= 0 safe)
           let availableDetailWidth = contentLimit - x
-          let detailRunes = entry.detail.get.toRunes
           var displayDetail = entry.detail.get
-          if detailRunes.len > availableDetailWidth:
+          if displayDetail.displayWidth > availableDetailWidth:
             displayDetail =
-              if availableDetailWidth >= 1:
-                $detailRunes[0 ..< availableDetailWidth - 1] & "…"
-              else:
-                ""
+              truncateToWidthWithSuffix(displayDetail, availableDetailWidth, "…")
           x =
             drawClippedRunes(termBuffer, x, y, contentLimit, displayDetail, detailStyle)
 
@@ -1125,10 +1118,10 @@ proc calculateDocPanelPosition*(
   ## highlighted candidate's row (border + selectedIndex - scrollOffset), so the
   ## panel tracks the selection instead of pinning to the popup's first row.
 
-  # Calculate content dimensions
+  # Calculate content dimensions (max line display width, CJK-aware)
   var maxLineLen = 0
   for line in docPanel.lines:
-    maxLineLen = max(maxLineLen, line.runeLen)
+    maxLineLen = max(maxLineLen, line.displayWidth)
 
   let contentWidth =
     min(max(maxLineLen + PopupPadding, DocPanelMinWidth), DocPanelMaxWidth)
