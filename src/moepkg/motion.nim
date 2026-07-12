@@ -453,36 +453,43 @@ proc moveWordBackward(
       break
 
     var pos = result.x
+    var currentLine: string
+    var lineContent: string
+    var runes: seq[Rune]
+
+    template loadCurrentLine() =
+      currentLine = e.buffer.getLine(result.y)
+      lineContent =
+        if currentLine.len > 0 and currentLine[^1] == '\n':
+          currentLine[0 ..< ^1]
+        else:
+          currentLine
+      runes = lineContent.toRunes()
 
     # Move back one position first
     if pos > 0:
       pos -= 1
+      loadCurrentLine()
     elif result.y > 0:
       # Move to previous line
       result.y -= 1
-      let prevLine = e.buffer.getLine(result.y)
-      let prevContent =
-        if prevLine.len > 0 and prevLine[^1] == '\n':
-          prevLine[0 ..< ^1]
-        else:
-          prevLine
-      let prevRunes = prevContent.toRunes()
-      pos = max(0, prevRunes.len - 1)
+      loadCurrentLine()
+      pos = max(0, runes.len - 1)
     else:
       # At beginning of buffer
       break
 
-    let currentLine = e.buffer.getLine(result.y)
-    let lineContent =
-      if currentLine.len > 0 and currentLine[^1] == '\n':
-        currentLine[0 ..< ^1]
+    # Skip whitespace and empty lines backwards.
+    while true:
+      while pos > 0 and pos < runes.len and isWhitespace(runes[pos]):
+        pos -= 1
+      if (runes.len == 0 or (pos < runes.len and isWhitespace(runes[pos]))) and
+          result.y > 0:
+        result.y -= 1
+        loadCurrentLine()
+        pos = max(0, runes.len - 1)
       else:
-        currentLine
-    let runes = lineContent.toRunes()
-
-    # Skip whitespace backwards
-    while pos > 0 and isWhitespace(runes[pos]):
-      pos -= 1
+        break
 
     # Now we're on a non-whitespace character
     # Skip backwards through the word/symbol sequence to find its start
