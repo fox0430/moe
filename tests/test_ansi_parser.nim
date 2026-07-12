@@ -226,6 +226,30 @@ suite "TerminalGrid - SGR colors":
     check grid.cells[0][0].bg.g == 128
     check grid.cells[0][0].bg.b == 255
 
+  test "Truncated 38;5 does not leak into subsequent SGR codes":
+    # `38;5` without the color index used to fall through and be reinterpreted
+    # as SGR 5 (blink), corrupting attribute state.
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[38;5mX")
+    check taBlink notin grid.cells[0][0].attrs
+
+  test "Truncated 38;2 does not leak into subsequent SGR codes":
+    # `38;2;R;G` without B previously set taDim (from the leftover `2`) and
+    # ran R/G through the SGR case as well.
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[38;2;255;128mX")
+    check taDim notin grid.cells[0][0].attrs
+
+  test "Truncated 48;5 does not leak into subsequent SGR codes":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[48;5mX")
+    check taBlink notin grid.cells[0][0].attrs
+
+  test "Truncated 48;2 does not leak into subsequent SGR codes":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[48;2;0;128mX")
+    check taDim notin grid.cells[0][0].attrs
+
 suite "TerminalGrid - Cursor visibility":
   test "Hide cursor (CSI ?25l)":
     let grid = newTerminalGrid(80, 24)
