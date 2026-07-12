@@ -199,11 +199,20 @@ proc setDeletedRegister*(r: Registers, content: string, isLine: bool) =
 
 proc setDeletedRegister*(r: Registers, lines: seq[string], isLine: bool) =
   ## Set delete register from lines with history shift
-  # Shift registers 1-8 to 2-9
-  for i in countdown(8, 1):
-    r.number[i + 1] = r.number[i]
-  r.number[1].setRegister(lines, isLine)
-  r.setNoNamedRegister(lines, isLine)
+  ## - If linewise or multiline: goes to register 1, shifting 1-8 to 2-9
+  ## - If characterwise single line: goes to small delete register (-)
+  if isLine or lines.len > 1:
+    for i in countdown(8, 1):
+      r.number[i + 1] = r.number[i]
+    r.number[1].setRegister(lines, isLine)
+    r.setNoNamedRegister(lines, isLine)
+  else:
+    let content =
+      if lines.len == 0:
+        ""
+      else:
+        lines[0]
+    r.setSmallDeleteRegister(content)
 
 proc setNamedRegister*(
     r: Registers, name: char, content: string, isLine: bool
