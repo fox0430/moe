@@ -310,7 +310,7 @@ suite "Config - newEditorConfig defaults":
     let config = newEditorConfig()
 
     check config.lsp.enable == false
-    check config.lsp.timeout == 5000
+    check config.lsp.timeout == 30000
 
     # Feature configs
     check config.lsp.completion.enable == true

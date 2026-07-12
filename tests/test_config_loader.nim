@@ -568,7 +568,7 @@ timeout = 0
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Lsp.timeout" in vr.errors[0].name
-    check config.lsp.timeout == 5000 # Default value
+    check config.lsp.timeout == 30000 # Default value
 
   test "Negative LSP timeout is rejected":
     let tomlStr = """
@@ -578,7 +578,7 @@ timeout = -1
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Lsp.timeout" in vr.errors[0].name
-    check config.lsp.timeout == 5000 # Default value
+    check config.lsp.timeout == 30000 # Default value
 
   test "Loader accepts any positive LSP timeout (no upper bound)":
     # timeout has no upper bound anywhere: only correctness matters (> 0), and

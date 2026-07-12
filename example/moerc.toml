@@ -478,7 +478,7 @@ enable = true                          # Enable .editorconfig support
 
 enable = false                         # Enable LSP support
 
-timeout = 5000                         # LSP request timeout in ms
+timeout = 30000                        # LSP request timeout in ms
 
 [Lsp.Completion]
 
