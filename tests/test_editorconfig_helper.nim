@@ -513,8 +513,7 @@ indent_style = space
     let buf = newTextBuffer()
     buf.filePath = some(testFile)
     # Simulate an override left over from a prior .editorconfig state.
-    buf.editorConfig =
-      some(BufferEditorConfig(expandTab: some(true), tabStop: some(2)))
+    buf.editorConfig = some(BufferEditorConfig(expandTab: some(true), tabStop: some(2)))
 
     applyEditorConfigToBuffer(buf, conf)
 
