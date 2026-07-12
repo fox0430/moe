@@ -474,6 +474,127 @@ proc formatRawJsonLogLine*(
   let arrow = if direction == ljdSent: ">>>" else: "<<<"
   languageId & " " & arrow & " " & json
 
+proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
+  ## Convert a server notification (method + params) into the LspEvent to
+  ## enqueue. Pure - no I/O, no queue access, no raising. Malformed frames
+  ## (missing or wrong-typed fields) resolve to a warning levLogMessage so a
+  ## bad frame never unwinds the caller and drops adjacent frames from the
+  ## same drain.
+  case meth
+  of "textDocument/publishDiagnostics":
+    let uri = params.getOrDefault("uri").getStr
+    if uri.len == 0:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "publishDiagnostics missing/invalid uri; dropping frame",
+      )
+    # Serialize the raw diagnostics array; the main thread parses it
+    # (Diagnostic carries JsonNode fields that must not cross threads)
+    let diagsJson =
+      if params.hasKey("diagnostics"):
+        $params["diagnostics"]
+      else:
+        "[]"
+    return LspEvent(kind: levDiagnostics, diagUri: uri, diagnosticsJson: diagsJson)
+  of "window/logMessage":
+    return LspEvent(
+      kind: levLogMessage,
+      msgType:
+        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtLog.ord), mtLog),
+      message: params.getOrDefault("message").getStr,
+    )
+  of "window/showMessage":
+    return LspEvent(
+      kind: levShowMessage,
+      msgType:
+        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtLog.ord), mtLog),
+      message: params.getOrDefault("message").getStr,
+    )
+  of "$/logTrace":
+    var message = params.getOrDefault("message").getStr
+    let verbose = params.getOrDefault("verbose").getStr
+    if verbose.len > 0:
+      message &= "\n" & verbose
+    return LspEvent(kind: levLogMessage, msgType: mtInfo, message: message)
+  of "$/progress":
+    try:
+      let progressParams = parseWorkDoneProgressParams(params)
+      return LspEvent(
+        kind: levProgress,
+        progressToken: getProgressToken(progressParams),
+        progress: progressParams.value,
+      )
+    except CatchableError as e:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "Failed to parse $/progress: " & e.msg,
+      )
+  of "experimental/serverStatus":
+    # rust-analyzer style status notification
+    try:
+      let health =
+        case params.getOrDefault("health").getStr
+        of "warning": shWarning
+        of "error": shError
+        else: shOk
+      let quiescent = params.getOrDefault("quiescent").getBool(true)
+      let msgNode = params.getOrDefault("message")
+      let message =
+        if not msgNode.isNil and msgNode.kind == JString:
+          some(msgNode.getStr)
+        else:
+          none(string)
+      return LspEvent(
+        kind: levStatusUpdate,
+        statusHealth: health,
+        statusQuiescent: quiescent,
+        statusMessage: message,
+      )
+    except CatchableError as e:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "Failed to parse experimental/serverStatus: " & e.msg,
+      )
+  of "extension/statusUpdate":
+    # nimlangserver style status notification
+    try:
+      let projectErrors = params.getOrDefault("projectErrors")
+      let hasErrors =
+        not projectErrors.isNil and projectErrors.kind == JArray and
+        projectErrors.len > 0
+      let health = if hasErrors: shWarning else: shOk
+      let pending = params.getOrDefault("pendingRequests")
+      let quiescent =
+        if not pending.isNil and pending.kind == JArray:
+          pending.len == 0
+        else:
+          true
+      var message = none(string)
+      if hasErrors:
+        for err in projectErrors:
+          if err.kind == JString:
+            message = some(err.getStr)
+            break
+      return LspEvent(
+        kind: levStatusUpdate,
+        statusHealth: health,
+        statusQuiescent: quiescent,
+        statusMessage: message,
+      )
+    except CatchableError as e:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "Failed to parse extension/statusUpdate: " & e.msg,
+      )
+  else:
+    return LspEvent(
+      kind: levLogMessage, msgType: mtInfo, message: "Unknown LSP notification: " & meth
+    )
+
 # Worker thread main loop
 proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
   var
@@ -514,10 +635,6 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
   proc sendLogMessage(msgType: MessageType, msg: string) =
     var evt = LspEvent(kind: levLogMessage, msgType: msgType, message: msg)
-    ctx.eventQueue[].push(evt)
-
-  proc sendDiagnostics(uri: string, diagsJson: string) =
-    var evt = LspEvent(kind: levDiagnostics, diagUri: uri, diagnosticsJson: diagsJson)
     ctx.eventQueue[].push(evt)
 
   proc sendCapabilities(capsJson: string) =
@@ -682,107 +799,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       )
 
   proc handleNotification(meth: string, params: JsonNode) =
-    case meth
-    of "textDocument/publishDiagnostics":
-      let uri = params["uri"].getStr
-      # Serialize the raw diagnostics array; the main thread parses it
-      # (Diagnostic carries JsonNode fields that must not cross threads)
-      let diagsJson =
-        if params.hasKey("diagnostics"):
-          $params["diagnostics"]
-        else:
-          "[]"
-      sendDiagnostics(uri, diagsJson)
-    of "window/logMessage":
-      var evt = LspEvent(
-        kind: levLogMessage,
-        msgType: toEnumOr[MessageType](params["type"].getInt, mtLog),
-        message: params["message"].getStr,
-      )
-      ctx.eventQueue[].push(evt)
-    of "window/showMessage":
-      var evt = LspEvent(
-        kind: levShowMessage,
-        msgType: toEnumOr[MessageType](params["type"].getInt, mtLog),
-        message: params["message"].getStr,
-      )
-      ctx.eventQueue[].push(evt)
-    of "$/logTrace":
-      var message = params["message"].getStr
-      if params.hasKey("verbose"):
-        message &= "\n" & params["verbose"].getStr
-      var evt = LspEvent(kind: levLogMessage, msgType: mtInfo, message: message)
-      ctx.eventQueue[].push(evt)
-    of "$/progress":
-      try:
-        let progressParams = parseWorkDoneProgressParams(params)
-        var evt = LspEvent(
-          kind: levProgress,
-          progressToken: getProgressToken(progressParams),
-          progress: progressParams.value,
-        )
-        ctx.eventQueue[].push(evt)
-      except CatchableError as e:
-        sendLogMessage(mtWarning, "Failed to parse $/progress: " & e.msg)
-    of "experimental/serverStatus":
-      # rust-analyzer style status notification
-      try:
-        let health =
-          case params["health"].getStr
-          of "warning": shWarning
-          of "error": shError
-          else: shOk
-        let quiescent = params.getOrDefault("quiescent").getBool(true)
-        let message =
-          if params.hasKey("message") and params["message"].kind == JString:
-            some(params["message"].getStr)
-          else:
-            none(string)
-        var evt = LspEvent(
-          kind: levStatusUpdate,
-          statusHealth: health,
-          statusQuiescent: quiescent,
-          statusMessage: message,
-        )
-        ctx.eventQueue[].push(evt)
-      except CatchableError as e:
-        sendLogMessage(mtWarning, "Failed to parse experimental/serverStatus: " & e.msg)
-    of "extension/statusUpdate":
-      # nimlangserver style status notification
-      try:
-        # Determine health from projectErrors
-        let health =
-          if params.hasKey("projectErrors") and params["projectErrors"].len > 0:
-            shWarning
-          else:
-            shOk
-        # Determine quiescent from pendingRequests
-        let quiescent =
-          if params.hasKey("pendingRequests"):
-            params["pendingRequests"].len == 0
-          else:
-            true
-        # Build message from projectErrors if any
-        var message = none(string)
-        if params.hasKey("projectErrors") and params["projectErrors"].len > 0:
-          var errors: seq[string] = @[]
-          for err in params["projectErrors"]:
-            if err.kind == JString:
-              errors.add(err.getStr)
-          if errors.len > 0:
-            message = some(errors[0]) # Show first error
-        var evt = LspEvent(
-          kind: levStatusUpdate,
-          statusHealth: health,
-          statusQuiescent: quiescent,
-          statusMessage: message,
-        )
-        ctx.eventQueue[].push(evt)
-      except CatchableError as e:
-        sendLogMessage(mtWarning, "Failed to parse extension/statusUpdate: " & e.msg)
-    else:
-      # Log unknown notifications for debugging
-      sendLogMessage(mtInfo, "Unknown LSP notification: " & meth)
+    ctx.eventQueue[].push(notificationToEvents(meth, params))
 
   proc sendRequest(
       meth: string, paramsJson: string
