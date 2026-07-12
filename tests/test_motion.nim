@@ -282,6 +282,20 @@ suite "Word Motion":
     let result = executor.moveWordEnd(currentPos, 1)
     check result.x == 8 # End of '日本語'
 
+  test "moveWordEnd crosses a single empty line":
+    let buffer = newTextBuffer("foo\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordEnd(CursorPosition(x: 2, y: 0), 1)
+    check result.y == 2
+    check result.x == 2 # End of "bar"
+
+  test "moveWordEnd crosses multiple empty lines":
+    let buffer = newTextBuffer("foo\n\n\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordEnd(CursorPosition(x: 2, y: 0), 1)
+    check result.y == 4
+    check result.x == 2 # End of "bar"
+
 suite "Find/Till Char Backward":
   test "findCharBackward finds previous occurrence":
     let buffer = newTextBuffer("abcxabc")
