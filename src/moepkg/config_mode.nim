@@ -590,6 +590,13 @@ proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
   of cvkColor:
     return indent & name & " : " & item.colorValue
 
+proc calcMaxNameWidth*(items: seq[ConfigItem], maxWidth: int): int =
+  ## Calculate the maximum display name width for config item layout.
+  for item in items:
+    if item.kind != cvkSection:
+      result = max(result, item.displayName.len + item.depth * 2)
+  result = min(result + 4, maxWidth div 2)
+
 # Edit mode (Int/String editing)
 
 proc startEdit*(state: ConfigModeState) =
