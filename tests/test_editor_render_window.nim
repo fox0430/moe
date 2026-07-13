@@ -261,8 +261,8 @@ suite "renderWindowLineWrapped - Basic behavior":
     # bytePos and turn this into an infinite loop.
     let e = createTestEditor()
     var buffer = createTestBuffer()
-    e.state.display.showSidebar = false
-    e.state.display.scrollbar = false
+    e.state.showSidebar = false
+    e.state.scrollbar = false
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abcdef")
 
@@ -295,8 +295,8 @@ suite "renderWindowLineWrapped - Basic behavior":
     # Boundary companion to the negative case above.
     let e = createTestEditor()
     var buffer = createTestBuffer()
-    e.state.display.showSidebar = false
-    e.state.display.scrollbar = false
+    e.state.showSidebar = false
+    e.state.scrollbar = false
 
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
 
