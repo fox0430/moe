@@ -145,7 +145,13 @@ proc moveCursorToLspPosition(e: Editor, buffer: TextBuffer, lspLine, lspColumn: 
       ""
   # Convert LSP UTF-16 character offset to character index
   let charCol = utf16ToRuneIndex(lineText, lspColumn)
-  let targetCol = min(charCol, max(0, lineText.charLen - 1))
+  # Insert mode allows cursor at charLen (append position)
+  let maxCol =
+    if e.state.mode == EditorMode.Insert:
+      lineText.charLen
+    else:
+      max(0, lineText.charLen - 1)
+  let targetCol = min(charCol, maxCol)
   e.activeWindow.cursor.line = targetLine
   e.activeWindow.cursor.column = max(0, targetCol)
 

@@ -760,6 +760,57 @@ suite "editor_navigation - openWindow option":
     check e.activeBuffer().filePath.get == testFile2
     check e.cursor.line == 1
 
+suite "editor_navigation - moveCursorToLspPosition cursor clamping":
+  test "Insert mode allows cursor at charLen (append position) when LSP column exceeds line length":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_lsp_clamp_insert.txt"
+
+    writeFile(testFile, "Hello\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    e.state.mode = EditorMode.Insert
+
+    let loc = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 0, character: 100),
+        `end`: lspTypes.Position(line: 0, character: 100),
+      ),
+    )
+
+    let result = e.jumpToLspLocation(loc, "Test")
+
+    check result
+    check e.cursor.line == 0
+    check e.cursor.column == 5
+
+  test "Normal mode clamps cursor to charLen-1 when LSP column exceeds line length":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_lsp_clamp_normal.txt"
+
+    writeFile(testFile, "Hello\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    # Default is Normal mode
+
+    let loc = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 0, character: 100),
+        `end`: lspTypes.Position(line: 0, character: 100),
+      ),
+    )
+
+    let result = e.jumpToLspLocation(loc, "Test")
+
+    check result
+    check e.cursor.line == 0
+    check e.cursor.column == 4
+
 suite "editor_navigation - mode-hijack guard":
   test "Stale location response arriving in Insert does not jump or enter References":
     # A location response would move the cursor / open a buffer / enter the
