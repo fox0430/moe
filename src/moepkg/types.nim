@@ -282,11 +282,10 @@ type
       # retried every base interval.
 
   PendingSemanticTokensRequest* = object
-    ## Snapshot of the in-flight `textDocument/semanticTokens` request.
-    ## Request-id, file-path, change-seq and content-version live in
-    ## `DebouncedLspPoll` (`LspCacheState.semanticTokensPoll`); the fields
-    ## here are semantic-tokens-specific extras that the generic poll type
-    ## does not model.
+    ## Semantic-tokens-specific extras (legend, viewport, range) captured at
+    ## request-send time. The generic stale-guard snapshot (request-id,
+    ## file-path, change-seq, content-version) lives in
+    ## `LspCacheState.pending[lrfSemanticTokens]` as of Phase D.
     rangeFirst*: int
     rangeLast*: int
       # Inclusive row bounds of a range-scoped request. Both `-1` for a
@@ -304,6 +303,54 @@ type
       # instead of the response-time viewport so a scroll in flight does
       # not falsely validate the current viewport against tokens computed
       # for the prior viewport. `-1` when no pending.
+
+  LspRequestFeature* = enum
+    lrfHover
+    lrfSignatureHelp
+    lrfCompletionResolve
+    lrfSelectionRange
+    lrfDocumentSymbol
+    lrfDocumentLink
+    lrfDocumentLinkResolve
+    lrfDefinition
+    lrfDeclaration
+    lrfReferences
+    lrfTypeDefinition
+    lrfImplementation
+    lrfCodeLens
+    lrfInlayHint
+    lrfDocumentHighlight
+    lrfSemanticTokens
+    lrfCallHierarchyPrepareIncoming
+    lrfCallHierarchyPrepareOutgoing
+    lrfCallHierarchyIncoming
+    lrfCallHierarchyOutgoing
+
+  LspRequestContext* = object
+    ## Snapshot of the world at request-send time. See
+    ## docs/config_runtime_push_removal_design.md §10.
+    requestId*: int
+    feature*: LspRequestFeature
+    bufferId*: BufferId
+    contentVersion*: int
+    path*: string
+    generation*: int
+    cursorLine*: int # -1 = not cursor-anchored
+    cursorCol*: int # -1 = not cursor-anchored
+    validModes*: set[EditorMode] # empty = any mode
+    isItemDriven*: bool
+      # Item-driven requests target an LSP item (e.g. CallHierarchyItem) rather
+      # than the active buffer's cursor. classifyResponse skips the
+      # buffer/version guard for these; the caller supplies its own guard.
+    ignoreContentVersion*: bool
+      # Skip the contentVersion drift check; for features whose response
+      # stays meaningful across in-flight edits (e.g. signature help).
+
+  LspResponseState* = enum
+    lrsFresh # buffer/version/mode all match
+    lrsStale # contentVersion drifted since send
+    lrsGone # bufferId no longer exists
+    lrsHijack # mode outside validModes
 
   LspCacheState* = object ## LSP cache and picker state grouped together
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
@@ -326,39 +373,17 @@ type
       # Debounce / backoff / request-time snapshot for `textDocument/inlayHint`.
     inlayHintCache*: InlayHintCache # Cached inlay hints for current viewport
     signatureHelp*: SignatureHelpRequestState # Auto signature help request tracking
-    pendingSignatureHelpRequestId*: int
-      # Request ID for pending signature help request (0 = none)
-    pendingHoverRequestId*: int # Request ID for pending hover request (0 = none)
-    pendingHoverBufferId*: BufferId # BufferId the pending hover request was made for
-    pendingHoverCursorLine*: int # Cursor line when the hover request was made
-    pendingHoverCursorCol*: int # Cursor column when the hover request was made
     autoHoverCursorLine*: int # Last cursor line for auto-hover debounce
     autoHoverCursorCol*: int # Last cursor column for auto-hover debounce
     lastAutoHoverUpdate*: MonoTime # Timestamp of last auto-hover request
-    # Pending location request (definition, references, etc.)
-    pendingLocationRequestId*: int # Request ID (0 = none)
-    pendingLocationRequestKind*: LspLocationRequestKind # Type of location request
-    # Pending document symbols request
-    pendingDocumentSymbolsRequestId*: int # Request ID (0 = none)
-    # Pending selection range request
-    pendingSelectionRangeRequestId*: int # Request ID (0 = none)
-    pendingSelectionRangeBufferId*: BufferId # BufferId the request was made for
-    pendingSelectionRangeContentVersion*: int # contentVersion at request time
     # Selection range expansion chain (innermost -> outermost), rune indexes.
     # Lets repeated Ctrl-s walk the parent chain without re-querying the server.
     selectionRangeChain*: seq[tuple[first, last: BufferPosition]]
     selectionRangeIndex*: int # Current level in the chain (0 = innermost)
-    # Pending call hierarchy request (2-stage: prepare -> incoming/outgoing)
-    pendingCallHierarchyRequestId*: int # Request ID (0 = none)
-    pendingCallHierarchyKind*: CallHierarchyRequestKind # incoming or outgoing
-    # Pending code action request
-    pendingCodeActionRequestId*: int # Request ID (0 = none)
-    # Pending document link request
-    pendingDocumentLinkRequestId*: int # Request ID (0 = none)
-    pendingDocumentLinkCursorLine*: int # Cursor line when request was made
-    pendingDocumentLinkCursorCol*: int # Cursor column (UTF-16) when request was made
-    # Pending document link resolve request (2nd stage)
-    pendingDocumentLinkResolveRequestId*: int # Request ID (0 = none)
+    # Consolidated stale-guard registry; migrated to per-feature entries as
+    # each feature moves off the pending* fields above.
+    pending*: Table[LspRequestFeature, LspRequestContext]
+    featureGeneration*: array[LspRequestFeature, int]
 
   RenameState* = object ## State for LSP rename mode
     text*: string # New name being typed
@@ -808,19 +833,18 @@ type
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
 
   DebouncedLspPoll* = object
-    ## Debounce + exponential backoff + request-time snapshot for a single LSP
-    ## poll feature.  Shared across semantic tokens, inlay hints, code lens,
-    ## and document highlight so every feature gets the same robustness:
-    ## exponential backoff on persistent reject (#2880) and contentVersion
-    ## stale-response drop (#2875).
+    ## Debounce + exponential backoff timer for a single LSP poll feature.
+    ## Shared across semantic tokens, inlay hints, code lens, and document
+    ## highlight so every feature gets the same rate-limiting: exponential
+    ## backoff on persistent reject (#2880).
+    ##
+    ## The per-request stale-guard snapshot (request id, buffer id, content
+    ## version, generation) moved to `LspCacheState.pending` in Phase D of the
+    ## LspRequestContext migration; see
+    ## docs/config_runtime_push_removal_design.md §10.
     lastUpdate*: MonoTime
     interval*: int64
     rejectStreak*: int
-    pendingRequestId*: int
-    pendingFilePath*: string
-    pendingChangeSeq*: int
-    pendingContentVersion*: int
-    generation*: int
 
 const MaxLspDebounceBackoffShift* = 6
   ## Max exponent for the reject-streak backoff (interval << 6).
@@ -1102,16 +1126,9 @@ proc modeStateKind*(mode: EditorMode): ModeStateKind =
   of EditorMode.Terminal: mskTerminal
   else: mskNone
 
-proc resetPending*(poll: var DebouncedLspPoll) =
-  poll.pendingRequestId = 0
-  poll.pendingFilePath = ""
-  poll.pendingChangeSeq = -1
-  poll.pendingContentVersion = -1
-
 proc debounceThreshold*(poll: DebouncedLspPoll): times.Duration =
   let shift = min(poll.rejectStreak, MaxLspDebounceBackoffShift)
   initDuration(milliseconds = poll.interval shl shift)
 
 proc initDebouncedLspPoll*(interval: int64): DebouncedLspPoll =
-  result = DebouncedLspPoll(lastUpdate: getMonoTime(), interval: interval)
-  result.resetPending()
+  DebouncedLspPoll(lastUpdate: getMonoTime(), interval: interval)

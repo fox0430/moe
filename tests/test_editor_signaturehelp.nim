@@ -19,10 +19,11 @@
 
 ## Tests for editor_signaturehelp.nim
 
-import std/[unittest, monotimes, times, options, json, importutils]
+import std/[unittest, monotimes, times, options, tables, json, importutils]
 
 import ../src/moepkg/[editor, config, config_loader, lsp_service, signature_help]
 import ../src/moepkg/editor_signaturehelp
+import ../src/moepkg/types/editor_types
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -42,7 +43,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     e.requestSignatureHelpFromLsp()
 
-    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
 
   test "Does nothing when not in Insert mode":
     let e = createTestEditor()
@@ -51,7 +52,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     e.requestSignatureHelpFromLsp()
 
-    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
 
   test "Does nothing when outside parens and popup inactive":
     let e = createTestEditor()
@@ -60,7 +61,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     # parenDepth defaults to 0 and the manager is inactive -> gated out
     e.requestSignatureHelpFromLsp()
 
-    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
 
   test "Does nothing when signatureHelp.enable is false":
     # Even with an otherwise-eligible state (LSP on, Insert mode, inside parens),
@@ -73,7 +74,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     e.requestSignatureHelpFromLsp()
 
-    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
 
   test "Timed-out response clears pending and invalidates change tracking":
     # A timed-out in-flight request must reset the tracked changeSeq so the next
@@ -84,7 +85,12 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     e.handlerManager.insertHandler.signatureHelpManager.parenDepth = 1
 
     const reqId = 4242
-    e.state.lspCache.pendingSignatureHelpRequestId = reqId
+    e.state.lspCache.pending[lrfSignatureHelp] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfSignatureHelp,
+      bufferId: e.activeBuffer.id,
+      contentVersion: e.activeBuffer.contentVersion,
+    )
     e.state.lspCache.signatureHelp.cursorLine = 3
     e.state.lspCache.signatureHelp.cursorColumn = 5
     e.state.lspCache.signatureHelp.changeSeq = 7
@@ -100,7 +106,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     e.requestSignatureHelpFromLsp()
 
-    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
     check e.state.lspCache.signatureHelp.changeSeq == -1
     # The failure must bump the backoff counter so retries slow down.
     check e.state.lspCache.signatureHelp.consecutiveErrors == 1
@@ -118,7 +124,13 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     mgr.parenDepth = 1
 
     const reqId = 99
-    e.state.lspCache.pendingSignatureHelpRequestId = reqId
+    e.state.lspCache.pending[lrfSignatureHelp] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfSignatureHelp,
+      bufferId: e.activeBuffer.id,
+      contentVersion: e.activeBuffer.contentVersion,
+      validModes: {EditorMode.Insert},
+    )
     e.state.lspCache.signatureHelp.consecutiveErrors = 3
     e.state.lspCache.signatureHelp.cursorLine = e.activeWindow.cursor.line
     e.state.lspCache.signatureHelp.cursorColumn = e.activeWindow.cursor.column
@@ -139,7 +151,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     e.requestSignatureHelpFromLsp()
 
-    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
     check mgr.isActive()
     check e.state.lspCache.signatureHelp.consecutiveErrors == 0
 

@@ -19,9 +19,9 @@
 
 ## Tests for editor_navigation.nim
 
-import std/[unittest, os, strutils, options, importutils, json]
+import std/[unittest, os, strutils, options, importutils, json, tables]
 
-import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
+import ../src/moepkg/[editor, buffer, config, config_loader, types, lsp_service]
 import ../src/moepkg/editor_navigation
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
@@ -84,7 +84,6 @@ suite "editor_navigation - requestLspImplementation":
 suite "editor_navigation - pollLspLocationRequest":
   test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
-    e.state.lspCache.pendingLocationRequestId = 0
 
     e.pollLspLocationRequest()
     # No crash means success
@@ -92,8 +91,6 @@ suite "editor_navigation - pollLspLocationRequest":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingLocationRequestId = 0
-    e.state.lspCache.pendingLocationRequestKind = lrkNone
 
     e.pollLspLocationRequest()
     # No crash means success
@@ -819,8 +816,18 @@ suite "editor_navigation - mode-hijack guard":
     e.lsp.enabled = true
     e.state.mode = EditorMode.Insert
     let reqId = 7171
-    e.state.lspCache.pendingLocationRequestId = reqId
-    e.state.lspCache.pendingLocationRequestKind = lrkDefinition
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfDefinition] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfDefinition,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "/tmp/x.nim",
+      generation: 1,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: LocationValidModes,
+    )
     let cursorBefore = e.cursor
     let bufBefore = e.state.activeWindow.buffer
     privateAccess(LspService)
@@ -837,7 +844,6 @@ suite "editor_navigation - mode-hijack guard":
     e.pollLspLocationRequest()
 
     check e.state.mode == EditorMode.Insert
-    check e.state.lspCache.pendingLocationRequestId == 0
-    check e.state.lspCache.pendingLocationRequestKind == lrkNone
+    check not e.state.lspCache.pending.hasKey(lrfDefinition)
     check e.cursor == cursorBefore
     check e.state.activeWindow.buffer == bufBefore

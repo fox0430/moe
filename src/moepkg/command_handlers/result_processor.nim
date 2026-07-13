@@ -334,10 +334,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrCallHierarchyQuit:
     # Close call hierarchy viewer and return to Normal mode, restoring the
     # cursor/viewport that were active before the viewer was opened.
-    if e.state.lspCache.pendingCallHierarchyRequestId != 0:
-      e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
-      e.state.lspCache.pendingCallHierarchyRequestId = 0
-    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    cancelAllCallHierarchy(e)
     let win = e.activeWindow
     var origin = none(CallHierarchyViewerState)
     if win.modeState.kind == mskCallHierarchy:
@@ -355,10 +352,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Jump to selected call hierarchy item. Restore the pre-viewer cursor first
     # so the jump list anchors at the original position (enabling jump-back).
     let path = lsp_service.uriToPath(r.callHierarchyJumpUri)
-    if e.state.lspCache.pendingCallHierarchyRequestId != 0:
-      e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
-      e.state.lspCache.pendingCallHierarchyRequestId = 0
-    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    cancelAllCallHierarchy(e)
     let win = e.activeWindow
     var originCursor = BufferPosition(line: 0, column: 0)
     if win.modeState.kind == mskCallHierarchy:

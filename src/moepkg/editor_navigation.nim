@@ -40,6 +40,32 @@ import
   highlight_config
 import lsp/protocol/types as lspTypes
 
+const
+  LocationFeatures* =
+    {lrfDefinition, lrfDeclaration, lrfReferences, lrfTypeDefinition, lrfImplementation}
+  LocationValidModes* = {
+    EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine
+  }
+
+func featureOfLocationKind*(kind: LspLocationRequestKind): LspRequestFeature =
+  case kind
+  of lrkDefinition: lrfDefinition
+  of lrkDeclaration: lrfDeclaration
+  of lrkReferences: lrfReferences
+  of lrkTypeDefinition: lrfTypeDefinition
+  of lrkImplementation: lrfImplementation
+  of lrkNone: lrfDefinition
+    # unreachable via startLspLocationRequest guards
+
+func locationKindOfFeature*(f: LspRequestFeature): LspLocationRequestKind =
+  case f
+  of lrfDefinition: lrkDefinition
+  of lrfDeclaration: lrkDeclaration
+  of lrfReferences: lrkReferences
+  of lrfTypeDefinition: lrkTypeDefinition
+  of lrfImplementation: lrkImplementation
+  else: lrkNone
+
 proc switchToBufferForLsp*(e: Editor, index: int) =
   ## Switch to buffer at given index (simplified version for LSP jumps)
   if index < 0 or index >= e.buffers.len:
@@ -345,36 +371,39 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
       "LSP " & kindName & " is not supported by the language server"
     return false
 
-  # Cancel any pending location request
-  if e.state.lspCache.pendingLocationRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingLocationRequestId)
-    e.state.lspCache.pendingLocationRequestId = 0
-  e.state.lspCache.pendingLocationRequestKind = lrkNone
+  # Only one location request in flight at a time: a new one supersedes any
+  # of the five kinds already pending.
+  for f in LocationFeatures:
+    cancelIfPending(e, f)
 
   let line = e.activeWindow.cursor.line
   let col = e.activeWindow.cursor.column
+  let feature = featureOfLocationKind(kind)
 
-  let reqResult =
-    case kind
-    of lrkDefinition:
-      e.lsp.startDefinitionRequest(activeBuffer, line, col)
-    of lrkDeclaration:
-      e.lsp.startDeclarationRequest(activeBuffer, line, col)
-    of lrkReferences:
-      e.lsp.startReferencesRequest(activeBuffer, line, col)
-    of lrkTypeDefinition:
-      e.lsp.startTypeDefinitionRequest(activeBuffer, line, col)
-    of lrkImplementation:
-      e.lsp.startImplementationRequest(activeBuffer, line, col)
-    of lrkNone:
-      return false
-
-  if reqResult.isErr:
-    e.state.statusMessage = "LSP " & kindName & " failed: " & reqResult.error
+  let ctxRes = e.startContextualRequest(
+    feature,
+    proc(): Result[int, string] =
+      case kind
+      of lrkDefinition:
+        e.lsp.startDefinitionRequest(activeBuffer, line, col)
+      of lrkDeclaration:
+        e.lsp.startDeclarationRequest(activeBuffer, line, col)
+      of lrkReferences:
+        e.lsp.startReferencesRequest(activeBuffer, line, col)
+      of lrkTypeDefinition:
+        e.lsp.startTypeDefinitionRequest(activeBuffer, line, col)
+      of lrkImplementation:
+        e.lsp.startImplementationRequest(activeBuffer, line, col)
+      of lrkNone:
+        err("invalid location kind"),
+    validModes = LocationValidModes,
+    # goto-* response is URI-anchored (handleLspLocations opens by path), so a
+    # mid-flight buffer switch must not drop it.
+    isItemDriven = true,
+  )
+  if ctxRes.isErr:
+    e.state.statusMessage = "LSP " & kindName & " failed: " & ctxRes.error
     return false
-
-  e.state.lspCache.pendingLocationRequestId = reqResult.get
-  e.state.lspCache.pendingLocationRequestKind = kind
   return true
 
 proc pollLspLocationRequest*(e: Editor) =
@@ -383,26 +412,28 @@ proc pollLspLocationRequest*(e: Editor) =
   if not e.lsp.enabled:
     return
 
-  let requestId = e.state.lspCache.pendingLocationRequestId
-  if requestId == 0:
+  var feature: LspRequestFeature
+  var found = false
+  for f in LocationFeatures:
+    if e.state.lspCache.pending.hasKey(f):
+      feature = f
+      found = true
+      break
+  if not found:
     return
 
-  let kind = e.state.lspCache.pendingLocationRequestKind
-  if kind == lrkNone:
-    return
+  let ctx = e.state.lspCache.pending[feature]
+  let kind = locationKindOfFeature(feature)
 
   # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    e.state.lspCache.pendingLocationRequestId = 0
-    e.state.lspCache.pendingLocationRequestKind = lrkNone
-    # Drop stale response if the user is no longer in Normal/Visual: jumping
-    # cursor / opening a file / entering References would hijack input.
-    if not e.state.mode.isNormalOrVisualMode or e.state.overlay.isSome:
+    e.state.lspCache.pending.del(feature)
+    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
       return
     if resultOpt.isSome:
       let locations = parseLocationsResponse(resultOpt.get)
@@ -431,13 +462,11 @@ proc pollLspLocationRequest*(e: Editor) =
     else:
       e.state.statusMessage = "No results found"
   of lrsError:
-    e.state.lspCache.pendingLocationRequestId = 0
-    e.state.lspCache.pendingLocationRequestKind = lrkNone
+    e.state.lspCache.pending.del(feature)
     if errorOpt.isSome:
       e.state.statusMessage = "LSP request failed: " & errorOpt.get
   of lrsTimeout:
-    e.state.lspCache.pendingLocationRequestId = 0
-    e.state.lspCache.pendingLocationRequestKind = lrkNone
+    e.state.lspCache.pending.del(feature)
     e.state.statusMessage = "LSP request timed out"
 
 proc requestLspGotoDefinition*(e: Editor): bool =

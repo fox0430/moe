@@ -78,12 +78,13 @@ suite "Inlay Hint Cache invalidation":
   test "invalidateInlayHintCache clears validity and pending id":
     let e = createTestEditor()
     e.state.lspCache.inlayHintCache.isValid = true
-    e.state.lspCache.inlayHintPoll.pendingRequestId = 42
+    e.state.lspCache.pending[lrfInlayHint] =
+      LspRequestContext(requestId: 42, feature: lrfInlayHint)
 
     invalidateInlayHintCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.inlayHintCache.isValid
-    check e.state.lspCache.inlayHintPoll.pendingRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfInlayHint)
 
 suite "Inlay Hint Response processing":
   test "processInlayHintResponse groups hints by line and stamps viewport":
@@ -91,8 +92,6 @@ suite "Inlay Hint Response processing":
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "let x = 1")
 
-    e.state.lspCache.inlayHintPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     e.processInlayHintResponse(
       @[inlayHint(0, 5, ": int", 1), inlayHint(0, 5, " extra", 0)]
     )
@@ -111,8 +110,6 @@ suite "Inlay Hint Response processing":
 
     # The server returns them out of column order; end-of-line rendering
     # concatenates left-to-right, so they must come back column-sorted.
-    e.state.lspCache.inlayHintPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     e.processInlayHintResponse(@[inlayHint(0, 5, "b: "), inlayHint(0, 2, "a: ")])
 
     let items = e.state.lspCache.getInlayHintsForLine(0)
@@ -129,8 +126,6 @@ suite "Inlay Hint Response processing":
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "𐐷x")
 
     # A hint at UTF-16 offset 2 sits after the surrogate pair => rune index 1.
-    e.state.lspCache.inlayHintPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     e.processInlayHintResponse(@[inlayHint(0, 2, ": T", 1)])
 
     let items = e.state.lspCache.getInlayHintsForLine(0)
@@ -170,13 +165,17 @@ suite "Inlay Hint Response processing":
       result: some($(%*[{"position": {"line": 0, "character": 5}, "label": ": int"}])),
       error: none(string),
     )
-    e.state.lspCache.inlayHintPoll.pendingRequestId = reqId
-    e.state.lspCache.inlayHintPoll.pendingFilePath = buf.filePath.get("")
-    e.state.lspCache.inlayHintPoll.pendingContentVersion = buf.contentVersion
+    e.state.lspCache.pending[lrfInlayHint] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfInlayHint,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: buf.filePath.get(""),
+    )
 
     e.updateInlayHintCache()
 
-    check e.state.lspCache.inlayHintPoll.pendingRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfInlayHint)
     check e.state.lspCache.inlayHintCache.isValid
     check e.state.lspCache.getInlayHintsForLine(0).len == 1
 
@@ -196,14 +195,20 @@ suite "Inlay Hint Response processing":
       result: some($(%*[{"position": {"line": 0, "character": 5}, "label": ": int"}])),
       error: none(string),
     )
-    e.state.lspCache.inlayHintPoll.pendingRequestId = reqId
-    # Request was made for a different buffer than the current active one.
-    # Simulate by setting pendingFilePath to a different path.
-    e.state.lspCache.inlayHintPoll.pendingFilePath = "/other/file.nim"
+    # Request was made for a different buffer than the current active one:
+    # bufferId is a fake value that will not match the still-open active
+    # buffer, so classifyResponse returns lrsGone and the response is dropped.
+    e.state.lspCache.pending[lrfInlayHint] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfInlayHint,
+      bufferId: 999_999.BufferId,
+      contentVersion: 0,
+      path: "/other/file.nim",
+    )
 
     e.updateInlayHintCache()
 
-    check e.state.lspCache.inlayHintPoll.pendingRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfInlayHint)
     check not e.state.lspCache.inlayHintCache.isValid
 
 suite "Virtual text provider gating":

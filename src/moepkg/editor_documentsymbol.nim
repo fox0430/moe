@@ -19,9 +19,17 @@
 
 ## LSP Document Symbols request / poll orchestration
 
-import std/options
+import std/[options, tables]
 
-import types/editor_types, editor_window_state, lsp_integration, documentsymbol_viewer
+import
+  types/editor_types,
+  editor_window_state,
+  editor_lsp,
+  lsp_integration,
+  documentsymbol_viewer
+
+const DocumentSymbolValidModes* =
+  {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
 
 proc startLspDocumentSymbols*(e: Editor): bool =
   ## Start async document symbols request
@@ -44,39 +52,37 @@ proc startLspDocumentSymbols*(e: Editor): bool =
     e.state.statusMessage = "Document symbols not supported"
     return false
 
-  # Cancel any pending request
-  if e.state.lspCache.pendingDocumentSymbolsRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingDocumentSymbolsRequestId)
-    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
-
-  let reqResult = e.lsp.startDocumentSymbolsRequest(activeBuffer)
-  if reqResult.isErr:
-    e.state.statusMessage = "LSP document symbols failed: " & reqResult.error
+  let ctxRes = e.startContextualRequest(
+    lrfDocumentSymbol,
+    proc(): Result[int, string] =
+      e.lsp.startDocumentSymbolsRequest(activeBuffer),
+    validModes = DocumentSymbolValidModes,
+  )
+  if ctxRes.isErr:
+    e.state.statusMessage = "LSP document symbols failed: " & ctxRes.error
     return false
-
-  e.state.lspCache.pendingDocumentSymbolsRequestId = reqResult.get
   return true
 
 proc pollLspDocumentSymbols*(e: Editor) =
   ## Poll for pending document symbols response
   if not e.lsp.enabled:
     return
-
-  let requestId = e.state.lspCache.pendingDocumentSymbolsRequestId
-  if requestId == 0:
+  if not e.state.lspCache.pending.hasKey(lrfDocumentSymbol):
     return
+  let ctx = e.state.lspCache.pending[lrfDocumentSymbol]
 
   # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
-    # Drop stale response if the user has moved past Normal/Visual (e.g. into
-    # Insert or an overlay); forcing DocumentSymbol here would hijack input.
-    if not e.state.mode.isNormalOrVisualMode or e.state.overlay.isSome:
+    e.state.lspCache.pending.del(lrfDocumentSymbol)
+    # Drop stale response: buffer switched, edited, or the user moved into an
+    # input mode where forcing DocumentSymbol would hijack input. Overlay is
+    # outside classifyResponse's remit and checked inline.
+    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
       return
     if resultOpt.isSome:
       let activeBuffer = e.activeBuffer()
@@ -112,11 +118,11 @@ proc pollLspDocumentSymbols*(e: Editor) =
     else:
       e.state.statusMessage = "No symbols found"
   of lrsError:
-    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentSymbol)
     if errorOpt.isSome:
       e.state.statusMessage = "LSP document symbols failed: " & errorOpt.get
   of lrsTimeout:
-    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentSymbol)
     e.state.statusMessage = "LSP document symbols timed out"
 
 proc requestDocumentSymbols*(e: Editor): bool =

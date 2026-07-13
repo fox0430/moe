@@ -109,7 +109,7 @@ suite "CodeLens Cache":
     e.state.lspCache.codeLensCache.itemsByLine =
       {0: @[CodeLensItem(line: 0, title: "Item", command: "cmd")]}.toTable
 
-    e.state.lspCache.invalidateCodeLensCache()
+    invalidateCodeLensCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.codeLensCache.isValid
     # Items still exist but cache is marked invalid
@@ -272,7 +272,7 @@ suite "Document Highlight Cache":
       0: @[DocumentHighlightItem(line: 0, startColumn: 0, endColumn: 5, kind: 1)]
     }.toTable
 
-    e.state.lspCache.invalidateDocumentHighlightCache()
+    invalidateDocumentHighlightCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.documentHighlightCache.isValid
     check e.state.lspCache.documentHighlightCache.itemsByLine.len == 0
@@ -305,12 +305,14 @@ suite "Semantic Tokens Cache":
     e.state.lspCache.semanticTokensCache.isValid = true
     e.state.lspCache.semanticTokensCache.changeSeq = 5
     e.state.lspCache.semanticTokensCache.filePath = "/test/file.nim"
-    e.state.lspCache.semanticTokensPoll.pendingRequestId = 123
+    e.state.lspCache.pending[lrfSemanticTokens] = LspRequestContext(
+      requestId: 123, feature: lrfSemanticTokens, path: "/test/file.nim"
+    )
 
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.semanticTokensPoll.pendingRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSemanticTokens)
 
   test "processSemanticTokensResponse - drops response when contentVersion advanced":
     # Lock in the belt-and-braces guard: a mid-flight edit bumps
@@ -320,17 +322,20 @@ suite "Semantic Tokens Cache":
     let buf = e.activeBuffer()
     buf.filePath = some("/test/file.nim")
 
-    e.state.lspCache.semanticTokensPoll.pendingFilePath = "/test/file.nim"
-    e.state.lspCache.semanticTokensPoll.pendingRequestId = 1
-    e.state.lspCache.semanticTokensPoll.pendingChangeSeq = buf.changeSeq
-    e.state.lspCache.semanticTokensPoll.pendingContentVersion = buf.contentVersion
+    let ctx = LspRequestContext(
+      requestId: 1,
+      feature: lrfSemanticTokens,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "/test/file.nim",
+    )
     # processSemanticTokensResponse reads rangeFirst/Last from extras
     e.state.lspCache.semanticTokensPendingExtras =
       PendingSemanticTokensRequest(rangeFirst: -1, rangeLast: -1)
 
     buf.advanceContentVersion()
 
-    e.processSemanticTokensResponse(newJObject())
+    e.processSemanticTokensResponse(newJObject(), ctx)
 
     check not e.state.lspCache.semanticTokensCache.isValid
 
@@ -351,11 +356,11 @@ suite "Semantic Tokens Cache":
     e.state.lspCache.semanticTokensCache.isValid = true
 
     # The feature gate returns before issuing a request, leaving the cache and
-    # the pending-request id untouched.
+    # the pending-request Table untouched.
     e.updateSemanticTokensCache()
 
     check e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.semanticTokensPoll.pendingRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSemanticTokens)
 
   test "semanticTokensCacheCoversViewport - visible EOF is a cache hit":
     # Regression: previously the check compared cache.bottomLine against the
@@ -486,7 +491,7 @@ suite "CodeLens Response Generation":
     let reqVer = e.activeBuffer().contentVersion
 
     # Generation 2 represents the latest in-flight response.
-    e.state.lspCache.codeLensPoll.generation = 2
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 2
     check not e.state.lspCache.codeLensCache.isValid
 
     # An older (slower) response with a stale generation must not write the cache.
@@ -553,8 +558,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -586,8 +589,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -626,8 +627,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -655,8 +654,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -715,7 +712,7 @@ suite "CodeLens Column Extraction":
     e.activeBuffer().filePath = some("/test/file.nim")
     # "a😀b": rune indexes a=0, 😀=1, b=2; UTF-16 offsets a=0, 😀=1..2, b=3
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "a😀b")
-    e.state.lspCache.codeLensPoll.generation = 1
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 1
     waitFor e.processCodeLensResponse(
       @[lensWithCommand(0, 3, "5 refs")], 1, e.activeBuffer().contentVersion
     )
@@ -729,7 +726,7 @@ suite "CodeLens Column Extraction":
     let e = createTestEditor()
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "abcdefgh")
-    e.state.lspCache.codeLensPoll.generation = 1
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 1
     waitFor e.processCodeLensResponse(
       @[lensWithCommand(0, 5, "second"), lensWithCommand(0, 2, "first")],
       1,
@@ -752,7 +749,7 @@ suite "CodeLens Column Extraction":
     check not e.lsp.enabled
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "let x = 1")
-    e.state.lspCache.codeLensPoll.generation = 1
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 1
 
     waitFor e.processCodeLensResponse(
       @[lensWithoutCommand(0, 0)], 1, e.activeBuffer().contentVersion

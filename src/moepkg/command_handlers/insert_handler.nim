@@ -34,7 +34,7 @@ import pkg/results
 import
   ../[
     types, buffer, config, modes, key_bindings, motion, command_registry, unicode_utils,
-    completion, signature_help, lsp_integration,
+    completion, signature_help, lsp_integration, lsp_request_context,
   ]
 import handler_types, insert_commands
 import ../types/editor_types
@@ -756,7 +756,7 @@ proc triggerLspCompletionRequest*(
       handler.completionManager.lastLspPrefix = prefix
       handler.completionManager.setLspRequestPending(reqResult.get)
 
-proc pollLspCompletion*(handler: InsertModeHandler) =
+proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
   ## Poll for pending LSP completion response
   if handler.lsp.isNil or not handler.lsp.isEnabled:
     return
@@ -782,13 +782,20 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
   of lrsSuccess:
     if rawOpt.isSome:
       let (items, isIncomplete) = parseCompletionResponse(rawOpt.get)
+      # A fresh completion list obsoletes any resolve targeted at the previous
+      # list's selection: without this cancel, a slow resolve response could
+      # be applied to whatever entry now occupies `resolvedIndex`.
+      cancelPendingRequest(handler.lsp, state.lspCache, lrfCompletionResolve)
       handler.completionManager.setLspItems(items, isIncomplete)
   of lrsError, lrsTimeout:
     # Clear pending state on error/timeout
     logLspDegraded("Completion", status, errorOpt.get(""))
+    cancelPendingRequest(handler.lsp, state.lspCache, lrfCompletionResolve)
     handler.completionManager.setLspItems(@[])
 
-proc triggerResolveRequest*(handler: InsertModeHandler, buffer: TextBuffer) =
+proc triggerResolveRequest*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+) =
   ## Trigger a completionItem/resolve request for the selected item
   if handler.lsp.isNil or not handler.lsp.isEnabled:
     return
@@ -799,43 +806,52 @@ proc triggerResolveRequest*(handler: InsertModeHandler, buffer: TextBuffer) =
   if rawJsonOpt.isNone:
     return
 
-  # Cancel any pending resolve request before starting a new one
-  if handler.completionManager.resolveRequestId.isSome:
-    handler.lsp.cancelRequest(handler.completionManager.resolveRequestId.get)
-    handler.completionManager.resolveRequestId = none(int)
-
-  let reqResult = handler.lsp.startCompletionResolveRequest(buffer, rawJsonOpt.get)
-  if reqResult.isOk:
-    handler.completionManager.resolveRequestId = some(reqResult.get)
+  let ctxRes = startContextualRequestOnCache(
+    handler.lsp,
+    state.lspCache,
+    lrfCompletionResolve,
+    buffer,
+    proc(): Result[int, string] =
+      handler.lsp.startCompletionResolveRequest(buffer, rawJsonOpt.get),
+    validModes = {EditorMode.Insert},
+  )
+  if ctxRes.isOk:
     handler.completionManager.resolvedIndex =
       handler.completionManager.menu.selectedIndex
 
-proc pollLspResolve*(handler: InsertModeHandler) =
+proc pollLspResolve*(handler: InsertModeHandler, state: EditorState) =
   ## Poll for pending completionItem/resolve response
   if handler.lsp.isNil or not handler.lsp.isEnabled:
     return
 
-  if handler.completionManager.resolveRequestId.isNone:
+  if not state.lspCache.pending.hasKey(lrfCompletionResolve):
     return
 
-  let reqId = handler.completionManager.resolveRequestId.get
+  let ctx = state.lspCache.pending[lrfCompletionResolve]
 
   handler.lsp.poll()
 
-  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(reqId)
+  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard
   of lrsSuccess:
+    state.lspCache.pending.del(lrfCompletionResolve)
+    # updateResolvedEntry gates on entry identity (menu word == resolved word);
+    # a version drift while resolve is in flight doesn't invalidate that item.
+    let buf = state.activeWindow.buffer
+    if buf.isNil or buf.id != ctx.bufferId:
+      return
+    if state.mode != EditorMode.Insert:
+      return
     if resultOpt.isSome:
       let resolved = parseCompletionItem(resultOpt.get)
       handler.completionManager.updateResolvedEntry(resolved)
       handler.completionManager.updateDocPanel()
-    handler.completionManager.resolveRequestId = none(int)
   of lrsError, lrsTimeout:
+    state.lspCache.pending.del(lrfCompletionResolve)
     logLspDegraded("Completion resolve", status, errorOpt.get(""))
-    handler.completionManager.resolveRequestId = none(int)
 
 proc isCtrlN(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+N
@@ -936,7 +952,7 @@ proc handleInsertModeKey*(
         handler.completionManager.selectNext()
       let res = handler.commitCompletion(buffer, state, keepPopupOpen = true)
       handler.completionManager.updateDocPanel()
-      handler.triggerResolveRequest(buffer)
+      handler.triggerResolveRequest(buffer, state)
       return res
 
     if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
@@ -951,7 +967,7 @@ proc handleInsertModeKey*(
         handler.completionManager.selectPrevious()
       let res = handler.commitCompletion(buffer, state, keepPopupOpen = true)
       handler.completionManager.updateDocPanel()
-      handler.triggerResolveRequest(buffer)
+      handler.triggerResolveRequest(buffer, state)
       return res
 
     if keyCombo.isSpecial and keyCombo.special == skEnter:
@@ -1199,17 +1215,28 @@ proc handleInsertModeKey*(
   if keyCombo.isCtrlR:
     # Ctrl+R - trigger signature help (LSP)
     handler.completionManager.cancelCompletion()
-    # Request signature help from LSP if available
     if not handler.lsp.isNil and handler.lsp.isEnabled:
-      # Cancel any pending signature help request
-      if state.lspCache.pendingSignatureHelpRequestId != 0:
-        handler.lsp.cancelRequest(state.lspCache.pendingSignatureHelpRequestId)
-        state.lspCache.pendingSignatureHelpRequestId = 0
-      let reqResult = handler.lsp.startSignatureHelpRequest(
-        buffer, state.cursor.line, state.cursor.column
+      let cursorLine = state.cursor.line
+      let cursorCol = state.cursor.column
+      let ctxRes = startContextualRequestOnCache(
+        handler.lsp,
+        state.lspCache,
+        lrfSignatureHelp,
+        buffer,
+        proc(): Result[int, string] =
+          handler.lsp.startSignatureHelpRequest(buffer, cursorLine, cursorCol),
+        validModes = {EditorMode.Insert},
+        cursor = some(BufferPosition(line: cursorLine, column: cursorCol)),
+        ignoreContentVersion = true,
       )
-      if reqResult.isOk:
-        state.lspCache.pendingSignatureHelpRequestId = reqResult.get
+      if ctxRes.isOk:
+        # Sync the auto-poll tracker so requestSignatureHelpFromLsp does not
+        # fire a redundant follow-up request for the same position/changeSeq
+        # once this response arrives.
+        state.lspCache.signatureHelp.cursorLine = cursorLine
+        state.lspCache.signatureHelp.cursorColumn = cursorCol
+        state.lspCache.signatureHelp.changeSeq = buffer.changeSeq
+        state.lspCache.signatureHelp.lastUpdate = getMonoTime()
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   if keyCombo.isCtrlO:
