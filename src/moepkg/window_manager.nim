@@ -742,7 +742,7 @@ proc hsplit*(
         2 * StatusLineHeight + steadyBottomAreaHeight()
       else:
         StatusLineHeight + steadyBottomAreaHeight()
-    availableContentHeight = origHeight - numReservedLines - separatorOffset
+    availableContentHeight = max(0, origHeight - numReservedLines - separatorOffset)
 
     # Split content area: favor top window (round up) to preserve scroll position
     topContentHeight = (availableContentHeight + 1) div 2 # round up
@@ -835,7 +835,7 @@ proc hsplitWithBuffer*(
         2 * StatusLineHeight + steadyBottomAreaHeight()
       else:
         StatusLineHeight + steadyBottomAreaHeight()
-    availableContentHeight = origHeight - numReservedLines - separatorOffset
+    availableContentHeight = max(0, origHeight - numReservedLines - separatorOffset)
 
     # Split content area: favor top window (round up) to preserve scroll position
     topContentHeight = (availableContentHeight + 1) div 2 # round up
