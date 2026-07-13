@@ -374,6 +374,32 @@ suite "EditorWindowManager - Horizontal Split":
     check result.isOk
     check wm.windows.len == 2
 
+  test "hsplit with extremely small terminal height (single status line)":
+    let wm = createSingleWindowManager(80, 2)
+    let result = wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
+
+  test "hsplit with extremely small terminal height (multi status line)":
+    let wm = createSingleWindowManager(80, 3)
+    let result = wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = true,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
+
 suite "EditorWindowManager - vsplitWithBuffer":
   test "vsplitWithBuffer uses provided buffer":
     let wm = createSingleWindowManager()
@@ -408,6 +434,36 @@ suite "EditorWindowManager - hsplitWithBuffer":
     check result.isOk
     check result.get == newBuf
     check wm.windows[0].buffer == newBuf
+
+  test "hsplitWithBuffer with extremely small terminal height (single status line)":
+    let wm = createSingleWindowManager(80, 2)
+    let newBuf = newTextBuffer()
+    let result = wm.hsplitWithBuffer(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+      newBuf,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
+
+  test "hsplitWithBuffer with extremely small terminal height (multi status line)":
+    let wm = createSingleWindowManager(80, 3)
+    let newBuf = newTextBuffer()
+    let result = wm.hsplitWithBuffer(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = true,
+      newBuf,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
 
 suite "EditorWindowManager - resizeWindows":
   test "resizeWindows with invalid dimensions does nothing":
