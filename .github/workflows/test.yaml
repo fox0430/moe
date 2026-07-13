@@ -84,6 +84,11 @@ jobs:
         nimble build
 
     - name: Run unit test
+      env:
+        # xvfb-run leaves TERM=dumb (the runner default) so moe's color mode
+        # fallback collapses distinct theme colors to the same 8-color index
+        # and color-sensitive render tests fail. Force a 256-color terminal.
+        TERM: xterm-256color
       run: |
         nimble setup
         xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim
