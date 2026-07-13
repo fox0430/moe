@@ -79,10 +79,6 @@ jobs:
         nim-version: 2.2.10
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install lasm
-      run: |
-        nimble install lasm@#head
-
     - name: Build moe
       run: |
         nimble build
@@ -90,4 +86,4 @@ jobs:
     - name: Run unit test
       run: |
         nimble setup
-        xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim ptest
+        xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim
