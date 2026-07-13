@@ -1815,3 +1815,115 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     # Invariant restored and the cursor is not pushed above the viewport top.
     check vp.topWrapOffset < buf.wrapAt(vp.topLine)
     check buf.cursorVisualRow(vp, 5, 0) >= 0
+
+suite "renderCodeLensPicker":
+  test "No crash with normal dimensions":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
+    e.viewport.height = 24
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run Test", command: "test.run"),
+        CodeLensItem(line: 0, column: 0, title: "Debug Test", command: "test.debug"),
+      ],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 2,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash with extremely small terminal (regression: popupWidth overflow)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 5, height: 10)
+    e.viewport.height = 10
+    e.state.screenCursor = CursorPosition(x: 1, y: 1)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 1,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash with zero effective content width":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 6, height: 10)
+    e.viewport.height = 10
+    e.state.screenCursor = CursorPosition(x: 1, y: 1)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 1,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash when picker is not active":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker.isActive = false
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash with zero items":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[], selectedIndex: 0, scrollOffset: 0, maxVisibleItems: 0, isActive: true
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash when popup placed off-screen (adjusts to visible area)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 10)
+    e.viewport.height = 10
+    e.state.screenCursor = CursorPosition(x: 75, y: 8)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run Test Long", command: "cmd"),
+        CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
+      ],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 2,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "Renders popup borders and content on screen":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
+    e.viewport.height = 24
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd"),
+        CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
+      ],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 2,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+    let screen = buffer.toStrings()
+    let topBorder = screen[6] # popupY = cursor.y + 1 = 6
+    check topBorder.contains("┌")
+    check topBorder.contains("┐")
+    let contentLine = screen[7]
+    check contentLine.contains("│")
+    check contentLine.contains("Run")
+    let bottomBorder = screen[9] # popupY + visibleCount + 1 = 6 + 2 + 1 = 9
+    check bottomBorder.contains("└")
+    check bottomBorder.contains("┘")

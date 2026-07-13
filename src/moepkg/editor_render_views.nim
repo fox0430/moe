@@ -624,7 +624,7 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
     if w > maxDisplayWidth:
       maxDisplayWidth = w
   # Add padding (2 chars each side) + number prefix (3 chars: "N. ") and limit to screen width
-  let contentWidth = min(maxDisplayWidth + 2 + 3, buffer.area.width - 6)
+  let contentWidth = max(1, min(maxDisplayWidth + 2 + 3, buffer.area.width - 6))
   let popupWidth = contentWidth + 2 # +2 for border
 
   let popupHeight = visibleCount + 2 # +2 for border
