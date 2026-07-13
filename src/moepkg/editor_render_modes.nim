@@ -57,11 +57,7 @@ proc renderConfig*(
     startX = window.viewport.x
 
   # Calculate max name width for alignment
-  var maxNameWidth = 0
-  for item in configState.items:
-    if item.kind != cvkSection:
-      maxNameWidth = max(maxNameWidth, item.displayName.len + item.depth * 2)
-  maxNameWidth = min(maxNameWidth + 4, width div 2) # Limit to half of width
+  let maxNameWidth = calcMaxNameWidth(configState.items, width)
 
   # Ensure selected entry is visible
   let visibleLines = listEndY - listStartY
@@ -129,8 +125,7 @@ proc renderConfig*(
 
     # Overlay the search highlight on just the matched characters (like buffer
     # search), instead of repainting the whole line. Skip while editing — the
-    # edit style owns that line. Uses byte offsets as cell columns, matching the
-    # ASCII width assumption the rest of this renderer already relies on.
+    # edit style owns that line.
     if searchQuery.len > 0 and not isBeingEdited:
       let
         hlStyle = searchHighlightStyle()
@@ -141,8 +136,10 @@ proc renderConfig*(
         let idx = lineLower.find(queryLower, searchPos)
         if idx < 0:
           break
+        let charIdx = displayLine.byteToCharPos(idx)
+        let screenX = startX + displayLine.displayWidthUpTo(charIdx)
         buffer.setString(
-          startX + idx, screenY, displayLine[idx ..< idx + queryLower.len], hlStyle
+          screenX, screenY, displayLine[idx ..< idx + queryLower.len], hlStyle
         )
         searchPos = idx + queryLower.len
 
