@@ -306,24 +306,40 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
   let desc = configDescriptors[item.descriptorIndex]
   let cfg = state.config
 
+  # Skip no-op writes: confirming an unchanged value would otherwise flip
+  # pendingApply and force handler.nim's applyConfigSettings to reread the
+  # theme and re-highlight every buffer on each keystroke.
+  let changed =
+    case item.kind
+    of cvkBool:
+      desc.boolGet(cfg) != item.boolValue
+    of cvkInt:
+      desc.intGet(cfg) != item.intValue
+    of cvkFloat:
+      desc.floatGet(cfg) != item.floatValue
+    of cvkEnum:
+      desc.enumGet(cfg) != item.enumValue
+    of cvkString:
+      desc.stringGet(cfg) != item.stringValue
+    else:
+      false
+  if not changed:
+    return
+
   case item.kind
   of cvkBool:
     desc.boolSet(cfg, item.boolValue)
-    state.pendingApply = true
   of cvkInt:
     desc.intSet(cfg, item.intValue)
-    state.pendingApply = true
   of cvkFloat:
     desc.floatSet(cfg, item.floatValue)
-    state.pendingApply = true
   of cvkEnum:
     desc.enumSet(cfg, item.enumValue)
-    state.pendingApply = true
   of cvkString:
     desc.stringSetter(cfg, item.stringValue)
-    state.pendingApply = true
   else:
     discard
+  state.pendingApply = true
 
   # Rebuild to update conditional visibility
   let savedDescIdx = item.descriptorIndex

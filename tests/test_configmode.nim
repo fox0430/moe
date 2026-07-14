@@ -1352,6 +1352,20 @@ suite "ConfigMode - pendingApply":
     state.applyChange(sectionIdx)
     check state.pendingApply == false
 
+  test "confirmEdit with unchanged value leaves pendingApply false":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    var idx = -1
+    for i, item in state.items:
+      if item.kind == cvkInt and item.displayName == "tabStop":
+        idx = i
+        break
+    check idx >= 0
+    state.selectedIndex = idx
+    state.startEdit()
+    check state.confirmEdit(testEditorState(cfg)) == true
+    check state.pendingApply == false
+
   test "applyColorChange does not set pendingApply":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
