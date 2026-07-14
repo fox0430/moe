@@ -2405,3 +2405,68 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
     check e.activeBuffer().id == f2Id # still focused on the dirty buffer
     check e.buffers.len == bufferCountBefore
     check "No write since last change" in e.state.statusMessage
+
+suite "Editor - :theme routes through config so save/reload stay in sync":
+  test ":theme default resets config.theme to tkDefault":
+    let e = createTestEditor()
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = getTempDir() / "moe_test_theme_prev.toml"
+
+    e.applyThemeCommand("default")
+
+    check e.config.theme.kind == tkDefault
+    check e.config.theme.path == ""
+    check e.state.statusMessage == "Theme changed to: default"
+
+  test ":theme <name> updates config.theme.path to the loaded file":
+    let e = createTestEditor()
+
+    let fakeHome = getTempDir() / "moe_test_theme_home"
+    let themesDir = fakeHome / ".config" / "moe" / "themes"
+    createDir(themesDir)
+    let themeFile = themesDir / "mytheme.toml"
+    writeFile(
+      themeFile,
+      """
+[Colors]
+foreground = "#eeeeee"
+background = "#111111"
+""",
+    )
+
+    let originalHome = getEnv("HOME")
+    putEnv("HOME", fakeHome)
+    defer:
+      putEnv("HOME", originalHome)
+      removeDir(fakeHome)
+
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = getTempDir() / "moe_test_theme_prev.toml"
+
+    e.applyThemeCommand("mytheme")
+
+    check e.config.theme.kind == tkConfig
+    check e.config.theme.path == themeFile
+    check e.state.statusMessage == "Theme changed to: mytheme"
+
+  test ":theme <missing> leaves config.theme untouched":
+    let e = createTestEditor()
+
+    let fakeHome = getTempDir() / "moe_test_theme_missing_home"
+    createDir(fakeHome / ".config" / "moe" / "themes")
+
+    let originalHome = getEnv("HOME")
+    putEnv("HOME", fakeHome)
+    defer:
+      putEnv("HOME", originalHome)
+      removeDir(fakeHome)
+
+    let previousPath = getTempDir() / "moe_test_theme_previous.toml"
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = previousPath
+
+    e.applyThemeCommand("nope")
+
+    check e.config.theme.kind == tkConfig
+    check e.config.theme.path == previousPath
+    check e.state.statusMessage == "Theme not found: nope"

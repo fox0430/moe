@@ -18,8 +18,11 @@
 #[############################################################################]#
 
 import std/[unittest, options, strutils, sets, tables, importutils]
-import ../src/moepkg/[config, color, theme]
+import ../src/moepkg/[config, color, theme, types]
 import ../src/moepkg/config_mode {.all.}
+
+proc testEditorState(cfg: EditorConfig): EditorState =
+  EditorState(config: cfg)
 
 suite "ConfigMode - ConfigModeState initialization":
   test "newConfigModeState creates valid state":
@@ -539,7 +542,7 @@ suite "ConfigMode - Edit mode for Int":
     state.editBuffer = "5"
     state.editCursor = 1
 
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == true
     check state.items[intIndex].intValue == 5
     check state.editMode == false
@@ -560,7 +563,7 @@ suite "ConfigMode - Edit mode for Int":
     state.startEdit()
     state.editBuffer = "99999" # Out of range
 
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == false
     # Value unchanged after failed edit
     check state.items[intIndex].intValue == originalValue
@@ -581,7 +584,7 @@ suite "ConfigMode - Edit mode for Int":
     state.startEdit()
     state.editBuffer = "abc" # Invalid number
 
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == false
     check state.items[intIndex].intValue == originalValue
 
@@ -621,7 +624,7 @@ suite "ConfigMode - Edit mode for Float":
     state.editBuffer = "50.5"
     state.editCursor = 4
 
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == true
     check state.items[floatIndex].floatValue == 50.5
     check state.editMode == false
@@ -642,7 +645,7 @@ suite "ConfigMode - Edit mode for Float":
     state.startEdit()
     state.editBuffer = "99999.0" # Out of range
 
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == false
     check state.items[floatIndex].floatValue == originalValue
 
@@ -1359,7 +1362,7 @@ suite "ConfigMode - pendingApply":
         break
     check colorIdx >= 0
     state.items[colorIdx].colorValue = "#ff0000"
-    state.applyColorChange(colorIdx)
+    state.applyColorChange(testEditorState(cfg), colorIdx)
     check state.pendingApply == false
 
 suite "ConfigMode - Item coverage":
@@ -1740,7 +1743,7 @@ suite "ConfigMode - Edge cases and guard conditions":
 
     state.selectedIndex = -1
     state.editMode = true
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == false
     check state.editMode == false
 
@@ -1758,7 +1761,7 @@ suite "ConfigMode - Edge cases and guard conditions":
     state.selectedIndex = sectionIndex
     state.editMode = true
     state.editBuffer = "test"
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == false
     check state.editMode == false
 
@@ -1854,7 +1857,7 @@ suite "ConfigMode - Theme section":
 
     state.editBuffer = "/new/theme/path.toml"
     state.editCursor = state.editBuffer.len
-    let result = state.confirmEdit()
+    let result = state.confirmEdit(testEditorState(cfg))
     check result == true
     check cfg.theme.path == "/new/theme/path.toml"
 
@@ -2253,7 +2256,7 @@ suite "ConfigMode - Theme Colors":
     state.startEdit()
     check state.editMode
     state.editBuffer = "#ff0000"
-    check state.confirmEdit()
+    check state.confirmEdit(testEditorState(cfg))
     check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == rgb("#ff0000")
 
   test "editing accepts hex without the # prefix":
@@ -2264,7 +2267,7 @@ suite "ConfigMode - Theme Colors":
 
     state.startEdit()
     state.editBuffer = "00ff00"
-    check state.confirmEdit()
+    check state.confirmEdit(testEditorState(cfg))
     check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == rgb("#00ff00")
 
   test "editing accepts termDefault":
@@ -2275,7 +2278,7 @@ suite "ConfigMode - Theme Colors":
 
     state.startEdit()
     state.editBuffer = "termDefault"
-    check state.confirmEdit()
+    check state.confirmEdit(testEditorState(cfg))
     check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb.isTermDefaultColor
 
   test "invalid hex is rejected and editing continues":
@@ -2290,7 +2293,7 @@ suite "ConfigMode - Theme Colors":
 
     state.startEdit()
     state.editBuffer = "nothex"
-    check not state.confirmEdit()
+    check not state.confirmEdit(testEditorState(cfg))
     check state.editMode # still editing
     check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == rgb("#123456")
 
@@ -2303,7 +2306,7 @@ suite "ConfigMode - Theme Colors":
 
     state.startEdit()
     state.editBuffer = "#0000ff"
-    check state.confirmEdit()
+    check state.confirmEdit(testEditorState(cfg))
     check getThemeColor(EditorColorPairIndex.keyword).background.rgb == rgb("#0000ff")
     check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == fgBefore
 
@@ -2315,7 +2318,7 @@ suite "ConfigMode - Theme Colors":
 
     state.startEdit()
     state.editBuffer = "#ff0000"
-    check state.confirmEdit()
+    check state.confirmEdit(testEditorState(cfg))
     let item = state.items[state.selectedIndex]
     check item.kind == cvkColor
     check item.colorIndex == EditorColorPairIndex.keyword

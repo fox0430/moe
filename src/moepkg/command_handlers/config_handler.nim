@@ -48,14 +48,14 @@ type
       discard
 
 proc handleEditModeKey(
-    configState: ConfigModeState, keyCombo: KeyCombo
+    configState: ConfigModeState, editorState: EditorState, keyCombo: KeyCombo
 ): ConfigModeResult =
   ## Handle key press while in edit mode (editing Int or String value)
   if keyCombo.isSpecial:
     case keyCombo.special
     of skEnter:
       # Confirm edit
-      discard configState.confirmEdit()
+      discard configState.confirmEdit(editorState)
       return ConfigModeResult(kind: cmrHandled)
     of skEscape:
       # Cancel edit
@@ -131,7 +131,10 @@ proc handleEnumPopupKey(
       return ConfigModeResult(kind: cmrHandled)
 
 proc handleConfigModeKey*(
-    configState: ConfigModeState, viewportHeight: int, keyCombo: KeyCombo
+    configState: ConfigModeState,
+    editorState: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): ConfigModeResult =
   ## Handle a key press in Configuration mode
   ##
@@ -139,7 +142,7 @@ proc handleConfigModeKey*(
 
   # If in edit mode, handle separately
   if configState.isEditing():
-    return handleEditModeKey(configState, keyCombo)
+    return handleEditModeKey(configState, editorState, keyCombo)
 
   # If enum popup is open, handle separately
   if configState.isEnumPopupOpen():
