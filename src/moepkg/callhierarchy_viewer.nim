@@ -22,9 +22,9 @@
 ## This module provides the data structures and operations for the call hierarchy viewer mode.
 ## Used to display and navigate LSP call hierarchy results (incoming/outgoing calls).
 
-import std/[strformat, options]
+import std/[strformat, options, os, strutils, tables]
 
-import buffer, list_viewer, lsp_service
+import buffer, list_viewer, lsp_service, unicode_utils
 import lsp/protocol/types as lspTypes
 import types/callhierarchy_viewer_types
 
@@ -48,8 +48,10 @@ proc uriToPath(uri: string): string =
   ## Convert file:// URI to path
   lsp_service.uriToPath(uri)
 
-proc formatLine*(item: lspTypes.CallHierarchyItem): string =
-  ## Format a call hierarchy item as a display line
+proc formatLine*(item: lspTypes.CallHierarchyItem, lineText: string = ""): string =
+  ## Format a call hierarchy item as a display line. `lineText` is the raw
+  ## text of the target line, used to translate the LSP UTF-16 character
+  ## offset into a rune-index column; pass "" to fall back to the raw offset.
   let path = uriToPath(item.uri)
   let detail =
     if item.detail.isSome:
@@ -57,10 +59,33 @@ proc formatLine*(item: lspTypes.CallHierarchyItem): string =
     else:
       ""
   let line = item.selectionRange.start.line + 1
-  let col = item.selectionRange.start.character + 1
+  let col =
+    if lineText.len > 0:
+      utf16ToRuneIndex(lineText, item.selectionRange.start.character) + 1
+    else:
+      item.selectionRange.start.character + 1
   fmt"{item.name}{detail} ({path}:{line}:{col})"
 
 proc createCallHierarchyTextBuffer*(state: CallHierarchyViewerState): TextBuffer =
   ## Create a TextBuffer from call hierarchy items for rendering via the normal view path
   let header = "-- " & state.title & " (" & $state.itemCount() & ") --"
-  state.toListTextBuffer(header, formatLine)
+  var fileCache = initTable[string, seq[string]]()
+  proc formatItem(item: lspTypes.CallHierarchyItem): string =
+    var lineText = ""
+    if item.uri.startsWith("file://"):
+      let path = uriToPath(item.uri)
+      if not fileCache.hasKey(path):
+        var lines: seq[string] = @[]
+        if fileExists(path):
+          try:
+            lines = readFile(path).splitLines()
+          except CatchableError:
+            discard
+        fileCache[path] = lines
+      let lines = fileCache[path]
+      let lineIdx = item.selectionRange.start.line
+      if lineIdx >= 0 and lineIdx < lines.len:
+        lineText = lines[lineIdx]
+    formatLine(item, lineText)
+
+  state.toListTextBuffer(header, formatItem)
