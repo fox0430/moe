@@ -160,7 +160,12 @@ proc addBuffer*(e: Editor, buf: TextBuffer) =
 proc deleteBufferAt*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from
   ## `bufferIdIndex`. Use this instead of `e.buffers.delete`.
-  let id = e.buffers[idx].id
+  ## Also sends LSP didClose so a later re-open doesn't collide with stale
+  ## server state (no-op for non-file buffers and untracked paths).
+  let buf = e.buffers[idx]
+  let id = buf.id
+  if e.lsp != nil:
+    discard e.lsp.onBufferClose(buf)
   e.buffers.delete(idx)
   e.bufferIdIndex.del(id)
   e.lastLspChangeSeqs.del(id)
