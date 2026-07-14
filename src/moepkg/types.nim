@@ -227,8 +227,8 @@ type
     recordedKeys*: seq[string] # Keys being recorded in current macro session
     registers*: Table[char, seq[string]] # Saved macros by register
     lastRegister*: Option[char] # Last executed macro register for @@
-    waitingForRegister*: bool # Waiting for register name after q or @
-    commandType*: string # "record" or "playback"
+    waitingForRegister*: bool # Waiting for register name after q
+    commandType*: string # "record" or empty
     recordStartKey*: string # Key string that started recording (for stop detection)
     pendingCount*: int # Numeric prefix for macro playback
     playbackDepth*: int # Current macro recursion depth
