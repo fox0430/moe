@@ -100,15 +100,65 @@ proc startBackgroundBuild*(
   )
 
 proc parseCommandString*(cmdStr: string): BuildCommand =
-  ## Parse a command string into BuildCommand tuple.
-  ## E.g., "nim c -d:release file.nim" -> (cmd: "nim", args: @["c", "-d:release", "file.nim"])
-  let parts = cmdStr.split(' ')
-  if parts.len == 0:
+  ## Parse a command string into BuildCommand tuple, honoring POSIX-style
+  ## single/double quotes and backslash escapes so args containing whitespace
+  ## survive as a single token.
+  ## E.g., `nim c "-d:foo bar" file.nim` -> (cmd: "nim", args: @["c", "-d:foo bar", "file.nim"])
+  var
+    tokens: seq[string] = @[]
+    current = ""
+    inSingle = false
+    inDouble = false
+    hasToken = false
+    i = 0
+  while i < cmdStr.len:
+    let c = cmdStr[i]
+    if inSingle:
+      if c == '\'':
+        inSingle = false
+      else:
+        current.add c
+    elif inDouble:
+      if c == '"':
+        inDouble = false
+      elif c == '\\' and i + 1 < cmdStr.len and cmdStr[i + 1] in {'"', '\\'}:
+        current.add cmdStr[i + 1]
+        inc i
+      else:
+        current.add c
+    else:
+      case c
+      of ' ', '\t':
+        if hasToken:
+          tokens.add current
+          current = ""
+          hasToken = false
+      of '\'':
+        inSingle = true
+        hasToken = true
+      of '"':
+        inDouble = true
+        hasToken = true
+      of '\\':
+        if i + 1 < cmdStr.len:
+          current.add cmdStr[i + 1]
+          inc i
+        else:
+          current.add c
+        hasToken = true
+      else:
+        current.add c
+        hasToken = true
+    inc i
+  if hasToken or inSingle or inDouble:
+    tokens.add current
+
+  if tokens.len == 0:
     return (cmd: "", args: @[])
-  elif parts.len == 1:
-    return (cmd: parts[0], args: @[])
+  elif tokens.len == 1:
+    return (cmd: tokens[0], args: @[])
   else:
-    return (cmd: parts[0], args: parts[1 .. ^1])
+    return (cmd: tokens[0], args: tokens[1 .. ^1])
 
 proc startBackgroundBuildOnSave*(
     path: string,

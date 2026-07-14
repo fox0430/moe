@@ -50,6 +50,46 @@ suite "Build - parseCommandString":
     check cmd.cmd == "cargo"
     check cmd.args == @["build", "--release"]
 
+  test "Collapse consecutive whitespace":
+    let cmd = parseCommandString("nim   c\t\tfile.nim")
+    check cmd.cmd == "nim"
+    check cmd.args == @["c", "file.nim"]
+
+  test "Trim leading and trailing whitespace":
+    let cmd = parseCommandString("  nim c file.nim  ")
+    check cmd.cmd == "nim"
+    check cmd.args == @["c", "file.nim"]
+
+  test "Double-quoted arg preserves inner spaces":
+    let cmd = parseCommandString("nim c \"-d:foo bar\" file.nim")
+    check cmd.cmd == "nim"
+    check cmd.args == @["c", "-d:foo bar", "file.nim"]
+
+  test "Single-quoted arg is fully literal":
+    let cmd = parseCommandString("echo 'a \"b\" \\c'")
+    check cmd.cmd == "echo"
+    check cmd.args == @["a \"b\" \\c"]
+
+  test "Backslash escapes space outside quotes":
+    let cmd = parseCommandString("cmd a\\ b c")
+    check cmd.cmd == "cmd"
+    check cmd.args == @["a b", "c"]
+
+  test "Backslash escapes quote inside double quotes":
+    let cmd = parseCommandString("echo \"say \\\"hi\\\"\"")
+    check cmd.cmd == "echo"
+    check cmd.args == @["say \"hi\""]
+
+  test "Empty quoted string is a token":
+    let cmd = parseCommandString("cmd \"\" x")
+    check cmd.cmd == "cmd"
+    check cmd.args == @["", "x"]
+
+  test "Whitespace-only string yields empty command":
+    let cmd = parseCommandString("   \t  ")
+    check cmd.cmd == ""
+    check cmd.args.len == 0
+
 suite "Build - nimBuildCommand":
   test "Generate nim build command":
     let cmd = nimBuildCommand("/path/to/file.nim")
