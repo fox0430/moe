@@ -143,6 +143,10 @@ type
     # liveWorkerOverride when nil so existing tests that only set the latter
     # still treat the fake worker as running. nil in production.
     runningWorkerOverride*: proc(path: string): bool {.gcsafe.}
+    # Test seam: when set, overrides liveWorkerLangIds so tests can exercise
+    # the "config changed for a running worker" branch without spawning a real
+    # server. nil in production.
+    liveWorkerLangIdsOverride*: proc(): seq[string] {.gcsafe.}
 
 proc defaultLanguageServerConfigs*(): Table[string, LanguageServerConfig] =
   ## Built-in default LSP server registrations.
@@ -263,6 +267,14 @@ proc getConfig*(svc: LspService, langId: string): Option[LanguageServerConfig] =
   if langId in svc.configs:
     return some(svc.configs[langId])
   return none(LanguageServerConfig)
+
+proc liveWorkerLangIds*(svc: LspService): seq[string] =
+  ## Language IDs whose worker is running or starting.
+  if svc.liveWorkerLangIdsOverride != nil:
+    return svc.liveWorkerLangIdsOverride()
+  for langId, worker in svc.workers:
+    if worker.isRunning or worker.isStarting:
+      result.add(langId)
 
 proc getLanguageIdFromPath*(svc: LspService, path: string): Option[string] =
   ## Determine language ID from file path extension
