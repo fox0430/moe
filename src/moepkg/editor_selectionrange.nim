@@ -28,9 +28,11 @@
 ## user adjusted the selection by hand), and expansion stops at the outermost
 ## level instead of collapsing back to the innermost range.
 
-import std/options
+import std/[options, tables]
 
-import types/editor_types, lsp_integration, unicode_utils
+import pkg/results
+
+import types/editor_types, editor_lsp, lsp_integration, unicode_utils
 
 proc normalizedSelection(sel: VisualSelection): tuple[first, last: BufferPosition] =
   ## Order the selection endpoints so `first` precedes `last`.
@@ -151,48 +153,39 @@ proc startLspSelectionRange*(e: Editor): bool =
   e.state.lspCache.selectionRangeChain = @[]
   e.state.lspCache.selectionRangeIndex = 0
 
-  # Cancel any pending selection range request
-  if e.state.lspCache.pendingSelectionRangeRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingSelectionRangeRequestId)
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
-
   let activeBuffer = e.activeBuffer()
-  let reqResult = e.lsp.startSelectionRangeRequest(
-    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
+  let line = e.activeWindow.cursor.line
+  let col = e.activeWindow.cursor.column
+  let ctxRes = e.startContextualRequest(
+    lrfSelectionRange,
+    proc(): Result[int, string] =
+      e.lsp.startSelectionRangeRequest(activeBuffer, line, col),
   )
-
-  if reqResult.isErr:
-    e.state.statusMessage = "LSP selection range failed: " & reqResult.error
+  if ctxRes.isErr:
+    e.state.statusMessage = "LSP selection range failed: " & ctxRes.error
     return false
-
-  e.state.lspCache.pendingSelectionRangeRequestId = reqResult.get
-  e.state.lspCache.pendingSelectionRangeBufferId = activeBuffer.id
-  e.state.lspCache.pendingSelectionRangeContentVersion = activeBuffer.contentVersion
   return true
 
 proc pollLspSelectionRange*(e: Editor) =
   ## Poll for a pending selection range response and seed the expansion chain.
   if not e.lsp.enabled:
     return
-
-  let requestId = e.state.lspCache.pendingSelectionRangeRequestId
-  if requestId == 0:
+  if not e.state.lspCache.pending.hasKey(lrfSelectionRange):
     return
+  let ctx = e.state.lspCache.pending[lrfSelectionRange]
 
   # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    e.state.lspCache.pending.del(lrfSelectionRange)
 
     # Ranges are anchored to the originating buffer's content; a buffer switch
     # or edit in flight would misapply them.
-    let buf = e.activeBuffer()
-    if buf.id != e.state.lspCache.pendingSelectionRangeBufferId or
-        buf.contentVersion != e.state.lspCache.pendingSelectionRangeContentVersion:
+    if classifyResponse(e, ctx) != lrsFresh:
       return
 
     var applied = false
@@ -210,11 +203,11 @@ proc pollLspSelectionRange*(e: Editor) =
     if not applied:
       e.state.statusMessage = "No selection range available"
   of lrsError:
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    e.state.lspCache.pending.del(lrfSelectionRange)
     if errorOpt.isSome:
       e.state.statusMessage = "LSP selection range failed: " & errorOpt.get
   of lrsTimeout:
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    e.state.lspCache.pending.del(lrfSelectionRange)
     e.state.statusMessage = "LSP selection range timed out"
 
 proc requestLspSelectionRange*(e: Editor): bool =

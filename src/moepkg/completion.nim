@@ -100,7 +100,6 @@ type
     lastLspRequestTime*: MonoTime ## Time of last LSP completion request
     isIncomplete*: bool ## Whether last LSP completion list was incomplete
     lastLspPrefix*: string ## Prefix used for last LSP request
-    resolveRequestId*: Option[int] ## Pending resolve request ID
     resolvedIndex*: int ## Index of item being resolved
 
   PopupPosition* = object
@@ -1235,7 +1234,6 @@ proc setLspItems*(
   mgr.lspItems = items
   mgr.isIncomplete = isIncomplete
   mgr.lspRequestId = none(int)
-  mgr.resolveRequestId = none(int)
 
   # Update entries with the new LSP items
   mgr.menu.entries = mgr.filterAndSortEntries(mgr.menu.prefix)

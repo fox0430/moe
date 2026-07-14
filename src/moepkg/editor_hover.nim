@@ -22,9 +22,14 @@
 ## cursor — the diagnostics-on-hover behavior is treated as part of the hover
 ## feature, not the diagnostics feature.
 
-import std/[options, monotimes, times]
+import std/[options, monotimes, tables, times]
 
-import types/editor_types, lsp_integration, hover_popup, buffer
+import pkg/results
+
+import types/editor_types, editor_lsp, lsp_integration, hover_popup, buffer
+
+const HoverValidModes* =
+  {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
 
 proc startLspHover*(e: Editor): bool =
   ## Start async LSP hover request at current cursor position
@@ -46,23 +51,18 @@ proc startLspHover*(e: Editor): bool =
     e.state.statusMessage = "LSP hover is not supported by the language server"
     return false
 
-  # Cancel any pending hover request
-  if e.state.lspCache.pendingHoverRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingHoverRequestId)
-    e.state.lspCache.pendingHoverRequestId = 0
-
-  let reqResult = e.lsp.startHoverRequest(
-    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
+  let line = e.activeWindow.cursor.line
+  let col = e.activeWindow.cursor.column
+  let ctxRes = e.startContextualRequest(
+    lrfHover,
+    proc(): Result[int, string] =
+      e.lsp.startHoverRequest(activeBuffer, line, col),
+    validModes = HoverValidModes,
+    cursor = some(BufferPosition(line: line, column: col)),
   )
-
-  if reqResult.isErr:
-    e.state.statusMessage = "LSP hover failed: " & reqResult.error
+  if ctxRes.isErr:
+    e.state.statusMessage = "LSP hover failed: " & ctxRes.error
     return false
-
-  e.state.lspCache.pendingHoverRequestId = reqResult.get
-  e.state.lspCache.pendingHoverBufferId = activeBuffer.id
-  e.state.lspCache.pendingHoverCursorLine = e.activeWindow.cursor.line
-  e.state.lspCache.pendingHoverCursorCol = e.activeWindow.cursor.column
   return true
 
 proc pollLspHover*(e: Editor) =
@@ -70,24 +70,22 @@ proc pollLspHover*(e: Editor) =
   ## This should be called from the main event loop (tick function)
   if not e.lsp.enabled:
     return
-
-  let requestId = e.state.lspCache.pendingHoverRequestId
-  if requestId == 0:
+  if not e.state.lspCache.pending.hasKey(lrfHover):
     return
+  let ctx = e.state.lspCache.pending[lrfHover]
 
   # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    e.state.lspCache.pendingHoverRequestId = 0
+    e.state.lspCache.pending.del(lrfHover)
 
-    # Discard the response if the active buffer changed while waiting: the hover
-    # text is for the originating buffer, so merging it with another buffer's
-    # diagnostics (or showing it over unrelated content) would be wrong.
-    if e.activeBuffer().id != e.state.lspCache.pendingHoverBufferId:
+    # classifyResponse rejects buffer-switch (origin != active), stale edits,
+    # closed origin, and mode hijacks — no supplementary check needed.
+    if classifyResponse(e, ctx) != lrsFresh:
       return
 
     var hoverText = ""
@@ -96,8 +94,8 @@ proc pollLspHover*(e: Editor) =
       if hoverOpt.isSome:
         hoverText = getHoverText(hoverOpt.get)
 
-    let cursorLine = e.state.lspCache.pendingHoverCursorLine
-    let cursorCol = e.state.lspCache.pendingHoverCursorCol
+    let cursorLine = ctx.cursorLine
+    let cursorCol = ctx.cursorCol
     let diags = e.activeBuffer().getDiagnosticsAt(cursorLine, cursorCol)
     let diagText = formatDiagnosticsForHover(diags)
 
@@ -114,11 +112,11 @@ proc pollLspHover*(e: Editor) =
     else:
       e.state.statusMessage = "No hover information available"
   of lrsError:
-    e.state.lspCache.pendingHoverRequestId = 0
+    e.state.lspCache.pending.del(lrfHover)
     if errorOpt.isSome:
       e.state.statusMessage = "LSP hover failed: " & errorOpt.get
   of lrsTimeout:
-    e.state.lspCache.pendingHoverRequestId = 0
+    e.state.lspCache.pending.del(lrfHover)
     e.state.statusMessage = "LSP hover timed out"
 
 proc requestLspHover*(e: Editor): bool =
@@ -134,8 +132,8 @@ proc maybeAutoHoverDiagnostic*(e: Editor) =
       not e.config.lsp.diagnostics.autoHover:
     return
 
-  # Only in Normal/Visual modes
-  if e.state.mode notin {EditorMode.Normal, EditorMode.Visual}:
+  # Match manual hover: any Normal/Visual variant (Visual/VisualBlock/VisualLine).
+  if e.state.mode notin HoverValidModes:
     return
 
   let cursorLine = e.activeWindow.cursor.line

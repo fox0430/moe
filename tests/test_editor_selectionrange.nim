@@ -19,7 +19,7 @@
 
 ## Tests for editor_selectionrange.nim
 
-import std/[unittest, json, options, importutils]
+import std/[tables, unittest, json, options, importutils]
 
 import
   ../src/moepkg/[
@@ -28,6 +28,23 @@ import
   ]
 
 privateAccess(LspService)
+
+proc seedSelectionRangePending(
+    e: Editor, reqId: int, bufId: BufferId, contentVersion: int
+) =
+  ## Install a pre-formed selectionRange LspRequestContext so pollLspSelectionRange
+  ## treats reqId as its currently-pending request.
+  e.state.lspCache.pending[lrfSelectionRange] = LspRequestContext(
+    requestId: reqId,
+    feature: lrfSelectionRange,
+    bufferId: bufId,
+    contentVersion: contentVersion,
+    path: "/tmp/x.nim",
+    generation: 1,
+    cursorLine: -1,
+    cursorCol: -1,
+    validModes: {},
+  )
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -68,7 +85,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
 
     e.pollLspSelectionRange()
     # No crash means success
@@ -96,9 +113,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
     ]
 
     let requestId = 1
-    e.state.lspCache.pendingSelectionRangeRequestId = requestId
-    e.state.lspCache.pendingSelectionRangeBufferId = buf.id
-    e.state.lspCache.pendingSelectionRangeContentVersion = buf.contentVersion
+    e.seedSelectionRangePending(requestId, buf.id, buf.contentVersion)
     e.lsp.service.activeRequests[requestId] = LspPendingRequest(
       requestId: requestId,
       langId: "",
@@ -133,10 +148,9 @@ suite "editor_selectionrange - pollLspSelectionRange":
     ]
 
     const reqId = 7
-    e.state.lspCache.pendingSelectionRangeRequestId = reqId
     # Simulate a buffer switch: the request was sent for a different buffer.
-    e.state.lspCache.pendingSelectionRangeBufferId = BufferId(int(buf.id) + 1)
-    e.state.lspCache.pendingSelectionRangeContentVersion = buf.contentVersion
+    # classifyResponse treats an unknown bufferId as lrsGone.
+    e.seedSelectionRangePending(reqId, BufferId(int(buf.id) + 1), buf.contentVersion)
     e.lsp.service.activeRequests[reqId] = LspPendingRequest(
       requestId: reqId,
       langId: "",
@@ -150,7 +164,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
     let modeBefore = e.state.mode
     e.pollLspSelectionRange()
 
-    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
     check e.state.mode == modeBefore
     check not e.state.visualSelection.active
     check e.state.lspCache.selectionRangeChain.len == 0
@@ -171,9 +185,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
     ]
 
     const reqId = 8
-    e.state.lspCache.pendingSelectionRangeRequestId = reqId
-    e.state.lspCache.pendingSelectionRangeBufferId = buf.id
-    e.state.lspCache.pendingSelectionRangeContentVersion = versionAtRequest
+    e.seedSelectionRangePending(reqId, buf.id, versionAtRequest)
     e.lsp.service.activeRequests[reqId] = LspPendingRequest(
       requestId: reqId,
       langId: "",
@@ -191,7 +203,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
     let modeBefore = e.state.mode
     e.pollLspSelectionRange()
 
-    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
     check e.state.mode == modeBefore
     check not e.state.visualSelection.active
 
@@ -209,9 +221,7 @@ suite "editor_selectionrange - config gate":
 suite "editor_selectionrange - chain expansion":
   proc seedResponse(e: Editor, requestId: int, responseJson: JsonNode) =
     let buf = e.activeBuffer()
-    e.state.lspCache.pendingSelectionRangeRequestId = requestId
-    e.state.lspCache.pendingSelectionRangeBufferId = buf.id
-    e.state.lspCache.pendingSelectionRangeContentVersion = buf.contentVersion
+    e.seedSelectionRangePending(requestId, buf.id, buf.contentVersion)
     e.lsp.service.activeRequests[requestId] = LspPendingRequest(
       requestId: requestId,
       langId: "",
@@ -253,14 +263,14 @@ suite "editor_selectionrange - chain expansion":
 
     # Second request expands to the parent without contacting the server.
     check e.requestLspSelectionRange()
-    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
     check e.state.lspCache.selectionRangeIndex == 1
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
 
     # Third request stops at the outermost level (no change, no new request).
     check e.requestLspSelectionRange()
-    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
     check e.state.lspCache.selectionRangeIndex == 1
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)

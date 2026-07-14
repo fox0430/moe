@@ -19,12 +19,14 @@
 
 ## LSP-related procedures for the editor
 
-import std/[options, json, os]
+import std/[options, json, os, tables]
 
 import pkg/results
 
-import types/editor_types, lsp_integration, motion, editor_codelens
+import types/editor_types, lsp_integration, motion, editor_codelens, lsp_request_context
 import command_handlers/[handler_manager, insert_handler]
+
+export lsp_request_context
 
 proc applyLspServerConfigs*(e: Editor) =
   ## Rebuild the LSP service config table from built-in defaults plus the
@@ -233,8 +235,8 @@ proc pollLspCompletion*(e: Editor) =
     return
 
   # Call the insert handler's poll function
-  e.handlerManager.insertHandler.pollLspCompletion()
-  e.handlerManager.insertHandler.pollLspResolve()
+  e.handlerManager.insertHandler.pollLspCompletion(e.state)
+  e.handlerManager.insertHandler.pollLspResolve(e.state)
 
 proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledError]).} =
   ## Request LSP document formatting and apply edits
@@ -525,3 +527,6 @@ proc requestLspExecuteCommand*(
       discard
     except Exception as err:
       e.state.statusMessage = "LSP executeCommand error: " & err.msg
+
+# LSP request-context helpers live in `lsp_request_context` (Phase A);
+# re-exported above so existing callers keep working.

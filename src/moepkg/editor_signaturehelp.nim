@@ -22,9 +22,13 @@
 ## The UI side (popup rendering, manager state) lives in signature_help.nim.
 ## This module owns the editor-side request lifecycle that drives it.
 
-import std/[options, monotimes, times]
+import std/[options, monotimes, tables, times]
 
-import types/editor_types, lsp_integration, signature_help
+import pkg/results
+
+import types/editor_types, editor_lsp, lsp_integration, signature_help
+
+const SignatureHelpValidModes* = {EditorMode.Insert}
 
 proc shouldRequestSignatureHelp*(
     sigHelp: SignatureHelpRequestState,
@@ -62,17 +66,21 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
   let activeBuffer = e.activeBuffer()
 
   # Check if there's a pending request - try to get response
-  if e.state.lspCache.pendingSignatureHelpRequestId != 0:
-    let (status, resultOpt, errorOpt) =
-      e.lsp.checkResponse(e.state.lspCache.pendingSignatureHelpRequestId)
+  if e.state.lspCache.pending.hasKey(lrfSignatureHelp):
+    let ctx = e.state.lspCache.pending[lrfSignatureHelp]
+    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
     case status
     of lrsPending:
       # Still waiting for response, don't start a new request
       return
     of lrsSuccess:
       # Got response, process it
-      e.state.lspCache.pendingSignatureHelpRequestId = 0
+      e.state.lspCache.pending.del(lrfSignatureHelp)
       e.state.lspCache.signatureHelp.consecutiveErrors = 0
+      # Drop stale reply (buffer switched / edited / left Insert). The debounce
+      # fields still record the tried position so change detection stays honest.
+      if classifyResponse(e, ctx) != lrsFresh:
+        return
       if resultOpt.isSome:
         let sigHelpOpt = parseSignatureHelpResponse(resultOpt.get)
         if sigHelpOpt.isSome:
@@ -92,7 +100,7 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
       # persistently failing server does not flood the LSP log on every retry.
       if e.state.lspCache.signatureHelp.consecutiveErrors == 0:
         logLspDegraded("Signature help", status, errorOpt.get(""))
-      e.state.lspCache.pendingSignatureHelpRequestId = 0
+      e.state.lspCache.pending.del(lrfSignatureHelp)
       e.state.lspCache.signatureHelp.changeSeq = -1
       inc e.state.lspCache.signatureHelp.consecutiveErrors
       return
@@ -114,12 +122,18 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
     return
 
   # Start a new request and record the position it was issued for.
-  let reqResult = e.lsp.startSignatureHelpRequest(
-    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
+  let line = e.activeWindow.cursor.line
+  let col = e.activeWindow.cursor.column
+  let ctxRes = e.startContextualRequest(
+    lrfSignatureHelp,
+    proc(): Result[int, string] =
+      e.lsp.startSignatureHelpRequest(activeBuffer, line, col),
+    validModes = SignatureHelpValidModes,
+    cursor = some(BufferPosition(line: line, column: col)),
+    ignoreContentVersion = true,
   )
-  if reqResult.isOk:
-    e.state.lspCache.pendingSignatureHelpRequestId = reqResult.get
-    e.state.lspCache.signatureHelp.cursorLine = e.activeWindow.cursor.line
-    e.state.lspCache.signatureHelp.cursorColumn = e.activeWindow.cursor.column
+  if ctxRes.isOk:
+    e.state.lspCache.signatureHelp.cursorLine = line
+    e.state.lspCache.signatureHelp.cursorColumn = col
     e.state.lspCache.signatureHelp.changeSeq = activeBuffer.changeSeq
     e.state.lspCache.signatureHelp.lastUpdate = now

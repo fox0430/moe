@@ -19,13 +19,28 @@
 
 ## Tests for editor_hover.nim
 
-import std/[unittest, monotimes, times, json, options, importutils]
+import std/[unittest, monotimes, tables, times, json, options, importutils]
 
 import ../src/moepkg/[editor, buffer, config, config_loader, types, hover_popup]
 import ../src/moepkg/editor_hover
 import ../src/moepkg/lsp_service
 
 privateAccess(LspService)
+
+proc seedHoverPending(e: Editor, reqId: int, bufId: BufferId, contentVersion: int) =
+  ## Install a pre-formed hover LspRequestContext so pollLspHover treats reqId
+  ## as its currently-pending request.
+  e.state.lspCache.pending[lrfHover] = LspRequestContext(
+    requestId: reqId,
+    feature: lrfHover,
+    bufferId: bufId,
+    contentVersion: contentVersion,
+    path: "/tmp/x.nim",
+    generation: 1,
+    cursorLine: 0,
+    cursorCol: 0,
+    validModes: HoverValidModes,
+  )
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -78,7 +93,7 @@ suite "editor_hover - pollLspHover":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingHoverRequestId = 0
+    check not e.state.lspCache.pending.hasKey(lrfHover)
 
     e.pollLspHover()
     # No crash means success
@@ -92,14 +107,11 @@ suite "editor_hover - pollLspHover":
       result: some($(%*{"contents": {"kind": "plaintext", "value": "hover text"}})),
       error: none(string),
     )
-    e.state.lspCache.pendingHoverRequestId = reqId
-    e.state.lspCache.pendingHoverBufferId = e.activeBuffer().id
-    e.state.lspCache.pendingHoverCursorLine = 0
-    e.state.lspCache.pendingHoverCursorCol = 0
+    e.seedHoverPending(reqId, e.activeBuffer().id, e.activeBuffer().contentVersion)
 
     e.pollLspHover()
 
-    check e.state.lspCache.pendingHoverRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfHover)
     check e.state.lspCache.hoverPopup.isActive
 
   test "Discards response when the active buffer changed while waiting":
@@ -111,15 +123,16 @@ suite "editor_hover - pollLspHover":
       result: some($(%*{"contents": {"kind": "plaintext", "value": "hover text"}})),
       error: none(string),
     )
-    e.state.lspCache.pendingHoverRequestId = reqId
-    # Request was made for a different buffer than the current active one.
-    e.state.lspCache.pendingHoverBufferId = BufferId(int(e.activeBuffer().id) + 1)
-    e.state.lspCache.pendingHoverCursorLine = 0
-    e.state.lspCache.pendingHoverCursorCol = 0
+    # Request was made for a different buffer than the current active one:
+    # classifyResponse treats an unknown id as lrsGone so the popup must stay
+    # hidden.
+    e.seedHoverPending(
+      reqId, BufferId(int(e.activeBuffer().id) + 1), e.activeBuffer().contentVersion
+    )
 
     e.pollLspHover()
 
-    check e.state.lspCache.pendingHoverRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfHover)
     check not e.state.lspCache.hoverPopup.isActive
 
 suite "editor_hover - hideHoverPopup":
