@@ -437,7 +437,7 @@ proc renotifyOpenBuffers(e: Editor, langId: string): int =
     if buf.filePath.isSome:
       let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
       if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
-        let openResult = e.lsp.onBufferOpen(buf)
+        let openResult = e.lsp.onBufferOpen(buf, serverIsFresh = true)
         if openResult.isErr:
           inc result
           logLspDegraded("re-open " & buf.filePath.get, openResult.error)

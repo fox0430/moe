@@ -341,8 +341,15 @@ proc setApplyEditCallback*(
   lsp.service.onApplyWorkspaceEdit = callback
 
 # Buffer lifecycle operations
-proc onBufferOpen*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
-  ## Called when a buffer is opened/loaded
+proc onBufferOpen*(
+    lsp: LspIntegration, buffer: TextBuffer, serverIsFresh: bool = false
+): Result[void, string] =
+  ## Called when a buffer is opened/loaded.
+  ## If the path is already tracked, sends didClose first: the version reset
+  ## below would otherwise send a second didOpen at v1 while the server still
+  ## holds a higher version, causing later didChange to be dropped as stale.
+  ## `serverIsFresh` skips the didClose on the restart path where the worker
+  ## just started and knows nothing about the document.
   if not lsp.enabled:
     return ok()
 
@@ -352,7 +359,9 @@ proc onBufferOpen*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string
   let path = buffer.filePath.get
   let text = buffer.getTextString()
 
-  # Track open buffer; didOpen is sent with version 1
+  if path in lsp.documents and not serverIsFresh:
+    discard lsp.service.notifyDocumentClosed(path)
+
   lsp.documents[path] = (version: 1, shadow: text)
 
   return lsp.service.notifyDocumentOpened(path, text)

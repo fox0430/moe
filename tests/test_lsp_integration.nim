@@ -1184,6 +1184,37 @@ suite "LspIntegration - Buffer Version Tracking":
     check lsp.onBufferChange(buffer).isOk
     check lsp.sentDocumentVersion(tmpDir / "test.nim") == some(1)
 
+  test "re-open on tracked path resets version (implicit didClose)":
+    # Regression: :bdelete used to leave the path tracked, so a subsequent
+    # onBufferOpen for the same path was a duplicate didOpen at version 1
+    # while the server still held the previous higher version, causing later
+    # didChange notifications to be dropped as stale.
+    lsp.markReady()
+    let buffer = newTextBuffer("hi", some(tmpDir / "reopen.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    for _ in 0 ..< 3:
+      check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+      check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(4)
+
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(1)
+
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "y").isOk
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(2)
+
+  test "serverIsFresh skips defensive didClose on restart re-open":
+    lsp.markReady()
+    let buffer = newTextBuffer("hi", some(tmpDir / "restart.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(2)
+
+    check lsp.onBufferOpen(buffer, serverIsFresh = true).isOk
+    check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(1)
+
 suite "LspIntegration - Request Methods (disabled)":
   test "startCompletionRequest returns error when disabled":
     let lsp = newLspIntegration()
