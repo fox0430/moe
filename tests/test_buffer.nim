@@ -315,6 +315,18 @@ suite "Buffer - Editing Operations":
     check buf[0] == "A B C"
     check buf[1] == "D"
 
+  test "joinLines skips separator space before ')'":
+    let buf = newTextBuffer("foo(\n)")
+    discard buf.joinLines(0)
+    check buf.len == 1
+    check buf[0] == "foo()"
+
+  test "joinLines skips separator space before ')' with leading whitespace":
+    let buf = newTextBuffer("foo(\n   )bar")
+    discard buf.joinLines(0)
+    check buf.len == 1
+    check buf[0] == "foo()bar"
+
 suite "Buffer - Undo/Redo":
   test "undo insertText":
     let buf = newTextBuffer("Hello")

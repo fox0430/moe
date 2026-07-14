@@ -373,13 +373,10 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
     # Trim leading whitespace from next line
     let trimmedNext = nextLine.strip(leading = true, trailing = false)
 
-    # Add a space between lines if current line doesn't end with whitespace
-    # and next line is not empty
-    if trimmedCurrent.len > 0 and trimmedNext.len > 0:
-      # Don't add space if current line ends with certain punctuation
-      let lastChar = trimmedCurrent[^1]
-      if lastChar notin {' ', '\t', '\n'}:
-        trimmedCurrent.add(' ')
+    # Vim J: separate joined lines with a space, but not when the next line
+    # begins with ')'.
+    if trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')':
+      trimmedCurrent.add(' ')
 
     # Build the joined line
     let joinedLine = trimmedCurrent & trimmedNext
