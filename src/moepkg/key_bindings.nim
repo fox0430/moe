@@ -100,6 +100,11 @@ proc parseKeyString*(s: string): seq[KeyCombo] =
     if combo.isSome:
       result.add(combo.get)
     elif part.len > 1 and '-' notin part:
+      # Reject uppercase modifier-letter runs — "CC" is almost always a typo
+      # for "C-C", so silently treating it as two Shift+C presses is worse
+      # than surfacing an error at the caller.
+      if part.allIt(it in {'C', 'M', 'S'}):
+        return @[]
       # Vim-style concatenated characters: "jj", "gg", "gd" etc.
       for ch in part:
         let charCombo = parseKeyCombo($ch)
