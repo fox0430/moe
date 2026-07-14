@@ -17,8 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
+import std/[unittest, options, os, strutils]
 
+import ../src/moepkg/buffer
 import ../src/moepkg/lsp/protocol/types as lspTypes
 import ../src/moepkg/callhierarchy_viewer
 
@@ -153,6 +154,53 @@ suite "CallHierarchyViewer - formatLine":
     let line = formatLine(item)
 
     check line == "myFunc (untitled:Untitled-1:1:1)"
+
+  test "Format line converts UTF-16 offset to rune column via lineText":
+    # 2 CJK runes (each 1 UTF-16 code unit in the BMP) followed by `foo`;
+    # the LSP-style UTF-16 offset 2 lands on the 'f' of `foo`, which is
+    # rune column 2 (0-based) / 3 (1-based).
+    let item = makeCallHierarchyItem("foo", "file:///cjk.nim", 0, 2)
+    let line = formatLine(item, "あいfoo")
+
+    check line == "foo (/cjk.nim:1:3)"
+
+  test "Format line with supplementary-plane rune (2 UTF-16 units per rune)":
+    # A single non-BMP rune (U+1F600) counts as 2 UTF-16 code units. The
+    # LSP offset 2 sits immediately after it, at rune column 1 (0-based) /
+    # 2 (1-based).
+    let item = makeCallHierarchyItem("foo", "file:///emoji.nim", 0, 2)
+    let line = formatLine(item, "\u{1F600}foo")
+
+    check line == "foo (/emoji.nim:1:2)"
+
+  test "Format line with empty lineText falls back to raw UTF-16 offset":
+    let item = makeCallHierarchyItem("foo", "file:///test.nim", 0, 7)
+    let line = formatLine(item, "")
+
+    check line == "foo (/test.nim:1:8)"
+
+suite "CallHierarchyViewer - createCallHierarchyTextBuffer CJK":
+  test "Display column is rune-based when the target file has CJK":
+    # Write a real file so createCallHierarchyTextBuffer's per-file cache can
+    # read it; the LSP UTF-16 offset 2 should land on rune column 3 (1-based).
+    let tmpPath = getTempDir() / "moe_callhierarchy_cjk_test.nim"
+    writeFile(tmpPath, "あいfoo\n")
+    defer:
+      removeFile(tmpPath)
+
+    let uri = "file://" & tmpPath
+    let items = @[makeCallHierarchyItem("foo", uri, 0, 2)]
+    let state = newCallHierarchyViewerState(items, chvkPrepare)
+    let tb = state.createCallHierarchyTextBuffer()
+
+    var body = ""
+    for i in 0 ..< tb.len:
+      if i > 0:
+        body.add('\n')
+      body.add(tb.getLine(i))
+    let bodyLines = body.splitLines()
+    check bodyLines.len == 2
+    check bodyLines[1] == "foo (" & tmpPath & ":1:3)"
 
 suite "CallHierarchyViewer - getItem + formatLine":
   test "Get formatted line at valid index":
