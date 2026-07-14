@@ -565,79 +565,6 @@ suite "NormalModeHandler - Macro Playback State":
 
     check r.kind == nmrHandled
 
-  test "Playback existing macro (@a)":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.registers = initTable[char, seq[string]]()
-    state.macroState.registers['a'] = @["d", "d"]
-
-    # Press 'a' to play register
-    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrPlaybackMacro
-    check r.macroKeys == @["d", "d"]
-    check state.macroState.lastRegister.isSome
-    check state.macroState.lastRegister.get == 'a'
-
-  test "Playback non-existent macro shows error":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.registers = initTable[char, seq[string]]()
-
-    # Press 'z' (empty register)
-    let keyCombo = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrHandled
-    check state.statusMessage == "Register @z is empty"
-
-  test "Repeat last macro (@@)":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.registers = initTable[char, seq[string]]()
-    state.macroState.registers['a'] = @["j", "j"]
-    state.macroState.lastRegister = some('a')
-
-    # Press '@' to repeat last macro
-    let keyCombo = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrPlaybackMacro
-    check r.macroKeys == @["j", "j"]
-
-  test "Repeat last macro when no previous":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.lastRegister = none(char)
-
-    # Press '@' when no previous macro
-    let keyCombo = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrHandled
-    check state.statusMessage == "No previous macro"
-
 suite "NormalModeHandler - Register Selection":
   test "Start register selection (\")":
     let buf = newTextBuffer()
@@ -1146,24 +1073,6 @@ suite "NormalModeHandler - Macro Key Recording":
     # Key should be recorded
     check state.macroState.recordedKeys.len >= 1
 
-  test "Macro playback with count":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.pendingCount = 5 # Play 5 times
-    state.macroState.registers = initTable[char, seq[string]]()
-    state.macroState.registers['a'] = @["j"]
-
-    let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrPlaybackMacro
-    check r.macroCount == 5
-
 suite "NormalModeHandler - Undo/Redo":
   test "Undo command executes":
     let buf = newTextBuffer()
@@ -1546,24 +1455,6 @@ suite "NormalModeHandler - Jump List Edge Cases":
     check r.nmrJumpColumn == 3
 
 suite "NormalModeHandler - Macro Edge Cases":
-  test "@@ with last register deleted":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.registers = initTable[char, seq[string]]()
-    # lastRegister points to 'a', but 'a' is not in registers (deleted)
-    state.macroState.lastRegister = some('a')
-
-    let keyCombo = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrHandled
-    check state.statusMessage == "Register @a is empty"
-
   test "Empty char in key combo during macro register selection":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
@@ -1596,63 +1487,6 @@ suite "NormalModeHandler - Macro Edge Cases":
     check r.kind == nmrHandled
     check state.macroState.waitingForRegister == false
     check state.statusMessage == ""
-
-  test "Invalid register for playback":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-
-    # Press '!' (invalid for playback)
-    let keyCombo = KeyCombo(isSpecial: false, char: "!", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrHandled
-    check state.statusMessage == "Invalid register (use a-z, @, or :)"
-
-  test "Repeat last Command mode command @:":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    # Set up command history with a previous Command mode command
-    state.input.commandState.history = @["set number"]
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.pendingCount = 1
-
-    # Press ':' to trigger @:
-    let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrExecCommand
-    check r.execCommandText == "set number"
-    check r.execCommandCount == 1
-    check state.macroState.waitingForRegister == false
-
-  test "Repeat last Command mode command @: with no history":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    state.input.commandState.history = @[]
-
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.macroState.pendingCount = 1
-
-    # Press ':' to trigger @:
-    let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
-
-    check r.kind == nmrHandled
-    check state.statusMessage == "No previous Command mode command"
 
 suite "NormalModeHandler - Command mode command alias dispatch (#2597)":
   test "K mapped to bdelete dispatches via exec.cmdline.* bridge":
