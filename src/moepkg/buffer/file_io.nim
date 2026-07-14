@@ -27,8 +27,9 @@ import std/[options, os, strutils, times]
 
 import pkg/[celina, results]
 
-import ../[encoding, highlight, logger, uri_utils]
+import ../[encoding, highlight, logger]
 import core, atomic_write
+import highlight as buffer_highlight
 
 const ExternalModErrorMsg* =
   "File was modified externally. Use :w! to force save, or :e! to reload."
@@ -253,15 +254,10 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.highlight = Highlight(colorSegments: @[])
     b.incrementalHighlight = nil
 
-  # Apply URI underlines for the initial chunk. The rest is handled
-  # progressively by continueUriScan.
+  # URI underlines for the initial chunk; the rest is handled progressively
+  # by continueUriScan.
   let uriChunkEnd = min(999, b.len - 1)
-  for lineIdx in 0 .. uriChunkEnd:
-    let line = b.getLine(lineIdx)
-    for m in findAllUris(line, b.maxHighlightLineLength):
-      b.highlight.addModifier(
-        lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
-      )
+  discard buffer_highlight.scanAndApplyUriUnderlines(b, 0, uriChunkEnd)
   b.uriScanParsedUpTo = uriChunkEnd
 
   b.highlightNeedsUpdate = false

@@ -29,6 +29,25 @@ import ../[highlight, uri_utils]
 import ./core
 import ./markers
 
+proc scanAndApplyUriUnderlines*(
+    b: TextBuffer, startLine, endLine: int, applyToCache = true
+): bool =
+  ## Batch-apply URI Underline in `[startLine, endLine]` to `b.highlight` and
+  ## (when `applyToCache`) to `b.incrementalHighlight.segments`. Applying to
+  ## the cache directly, not via `b.highlight`, keeps transient diagnostic
+  ## styling out of it. Returns true if any URI was applied.
+  var ranges: seq[tuple[row, firstCol, lastCol: int]]
+  for lineIdx in startLine .. endLine:
+    let line = b.getLine(lineIdx)
+    for m in findAllUris(line, b.maxHighlightLineLength):
+      ranges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
+  if ranges.len == 0:
+    return false
+  if applyToCache and b.incrementalHighlight != nil:
+    b.incrementalHighlight.segments.addUnderlineRanges(ranges)
+  b.highlight.addUnderlineRanges(ranges)
+  return true
+
 proc continueInitialHighlight*(b: TextBuffer): bool =
   ## Continue progressive initial highlighting if incomplete.
   ## Returns true if work was done (caller should update the display).
@@ -156,28 +175,8 @@ proc continueUriScan*(b: TextBuffer): bool =
   if b.incrementalHighlight != nil:
     endLine = min(endLine, b.incrementalHighlight.parsedUpTo)
 
-  # Collect URI ranges across the whole chunk, then apply them in one
-  # batched pass over the segment seq. Calling addModifier per URI rebuilds
-  # the whole colorSegments seq each time (O(N) memcpy), which dominates
-  # frame time for large files with many segments (e.g. 40k-line JSON:
-  # ~300k segments × ~140 URIs/chunk → ~400ms). The batched apply is
-  # O(N + M) total.
-  var ranges: seq[tuple[row, firstCol, lastCol: int]]
-  for lineIdx in startLine .. endLine:
-    let line = b.getLine(lineIdx)
-    for m in findAllUris(line, b.maxHighlightLineLength):
-      ranges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
-
-  let modified = ranges.len > 0
-  if modified:
-    b.highlight.addUnderlineRanges(ranges)
-
+  let modified = scanAndApplyUriUnderlines(b, startLine, endLine)
   b.uriScanParsedUpTo = endLine
-
-  # Persist URI modifiers into incrementalHighlight.segments so they survive
-  # the next updateHighlight call (which assigns b.highlight from that seq).
-  if modified and b.incrementalHighlight != nil:
-    b.incrementalHighlight.segments = b.highlight.colorSegments
 
   return modified
 
@@ -276,28 +275,15 @@ proc updateHighlight*(b: TextBuffer) =
       else:
         b.highlight.colorSegments = @[]
 
-    # Apply underline to URIs/URLs in a limited range around the change point.
-    # Scanning all lines from the change point to EOF is O(n) and blocks
-    # rendering for large files. Limit to a reasonable chunk; the rest will be
-    # handled progressively by continueUriScan.
-    # Applied BEFORE diagnostics so the URI modifiers can be synced into
-    # incrementalHighlight.segments without mixing in transient diagnostic mods.
-    # Batched to avoid per-range O(N) segment-seq rebuilds.
+    # URI underlines around the change point; the rest is handled progressively
+    # by continueUriScan. When the highlight was rebuilt from scratch the cache
+    # is fresh and `uriScanParsedUpTo` is reset below, so the progressive scan
+    # will re-cover this range — skip the cache mirror to avoid redundant work.
     let uriStart = max(0, b.lastChangedLines)
     let uriEnd = min(uriStart + 1000, b.len) - 1
-    var inlineRanges: seq[tuple[row, firstCol, lastCol: int]]
-    for lineIdx in uriStart .. uriEnd:
-      let line = b.getLine(lineIdx)
-      for m in findAllUris(line, b.maxHighlightLineLength):
-        inlineRanges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
-    if inlineRanges.len > 0:
-      b.highlight.addUnderlineRanges(inlineRanges)
-
-    # Persist URI modifiers into incrementalHighlight.segments. Without this,
-    # the next incremental update's `b.highlight.colorSegments = ...` reassign
-    # would drop URI modifiers in the unchanged region, forcing a full rescan.
-    if not highlightRebuilt and b.incrementalHighlight != nil:
-      b.incrementalHighlight.segments = b.highlight.colorSegments
+    discard scanAndApplyUriUnderlines(
+      b, uriStart, uriEnd, applyToCache = not highlightRebuilt
+    )
 
     b.highlight.hasDiagnostics = false
     if b.diagnostics.len > 0:

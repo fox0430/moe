@@ -1216,6 +1216,68 @@ suite "Highlight - diagnostics survive progressive load":
       discard
     check buf.highlight.getSegmentModifiers(500, 2) == {StyleModifier.Undercurl}
 
+  test "continueUriScan does not bake diagnostic styling into the cache":
+    # Regression: reassigning incrementalHighlight.segments from
+    # b.highlight.colorSegments would carry over any diagnostic-styled
+    # segments applied earlier in the same frame; a later incremental
+    # update would then surface them as stale undercurls after the
+    # diagnostics themselves are cleared.
+    var buf = newTextBuffer()
+
+    let path = getTempDir() / "test_uri_scan_diag_no_bake.rs"
+    var content = ""
+    for i in 0 ..< 500:
+      if i == 250:
+        content.add("// see https://example.com/api\n")
+      else:
+        content.add("let x = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    while buf.continueInitialHighlight():
+      discard
+    while buf.continueUriScan():
+      discard
+
+    # Diagnostic on line 100, far from both the URI (line 250) and the edit
+    # point below — otherwise the incremental re-parse would splice fresh
+    # segments over line 100 and mask a stale-cache bug.
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 100,
+        startCol: 0,
+        endLine: 100,
+        endCol: 5,
+        severity: bdsError,
+        message: "test error",
+      )
+    ]
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+    check StyleModifier.Undercurl in buf.highlight.getSegmentModifiers(100, 2)
+
+    # Rewind the URI scan and re-process the chunk that already carries the
+    # diagnostic style — the same path an edit-triggered rewind takes.
+    buf.uriScanParsedUpTo = -1
+    discard buf.continueUriScan()
+
+    # LSP publishDiagnostics{[]} clears diagnostics.
+    buf.diagnostics.setLen(0)
+
+    # Edit near end-of-file so the incremental re-parse converges quickly
+    # and does not touch line 100 — the cached segment there is the only
+    # source of styling for the next b.highlight rebuild.
+    buf.lastChangedLines = 490
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check StyleModifier.Undercurl notin buf.highlight.getSegmentModifiers(100, 2)
+    check buf.highlight.getColorPair(100, 2) notin {
+      EditorColorPairIndex.syntaxCheckErr, EditorColorPairIndex.syntaxCheckWarn,
+      EditorColorPairIndex.syntaxCheckInfo, EditorColorPairIndex.syntaxCheckHint,
+    }
+
 suite "Highlight - JS/TS String Line Bounding":
   # JS/TS string tokens (and the isKey lookahead) must not cross a newline:
   # a line's tokens may depend only on the tokenizer state at the line's

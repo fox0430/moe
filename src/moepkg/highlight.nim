@@ -743,11 +743,11 @@ proc addModifier*(
   highlight.colorSegments = newSegments
 
 proc addUnderlineRanges*(
-    highlight: var Highlight, ranges: openArray[tuple[row, firstCol, lastCol: int]]
+    segs: var seq[ColorSegment], ranges: openArray[tuple[row, firstCol, lastCol: int]]
 ) =
   ## Batch-apply the Underline modifier to the given single-row column
-  ## ranges in a single pass over `highlight.colorSegments`. Ranges MUST be
-  ## sorted by (row, firstCol) and non-overlapping.
+  ## ranges in a single pass over `segs`. Ranges MUST be sorted by
+  ## (row, firstCol) and non-overlapping.
   ##
   ## Equivalent to repeatedly calling `addModifier(..., Underline)` for each
   ## range, but rebuilds the segment seq **once** instead of per-range. URI
@@ -758,7 +758,6 @@ proc addUnderlineRanges*(
   if ranges.len == 0:
     return
 
-  let segs = highlight.colorSegments
   # Allocate for the worst case: each range can split a segment into 3 parts.
   var newSegs = newSeqOfCap[ColorSegment](segs.len + ranges.len * 2)
   var rIdx = 0
@@ -860,7 +859,13 @@ proc addUnderlineRanges*(
 
     rIdx = endRange
 
-  highlight.colorSegments = newSegs
+  segs = newSegs
+
+proc addUnderlineRanges*(
+    highlight: var Highlight, ranges: openArray[tuple[row, firstCol, lastCol: int]]
+) =
+  ## Highlight overload: forwards to the seq-level `addUnderlineRanges`.
+  highlight.colorSegments.addUnderlineRanges(ranges)
 
 proc addColorSegment*(
     h: var Highlight,
