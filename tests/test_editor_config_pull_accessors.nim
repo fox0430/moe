@@ -23,10 +23,11 @@
 ## flipping the config value must be visible via the accessor immediately, with
 ## no separate sync step.
 
-import std/[unittest, options]
+import std/[unittest, options, strutils]
 
 import
-  ../src/moepkg/[editor, config, config_loader, buffer, editor_window, window_manager]
+  ../src/moepkg/
+    [editor, config, config_loader, buffer, editor_window, window_manager, lsp_service]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/types/editor_types
 
@@ -349,6 +350,82 @@ suite "Editor - applyConfigSettings LSP server configs":
     let removeCfg = newEditorConfig()
     e.applyConfigSettings(removeCfg)
     check e.lsp.service.getConfig("mylang").isNone
+
+suite "Editor - applyLspServerConfigs :lspRestart hint on running-worker change":
+  test "hint appears when a running worker's command changed":
+    let e = mkEditor()
+    e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
+      @["nim"]
+
+    let newCfg = newEditorConfig()
+    newCfg.lsp.servers["nim"] =
+      LspServerConfig(command: "custom-nimlangserver", extensions: @["nim"])
+    e.state.statusMessage = ""
+    e.applyConfigSettings(newCfg)
+
+    check e.state.statusMessage.contains("nim")
+    check e.state.statusMessage.contains(":lspRestart")
+
+  test "no hint when no worker is running":
+    let e = mkEditor()
+    e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
+      @[]
+
+    let newCfg = newEditorConfig()
+    newCfg.lsp.servers["nim"] =
+      LspServerConfig(command: "different-command", extensions: @["nim"])
+    e.state.statusMessage = ""
+    e.applyConfigSettings(newCfg)
+
+    check not e.state.statusMessage.contains(":lspRestart")
+
+  test "no hint when running worker's launch-affecting fields are unchanged":
+    let e = mkEditor()
+    e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
+      @["nim"]
+
+    let sameCfg = newEditorConfig()
+    e.state.statusMessage = ""
+    e.applyConfigSettings(sameCfg)
+
+    check not e.state.statusMessage.contains(":lspRestart")
+
+  test "hint lists multiple languages sorted":
+    let e = mkEditor()
+    e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
+      @["rust", "nim"]
+
+    let newCfg = newEditorConfig()
+    newCfg.lsp.servers["nim"] =
+      LspServerConfig(command: "custom-nim", extensions: @["nim"])
+    newCfg.lsp.servers["rust"] = LspServerConfig(
+      command: "custom-rust", extensions: @["rs"], rustAnalyzerRunSingle: false
+    )
+    e.state.statusMessage = ""
+    e.applyConfigSettings(newCfg)
+
+    check e.state.statusMessage.contains("nim, rust")
+
+  test "hint when rust-analyzer initializationOptions change":
+    let e = mkEditor()
+    e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
+      @["rust"]
+
+    let firstCfg = newEditorConfig()
+    firstCfg.lsp.servers["rust"] = LspServerConfig(
+      extensions: @["rs"], rustAnalyzerRunSingle: true, rustAnalyzerDebugSingle: true
+    )
+    e.applyConfigSettings(firstCfg)
+    e.state.statusMessage = ""
+
+    let secondCfg = newEditorConfig()
+    secondCfg.lsp.servers["rust"] = LspServerConfig(
+      extensions: @["rs"], rustAnalyzerRunSingle: false, rustAnalyzerDebugSingle: true
+    )
+    e.applyConfigSettings(secondCfg)
+
+    check e.state.statusMessage.contains("rust")
+    check e.state.statusMessage.contains(":lspRestart")
 
 suite "EditorState - per-buffer .editorconfig overrides for tabStop/shiftWidth/expandTab":
   test "tabStop reads buf.editorConfig override when set":

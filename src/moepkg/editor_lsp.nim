@@ -19,7 +19,7 @@
 
 ## LSP-related procedures for the editor
 
-import std/[options, json, os, tables]
+import std/[options, json, os, algorithm, strutils, tables]
 
 import pkg/results
 
@@ -28,12 +28,22 @@ import command_handlers/[handler_manager, insert_handler]
 
 export lsp_request_context
 
+proc launchAffectingFields(c: LanguageServerConfig): (string, seq[string], string) =
+  (c.command, c.args, c.initializationOptions)
+
 proc applyLspServerConfigs*(e: Editor) =
   ## Rebuild the LSP service config table from built-in defaults plus the
   ## per-language [Lsp.<lang>] entries in e.config. Called from newEditor and
   ## from applyConfigSettings so live reload picks up server-command /
   ## trace / rust-analyzer edits including deletions and toggle-offs.
-  ## Already-running workers keep their old command until they restart.
+  ## Already-running workers keep their old command until they restart; when
+  ## the change affects a running worker, hint the user to `:lspRestart`.
+  var runningSnapshot: Table[string, LanguageServerConfig]
+  for langId in e.lsp.service.liveWorkerLangIds:
+    let cfgOpt = e.lsp.service.getConfig(langId)
+    if cfgOpt.isSome:
+      runningSnapshot[langId] = cfgOpt.get
+
   e.lsp.service.resetConfigsToDefaults()
   for langId, serverCfg in e.config.lsp.servers:
     let existing = e.lsp.service.getConfig(langId)
@@ -44,8 +54,6 @@ proc applyLspServerConfigs*(e: Editor) =
         c.args = @[]
       if serverCfg.extensions.len > 0:
         c.extensions = serverCfg.extensions
-      # Sync rawJsonLog to the current trace setting so toggling verbose off
-      # actually disables raw JSON-RPC logging.
       c.rawJsonLog = serverCfg.trace == LspTraceLevel.ltVerbose
       if langId == "rust":
         c.initializationOptions =
@@ -63,6 +71,18 @@ proc applyLspServerConfigs*(e: Editor) =
           rawJsonLog: serverCfg.trace == LspTraceLevel.ltVerbose,
         ),
       )
+
+  var changed: seq[string]
+  for langId, oldCfg in runningSnapshot:
+    let newCfgOpt = e.lsp.service.getConfig(langId)
+    if newCfgOpt.isNone or
+        newCfgOpt.get.launchAffectingFields != oldCfg.launchAffectingFields:
+      changed.add(langId)
+  if changed.len > 0:
+    changed.sort()
+    e.state.statusMessage =
+      "LSP server config changed for " & changed.join(", ") &
+      "; run :lspRestart to apply"
 
 proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =
   ## Route a server's publishDiagnostics to the buffer it targets, not just
