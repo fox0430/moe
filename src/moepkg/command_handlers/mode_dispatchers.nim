@@ -1168,7 +1168,7 @@ proc handleConfigMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Configuration mode input
-  let r = handleConfigModeKey(configState, viewportHeight, keyCombo)
+  let r = handleConfigModeKey(configState, state, viewportHeight, keyCombo)
   case r.kind
   of cmrHandled:
     return HandlerResult(

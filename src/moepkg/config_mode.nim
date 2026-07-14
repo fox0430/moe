@@ -27,7 +27,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import config, color
+import config, color, types
 
 import types/config_mode_types
 export config_mode_types
@@ -335,9 +335,14 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
   if state.selectedIndex >= state.items.len:
     state.selectedIndex = max(0, state.items.len - 1)
 
-proc applyColorChange*(state: ConfigModeState, itemIndex: int) =
+proc applyColorChange*(
+    state: ConfigModeState, editorState: EditorState, itemIndex: int
+) =
   ## Apply a theme color change to the global `themeColors` (live preview).
-  ## Persisted to the theme file by the normal `:w` save path.
+  ## Persisted to the theme file by the normal `:w` save path only when the
+  ## active theme is `tkConfig`; other kinds keep the edit in memory but
+  ## silently drop it on `:writeconf`. Surface that once via statusMessage
+  ## so the user isn't left wondering why the change didn't stick.
   if itemIndex < 0 or itemIndex >= state.items.len:
     return
 
@@ -355,6 +360,10 @@ proc applyColorChange*(state: ConfigModeState, itemIndex: int) =
   else:
     colors[item.colorIndex].background = ThemeColor(rgb: parsed.get)
   setThemeColors(colors)
+
+  if editorState.config.theme.kind != tkConfig:
+    editorState.statusMessage =
+      "Theme color preview only; run :theme <name> or set [Theme].path to persist"
 
   # Rebuild and re-select by (colorIndex, colorIsFg) identity
   let
@@ -632,7 +641,7 @@ proc cancelEdit*(state: ConfigModeState) =
   state.editBuffer = ""
   state.editCursor = 0
 
-proc confirmEdit*(state: ConfigModeState): bool =
+proc confirmEdit*(state: ConfigModeState, editorState: EditorState): bool =
   ## Confirm the edit and apply the value
   ## Returns true if successful
   let itemIndex = state.getSelectedItemIndex()
@@ -675,7 +684,7 @@ proc confirmEdit*(state: ConfigModeState): bool =
     if parseThemeColor(state.editBuffer).isErr:
       return false # Invalid hex / not "termDefault"; keep editing
     state.items[itemIndex].colorValue = state.editBuffer
-    state.applyColorChange(itemIndex)
+    state.applyColorChange(editorState, itemIndex)
     state.cancelEdit()
     return true
   else:

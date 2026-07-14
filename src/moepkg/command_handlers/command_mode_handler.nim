@@ -31,9 +31,9 @@ import
     editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
     logger, types, motion, filer, filetree, quick_run_utils, help_viewer,
     buffer_manager, bookmark_manager, backup_manager, backup, debug_viewer,
-    config_loader, message_log, command_line, color, theme, terminal_mode,
-    command_completion, render_utils, config_mode, log_viewer, syntax_checker,
-    window_manager, registers, unicode_utils, git_conflict, status_line,
+    config_loader, message_log, command_line, terminal_mode, command_completion,
+    render_utils, config_mode, log_viewer, syntax_checker, window_manager, registers,
+    unicode_utils, git_conflict, status_line,
   ]
 import handler_manager
 
@@ -370,6 +370,35 @@ proc insertPastedTextInCommand*(e: Editor, text: string) =
 
   e.state.commandCompletionManager.cancelCompletion()
   e.updateSubstitutePreviewIfNeeded()
+
+proc applyThemeCommand*(e: Editor, themeName: string) =
+  ## Route a `:theme` selection through `e.config.theme` + `initTheme` so
+  ## `themeColorsFromFile` and `config.theme.{kind,path}` stay in sync with
+  ## `themeColors`. Otherwise a later `saveConfigToToml` would stamp the
+  ## newly loaded colors over the previously configured theme file.
+  if themeName == "default":
+    e.config.theme.kind = tkDefault
+    e.config.theme.path = ""
+    initTheme(e.config)
+    e.state.statusMessage = "Theme changed to: default"
+    return
+
+  let themePath = getHomeDir() / ".config" / "moe" / "themes" / (themeName & ".toml")
+  if not fileExists(themePath):
+    e.state.statusMessage = "Theme not found: " & themeName
+    return
+
+  let previousTheme = e.config.theme
+  e.config.theme.kind = tkConfig
+  e.config.theme.path = themePath
+  var vr = newValidationResult()
+  initTheme(e.config, vr)
+  if vr.hasErrors:
+    e.config.theme = previousTheme
+    initTheme(e.config)
+    e.state.statusMessage = "Failed to load theme: " & vr.toErrorMessages.join("; ")
+  else:
+    e.state.statusMessage = "Theme changed to: " & themeName
 
 proc handleCommandModeEvent*(e: Editor, event: Event): bool =
   ## Handle Command mode events (special handling for text input)
@@ -1393,27 +1422,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
       of hrTheme:
         overlayHandled = true
-        # Handle theme change command
-        let themeName = r.hrThemeName
-        if themeName == "default":
-          # Use default theme
-          setThemeColors(DefaultColors)
-          e.state.statusMessage = "Theme changed to: default"
-        else:
-          # Try to load theme from config directory
-          let themePath =
-            getHomeDir() / ".config" / "moe" / "themes" / (themeName & ".toml")
-          let expandedPath = expandTilde(themePath)
-          if fileExists(expandedPath):
-            let themeResult = loadThemeFromToml(expandedPath)
-            if themeResult.isOk:
-              setThemeColors(themeResult.get)
-              e.state.statusMessage = "Theme changed to: " & themeName
-            else:
-              e.state.statusMessage = "Failed to load theme: " & themeResult.error
-          else:
-            e.state.statusMessage = "Theme not found: " & themeName
-        # Exit overlay first, then set Normal mode
+        e.applyThemeCommand(r.hrThemeName)
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
       of hrConfig:
