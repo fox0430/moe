@@ -269,8 +269,10 @@ suite "EditorConfig Support":
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.editorConfig.isSome
-    # tab_width not set, so shiftWidth should be none
-    check buf.editorConfig.get.shiftWidth.isNone
+    # tab_width not set: shiftWidth records the vim-style 0 sentinel so
+    # effectiveShiftWidth() follows the effective tabStop at read time.
+    check buf.editorConfig.get.shiftWidth == some(0)
+    check buf.editorConfig.get.tabStop.isNone
 
   test "applyEditorConfig with non-numeric indent_size":
     var props = initTable[string, string]()

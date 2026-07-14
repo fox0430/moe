@@ -75,9 +75,14 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
   if props.hasKey("indent_size"):
     let sizeStr = props["indent_size"]
     if sizeStr == "tab":
-      # indent_size = tab means use tab_width value
-      if bufEc.tabStop.isSome:
-        bufEc.shiftWidth = bufEc.tabStop
+      # indent_size = tab: shiftWidth follows the tab width. Mirror
+      # tab_width when set; otherwise store 0, the vim-style "follow
+      # tabStop" sentinel that effectiveShiftWidth() resolves at read.
+      bufEc.shiftWidth =
+        if bufEc.tabStop.isSome:
+          bufEc.tabStop
+        else:
+          some(0)
     else:
       try:
         let val = parseInt(sizeStr)
