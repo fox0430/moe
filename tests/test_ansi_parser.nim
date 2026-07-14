@@ -1026,6 +1026,35 @@ suite "TerminalGrid - OSC sequences":
     check grid.parserState == apsNormal # aborted once the payload crossed the cap
     check grid.escapeBuffer.len == 0
 
+  test "OSC ST split across PTY reads does not leak backslash into output":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]2;t\x1b") # chunk ends on ESC of ST
+    grid.processOutput("\\rest")
+    check grid.title == "t"
+    check grid.parserState == apsNormal
+    check grid.cells[0][0].ch == "r"
+    check grid.cells[0][1].ch == "e"
+    check grid.cells[0][2].ch == "s"
+    check grid.cells[0][3].ch == "t"
+
+  test "OSC followed by a new escape in the same chunk starts that escape":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]2;t\x1b[31mR")
+    check grid.title == "t"
+    check grid.cells[0][0].ch == "R"
+    check grid.cells[0][0].fg.kind == ckIndexed
+    check grid.cells[0][0].fg.index == 1
+
+  test "DCS ST split across PTY reads does not leak backslash into output":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1bPpayload\x1b") # chunk ends on ESC of ST
+    grid.processOutput("\\rest")
+    check grid.parserState == apsNormal
+    check grid.cells[0][0].ch == "r"
+    check grid.cells[0][1].ch == "e"
+    check grid.cells[0][2].ch == "s"
+    check grid.cells[0][3].ch == "t"
+
 suite "TerminalGrid - CSI sequences":
   test "unterminated CSI past the cap aborts to normal and frees the buffer":
     let grid = newTerminalGrid(20, 3)

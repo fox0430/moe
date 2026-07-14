@@ -962,10 +962,12 @@ proc processOutput*(grid: TerminalGrid, data: string) =
           if oscType in {'0', '2'}:
             grid.title = oscStr[2 .. ^1]
         if ch == '\x1b':
-          # OSC terminated by ESC \ (ST), skip the backslash
-          if i + 1 < actualData.len and actualData[i + 1] == '\\':
-            i += 1
-        grid.parserState = apsNormal
+          # Defer ST's trailing '\' to apsEscape so it's handled even when the
+          # chunk ends here (peeking i+1 would leak the '\' into normal output).
+          grid.parserState = apsEscape
+          grid.escapeBuffer = ""
+        else:
+          grid.parserState = apsNormal
       elif grid.escapeBuffer.len >= MaxOscLength:
         # Oversized (likely unterminated) OSC: abort to bound memory (DoS guard).
         # This byte is valid payload, so reprocess it as normal output instead
@@ -978,10 +980,10 @@ proc processOutput*(grid: TerminalGrid, data: string) =
     of apsStringSeq:
       # Consuming DCS/APC/PM/SOS string until ST (ESC \) or BEL
       if ch == '\x1b':
-        # Possible start of ST (ESC \)
-        if i + 1 < actualData.len and actualData[i + 1] == '\\':
-          i += 1 # Skip the backslash
-        grid.parserState = apsNormal
+        # Defer ST's trailing '\' to apsEscape so it's handled even when the
+        # chunk ends here (peeking i+1 would leak the '\' into normal output).
+        grid.parserState = apsEscape
+        grid.escapeBuffer = ""
       elif ch == '\x07':
         # BEL also terminates string sequences
         grid.parserState = apsNormal
