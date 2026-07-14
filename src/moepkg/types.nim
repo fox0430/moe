@@ -407,7 +407,6 @@ type
     lrkImplementation
 
   TimingState* = object ## Timing and debounce state grouped together
-    lastResizeTime*: MonoTime # Timestamp of last processed resize event
     gitDiffUpdateInterval*: int64
       # Minimum milliseconds between git diff
       # refresh cycles. Consumed by status_line's async cache via

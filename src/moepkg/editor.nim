@@ -158,7 +158,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       ),
       # Timing state (grouped in TimingState)
       timing: TimingState(
-        lastResizeTime: getMonoTime(),
         gitDiffUpdateInterval: editorConfig.git.updateInterval,
         lastConflictScan: getMonoTime(),
         lastConflictScanSeq: -1,
