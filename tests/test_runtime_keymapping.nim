@@ -149,6 +149,27 @@ suite "parseKeyString":
     let keys = parseKeyString("C-1")
     check keys.len == 0
 
+  test "Uppercase modifier-letter run rejected (CC is typo for C-C)":
+    check parseKeyString("CC").len == 0
+    check parseKeyString("MM").len == 0
+    check parseKeyString("SS").len == 0
+    check parseKeyString("CM").len == 0
+    check parseKeyString("SC").len == 0
+    check parseKeyString("CMS").len == 0
+
+  test "Lowercase Vim-style doubled letters still accepted":
+    # "cc" (change line), "mm" (set mark m), "ss" — real Vim mappings.
+    check parseKeyString("cc").len == 2
+    check parseKeyString("mm").len == 2
+    check parseKeyString("ss").len == 2
+
+  test "Vim-style with uppercase non-modifier letter still accepted":
+    # "gT" (previous tab), "zM" (foldlevel 0), etc.
+    let gT = parseKeyString("gT")
+    check gT.len == 2
+    check gT[0].char == "g"
+    check gT[1].char == "T"
+
   test "Whitespace only returns empty":
     let keys = parseKeyString("   ")
     check keys.len == 0
