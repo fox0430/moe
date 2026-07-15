@@ -2491,3 +2491,72 @@ background = "#111111"
     check e.config.theme.kind == tkConfig
     check e.config.theme.path == previousPath
     check e.state.statusMessage == "Theme not found: nope"
+
+suite "Editor - processResult(hrSave) actually saves (regression)":
+  test "processResult(hrSave) writes modified buffer to disk":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_hSave_regression.txt"
+    writeFile(testFile, "original")
+    defer:
+      removeFile(testFile)
+
+    check e.editFile(testFile).isOk
+    discard
+      e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "modified: ")
+    check e.activeBuffer().isModified
+
+    let r = HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
+    let ok = e.processResult(r, e.activeBuffer())
+    check ok
+
+    check readFile(testFile).startsWith("modified: original")
+    check not e.activeBuffer().isModified
+
+  test "processResult(hrSave) still returns true when save fails":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_hSave_readonly" / "nested.txt"
+    defer:
+      removeFile(testFile)
+      removeDir(testFile.parentDir)
+
+    createDir(testFile.parentDir)
+    writeFile(testFile, "content")
+    check e.editFile(testFile).isOk
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "X")
+    setFilePermissions(testFile, {fpUserRead})
+    defer:
+      setFilePermissions(testFile, {fpUserRead, fpUserWrite})
+
+    let r = HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
+    let ok = e.processResult(r, e.activeBuffer())
+    check ok
+
+suite "Editor - processResult(hrSaveAll) actually saves (regression)":
+  test "processResult(hrSaveAll) writes every modified buffer to disk":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_hSaveAll_regr_a.txt"
+    let f2 = getTempDir() / "moe_test_hSaveAll_regr_b.txt"
+    writeFile(f1, "A")
+    writeFile(f2, "B")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    check e.editFile(f1).isOk
+    check e.editFile(f2).isOk
+
+    # Dirty the first buffer (active = f2 after second editFile)
+    discard e.buffers[1].insertText(BufferPosition(line: 0, column: 0), "modA: ")
+    check e.buffers[1].isModified
+    # Dirty f2 as well
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "modB: ")
+    check e.activeBuffer().isModified
+
+    let r = HandlerResult(kind: hrSaveAll, forceSaveAll: false)
+    let ok = e.processResult(r, e.activeBuffer())
+    check ok
+
+    check readFile(f1) == "modA: A"
+    check readFile(f2) == "modB: B"
+    check not e.buffers[1].isModified
+    check not e.activeBuffer().isModified

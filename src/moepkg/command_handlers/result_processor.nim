@@ -867,10 +867,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       if e.config.notification.screenNotifications and
           e.config.notification.quickRunScreenNotify:
         e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
+  of hrSave:
+    e.processSaveResult(r, activeBuffer)
+  of hrSaveAll:
+    e.processSaveAllResult(r)
   of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
-      hrSetFloatOption, hrClearSearchHighlight, hrSave, hrSaveAll, hrStripWhitespace,
-      hrShellCommand, hrBackground, hrMan, hrSubstitute, hrDeleteLines, hrBuild,
-      hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrChanges,
+      hrSetFloatOption, hrClearSearchHighlight, hrStripWhitespace, hrShellCommand,
+      hrBackground, hrMan, hrSubstitute, hrDeleteLines, hrBuild, hrDebug,
+      hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrChanges,
       hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
       hrEnterHelpViewer, hrEnterBufferManager, hrEnterBookmarkManager,
       hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,

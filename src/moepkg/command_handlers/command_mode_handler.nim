@@ -152,6 +152,71 @@ proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
   logInfo("handler", "All files saved, quitting editor")
   false
 
+proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
+  ## Process hrSave: save active buffer (or LogViewer/Config content) and
+  ## trigger buildOnSave / syntaxCheckOnSave side effects.
+  if e.state.mode == EditorMode.LogViewer:
+    let msg = e.trySaveLogViewerBuffer()
+    if msg.len > 0:
+      e.state.statusMessage = msg
+  elif e.state.mode == EditorMode.Config:
+    let configPath = getConfigPath()
+    var backupOk = true
+    if fileExists(configPath):
+      let backupPath = configPath & ".bac"
+      try:
+        copyFile(configPath, backupPath)
+        logInfo("config", "Backed up existing config to: " & backupPath)
+      except CatchableError as ex:
+        backupOk = false
+        e.state.statusMessage = "Failed to backup config: " & ex.msg
+        logError("config", "Failed to backup config: " & ex.msg)
+    if backupOk:
+      let saveResult = saveConfig(e.config)
+      if saveResult.isOk:
+        e.state.statusMessage = "Config saved: " & configPath
+        logInfo("config", "Config saved: " & configPath)
+      else:
+        e.state.statusMessage = "Failed to save config: " & saveResult.error
+        logError("config", "Failed to save config: " & saveResult.error)
+  else:
+    let saveResult = e.saveFile(r.saveFilename, r.forceSave)
+    if saveResult.isErr:
+      logError("handler", "Save command failed: " & saveResult.error)
+      e.state.statusMessage = "Error: " & saveResult.error
+    else:
+      let savedPath =
+        if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
+      if e.config.notification.logNotifications and e.config.notification.saveLogNotify:
+        logInfo("handler", "File saved via command: " & savedPath)
+      if e.config.notification.screenNotifications and
+          e.config.notification.saveScreenNotify:
+        e.state.statusMessage = "Saved: " & savedPath
+      if e.config.buildOnSave.enable:
+        let customCmd =
+          if e.config.buildOnSave.command.isSome:
+            e.config.buildOnSave.command.get
+          else:
+            ""
+        let workspaceRoot =
+          if e.config.buildOnSave.workspaceRoot.isSome:
+            e.config.buildOnSave.workspaceRoot.get
+          else:
+            parentDir(savedPath)
+        e.state.pending.buildOnSave = (
+          path: savedPath,
+          language: activeBuffer.language.ord,
+          customCmd: customCmd,
+          workspaceRoot: workspaceRoot,
+        )
+        if e.config.notification.screenNotifications and
+            e.config.notification.buildOnSaveScreenNotify:
+          e.state.statusMessage = "Building: " & savedPath
+      if e.config.syntaxChecker.enable and
+          syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
+        e.state.pending.syntaxCheck =
+          (path: savedPath, language: activeBuffer.language.ord)
+
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Process hrGotoLine: move cursor to the specified line number.
   let lineNum = r.lineNumber
@@ -868,83 +933,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         # Set pending background flag to be handled by handleEventAsync
         e.state.pending.background = true
       of hrSave:
-        if e.state.mode == EditorMode.LogViewer:
-          # LogViewer has no backing file; treat :w as a save-to-current-dir.
-          let msg = e.trySaveLogViewerBuffer()
-          if msg.len > 0:
-            e.state.statusMessage = msg
-        elif e.state.mode == EditorMode.Config:
-          # In Config mode, :w saves the configuration file instead of a buffer
-          let configPath = getConfigPath()
-
-          # Backup existing config file if it exists
-          var backupOk = true
-          if fileExists(configPath):
-            let backupPath = configPath & ".bac"
-            try:
-              copyFile(configPath, backupPath)
-              logInfo("config", "Backed up existing config to: " & backupPath)
-            except CatchableError as ex:
-              backupOk = false
-              e.state.statusMessage = "Failed to backup config: " & ex.msg
-              logError("config", "Failed to backup config: " & ex.msg)
-
-          if backupOk:
-            let saveResult = saveConfig(e.config)
-            if saveResult.isOk:
-              e.state.statusMessage = "Config saved: " & configPath
-              logInfo("config", "Config saved: " & configPath)
-            else:
-              e.state.statusMessage = "Failed to save config: " & saveResult.error
-              logError("config", "Failed to save config: " & saveResult.error)
-        else:
-          # Handle file save
-          let saveResult = e.saveFile(r.saveFilename, r.forceSave)
-          if saveResult.isErr:
-            logError("handler", "Save command failed: " & saveResult.error)
-            e.state.statusMessage = "Error: " & saveResult.error
-          else:
-            # Get saved file path from active buffer
-            let savedPath =
-              if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
-            # Log notification (controlled by config)
-            if e.config.notification.logNotifications and
-                e.config.notification.saveLogNotify:
-              logInfo("handler", "File saved via command: " & savedPath)
-            # Screen notification (controlled by config)
-            if e.config.notification.screenNotifications and
-                e.config.notification.saveScreenNotify:
-              e.state.statusMessage = "Saved: " & savedPath
-
-            # Build on save if enabled
-            if e.config.buildOnSave.enable:
-              let customCmd =
-                if e.config.buildOnSave.command.isSome:
-                  e.config.buildOnSave.command.get
-                else:
-                  ""
-              let workspaceRoot =
-                if e.config.buildOnSave.workspaceRoot.isSome:
-                  e.config.buildOnSave.workspaceRoot.get
-                else:
-                  parentDir(savedPath)
-              # Set pending build info for async processing
-              e.state.pending.buildOnSave = (
-                path: savedPath,
-                language: activeBuffer.language.ord,
-                customCmd: customCmd,
-                workspaceRoot: workspaceRoot,
-              )
-              # Build on save screen notification (controlled by config)
-              if e.config.notification.screenNotifications and
-                  e.config.notification.buildOnSaveScreenNotify:
-                e.state.statusMessage = "Building: " & savedPath
-
-            # Syntax check on save if enabled (only for supported languages)
-            if e.config.syntaxChecker.enable and
-                syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
-              e.state.pending.syntaxCheck =
-                (path: savedPath, language: activeBuffer.language.ord)
+        e.processSaveResult(r, activeBuffer)
       of hrSaveAll:
         e.processSaveAllResult(r)
       of hrSaveAndQuit:
