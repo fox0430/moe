@@ -84,9 +84,8 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
       if resultOpt.isSome:
         let sigHelpOpt = parseSignatureHelpResponse(resultOpt.get)
         if sigHelpOpt.isSome:
-          sigHelpMgr.show(
-            sigHelpOpt.get, e.activeWindow.cursor.line, e.activeWindow.cursor.column
-          )
+          # Use request-issue position — cursor may have moved while in flight.
+          sigHelpMgr.show(sigHelpOpt.get, ctx.cursorLine, ctx.cursorCol)
         else:
           if sigHelpMgr.parenDepth == 0:
             sigHelpMgr.hide()
