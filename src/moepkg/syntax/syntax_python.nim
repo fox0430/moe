@@ -52,7 +52,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
   if g.buf[pos] == '\0' and g.state in {gtDocLongComment, gtStringLit}:
     g.kind = gtEof
     g.state = gtNone
-    g.commentDepth = 0
+    g.lang.python.commentDepth = 0
     g.length = 0
     g.pos = pos
     return
@@ -61,13 +61,13 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
   # so the main path can tokenize the newline as whitespace.
   if g.state == gtStringLit and g.buf[pos] in {'\r', '\n'}:
     g.state = gtNone
-    g.commentDepth = 0
+    g.lang.python.commentDepth = 0
 
   if g.state == gtDocLongComment:
     # Continuation of triple-quoted docstring across lines.
     # commentDepth: 1 = """, 2 = '''
     g.kind = gtDocLongComment
-    let quoteChar = if g.commentDepth == 1: '\"' else: '\''
+    let quoteChar = if g.lang.python.commentDepth == 1: '\"' else: '\''
     while true:
       case g.buf[pos]
       of '\0':
@@ -81,7 +81,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
             g.peek(pos, 2) == quoteChar:
           inc(pos, 3)
           g.state = gtNone
-          g.commentDepth = 0
+          g.lang.python.commentDepth = 0
           break
         else:
           inc(pos)
@@ -91,7 +91,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
     # Continuation of a single-line string after a \ escape split.
     # commentDepth: 1 = ", 2 = '
     g.kind = gtStringLit
-    let quoteChar = if g.commentDepth == 2: '\'' else: '\"'
+    let quoteChar = if g.lang.python.commentDepth == 2: '\'' else: '\"'
     while true:
       case g.buf[pos]
       of '\\':
@@ -109,19 +109,19 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
             inc(pos)
         of '\0':
           g.state = gtNone
-          g.commentDepth = 0
+          g.lang.python.commentDepth = 0
         else:
           inc(pos)
         break
       of '\0', '\r', '\n':
         g.state = gtNone
-        g.commentDepth = 0
+        g.lang.python.commentDepth = 0
         break
       of '\"', '\'':
         if g.buf[pos] == quoteChar:
           inc(pos)
           g.state = gtNone
-          g.commentDepth = 0
+          g.lang.python.commentDepth = 0
           break
         else:
           inc(pos)
@@ -161,7 +161,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
           case g.buf[pos]
           of '\0':
             g.state = gtDocLongComment
-            g.commentDepth = if quoteChar == '\"': 1 else: 2
+            g.lang.python.commentDepth = if quoteChar == '\"': 1 else: 2
             break
           of '\\':
             inc(pos)
@@ -183,7 +183,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
           # scanStringBody parked on a backslash; record which quote opened the
           # literal so the resume path picks the right terminator.
           # commentDepth: 1 = ", 2 = '
-          g.commentDepth = if quoteChar == '\"': 1 else: 2
+          g.lang.python.commentDepth = if quoteChar == '\"': 1 else: 2
     of '(':
       inc(pos)
       g.kind = gtPunctuation

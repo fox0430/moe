@@ -95,17 +95,18 @@ proc lexBacktick*(
 
 proc lexCurlyOpen*(
     lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags
-): int =
-  result = position
+): tuple[endPos: int, commentDepth: int] =
+  ## See `lexCurlyDashComment` for the `commentDepth` semantics.
+  result.endPos = position
 
-  if lexer.buf[result] == '{':
+  if lexer.buf[result.endPos] == '{':
     lexer.kind = gtPunctuation
-    inc result
+    inc result.endPos
 
-    if lexer.buf[result] == '-':
+    if lexer.buf[result.endPos] == '-':
       if hasCurlyDashComments in flags:
         lexer.kind = gtLongComment
-        result = lexer.lexCurlyDashComment(result, flags)
+        result = lexer.lexCurlyDashComment(result.endPos, flags)
 
 ## Lex a dash character (``-``).
 ##

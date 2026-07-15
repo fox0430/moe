@@ -223,8 +223,8 @@ proc commitEditMsgNextToken*(g: var GeneralTokenizer) =
     return
 
   # Non-empty, non-comment content line.
-  if not g.commitSubjectSeen:
-    g.commitSubjectSeen = true
+  if not g.lang.commit.subjectSeen:
+    g.lang.commit.subjectSeen = true
     let ccLen = matchConventionalType(g.buf, pos)
     if ccLen > 0:
       g.kind = gtKeyword

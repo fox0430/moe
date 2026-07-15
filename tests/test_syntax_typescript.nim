@@ -20,6 +20,7 @@
 import std/unittest
 
 import ../src/moepkg/syntax/[tokenizer, syntax_typescript]
+import ../src/moepkg/highlight
 
 suite "syntax_typescript - typescriptKeywords constant":
   test "typescriptKeywords contains TypeScript type keywords":
@@ -1395,15 +1396,14 @@ suite "syntax_typescript - typescriptNextToken state preservation":
     # boundaries, making incremental output diverge from a full reparse.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("test")
-    g.templateLiteralDepth = 5
-    g.braceDepthStack = @[1, 2, 3]
-    g.inJsxMode = true
+    g.lang.jslike =
+      JsLikeState(templateLiteralDepth: 5, braceDepthStack: @[1, 2, 3], inJsxMode: true)
 
     g.typescriptNextToken()
 
-    check g.templateLiteralDepth == 5
-    check g.braceDepthStack == @[1, 2, 3]
-    check g.inJsxMode == true
+    check g.lang.jslike.templateLiteralDepth == 5
+    check g.lang.jslike.braceDepthStack == @[1, 2, 3]
+    check g.lang.jslike.inJsxMode == true
 
 suite "syntax_typescript - typescriptNextToken advanced TypeScript patterns":
   test "discriminated union":
@@ -1857,14 +1857,12 @@ suite "syntax_typescript - JSDoc highlighting":
       if g.kind == gtEof:
         break
     check g.state == gtDocLongComment
-    check g.commentDepth == 1
+    check g.lang.jslike.commentDepth == 1
 
     # Second line: * @param x
-    let savedState = g.state
-    let savedDepth = g.commentDepth
+    let snap1 = captureTokenizerState(g)
     g.initGeneralTokenizer(" * @param x")
-    g.state = savedState
-    g.commentDepth = savedDepth
+    g.restoreTokenizerState(snap1)
     var hasPreprocessor = false
     while true:
       g.typescriptNextToken()
@@ -1876,17 +1874,15 @@ suite "syntax_typescript - JSDoc highlighting":
     check g.state == gtDocLongComment
 
     # Third line: */
-    let savedState2 = g.state
-    let savedDepth2 = g.commentDepth
+    let snap2 = captureTokenizerState(g)
     g.initGeneralTokenizer(" */")
-    g.state = savedState2
-    g.commentDepth = savedDepth2
+    g.restoreTokenizerState(snap2)
     while true:
       g.typescriptNextToken()
       if g.kind == gtEof:
         break
     check g.state == gtNone
-    check g.commentDepth == 0
+    check g.lang.jslike.commentDepth == 0
 
   test "JSDoc unclosed type before comment end":
     var g: GeneralTokenizer

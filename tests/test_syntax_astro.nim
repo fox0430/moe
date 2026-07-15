@@ -42,12 +42,12 @@ suite "syntaxastro - frontmatter delimiter":
     g.initGeneralTokenizer("---\n---")
     g.astroNextToken() # Start delimiter
     check g.kind == gtDirective
-    check g.astroInFrontmatter == true
+    check g.lang.astro.inFrontmatter == true
 
     g.astroNextToken() # Newline
     g.astroNextToken() # End delimiter
     check g.kind == gtDirective
-    check g.astroInFrontmatter == false
+    check g.lang.astro.inFrontmatter == false
 
 suite "syntaxastro - frontmatter JavaScript content":
   test "JavaScript variable in frontmatter":
@@ -56,7 +56,7 @@ suite "syntaxastro - frontmatter JavaScript content":
 
     g.astroNextToken() # ---
     check g.kind == gtDirective
-    check g.astroInFrontmatter == true
+    check g.lang.astro.inFrontmatter == true
 
     g.astroNextToken() # \n
     check g.kind == gtWhitespace
@@ -98,7 +98,7 @@ suite "syntaxastro - HTML content outside frontmatter":
     g.astroNextToken() # \n
     g.astroNextToken() # --- end
     check g.kind == gtDirective
-    check g.astroInFrontmatter == false
+    check g.lang.astro.inFrontmatter == false
 
     g.astroNextToken() # \n
     g.astroNextToken() # <div>
@@ -221,23 +221,23 @@ suite "syntaxastro - state tracking":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("---")
     g.astroNextToken()
-    check g.astroFirstLine == false
-    check g.astroInFrontmatter == true
+    check g.lang.astro.firstLine == false
+    check g.lang.astro.inFrontmatter == true
 
   test "astroInFrontmatter tracks state correctly":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("---\ncode\n---")
 
     g.astroNextToken() # ---
-    check g.astroInFrontmatter == true
+    check g.lang.astro.inFrontmatter == true
 
     # Skip through content
     while g.kind != gtEof:
-      if g.kind == gtDirective and g.astroInFrontmatter == false:
+      if g.kind == gtDirective and g.lang.astro.inFrontmatter == false:
         break
       g.astroNextToken()
 
-    check g.astroInFrontmatter == false
+    check g.lang.astro.inFrontmatter == false
 
 suite "syntaxastro - edge cases":
   test "empty file":
@@ -265,7 +265,7 @@ suite "syntaxastro - edge cases":
 
     g.astroNextToken()
     check g.kind == gtTagStart
-    check g.astroInFrontmatter == false
+    check g.lang.astro.inFrontmatter == false
 
   test "text content in template":
     var g: GeneralTokenizer
@@ -283,7 +283,7 @@ suite "syntaxastro - edge cases":
     g.initGeneralTokenizer("text\n---")
 
     g.astroNextToken() # text handled by HTML
-    check g.astroFirstLine == false
+    check g.lang.astro.firstLine == false
     # The --- later is not treated as frontmatter since it's not at position 0
 
 suite "syntaxastro - HTML elements":

@@ -117,37 +117,82 @@ type
     gtLogInfo
     gtLogUuid
 
+  JsLikeState* = object ## Shared JS/TS/JSX/TSX tokenizer state.
+    templateLiteralDepth*: int
+    braceDepthStack*: seq[int]
+    inJsxMode*: bool
+    jsxTagDepth*: int
+    commentDepth*: int
+
+  HtmlState* = object
+    inComment*: bool
+    inScript*: bool
+    inStyle*: bool
+
+  AstroState* = object
+    inFrontmatter*: bool
+    firstLine*: bool
+
+  YamlState* = object
+    isKey*: bool
+
+  MarkdownState* = object
+    ## Per-line transient `inIndentedCode` lives on `GeneralTokenizer`, not here.
+    inCodeBlock*: bool
+    inMathMode*: bool
+    inDisplayMath*: bool
+    inFrontmatter*: bool
+    firstLine*: bool
+
+  LatexState* = object
+    inMathMode*: bool
+    inDisplayMath*: bool
+
+  RustState* = object
+    commentDepth*: int
+    rawStringHashCount*: int
+    inByteString*: bool
+    inRawString*: bool
+    attrBracketDepth*: int
+
+  CommitState* = object
+    subjectSeen*: bool
+
+  LispState* = object
+    commentDepth*: int
+
+  HaskellState* = object
+    commentDepth*: int
+
+  PythonState* = object
+    commentDepth*: int
+
+  LangState* = object
+    ## Per-language tokenizer state, captured/restored as a whole record.
+    ## 8-aligned members first, then bool-only, to minimise padding.
+    jslike*: JsLikeState
+    rust*: RustState
+    lisp*: LispState
+    haskell*: HaskellState
+    python*: PythonState
+    html*: HtmlState
+    astro*: AstroState
+    yaml*: YamlState
+    markdown*: MarkdownState
+    latex*: LatexState
+    commit*: CommitState
+
   GeneralTokenizer* = object of RootObj
     kind*: TokenClass
     start*, length*: int
     buf*: cstring
     pos*: int
     state*: TokenClass
-    # Language-specific state fields
-    templateLiteralDepth*: int
-    braceDepthStack*: seq[int]
-    inJsxMode*: bool
-    jsxTagDepth*: int
-    inComment*: bool
-    commentDepth*: int
-    inScript*: bool
-    inStyle*: bool
-    astroInFrontmatter*: bool
-    astroFirstLine*: bool
-    yamlIsKey*: bool
-    mdInCodeBlock*: bool
+    lang*: LangState
     mdInIndentedCode*: bool
-    mdInMathMode*: bool
-    mdInDisplayMath*: bool
-    mdInFrontmatter*: bool
-    mdFirstLine*: bool
-    latexInMathMode*: bool
-    latexInDisplayMath*: bool
-    rustRawStringHashCount*: int
-    rustInByteString*: bool
-    rustInRawString*: bool
-    rustAttrBracketDepth*: int
-    commitSubjectSeen*: bool
+      ## Per-line transient: set while consuming a markdown line's leading
+      ## indent, cleared at content start. Kept off `lang` so it is not
+      ## persisted at line boundaries (would emit an empty token on resume).
 
   SourceLanguage* = enum
     langNone
@@ -218,38 +263,23 @@ proc getSourceLanguage*(name: string): SourceLanguage =
       return i
   result = langNone
 
+proc defaultLangState*(): LangState =
+  ## Initial `LangState` for a fresh tokenizer. Callers seeding a tokenizer at
+  ## file line 0 must use this rather than `LangState()`; otherwise
+  ## astro/markdown `firstLine` is false and the frontmatter fence is missed.
+  LangState(
+    astro: AstroState(firstLine: true), markdown: MarkdownState(firstLine: true)
+  )
+
 proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.buf = buf
   g.kind = low(TokenClass)
   g.start = 0
   g.length = 0
   g.state = low(TokenClass)
-  # Initialize language-specific state fields
-  g.templateLiteralDepth = 0
-  g.braceDepthStack = @[]
-  g.inJsxMode = false
-  g.jsxTagDepth = 0
-  g.inComment = false
-  g.commentDepth = 0
-  g.inScript = false
-  g.inStyle = false
-  g.astroInFrontmatter = false
-  g.astroFirstLine = true
-  g.yamlIsKey = false
-  g.mdInCodeBlock = false
-  g.mdInIndentedCode = false
-  g.mdInMathMode = false
-  g.mdInDisplayMath = false
-  g.mdInFrontmatter = false
-  g.mdFirstLine = true
-  g.latexInMathMode = false
-  g.latexInDisplayMath = false
-  g.rustRawStringHashCount = 0
-  g.rustInByteString = false
-  g.rustInRawString = false
-  g.rustAttrBracketDepth = 0
-  g.commitSubjectSeen = false
   g.pos = 0
+  g.lang = defaultLangState()
+  g.mdInIndentedCode = false
 
 proc scanToTerminator*(buf: cstring, pos: var int, t0, t1, t2: char): bool =
   ## Advance `pos` until the 3-byte terminator `t0 t1 t2` (consumed) or the

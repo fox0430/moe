@@ -92,46 +92,50 @@ proc lexCurlyDashPreprocessor(
 
 proc lexCurlyDashComment*(
     lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags
-): int =
+): tuple[endPos: int, commentDepth: int] =
+  ## `commentDepth` is the residual nesting depth on an unterminated comment
+  ## (0 on clean close). The caller persists it into its own language slot.
   let nested = hasNestedComments in flags
-  var depth = 0
-  result = position
+  var
+    depth = 0
+    pos = position
 
-  if lexer.buf[result] == '-':
-    inc result
+  if lexer.buf[pos] == '-':
+    inc pos
 
-    if lexer.buf[result] == '#' and hasPreprocessor in flags:
+    if lexer.buf[pos] == '#' and hasPreprocessor in flags:
       lexer.kind = gtPreprocessor
-      result = lexer.lexCurlyDashPreprocessor(result, nested)
+      pos = lexer.lexCurlyDashPreprocessor(pos, nested)
     else:
-      if lexer.buf[result] == '|':
+      if lexer.buf[pos] == '|':
         if hasCurlyDashPipeComments in flags:
           lexer.kind = gtDocLongComment
-          inc result
+          inc pos
 
       while true:
-        case lexer.buf[result]
+        case lexer.buf[pos]
         of '\0':
           lexer.state = lexer.kind
-          lexer.commentDepth = depth
           break
         of '-':
-          inc result
+          inc pos
 
-          if lexer.buf[result] == '}':
-            inc result
+          if lexer.buf[pos] == '}':
+            inc pos
 
             if depth == 0:
               break
             elif nested:
               dec depth
         of '{':
-          inc result
+          inc pos
 
-          if lexer.buf[result] == '-':
-            inc result
+          if lexer.buf[pos] == '-':
+            inc pos
 
             if nested:
               inc depth
         else:
-          inc result
+          inc pos
+
+  result = (endPos: pos, commentDepth: depth)

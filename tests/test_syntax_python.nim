@@ -1264,7 +1264,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtDocLongComment
-    check g.commentDepth == 1
+    check g.lang.python.commentDepth == 1
 
   test "unterminated triple single-quote sets continuation state":
     var g: GeneralTokenizer
@@ -1272,7 +1272,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtDocLongComment
-    check g.commentDepth == 2
+    check g.lang.python.commentDepth == 2
 
   test "multi-line triple double-quote continuation":
     var g: GeneralTokenizer
@@ -1281,7 +1281,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtDocLongComment
-    check g.commentDepth == 1
+    check g.lang.python.commentDepth == 1
 
     # Second line: simulate continuation by setting buf/pos directly
     const line2 = "second line\"\"\""
@@ -1290,7 +1290,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtNone
-    check g.commentDepth == 0
+    check g.lang.python.commentDepth == 0
 
   test "multi-line triple single-quote continuation":
     var g: GeneralTokenizer
@@ -1299,7 +1299,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtDocLongComment
-    check g.commentDepth == 2
+    check g.lang.python.commentDepth == 2
 
     # Second line: simulate continuation
     const line2 = "second line'''"
@@ -1308,7 +1308,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtNone
-    check g.commentDepth == 0
+    check g.lang.python.commentDepth == 0
 
   test "triple-quote with escape sequence":
     var g: GeneralTokenizer
@@ -1402,7 +1402,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtNone
-    check g.commentDepth == 0
+    check g.lang.python.commentDepth == 0
 
   test "token after completed docstring":
     var g: GeneralTokenizer
@@ -1434,7 +1434,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtDocLongComment
-    check g.commentDepth == 1
+    check g.lang.python.commentDepth == 1
 
   test "triple single-quote not closed by triple double-quote":
     var g: GeneralTokenizer
@@ -1456,7 +1456,7 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.initGeneralTokenizer("\"\"\"start")
     g.pythonNextToken()
     check g.state == gtDocLongComment
-    check g.commentDepth == 1
+    check g.lang.python.commentDepth == 1
 
     # Continuation with ''' should NOT close
     const line2 = "has ''' inside"
