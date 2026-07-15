@@ -125,19 +125,17 @@ proc collectCommands*(parser: CommandLineParser): seq[CommandCompletionEntry] =
   result.sort do(a, b: CommandCompletionEntry) -> int:
     cmp(a.command, b.command)
 
-proc extractCommandPrefix*(commandText: string): string =
-  ## Extract the command prefix from commandText (after ":")
-  ## Example: ":wq" -> "wq", ":set num" -> "set"
-  if commandText.len <= 1:
+proc stripQuotes(raw: string): string =
+  if raw.len == 0:
     return ""
 
-  # Remove the leading ":"
-  result = commandText[1 ..^ 1]
-
-  # If there's a space, return only the command part
-  let spacePos = result.find(' ')
-  if spacePos >= 0:
-    result = result[0 ..< spacePos]
+  let trimmed = raw.strip()
+  if trimmed.len >= 2 and (
+    (trimmed[0] == '"' and trimmed[^1] == '"') or
+    (trimmed[0] == '\'' and trimmed[^1] == '\'')
+  ):
+    return trimmed[1 ..^ 2]
+  return trimmed
 
 proc parseCommandLine*(commandText: string): tuple[cmd: string, arg: string] =
   ## Parse command text into command and argument parts
@@ -151,8 +149,13 @@ proc parseCommandLine*(commandText: string): tuple[cmd: string, arg: string] =
     return (text, "")
 
   let cmd = text[0 ..< spacePos]
-  let arg = text[spacePos + 1 ..^ 1].strip()
+  let arg = stripQuotes(text[spacePos + 1 ..^ 1])
   return (cmd, arg)
+
+proc extractCommandPrefix*(commandText: string): string =
+  ## Extract the command prefix from commandText (after ":")
+  ## Example: ":wq" -> "wq", ":set num" -> "set"
+  parseCommandLine(commandText).cmd
 
 proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionEntry] =
   ## Collect file and directory paths for completion

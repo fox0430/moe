@@ -852,6 +852,21 @@ suite "CommandCompletion - edge cases":
     check cmd == "e"
     check arg == ""
 
+  test "parseCommandLine strips double quotes from argument":
+    let (cmd, arg) = parseCommandLine(":e \"/path/with spaces/file.txt\"")
+    check cmd == "e"
+    check arg == "/path/with spaces/file.txt"
+
+  test "parseCommandLine strips single quotes from argument":
+    let (cmd, arg) = parseCommandLine(":e '/path/with spaces/file.txt'")
+    check cmd == "e"
+    check arg == "/path/with spaces/file.txt"
+
+  test "parseCommandLine preserves path with spaces (no quotes)":
+    let (cmd, arg) = parseCommandLine(":e /path/with spaces/file.txt")
+    check cmd == "e"
+    check arg == "/path/with spaces/file.txt"
+
   test "collectSetOptions finds tabstop with value format":
     let options = collectSetOptions("tab")
     var hasTabstop = false
