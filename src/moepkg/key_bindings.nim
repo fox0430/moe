@@ -303,11 +303,17 @@ proc clearRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode) =
     registry.runtimeMappings[mode] = @[]
     registry.rebuildEffectiveBindings(mode)
 
-proc listRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode): seq[string] =
-  ## List all runtime mappings for the given mode as human-readable strings
+proc listRuntimeMappings*(
+    registry: KeyBindingRegistry, mode: EditorMode, prefix: string = ""
+): seq[string] =
+  ## List runtime mappings for the given mode as human-readable strings.
+  ## When `prefix` is non-empty, only mappings whose triggerStr starts with it
+  ## are returned (Vim-compat: `:nmap <prefix>` filters the listing).
   if mode notin registry.runtimeMappings:
     return @[]
   for m in registry.runtimeMappings[mode]:
+    if prefix.len > 0 and not m.triggerStr.startsWith(prefix):
+      continue
     result.add(m.triggerStr & " -> " & m.targetStr)
 
 proc clearRuntimeMappingState*(state: var DispatchState) =
