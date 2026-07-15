@@ -2349,3 +2349,58 @@ suite "ConfigMode - Theme Colors":
     let idx = state.findColorItem("keyword.fg")
     check state.items[idx].matchesSearchQuery("keyword")
     check state.items[idx].matchesSearchQuery("ff0000")
+
+  test "applyColorChange snaps selection to itemIndex when color items become hidden":
+    # Regression: if a rebuild hides the edited color item (e.g. the config
+    # theme path was cleared out from under it), selection recovery must not
+    # leave selectedIndex pointing at whatever unrelated row it held before.
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    cfg.theme.path = "somepath"
+    let state = newConfigModeState(cfg)
+
+    let idx = state.findColorItem("keyword.fg")
+    check idx > 0
+
+    # Force the next rebuild to drop every color item.
+    cfg.theme.path = ""
+    state.selectedIndex = 0
+
+    state.applyColorChange(testEditorState(cfg), idx)
+
+    for item in state.items:
+      check item.kind != cvkColor
+    check state.selectedIndex == clamp(idx, 0, max(0, state.items.len - 1))
+
+suite "ConfigMode - applyChange hidden recovery":
+  test "selection snaps to itemIndex when the edited item becomes hidden":
+    # Regression: if the item being edited is hidden by the post-edit rebuild
+    # (e.g. its visibleWhen predicate now returns false), the recovery loop
+    # cannot find its descriptor. Selection must fall back to the neighborhood
+    # of the edited slot, not the stale selectedIndex.
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    cfg.theme.path = "somepath"
+    let state = newConfigModeState(cfg)
+
+    var pathIdx = -1
+    for i, item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathIdx = i
+        break
+    check pathIdx > 0
+
+    # Preload the rebuild so Theme.path (visibleWhen kind == tkConfig) is hidden,
+    # and stage a real value change so applyChange doesn't early-return.
+    cfg.theme.kind = tkDefault
+    state.items[pathIdx].stringValue = "newpath"
+    state.selectedIndex = 0
+
+    state.applyChange(pathIdx)
+
+    for item in state.items:
+      check not (
+        item.kind == cvkString and item.section == "Theme" and item.displayName == "path"
+      )
+    check state.selectedIndex == clamp(pathIdx, 0, max(0, state.items.len - 1))

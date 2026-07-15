@@ -344,12 +344,15 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
   # Rebuild to update conditional visibility
   let savedDescIdx = item.descriptorIndex
   state.buildItemList()
+  var found = false
   for i, newItem in state.items:
     if newItem.descriptorIndex == savedDescIdx:
       state.selectedIndex = i
+      found = true
       break
-  if state.selectedIndex >= state.items.len:
-    state.selectedIndex = max(0, state.items.len - 1)
+  if not found:
+    # Item hidden by rebuild; anchor near its old slot instead of stale index.
+    state.selectedIndex = clamp(itemIndex, 0, max(0, state.items.len - 1))
 
 proc applyColorChange*(
     state: ConfigModeState, editorState: EditorState, itemIndex: int
@@ -386,11 +389,16 @@ proc applyColorChange*(
     savedIdx = item.colorIndex
     savedIsFg = item.colorIsFg
   state.buildItemList()
+  var found = false
   for i, newItem in state.items:
     if newItem.kind == cvkColor and newItem.colorIndex == savedIdx and
         newItem.colorIsFg == savedIsFg:
       state.selectedIndex = i
+      found = true
       break
+  if not found:
+    # Item hidden by rebuild; anchor near its old slot instead of stale index.
+    state.selectedIndex = clamp(itemIndex, 0, max(0, state.items.len - 1))
 
 # State management
 
