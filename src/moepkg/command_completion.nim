@@ -212,8 +212,8 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
   try:
     for kind, path in walkDir(searchDir):
       let filename = extractFilename(path)
-      # Skip hidden files unless prefix starts with .
-      if filename.startsWith(".") and not filterPrefix.startsWith("."):
+      if filename.startsWith(".") and filterPrefix.len > 0 and
+          not filterPrefix.startsWith("."):
         continue
 
       if filterPrefix.len == 0 or

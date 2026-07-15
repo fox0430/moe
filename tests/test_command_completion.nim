@@ -756,7 +756,7 @@ suite "CommandCompletion - collectFilePaths":
     finally:
       removeDir(testDir)
 
-  test "Hidden files skipped by default":
+  test "Hidden files included when filter is empty":
     let testDir = getTempDir() / "moe_test_hidden"
     createDir(testDir)
     writeFile(testDir / ".hidden", "hidden")
@@ -764,7 +764,27 @@ suite "CommandCompletion - collectFilePaths":
 
     try:
       let entries = collectFilePaths(testDir, "")
-      # Hidden file should be skipped
+      # Empty filter lists every entry, including dot files.
+      var hasHidden = false
+      var hasVisible = false
+      for e in entries:
+        if e.command == ".hidden":
+          hasHidden = true
+        if e.command == "visible":
+          hasVisible = true
+      check hasHidden
+      check hasVisible
+    finally:
+      removeDir(testDir)
+
+  test "Hidden files skipped when filter does not start with dot":
+    let testDir = getTempDir() / "moe_test_hidden_filter"
+    createDir(testDir)
+    writeFile(testDir / ".hidden", "hidden")
+    writeFile(testDir / "visible", "visible")
+
+    try:
+      let entries = collectFilePaths(testDir, "v")
       var hasHidden = false
       var hasVisible = false
       for e in entries:
@@ -773,6 +793,27 @@ suite "CommandCompletion - collectFilePaths":
         if e.command == "visible":
           hasVisible = true
       check not hasHidden
+      check hasVisible
+    finally:
+      removeDir(testDir)
+
+  test "Hidden files listed when entering directory via trailing slash":
+    let testDir = getTempDir() / "moe_test_hidden_dir"
+    let subDir = testDir / "sub"
+    createDir(subDir)
+    writeFile(subDir / ".hidden", "hidden")
+    writeFile(subDir / "visible", "visible")
+
+    try:
+      let entries = collectFilePaths(testDir, "sub/")
+      var hasHidden = false
+      var hasVisible = false
+      for e in entries:
+        if e.command == ".hidden":
+          hasHidden = true
+        if e.command == "visible":
+          hasVisible = true
+      check hasHidden
       check hasVisible
     finally:
       removeDir(testDir)
