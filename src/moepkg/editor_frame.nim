@@ -441,9 +441,20 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
 
     let sigHelpMgr = e.handlerManager.insertHandler.signatureHelpManager
     if sigHelpMgr.isActive():
+      let cursor = e.activeWindow.cursor
+      let lineText = e.activeBuffer.getLine(cursor.line)
+      let anchorX = calculateSignatureHelpAnchorX(
+        e.state.screenCursor.x,
+        sigHelpMgr.triggerLine,
+        sigHelpMgr.triggerCol,
+        cursor.line,
+        cursor.column,
+        displayWidthUpToWithTabs(lineText, sigHelpMgr.triggerCol, e.tabStop),
+        displayWidthUpToWithTabs(lineText, cursor.column, e.tabStop),
+      )
       let popupPos = calculateSignatureHelpPosition(
-        e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
-        buffer.area.height, sigHelpMgr.display.signature.len,
+        anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,
+        sigHelpMgr.display.signature.len,
       )
       renderSignatureHelpPopup(buffer, sigHelpMgr.display, popupPos, true)
 

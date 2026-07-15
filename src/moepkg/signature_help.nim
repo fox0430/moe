@@ -159,6 +159,19 @@ proc signatureHelpHighlightStyle*(): Style =
 proc signatureHelpBorderStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.popupWindowBorder)
 
+proc calculateSignatureHelpAnchorX*(
+    screenCursorX: int,
+    triggerLine, triggerCol: int,
+    cursorLine, cursorCol: int,
+    triggerCellX, cursorCellX: int,
+): int =
+  ## Popup X anchor. Pins at the trigger column so typing arguments does not
+  ## drag the popup with the caret. Falls back to `screenCursorX` when the
+  ## caret has left the trigger line or moved before the trigger column.
+  if triggerLine != cursorLine or triggerCol < 0 or triggerCol > cursorCol:
+    return screenCursorX
+  max(0, screenCursorX - (cursorCellX - triggerCellX))
+
 proc calculateSignatureHelpPosition*(
     cursorX, cursorY: int, termWidth, termHeight: int, signatureLen: int
 ): SignatureHelpPopupPosition =
