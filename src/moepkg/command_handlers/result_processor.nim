@@ -798,6 +798,9 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrError:
     e.state.statusMessage = r.errorMessage
   of hrCloseWindow:
+    let activeWin = e.activeWindow
+    if e.terminalStates.hasKey(activeWin.buffer.id):
+      e.closeTerminalBuffer(activeWin.buffer.id)
     let shouldQuit = e.closeWindow()
     if shouldQuit:
       return false
