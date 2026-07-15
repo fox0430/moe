@@ -160,16 +160,17 @@ suite "tokenizer - initGeneralTokenizer":
   test "initGeneralTokenizer initializes language-specific fields":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("test")
-    check g.templateLiteralDepth == 0
-    check g.braceDepthStack.len == 0
-    check g.inJsxMode == false
-    check g.jsxTagDepth == 0
-    check g.inComment == false
-    check g.commentDepth == 0
-    check g.inScript == false
-    check g.inStyle == false
-    check g.astroInFrontmatter == false
-    check g.astroFirstLine == true
+    check g.lang.jslike.templateLiteralDepth == 0
+    check g.lang.jslike.braceDepthStack.len == 0
+    check g.lang.jslike.inJsxMode == false
+    check g.lang.jslike.jsxTagDepth == 0
+    check g.lang.jslike.commentDepth == 0
+    check g.lang.html.inComment == false
+    check g.lang.html.inScript == false
+    check g.lang.html.inStyle == false
+    check g.lang.astro.inFrontmatter == false
+    check g.lang.astro.firstLine == true
+    check g.lang.markdown.firstLine == true
 
 suite "tokenizer - generalNumber":
   test "generalNumber parses simple integer":
@@ -902,7 +903,7 @@ suite "tokenizer - multi-line token handling":
     # Rust strings can span lines, so state parks at gtLongStringLit so
     # the next call resumes the same string.
     check g.state == gtLongStringLit
-    check g.rustRawStringHashCount == 0
+    check g.lang.rust.rawStringHashCount == 0
 
   test "multi-line comment in C":
     var g: GeneralTokenizer

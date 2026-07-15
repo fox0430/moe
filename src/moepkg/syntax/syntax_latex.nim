@@ -44,14 +44,14 @@ proc latexMathNextToken(g: var GeneralTokenizer, pos: var int, doubleClose: bool
       if g.buf[pos + 1] == '$':
         g.kind = gtLongStringLit
         inc pos, 2
-        g.latexInDisplayMath = false
+        g.lang.latex.inDisplayMath = false
       else:
         g.kind = gtNone
         inc pos
     else:
       g.kind = gtStringLit
       inc pos
-      g.latexInMathMode = false
+      g.lang.latex.inMathMode = false
   of '\\':
     inc pos
     case g.buf[pos]
@@ -117,7 +117,7 @@ proc latexNextToken*(g: var GeneralTokenizer) =
   g.start = g.pos
 
   # Handle continued display math mode ($$...$$)
-  if g.latexInDisplayMath:
+  if g.lang.latex.inDisplayMath:
     g.latexMathNextToken(pos, doubleClose = true)
 
     g.length = pos - g.pos
@@ -127,7 +127,7 @@ proc latexNextToken*(g: var GeneralTokenizer) =
     return
 
   # Handle continued inline math mode ($...$)
-  if g.latexInMathMode:
+  if g.lang.latex.inMathMode:
     g.latexMathNextToken(pos, doubleClose = false)
 
     g.length = pos - g.pos
@@ -186,12 +186,12 @@ proc latexNextToken*(g: var GeneralTokenizer) =
       # Opening $$ - emit just the delimiter
       g.kind = gtLongStringLit
       inc pos, 2
-      g.latexInDisplayMath = true
+      g.lang.latex.inDisplayMath = true
     else:
       # Opening $ - emit just the delimiter
       g.kind = gtStringLit
       inc pos
-      g.latexInMathMode = true
+      g.lang.latex.inMathMode = true
   of '{', '}', '[', ']':
     g.kind = gtPunctuation
     inc pos

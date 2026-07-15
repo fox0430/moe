@@ -20,6 +20,7 @@
 import std/unittest
 
 import ../src/moepkg/syntax/[tokenizer, syntax_commit_edit_msg]
+import ../src/moepkg/highlight
 
 suite "syntax_commit_edit_msg - Comment lines":
   test "comment line with # prefix":
@@ -360,3 +361,40 @@ suite "syntax_commit_edit_msg - Git status comment lines":
 
     g.commitEditMsgNextToken()
     check g.kind == gtComment
+
+suite "syntax_commit_edit_msg - subjectSeen persistence across capture/restore":
+  test "captured commit state round-trips subjectSeen":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("feat: something\nbody line\n")
+    g.commitEditMsgNextToken()
+    check g.lang.commit.subjectSeen == true
+
+    let snapshot = captureTokenizerState(g)
+    check snapshot.lang.commit.subjectSeen == true
+
+    var g2: GeneralTokenizer
+    g2.initGeneralTokenizer("body line\n")
+    check g2.lang.commit.subjectSeen == false
+    g2.restoreTokenizerState(snapshot)
+    check g2.lang.commit.subjectSeen == true
+
+  test "second content line is NOT re-tokenized as subject after resume":
+    # Drain to `state == gtNone` before capture so the resume path actually
+    # reaches the `subjectSeen` check (mid-line ccPost* states short-circuit).
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("feat: subject\n")
+    g.commitEditMsgNextToken() # gtKeyword "feat"
+    check g.kind == gtKeyword
+    while g.state != gtNone:
+      g.commitEditMsgNextToken()
+      if g.kind == gtEof:
+        break
+    check g.lang.commit.subjectSeen == true
+    let boundary = captureTokenizerState(g)
+
+    var g2: GeneralTokenizer
+    g2.initGeneralTokenizer("feat: body\n")
+    g2.restoreTokenizerState(boundary)
+    g2.commitEditMsgNextToken()
+    # Without the flag, "feat" would re-tag as gtKeyword via the subject branch.
+    check g2.kind != gtKeyword

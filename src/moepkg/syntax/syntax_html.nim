@@ -57,13 +57,12 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
 
   # Reset state when starting fresh
   if g.pos == 0 and g.state != gtLongComment:
-    g.inComment = false
-    g.commentDepth = 0
-    g.inScript = false
-    g.inStyle = false
+    g.lang.html.inComment = false
+    g.lang.html.inScript = false
+    g.lang.html.inStyle = false
 
   # Handle comment state
-  if g.state == gtLongComment or g.inComment:
+  if g.state == gtLongComment or g.lang.html.inComment:
     let terminated = scanToTerminator(g.buf, pos, '-', '-', '>')
     if pos == g.pos:
       # Nothing left to consume on this line; terminate without emitting an
@@ -74,7 +73,7 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
       g.kind = gtLongComment
       if terminated:
         g.state = gtNone
-        g.inComment = false
+        g.lang.html.inComment = false
     g.length = pos - g.pos
     g.pos = pos
     return
@@ -96,11 +95,11 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
       inc(pos, 3) # Skip !-- (the < is already consumed)
       if scanToTerminator(g.buf, pos, '-', '-', '>'):
         g.state = gtNone
-        g.inComment = false
+        g.lang.html.inComment = false
       else:
         # Unterminated on this line; the state continues it on the next line.
         g.state = gtLongComment
-        g.inComment = true
+        g.lang.html.inComment = true
     elif g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
       # Tag start: <tag, </tag, or <!DOCTYPE
       g.kind = gtTagStart

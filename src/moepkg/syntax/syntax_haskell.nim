@@ -56,13 +56,13 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
   if g.buf[pos] == '\0' and g.state == gtStringLit:
     g.kind = gtEof
     g.state = gtNone
-    g.commentDepth = 0
+    g.lang.haskell.commentDepth = 0
     g.length = 0
     g.pos = pos
     return
   if g.state == gtStringLit and g.buf[pos] in {'\r', '\n'}:
     g.state = gtNone
-    g.commentDepth = 0
+    g.lang.haskell.commentDepth = 0
 
   if g.state in {gtLongComment, gtDocLongComment}:
     # Continuation of {- -} block comment
@@ -71,11 +71,11 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
     else:
       g.kind = g.state
       let nested = hasNestedComments in flagsHaskell
-      var depth = g.commentDepth
+      var depth = g.lang.haskell.commentDepth
       while true:
         case g.buf[pos]
         of '\0':
-          g.commentDepth = depth
+          g.lang.haskell.commentDepth = depth
           break
         of '-':
           inc(pos)
@@ -83,7 +83,7 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
             inc(pos)
             if depth == 0:
               g.state = gtNone
-              g.commentDepth = 0
+              g.lang.haskell.commentDepth = 0
               break
             elif nested:
               dec(depth)
@@ -99,7 +99,7 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
     # Continuation of a string or char literal after a \ escape split.
     # commentDepth: 1 = ", 2 = ' — selects the closing quote.
     g.kind = gtStringLit
-    let quote = if g.commentDepth == 2: '\'' else: '\"'
+    let quote = if g.lang.haskell.commentDepth == 2: '\'' else: '\"'
     while true:
       case g.buf[pos]
       of '\\':
@@ -118,19 +118,19 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
         of '\0', '\r', '\n':
           # Trailing backslash at the line end: stay line-bounded.
           g.state = gtNone
-          g.commentDepth = 0
+          g.lang.haskell.commentDepth = 0
         else:
           inc(pos)
         break
       of '\0', '\r', '\n':
         g.state = gtNone
-        g.commentDepth = 0
+        g.lang.haskell.commentDepth = 0
         break
       of '\"', '\'':
         if g.buf[pos] == quote:
           inc(pos)
           g.state = gtNone
-          g.commentDepth = 0
+          g.lang.haskell.commentDepth = 0
           break
         else:
           inc(pos)
@@ -153,7 +153,9 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
         while g.buf[pos] in opChars:
           inc(pos)
     of '{':
-      pos = g.lexCurlyOpen(pos, flagsHaskell)
+      let ret = g.lexCurlyOpen(pos, flagsHaskell)
+      pos = ret.endPos
+      g.lang.haskell.commentDepth = ret.commentDepth
     of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in symChars:
@@ -207,7 +209,7 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
       if g.state == gtStringLit:
         # Parked on a backslash; remember which quote opened the literal.
         # commentDepth: 1 = ", 2 = '
-        g.commentDepth = if quote == '\"': 1 else: 2
+        g.lang.haskell.commentDepth = if quote == '\"': 1 else: 2
     of '(', ')', '[', ']', '}', ':', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation

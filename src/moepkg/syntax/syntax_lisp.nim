@@ -78,11 +78,11 @@ proc lispNextToken*(g: var GeneralTokenizer) =
       g.kind = gtEof
     else:
       g.kind = gtLongComment
-      var depth = g.commentDepth
+      var depth = g.lang.lisp.commentDepth
       while true:
         case g.buf[pos]
         of '\0':
-          g.commentDepth = depth
+          g.lang.lisp.commentDepth = depth
           break
         of '|':
           inc(pos)
@@ -90,7 +90,7 @@ proc lispNextToken*(g: var GeneralTokenizer) =
             inc(pos)
             if depth == 0:
               g.state = gtNone
-              g.commentDepth = 0
+              g.lang.lisp.commentDepth = 0
               break
             else:
               dec(depth)
@@ -165,12 +165,12 @@ proc lispNextToken*(g: var GeneralTokenizer) =
         inc(pos)
         g.kind = gtLongComment
         g.state = gtLongComment
-        g.commentDepth = 0
+        g.lang.lisp.commentDepth = 0
         var depth = 0
         while true:
           case g.buf[pos]
           of '\0':
-            g.commentDepth = depth
+            g.lang.lisp.commentDepth = depth
             break
           of '|':
             inc(pos)
@@ -178,7 +178,7 @@ proc lispNextToken*(g: var GeneralTokenizer) =
               inc(pos)
               if depth == 0:
                 g.state = gtNone
-                g.commentDepth = 0
+                g.lang.lisp.commentDepth = 0
                 break
               else:
                 dec(depth)

@@ -47,32 +47,32 @@ proc astroNextToken*(g: var GeneralTokenizer) =
   g.start = g.pos
 
   # Handle frontmatter delimiters
-  if g.astroFirstLine and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
+  if g.lang.astro.firstLine and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
       g.buf[pos + 2] == '-':
     # Start of frontmatter
-    g.astroInFrontmatter = true
-    g.astroFirstLine = false
+    g.lang.astro.inFrontmatter = true
+    g.lang.astro.firstLine = false
     g.kind = gtDirective
     inc(pos, 3)
     # Skip any trailing characters on the line
     while g.buf[pos] notin {'\0', '\n', '\r'}:
       inc(pos)
-  elif g.astroInFrontmatter and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
+  elif g.lang.astro.inFrontmatter and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
       g.buf[pos + 2] == '-':
     # End of frontmatter
-    g.astroInFrontmatter = false
+    g.lang.astro.inFrontmatter = false
     g.kind = gtDirective
     inc(pos, 3)
     # Skip any trailing characters on the line
     while g.buf[pos] notin {'\0', '\n', '\r'}:
       inc(pos)
-  elif g.astroInFrontmatter:
+  elif g.lang.astro.inFrontmatter:
     # Inside frontmatter - use JavaScript tokenizer
     javaScriptNextToken(g)
     return
   else:
     # Outside frontmatter - check for HTML content
-    g.astroFirstLine = false
+    g.lang.astro.firstLine = false
 
     # Check if we're starting an HTML tag
     if g.buf[g.pos] == '<' and g.buf[g.pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:

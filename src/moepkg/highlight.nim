@@ -78,37 +78,9 @@ type
 
   # Incremental highlighting support
   TokenizerState* = object
-    ## Tokenizer state at the start of a line
-    ## Used for incremental re-parsing
+    ## Tokenizer state captured at a line boundary for incremental re-parsing.
     state*: TokenClass
-    templateLiteralDepth*: int
-    braceDepthStack*: seq[int]
-    commentDepth*: int
-    inJsxMode*: bool
-    jsxTagDepth*: int
-    inComment*: bool
-    inScript*: bool
-    inStyle*: bool
-    astroInFrontmatter*: bool
-    astroFirstLine*: bool
-    yamlIsKey*: bool
-    mdInCodeBlock*: bool
-    # NOTE: `mdInIndentedCode` is intentionally NOT tracked here. It is a
-    # per-line transient flag (set while consuming a line's leading indent and
-    # cleared at the line's content), so it is always false at a line boundary.
-    # Persisting it would let a cached boundary state restore it as true and
-    # produce an empty token on reparse; the normal path re-detects each line's
-    # indentation instead.
-    mdInMathMode*: bool
-    mdInDisplayMath*: bool
-    mdInFrontmatter*: bool
-    mdFirstLine*: bool
-    latexInMathMode*: bool
-    latexInDisplayMath*: bool
-    rustRawStringHashCount*: int
-    rustInByteString*: bool
-    rustInRawString*: bool
-    rustAttrBracketDepth*: int
+    lang*: LangState
 
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
@@ -176,60 +148,13 @@ let defaultStyle* =
   ## Default style for highlighting
 
 proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
-  ## Capture the current state of a tokenizer
-  ## Used to save state at line boundaries for incremental re-parsing
-  result = TokenizerState(
-    state: g.state,
-    templateLiteralDepth: g.templateLiteralDepth,
-    braceDepthStack: g.braceDepthStack,
-    commentDepth: g.commentDepth,
-    inJsxMode: g.inJsxMode,
-    jsxTagDepth: g.jsxTagDepth,
-    inComment: g.inComment,
-    inScript: g.inScript,
-    inStyle: g.inStyle,
-    astroInFrontmatter: g.astroInFrontmatter,
-    astroFirstLine: g.astroFirstLine,
-    yamlIsKey: g.yamlIsKey,
-    mdInCodeBlock: g.mdInCodeBlock,
-    mdInMathMode: g.mdInMathMode,
-    mdInDisplayMath: g.mdInDisplayMath,
-    mdInFrontmatter: g.mdInFrontmatter,
-    mdFirstLine: g.mdFirstLine,
-    latexInMathMode: g.latexInMathMode,
-    latexInDisplayMath: g.latexInDisplayMath,
-    rustRawStringHashCount: g.rustRawStringHashCount,
-    rustInByteString: g.rustInByteString,
-    rustInRawString: g.rustInRawString,
-    rustAttrBracketDepth: g.rustAttrBracketDepth,
-  )
+  ## Capture tokenizer state at a line boundary.
+  TokenizerState(state: g.state, lang: g.lang)
 
 proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
-  ## Restore tokenizer state from a saved state
-  ## Used to resume tokenization from a cached line boundary
+  ## Restore tokenizer state captured by `captureTokenizerState`.
   g.state = state.state
-  g.templateLiteralDepth = state.templateLiteralDepth
-  g.braceDepthStack = state.braceDepthStack
-  g.commentDepth = state.commentDepth
-  g.inJsxMode = state.inJsxMode
-  g.jsxTagDepth = state.jsxTagDepth
-  g.inComment = state.inComment
-  g.inScript = state.inScript
-  g.inStyle = state.inStyle
-  g.astroInFrontmatter = state.astroInFrontmatter
-  g.astroFirstLine = state.astroFirstLine
-  g.yamlIsKey = state.yamlIsKey
-  g.mdInCodeBlock = state.mdInCodeBlock
-  g.mdInMathMode = state.mdInMathMode
-  g.mdInDisplayMath = state.mdInDisplayMath
-  g.mdInFrontmatter = state.mdInFrontmatter
-  g.mdFirstLine = state.mdFirstLine
-  g.latexInMathMode = state.latexInMathMode
-  g.latexInDisplayMath = state.latexInDisplayMath
-  g.rustRawStringHashCount = state.rustRawStringHashCount
-  g.rustInByteString = state.rustInByteString
-  g.rustInRawString = state.rustInRawString
-  g.rustAttrBracketDepth = state.rustAttrBracketDepth
+  g.lang = state.lang
 
 proc `$`*(highlight: Highlight): string =
   result = "Highlight: ["
@@ -1276,17 +1201,11 @@ proc initHighlightIncrementalFromStr*(
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(bufferStr)
 
-  # Restore initial tokenizer state
-  token.restoreTokenizerState(initialState)
-
-  if startLine == 0:
-    # `astroFirstLine`/`mdFirstLine`'s fresh-start value is `true`, unlike every
-    # other field (zero-value `false`), so the zero-valued seed `TokenizerState()`
-    # restores them as `false` and the frontmatter `---` fence is missed.
-    # Re-assert at file line 0; captured states for `startLine > 0` are always
-    # `false`.
-    token.astroFirstLine = true
-    token.mdFirstLine = true
+  # At line 0 keep `defaultLangState()` from `initGeneralTokenizer`; a
+  # zero-seed `initialState` would clobber astro/markdown firstLine and miss
+  # the frontmatter fence.
+  if startLine > 0:
+    token.restoreTokenizerState(initialState)
 
   while true:
     token.getNextToken(language)

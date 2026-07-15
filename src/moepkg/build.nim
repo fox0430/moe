@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, strutils]
+import std/strformat
 
 import pkg/[results, chronos]
 

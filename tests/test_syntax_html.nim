@@ -205,7 +205,7 @@ suite "syntax_html - htmlNextToken comments":
     g.htmlNextToken()
     check g.kind == gtLongComment
     check g.state == gtLongComment
-    check g.inComment == true
+    check g.lang.html.inComment == true
 
 suite "syntax_html - htmlNextToken entities":
   test "named entity":

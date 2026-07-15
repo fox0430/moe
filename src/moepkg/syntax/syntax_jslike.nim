@@ -137,17 +137,17 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
   # tokens to diverge from a fresh full reparse.
 
   # If we're in JSX/TSX mode, delegate to HTML tokenizer
-  if g.inJsxMode and g.state != gtLongStringLit:
+  if g.lang.jslike.inJsxMode and g.state != gtLongStringLit:
     htmlNextToken(g)
     # Check if we should exit JSX mode
     if g.buf[g.pos] == '{' and g.buf[g.pos - 1] != '\\':
       # Entering JSX expression
-      g.inJsxMode = false
+      g.lang.jslike.inJsxMode = false
       return
     elif g.kind == gtOperator and g.buf[g.pos - 1] == '>':
       # Check if this is the end of a closing tag
-      if g.jsxTagDepth == 0:
-        g.inJsxMode = false
+      if g.lang.jslike.jsxTagDepth == 0:
+        g.lang.jslike.inJsxMode = false
     return
 
   # Handle block comment continuation
@@ -164,11 +164,12 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
         if g.buf[pos] == '/':
           inc(pos)
           g.state = gtNone
-          g.commentDepth = 0
+          g.lang.jslike.commentDepth = 0
           break
       of '@':
-        if g.commentDepth == 1 and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'} and
-            (pos == 0 or g.buf[pos - 1] in {' ', '\t', '\n', '\r', '*'}):
+        if g.lang.jslike.commentDepth == 1 and g.buf[pos + 1] in {
+          'A' .. 'Z', 'a' .. 'z'
+        } and (pos == 0 or g.buf[pos - 1] in {' ', '\t', '\n', '\r', '*'}):
           if pos > g.start:
             break # Return text before tag
           else:
@@ -180,9 +181,9 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
         else:
           inc(pos)
       of '{':
-        if g.commentDepth == 1 and pos > g.start:
+        if g.lang.jslike.commentDepth == 1 and pos > g.start:
           break
-        elif g.commentDepth == 1:
+        elif g.lang.jslike.commentDepth == 1:
           g.kind = gtPreprocessor
           var braceNest = 0
           while g.buf[pos] != '\0' and not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
@@ -233,8 +234,8 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
         inc(pos)
         g.kind = gtLongStringLit
         g.state = gtNone
-        if g.templateLiteralDepth > 0:
-          dec(g.templateLiteralDepth)
+        if g.lang.jslike.templateLiteralDepth > 0:
+          dec(g.lang.jslike.templateLiteralDepth)
         break
       of '\\':
         inc(pos)
@@ -255,7 +256,7 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
             g.kind = gtOperator
             g.state = gtNone # Exit template literal state temporarily
             # Push 0 to track brace depth for this interpolation
-            g.braceDepthStack.add(0)
+            g.lang.jslike.braceDepthStack.add(0)
           break
         else:
           inc(pos)
@@ -303,7 +304,7 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
     if g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'} and
         not (tsMode and prevIsIdentChar):
       # This looks like JSX/TSX, switch to JSX mode
-      g.inJsxMode = true
+      g.lang.jslike.inJsxMode = true
       htmlNextToken(g)
       return
     else:
@@ -327,20 +328,21 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
       inc(pos)
       # Detect a doc comment: /** but not /**/ (empty)
       if g.buf[pos] == '*' and g.buf[pos + 1] != '/':
-        g.commentDepth = 1 # Mark as a doc comment
+        g.lang.jslike.commentDepth = 1 # Mark as a doc comment
         g.kind = gtDocLongComment
       else:
-        g.commentDepth = 0
+        g.lang.jslike.commentDepth = 0
       while true:
         case g.buf[pos]
         of '*':
           inc(pos)
           if g.buf[pos] == '/':
             inc(pos)
-            g.commentDepth = 0
+            g.lang.jslike.commentDepth = 0
             break
         of '@':
-          if g.commentDepth == 1 and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'}:
+          if g.lang.jslike.commentDepth == 1 and
+              g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'}:
             if pos > g.start:
               g.state = gtDocLongComment
               break
@@ -354,10 +356,10 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
           else:
             inc(pos)
         of '{':
-          if g.commentDepth == 1 and pos > g.start:
+          if g.lang.jslike.commentDepth == 1 and pos > g.start:
             g.state = gtDocLongComment
             break
-          elif g.commentDepth == 1:
+          elif g.lang.jslike.commentDepth == 1:
             g.kind = gtPreprocessor
             g.state = gtDocLongComment
             var braceNest = 0
@@ -375,7 +377,8 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
           else:
             inc(pos)
         of '\0':
-          g.state = if g.commentDepth == 1: gtDocLongComment else: gtLongComment
+          g.state =
+            if g.lang.jslike.commentDepth == 1: gtDocLongComment else: gtLongComment
           break
         else:
           inc(pos)
@@ -533,7 +536,7 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
     inc(pos)
     g.kind = gtLongStringLit
     g.state = gtLongStringLit
-    inc(g.templateLiteralDepth)
+    inc(g.lang.jslike.templateLiteralDepth)
     # Only consume until first ${ or the next newline. Splitting at `\n`
     # keeps per-line state captures accurate so an incremental re-parse
     # from any line in the middle of the template literal sees the same
@@ -550,8 +553,8 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
       of '`':
         inc(pos)
         g.state = gtNone
-        if g.templateLiteralDepth > 0:
-          dec(g.templateLiteralDepth)
+        if g.lang.jslike.templateLiteralDepth > 0:
+          dec(g.lang.jslike.templateLiteralDepth)
         break
       of '\\':
         inc(pos)
@@ -615,26 +618,26 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
         inc(pos)
   of '{':
     inc(pos)
-    if g.braceDepthStack.len > 0:
-      inc(g.braceDepthStack[^1])
+    if g.lang.jslike.braceDepthStack.len > 0:
+      inc(g.lang.jslike.braceDepthStack[^1])
     g.kind = gtPunctuation
   of '}':
     inc(pos)
-    if g.braceDepthStack.len > 0:
-      if g.braceDepthStack[^1] == 0:
+    if g.lang.jslike.braceDepthStack.len > 0:
+      if g.lang.jslike.braceDepthStack[^1] == 0:
         # This closes a template interpolation
-        discard g.braceDepthStack.pop()
+        discard g.lang.jslike.braceDepthStack.pop()
         g.kind = gtOperator
         g.state = gtLongStringLit # Go back to template literal
       else:
         # This is a regular brace inside interpolation
-        dec(g.braceDepthStack[^1])
+        dec(g.lang.jslike.braceDepthStack[^1])
         g.kind = gtPunctuation
     else:
       g.kind = gtPunctuation
       # Check if we should return to JSX mode after closing expression
       if g.buf[pos] == '<':
-        g.inJsxMode = true
+        g.lang.jslike.inJsxMode = true
   of '@':
     if tsMode:
       # Decorator syntax
@@ -656,7 +659,7 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
       g.kind = gtOperator
       while g.buf[pos] in opChars:
         inc(pos)
-    elif g.buf[pos] == '>' and g.inJsxMode:
+    elif g.buf[pos] == '>' and g.lang.jslike.inJsxMode:
       # Handle JSX closing tags
       htmlNextToken(g)
       return

@@ -102,8 +102,8 @@ proc rustNormalString(g: var GeneralTokenizer, pos: var int) =
   # the next line continues as the same string. Splitting at `\n` is also
   # what makes per-line state captures record the mid-string context (see
   # the rationale on `rustRawString`).
-  g.rustInRawString = false
-  g.rustRawStringHashCount = 0
+  g.lang.rust.inRawString = false
+  g.lang.rust.rawStringHashCount = 0
   inc(pos)
   g.kind = gtStringLit
   while true:
@@ -117,7 +117,7 @@ proc rustNormalString(g: var GeneralTokenizer, pos: var int) =
       break
     of '\"':
       inc(pos)
-      g.rustInByteString = false
+      g.lang.rust.inByteString = false
       break
     of '\\':
       g.state = gtStringLit
@@ -140,8 +140,8 @@ proc rustRawString(g: var GeneralTokenizer, pos: var int) =
     inc(pos)
   inc(pos) # past opening "
   g.kind = gtStringLit
-  g.rustInRawString = true
-  g.rustRawStringHashCount = hashCount
+  g.lang.rust.inRawString = true
+  g.lang.rust.rawStringHashCount = hashCount
   while g.buf[pos] != '\0':
     if g.buf[pos] == '\n':
       inc(pos)
@@ -155,8 +155,8 @@ proc rustRawString(g: var GeneralTokenizer, pos: var int) =
         inc(look)
       if matched == hashCount:
         pos = look
-        g.rustInRawString = false
-        g.rustRawStringHashCount = 0
+        g.lang.rust.inRawString = false
+        g.lang.rust.rawStringHashCount = 0
         return
     inc(pos)
   g.state = gtLongStringLit
@@ -271,7 +271,7 @@ proc rustReadEscape(g: var GeneralTokenizer, pos: var int) =
     if g.buf[pos] in rustHexChars:
       inc(pos)
   of 'u':
-    if g.rustInByteString:
+    if g.lang.rust.inByteString:
       # `\u{...}` is invalid in byte strings. Emit only the `\` itself
       # (length 1) as a broken-escape signal so the highlighter does not
       # lie about validity; `u{...}` flows on as ordinary string text.
@@ -286,7 +286,7 @@ proc rustReadEscape(g: var GeneralTokenizer, pos: var int) =
           inc(pos)
   of '\0':
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 0
+    g.lang.rust.rawStringHashCount = 0
   of '\n':
     # `\` followed by a newline is Rust's line-continuation escape. End the
     # sub-token at the newline and park `gtLongStringLit`, exactly like the
@@ -297,7 +297,7 @@ proc rustReadEscape(g: var GeneralTokenizer, pos: var int) =
     # read on the cstring buffer).
     inc(pos)
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 0
+    g.lang.rust.rawStringHashCount = 0
   else:
     inc(pos)
 
@@ -372,7 +372,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
           # Reached only after at least one char was consumed; the token is
           # non-empty and the next call lands in the EOF guard above.
           g.state = gtLongStringLit
-          g.rustRawStringHashCount = 0
+          g.lang.rust.rawStringHashCount = 0
           break
         of '\n':
           # End the sub-token at the newline and park state so the next line
@@ -380,20 +380,20 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
           # (not gtStringLit) signals "no escape pending" to the resume path.
           inc(pos)
           g.state = gtLongStringLit
-          g.rustRawStringHashCount = 0
+          g.lang.rust.rawStringHashCount = 0
           break
         of '\"':
           inc(pos)
           g.state = gtNone
-          g.rustInByteString = false
+          g.lang.rust.inByteString = false
           break
         else:
           inc(pos)
   elif g.state == gtLongStringLit:
     if g.buf[pos] == '\0':
       g.kind = gtEof
-    elif g.rustInRawString:
-      let hashCount = g.rustRawStringHashCount
+    elif g.lang.rust.inRawString:
+      let hashCount = g.lang.rust.rawStringHashCount
       g.kind = gtLongStringLit
       while g.buf[pos] != '\0':
         if g.buf[pos] == '\n':
@@ -411,8 +411,8 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
           if matched == hashCount:
             pos = look
             g.state = gtNone
-            g.rustRawStringHashCount = 0
-            g.rustInRawString = false
+            g.lang.rust.rawStringHashCount = 0
+            g.lang.rust.inRawString = false
             break
         inc(pos)
     elif g.buf[pos] == '\\':
@@ -434,7 +434,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         of '\"':
           inc(pos)
           g.state = gtNone
-          g.rustInByteString = false
+          g.lang.rust.inByteString = false
           break
         of '\\':
           g.state = gtStringLit
@@ -447,7 +447,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
       g.kind = gtEof
     else:
       g.kind = resumeKind
-    var nested = g.commentDepth
+    var nested = g.lang.rust.commentDepth
     while g.kind != gtEof:
       case g.buf[pos]
       of '*':
@@ -456,7 +456,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
           inc(pos)
           if nested == 0:
             g.state = gtNone
-            g.commentDepth = 0
+            g.lang.rust.commentDepth = 0
             break
           else:
             dec(nested)
@@ -466,7 +466,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
           inc(pos)
           inc(nested)
       of '\0':
-        g.commentDepth = nested
+        g.lang.rust.commentDepth = nested
         break
       else:
         inc(pos)
@@ -513,7 +513,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
               inc(nested)
           of '\0':
             g.state = blockState
-            g.commentDepth = nested
+            g.lang.rust.commentDepth = nested
             break
           else:
             inc(pos)
@@ -527,12 +527,12 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         # tokenizes normally with `rustAttrBracketDepth` letting the
         # identifier path resolve attribute names to gtPreprocessor.
         inc(pos, 2)
-        inc(g.rustAttrBracketDepth)
+        inc(g.lang.rust.attrBracketDepth)
         g.kind = gtPreprocessor
       elif g.buf[pos + 1] == '!' and g.buf[pos + 2] == '[':
         # `#![...]` inner attribute.
         inc(pos, 3)
-        inc(g.rustAttrBracketDepth)
+        inc(g.lang.rust.attrBracketDepth)
         g.kind = gtPreprocessor
       else:
         inc(pos)
@@ -555,7 +555,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         rustRawString(g, pos)
       elif g.buf[pos] == 'b' and g.buf[pos + 1] == '\"':
         inc(pos) # past 'b'
-        g.rustInByteString = true
+        g.lang.rust.inByteString = true
         rustNormalString(g, pos)
       elif g.buf[pos] == 'b' and g.buf[pos + 1] == '\'':
         inc(pos) # past 'b'
@@ -565,7 +565,7 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         while g.buf[pos] in rustSymChars:
           add(id, g.buf[pos])
           inc(pos)
-        g.kind = rustGetKeyword(id, g.rustAttrBracketDepth)
+        g.kind = rustGetKeyword(id, g.lang.rust.attrBracketDepth)
     of '0':
       inc(pos)
       case g.buf[pos]
@@ -603,21 +603,21 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
       rustNormalString(g, pos)
     of '[':
       inc(pos)
-      if g.rustAttrBracketDepth > 0:
+      if g.lang.rust.attrBracketDepth > 0:
         # Nested `[` inside an open attribute (e.g. array literal in attr
         # value) needs to track depth so the matching `]` doesn't close
         # the outer attribute prematurely.
-        inc(g.rustAttrBracketDepth)
+        inc(g.lang.rust.attrBracketDepth)
       g.kind = gtPunctuation
     of ']':
       inc(pos)
-      if g.rustAttrBracketDepth > 0:
-        dec(g.rustAttrBracketDepth)
+      if g.lang.rust.attrBracketDepth > 0:
+        dec(g.lang.rust.attrBracketDepth)
         # When this `]` closes the outermost attribute (depth back to 0),
         # color it the same as the opening `#[` so the bracket pair stays
         # visually balanced. Inner `]` (e.g. closing an array literal
         # inside the attribute body) keeps punctuation color.
-        if g.rustAttrBracketDepth == 0:
+        if g.lang.rust.attrBracketDepth == 0:
           g.kind = gtPreprocessor
         else:
           g.kind = gtPunctuation

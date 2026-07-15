@@ -231,7 +231,7 @@ suite "syntax_rust - rustNextToken attributes":
     g.initGeneralTokenizer("#[cfg(any(a = \"b\"))]")
     while g.kind != gtEof:
       g.rustNextToken()
-    check g.rustAttrBracketDepth == 0
+    check g.lang.rust.attrBracketDepth == 0
 
   test "Clone inside #[derive] stays gtBuiltin":
     # Names that resolve to gtBuiltin (e.g. `Clone`) must keep that color
@@ -1367,7 +1367,7 @@ suite "syntax_rust - rustNextToken string continuation":
     check g.kind == gtEscapeSequence
     # Trailing `\` before buffer end parks state for line continuation.
     check g.state == gtLongStringLit
-    check g.rustRawStringHashCount == 0
+    check g.lang.rust.rawStringHashCount == 0
 
 suite "syntax_rust - rustNextToken compound operators":
   test "increment-like operator":
@@ -1817,14 +1817,14 @@ suite "syntax_rust - byte string escape handling":
     g.initGeneralTokenizer("b\"x\"")
     g.rustNextToken()
     check g.kind == gtStringLit
-    check g.rustInByteString == false
+    check g.lang.rust.inByteString == false
 
   test "regular string still highlights \\u escape":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"\\u{61}\"")
     g.rustNextToken()
     check g.state == gtStringLit
-    check g.rustInByteString == false
+    check g.lang.rust.inByteString == false
     g.rustNextToken()
     check g.kind == gtEscapeSequence
     check g.length == 6 # \u{61}
@@ -1869,40 +1869,40 @@ suite "syntax_rust - multi-line string continuation":
     g.rustNextToken()
     check g.kind == gtStringLit
     check g.state == gtLongStringLit
-    check g.rustRawStringHashCount == 0
+    check g.lang.rust.rawStringHashCount == 0
 
   test "unterminated raw string parks hash count":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("r##\"line1")
     g.rustNextToken()
     check g.state == gtLongStringLit
-    check g.rustRawStringHashCount == 2
-    check g.rustInRawString
+    check g.lang.rust.rawStringHashCount == 2
+    check g.lang.rust.inRawString
 
   test "raw string continuation closes on matching hashes":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("line2\"##rest")
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 2
-    g.rustInRawString = true
+    g.lang.rust.rawStringHashCount = 2
+    g.lang.rust.inRawString = true
     g.rustNextToken()
     check g.kind == gtLongStringLit
     check g.state == gtNone
-    check g.rustRawStringHashCount == 0
-    check not g.rustInRawString
+    check g.lang.rust.rawStringHashCount == 0
+    check not g.lang.rust.inRawString
     check g.length == 8 # "line2\"##"
 
   test "raw string continuation that does not close keeps state":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("still inside")
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 1
-    g.rustInRawString = true
+    g.lang.rust.rawStringHashCount = 1
+    g.lang.rust.inRawString = true
     g.rustNextToken()
     check g.kind == gtLongStringLit
     check g.state == gtLongStringLit
-    check g.rustRawStringHashCount == 1
-    check g.rustInRawString
+    check g.lang.rust.rawStringHashCount == 1
+    check g.lang.rust.inRawString
 
   test "non-raw continuation starting with backslash does not raise":
     # Regression: previously emitted an empty token of kind gtLongStringLit
@@ -1910,8 +1910,8 @@ suite "syntax_rust - multi-line string continuation":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\\nrest\"")
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 0
-    g.rustInRawString = false
+    g.lang.rust.rawStringHashCount = 0
+    g.lang.rust.inRawString = false
     g.rustNextToken()
     check g.kind == gtEscapeSequence
     check g.length == 2 # `\n`
@@ -1926,8 +1926,8 @@ suite "syntax_rust - multi-line string continuation":
     g.initGeneralTokenizer("r\"hello")
     g.rustNextToken()
     check g.state == gtLongStringLit
-    check g.rustRawStringHashCount == 0
-    check g.rustInRawString
+    check g.lang.rust.rawStringHashCount == 0
+    check g.lang.rust.inRawString
 
   test "raw string with zero hashes continues across buffers":
     # Regression: previously the `\\n` would be treated as an escape because
@@ -1935,25 +1935,25 @@ suite "syntax_rust - multi-line string continuation":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("backslash \\n still raw\"")
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 0
-    g.rustInRawString = true
+    g.lang.rust.rawStringHashCount = 0
+    g.lang.rust.inRawString = true
     g.rustNextToken()
     check g.kind == gtLongStringLit
     check g.state == gtNone
-    check not g.rustInRawString
+    check not g.lang.rust.inRawString
 
   test "non-raw continuation parks rustInRawString as false":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"hello")
     g.rustNextToken()
     check g.state == gtLongStringLit
-    check not g.rustInRawString
+    check not g.lang.rust.inRawString
 
   test "normal string continuation closes on quote":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("rest\"")
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 0
+    g.lang.rust.rawStringHashCount = 0
     g.rustNextToken()
     check g.kind == gtLongStringLit
     check g.state == gtNone
@@ -1963,7 +1963,7 @@ suite "syntax_rust - multi-line string continuation":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("rest\\nmore\"")
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 0
+    g.lang.rust.rawStringHashCount = 0
     g.rustNextToken()
     check g.kind == gtLongStringLit
     check g.state == gtStringLit
@@ -1980,7 +1980,7 @@ suite "syntax_rust - multi-line string continuation":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("")
     g.state = gtLongStringLit
-    g.rustRawStringHashCount = 0
+    g.lang.rust.rawStringHashCount = 0
     g.rustNextToken()
     check g.kind == gtEof
 
@@ -2077,7 +2077,7 @@ suite "syntax_rust - rustNextToken block doc comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("more text */")
     g.state = gtDocLongComment
-    g.commentDepth = 0
+    g.lang.rust.commentDepth = 0
     g.rustNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtNone
@@ -2087,7 +2087,7 @@ suite "syntax_rust - rustNextToken block doc comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("still inside")
     g.state = gtDocLongComment
-    g.commentDepth = 0
+    g.lang.rust.commentDepth = 0
     g.rustNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtDocLongComment
@@ -2096,7 +2096,7 @@ suite "syntax_rust - rustNextToken block doc comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("rest */")
     g.state = gtLongComment
-    g.commentDepth = 0
+    g.lang.rust.commentDepth = 0
     g.rustNextToken()
     check g.kind == gtLongComment
     check g.state == gtNone
@@ -2119,7 +2119,7 @@ suite "syntax_rust - line-bounded escapes and buffer-end safety":
     check g.kind == gtEscapeSequence
     check g.length == 2
     check g.state == gtLongStringLit
-    check g.rustRawStringHashCount == 0
+    check g.lang.rust.rawStringHashCount == 0
 
     g.rustNextToken() # b" resumes the string on the next line
     check g.kind == gtLongStringLit

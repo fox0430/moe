@@ -61,17 +61,19 @@ suite "Highlight - TokenizerState Capture/Restore":
     var token = GeneralTokenizer()
     token.initGeneralTokenizer("test")
     token.state = gtKeyword
-    token.templateLiteralDepth = 5
-    token.braceDepthStack = @[1, 2, 3]
-    token.commentDepth = 2
-    token.inJsxMode = true
+    token.lang.jslike = JsLikeState(
+      templateLiteralDepth: 5,
+      braceDepthStack: @[1, 2, 3],
+      commentDepth: 2,
+      inJsxMode: true,
+    )
 
     let state = captureTokenizerState(token)
     check state.state == gtKeyword
-    check state.templateLiteralDepth == 5
-    check state.braceDepthStack == @[1, 2, 3]
-    check state.commentDepth == 2
-    check state.inJsxMode == true
+    check state.lang.jslike.templateLiteralDepth == 5
+    check state.lang.jslike.braceDepthStack == @[1, 2, 3]
+    check state.lang.jslike.commentDepth == 2
+    check state.lang.jslike.inJsxMode == true
 
   test "restoreTokenizerState restores all fields":
     var token = GeneralTokenizer()
@@ -79,25 +81,21 @@ suite "Highlight - TokenizerState Capture/Restore":
 
     let state = TokenizerState(
       state: gtStringLit,
-      templateLiteralDepth: 3,
-      braceDepthStack: @[5, 6],
-      commentDepth: 1,
-      inJsxMode: false,
-      jsxTagDepth: 0,
-      inComment: true,
-      inScript: false,
-      inStyle: false,
-      astroInFrontmatter: false,
-      astroFirstLine: false,
+      lang: LangState(
+        jslike: JsLikeState(
+          templateLiteralDepth: 3, braceDepthStack: @[5, 6], commentDepth: 1
+        ),
+        html: HtmlState(inComment: true),
+      ),
     )
 
     token.restoreTokenizerState(state)
     check token.state == gtStringLit
-    check token.templateLiteralDepth == 3
-    check token.braceDepthStack == @[5, 6]
-    check token.commentDepth == 1
-    check token.inJsxMode == false
-    check token.inComment == true
+    check token.lang.jslike.templateLiteralDepth == 3
+    check token.lang.jslike.braceDepthStack == @[5, 6]
+    check token.lang.jslike.commentDepth == 1
+    check token.lang.jslike.inJsxMode == false
+    check token.lang.html.inComment == true
 
 suite "Highlight - Incremental Initialization":
   test "initHighlightIncremental with empty buffer":
