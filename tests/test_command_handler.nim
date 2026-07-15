@@ -1875,13 +1875,23 @@ suite "CommandModeHandler - handleCommandModeInput map commands":
     check result.kind == cmrMapList
     check result.mapListModes.len == 6
 
-  test "Handle :nmap with only LHS returns error":
+  test "Handle :nmap with only LHS returns cmrMapList with prefix":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
     let result = handler.handleCommandModeInput(buffer, ":nmap C-s")
-    check result.kind == cmrError
-    check "Usage" in result.errorMessage
+    check result.kind == cmrMapList
+    check result.mapListModes == @[EditorMode.Normal]
+    check result.mapListPrefix == "C-s"
+
+  test "Handle :map with only LHS returns cmrMapList with prefix for all modes":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":map C-s")
+    check result.kind == cmrMapList
+    check result.mapListModes.len == 6
+    check result.mapListPrefix == "C-s"
 
 suite "CommandModeHandler - Result Helper Functions":
   test "shouldQuit returns true for quit result":

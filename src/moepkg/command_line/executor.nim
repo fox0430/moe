@@ -304,18 +304,32 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
           CommandLineResult(kind: claCmap, mapLhs: "", mapRhs: "", noremap: noremap)
       else:
         discard
-    if cmd.args.len < 2:
-      let cmdName =
-        case cmd.action
-        of claNmap, claNnoremap: "nmap"
-        of claImap, claInoremap: "imap"
-        of claVmap, claVnoremap: "vmap"
-        of claRmap: "rmap"
-        of claCmap, claCnoremap: "cmap"
-        else: "map"
-      return CommandLineResult(
-        kind: claUnknown, errorMessage: "Usage: :" & cmdName & " {lhs} {rhs}"
-      )
+    if cmd.args.len == 1:
+      # Vim-compat: `:nmap <prefix>` lists mappings whose lhs starts with
+      # <prefix>. Signal that by leaving mapRhs empty; the handler routes an
+      # empty rhs to cmrMapList with the prefix.
+      let prefix = cmd.args[0]
+      case cmd.action
+      of claMap, claNoremap:
+        return
+          CommandLineResult(kind: claMap, mapLhs: prefix, mapRhs: "", noremap: noremap)
+      of claNmap, claNnoremap:
+        return
+          CommandLineResult(kind: claNmap, mapLhs: prefix, mapRhs: "", noremap: noremap)
+      of claImap, claInoremap:
+        return
+          CommandLineResult(kind: claImap, mapLhs: prefix, mapRhs: "", noremap: noremap)
+      of claVmap, claVnoremap:
+        return
+          CommandLineResult(kind: claVmap, mapLhs: prefix, mapRhs: "", noremap: noremap)
+      of claRmap:
+        return
+          CommandLineResult(kind: claRmap, mapLhs: prefix, mapRhs: "", noremap: noremap)
+      of claCmap, claCnoremap:
+        return
+          CommandLineResult(kind: claCmap, mapLhs: prefix, mapRhs: "", noremap: noremap)
+      else:
+        discard
     let lhs = cmd.args[0]
     # Read the RHS verbatim from rawText — tokenize+join would lose tabs.
     let rhs = block:

@@ -617,6 +617,20 @@ suite "listRuntimeMappings":
     check "C-a -> Escape" in normalList
     check "C-b -> Enter" in insertList
 
+  test "Prefix filter keeps only lhs that start with the prefix":
+    var registry = newKeyBindingRegistry()
+    discard registry.addRuntimeMapping(Normal, "<leader>ab", "Escape")
+    discard registry.addRuntimeMapping(Normal, "<leader>ac", "Escape")
+    discard registry.addRuntimeMapping(Normal, "C-b", "Escape")
+
+    let filtered = registry.listRuntimeMappings(Normal, "<leader>a")
+    check filtered.len == 2
+    check "<leader>ab -> Escape" in filtered
+    check "<leader>ac -> Escape" in filtered
+
+    let miss = registry.listRuntimeMappings(Normal, "zz")
+    check miss.len == 0
+
 suite "getRuntimeKeySeqMappings":
   test "Returns only key-sequence mappings":
     var registry = newKeyBindingRegistry()
@@ -725,10 +739,11 @@ suite "Command mode command parsing - map commands":
     check result.mapLhs == ""
     check result.mapRhs == ""
 
-  test "Parse :nmap with only LHS returns error":
+  test "Parse :nmap with only LHS returns prefix list request":
     let result = parser.parseAndExecute(":nmap C-s")
-    check result.kind == claUnknown
-    check "Usage" in result.errorMessage
+    check result.kind == claNmap
+    check result.mapLhs == "C-s"
+    check result.mapRhs == ""
 
   test "Parse :rmap C-a Escape":
     let result = parser.parseAndExecute(":rmap C-a Escape")
@@ -1668,10 +1683,11 @@ suite "Command mode command parsing - cmap commands":
     check result.mapLhs == ""
     check result.mapRhs == ""
 
-  test "Parse :cmap with only LHS returns error":
+  test "Parse :cmap with only LHS returns prefix list request":
     let result = parser.parseAndExecute(":cmap C-a")
-    check result.kind == claUnknown
-    check "Usage" in result.errorMessage
+    check result.kind == claCmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == ""
 
   test "Parse :cunmap C-a":
     let result = parser.parseAndExecute(":cunmap C-a")

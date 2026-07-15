@@ -426,12 +426,15 @@ proc handleCommandMode*(
   of cmrMapList:
     var lines: seq[string] = @[]
     for mode in r.mapListModes:
-      let mappings = manager.keyBindingRegistry.listRuntimeMappings(mode)
+      let mappings =
+        manager.keyBindingRegistry.listRuntimeMappings(mode, r.mapListPrefix)
       for m in mappings:
         lines.add(modeLabel(mode) & "  " & m)
     let msg =
       if lines.len > 0:
         lines.join("\n")
+      elif r.mapListPrefix.len > 0:
+        "No mapping found: " & r.mapListPrefix
       else:
         "No mapping"
     return HandlerResult(

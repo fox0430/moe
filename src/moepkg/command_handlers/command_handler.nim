@@ -230,6 +230,7 @@ type
       mapClearModes*: seq[EditorMode]
     of cmrMapList:
       mapListModes*: seq[EditorMode]
+      mapListPrefix*: string ## Optional lhs prefix filter (Vim: `:nmap <lhs>`)
     of cmrOnlyWindow:
       discard
     of cmrFileTree:
@@ -869,9 +870,11 @@ proc handleCommandModeInput*(
           EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
           EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
         ]
-    if cmdResult.mapLhs == "":
-      # No arguments: list mappings
-      return CommandModeResult(kind: cmrMapList, mapListModes: modes)
+    if cmdResult.mapRhs == "":
+      # No rhs: list mappings. mapLhs (if any) filters by prefix.
+      return CommandModeResult(
+        kind: cmrMapList, mapListModes: modes, mapListPrefix: cmdResult.mapLhs
+      )
     return CommandModeResult(
       kind: cmrMapAdd,
       mapAddLhs: cmdResult.mapLhs,
