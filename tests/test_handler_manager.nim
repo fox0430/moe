@@ -711,6 +711,14 @@ suite "HandlerManager - Map list commands":
     check "NORMAL" in result.statusMessage
     check "C-a -> g g" in result.statusMessage
 
+  test ":nmap <prefix> with no match shows No mapping found":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+
+    let result = manager.handleCommandMode(buffer, ":nmap C-a")
+    check result.kind == hrHandled
+    check result.statusMessage == "No mapping found: C-a"
+
   test ":map with no args lists mappings from all modes":
     let manager = createTestManager()
     let buffer = newTextBuffer()

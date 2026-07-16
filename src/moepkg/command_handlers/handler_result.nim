@@ -27,9 +27,8 @@
 
 import std/options
 
-import ../[modes, buffer]
+import ../[modes, buffer, setting_options]
 import ../lsp/protocol/types as lspTypes
-import command_handler
 
 type
   HandlerResultKind* = enum
@@ -156,6 +155,10 @@ type
     hrOpenUri # Open URI/file under cursor
     hrUnhandled # Command was not handled
     hrError # Error occurred
+    hrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
+    hrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
+    hrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
+    hrMapList # List runtime key mappings
 
   HandlerResult* = object ## Unified result type for all handlers
     case kind*: HandlerResultKind
@@ -398,6 +401,19 @@ type
       discard
     of hrOpenUri:
       openUri*: string
+    of hrMapAdd:
+      mapAddLhs*: string
+      mapAddRhs*: string
+      mapAddModes*: seq[EditorMode]
+      mapAddNoremap*: bool
+    of hrMapRemove:
+      mapRemoveLhs*: string
+      mapRemoveModes*: seq[EditorMode]
+    of hrMapClear:
+      mapClearModes*: seq[EditorMode]
+    of hrMapList:
+      mapListModes*: seq[EditorMode]
+      mapListPrefix*: string
     of hrUnhandled:
       discard
     of hrError:
@@ -429,7 +445,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
     hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
     hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrConflictNext,
-    hrConflictPrev,
+    hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear, hrMapList,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =
