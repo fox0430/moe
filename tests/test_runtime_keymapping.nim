@@ -25,6 +25,7 @@ import
   ../src/moepkg/
     [keybind_config, key_router, modes, command_line, command_config, buffer]
 import ../src/moepkg/command_handlers/command_handler
+import ../src/moepkg/command_handlers/handler_result
 import ../src/moepkg/key_bindings
 import ../src/moepkg/types
 import ../src/moepkg/config
@@ -862,102 +863,102 @@ suite "CommandModeHandler - map commands":
     let commandRegistry = newCommandRegistry()
     let handler = newCommandModeHandler(parser, config, commandRegistry)
 
-  test "handleCommandModeInput :nmap returns cmrMapAdd":
+  test "handleCommandModeInput :nmap returns hrMapAdd":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nmap C-s file.save")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddLhs == "C-s"
     check result.mapAddRhs == "file.save"
     check EditorMode.Normal in result.mapAddModes
     check result.mapAddModes.len == 1
     check result.mapAddNoremap == false
 
-  test "handleCommandModeInput :nnoremap returns cmrMapAdd with noremap=true":
+  test "handleCommandModeInput :nnoremap returns hrMapAdd with noremap=true":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nnoremap C-s file.save")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Normal in result.mapAddModes
     check result.mapAddNoremap == true
 
-  test "handleCommandModeInput :imap returns cmrMapAdd for Insert":
+  test "handleCommandModeInput :imap returns hrMapAdd for Insert":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":imap j Escape")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Insert in result.mapAddModes
 
-  test "handleCommandModeInput :vmap returns cmrMapAdd for Visual modes":
+  test "handleCommandModeInput :vmap returns hrMapAdd for Visual modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":vmap d visual.delete")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Visual in result.mapAddModes
     check EditorMode.VisualBlock in result.mapAddModes
     check EditorMode.VisualLine in result.mapAddModes
 
-  test "handleCommandModeInput :map returns cmrMapAdd for all modes":
+  test "handleCommandModeInput :map returns hrMapAdd for all modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":map C-s file.save")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddModes.len == 6
 
-  test "handleCommandModeInput :nunmap returns cmrMapRemove":
+  test "handleCommandModeInput :nunmap returns hrMapRemove":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nunmap C-s")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check result.mapRemoveLhs == "C-s"
     check EditorMode.Normal in result.mapRemoveModes
 
-  test "handleCommandModeInput :nmapclear returns cmrMapClear":
+  test "handleCommandModeInput :nmapclear returns hrMapClear":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nmapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check EditorMode.Normal in result.mapClearModes
 
-  test "handleCommandModeInput :rmap returns cmrMapAdd for Replace":
+  test "handleCommandModeInput :rmap returns hrMapAdd for Replace":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":rmap C-a Escape")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Replace in result.mapAddModes
     check result.mapAddModes.len == 1
 
-  test "handleCommandModeInput :unmap returns cmrMapRemove for all modes":
+  test "handleCommandModeInput :unmap returns hrMapRemove for all modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":unmap C-s")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check result.mapRemoveLhs == "C-s"
     check result.mapRemoveModes.len == 6
 
-  test "handleCommandModeInput :iunmap returns cmrMapRemove for Insert":
+  test "handleCommandModeInput :iunmap returns hrMapRemove for Insert":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":iunmap C-a")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check EditorMode.Insert in result.mapRemoveModes
     check result.mapRemoveModes.len == 1
 
-  test "handleCommandModeInput :vunmap returns cmrMapRemove for Visual modes":
+  test "handleCommandModeInput :vunmap returns hrMapRemove for Visual modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":vunmap d")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check EditorMode.Visual in result.mapRemoveModes
     check EditorMode.VisualBlock in result.mapRemoveModes
     check EditorMode.VisualLine in result.mapRemoveModes
 
-  test "handleCommandModeInput :mapclear returns cmrMapClear for all modes":
+  test "handleCommandModeInput :mapclear returns hrMapClear for all modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":mapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check result.mapClearModes.len == 6
 
-  test "handleCommandModeInput :imapclear returns cmrMapClear for Insert":
+  test "handleCommandModeInput :imapclear returns hrMapClear for Insert":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":imapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check EditorMode.Insert in result.mapClearModes
     check result.mapClearModes.len == 1
 
   test "handleCommandModeInput :imap jj Escape (Vim-style)":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":imap jj Escape")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddLhs == "jj"
     check result.mapAddRhs == "Escape"
     check EditorMode.Insert in result.mapAddModes
@@ -1712,33 +1713,33 @@ suite "CommandModeHandler - cmap commands":
     let commandRegistry = newCommandRegistry()
     let handler = newCommandModeHandler(parser, config, commandRegistry)
 
-  test "handleCommandModeInput :cmap returns cmrMapAdd with CommandLine mode":
+  test "handleCommandModeInput :cmap returns hrMapAdd with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmap C-a Home")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddLhs == "C-a"
     check result.mapAddRhs == "Home"
     check EditorMode.Command in result.mapAddModes
     check result.mapAddModes.len == 1
 
-  test "handleCommandModeInput :cmap without args returns cmrMapList":
+  test "handleCommandModeInput :cmap without args returns hrMapList":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmap")
-    check result.kind == cmrMapList
+    check result.kind == hrMapList
     check EditorMode.Command in result.mapListModes
 
-  test "handleCommandModeInput :cunmap returns cmrMapRemove with CommandLine mode":
+  test "handleCommandModeInput :cunmap returns hrMapRemove with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cunmap C-a")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check result.mapRemoveLhs == "C-a"
     check EditorMode.Command in result.mapRemoveModes
     check result.mapRemoveModes.len == 1
 
-  test "handleCommandModeInput :cmapclear returns cmrMapClear with CommandLine mode":
+  test "handleCommandModeInput :cmapclear returns hrMapClear with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check EditorMode.Command in result.mapClearModes
     check result.mapClearModes.len == 1
 

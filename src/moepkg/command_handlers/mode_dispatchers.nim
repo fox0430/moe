@@ -272,175 +272,17 @@ proc handleCommandMode*(
     isSharedBuffer: bool = false,
     currentLine: int = 0,
 ): HandlerResult =
-  ## Handle Command mode input (when Enter is pressed)
-  ## isSharedBuffer: true if the buffer is shared across multiple windows
-  ## currentLine: current cursor line (0-based), used for range substitution with '.'
+  ## Handle Command mode input (when Enter is pressed).
+  ## isSharedBuffer: true if the buffer is shared across multiple windows.
+  ## currentLine: 0-based cursor line, used for range substitution with '.'.
+  ## Map ops (hrMap*) need access to `manager.keyBindingRegistry`, so they are
+  ## executed here and folded onto hrHandled/hrError; every other kind is
+  ## returned as-is to the caller.
   let r = manager.commandHandler.handleCommandModeInput(
     buffer, commandText, isSharedBuffer, currentLine
   )
-
   case r.kind
-  of cmrQuit:
-    return HandlerResult(kind: hrQuit)
-  of cmrCquit:
-    return HandlerResult(kind: hrCquit)
-  of cmrCloseWindow:
-    return HandlerResult(kind: hrCloseWindow, forceClose: r.forceClose)
-  of cmrModeSwitch:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(r.targetMode), statusMessage: ""
-    )
-  of cmrMessage:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: r.message
-    )
-  of cmrGotoLine:
-    return HandlerResult(kind: hrGotoLine, lineNumber: r.lineNumber)
-  of cmrVSplit:
-    return HandlerResult(kind: hrVSplit, vsplitFilename: r.vsplitFilename)
-  of cmrHSplit:
-    return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
-  of cmrNew:
-    return HandlerResult(kind: hrNew)
-  of cmrVnew:
-    return HandlerResult(kind: hrVnew)
-  of cmrEnew:
-    return HandlerResult(kind: hrEnew)
-  of cmrEdit:
-    return
-      HandlerResult(kind: hrEdit, editFilename: r.editFilename, forceEdit: r.forceEdit)
-  of cmrSetBoolOption:
-    return HandlerResult(
-      kind: hrSetBoolOption, boolOption: r.boolOption, boolValue: r.boolValue
-    )
-  of cmrSetIntOption:
-    return
-      HandlerResult(kind: hrSetIntOption, intOption: r.intOption, intValue: r.intValue)
-  of cmrSetFloatOption:
-    return HandlerResult(
-      kind: hrSetFloatOption, floatOption: r.floatOption, floatValue: r.floatValue
-    )
-  of cmrClearSearchHighlight:
-    return HandlerResult(kind: hrClearSearchHighlight)
-  of cmrShellCommand:
-    return HandlerResult(kind: hrShellCommand, shellCommand: r.shellCommand)
-  of cmrBackground:
-    return HandlerResult(kind: hrBackground)
-  of cmrSave:
-    return
-      HandlerResult(kind: hrSave, saveFilename: r.saveFilename, forceSave: r.forceSave)
-  of cmrSaveAll:
-    return HandlerResult(kind: hrSaveAll, forceSaveAll: r.forceSaveAll)
-  of cmrSaveAndQuit:
-    return HandlerResult(
-      kind: hrSaveAndQuit,
-      saveAndQuitFilename: r.saveAndQuitFilename,
-      forceQuitAfterSave: r.forceSaveAndQuit,
-    )
-  of cmrSaveAllAndQuit:
-    return HandlerResult(
-      kind: hrSaveAllAndQuit, forceSaveAllAndQuitAfter: r.forceSaveAllAndQuit
-    )
-  of cmrBufferNext:
-    return HandlerResult(kind: hrBufferNext)
-  of cmrBufferPrev:
-    return HandlerResult(kind: hrBufferPrev)
-  of cmrBufferFirst:
-    return HandlerResult(kind: hrBufferFirst)
-  of cmrBufferLast:
-    return HandlerResult(kind: hrBufferLast)
-  of cmrBufferDelete:
-    return HandlerResult(kind: hrBufferDelete, forceBufferDelete: r.forceBufferDelete)
-  of cmrBuffer:
-    return HandlerResult(kind: hrBuffer, bufferArg: r.bufferArg)
-  of cmrStripWhitespace:
-    return
-      HandlerResult(kind: hrStripWhitespace, strippedLineCount: r.strippedLineCount)
-  of cmrFiler:
-    # Switch to Filer mode with optional path
-    return HandlerResult(kind: hrEnterFiler, enterFilerPath: r.filerPath)
-  of cmrLogViewer:
-    # Switch to LogViewer mode
-    return HandlerResult(kind: hrEnterLogViewer)
-  of cmrHelpViewer:
-    # Switch to HelpViewer mode
-    return HandlerResult(kind: hrEnterHelpViewer)
-  of cmrQuickRun:
-    return HandlerResult(kind: hrQuickRun)
-  of cmrBufferManager:
-    return HandlerResult(kind: hrEnterBufferManager)
-  of cmrBackupManager:
-    return HandlerResult(kind: hrEnterBackupManager)
-  of cmrRecentFile:
-    return HandlerResult(kind: hrRecentFile)
-  of cmrJumpList:
-    return HandlerResult(kind: hrJumpList)
-  of cmrChanges:
-    return HandlerResult(kind: hrChanges)
-  of cmrBookmarks:
-    return HandlerResult(kind: hrEnterBookmarkManager)
-  of cmrConflictNext:
-    return HandlerResult(kind: hrConflictNext)
-  of cmrConflictPrev:
-    return HandlerResult(kind: hrConflictPrev)
-  of cmrBuild:
-    return HandlerResult(kind: hrBuild)
-  of cmrDebug:
-    return HandlerResult(kind: hrDebug)
-  of cmrConfig:
-    return HandlerResult(kind: hrConfig)
-  of cmrPutConfigFile:
-    return HandlerResult(kind: hrPutConfigFile)
-  of cmrMan:
-    return HandlerResult(kind: hrMan, hrManPage: r.manPage)
-  of cmrTheme:
-    return HandlerResult(kind: hrTheme, hrThemeName: r.themeName)
-  of cmrLspLog:
-    return HandlerResult(kind: hrLspLog)
-  of cmrLspFormat:
-    return HandlerResult(kind: hrLspFormat)
-  of cmrLspRestart:
-    return HandlerResult(kind: hrLspRestart)
-  of cmrLspFold:
-    return HandlerResult(kind: hrLspFold)
-  of cmrLspExecuteCommand:
-    return HandlerResult(
-      kind: hrLspExecuteCommand,
-      hrLspCommand: r.lspCommand,
-      hrLspCommandArgs: r.lspCommandArgs,
-    )
-  of cmrLspCallHierarchyIncoming:
-    return HandlerResult(kind: hrLspCallHierarchyIncoming)
-  of cmrLspCallHierarchyOutgoing:
-    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
-  of cmrSubstitute:
-    return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
-  of cmrDeleteLines:
-    return HandlerResult(
-      kind: hrDeleteLines,
-      hrDeletedText: r.deletedText,
-      hrDeletedLineCount: r.deletedLineCount,
-    )
-  of cmrTerminal:
-    return HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: r.terminalCommand)
-  of cmrMapList:
-    var lines: seq[string] = @[]
-    for mode in r.mapListModes:
-      let mappings =
-        manager.keyBindingRegistry.listRuntimeMappings(mode, r.mapListPrefix)
-      for m in mappings:
-        lines.add(modeLabel(mode) & "  " & m)
-    let msg =
-      if lines.len > 0:
-        lines.join("\n")
-      elif r.mapListPrefix.len > 0:
-        "No mapping found: " & r.mapListPrefix
-      else:
-        "No mapping"
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
-    )
-  of cmrMapAdd:
+  of hrMapAdd:
     var firstError = ""
     var modeNames: seq[string] = @[]
     for mode in r.mapAddModes:
@@ -459,7 +301,7 @@ proc handleCommandMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
     )
-  of cmrMapRemove:
+  of hrMapRemove:
     var firstError = ""
     var modeNames: seq[string] = @[]
     for mode in r.mapRemoveModes:
@@ -475,7 +317,7 @@ proc handleCommandMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
     )
-  of cmrMapClear:
+  of hrMapClear:
     var modeNames: seq[string] = @[]
     for mode in r.mapClearModes:
       manager.keyBindingRegistry.clearRuntimeMappings(mode)
@@ -484,12 +326,24 @@ proc handleCommandMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
     )
-  of cmrOnlyWindow:
-    return HandlerResult(kind: hrOnlyWindow)
-  of cmrFileTree:
-    return HandlerResult(kind: hrEnterFileTree, enterFileTreePath: r.fileTreePath)
-  of cmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+  of hrMapList:
+    var lines: seq[string] = @[]
+    for mode in r.mapListModes:
+      let label = modeLabel(mode)
+      for m in manager.keyBindingRegistry.listRuntimeMappings(mode, r.mapListPrefix):
+        lines.add(label & "  " & m)
+    let msg =
+      if lines.len > 0:
+        lines.join("\n")
+      elif r.mapListPrefix.len > 0:
+        "No mapping found: " & r.mapListPrefix
+      else:
+        "No mapping"
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
+    )
+  else:
+    return r
 
 proc handleSearchMode*(
     manager: HandlerManager,

@@ -307,7 +307,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     if cmd.args.len == 1:
       # Vim-compat: `:nmap <prefix>` lists mappings whose lhs starts with
       # <prefix>. Signal that by leaving mapRhs empty; the handler routes an
-      # empty rhs to cmrMapList with the prefix.
+      # empty rhs to hrMapList with the prefix.
       let prefix = cmd.args[0]
       case cmd.action
       of claMap, claNoremap:

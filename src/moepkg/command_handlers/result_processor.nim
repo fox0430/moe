@@ -91,9 +91,12 @@ proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
       hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
       hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
       hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
-      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri:
+      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrMapAdd, hrMapRemove, hrMapClear,
+      hrMapList:
     # Kinds produced from within per-mode dispatchers (not Command overlay);
     # if they ever reach the overlay path, resync to base mode.
+    # hrMap* are folded to hrHandled/hrError in handleCommandMode so this arm
+    # is defensive only.
     oxaExitAndResync
 
 proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
@@ -1454,6 +1457,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.syncActiveWindow()
     if e.windowManager.windows.len > 0:
       e.setActiveWindowScreenCursor(e.activeWindow)
+  of hrMapAdd, hrMapRemove, hrMapClear, hrMapList:
+    discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
   of hrDebugViewerQuit, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterDiffViewer,
       hrEnterReferences, hrEnterDocumentSymbol, hrEnterCallHierarchy:
     discard # Handled by per-mode dispatchers or produced from within those modes
