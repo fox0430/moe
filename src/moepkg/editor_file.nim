@@ -129,7 +129,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
     if lspResult.isErr:
       logLspDegraded("didOpen", lspResult.error & " (" & path & ")")
     else:
-      e.lastLspChangeSeqs[e.activeBuffer.id] = e.activeBuffer.changeSeq
+      e.lastLspContentVersions[e.activeBuffer.id] = e.activeBuffer.contentVersion
 
   ok(())
 

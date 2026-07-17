@@ -19,7 +19,7 @@
 
 ## Tests for editor_lsp.nim
 
-import std/[unittest, os, options, tables]
+import std/[unittest, os, options, tables, importutils]
 
 import pkg/chronos
 
@@ -45,21 +45,21 @@ suite "editor_lsp - maybeUpdateLsp":
   test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
     let activeBuffer = e.activeBuffer()
-    let initialSeq = e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0)
+    let initialVer = e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0)
 
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0) == initialSeq
+    check e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0) == initialVer
 
   test "Does nothing when buffer has not changed":
     let e = createTestEditor()
     e.lsp.enabled = true
     let activeBuffer = e.activeBuffer()
-    e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
+    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
 
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
+    check e.lastLspContentVersions[activeBuffer.id] == activeBuffer.contentVersion
 
   test "Tracking is per-buffer":
     let e = createTestEditor()
@@ -68,13 +68,64 @@ suite "editor_lsp - maybeUpdateLsp":
     # Another buffer's entry must not affect the active buffer's tracking
     let otherBuffer = newTextBuffer("other")
     e.addBuffer(otherBuffer)
-    e.lastLspChangeSeqs[otherBuffer.id] = 999
+    e.lastLspContentVersions[otherBuffer.id] = 999
 
-    e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
+    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
-    check e.lastLspChangeSeqs[otherBuffer.id] == 999
+    check e.lastLspContentVersions[activeBuffer.id] == activeBuffer.contentVersion
+    check e.lastLspContentVersions[otherBuffer.id] == 999
+
+  test "Undo then edit collides on changeSeq: server must still be resynced":
+    # undo() rewinds changeSeq to the pre-mutation value, so a follow-up edit
+    # can land on the exact same changeSeq that was already recorded as synced.
+    # A gate keyed on changeSeq treats the two different contents as identical
+    # and drops the didChange, permanently desyncing the server.
+    privateAccess(LspIntegration)
+
+    let tmpDir = getTempDir() / "moe_test_editor_lsp_content_version"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    let path = tmpDir / "collide.txt"
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.lsp.service.liveWorkerOverride = proc(p: string): bool =
+      true
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    e.openBufferWithLsp(buf)
+    check e.lsp.sentDocumentVersion(path) == some(1)
+
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    e.maybeUpdateLsp()
+    check e.lsp.sentDocumentVersion(path) == some(2)
+    let seqAfterA = buf.changeSeq
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "b").isOk
+    e.maybeUpdateLsp()
+    let syncedVersion = e.lsp.sentDocumentVersion(path).get
+    check syncedVersion == 3
+    let syncedSeq = buf.changeSeq
+
+    # Undo B then insert C without an intervening maybeUpdateLsp. The undo
+    # rewinds changeSeq to seqAfterA; the follow-up insert increments it back
+    # to syncedSeq. Content is now "ac", not the "ab" the server last saw.
+    check buf.undo().isOk
+    check buf.changeSeq == seqAfterA
+    check buf.insertText(BufferPosition(line: 0, column: 1), "c").isOk
+    check buf.changeSeq == syncedSeq
+    check buf.getTextString() == "ac"
+
+    e.maybeUpdateLsp()
+
+    # The server must have received the "ac" state. With a changeSeq-keyed
+    # gate, syncedSeq == the recorded value and the sync is dropped, leaving
+    # the server on "ab" forever.
+    check e.lsp.sentDocumentVersion(path).get > syncedVersion
+    check e.lsp.documents[path].shadow == "ac"
 
 suite "editor_lsp - server config plumbing":
   test "custom command/extensions override the built-in default":

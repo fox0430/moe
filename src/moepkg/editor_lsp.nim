@@ -116,7 +116,7 @@ proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
   ## otherwise drift on the server side. `context` only tags the degrade log.
   let syncResult = e.lsp.onBufferChange(buf)
   if syncResult.isOk:
-    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
   elif buf.filePath.isSome:
     logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
 
@@ -133,13 +133,13 @@ proc resyncBufferAfterReload*(e: Editor, buf: TextBuffer) =
   discard e.lsp.onBufferClose(buf) # best effort; re-opened next regardless
   let openResult = e.lsp.onBufferOpen(buf)
   if openResult.isOk:
-    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
   else:
     logLspDegraded("reload: didOpen " & buf.filePath.get, openResult.error)
 
 proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
-  ## didOpen a freshly registered buffer and record its synced changeSeq so the
-  ## next didChange delta is computed against the right baseline. No-op when LSP
+  ## didOpen a freshly registered buffer and record its synced contentVersion so
+  ## the next didChange delta is computed against the right baseline. No-op when LSP
   ## is disabled or the buffer has no path (onBufferOpen guards both). Callers
   ## that register a buffer without going through `loadFile` (loadOrCreateBuffer)
   ## must call this, otherwise the server never learns about the document.
@@ -147,7 +147,7 @@ proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
     return
   let openResult = e.lsp.onBufferOpen(buf)
   if openResult.isOk:
-    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
   elif buf.filePath.isSome:
     logLspDegraded("didOpen " & buf.filePath.get, openResult.error)
 
@@ -185,18 +185,19 @@ proc applyWorkspaceEditFromServer*(
       return (applied: false, failureReason: some("LSP is disabled"))
 
     # Reject the edit if any targeted open buffer has local changes the server
-    # has not seen yet: its changeSeq has moved past the changeSeq recorded at
-    # the last didChange we sent (lastLspChangeSeqs). The server positioned its
-    # edit against the text it last received, so applying it onto newer text
-    # would corrupt the buffer. This mirrors the rename flow's staleness guard,
-    # but the baseline is "what the server last saw" rather than a fresh
-    # snapshot, because this request is not one we awaited.
+    # has not seen yet: its contentVersion has moved past the value recorded at
+    # the last didChange we sent (lastLspContentVersions). The server positioned
+    # its edit against the text it last received, so applying it onto newer
+    # text would corrupt the buffer. This mirrors the rename flow's staleness
+    # guard, but the baseline is "what the server last saw" rather than a
+    # fresh snapshot, because this request is not one we awaited.
     for path in collectWorkspaceEditPaths(edit):
       let absPath = normalizedPath(absolutePath(path))
       for buf in e.buffers:
         if buf.filePath.isSome and
             normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-            buf.changeSeq != e.lastLspChangeSeqs.getOrDefault(buf.id, buf.changeSeq):
+            buf.contentVersion !=
+            e.lastLspContentVersions.getOrDefault(buf.id, buf.contentVersion):
           e.state.statusMessage =
             "Buffer changed since last sync; server edit discarded"
           return
@@ -239,11 +240,15 @@ proc maybeUpdateLsp*(e: Editor) =
 
   let activeBuffer = e.activeBuffer()
 
-  # Only notify LSP if this buffer has changed since its last notification
-  if activeBuffer.changeSeq != e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0):
+  # Only notify LSP if this buffer has changed since its last notification.
+  # Key on contentVersion, not changeSeq: undo rewinds changeSeq, so a
+  # follow-up edit could land on the exact value we last synced and be dropped
+  # here, leaving the server permanently out of sync.
+  if activeBuffer.contentVersion !=
+      e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0):
     let lspResult = e.lsp.onBufferChange(activeBuffer)
     if lspResult.isOk:
-      e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
+      e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
 
 proc pollLspCompletion*(e: Editor) =
   ## Poll for pending LSP completion responses
