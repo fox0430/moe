@@ -52,8 +52,8 @@ proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
   ## Shared post-reload bookkeeping for both the external-change and `:e!` paths:
   ## re-clamp the cursor, refresh the git gutter, rescan conflict markers against
   ## the new content, and re-open the document so the LSP re-publishes diagnostics.
-  ## The reload dropped the buffer's diagnostics and reset changeSeq to 0, so
-  ## maybeUpdateLsp's changeSeq guard would never re-sync on its own.
+  ## The reload dropped the buffer's diagnostics; re-open ensures the server
+  ## re-publishes them regardless of whether the on-disk bytes changed.
   # Reload is the user's chance to pick up an edited .editorconfig.
   applyEditorConfigToBuffer(buf, e.config)
   e.clampCursorAfterReload(buf)
