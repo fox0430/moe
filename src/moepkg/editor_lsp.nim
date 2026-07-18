@@ -94,9 +94,9 @@ proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic
   if not e.config.lsp.diagnostics.enable:
     return
 
-  let path = uriToPath(uri).absolutePath()
+  let path = normalizedPath(absolutePath(uriToPath(uri)))
   for buf in e.buffers:
-    if buf.filePath.isSome and buf.filePath.get.absolutePath() == path:
+    if buf.filePath.isSome and normalizedPath(absolutePath(buf.filePath.get)) == path:
       applyDiagnosticsToBuffer(buf, diagnostics)
       return
   # No matching open buffer: drop. The server only publishes for documents
