@@ -2459,6 +2459,21 @@ suite "middleClickPaste":
 
     check e.activeBuffer.getLine(0) == "hello"
 
+  test "Read-only buffer in Normal mode does not enter Insert or move cursor":
+    let e = createTestEditorForMiddleClick("hello")
+    e.state.mode = EditorMode.Normal
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.activeBuffer.readOnly = true
+
+    e.middleClickPaste()
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.statusMessage == "Buffer is read-only"
+    check e.activeBuffer.getLine(0) == "hello"
+    check e.windowManager.windows[0].cursor.line == 0
+    check e.windowManager.windows[0].cursor.column == 0
+    check not e.activeBuffer.inTransaction
+
   test "Insert mode - paste from clipboard":
     if not isClipboardToolAvailable():
       skip()

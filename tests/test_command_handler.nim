@@ -1101,6 +1101,17 @@ suite "CommandModeHandler - executeStripWhitespace":
     check result.kind == hrStripWhitespace
     check result.strippedLineCount == 0
 
+  test "Strip whitespace on read-only buffer reports error and leaves buffer intact":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Hello   ", "World  "])
+    buffer.readOnly = true
+
+    let result = handler.executeStripWhitespace(buffer)
+    check result.kind == hrError
+    check result.errorMessage == "Buffer is read-only"
+    check buffer.getLine(0) == "Hello   "
+    check buffer.getLine(1) == "World  "
+
 suite "CommandModeHandler - executeQuickRun":
   test "Execute quickrun":
     let handler = setupHandler()
@@ -1313,6 +1324,27 @@ suite "CommandModeHandler - executeSubstitute":
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 1
     check buffer.getLine(0) == "world"
+
+  test "Substitute on read-only buffer reports error and leaves buffer intact":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    buffer.readOnly = true
+
+    let result = handler.executeSubstitute(
+      buffer,
+      "hello",
+      "hi",
+      "",
+      hasRange = false,
+      isGlobalRange = false,
+      startLine = 0,
+      endLine = 0,
+      currentLine = 0,
+    )
+    check result.kind == hrError
+    check result.errorMessage == "Buffer is read-only"
+    check buffer.getLine(0) == "hello world"
 
 suite "CommandModeHandler - handleCommandModeInput":
   test "Empty command returns to normal mode":
@@ -2177,6 +2209,24 @@ suite "CommandModeHandler - executeDelete":
       buffer, hasRange = true, isGlobalRange = false, startLine = 10, endLine = 20
     )
     check result.kind == hrError
+
+  test "Delete on read-only buffer reports error and does not populate deleted text":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    buffer.readOnly = true
+
+    let result = handler.executeDelete(
+      buffer, hasRange = false, isGlobalRange = false, currentLine = 0
+    )
+    # hrError instead of hrDeleteLines guarantees result_processor's
+    # setDeletedRegister branch never fires -- the register cannot be polluted.
+    check result.kind == hrError
+    check result.errorMessage == "Buffer is read-only"
+    check buffer.len == 2
+    check buffer.getLine(0) == "line1"
+    check buffer.getLine(1) == "line2"
 
 suite "CommandModeHandler - fold auto-expand on edit":
   test "substitute reveals a collapsed fold on a modified line":
