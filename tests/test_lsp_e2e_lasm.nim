@@ -555,12 +555,16 @@ proc awaitFormatting(svc: LspService, path: string): Result[seq[TextEdit], strin
 
   waitFor runner()
 
-suite "e2e: LspService driven by lasm":
-  setup:
+template lasmTest(name: string, body: untyped) =
+  ## skip() only sets status; bypass the body explicitly to avoid hanging.
+  test name:
     if not lasmAvailable():
       skip()
+    else:
+      body
 
-  test "initialize -> didOpen -> hover -> shutdown":
+suite "e2e: LspService driven by lasm":
+  lasmTest "initialize -> didOpen -> hover -> shutdown":
     let h = startLasm()
     try:
       let idRes = h.svc.startHoverRequest(h.filePath, 0, 0)
@@ -575,7 +579,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "completion returns scenario items":
+  lasmTest "completion returns scenario items":
     let h = startLasm()
     try:
       let idRes = h.svc.startCompletionRequest(h.filePath, 0, 0)
@@ -592,7 +596,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "definition returns the configured single location":
+  lasmTest "definition returns the configured single location":
     let h = startLasm()
     try:
       let idRes = h.svc.startDefinitionRequest(h.filePath, 0, 0)
@@ -608,7 +612,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "references returns both configured locations":
+  lasmTest "references returns both configured locations":
     let h = startLasm()
     try:
       let idRes = h.svc.startReferencesRequest(h.filePath, 0, 0, true)
@@ -629,7 +633,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "documentHighlight returns both configured highlights":
+  lasmTest "documentHighlight returns both configured highlights":
     let h = startLasm()
     try:
       let idRes = h.svc.startDocumentHighlightRequest(h.filePath, 0, 0)
@@ -645,7 +649,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "rename substitutes ${newName} in workspaceEdit":
+  lasmTest "rename substitutes ${newName} in workspaceEdit":
     let h = startLasm()
     try:
       let respRes = awaitRename(h.svc, h.filePath, "renamed")
@@ -663,7 +667,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "declaration returns the configured location":
+  lasmTest "declaration returns the configured location":
     let h = startLasm()
     try:
       let idRes = h.svc.startDeclarationRequest(h.filePath, 0, 0)
@@ -676,7 +680,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "typeDefinition returns the configured location":
+  lasmTest "typeDefinition returns the configured location":
     let h = startLasm()
     try:
       let idRes = h.svc.startTypeDefinitionRequest(h.filePath, 0, 0)
@@ -689,7 +693,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "implementation returns the configured location":
+  lasmTest "implementation returns the configured location":
     let h = startLasm()
     try:
       let idRes = h.svc.startImplementationRequest(h.filePath, 0, 0)
@@ -702,7 +706,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "inlayHint returns hints for the requested range":
+  lasmTest "inlayHint returns hints for the requested range":
     let h = startLasm()
     try:
       let idRes = h.svc.startInlayHintRequest(h.filePath, 0, 0, 100, 0)
@@ -716,7 +720,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "semanticTokens/full returns the configured data array":
+  lasmTest "semanticTokens/full returns the configured data array":
     let h = startLasm()
     try:
       let idRes = h.svc.startSemanticTokensFullRequest(h.filePath)
@@ -735,7 +739,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "callHierarchy prepare -> incoming -> outgoing chain":
+  lasmTest "callHierarchy prepare -> incoming -> outgoing chain":
     let h = startLasm()
     try:
       let prepIdRes = h.svc.startCallHierarchyPrepareRequest(h.filePath, 0, 0)
@@ -764,7 +768,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "formatting returns the configured text edits":
+  lasmTest "formatting returns the configured text edits":
     let h = startLasm()
     try:
       let respRes = awaitFormatting(h.svc, h.filePath)
@@ -776,7 +780,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "documentLink returns the configured links":
+  lasmTest "documentLink returns the configured links":
     let h = startLasm()
     try:
       let idRes = h.svc.startDocumentLinkRequest(h.filePath)
@@ -797,7 +801,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "semanticTokens/range returns the configured data array":
+  lasmTest "semanticTokens/range returns the configured data array":
     let h = startLasm()
     try:
       let idRes = h.svc.startSemanticTokensRangeRequest(h.filePath, 0, 0, 10, 0)
@@ -813,7 +817,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "hover request times out when scenario injects a delay":
+  lasmTest "hover request times out when scenario injects a delay":
     # Inject a 1500ms server-side delay; drop the consumer-side timeout to
     # 200ms so waitForResponse surfaces "Request timed out" before lasm ever
     # answers.
@@ -827,7 +831,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "workspace/executeCommand switches scenarios mid-session":
+  lasmTest "workspace/executeCommand switches scenarios mid-session":
     let h = startLasmWith(twoHoverScenariosJson())
     try:
       # First hover uses the s1 payload.
@@ -851,7 +855,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "lsptest.listScenarios returns the configured scenarios":
+  lasmTest "lsptest.listScenarios returns the configured scenarios":
     let h = startLasm()
     try:
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listScenarios", @[])
@@ -869,7 +873,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "lsptest.listOpenFiles reports the file opened during startup":
+  lasmTest "lsptest.listOpenFiles reports the file opened during startup":
     let h = startLasm()
     try:
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
@@ -882,7 +886,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "errors.hover surfaces an LSP error response":
+  lasmTest "errors.hover surfaces an LSP error response":
     let h = startLasmWith(errorInjectedHoverScenario())
     try:
       let idRes = h.svc.startHoverRequest(h.filePath, 0, 0)
@@ -893,7 +897,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "multiple language workers coexist against separate lasm processes":
+  lasmTest "multiple language workers coexist against separate lasm processes":
     let h = startLasm()
     try:
       # Register a second language mapped to the same lasm binary and config,
@@ -937,7 +941,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "lsptest.reloadConfig picks up edits to the config file":
+  lasmTest "lsptest.reloadConfig picks up edits to the config file":
     let h = startLasmWith(simpleHoverScenario("before reload"))
     try:
       # Before reload: the "before" payload.
@@ -962,7 +966,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "onLogMessage captures window/showMessage from switchScenario":
+  lasmTest "onLogMessage captures window/showMessage from switchScenario":
     logMessages = @[]
     let h = startLasmWith(twoHoverScenariosJson())
     try:
@@ -998,7 +1002,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "didChange (full sync) updates version and contentLength on the server":
+  lasmTest "didChange (full sync) updates version and contentLength on the server":
     let h = startLasm()
     try:
       # Baseline: after startup the doc is version 1 with SampleText's length.
@@ -1021,7 +1025,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "didChange (incremental) splices range with new text on the server":
+  lasmTest "didChange (incremental) splices range with new text on the server":
     let h = startLasm()
     try:
       # SampleText is "abc\ndef\nghi\n" (12 bytes). Replace "abc"
@@ -1047,7 +1051,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "didChange (incremental) handles multi-line ranges":
+  lasmTest "didChange (incremental) handles multi-line ranges":
     let h = startLasm()
     try:
       # SampleText = "abc\ndef\nghi\n". Splice range (0,1)-(1,2) (which
@@ -1069,7 +1073,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "didChange (incremental) applies multi-edit contentChanges in order":
+  lasmTest "didChange (incremental) applies multi-edit contentChanges in order":
     let h = startLasm()
     try:
       # Two edits, applied sequentially per LSP spec (each edit computed
@@ -1097,7 +1101,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "switchScenario with an unknown name surfaces an error response":
+  lasmTest "switchScenario with an unknown name surfaces an error response":
     let h = startLasmWith(twoHoverScenariosJson())
     try:
       let resp = awaitExecuteCommand(
@@ -1111,7 +1115,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "didChange (incremental) respects UTF-16 character positions":
+  lasmTest "didChange (incremental) respects UTF-16 character positions":
     # Content: "こんにちは\nworld\n"
     #   - 5 Japanese chars, each 3 bytes in UTF-8 and 1 UTF-16 code unit
     #   - Total UTF-8 bytes = 5*3 + 1 + 5 + 1 = 22
@@ -1137,7 +1141,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "listOpenFiles reflects multiple files opened via the same worker":
+  lasmTest "listOpenFiles reflects multiple files opened via the same worker":
     let h = startLasm()
     try:
       # Open a second file on the same language/worker. lasm keeps a
@@ -1159,7 +1163,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "has*Support covers the remaining capabilities lasm advertises":
+  lasmTest "has*Support covers the remaining capabilities lasm advertises":
     let h = startLasm()
     try:
       # All of these are set to `some(true)` (or equivalent) in lasm's
@@ -1183,7 +1187,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "didSave with text overwrites the server-side content":
+  lasmTest "didSave with text overwrites the server-side content":
     let h = startLasm()
     try:
       const SavedText = "saved payload"
@@ -1196,7 +1200,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "didClose drops the document from listOpenFiles":
+  lasmTest "didClose drops the document from listOpenFiles":
     let h = startLasm()
     try:
       check h.svc.notifyDocumentClosed(h.filePath).isOk
@@ -1208,7 +1212,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "getServerInfo exposes lasm's initialize response":
+  lasmTest "getServerInfo exposes lasm's initialize response":
     let h = startLasm()
     try:
       let info = h.svc.getServerInfo(LangId)
@@ -1219,7 +1223,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "publishDiagnostics is re-sent (empty) after didClose":
+  lasmTest "publishDiagnostics is re-sent (empty) after didClose":
     # Reset the module-level captures used by the diagnostics callback.
     diagReceived = @[]
     diagUri = ""
@@ -1250,7 +1254,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "worker restarts after the lasm process is killed":
+  lasmTest "worker restarts after the lasm process is killed":
     let h = startLasm()
     try:
       # Find the running lasm subprocess by its unique config path so we don't
@@ -1287,7 +1291,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "server capabilities from initialize propagate to has*Support queries":
+  lasmTest "server capabilities from initialize propagate to has*Support queries":
     let h = startLasm()
     try:
       # lasm advertises hover/completion/definition/rename/references/
@@ -1299,7 +1303,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "cancelRequest drops a pending request from the tracking table":
+  lasmTest "cancelRequest drops a pending request from the tracking table":
     # Use a slow hover so we can cancel it in-flight; a short wait afterwards
     # keeps the test snappy while still proving the cleanup happened.
     let h = startLasmWith(slowHoverScenario(2000))
@@ -1314,7 +1318,7 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
-  test "diagnostics arrive via publishDiagnostics after didOpen":
+  lasmTest "diagnostics arrive via publishDiagnostics after didOpen":
     diagReceived = @[]
     diagUri = ""
     let h = startLasm()
