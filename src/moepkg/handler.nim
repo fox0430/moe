@@ -529,6 +529,52 @@ proc middleClickPaste(e: Editor) =
   if ownTransaction:
     discard activeBuffer.commitTransaction()
 
+proc finalizeCurrentWindowForMouseJump(e: Editor) =
+  ## Exit the current mode before a mouse click hands focus to another window.
+  ## visualSelection and pendingOperator carry no buffer identity, and an open
+  ## transaction is per-buffer, so any of them would misfire on the new buffer.
+  let activeBuffer = e.activeBuffer()
+
+  case e.state.mode
+  of EditorMode.Insert, EditorMode.Replace:
+    if activeBuffer.inTransaction:
+      clearAutoIndentIfUnedited(activeBuffer, e.state)
+      discard activeBuffer.commitTransaction()
+    e.state.editState.insertModeStartPos = none(BufferPosition)
+    e.state.editState.substituteContext = none(types.SubstituteContext)
+    e.state.editState.replaceHistory = @[]
+    e.state.editState.insertReplayCount = 0
+    e.state.editState.insertReplayLineEntry = false
+    e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+    let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
+    adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+  of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
+    e.state.visualSelection.active = false
+  else:
+    discard
+
+  # Ctrl-o holds an open Insert transaction while state.mode is Normal.
+  if e.state.insertNormalMode:
+    if activeBuffer.inTransaction:
+      clearAutoIndentIfUnedited(activeBuffer, e.state)
+      discard activeBuffer.commitTransaction()
+    e.state.insertNormalMode = false
+    e.state.editState.insertModeStartPos = none(BufferPosition)
+
+  e.state.editState.pendingOperator = none(PendingOperator)
+  e.state.editState.pendingTextObject = none(PendingTextObject)
+  e.state.pendingRegister = none(char)
+  discard e.keyRouter.cancel()
+  if e.state.macroState.waitingForRegister:
+    e.state.macroState.waitingForRegister = false
+    e.state.macroState.commandType = ""
+    e.state.macroState.pendingCount = 0
+
+  # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
+  # the target window's own saved mode.
+  e.state.previousMode = e.state.mode
+  e.state.mode = EditorMode.Normal
+
 proc handleMouseEvent(e: Editor, event: Event): bool =
   ## Handle mouse events for cursor movement
   ## Returns true if the event was handled, false otherwise
@@ -641,6 +687,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
               hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, mouse.x)
             if tabIdx >= 0:
               if i != e.windowManager.activeWindowIndex:
+                e.finalizeCurrentWindowForMouseJump()
                 e.windowManager.activeWindowIndex = i
                 for j, w in e.windowManager.windows.mpairs:
                   w.active = (j == i)
@@ -671,6 +718,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           let pos = posOpt.get
 
           if i != e.windowManager.activeWindowIndex:
+            e.finalizeCurrentWindowForMouseJump()
             e.windowManager.activeWindowIndex = i
             for j, w in e.windowManager.windows.mpairs:
               w.active = (j == i)

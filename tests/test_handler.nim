@@ -3013,3 +3013,136 @@ suite "updateViewportReservedLines - steady reserve":
     # ...but the motion reserve stays steady.
     e.updateViewportReservedLines()
     check e.state.windowDisplay.viewportReservedLines == steadyBottomAreaHeight()
+
+proc addSecondWindow(e: Editor, buf2: TextBuffer, vpx: int = 40) =
+  ## Split the 80-wide viewport at `vpx` and add a right-half window.
+  e.windowManager.windows[0].viewport =
+    ViewPort(x: 0, y: 0, width: vpx, height: 24, topLine: 0, leftColumn: 0)
+  let win2 = EditorWindow(
+    buffer: buf2,
+    bufferIds: @[buf2.id],
+    viewport:
+      ViewPort(x: vpx, y: 0, width: 80 - vpx, height: 24, topLine: 0, leftColumn: 0),
+    cursor: BufferPosition(line: 0, column: 0),
+    active: false,
+    mode: EditorMode.Normal,
+  )
+  e.windowManager.windows.add(win2)
+
+suite "handleMouseEvent - Cross-window jump finalizes stale state":
+  test "Insert-mode transaction on old buffer is committed":
+    # Without the finalize hook, bufA's open transaction leaks past the jump.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy\nzzz")
+    e.addSecondWindow(buf2)
+
+    let bufA = e.windowManager.windows[0].buffer
+    e.state.mode = EditorMode.Insert
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    check bufA.beginTransaction("Insert mode edit").isOk
+    check bufA.inTransaction
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 1))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 1
+    check not bufA.inTransaction
+    check e.state.editState.insertModeStartPos.isNone
+    check e.state.mode == EditorMode.Normal
+
+  test "Visual selection is cleared before touching new buffer":
+    # Anchor line 5 on a 6-line buf, click into a 2-line buf: a surviving
+    # visualSelection would OOB in the next Visual operator.
+    let e = createTestEditorWithBuffer("a\nb\nc\nd\ne\nf")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("x\ny")
+    e.addSecondWindow(buf2)
+
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 5, column: 0),
+      current: BufferPosition(line: 5, column: 0),
+      active: true,
+      kind: vskChar,
+    )
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 1
+    check not e.state.visualSelection.active
+    check e.state.mode == EditorMode.Normal
+
+  test "Pending operator does not fire on the newly-active buffer":
+    # PendingOperator.startPos has no buffer identity; a surviving one would
+    # apply bufA's coordinates to bufB on the next motion.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy")
+    e.addSecondWindow(buf2)
+
+    e.state.mode = EditorMode.Normal
+    e.state.editState.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: BufferPosition(line: 2, column: 0),
+      )
+    )
+    e.state.editState.pendingTextObject = some(PendingTextObject(modifier: tomInner))
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 1
+    check e.state.editState.pendingOperator.isNone
+    check e.state.editState.pendingTextObject.isNone
+
+  test "Ctrl-o (insert-normal) commits Insert transaction on jump":
+    # Ctrl-o keeps an open Insert transaction while state.mode is Normal;
+    # the mode-branch alone would miss it.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy")
+    e.addSecondWindow(buf2)
+
+    let bufA = e.windowManager.windows[0].buffer
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    check bufA.beginTransaction("Insert mode edit").isOk
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
+    check handled == true
+
+    check not bufA.inTransaction
+    check not e.state.insertNormalMode
+    check e.state.editState.insertModeStartPos.isNone
+
+  test "Click on the same window keeps mode/state intact":
+    # The finalize hook must fire only on cross-window jumps.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+
+    let bufA = e.windowManager.windows[0].buffer
+    e.state.mode = EditorMode.Insert
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    check bufA.beginTransaction("Insert mode edit").isOk
+
+    # Two windows so the same-window branch (not the single-window one) runs.
+    let buf2 = newTextBuffer("xxx")
+    e.addSecondWindow(buf2)
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(10, 1))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 0
+    check bufA.inTransaction
+    check e.state.mode == EditorMode.Insert
+    check e.state.editState.insertModeStartPos.isSome
