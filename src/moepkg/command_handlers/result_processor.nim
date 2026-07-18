@@ -1607,6 +1607,7 @@ const MaxMapRecursionDepth = 50
   ## before the macro depth guard fires.
 
 proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome
+proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome
 
 proc runNestedKeyCombo*(
   manager: HandlerManager, e: Editor, keyCombo: KeyCombo
@@ -1642,38 +1643,51 @@ proc processReplayedResult*(
     return roQuit
   roContinue
 
+template withPlaybackGuard(e: Editor, body: untyped): ReplayOutcome =
+  ## Shared depth guard + isRecording suspension for macro / runtime-mapping
+  ## replay loops. `body` must assign to `outcome`.
+  block:
+    let state = e.state
+    if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
+      e.state.statusMessage =
+        "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")"
+      roAbort
+    else:
+      state.macroState.playbackDepth += 1
+      let wasRecording = state.macroState.isRecording
+      state.macroState.isRecording = false
+      var outcome {.inject.} = roContinue
+      body
+      state.macroState.isRecording = wasRecording
+      state.macroState.playbackDepth -= 1
+      outcome
+
+proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome =
+  ## Iterate `combos` through `runNestedKeyCombo` — no per-key parse. Used by
+  ## runtime key-sequence mappings whose RHS is pre-parsed at registration.
+  withPlaybackGuard(e):
+    for k in combos:
+      outcome = runNestedKeyCombo(e.handlerManager, e, k)
+      if outcome != roContinue:
+        break
+
 proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
-  ## Iterate `keys` and dispatch each through `handleKeyCombo`, applying full
-  ## side effects via `processReplayedResult`. The built-in sequence FSM is
-  ## not cleared here so an outer `numericPrefix` survives into the RHS.
-  let state = e.state
-
-  if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
-    e.state.statusMessage =
-      "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")"
-    return roAbort
-
-  state.macroState.playbackDepth += 1
-  let wasRecording = state.macroState.isRecording
-  state.macroState.isRecording = false
-
-  var outcome = roContinue
-  for keyStr in keys:
-    let keyComboOpt = stringToKeyCombo(keyStr)
-    if keyComboOpt.isNone:
-      e.state.statusMessage = "Invalid key in macro: " & keyStr
-      outcome = roAbort
-      break
-    outcome = runNestedKeyCombo(e.handlerManager, e, keyComboOpt.get)
-    if outcome != roContinue:
-      break
-
-  state.macroState.isRecording = wasRecording
-  state.macroState.playbackDepth -= 1
-  outcome
+  ## Iterate user-recorded macro `keys` (register storage is seq[string]).
+  ## Aborts on the first `stringToKeyCombo` failure but keeps executing the
+  ## good prefix (matches pre-refactor behaviour).
+  withPlaybackGuard(e):
+    for keyStr in keys:
+      let keyComboOpt = stringToKeyCombo(keyStr)
+      if keyComboOpt.isNone:
+        e.state.statusMessage = "Invalid key in macro: " & keyStr
+        outcome = roAbort
+        break
+      outcome = runNestedKeyCombo(e.handlerManager, e, keyComboOpt.get)
+      if outcome != roContinue:
+        break
 
 proc replayRuntimeKeySequence*(
-    manager: HandlerManager, editor: Editor, targetKeys: seq[string], noremap: bool
+    manager: HandlerManager, editor: Editor, targetKeys: seq[KeyCombo], noremap: bool
 ): ReplayOutcome =
   ## Replay the RHS of a fired runtime key-sequence mapping. `:noremap` runs
   ## verbatim under `withReplay` (isReplayingMapping suppresses re-expansion);
@@ -1682,7 +1696,7 @@ proc replayRuntimeKeySequence*(
   if noremap:
     var outcome = roContinue
     editor.keyRouter.withReplay:
-      outcome = playbackMacroImpl(editor, targetKeys)
+      outcome = playbackKeyCombosImpl(editor, targetKeys)
     return outcome
 
   if editor.keyRouter.mapExpandDepth >= MaxMapRecursionDepth:
@@ -1690,7 +1704,7 @@ proc replayRuntimeKeySequence*(
     return roAbort
   editor.keyRouter.mapExpandDepth += 1
   try:
-    result = playbackMacroImpl(editor, targetKeys)
+    result = playbackKeyCombosImpl(editor, targetKeys)
   finally:
     editor.keyRouter.mapExpandDepth -= 1
 
@@ -1766,6 +1780,11 @@ proc playbackMacro*(editor: Editor, keys: seq[string]): HandlerResult =
   ## tests that inspect it directly. Side effects are applied via
   ## `playbackMacroImpl`; the returned HandlerResult is a status signal.
   outcomeToHandlerResult(editor, playbackMacroImpl(editor, keys))
+
+proc playbackKeyCombos*(editor: Editor, combos: seq[KeyCombo]): HandlerResult =
+  ## Test-facing wrapper for the pre-parsed variant. Used by tests that
+  ## execute a `RuntimeKeyMapping.targetKeys` (now seq[KeyCombo]) directly.
+  outcomeToHandlerResult(editor, playbackKeyCombosImpl(editor, combos))
 
 proc runKeyCombo*(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo

@@ -224,18 +224,13 @@ proc addRuntimeMapping*(
     if rhsKeys.len == 0:
       return "Invalid mapping target: " & rhsStr
 
-    # Convert RHS keys to string representation for playbackMacro
-    var targetKeyStrs: seq[string] = @[]
-    for k in rhsKeys:
-      targetKeyStrs.add(keyComboToString(k))
-
     let mapping = RuntimeKeyMapping(
       triggerKeys: lhsKeys,
       triggerStr: lhsStr,
       targetStr: rhsStr,
       noremap: noremap,
       kind: rmkKeySequence,
-      targetKeys: targetKeyStrs,
+      targetKeys: rhsKeys,
     )
 
     # Remove existing mapping for same trigger

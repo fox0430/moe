@@ -148,7 +148,7 @@ type
         ## custom-with-args entries differ from the bare registry version).
       commandName*: string
     of rmkKeySequence:
-      targetKeys*: seq[string] ## Key strings for playbackMacro
+      targetKeys*: seq[KeyCombo] ## Parsed RHS keys, ready for replay
 
   ## Runtime key-sequence mapping accumulator. Owned by the `KeyRouter`
   ## (`KeyRouter.dispatchState`), *not* by the registry — runtime-mapping
@@ -180,7 +180,7 @@ type
     of rmdExecuteCommand:
       commandName*: string
     of rmdExecuteKeySequence:
-      targetKeys*: seq[string]
+      targetKeys*: seq[KeyCombo]
       noremap*: bool
     of rmdWaitForMore, rmdNoMatchPassThrough:
       discard
@@ -203,7 +203,7 @@ type
     of rmfExecuteCommand:
       commandName*: string
     of rmfExecuteKeySequence:
-      targetKeys*: seq[string]
+      targetKeys*: seq[KeyCombo]
       noremap*: bool
     of rmfReplayPerKey:
       keysToReplay*: seq[KeyCombo]

@@ -173,12 +173,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       # noremap is not honoured here (known limitation).
       var replayResult = true
       e.keyRouter.withReplay:
-        for targetKeyStr in route.targetKeys:
-          let targetKeyOpt = stringToKeyCombo(targetKeyStr)
-          if targetKeyOpt.isSome:
-            if not e.handleCommandModeKeyCombo(targetKeyOpt.get):
-              replayResult = false
-              break
+        for k in route.targetKeys:
+          if not e.handleCommandModeKeyCombo(k):
+            replayResult = false
+            break
       return replayResult
     of rrWaiting:
       return true
