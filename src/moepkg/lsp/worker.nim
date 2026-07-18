@@ -464,6 +464,17 @@ proc buildApplyEditResponse*(
     resultObj["failureReason"] = %failureReason
   %*{"jsonrpc": "2.0", "id": idNode, "result": resultObj}
 
+proc dropPendingDidOpen*(pending: var seq[LspCommand], uri: string) =
+  ## Remove any queued lcmdDidOpen for `uri` from `pending`. Used when a
+  ## didClose arrives before the server reaches lwsRunning so the flush
+  ## doesn't emit a didOpen for an already-closed buffer.
+  var i = 0
+  while i < pending.len:
+    if pending[i].openUri == uri:
+      pending.delete(i)
+    else:
+      inc i
+
 proc formatRawJsonLogLine*(
     languageId: string, direction: LspJsonDirection, json: string
 ): string =
@@ -1201,6 +1212,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         let params =
           DidCloseParams(textDocument: TextDocumentIdentifier(uri: cmd.closeUri)).toJson
         await sendNotificationLog("textDocument/didClose", params)
+      else:
+        dropPendingDidOpen(pendingDidOpen, cmd.closeUri)
     of lcmdDidChange:
       let changeState = ctx.sharedState.loadState()
       if changeState == lwsRunning:

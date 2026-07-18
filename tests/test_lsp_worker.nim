@@ -147,6 +147,65 @@ suite "LspWorker - formatRawJsonLogLine":
     let line = formatRawJsonLogLine("", ljdReceived, """{"x":1}""")
     check line == """ <<< {"x":1}"""
 
+suite "LspWorker - dropPendingDidOpen":
+  # Regression: a didClose that arrives before the server reaches lwsRunning
+  # must remove the queued didOpen for the same URI. Otherwise the post-init
+  # flush emits a didOpen for a buffer the user already closed, and a later
+  # reopen sends a second didOpen without an intervening didClose - a
+  # protocol violation.
+  proc openCmd(uri: string, version = 1): LspCommand =
+    LspCommand(
+      kind: lcmdDidOpen,
+      openUri: uri,
+      openLangId: "nim",
+      openVersion: version,
+      openText: "x",
+    )
+
+  test "removes the sole matching entry":
+    var pending = @[openCmd("file:///a.nim")]
+    dropPendingDidOpen(pending, "file:///a.nim")
+    check pending.len == 0
+
+  test "leaves non-matching URIs untouched":
+    var pending = @[openCmd("file:///a.nim"), openCmd("file:///b.nim")]
+    dropPendingDidOpen(pending, "file:///b.nim")
+    check pending.len == 1
+    check pending[0].openUri == "file:///a.nim"
+
+  test "removes every duplicate for the same URI":
+    var pending = @[
+      openCmd("file:///a.nim", 1), openCmd("file:///a.nim", 2), openCmd("file:///b.nim")
+    ]
+    dropPendingDidOpen(pending, "file:///a.nim")
+    check pending.len == 1
+    check pending[0].openUri == "file:///b.nim"
+
+  test "is a no-op when the URI is not queued":
+    var pending = @[openCmd("file:///a.nim")]
+    dropPendingDidOpen(pending, "file:///missing.nim")
+    check pending.len == 1
+    check pending[0].openUri == "file:///a.nim"
+
+  test "is a no-op on an empty queue":
+    var pending: seq[LspCommand] = @[]
+    dropPendingDidOpen(pending, "file:///a.nim")
+    check pending.len == 0
+
+  test "preserves the relative order of surviving entries":
+    var pending = @[
+      openCmd("file:///a.nim"),
+      openCmd("file:///b.nim"),
+      openCmd("file:///c.nim"),
+      openCmd("file:///b.nim"),
+      openCmd("file:///d.nim"),
+    ]
+    dropPendingDidOpen(pending, "file:///b.nim")
+    check pending.len == 3
+    check pending[0].openUri == "file:///a.nim"
+    check pending[1].openUri == "file:///c.nim"
+    check pending[2].openUri == "file:///d.nim"
+
 suite "LspWorker - LspCommand object":
   test "LspCommand lcmdStart variant":
     let cmd = LspCommand(
