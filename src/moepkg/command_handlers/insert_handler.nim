@@ -1231,11 +1231,11 @@ proc handleInsertModeKey*(
       )
       if ctxRes.isOk:
         # Sync the auto-poll tracker so requestSignatureHelpFromLsp does not
-        # fire a redundant follow-up request for the same position/changeSeq
+        # fire a redundant follow-up request for the same position/contentVersion
         # once this response arrives.
         state.lspCache.signatureHelp.cursorLine = cursorLine
         state.lspCache.signatureHelp.cursorColumn = cursorCol
-        state.lspCache.signatureHelp.changeSeq = buffer.changeSeq
+        state.lspCache.signatureHelp.contentVersion = buffer.contentVersion
         state.lspCache.signatureHelp.lastUpdate = getMonoTime()
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 

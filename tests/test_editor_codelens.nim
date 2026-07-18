@@ -476,13 +476,46 @@ suite "CodeLens Cache Validation":
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
       filePath: "/path/to/file.nim",
-      changeSeq: 5,
+      contentVersion: 5,
       itemsByLine: initTable[int, seq[CodeLensItem]](),
     )
 
     check e.state.lspCache.codeLensCache.isValid
     check e.state.lspCache.codeLensCache.filePath == "/path/to/file.nim"
-    check e.state.lspCache.codeLensCache.changeSeq == 5
+    check e.state.lspCache.codeLensCache.contentVersion == 5
+
+  test "Undo then edit collides on changeSeq: contentVersion key detects staleness":
+    # undo() rewinds changeSeq to the pre-mutation value; a follow-up edit can
+    # land on the same changeSeq that was cached for a different content. Keying
+    # the cache on contentVersion (monotonic) instead of changeSeq keeps stale
+    # results out.
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.filePath = some("/path/to/collide.nim")
+
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    let seqAfterA = buf.changeSeq
+    let verAfterA = buf.contentVersion
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "b").isOk
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: buf.filePath.get,
+      contentVersion: buf.contentVersion,
+      itemsByLine: initTable[int, seq[CodeLensItem]](),
+    )
+    let cachedSeq = buf.changeSeq
+
+    # Undo B then insert C: changeSeq matches the cached-for-"ab" value again,
+    # but contentVersion has advanced past it, so the cache is stale.
+    check buf.undo().isOk
+    check buf.changeSeq == seqAfterA
+    check buf.insertText(BufferPosition(line: 0, column: 1), "c").isOk
+    check buf.changeSeq == cachedSeq
+    check buf.getTextString() == "ac"
+    check buf.contentVersion > verAfterA
+
+    check e.state.lspCache.codeLensCache.contentVersion != buf.contentVersion
 
 suite "CodeLens Response Generation":
   test "stale generation does not overwrite a newer cache":
@@ -520,7 +553,7 @@ suite "Document Highlight Item":
       isValid: true,
       cursorLine: 5,
       cursorColumn: 10,
-      changeSeq: 3,
+      contentVersion: 3,
       itemsByLine: {
         5: @[DocumentHighlightItem(line: 5, startColumn: 10, endColumn: 15, kind: 1)],
         10: @[DocumentHighlightItem(line: 10, startColumn: 10, endColumn: 15, kind: 2)],
@@ -533,6 +566,34 @@ suite "Document Highlight Item":
     check cache.itemsByLine[5][0].kind == 1
     check cache.itemsByLine[10][0].kind == 2
     check cache.itemsByLine[15][0].kind == 3
+
+  test "Undo then edit collides on changeSeq: contentVersion key detects staleness":
+    # Same scenario as the CodeLens variant: changeSeq collides across undo+edit
+    # but contentVersion doesn't, so keying the cache on contentVersion rejects
+    # a stale document-highlight result.
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    let seqAfterA = buf.changeSeq
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "b").isOk
+    e.state.lspCache.documentHighlightCache = DocumentHighlightCache(
+      isValid: true,
+      cursorLine: 0,
+      cursorColumn: 0,
+      contentVersion: buf.contentVersion,
+      itemsByLine: initTable[int, seq[DocumentHighlightItem]](),
+    )
+    let cachedSeq = buf.changeSeq
+
+    check buf.undo().isOk
+    check buf.changeSeq == seqAfterA
+    check buf.insertText(BufferPosition(line: 0, column: 1), "c").isOk
+    check buf.changeSeq == cachedSeq
+    check buf.getTextString() == "ac"
+
+    check e.state.lspCache.documentHighlightCache.contentVersion != buf.contentVersion
 
 suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
   test "Converts UTF-16 positions to rune indexes for surrogate pairs":

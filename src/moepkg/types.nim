@@ -269,13 +269,13 @@ type
     ## Debounce + change-detection state for auto signature help requests.
     ## "Debounce" here is a minimum-interval gate measured from the last issued
     ## request (same shape as documentHighlight/semanticTokens), not a
-    ## reset-on-change timer. Sentinel -1 for the cursor/changeSeq fields means
-    ## "no request issued yet".
+    ## reset-on-change timer. Sentinel -1 for the cursor/contentVersion fields
+    ## means "no request issued yet".
     lastUpdate*: MonoTime # Timestamp of last signature help request
     interval*: int64 # Base debounce interval (milliseconds)
     cursorLine*: int # Cursor line of last request
     cursorColumn*: int # Cursor column of last request
-    changeSeq*: int # Buffer changeSeq of last request
+    contentVersion*: int # Buffer contentVersion of last request
     consecutiveErrors*: int
       # Failed/timed-out requests since the last success. Widens the effective
       # interval (exponential backoff) so a persistently failing server is not
@@ -675,7 +675,7 @@ type
     ## Cache for CodeLens items per buffer
     ## Uses Table for O(1) line lookup instead of O(n) sequential search
     itemsByLine*: Table[int, seq[CodeLensItem]] # Line number -> CodeLens items
-    changeSeq*: int # Buffer changeSeq when cache was last updated
+    contentVersion*: int # Buffer contentVersion when cache was last updated
     filePath*: string # Path of the buffer this cache belongs to
     isValid*: bool # Whether the cache is valid
 
@@ -699,7 +699,7 @@ type
     itemsByLine*: Table[int, seq[DocumentHighlightItem]] # Line number -> items
     cursorLine*: int # Cursor line when highlights were requested
     cursorColumn*: int # Cursor column when highlights were requested
-    changeSeq*: int # Buffer changeSeq when cache was last updated
+    contentVersion*: int # Buffer contentVersion when cache was last updated
     isValid*: bool # Whether the cache is valid
 
   SemanticTokensCache* = object
