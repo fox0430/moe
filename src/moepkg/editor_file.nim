@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times, tables, sets]
+import std/[options, strformat, os, monotimes, times, tables]
 
 import pkg/results
 
@@ -332,19 +332,12 @@ proc autoSave*(e: Editor) =
   if elapsed < threshold:
     return
 
-  # Check all windows for modified buffers and save them
+  # Iterate `e.buffers`, not windows: windows only expose foreground tabs,
+  # so background-tab buffers would silently miss auto save.
   var savedCount = 0
   var savedPaths: seq[string] = @[]
-  var savedBufferIds = initHashSet[BufferId]()
-    # Track already saved buffers to avoid duplicates
 
-  for window in e.windowManager.windows:
-    let buffer = window.buffer
-
-    # Skip if already saved (same buffer in multiple windows)
-    if buffer.id in savedBufferIds:
-      continue
-
+  for buffer in e.buffers:
     # Check if buffer is modified and has a file path
     if buffer.isModified and buffer.filePath.isSome:
       let savePath = buffer.filePath.get
@@ -359,7 +352,6 @@ proc autoSave*(e: Editor) =
       let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
 
       if saveResult.isOk:
-        savedBufferIds.incl(buffer.id)
         savedCount += 1
         savedPaths.add(savePath)
 
@@ -427,26 +419,18 @@ proc autoBackup*(e: Editor) =
   if backupElapsed < backupThreshold:
     return
 
-  # Backup all modified buffers
+  # Iterate `e.buffers`, not windows: windows only expose foreground tabs,
+  # so background-tab buffers would silently miss auto backup.
   var backupCount = 0
   var backupPaths: seq[string] = @[]
-  var backedUpBufferIds = initHashSet[BufferId]()
-    # Track already backed up buffers to avoid duplicates
 
-  for window in e.windowManager.windows:
-    let buffer = window.buffer
-
-    # Skip if already backed up (same buffer in multiple windows)
-    if buffer.id in backedUpBufferIds:
-      continue
-
+  for buffer in e.buffers:
     # Only backup modified buffers with a file path
     if buffer.isModified and buffer.filePath.isSome:
       let backupResult =
         backupBuffer(buffer.filePath, buffer.getFileContent(), e.config.autoBackup)
 
       if backupResult.isOk:
-        backedUpBufferIds.incl(buffer.id)
         backupCount += 1
         backupPaths.add(backupResult.get)
 
