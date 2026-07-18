@@ -84,6 +84,8 @@ proc pollOutput*(state: TerminalState): bool =
   if state.pty.closed:
     return false
 
+  discard state.pty.drainWriteBuffer()
+
   let data = state.pty.readFromPty()
   if data.len > 0:
     state.grid.processOutput(data)
