@@ -71,7 +71,7 @@ type
     of rrExecuteRuntimeCommand:
       commandName*: string
     of rrExecuteRuntimeKeySequence:
-      targetKeys*: seq[string]
+      targetKeys*: seq[KeyCombo]
       noremap*: bool
         ## When false the replayed keys are re-expanded through the mapping
         ## table (`:map`); when true they are replayed verbatim (`:noremap`).

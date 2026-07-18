@@ -46,7 +46,7 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
     let route = router.feedKey(EditorMode.Insert, toKeyCombo('j'))
 
     check route.kind == rrExecuteRuntimeKeySequence
-    check route.targetKeys == @["<Escape>"]
+    check route.targetKeys == @[toSpecialKeyCombo(skEscape)]
     check router.dispatchState.keys.len == 0
 
   test "multi-key prefix waits, then fires on exact match":
@@ -60,7 +60,7 @@ suite "KeyRouter - feedKey runtime key-sequence mapping":
 
     let second = router.feedKey(EditorMode.Insert, toKeyCombo('j'))
     check second.kind == rrExecuteRuntimeKeySequence
-    check second.targetKeys == @["<Escape>"]
+    check second.targetKeys == @[toSpecialKeyCombo(skEscape)]
     check router.dispatchState.keys.len == 0
 
   test "non-prefix key in middle of sequence flushes accumulator":
@@ -108,7 +108,7 @@ suite "KeyRouter - feedKey mode separation":
     check r1.kind == rrWaiting
     let r2 = router.feedKey(EditorMode.Normal, toKeyCombo('k'))
     check r2.kind == rrExecuteRuntimeKeySequence
-    check r2.targetKeys == @["i"]
+    check r2.targetKeys == @[toKeyCombo('i')]
 
 suite "KeyRouter - flushTimeout":
   test "empty accumulator returns rrCancelled":
@@ -126,7 +126,7 @@ suite "KeyRouter - flushTimeout":
 
     let route = router.flushTimeout(EditorMode.Insert)
     check route.kind == rrExecuteRuntimeKeySequence
-    check route.targetKeys == @["<Escape>"]
+    check route.targetKeys == @[toSpecialKeyCombo(skEscape)]
     check router.dispatchState.keys.len == 0
 
   test "no exact match returns rrUnhandledBatch":
