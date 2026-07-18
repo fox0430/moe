@@ -1265,3 +1265,53 @@ suite "Buffer - Transaction Cursor Cache Staleness":
     let r = b.redo()
     check r.isOk
     check b.getLine(0) == "ABCDEFGHIKLMN"
+
+suite "Buffer - readOnly guard on undo/redo":
+  # buffer/edit rejects mutations on readOnly buffers, but undo()/redo() used to
+  # replay history without checking the flag — so a buffer set readOnly AFTER
+  # edits were recorded could still be mutated through the history stacks. The
+  # guards below complete "readOnly rejects on every mutation path".
+  test "undo on a readOnly buffer returns err and leaves content unchanged":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check b.getLine(0) == "hello!"
+    let undoLenBefore = b.undoStack.len
+    let redoLenBefore = b.redoStack.len
+
+    b.readOnly = true
+    let r = b.undo()
+    check r.isErr
+    check r.error == "Buffer is read-only"
+    check b.getLine(0) == "hello!"
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore
+
+  test "redo on a readOnly buffer returns err and leaves content unchanged":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    let u = b.undo()
+    check u.isOk
+    check b.getLine(0) == "hello"
+    let undoLenBefore = b.undoStack.len
+    let redoLenBefore = b.redoStack.len
+
+    b.readOnly = true
+    let r = b.redo()
+    check r.isErr
+    check r.error == "Buffer is read-only"
+    check b.getLine(0) == "hello"
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore
+
+  test "undo err on readOnly precedes the 'nothing to undo' err":
+    # Guard ordering matters: readOnly must reject even before we look at the
+    # stacks, so a fresh readOnly buffer reports the right reason (not
+    # "Nothing to undo").
+    let b = newTextBuffer("hello")
+    b.readOnly = true
+    let ru = b.undo()
+    check ru.isErr
+    check ru.error == "Buffer is read-only"
+    let rr = b.redo()
+    check rr.isErr
+    check rr.error == "Buffer is read-only"
