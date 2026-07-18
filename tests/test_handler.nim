@@ -37,6 +37,7 @@ import
     render_utils, clipboard,
   ]
 import ../src/moepkg/handler {.all.}
+import ../src/moepkg/command_handlers/result_processor
 
 proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
   ViewPort(
@@ -2870,6 +2871,114 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     check e.state.mode == EditorMode.Insert
     check not e.state.insertNormalMode
     check not e.state.isCommandOverlay
+
+suite "Macro recording - Command / Search overlay keys":
+  # Regression: overlay dispatch used to bypass macro recording, so `qa:s/foo/bar/<CR>q`
+  # would capture only ":" and lose the rest of the command line (same for `/pattern<CR>`).
+  proc createEditorForOverlayRecord(content: string): Editor =
+    let config = newEditorConfig()
+    result = newEditor(config)
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.state.mode = EditorMode.Normal
+
+  proc startRecording(e: Editor, register: char) =
+    e.state.macroState.isRecording = true
+    e.state.macroState.register = register
+    e.state.macroState.recordedKeys = @[]
+    e.state.macroState.recordStartKey = "q"
+
+  test "Command overlay: keys after ':' land in recordedKeys":
+    let e = createEditorForOverlayRecord("hello foo bar")
+    e.startRecording('a')
+    e.state.enterCommandOverlay()
+
+    for ch in "s/foo/bar/":
+      discard e.handleEvent(makeCharEvent($ch))
+    discard e.handleEvent(makeEnterEvent())
+
+    check e.state.macroState.recordedKeys ==
+      @["s", "/", "f", "o", "o", "/", "b", "a", "r", "/", "<Enter>"]
+
+  test "Search overlay: pattern and Enter recorded":
+    let e = createEditorForOverlayRecord("hello world")
+    e.startRecording('a')
+    e.state.enterSearchOverlay(SearchDirection.Forward)
+
+    for ch in "wor":
+      discard e.handleEvent(makeCharEvent($ch))
+    discard e.handleEvent(makeEnterEvent())
+
+    check e.state.macroState.recordedKeys == @["w", "o", "r", "<Enter>"]
+
+  test "Command overlay Escape recorded so playback replays cancel":
+    let e = createEditorForOverlayRecord("hello")
+    e.startRecording('a')
+    e.state.enterCommandOverlay()
+
+    discard e.handleEvent(makeCharEvent("a"))
+    discard e.handleEvent(makeCharEvent("b"))
+    discard
+      e.handleEvent(Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Escape)))
+
+    check e.state.macroState.recordedKeys == @["a", "b", "<Escape>"]
+    check not e.state.isCommandOverlay
+
+  test "Recording paused during playback (withPlaybackGuard)":
+    # Sanity: replayed keys must not re-enter recordedKeys.
+    let e = createEditorForOverlayRecord("hello")
+    e.startRecording('a')
+    e.state.enterCommandOverlay()
+    e.state.macroState.playbackDepth = 1
+    e.state.macroState.isRecording = false # withPlaybackGuard mirror
+
+    discard e.handleEvent(makeCharEvent("x"))
+
+    check e.state.macroState.recordedKeys.len == 0
+
+suite "Macro playback - overlay-aware routing":
+  # Regression: nested key replay dispatched by state.mode, so overlay-mode keys
+  # were mis-interpreted by the base handler. runNestedKeyCombo now consults
+  # `overlayPlaybackHook` (wired from handler.nim) to route via the overlay handler.
+  proc createEditorForOverlayPlayback(content: string): Editor =
+    let config = newEditorConfig()
+    result = newEditor(config)
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.state.mode = EditorMode.Normal
+
+  test "Character keys in Command overlay build commandText, not buffer edits":
+    let e = createEditorForOverlayPlayback("hello")
+    e.state.enterCommandOverlay()
+
+    let sKey = KeyCombo(isSpecial: false, char: "s", modifiers: {})
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    let fKey = KeyCombo(isSpecial: false, char: "f", modifiers: {})
+
+    discard e.handlerManager.runKeyCombo(e, sKey)
+    discard e.handlerManager.runKeyCombo(e, slashKey)
+    discard e.handlerManager.runKeyCombo(e, fKey)
+
+    check e.state.input.commandText == ":s/f"
+    check $e.activeBuffer.getLine(0) == "hello"
+
+  test "Character keys in Search overlay build search text":
+    let e = createEditorForOverlayPlayback("hello world")
+    e.state.enterSearchOverlay(SearchDirection.Forward)
+
+    for ch in "wor":
+      let kc = KeyCombo(isSpecial: false, char: $ch, modifiers: {})
+      discard e.handlerManager.runKeyCombo(e, kc)
+
+    check e.state.input.search.text == "wor"
 
 suite "updateViewportReservedLines - steady reserve":
   test "Multi-line status message keeps the motion reserve steady":

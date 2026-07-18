@@ -36,6 +36,15 @@ import
   ]
 export command_mode_handler, search_mode_handler, cursor_util
 
+# Wire the playback overlay hook so nested key replay routes to the overlay
+# handler when Command / Search overlay is active.
+overlayPlaybackHook = proc(e: Editor, keyCombo: KeyCombo): Option[bool] =
+  if e.state.isCommandOverlay:
+    return some(e.handleCommandModeKeyCombo(keyCombo))
+  if e.state.isSearchOverlay:
+    return some(e.handleSearchModeKeyCombo(keyCombo))
+  return none(bool)
+
 proc addRunningProcess*(e: Editor, p: BackgroundProcess) =
   e.runningBackgroundProcesses.add(p)
 
@@ -862,12 +871,27 @@ proc dismissTempMessages(e: Editor, event: Event): bool =
   # Otherwise just dismiss and stay in current mode
   return true
 
+proc recordOverlayKey(e: Editor, event: Event) =
+  ## Append the overlay key to the active macro register. Overlay handlers
+  ## do not record inline, so capture at the dispatcher entry instead.
+  ## Suppressed during playback via `withPlaybackGuard` clearing `isRecording`.
+  if not e.state.macroState.isRecording:
+    return
+  if event.kind != EventKind.Key:
+    return
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return
+  e.state.macroState.recordedKeys.add(keyComboToString(keyComboOpt.get))
+
 proc handleOverlayEvent(e: Editor, event: Event): Option[bool] =
   ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.
   ## Returns some(result) if handled, none otherwise.
   if e.state.isCommandOverlay:
+    e.recordOverlayKey(event)
     return some(handleCommandModeEvent(e, event))
   if e.state.isSearchOverlay:
+    e.recordOverlayKey(event)
     return some(handleSearchModeEvent(e, event))
   if e.state.isRenameOverlay:
     return some(handleRenameModeEvent(e, event))

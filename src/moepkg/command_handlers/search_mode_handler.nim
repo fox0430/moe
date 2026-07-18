@@ -316,30 +316,10 @@ proc handleSearchBackspace(e: Editor) =
     e.state.input.search.cursor -= 1
     e.performIncrementalSearch()
 
-proc handleSearchModeEvent*(e: Editor, event: Event): bool =
-  ## Handle Search mode events - main event dispatcher
-  ##
-  ## This function is the entry point for all key events in Search mode.
-  ## It dispatches to specialized handlers based on key type:
-  ##
-  ## Key Mappings:
-  ## - Escape      -> cancelSearch()         (abort, restore cursor if incsearch)
-  ## - Enter/CR    -> finalizeSearch()       (save search, return to Normal mode)
-  ## - Backspace   -> handleSearchBackspace() (remove char, trigger incsearch)
-  ## - Character   -> handleSearchCharacterInput() (add char, trigger incsearch)
-  ## - Other keys  -> Ignored
-  ##
-  ## Returns: true (event handled)
-  if event.kind != EventKind.Key:
-    return true
-
-  # Convert event to key combo
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return true
-
-  let keyCombo = keyComboOpt.get
-
+proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle a KeyCombo in Search mode. Same dispatch as `handleSearchModeEvent`
+  ## but reachable from replay paths (macro playback, runtime mapping RHS) that
+  ## already hold a KeyCombo rather than a raw Event.
   # Escape: Cancel search and return to previous mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
     e.cancelSearch()
@@ -445,3 +425,14 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
 
   # Ignore other special keys
   return true
+
+proc handleSearchModeEvent*(e: Editor, event: Event): bool =
+  ## Handle Search mode events - main event dispatcher.
+  ## Extracts the KeyCombo and forwards to `handleSearchModeKeyCombo`, which
+  ## replay paths call directly.
+  if event.kind != EventKind.Key:
+    return true
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return true
+  return e.handleSearchModeKeyCombo(keyComboOpt.get)

@@ -56,6 +56,13 @@ type
     roQuit ## hrQuit / hrCquit — main loop terminates
     roAbort ## hrError — statusMessage already set; loop stops, app continues
 
+  OverlayPlaybackHook* = proc(e: Editor, keyCombo: KeyCombo): Option[bool] {.closure.}
+    ## Playback overlay dispatch. `none` = no overlay, fall through; `some(true)`
+    ## = handled, continue; `some(false)` = handled, requested app exit. Wired
+    ## from handler.nim to avoid an import cycle (overlay handlers import here).
+
+var overlayPlaybackHook*: OverlayPlaybackHook = nil
+
 proc executeCommandOverlay*(e: Editor, commandText: string): bool
 
 proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
@@ -1754,6 +1761,12 @@ proc runNestedKeyCombo*(
   ## dispatch and full processResult side effects. Both the top-level event
   ## loop and nested-playback loops (macro, mapping RHS, timeout batch) call
   ## this so every kind's side effect fires exactly once.
+  # When an overlay is active the live loop routes through the overlay handler;
+  # replay must do the same or recorded overlay keys hit the base-mode handler.
+  if not overlayPlaybackHook.isNil:
+    let overlayResult = overlayPlaybackHook(e, keyCombo)
+    if overlayResult.isSome:
+      return if overlayResult.get: roContinue else: roQuit
   if not manager.keyBindingRegistry.isReplayingMapping:
     let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
     if expand.isSome:
