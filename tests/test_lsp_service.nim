@@ -616,6 +616,37 @@ suite "LspService - Capability Checking (without workers)":
     check not svc.hasCompletionSupport("nim")
     check not svc.hasSignatureHelpSupport("nim")
 
+  test "explicit `null` capability is treated as unsupported":
+    # Some servers (notably Nim-based ones that serialise Option[T] fields
+    # verbatim) emit `"xxxProvider": null` when a capability is not set. Both
+    # capability paths — Option[JsonNode] (hover/definition/references/...)
+    # and Option[Options] (completion/signatureHelp/executeCommand) — must
+    # reject JNull the same way they reject literal `false`, otherwise every
+    # gated request fires and hangs until the timeout.
+    let svc = newLspService()
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levCapabilities,
+        capabilitiesJson: $(
+          %*{
+            "hoverProvider": newJNull(),
+            "definitionProvider": newJNull(),
+            "referencesProvider": newJNull(),
+            "completionProvider": newJNull(),
+            "signatureHelpProvider": newJNull(),
+            "executeCommandProvider": newJNull(),
+          }
+        ),
+      ),
+    )
+    check not svc.hasHoverSupport("nim")
+    check not svc.hasDefinitionSupport("nim")
+    check not svc.hasReferencesSupport("nim")
+    check not svc.hasCompletionSupport("nim")
+    check not svc.hasSignatureHelpSupport("nim")
+    check not svc.hasExecuteCommandSupport("nim")
+
   test "`true` and object capabilities are treated as supported":
     let svc = newLspService()
     svc.processEvent(

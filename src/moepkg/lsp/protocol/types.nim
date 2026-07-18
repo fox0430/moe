@@ -1034,10 +1034,11 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.textDocumentSync = some(node["textDocumentSync"])
   if node.hasKey("completionProvider"):
     let cp = node["completionProvider"]
-    # A server may advertise a literal `false` to disable the feature. The spec
-    # types this as Options, but be defensive: only a non-`false` value counts
-    # as supported so we never fire requests that hang until the timeout.
-    if cp.kind != JBool or cp.getBool:
+    # A server may advertise a literal `false` (or `null`, via Option-field
+    # serialisation) to disable the feature. The spec types this as Options,
+    # but be defensive: only a truthy/object value counts as supported so we
+    # never fire requests that hang until the timeout.
+    if cp.kind != JNull and (cp.kind != JBool or cp.getBool):
       var opts = CompletionOptions()
       if cp.kind == JObject:
         if cp.hasKey("triggerCharacters"):
@@ -1050,8 +1051,8 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
       result.completionProvider = some(opts)
   if node.hasKey("signatureHelpProvider"):
     let sh = node["signatureHelpProvider"]
-    # See completionProvider above: skip a literal `false`.
-    if sh.kind != JBool or sh.getBool:
+    # See completionProvider above: skip literal `false` and `null`.
+    if sh.kind != JNull and (sh.kind != JBool or sh.getBool):
       var opts = SignatureHelpOptions()
       if sh.kind == JObject:
         if sh.hasKey("triggerCharacters"):
@@ -1093,8 +1094,10 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   if node.hasKey("renameProvider"):
     result.renameProvider = some(node["renameProvider"])
   if node.hasKey("executeCommandProvider"):
-    result.executeCommandProvider =
-      some(parseExecuteCommandOptions(node["executeCommandProvider"]))
+    let ec = node["executeCommandProvider"]
+    # See completionProvider above: skip literal `false` and `null`.
+    if ec.kind != JNull and (ec.kind != JBool or ec.getBool):
+      result.executeCommandProvider = some(parseExecuteCommandOptions(ec))
   if node.hasKey("semanticTokensProvider"):
     let stp = node["semanticTokensProvider"]
     # Some servers send a bare `false` / `null` instead of an options object.

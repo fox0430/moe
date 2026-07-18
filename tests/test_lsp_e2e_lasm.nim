@@ -1131,6 +1131,14 @@ suite "e2e: LspService driven by lasm":
       check h.svc.hasInlayHintSupport(LangId)
       check h.svc.hasSemanticTokensSupport(LangId)
       check h.svc.hasCallHierarchySupport(LangId)
+      # lasm does not advertise these capabilities. It serialises absent
+      # Option fields as `"xxxProvider": null` in the initialize result, so
+      # this branch also guards `isCapabilityEnabled` against treating JNull
+      # as enabled — a regression would silently reintroduce timeout-hangs
+      # on servers that emit null.
+      check not h.svc.hasDocumentLinkSupport(LangId)
+      check not h.svc.hasSignatureHelpSupport(LangId)
+      check not h.svc.hasCodeLensSupport(LangId)
     finally:
       stopLasm(h)
 
