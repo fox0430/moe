@@ -33,8 +33,10 @@ import
     key_router, modes, buffer, motion, command_registry, registers, key_bindings, types
   ]
 import
-  ../src/moepkg/command_handlers/
-    [handler_manager, normal_handler, visual_handler, insert_handler, replace_handler]
+  ../src/moepkg/command_handlers/[
+    handler_manager, result_processor, normal_handler, visual_handler, insert_handler,
+    replace_handler,
+  ]
 from ../src/moepkg/types/editor_types import Editor
 
 import editor_test_helper
@@ -108,12 +110,13 @@ suite "playbackMacro - outer FSM state preservation":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     manager.keyBindingRegistry.sequenceState.numericPrefix = "2"
     check manager.keyBindingRegistry.hasActiveSequence()
 
-    discard manager.playbackMacro(editor, @[])
+    discard playbackMacro(editor, @[])
 
     check manager.keyBindingRegistry.sequenceState.numericPrefix == "2"
     check manager.keyBindingRegistry.hasActiveSequence()
@@ -128,9 +131,10 @@ suite "playbackMacro - outer FSM state preservation":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "abcdef")
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    discard manager.playbackMacro(editor, @["f"])
+    discard playbackMacro(editor, @["f"])
 
     check manager.keyBindingRegistry.isWaitingForChar()
     check manager.keyBindingRegistry.hasActiveSequence()
@@ -143,13 +147,14 @@ suite "playbackMacro - outer FSM state preservation":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
     manager.keyBindingRegistry.sequenceState.keys = @[gKey]
     manager.keyBindingRegistry.sequenceState.numericPrefix = "3"
 
-    discard manager.playbackMacro(editor, @[])
+    discard playbackMacro(editor, @[])
 
     check manager.keyBindingRegistry.sequenceState.keys == @[gKey]
     check manager.keyBindingRegistry.sequenceState.numericPrefix == "3"
@@ -173,7 +178,8 @@ suite "playbackMacro - runtime `:noremap` mid-count invariants":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     state.macroState.registers['a'] = @[]
 
@@ -184,10 +190,10 @@ suite "playbackMacro - runtime `:noremap` mid-count invariants":
     let two = KeyCombo(isSpecial: false, char: "2", modifiers: {})
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
 
-    discard manager.handleKeyCombo(editor, two)
+    discard manager.runKeyCombo(editor, two)
     check manager.keyBindingRegistry.sequenceState.numericPrefix == "2"
 
-    discard manager.handleKeyCombo(editor, j)
+    discard manager.runKeyCombo(editor, j)
 
     # `a` completing `@a` inside the noremap replay consumed the outer `2`
     # via applyCountToCommand — numericPrefix is now empty (not because the
@@ -203,10 +209,11 @@ suite "playbackMacro - depth and recursion guards":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     check state.macroState.playbackDepth == 0
-    discard manager.playbackMacro(editor, @[])
+    discard playbackMacro(editor, @[])
     check state.macroState.playbackDepth == 0
 
   test "playbackDepth returns to 0 after an invalid-key error":
@@ -214,9 +221,10 @@ suite "playbackMacro - depth and recursion guards":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    let r = manager.playbackMacro(editor, @["<not-a-real-key>"])
+    let r = playbackMacro(editor, @["<not-a-real-key>"])
     check r.kind == hrError
     check state.macroState.playbackDepth == 0
 
@@ -225,11 +233,12 @@ suite "playbackMacro - depth and recursion guards":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    # MaxMacroRecursionDepth = 100 in handler_manager.nim
+    # MaxMacroRecursionDepth = 100.
     state.macroState.playbackDepth = 100
-    let r = manager.playbackMacro(editor, @[])
+    let r = playbackMacro(editor, @[])
     check r.kind == hrError
     # Guard rejects without touching the counter — caller retains its depth.
     check state.macroState.playbackDepth == 100
@@ -244,7 +253,8 @@ suite "playbackMacro - nested `@X` recursion":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # qa = empty (dispatches macro-play, sets lastRegister, no side effects).
     # qb = @a (recorded as the two keystrokes `@`, `a`).
@@ -253,8 +263,8 @@ suite "playbackMacro - nested `@X` recursion":
 
     let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
     let b = KeyCombo(isSpecial: false, char: "b", modifiers: {})
-    discard manager.handleKeyCombo(editor, at)
-    discard manager.handleKeyCombo(editor, b)
+    discard manager.runKeyCombo(editor, at)
+    discard manager.runKeyCombo(editor, b)
 
     # Outer @b sets lastRegister='b', inner @a overwrites it to 'a'.
     check state.macroState.lastRegister == some('a')
@@ -271,7 +281,8 @@ suite "playbackMacro - nested `@X` recursion":
     let buffer = newTextBuffer()
     let state = newTestState()
     let viewport = newTestViewport()
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     state.macroState.registers['a'] = @[]
     state.macroState.registers['b'] = @["@", "a"]
@@ -279,13 +290,60 @@ suite "playbackMacro - nested `@X` recursion":
     let two = KeyCombo(isSpecial: false, char: "2", modifiers: {})
     let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
     let b = KeyCombo(isSpecial: false, char: "b", modifiers: {})
-    discard manager.handleKeyCombo(editor, two)
+    discard manager.runKeyCombo(editor, two)
     check manager.keyBindingRegistry.sequenceState.numericPrefix == "2"
 
-    discard manager.handleKeyCombo(editor, at)
-    discard manager.handleKeyCombo(editor, b)
+    discard manager.runKeyCombo(editor, at)
+    discard manager.runKeyCombo(editor, b)
 
     check manager.keyBindingRegistry.sequenceState.numericPrefix == ""
     check not manager.keyBindingRegistry.hasActiveSequence()
     check state.macroState.playbackDepth == 0
     check state.macroState.lastRegister == some('a')
+
+suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
+  test "empty macro in insert-normal returns to Insert mode":
+    # Regression: Ctrl-O followed by @a where `a` is empty must fold the
+    # temporary Normal-mode step back into Insert, matching the pre-refactor
+    # behaviour where playbackMacro ran inline inside handleNormalMode.
+    let manager = newTestManager()
+    let buffer = newTextBuffer()
+    let state = newTestState(EditorMode.Normal)
+    state.insertNormalMode = true
+    let viewport = newTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    state.macroState.registers['a'] = @[]
+
+    let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
+    let a = KeyCombo(isSpecial: false, char: "a", modifiers: {})
+    discard manager.runKeyCombo(editor, at)
+    discard manager.runKeyCombo(editor, a)
+
+    check state.mode == EditorMode.Insert
+    check not state.insertNormalMode
+
+  test "pending-operand macro key leaves insert-normal intact":
+    # A macro whose only key parks the FSM in waiting-for-operand (`f`
+    # awaiting a char) is a legitimate mid-command state — insert-normal
+    # must not be finalized until the operand actually arrives.
+    let manager = newTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "abcdef")
+    let state = newTestState(EditorMode.Normal)
+    state.insertNormalMode = true
+    let viewport = newTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    state.macroState.registers['a'] = @["f"]
+
+    let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
+    let a = KeyCombo(isSpecial: false, char: "a", modifiers: {})
+    discard manager.runKeyCombo(editor, at)
+    discard manager.runKeyCombo(editor, a)
+
+    check state.mode == EditorMode.Normal
+    check state.insertNormalMode
+    check manager.keyBindingRegistry.isWaitingForChar()

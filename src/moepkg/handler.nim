@@ -228,7 +228,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
       hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList:
+      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -1154,7 +1154,14 @@ proc handleEvent*(e: Editor, event: Event): bool =
   e.updateViewportReservedLines()
   e.syncCompletionOtherBuffers(activeBuffer)
 
-  let r = e.handlerManager.handleEvent(e, event)
+  # Non-key events (or unmappable keys) fall through; the pre-refactor
+  # `handlerManager.handleEvent` folded these to hrUnhandled which processResult
+  # ignored, so returning true here matches that behaviour.
+  var outcome = roContinue
+  if event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      outcome = e.handlerManager.runNestedKeyCombo(e, keyComboOpt.get)
 
   # In Config mode, sync display state only when a value was actually mutated.
   # Plain cursor movement leaves pendingApply false, avoiding a theme reread and
@@ -1170,7 +1177,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if e.currentMode == EditorMode.LogViewer:
     e.updateViewportForCursor(e.cursor)
 
-  return e.processResult(r, activeBuffer)
+  return outcome != roQuit
 
 proc hasPendingAsyncOperations*(e: Editor): bool =
   ## Check if there are pending async operations
@@ -1425,11 +1432,9 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     else:
       # Base mode: honour noremap so a timeout-fired mapping expands the same way
       # as an immediate match (recursive for :map, verbatim for :noremap).
-      let r =
+      let outcome =
         e.handlerManager.replayRuntimeKeySequence(e, route.targetKeys, route.noremap)
-      if r.kind == hrHandled and r.modeTransition.isSome:
-        e.state.mode = r.modeTransition.get
-      if r.kind == hrQuit:
+      if outcome == roQuit:
         shouldContinue = false
   of rrUnhandledBatch:
     if inCommandOverlay:
@@ -1441,13 +1446,13 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     else:
       e.keyRouter.withReplay:
         for k in route.keys:
-          let r = e.handlerManager.handleKeyCombo(e, k)
-          if r.kind == hrHandled and r.modeTransition.isSome:
-            e.state.mode = r.modeTransition.get
-          if r.kind == hrQuit:
+          case e.handlerManager.runNestedKeyCombo(e, k)
+          of roContinue:
+            discard
+          of roQuit:
             shouldContinue = false
             break
-          if r.kind == hrError:
+          of roAbort:
             break
 
   return shouldContinue

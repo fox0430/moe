@@ -347,57 +347,6 @@ proc handleCommandMode*(
   else:
     return r
 
-proc handleSearchMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Search mode key events (for macro playback)
-  ## This builds up the search text character by character
-
-  # Record key for macro if recording is active
-  if state.macroState.isRecording:
-    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
-
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEscape:
-      # Cancel search mode and restore cursor
-      state.input.search.text = ""
-      state.cursor = state.input.search.startPos
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skEnter:
-      # Confirm search and switch to Normal mode
-      # The search result is already applied via incremental search
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skBackspace:
-      # Delete last character (rune) - handles unicode properly
-      if state.input.search.text.len > 0:
-        var runes = state.input.search.text.toRunes
-        if runes.len > 0:
-          runes.setLen(runes.len - 1)
-          state.input.search.text = $runes
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-  else:
-    # Regular character - append to search text
-    if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.input.search.text.add(keyCombo.char)
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-
 proc handleVisualMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
