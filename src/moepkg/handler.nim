@@ -460,6 +460,12 @@ proc middleClickPaste(e: Editor) =
       e.insertPastedTextInSearch(pastedText)
     return
 
+  # A read-only active buffer must not slip into Insert mode via middle-click:
+  # the Insert-entry gate lives in normal_handler, which mouse events bypass.
+  if e.activeBuffer().readOnly:
+    e.state.statusMessage = "Buffer is read-only"
+    return
+
   if e.state.mode == EditorMode.Normal:
     e.setMode(EditorMode.Insert)
     let activeBuffer = e.activeBuffer()

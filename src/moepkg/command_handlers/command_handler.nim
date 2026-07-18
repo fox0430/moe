@@ -283,6 +283,8 @@ proc executeStripWhitespace*(
 ): HandlerResult =
   ## Execute stripwhitespace command (:stripwhitespace, :stripws)
   ## Removes trailing whitespace from all lines.
+  if buffer.readOnly:
+    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   var strippedCount = 0
   discard buffer.beginTransaction("stripwhitespace")
   for lineIdx in 0 ..< buffer.len:
@@ -312,6 +314,8 @@ proc executeSubstitute*(
     currentLine: int = 0,
 ): HandlerResult =
   ## Execute substitute command (:s, :%s/pattern/replacement/flags)
+  if buffer.readOnly:
+    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   if pattern.len == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern required")
 
@@ -395,6 +399,8 @@ proc executeDelete*(
     currentLine: int = 0,
 ): HandlerResult =
   ## Execute delete command (:d, :%d, :1,10d)
+  if buffer.readOnly:
+    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   var rangeStart, rangeEnd: int
   if isGlobalRange:
     rangeStart = 0
