@@ -195,6 +195,33 @@ suite "CommandModeHandler - executeQuitAll":
     let result = handler.executeQuitAll(buffer, force = true)
     check result.kind == hrQuit
 
+  test "Quit all refuses when another buffer is modified":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+    buffer.markSaved()
+
+    let result = handler.executeQuitAll(buffer, force = false, otherModifiedCount = 1)
+    check result.kind == hrError
+    check result.errorMessage == "No write since last change (add ! to override)"
+
+  test "Quit all reports total count when several buffers are modified":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Hello"])
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), "!")
+
+    let result = handler.executeQuitAll(buffer, force = false, otherModifiedCount = 2)
+    check result.kind == hrError
+    check result.errorMessage ==
+      "No write since last change: 3 buffers modified (add ! to override)"
+
+  test "Quit all force overrides other modified buffers":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+    buffer.markSaved()
+
+    let result = handler.executeQuitAll(buffer, force = true, otherModifiedCount = 3)
+    check result.kind == hrQuit
+
 suite "CommandModeHandler - executeEdit":
   test "Edit existing file":
     let handler = setupHandler()

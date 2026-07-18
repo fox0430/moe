@@ -1639,8 +1639,12 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
   # 2. dispatch
   let activeBuffer = e.activeBuffer()
   let isShared = e.isBufferShared(activeBuffer)
+  var otherModifiedCount = 0
+  for buf in e.buffers:
+    if buf != activeBuffer and buf.isModified:
+      otherModifiedCount.inc
   let r = e.handlerManager.handleCommandMode(
-    activeBuffer, commandText, isShared, e.activeWindow.cursor.line
+    activeBuffer, commandText, isShared, e.activeWindow.cursor.line, otherModifiedCount
   )
   if commandText.len > 1:
     e.addCommandToHistory(commandText[1 ..^ 1])

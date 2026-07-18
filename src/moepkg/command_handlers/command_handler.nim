@@ -109,12 +109,23 @@ proc executeSaveAllAndQuit*(handler: CommandModeHandler, force: bool): HandlerRe
   HandlerResult(kind: hrSaveAllAndQuit, forceSaveAllAndQuitAfter: force)
 
 proc executeQuitAll*(
-    handler: CommandModeHandler, buffer: TextBuffer, force: bool
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    force: bool,
+    otherModifiedCount: int = 0,
 ): HandlerResult =
-  ## Execute quit all command (:qa, :qa!) - closes all windows and quits
+  ## Execute :qa / :qa!. `otherModifiedCount` covers buffers other than `buffer`.
   if not force:
-    if buffer.isModified:
-      return unsavedChangesErr()
+    let total = (if buffer.isModified: 1 else: 0) + otherModifiedCount
+    if total > 0:
+      if total == 1:
+        return unsavedChangesErr()
+      return HandlerResult(
+        kind: hrError,
+        errorMessage:
+          "No write since last change: " & $total &
+          " buffers modified (add ! to override)",
+      )
   HandlerResult(kind: hrQuit)
 
 proc executeEdit*(
@@ -448,10 +459,12 @@ proc handleCommandModeInput*(
     commandText: string,
     isSharedBuffer: bool = false,
     currentLine: int = 0,
+    otherModifiedCount: int = 0,
 ): HandlerResult =
   ## Main entry point for handling Command mode input.
   ## isSharedBuffer: true if the buffer is shared across multiple windows
   ## currentLine: 0-based cursor line, used for range substitution with '.'
+  ## otherModifiedCount: modified buffers other than `buffer` (for :qa)
 
   if commandText.len <= 1: # Just ":"
     return HandlerResult(
@@ -464,7 +477,7 @@ proc handleCommandModeInput*(
   of claQuit:
     handler.executeQuit(buffer, cmdResult.forceQuit, isSharedBuffer)
   of claQuitAll:
-    handler.executeQuitAll(buffer, cmdResult.forceQuitAll)
+    handler.executeQuitAll(buffer, cmdResult.forceQuitAll, otherModifiedCount)
   of claSave:
     handler.executeSave(buffer, cmdResult.filename, cmdResult.forceSave)
   of claSaveAll:
