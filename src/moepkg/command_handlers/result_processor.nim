@@ -37,16 +37,24 @@ import
     config_loader, lsp_service, message_log, uri_utils, primitives, syntax_checker,
     status_line, cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode,
     log_viewer, git_conflict, registers, setting_options, command_completion,
+    key_bindings,
   ]
 import editor_ops, handler_result, handler_manager
 
-type OverlayExitAction* = enum
-  ## Post-processResult teardown for a Command-overlay dispatch.
-  oxaAppExit ## processResult returned false; wrapper skips teardown
-  oxaExitToNormal ## exitOverlay + setMode(Normal): one-shot actions
-  oxaExitToNewMode ## exitOverlay only; per-kind proc already set target mode
-  oxaExitAndResync ## exitOverlay + setMode(state.mode): base-mode resync
-  oxaHandledGeneric ## hrHandled/hrUnhandled/hrError: inspect r.modeTransition
+type
+  OverlayExitAction* = enum
+    ## Post-processResult teardown for a Command-overlay dispatch.
+    oxaAppExit ## processResult returned false; wrapper skips teardown
+    oxaExitToNormal ## exitOverlay + setMode(Normal): one-shot actions
+    oxaExitToNewMode ## exitOverlay only; per-kind proc already set target mode
+    oxaExitAndResync ## exitOverlay + setMode(state.mode): base-mode resync
+    oxaHandledGeneric ## hrHandled/hrUnhandled/hrError: inspect r.modeTransition
+
+  ReplayOutcome* = enum
+    ## Outcome from a single replayed key, after full processResult side effects.
+    roContinue
+    roQuit ## hrQuit / hrCquit — main loop terminates
+    roAbort ## hrError — statusMessage already set; loop stops, app continues
 
 proc executeCommandOverlay*(e: Editor, commandText: string): bool
 
@@ -91,8 +99,8 @@ proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
       hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
       hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
       hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
-      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrMapAdd, hrMapRemove, hrMapClear,
-      hrMapList:
+      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrMapAdd,
+      hrMapRemove, hrMapClear, hrMapList:
     # Kinds produced from within per-mode dispatchers (not Command overlay);
     # if they ever reach the overlay path, resync to base mode.
     # hrMap* are folded to hrHandled/hrError in handleCommandMode so this arm
@@ -564,6 +572,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrConfigQuit:
     # Close config mode and return to previous mode
     let activeWin = e.activeWindow
+    # Flush any pending config apply before wiping the config mode state.
+    # The outer handleEvent's pendingApply check runs after processResult,
+    # so a mapping RHS that both mutates a value and exits Config in one
+    # event (e.g. `:map <F5> togglekey ZQ`) would otherwise lose the change.
+    if activeWin.modeState.kind == mskConfig and activeWin.modeState.config.pendingApply:
+      e.applyConfigSettings(e.config)
     activeWin.clearModeState(EditorMode.Config)
     activeWin.mode = e.state.previousMode
     e.setMode(e.state.previousMode)
@@ -1459,6 +1473,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.setActiveWindowScreenCursor(e.activeWindow)
   of hrMapAdd, hrMapRemove, hrMapClear, hrMapList:
     discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
+  of hrPlaybackMacro:
+    discard # Consumed by processReplayedResult; only reaches here defensively.
   of hrDebugViewerQuit, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterDiffViewer,
       hrEnterReferences, hrEnterDocumentSymbol, hrEnterCallHierarchy:
     discard # Handled by per-mode dispatchers or produced from within those modes
@@ -1581,6 +1597,187 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         e.state.statusMessage = syntaxMsg.get
 
   return true # Continue running
+
+const MaxMacroRecursionDepth = 100
+  ## Macro recursion depth guard (@a inside @a...) before abort.
+
+const MaxMapRecursionDepth = 50
+  ## `:map` (noremap=false) expansion depth guard. Kept below
+  ## MaxMacroRecursionDepth so a cyclic mapping reports "recursive mapping"
+  ## before the macro depth guard fires.
+
+proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome
+
+proc runNestedKeyCombo*(
+  manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): ReplayOutcome
+
+proc processReplayedResult*(
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer
+): ReplayOutcome =
+  ## Mini processor for keys fired from a nested replay context (macro,
+  ## mapping RHS, timeout batch). Applies full side effects via
+  ## `processResult` — no kind is silently dropped — and returns whether the
+  ## loop should keep going. `hrPlaybackMacro` is intercepted here and drives
+  ## the nested `playbackMacroImpl` loop count times.
+  if r.kind == hrPlaybackMacro:
+    for _ in 0 ..< r.playbackMacroCount:
+      let outcome = playbackMacroImpl(e, r.playbackMacroKeys)
+      if outcome != roContinue:
+        return outcome
+    # Finalize insert-normal after the macro. applyNormalModePostProcessing
+    # skips hrPlaybackMacro's clean-up branch so the OUTER insertNormalMode
+    # survives the propagation; if the macro's own keys never cleared it
+    # (empty macro, all keys stayed pending), fold it back into Insert here.
+    let state = e.state
+    if state.insertNormalMode and state.mode == EditorMode.Normal and
+        not hasPendingBuiltinInput(e):
+      state.insertNormalMode = false
+      e.setMode(EditorMode.Insert)
+    return roContinue
+  let shouldContinue = processResult(e, r, activeBuffer)
+  if r.kind == hrError:
+    return roAbort
+  if not shouldContinue:
+    return roQuit
+  roContinue
+
+proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
+  ## Iterate `keys` and dispatch each through `handleKeyCombo`, applying full
+  ## side effects via `processReplayedResult`. The built-in sequence FSM is
+  ## not cleared here so an outer `numericPrefix` survives into the RHS.
+  let state = e.state
+
+  if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
+    e.state.statusMessage =
+      "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")"
+    return roAbort
+
+  state.macroState.playbackDepth += 1
+  let wasRecording = state.macroState.isRecording
+  state.macroState.isRecording = false
+
+  var outcome = roContinue
+  for keyStr in keys:
+    let keyComboOpt = stringToKeyCombo(keyStr)
+    if keyComboOpt.isNone:
+      e.state.statusMessage = "Invalid key in macro: " & keyStr
+      outcome = roAbort
+      break
+    outcome = runNestedKeyCombo(e.handlerManager, e, keyComboOpt.get)
+    if outcome != roContinue:
+      break
+
+  state.macroState.isRecording = wasRecording
+  state.macroState.playbackDepth -= 1
+  outcome
+
+proc replayRuntimeKeySequence*(
+    manager: HandlerManager, editor: Editor, targetKeys: seq[string], noremap: bool
+): ReplayOutcome =
+  ## Replay the RHS of a fired runtime key-sequence mapping. `:noremap` runs
+  ## verbatim under `withReplay` (isReplayingMapping suppresses re-expansion);
+  ## `:map` runs without withReplay so each replayed key re-enters the
+  ## precheck, bounded by `mapExpandDepth` / `MaxMapRecursionDepth`.
+  if noremap:
+    var outcome = roContinue
+    editor.keyRouter.withReplay:
+      outcome = playbackMacroImpl(editor, targetKeys)
+    return outcome
+
+  if editor.keyRouter.mapExpandDepth >= MaxMapRecursionDepth:
+    editor.state.statusMessage = "recursive mapping (max " & $MaxMapRecursionDepth & ")"
+    return roAbort
+  editor.keyRouter.mapExpandDepth += 1
+  try:
+    result = playbackMacroImpl(editor, targetKeys)
+  finally:
+    editor.keyRouter.mapExpandDepth -= 1
+
+proc checkRuntimeKeySeqMapping*(
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
+): Option[ReplayOutcome] =
+  ## Ask the KeyRouter whether `keyCombo` is part of a runtime mapping. Returns
+  ## `none` to let the caller fall through to built-in resolution, or `some`
+  ## outcome when the mapping fired (or is still building).
+  ##
+  ## Flush semantics: rrUnhandledBatch replays accumulated keys *except* the
+  ## current one; the caller re-processes the current key normally. The
+  ## Command overlay path lives in `command_mode_handler.handleCommandModeKeyCombo`.
+  let state = editor.state
+  let route = editor.keyRouter.feedKey(state.mode, keyCombo)
+  case route.kind
+  of rrUnhandled, rrCancelled, rrCommand:
+    # rrCommand is produced only by resolveBuiltin (Normal dispatcher), never by
+    # feedKey; listed for exhaustiveness. Fall through to built-in resolution.
+    return none(ReplayOutcome)
+  of rrExecuteRuntimeCommand:
+    let cmdResult = manager.executeCommandDirect(route.commandName)
+    if cmdResult.isSome:
+      return some(processReplayedResult(editor, cmdResult.get, editor.activeBuffer))
+    return none(ReplayOutcome)
+  of rrExecuteRuntimeKeySequence:
+    return
+      some(replayRuntimeKeySequence(manager, editor, route.targetKeys, route.noremap))
+  of rrWaiting:
+    return some(roContinue)
+  of rrUnhandledBatch:
+    let keysToFlush = route.keys[0 ..< route.keys.len - 1]
+    var outcome = roContinue
+    editor.keyRouter.withReplay:
+      for k in keysToFlush:
+        outcome = runNestedKeyCombo(manager, editor, k)
+        if outcome != roContinue:
+          break
+    if outcome != roContinue:
+      return some(outcome)
+    return none(ReplayOutcome)
+
+proc runNestedKeyCombo*(
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): ReplayOutcome =
+  ## Single entry point that fuses precheck (runtime key-sequence mapping) with
+  ## dispatch and full processResult side effects. Both the top-level event
+  ## loop and nested-playback loops (macro, mapping RHS, timeout batch) call
+  ## this so every kind's side effect fires exactly once.
+  if not manager.keyBindingRegistry.isReplayingMapping:
+    let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
+    if expand.isSome:
+      return expand.get
+  let r = manager.handleKeyCombo(e, keyCombo)
+  processReplayedResult(e, r, e.activeBuffer)
+
+proc outcomeToHandlerResult(e: Editor, outcome: ReplayOutcome): HandlerResult =
+  ## Fold a ReplayOutcome into the HandlerResult shape test-facing wrappers
+  ## return. `roAbort` pulls the diagnostic from `state.statusMessage`, which
+  ## the abort site (`playbackMacroImpl`, `replayRuntimeKeySequence`, or
+  ## `processResult`'s hrError arm) has already populated.
+  case outcome
+  of roContinue:
+    HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
+  of roQuit:
+    HandlerResult(kind: hrQuit)
+  of roAbort:
+    HandlerResult(kind: hrError, errorMessage: e.state.statusMessage)
+
+proc playbackMacro*(editor: Editor, keys: seq[string]): HandlerResult =
+  ## Test-facing wrapper. Real callers go through `hrPlaybackMacro` +
+  ## `processReplayedResult`; this preserves a HandlerResult return for
+  ## tests that inspect it directly. Side effects are applied via
+  ## `playbackMacroImpl`; the returned HandlerResult is a status signal.
+  outcomeToHandlerResult(editor, playbackMacroImpl(editor, keys))
+
+proc runKeyCombo*(
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): HandlerResult =
+  ## HandlerResult-returning form of `runNestedKeyCombo`, for tests that
+  ## inspect kind/errorMessage. Full processResult side effects fire on every
+  ## path (precheck, direct dispatch, hrPlaybackMacro expansion) so the
+  ## observable state after this call matches production `handleEvent`. The
+  ## returned HandlerResult is a status signal (hrHandled/hrQuit/hrError),
+  ## not the raw dispatched result — inspect `state.mode`, `state.overlay`,
+  ## and other mutations directly.
+  outcomeToHandlerResult(e, runNestedKeyCombo(manager, e, keyCombo))
 
 proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
   ## Consume `state.requestQuickRun` (set by buffer-mode key handlers) and

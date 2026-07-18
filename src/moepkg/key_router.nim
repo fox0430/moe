@@ -64,7 +64,7 @@ type KeyRouter* = ref object
     ## from the registry). See `key_bindings/registry.DispatchState`.
   mapExpandDepth*: int
     ## Recursion depth for `:map` (noremap=false) replay. Guards against cyclic
-    ## mappings; see `MaxMapRecursionDepth` in handler_manager.
+    ## mappings via `MaxMapRecursionDepth`.
 
 proc newKeyRouter*(registry: KeyBindingRegistry, policy: TimeoutPolicy): KeyRouter =
   KeyRouter(

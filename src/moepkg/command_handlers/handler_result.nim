@@ -153,6 +153,7 @@ type
     hrFileTreeOpenFile # Open file from fileTree
     hrFileTreeQuit # Close fileTree sidebar
     hrOpenUri # Open URI/file under cursor
+    hrPlaybackMacro # Playback a recorded macro (@a, N@a) via nested playback loop
     hrUnhandled # Command was not handled
     hrError # Error occurred
     hrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
@@ -401,6 +402,9 @@ type
       discard
     of hrOpenUri:
       openUri*: string
+    of hrPlaybackMacro:
+      playbackMacroKeys*: seq[string]
+      playbackMacroCount*: int
     of hrMapAdd:
       mapAddLhs*: string
       mapAddRhs*: string
@@ -445,7 +449,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
     hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
     hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrConflictNext,
-    hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear, hrMapList,
+    hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =
