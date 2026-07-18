@@ -1368,11 +1368,12 @@ proc getDynamicRegistrations*(svc: LspService, langId: string): seq[Registration
 
 template isCapabilityEnabled(cap: Option[JsonNode]): bool =
   ## A `boolean | Options` server capability counts as supported only when it is
-  ## present and not literally `false`. A server may legitimately advertise
-  ## `"xxxProvider": false` to disable a feature; treating that as enabled fires
-  ## useless requests that hang until the request timeout. An object (Options)
-  ## always means enabled.
-  cap.isSome and (cap.get.kind != JBool or cap.get.getBool)
+  ## present and not literally `false` or `null`. A server may legitimately
+  ## advertise `"xxxProvider": false` (or `null`, which some servers emit via
+  ## Option-field serialisation) to disable a feature; treating either as
+  ## enabled fires useless requests that hang until the request timeout. An
+  ## object (Options) always means enabled.
+  cap.isSome and cap.get.kind != JNull and (cap.get.kind != JBool or cap.get.getBool)
 
 template isCapabilityEnabled[T](cap: Option[T]): bool =
   ## Capabilities typed as `Options` (e.g. CompletionOptions) carry no boolean,

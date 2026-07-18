@@ -323,6 +323,26 @@ proc scenarioJson(): string =
             "newText": "    return;"
           }
         ]
+      },
+      "documentLink": {
+        "enabled": true,
+        "links": [
+          {
+            "range": {
+              "start": { "line": 0, "character": 4 },
+              "end":   { "line": 0, "character": 12 }
+            },
+            "target": "file:///path/to/target1.dummy",
+            "tooltip": "Open target1"
+          },
+          {
+            "range": {
+              "start": { "line": 2, "character": 0 },
+              "end":   { "line": 2, "character": 3 }
+            },
+            "target": "https://example.com/ghi"
+          }
+        ]
       }
     }
   }
@@ -756,6 +776,27 @@ suite "e2e: LspService driven by lasm":
     finally:
       stopLasm(h)
 
+  test "documentLink returns the configured links":
+    let h = startLasm()
+    try:
+      let idRes = h.svc.startDocumentLinkRequest(h.filePath)
+      check idRes.isOk
+      let respRes = awaitResponse(h.svc, idRes.get)
+      check respRes.isOk
+      let links = parseDocumentLinksResponse(respRes.get)
+      check links.len == 2
+      check links[0].range.start.line == 0
+      check links[0].range.start.character == 4
+      check links[0].target.isSome
+      check links[0].target.get == "file:///path/to/target1.dummy"
+      check links[0].tooltip.isSome
+      check links[0].tooltip.get == "Open target1"
+      check links[1].target.isSome
+      check links[1].target.get == "https://example.com/ghi"
+      check links[1].tooltip.isNone
+    finally:
+      stopLasm(h)
+
   test "semanticTokens/range returns the configured data array":
     let h = startLasm()
     try:
@@ -1131,6 +1172,14 @@ suite "e2e: LspService driven by lasm":
       check h.svc.hasInlayHintSupport(LangId)
       check h.svc.hasSemanticTokensSupport(LangId)
       check h.svc.hasCallHierarchySupport(LangId)
+      check h.svc.hasDocumentLinkSupport(LangId)
+      # lasm does not advertise these capabilities. It serialises absent
+      # Option fields as `"xxxProvider": null` in the initialize result, so
+      # this branch also guards `isCapabilityEnabled` against treating JNull
+      # as enabled — a regression would silently reintroduce timeout-hangs
+      # on servers that emit null.
+      check not h.svc.hasSignatureHelpSupport(LangId)
+      check not h.svc.hasCodeLensSupport(LangId)
     finally:
       stopLasm(h)
 
