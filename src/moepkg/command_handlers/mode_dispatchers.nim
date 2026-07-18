@@ -271,15 +271,17 @@ proc handleCommandMode*(
     commandText: string,
     isSharedBuffer: bool = false,
     currentLine: int = 0,
+    otherModifiedCount: int = 0,
 ): HandlerResult =
   ## Handle Command mode input (when Enter is pressed).
   ## isSharedBuffer: true if the buffer is shared across multiple windows.
   ## currentLine: 0-based cursor line, used for range substitution with '.'.
+  ## otherModifiedCount: modified buffers other than `buffer` (for :qa).
   ## Map ops (hrMap*) need access to `manager.keyBindingRegistry`, so they are
   ## executed here and folded onto hrHandled/hrError; every other kind is
   ## returned as-is to the caller.
   let r = manager.commandHandler.handleCommandModeInput(
-    buffer, commandText, isSharedBuffer, currentLine
+    buffer, commandText, isSharedBuffer, currentLine, otherModifiedCount
   )
   case r.kind
   of hrMapAdd:
