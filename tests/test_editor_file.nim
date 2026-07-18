@@ -680,6 +680,40 @@ suite "Editor - autoSave":
     let content = readFile(testFile)
     check content == "Original"
 
+  test "Auto save saves background-tab buffers":
+    # Regression: iterating windowManager.windows only reaches foreground tabs,
+    # so a modified background-tab buffer would silently lose its edits.
+    var config = newEditorConfig()
+    config.autoSave.enable = true
+    config.autoSave.interval = 1
+    let e = createTestEditorWithConfig(config)
+
+    let fgFile = getTempDir() / "moe_test_autosave_fg.txt"
+    let bgFile = getTempDir() / "moe_test_autosave_bg.txt"
+
+    writeFile(fgFile, "fg-original")
+    writeFile(bgFile, "bg-original")
+    defer:
+      removeFile(fgFile)
+      removeFile(bgFile)
+
+    discard e.loadFile(fgFile)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "F:")
+
+    # Background buffer: registered in e.buffers but not shown in any window.
+    let bgBuf = newTextBuffer("bg-original", some(bgFile))
+    e.addBuffer(bgBuf)
+    discard bgBuf.insertText(BufferPosition(line: 0, column: 0), "B:")
+    check bgBuf.isModified
+
+    e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
+
+    e.autoSave()
+
+    check not e.activeBuffer.isModified
+    check not bgBuf.isModified
+    check readFile(bgFile).startsWith("B:bg-original")
+
 suite "Editor - autoBackup":
   test "Auto backup does nothing when disabled":
     var config = newEditorConfig()
@@ -717,6 +751,53 @@ suite "Editor - autoBackup":
 
     # Should not backup because interval not passed
     e.autoBackup()
+
+  test "Auto backup backs up background-tab buffers":
+    # Regression: iterating windowManager.windows only reaches foreground tabs,
+    # so a modified background-tab buffer would silently miss auto backup.
+    let backupDir = getTempDir() / "moe_test_autobackup_bg_dir"
+    if dirExists(backupDir):
+      removeDir(backupDir)
+    defer:
+      if dirExists(backupDir):
+        removeDir(backupDir)
+
+    var config = newEditorConfig()
+    config.autoBackup.enable = true
+    config.autoBackup.idleTime = 0
+    config.autoBackup.interval = 1
+    config.autoBackup.backupDir = some(backupDir)
+    let e = createTestEditorWithConfig(config)
+
+    let fgFile = getTempDir() / "moe_test_autobackup_fg.txt"
+    let bgFile = getTempDir() / "moe_test_autobackup_bg.txt"
+
+    writeFile(fgFile, "fg-original")
+    writeFile(bgFile, "bg-original")
+    defer:
+      removeFile(fgFile)
+      removeFile(bgFile)
+
+    discard e.loadFile(fgFile)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "F:")
+
+    # Background buffer: registered in e.buffers but not shown in any window.
+    let bgBuf = newTextBuffer("bg-original", some(bgFile))
+    e.addBuffer(bgBuf)
+    discard bgBuf.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    e.state.timing.lastInputTime = getMonoTime() - initDuration(hours = 1)
+    e.state.timing.lastAutoBackup = getMonoTime() - initDuration(hours = 1)
+
+    e.autoBackup()
+
+    # Each source file gets its own subdirectory under `backupDir`. Two
+    # subdirectories means both foreground and background buffers were backed
+    # up; before the fix only the foreground buffer would produce one.
+    var subdirCount = 0
+    for _ in walkDir(backupDir):
+      subdirCount += 1
+    check subdirCount == 2
 
 suite "Editor - refreshGitDiff":
   test "Refresh git diff does not crash on non-git file":
