@@ -83,6 +83,10 @@ jobs:
       run: |
         nimble build
 
+    - name: Install lasm
+      run: |
+        nimble install --noLockfile lasm -y
+
     - name: Run unit test
       env:
         # xvfb-run leaves TERM=dumb (the runner default) so moe's color mode
