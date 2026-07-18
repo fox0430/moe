@@ -77,8 +77,9 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
 
   test "Timed-out response clears pending and invalidates change tracking":
-    # A timed-out in-flight request must reset the tracked changeSeq so the next
-    # eligible frame can retry instead of being suppressed by change detection.
+    # A timed-out in-flight request must reset the tracked contentVersion so the
+    # next eligible frame can retry instead of being suppressed by change
+    # detection.
     let e = createTestEditor()
     e.lsp.enabled = true
     e.state.mode = EditorMode.Insert
@@ -93,7 +94,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     )
     e.state.lspCache.signatureHelp.cursorLine = 3
     e.state.lspCache.signatureHelp.cursorColumn = 5
-    e.state.lspCache.signatureHelp.changeSeq = 7
+    e.state.lspCache.signatureHelp.contentVersion = 7
 
     # Inject an already-expired in-flight request so checkResponse -> lrsTimeout
     e.lsp.service.activeRequests[reqId] = LspPendingRequest(
@@ -107,7 +108,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     e.requestSignatureHelpFromLsp()
 
     check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
-    check e.state.lspCache.signatureHelp.changeSeq == -1
+    check e.state.lspCache.signatureHelp.contentVersion == -1
     # The failure must bump the backoff counter so retries slow down.
     check e.state.lspCache.signatureHelp.consecutiveErrors == 1
 
@@ -134,7 +135,7 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     e.state.lspCache.signatureHelp.consecutiveErrors = 3
     e.state.lspCache.signatureHelp.cursorLine = e.activeWindow.cursor.line
     e.state.lspCache.signatureHelp.cursorColumn = e.activeWindow.cursor.column
-    e.state.lspCache.signatureHelp.changeSeq = e.activeBuffer.changeSeq
+    e.state.lspCache.signatureHelp.contentVersion = e.activeBuffer.contentVersion
 
     e.lsp.service.pendingResponses[reqId] = (
       result: some(
@@ -159,10 +160,10 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
   # Decision logic for the auto request path: change detection + debounce.
   let t0 = getMonoTime()
   let tracked = SignatureHelpRequestState(
-    lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, changeSeq: 3
+    lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, contentVersion: 3
   )
 
-  test "Skips when cursor and changeSeq are unchanged (even past debounce)":
+  test "Skips when cursor and contentVersion are unchanged (even past debounce)":
     check not shouldRequestSignatureHelp(
       tracked, 5, 10, 3, t0 + initDuration(seconds = 10)
     )
@@ -177,7 +178,7 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
       tracked, 5, 11, 3, t0 + initDuration(milliseconds = 150)
     )
 
-  test "Requests when changeSeq changed and debounce elapsed":
+  test "Requests when contentVersion changed and debounce elapsed":
     check shouldRequestSignatureHelp(
       tracked, 5, 10, 4, t0 + initDuration(milliseconds = 150)
     )
@@ -192,9 +193,9 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
       tracked, 6, 10, 3, t0 + initDuration(milliseconds = 100)
     )
 
-  test "Invalidated tracking (changeSeq -1) re-requests once debounce elapses":
+  test "Invalidated tracking (contentVersion -1) re-requests once debounce elapses":
     let invalidated = SignatureHelpRequestState(
-      lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, changeSeq: -1
+      lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, contentVersion: -1
     )
     check shouldRequestSignatureHelp(
       invalidated, 5, 10, 3, t0 + initDuration(milliseconds = 150)
@@ -206,7 +207,7 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
       interval: 100,
       cursorLine: 5,
       cursorColumn: 10,
-      changeSeq: 3,
+      contentVersion: 3,
       consecutiveErrors: 1,
     )
     # 150ms would fire at the base interval, but the doubled window suppresses it.
@@ -224,7 +225,7 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
       interval: 100,
       cursorLine: 5,
       cursorColumn: 10,
-      changeSeq: 3,
+      contentVersion: 3,
       consecutiveErrors: 99,
     )
     # Still suppressed just before the 16x (1600ms) cap ...
@@ -234,4 +235,30 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
     # ... and fires at the cap rather than growing further.
     check shouldRequestSignatureHelp(
       manyFailed, 6, 10, 3, t0 + initDuration(milliseconds = 1600)
+    )
+
+  test "Undo-collision on changeSeq: contentVersion advance still fires":
+    # After undo() rewinds changeSeq to a previously-tracked value and a new
+    # edit lands on that same changeSeq with different content, the tracker
+    # (keyed on contentVersion, not changeSeq) must see the change and permit
+    # a fresh request. Regression against the pre-fix state where the same
+    # numeric key would suppress the request.
+    let cursorLine = 5
+    let cursorColumn = 10
+    let cachedContentVersion = 42
+    let debounced = SignatureHelpRequestState(
+      lastUpdate: t0,
+      interval: 100,
+      cursorLine: cursorLine,
+      cursorColumn: cursorColumn,
+      contentVersion: cachedContentVersion,
+    )
+    # A new contentVersion (post undo+edit) at the same cursor position must
+    # not be suppressed by change detection.
+    check shouldRequestSignatureHelp(
+      debounced,
+      cursorLine,
+      cursorColumn,
+      cachedContentVersion + 1,
+      t0 + initDuration(milliseconds = 150),
     )

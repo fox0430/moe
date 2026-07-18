@@ -138,7 +138,7 @@ proc processCodeLensResponse(
     e.state.lspCache.codeLensPoll.rejectStreak = 0
     e.state.lspCache.codeLensCache = CodeLensCache(
       itemsByLine: itemsByLine,
-      changeSeq: activeBuffer.changeSeq,
+      contentVersion: activeBuffer.contentVersion,
       filePath: filePath,
       isValid: true,
     )
@@ -225,14 +225,14 @@ proc updateCodeLensCache*(e: Editor) =
       inc poll.rejectStreak
       poll.lastUpdate = getMonoTime()
       e.state.lspCache.codeLensCache = CodeLensCache(
-        isValid: true, filePath: filePath, changeSeq: activeBuffer.changeSeq
+        isValid: true, filePath: filePath, contentVersion: activeBuffer.contentVersion
       )
       return
 
   # Check if cache is still valid (no changes needed)
   if e.state.lspCache.codeLensCache.isValid and
       e.state.lspCache.codeLensCache.filePath == filePath and
-      e.state.lspCache.codeLensCache.changeSeq == activeBuffer.changeSeq:
+      e.state.lspCache.codeLensCache.contentVersion == activeBuffer.contentVersion:
     return
 
   # Debounce with exponential backoff on the reject streak.
@@ -418,7 +418,7 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
     itemsByLine: itemsByLine,
     cursorLine: e.cursor.line,
     cursorColumn: e.cursor.column,
-    changeSeq: activeBuffer.changeSeq,
+    contentVersion: activeBuffer.contentVersion,
     isValid: true,
   )
   e.state.lspCache.documentHighlightPoll.rejectStreak = 0
@@ -506,7 +506,8 @@ proc updateDocumentHighlightCache*(e: Editor) =
   if e.state.lspCache.documentHighlightCache.isValid and
       e.state.lspCache.documentHighlightCache.cursorLine == e.cursor.line and
       e.state.lspCache.documentHighlightCache.cursorColumn == e.cursor.column and
-      e.state.lspCache.documentHighlightCache.changeSeq == activeBuffer.changeSeq:
+      e.state.lspCache.documentHighlightCache.contentVersion ==
+      activeBuffer.contentVersion:
     return
 
   # Debounce with exponential backoff on the reject streak.

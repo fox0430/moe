@@ -32,7 +32,7 @@ const SignatureHelpValidModes* = {EditorMode.Insert}
 
 proc shouldRequestSignatureHelp*(
     sigHelp: SignatureHelpRequestState,
-    cursorLine, cursorColumn, changeSeq: int,
+    cursorLine, cursorColumn, contentVersion: int,
     now: MonoTime,
 ): bool =
   ## Decide whether to fire a new auto signature help request.
@@ -42,7 +42,7 @@ proc shouldRequestSignatureHelp*(
   ## is retried at a slower cadence instead of every base interval. Pure so it
   ## can be unit-tested without driving a live LSP server.
   if sigHelp.cursorLine == cursorLine and sigHelp.cursorColumn == cursorColumn and
-      sigHelp.changeSeq == changeSeq:
+      sigHelp.contentVersion == contentVersion:
     return false
   let backoff = 1'i64 shl min(sigHelp.consecutiveErrors, 4) # 1, 2, 4, 8, 16
   now - sigHelp.lastUpdate >= initDuration(milliseconds = sigHelp.interval * backoff)
@@ -100,7 +100,7 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
       if e.state.lspCache.signatureHelp.consecutiveErrors == 0:
         logLspDegraded("Signature help", status, errorOpt.get(""))
       e.state.lspCache.pending.del(lrfSignatureHelp)
-      e.state.lspCache.signatureHelp.changeSeq = -1
+      e.state.lspCache.signatureHelp.contentVersion = -1
       inc e.state.lspCache.signatureHelp.consecutiveErrors
       return
 
@@ -110,7 +110,7 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
   let now = getMonoTime()
   if not shouldRequestSignatureHelp(
     e.state.lspCache.signatureHelp, e.activeWindow.cursor.line,
-    e.activeWindow.cursor.column, activeBuffer.changeSeq, now,
+    e.activeWindow.cursor.column, activeBuffer.contentVersion, now,
   ):
     return
 
@@ -134,5 +134,5 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
   if ctxRes.isOk:
     e.state.lspCache.signatureHelp.cursorLine = line
     e.state.lspCache.signatureHelp.cursorColumn = col
-    e.state.lspCache.signatureHelp.changeSeq = activeBuffer.changeSeq
+    e.state.lspCache.signatureHelp.contentVersion = activeBuffer.contentVersion
     e.state.lspCache.signatureHelp.lastUpdate = now

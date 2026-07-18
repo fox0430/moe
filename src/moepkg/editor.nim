@@ -261,7 +261,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
           interval: 100, # 100ms debounce for signature help
           cursorLine: -1,
           cursorColumn: -1,
-          changeSeq: -1,
+          contentVersion: -1,
           consecutiveErrors: 0,
         ),
       ),
