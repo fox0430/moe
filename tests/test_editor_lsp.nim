@@ -218,6 +218,24 @@ suite "editor_lsp - applyDiagnosticsForUri":
     )
     check activeBuffer.diagnostics.len == 0
 
+  test "matches when buffer path has unnormalized segments vs normalized URI":
+    # absolutePath is a no-op on absolute paths, so both sides must go
+    # through normalizedPath or a `.` segment on one side drops diagnostics.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    let dir = getTempDir()
+    let name = "moe_diag_unnormalized.nim"
+    # Direct concat: joinPath ("/") collapses `.` so it can't build this form.
+    let unnormalized = dir & "." & $DirSep & name
+    let normalized = dir / name
+    activeBuffer.filePath = some(unnormalized)
+
+    e.applyDiagnosticsForUri(pathToUri(normalized), oneDiagnostic("via normalized"))
+
+    check activeBuffer.diagnostics.len == 1
+    check activeBuffer.diagnostics[0].message == "via normalized"
+
   test "drops incoming diagnostics when disabled in config":
     let config = newEditorConfig()
     config.lsp.diagnostics.enable = false
