@@ -22,16 +22,19 @@
 
 import std/[os, posix, options]
 
-proc poll(
-  fds: ptr TPollfd, nfds: Tnfds, timeout: cint
-): cint {.importc, header: "<poll.h>".}
-
 import pkg/results
 
 type PtyHandle* = ref object
   masterFd*: cint
   childPid*: Pid
   closed*: bool
+  writeBuffer*: string
+    ## Bytes accepted by writeToPty that the kernel PTY buffer could not take
+    ## yet (EAGAIN). Drained non-blockingly by drainWriteBuffer from the outer
+    ## poll loop, so a stopped or flow-controlled child cannot wedge the UI.
+
+const maxPtyWriteBufferBytes* = 64 * 1024
+  ## Bound on writeBuffer so a wedged child can't grow it without limit.
 
 # POSIX PTY bindings
 when defined(macosx):
@@ -104,28 +107,71 @@ proc openPtyAndSpawn*(
 
   ok(PtyHandle(masterFd: masterFd, childPid: pid, closed: false))
 
+proc tryWriteNonblock(
+    fd: cint, data: string, offset: int
+): tuple[written: int, err: string] =
+  ## Write as much of data[offset ..< len] as the kernel will take without
+  ## blocking. Returns bytes written and an empty err on EAGAIN, or a
+  ## populated err on a real failure.
+  var written = 0
+  while offset + written < data.len:
+    let n = write(fd, unsafeAddr data[offset + written], data.len - offset - written)
+    if n < 0:
+      if errno == EINTR:
+        continue
+      if errno == EAGAIN or errno == EWOULDBLOCK:
+        return (written, "")
+      return (written, "write to PTY failed: " & $strerror(errno))
+    written += n.int
+  (written, "")
+
+proc drainWriteBuffer*(pty: PtyHandle): Result[void, string] =
+  ## Try to push any buffered bytes to the PTY without blocking. Safe to call
+  ## every UI tick — a stopped or flow-controlled child just leaves the buffer
+  ## in place.
+  if pty.closed or pty.writeBuffer.len == 0:
+    return ok()
+
+  let (written, err) = tryWriteNonblock(pty.masterFd, pty.writeBuffer, 0)
+  if written > 0:
+    if written >= pty.writeBuffer.len:
+      pty.writeBuffer.setLen(0)
+    else:
+      pty.writeBuffer = pty.writeBuffer[written ..< pty.writeBuffer.len]
+  if err.len > 0:
+    return err(err)
+  ok()
+
 proc writeToPty*(pty: PtyHandle, data: string): Result[void, string] =
-  ## Write raw bytes to the PTY master fd (forwards keystrokes to the shell).
+  ## Non-blocking write to the PTY master fd. Any bytes the kernel cannot
+  ## accept immediately are appended to pty.writeBuffer and flushed later by
+  ## drainWriteBuffer, so a SIGSTOP'd or ^S-paused child can never freeze the
+  ## caller.
   if pty.closed:
     return err("PTY is closed")
   if data.len == 0:
     return ok()
 
-  var written = 0
-  while written < data.len:
-    let n = write(pty.masterFd, unsafeAddr data[written], data.len - written)
-    if n < 0:
-      if errno == EINTR:
-        continue
-      if errno == EAGAIN or errno == EWOULDBLOCK:
-        var pfd: TPollfd
-        pfd.fd = pty.masterFd
-        pfd.events = POLLOUT
-        discard poll(addr pfd, 1, 100)
-        continue
-      return err("write to PTY failed: " & $strerror(errno))
-    written += n.int
+  ?pty.drainWriteBuffer()
 
+  var startOffset = 0
+  var writeErr = ""
+  if pty.writeBuffer.len == 0:
+    let (written, err) = tryWriteNonblock(pty.masterFd, data, 0)
+    startOffset = written
+    writeErr = err
+
+  if startOffset < data.len:
+    let remaining = data.len - startOffset
+    if pty.writeBuffer.len + remaining > maxPtyWriteBufferBytes:
+      return err(
+        "PTY write buffer full (" & $pty.writeBuffer.len &
+          " bytes pending); child is not consuming input"
+      )
+    pty.writeBuffer.add data[startOffset ..< data.len]
+
+  if writeErr.len > 0:
+    return err(writeErr)
   ok()
 
 proc readFromPty*(pty: PtyHandle, maxBytes: int = 4096): string =
