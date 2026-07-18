@@ -309,6 +309,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Undo the last 'count' changes (or all changes in a transaction group)
   ## Returns the suggested cursor position for the first undone change
   ## Returns error if nothing to undo or if the undo operation fails
+  if b.readOnly:
+    return Result[BufferPosition, string].err "Buffer is read-only"
   if b.undoStack.len == 0:
     return Result[BufferPosition, string].err "Nothing to undo"
 
@@ -480,6 +482,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Redo the last 'count' undone changes
   ## Returns the suggested cursor position for the first redone change
   ## Returns error if nothing to redo or if the redo operation fails
+  if b.readOnly:
+    return Result[BufferPosition, string].err "Buffer is read-only"
   if b.redoStack.len == 0:
     return Result[BufferPosition, string].err "Nothing to redo"
 
