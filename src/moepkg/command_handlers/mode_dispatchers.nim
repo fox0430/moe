@@ -146,6 +146,68 @@ proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
     cursor = advancePastText(cursor, unit)
   state.cursor = cursor
 
+proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, string] =
+  ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, `.`-repeat +
+  ## `[count]i` bookkeeping, visual-block replication, insert-state reset, and
+  ## transaction commit. Called by both the Escape path and the imap ->
+  ## Command-mode alias bridge so the bridge does not skip the cleanup.
+  state.snippetSession.active = false
+
+  clearAutoIndentIfUnedited(buffer, state)
+
+  if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
+    let transaction = buffer.currentTransaction.get
+    let insertedText = extractInsertedText(transaction)
+
+    if state.editState.visualBlockInsertContext.isSome:
+      if insertedText.len > 0:
+        let ctx = state.editState.visualBlockInsertContext.get
+        for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
+          let lineCharLen = buffer.getLine(lineNum).runeLen
+          let col = ctx.insertColumn
+          if col > lineCharLen:
+            let padding = ' '.repeat(col - lineCharLen)
+            discard buffer.insertText(
+              BufferPosition(line: lineNum, column: lineCharLen), padding
+            )
+          discard
+            buffer.insertText(BufferPosition(line: lineNum, column: col), insertedText)
+      state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+
+    if insertedText.len > 0:
+      if state.editState.substituteContext.isSome:
+        let subCtx = state.editState.substituteContext.get
+        state.editState.lastEditCommand = some(
+          types.LastEditCommand(
+            kind: types.lecSubstitute,
+            substituteText: insertedText,
+            substituteCount: subCtx.deleteCount,
+            substituteKind: subCtx.kind,
+          )
+        )
+      else:
+        state.editState.lastEditCommand = some(
+          types.LastEditCommand(
+            kind: types.lecInsertText,
+            insertedText: insertedText,
+            insertPosition: state.editState.insertModeStartPos.get,
+          )
+        )
+
+    # Replay before commit so [count]i repeats share the same undo group.
+    replayCountedInsert(buffer, state)
+
+    state.editState.insertModeStartPos = none(BufferPosition)
+    state.editState.insertReplayCount = 0
+    state.editState.insertReplayLineEntry = false
+    state.editState.substituteContext = none(types.SubstituteContext)
+
+  if buffer.inTransaction:
+    let transactionResult = buffer.commitTransaction()
+    if transactionResult.isErr:
+      return err(transactionResult.error)
+  ok()
+
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
@@ -164,80 +226,13 @@ proc handleInsertMode*(
           kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
         )
 
-      # Leaving Insert mode always ends any snippet tabstop session (some
-      # paths, e.g. Escape while the completion popup is open, return a mode
-      # switch without passing through the session key handling).
-      state.snippetSession.active = false
-
-      clearAutoIndentIfUnedited(buffer, state)
-
-      # Extract inserted text before committing transaction
-      if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
-        let transaction = buffer.currentTransaction.get
-        let insertedText = extractInsertedText(transaction)
-
-        # Visual Block insert replication: replicate inserted text to all block lines
-        if state.editState.visualBlockInsertContext.isSome:
-          if insertedText.len > 0:
-            let ctx = state.editState.visualBlockInsertContext.get
-            for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
-              let lineCharLen = buffer.getLine(lineNum).runeLen
-              let col = ctx.insertColumn
-              # Pad with spaces if line is shorter than the target column
-              if col > lineCharLen:
-                let padding = ' '.repeat(col - lineCharLen)
-                discard buffer.insertText(
-                  BufferPosition(line: lineNum, column: lineCharLen), padding
-                )
-              discard buffer.insertText(
-                BufferPosition(line: lineNum, column: col), insertedText
-              )
-          # Always clear context when leaving insert mode
-          state.editState.visualBlockInsertContext =
-            none(types.VisualBlockInsertContext)
-
-        # Record the insert command for repeat (.) if text was actually inserted
-        if insertedText.len > 0:
-          # Check if we entered Insert mode via substitute command (s/S/cc)
-          if state.editState.substituteContext.isSome:
-            let subCtx = state.editState.substituteContext.get
-            state.editState.lastEditCommand = some(
-              types.LastEditCommand(
-                kind: types.lecSubstitute,
-                substituteText: insertedText,
-                substituteCount: subCtx.deleteCount,
-                substituteKind: subCtx.kind,
-              )
-            )
-          else:
-            # Normal insert (i, a, o, O)
-            state.editState.lastEditCommand = some(
-              types.LastEditCommand(
-                kind: types.lecInsertText,
-                insertedText: insertedText,
-                insertPosition: state.editState.insertModeStartPos.get,
-              )
-            )
-
-        # [count]i/a/o/O: replay the typed text the remaining count-1 times.
-        # Done before clearing insertModeStartPos and before commit so the
-        # repeats join the same undo group.
-        replayCountedInsert(buffer, state)
-
-        # Clear insert position tracking and substitute context
-        state.editState.insertModeStartPos = none(BufferPosition)
-        state.editState.insertReplayCount = 0
-        state.editState.insertReplayLineEntry = false
-        state.editState.substituteContext = none(types.SubstituteContext)
-
-      # Commit the transaction when leaving Insert mode
-      let transactionResult = buffer.commitTransaction()
-      if transactionResult.isErr:
+      let finalizeResult = finalizeInsertExit(buffer, state)
+      if finalizeResult.isErr:
         # Even if commit fails, allow mode transition so user isn't stuck in Insert mode
         return HandlerResult(
           kind: hrHandled,
           modeTransition: r.modeTransition,
-          statusMessage: "Failed to commit transaction: " & transactionResult.error,
+          statusMessage: "Failed to commit transaction: " & finalizeResult.error,
         )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
@@ -245,20 +240,15 @@ proc handleInsertMode*(
   of imrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of imrExecCommand:
-    # Command mode command alias bridge fired from Insert mode (e.g.
-    # `imap K = "bdelete"`). Commit any in-progress insert transaction first
-    # so the Command mode command sees a consistent buffer state — otherwise
-    # an open transaction could be left dangling across buffer switches
-    # performed by `:bdelete` / `:bnext`.
-    state.snippetSession.active = false
-    if buffer.inTransaction:
-      let transactionResult = buffer.commitTransaction()
-      if transactionResult.isErr:
-        return HandlerResult(
-          kind: hrError,
-          errorMessage: "Failed to commit transaction: " & transactionResult.error,
-        )
-      state.editState.insertModeStartPos = none(BufferPosition)
+    # `imap K = "bdelete"` bridge: run the full leaving-Insert finalize so
+    # `.` repeat, `[count]i` replay, and substituteContext / block-insert
+    # cleanup all fire before the aliased command runs.
+    let finalizeResult = finalizeInsertExit(buffer, state)
+    if finalizeResult.isErr:
+      return HandlerResult(
+        kind: hrError,
+        errorMessage: "Failed to commit transaction: " & finalizeResult.error,
+      )
     return HandlerResult(
       kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
     )
