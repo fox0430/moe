@@ -326,6 +326,56 @@ suite "Buffer - Transaction lastChangedLines":
     # lastChangedLines should be unchanged
     check b.lastChangedLines == valBefore
 
+  test "consecutive edits keep minimum lastChangedLines while pending":
+    # Regression test: a second edit further down before updateHighlight
+    # consumes the pending anchor must not move the anchor past the first
+    # edit, or the first edit's line keeps a stale highlight.
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
+
+    discard b.insertText(BufferPosition(line: 2, column: 0), "x")
+    discard b.insertText(BufferPosition(line: 10, column: 0), "y")
+
+    check b.highlightNeedsUpdate
+    check b.lastChangedLines == 2
+
+  test "edit after consumed update starts a fresh anchor":
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5")
+
+    discard b.insertText(BufferPosition(line: 1, column: 0), "x")
+    check b.lastChangedLines == 1
+
+    # Simulate updateHighlight consuming the pending update.
+    b.highlightNeedsUpdate = false
+
+    discard b.insertText(BufferPosition(line: 4, column: 0), "y")
+    check b.lastChangedLines == 4
+
+  test "commitTransaction keeps pending pre-transaction anchor":
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12")
+
+    discard b.insertText(BufferPosition(line: 2, column: 0), "x")
+    discard b.beginTransaction("later lines")
+    discard b.insertText(BufferPosition(line: 10, column: 0), "y")
+    discard b.insertText(BufferPosition(line: 12, column: 0), "z")
+    discard b.commitTransaction()
+
+    check b.lastChangedLines == 2
+
+  test "undo after consumed update re-anchors at the undone line":
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5")
+
+    discard b.insertText(BufferPosition(line: 0, column: 0), "x")
+    b.highlightNeedsUpdate = false
+    b.lastChangedLines = 0
+
+    discard b.insertText(BufferPosition(line: 4, column: 0), "y")
+    b.highlightNeedsUpdate = false
+
+    let r = b.undo()
+    check r.isOk
+    check b.highlightNeedsUpdate
+    check b.lastChangedLines == 4
+
 suite "Buffer - Modified Flag":
   test "isModified returns false for new buffer":
     let b = newTextBuffer("test")

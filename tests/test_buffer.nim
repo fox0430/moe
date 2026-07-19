@@ -2497,6 +2497,9 @@ suite "Buffer - reload resets stale content-keyed state":
 
     let buf = newTextBuffer(backend = GapBuffer)
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    # Simulate updateHighlight consuming the pending anchor; otherwise the
+    # next edit min-merges into the still-pending line 0.
+    buf.highlightNeedsUpdate = false
     discard buf.insertText(BufferPosition(line: 3, column: 0), "X")
     check buf.lastChangedLines > 0 # the edit moved the seed off line 0
 

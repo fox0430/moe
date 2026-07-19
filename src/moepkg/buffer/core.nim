@@ -1168,6 +1168,17 @@ proc advanceContentVersion*(b: TextBuffer) {.inline.} =
   ## safe cache-invalidation key. See the `contentVersion` field doc.
   b.contentVersion.inc
 
+proc markLineChanged*(b: TextBuffer, line: int) =
+  ## Merge `line` into the pending incremental-highlight re-parse anchor.
+  ## While an update is pending (not yet consumed by updateHighlight), keep
+  ## the minimum so a later change further down cannot move the anchor past
+  ## an earlier change higher up, leaving it stale-highlighted.
+  if b.highlightNeedsUpdate:
+    b.lastChangedLines = min(b.lastChangedLines, line)
+  else:
+    b.lastChangedLines = line
+    b.highlightNeedsUpdate = true
+
 proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
   ## Always increments changeSeq to mark buffer as modified
@@ -1194,12 +1205,10 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # updateHighlight's mismatch guard and wipe the overlay every keystroke.
   b.emitRowColRemapEvents(change)
 
-  # Mark highlight as needing update and track changed range
-  b.highlightNeedsUpdate = true
-
-  # Track the first changed line for incremental highlighting
+  # Mark highlight as needing update and track the first changed line for
+  # incremental highlighting
   let changePos = getChangePosition(change)
-  b.lastChangedLines = changePos.line
+  b.markLineChanged(changePos.line)
 
   # Mark the changed line as modified
   b.ensureMarkersSize()
