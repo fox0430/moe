@@ -34,6 +34,9 @@ import pkg/results
 
 import types/editor_types, editor_lsp, lsp_integration, unicode_utils
 
+const SelectionRangeValidModes* =
+  {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
+
 proc normalizedSelection(sel: VisualSelection): tuple[first, last: BufferPosition] =
   ## Order the selection endpoints so `first` precedes `last`.
   let
@@ -160,6 +163,7 @@ proc startLspSelectionRange*(e: Editor): bool =
     lrfSelectionRange,
     proc(): Result[int, string] =
       e.lsp.startSelectionRangeRequest(activeBuffer, line, col),
+    validModes = SelectionRangeValidModes,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP selection range failed: " & ctxRes.error
@@ -183,9 +187,9 @@ proc pollLspSelectionRange*(e: Editor) =
   of lrsSuccess:
     e.state.lspCache.pending.del(lrfSelectionRange)
 
-    # Ranges are anchored to the originating buffer's content; a buffer switch
-    # or edit in flight would misapply them.
-    if classifyResponse(e, ctx) != lrsFresh:
+    # Overlay (Command/Search/Rename) leaves e.state.mode intact, so it slips
+    # past validModes; applying here would force Visual and drop the overlay.
+    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
       return
 
     var applied = false

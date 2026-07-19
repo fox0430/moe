@@ -207,6 +207,43 @@ suite "editor_selectionrange - pollLspSelectionRange":
     check e.state.mode == modeBefore
     check not e.state.visualSelection.active
 
+  test "Discards response while a Command overlay is active":
+    # Overlay sits on top of the base mode (mode stays Normal), so validModes
+    # can't catch it — the poll must reject it inline.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo")
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+      }
+    ]
+
+    const reqId = 9
+    e.seedSelectionRangePending(reqId, buf.id, buf.contentVersion)
+    e.lsp.service.activeRequests[reqId] = LspPendingRequest(
+      requestId: reqId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($responseJson), error: none(string))
+
+    e.state.overlay = some(OverlayKind.okCommand)
+    let modeBefore = e.state.mode
+    e.pollLspSelectionRange()
+
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
+    check e.state.mode == modeBefore
+    check not e.state.visualSelection.active
+    check e.state.lspCache.selectionRangeChain.len == 0
+
 suite "editor_selectionrange - config gate":
   test "startLspSelectionRange returns false when disabled in config":
     let config = newEditorConfig()
