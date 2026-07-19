@@ -1075,12 +1075,23 @@ proc renderWindow*(
   let (hasSelection, selStart, selEnd) =
     e.getVisualSelection(window.mode, window.active)
 
-  # Compute cursor's display column (accounting for tabs/wide chars and scroll offset)
-  let leftCol = if e.lineWrap: 0 else: window.viewport.leftColumn
+  # Wrap mode: displayX restarts at 0 on every segment, so use the cursor's
+  # segment-relative column — an absolute one only matches segment 1.
   let cursorDisplayCol =
     if window.cursor.line < lineCount:
       let cursorLineText = window.buffer.getLine(window.cursor.line)
-      bufferColToDisplayCol(cursorLineText, window.cursor.column, e.tabStop, leftCol)
+      if e.lineWrap:
+        let
+          sidebarWidth = e.calculateSidebarWidth(window.mode)
+          scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+          maxWidth = max(
+            1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+          )
+        cursorWrapPosition(cursorLineText, window.cursor.column, maxWidth, e.tabStop)[1]
+      else:
+        bufferColToDisplayCol(
+          cursorLineText, window.cursor.column, e.tabStop, window.viewport.leftColumn
+        )
     else:
       window.cursor.column
 
