@@ -207,9 +207,19 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
   of hrFilerQuit:
-    # Close filer and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.Filer)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close filer and return to Normal mode, restoring the cursor/viewport
+    # that were active before the filer was opened.
+    let win = e.activeWindow
+    var origin = none(FilerState)
+    if win.modeState.kind == mskFiler:
+      origin = some(win.modeState.filer)
+    win.clearModeState(EditorMode.Filer) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.resetViewportTop(st.originTopLine)
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrTerminalQuit:
@@ -447,9 +457,19 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     discard e.requestCallHierarchyOutgoingForItem(r.callHierarchyOutgoingItem)
     return true
   of hrBufferManagerQuit:
-    # Close buffer manager and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.BufferManager)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close buffer manager and return to Normal mode, restoring the
+    # cursor/viewport that were active before the manager was opened.
+    let win = e.activeWindow
+    var origin = none(BufferManagerState)
+    if win.modeState.kind == mskBufferManager:
+      origin = some(win.modeState.bufferManager)
+    win.clearModeState(EditorMode.BufferManager) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.resetViewportTop(st.originTopLine)
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrBufferManagerSelectBuffer:
@@ -503,9 +523,19 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Cannot delete the last buffer"
     return true
   of hrBookmarkManagerQuit:
-    # Close bookmark manager and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.BookmarkManager)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close bookmark manager and return to Normal mode, restoring the
+    # cursor/viewport that were active before the manager was opened.
+    let win = e.activeWindow
+    var origin = none(BookmarkManagerState)
+    if win.modeState.kind == mskBookmarkManager:
+      origin = some(win.modeState.bookmarkManager)
+    win.clearModeState(EditorMode.BookmarkManager) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.resetViewportTop(st.originTopLine)
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrBookmarkManagerJump:
@@ -1436,6 +1466,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     bmState.updateEntries(e.getBufferInfos())
     bmState.previousWindowIndex = e.windowManager.activeWindowIndex
     let activeWin = e.activeWindow
+    # Capture the current position so quitting the manager can restore it.
+    bmState.originCursor = activeWin.cursor
+    bmState.originTopLine = activeWin.viewport.topLine
+    bmState.originLeftColumn = activeWin.viewport.leftColumn
     activeWin.mode = EditorMode.BufferManager
     activeWin.saveOriginalBuffer()
     activeWin.buffer = bmState.createBufferManagerTextBuffer()
@@ -1450,6 +1484,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     bkmState.updateEntries(e.buffers)
     bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
     let activeWin = e.activeWindow
+    # Capture the current position so quitting the manager can restore it.
+    bkmState.originCursor = activeWin.cursor
+    bkmState.originTopLine = activeWin.viewport.topLine
+    bkmState.originLeftColumn = activeWin.viewport.leftColumn
     activeWin.mode = EditorMode.BookmarkManager
     activeWin.saveOriginalBuffer()
     activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
@@ -1522,6 +1560,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         else:
           getCurrentDir()
       let filerState = newFilerState(startPath)
+      # Capture the current position so quitting the filer can restore it.
+      filerState.originCursor = activeWin.cursor
+      filerState.originTopLine = activeWin.viewport.topLine
+      filerState.originLeftColumn = activeWin.viewport.leftColumn
       activeWin.saveOriginalBuffer()
       activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
       activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)
@@ -1535,6 +1577,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let bmState = newBufferManagerState()
       bmState.updateEntries(e.getBufferInfos())
       bmState.previousWindowIndex = e.windowManager.activeWindowIndex
+      # Capture the current position so quitting the manager can restore it.
+      bmState.originCursor = activeWin.cursor
+      bmState.originTopLine = activeWin.viewport.topLine
+      bmState.originLeftColumn = activeWin.viewport.leftColumn
       activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
       activeWin.mode = EditorMode.BufferManager
 
@@ -1543,6 +1589,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let bkmState = newBookmarkManagerState()
       bkmState.updateEntries(e.buffers)
       bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
+      # Capture the current position so quitting the manager can restore it.
+      bkmState.originCursor = activeWin.cursor
+      bkmState.originTopLine = activeWin.viewport.topLine
+      bkmState.originLeftColumn = activeWin.viewport.leftColumn
       activeWin.saveOriginalBuffer()
       activeWin.modeState =
         ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)

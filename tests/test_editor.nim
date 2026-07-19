@@ -2404,6 +2404,116 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     check win.modeState.kind == mskNone
     check win.suspendedMode.isNone
 
+suite "Editor - list viewer quit restores origin cursor/viewport":
+  # Regression: hrFilerQuit/hrBufferManagerQuit/hrBookmarkManagerQuit
+  # used to restore the original buffer but leave the cursor/viewport wherever
+  # the viewer had moved them, losing the editing position. Each state now
+  # snapshots the origin cursor/viewport on entry and the quit path restores
+  # it, mirroring the References/DocumentSymbol/CallHierarchy viewers.
+  test "processResult(hrFilerQuit) restores the pre-filer cursor/viewport":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_filer_quit_restore.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 5
+    win.cursor.column = 2
+    win.viewport.topLine = 4
+    win.viewport.leftColumn = 3
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check win.mode == EditorMode.Filer
+    check win.modeState.kind == mskFiler
+    check win.cursor.line == 0
+    check win.viewport.topLine == 0
+
+    # Simulate navigation inside the filer.
+    win.cursor.line = 3
+    win.viewport.topLine = 2
+
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 5
+    check win.cursor.column == 2
+    check win.viewport.topLine == 4
+    check win.viewport.leftColumn == 3
+
+  test "processResult(hrBufferManagerQuit) restores the pre-manager cursor/viewport":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_bm_quit_restore.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 6
+    win.cursor.column = 1
+    win.viewport.topLine = 5
+    win.viewport.leftColumn = 2
+
+    discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
+    check win.mode == EditorMode.BufferManager
+    check win.modeState.kind == mskBufferManager
+    check win.cursor.line == 0
+    check win.viewport.topLine == 0
+
+    # Simulate navigation inside the manager.
+    win.cursor.line = 2
+    win.viewport.topLine = 1
+
+    discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 6
+    check win.cursor.column == 1
+    check win.viewport.topLine == 5
+    check win.viewport.leftColumn == 2
+
+  test "processResult(hrBookmarkManagerQuit) restores the pre-manager cursor/viewport":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_bkm_quit_restore.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 7
+    win.cursor.column = 3
+    win.viewport.topLine = 6
+    win.viewport.leftColumn = 1
+
+    discard
+      e.processResult(HandlerResult(kind: hrEnterBookmarkManager), e.activeBuffer())
+    check win.mode == EditorMode.BookmarkManager
+    check win.modeState.kind == mskBookmarkManager
+    check win.cursor.line == 0
+    check win.viewport.topLine == 0
+
+    # Simulate navigation inside the manager.
+    win.cursor.line = 4
+    win.viewport.topLine = 3
+
+    discard
+      e.processResult(HandlerResult(kind: hrBookmarkManagerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 7
+    check win.cursor.column == 3
+    check win.viewport.topLine == 6
+    check win.viewport.leftColumn == 1
+
 suite "Editor - Command mode command alias bridge end-to-end (#2597)":
   # Regression: the `keyMappableCommandModeAliases` bridge in
   # `command_handlers/handler_manager.nim` rewrites a `K = "bdelete"` keymap

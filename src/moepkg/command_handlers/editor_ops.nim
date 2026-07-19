@@ -230,6 +230,10 @@ proc enterFilerInActiveWindow*(e: Editor, path: string) =
   let activeWin = e.activeWindow
   activeWin.mode = EditorMode.Filer
   let filerState = newFilerState(path)
+  # Capture the current position so quitting the filer can restore it.
+  filerState.originCursor = activeWin.cursor
+  filerState.originTopLine = activeWin.viewport.topLine
+  filerState.originLeftColumn = activeWin.viewport.leftColumn
   activeWin.saveOriginalBuffer()
   activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
   activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)

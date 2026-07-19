@@ -342,6 +342,10 @@ proc main() =
         editor.windowManager.windows[editor.windowManager.activeWindowIndex]
       activeWin.mode = EditorMode.Filer
       let filerState = newFilerState(dirPath)
+      # Capture the current position so quitting the filer can restore it.
+      filerState.originCursor = activeWin.cursor
+      filerState.originTopLine = activeWin.viewport.topLine
+      filerState.originLeftColumn = activeWin.viewport.leftColumn
       activeWin.saveOriginalBuffer()
       activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
       activeWin.buffer = filerState.createFilerTextBuffer(editor.config.filer.showIcons)
