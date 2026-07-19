@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, options, monotimes, times, os]
+import std/[strformat, strutils, sequtils, options, monotimes, times, os]
 
 import pkg/[results, chronos]
 
@@ -61,19 +61,36 @@ export
 proc addCommandAlias*(
     e: Editor, alias: string, action: CommandLineAction
 ): Result[(), string] =
-  ## Add a new command alias
-  e.commandConfig.addAlias(alias, action)
+  ## Add a new command alias.
+  ## Updates the runtime command config, the parser, and the persisted
+  ## config ([CommandAliases]) so the alias survives save/reload.
+  let
+    commandName = canonicalCommandName(action)
+    key = alias.toLowerAscii()
+  if commandName.isNone:
+    return err fmt"Unknown command action: {action}"
+  e.commandConfig.addAlias(key, action)
   e.commandConfig.applyToParser(e.commandLineParser)
+  e.config.commandAliases[key] = UserCommandEntry(command: commandName.get)
+  # Re-adding an alias lifts any persisted disable of the same name.
+  e.config.disabledCommandAliases.keepItIf(it != key)
   ok(())
 
 proc removeCommandAlias*(e: Editor, alias: string): Result[(), string] =
-  ## Remove a command alias
-  if e.commandLineParser.aliases.hasKey(alias):
-    e.commandLineParser.removeAlias(alias)
-    # Note: This doesn't remove from config until save is called
-    ok(())
-  else:
-    err fmt"Alias not found: {alias}"
+  ## Remove a command alias.
+  ## Updates the runtime command config, the parser, and the persisted
+  ## config ([CommandAliases] / [DisabledCommandAliases]) so the removal
+  ## survives save/reload. Removing a built-in default alias is persisted
+  ## as a [DisabledCommandAliases] entry.
+  let key = alias.toLowerAscii()
+  if not e.commandLineParser.aliases.hasKey(key):
+    return err fmt"Alias not found: {alias}"
+  e.commandConfig.removeAlias(key)
+  e.commandConfig.applyToParser(e.commandLineParser)
+  e.config.commandAliases.del(key)
+  if isDefaultCommandAlias(key) and key notin e.config.disabledCommandAliases:
+    e.config.disabledCommandAliases.add(key)
+  ok(())
 
 proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   ## Create a new Editor with the given configuration and validation result.

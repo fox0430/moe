@@ -24,7 +24,7 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
-    render_utils, lsp_service, diff_viewer, setting_options,
+    render_utils, lsp_service, diff_viewer, setting_options, editor_init,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import
@@ -2718,3 +2718,146 @@ suite "Editor - processResult(hrSaveAll) actually saves (regression)":
     check readFile(f2) == "modB: B"
     check not e.buffers[1].isModified
     check not e.activeBuffer().isModified
+
+suite "Editor - addCommandAlias/removeCommandAlias":
+  test "addCommandAlias updates parser, command config, and persisted config":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+
+    check e.commandLineParser.aliases["zz"] == claQuit
+    check e.commandConfig.aliases["zz"] == claQuit
+    check e.config.commandAliases["zz"].command == "quit"
+
+  test "addCommandAlias normalises the alias to lowercase":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("ZZ", claQuit).isOk
+
+    check "zz" in e.commandLineParser.aliases
+    check "zz" in e.commandConfig.aliases
+    check "zz" in e.config.commandAliases
+
+  test "removeCommandAlias updates parser, command config, and persisted config":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+
+    check "zz" notin e.commandLineParser.aliases
+    check "zz" notin e.commandConfig.aliases
+    check "zz" notin e.config.commandAliases
+
+  test "removeCommandAlias normalises the alias to lowercase":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("ZZ").isOk
+
+    check "zz" notin e.commandLineParser.aliases
+
+  test "removeCommandAlias fails for an unknown alias":
+    let e = createTestEditor()
+
+    let r = e.removeCommandAlias("nosuchalias")
+
+    check r.isErr
+    check "nosuchalias" in r.error
+
+  test "Removed alias does not revive when another alias is added (regression)":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+    # Pre-fix, applyToParser re-applied commandConfig.aliases (which still
+    # held "zz") and revived the removed alias.
+    check e.addCommandAlias("yy", claSaveAndQuit).isOk
+
+    check "zz" notin e.commandLineParser.aliases
+    check "yy" in e.commandLineParser.aliases
+
+  test "Added alias survives a save/reload round-trip":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_alias_roundtrip.toml"
+    defer:
+      removeFile(testFile)
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check saveConfigToToml(e.config, testFile).isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loadedConfig, vr) = loadResult.get
+    check not vr.hasErrors
+    check loadedConfig.commandAliases["zz"].command == "quit"
+    check resolveCommandName(loadedConfig.commandAliases["zz"].command) == some(claQuit)
+
+  test "Removed alias stays removed after a save/reload round-trip":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_alias_remove_roundtrip.toml"
+    defer:
+      removeFile(testFile)
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+    check saveConfigToToml(e.config, testFile).isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loadedConfig, _) = loadResult.get
+    check "zz" notin loadedConfig.commandAliases
+
+  test "Removing a user-defined alias does not touch disabledCommandAliases":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+
+    check e.config.disabledCommandAliases.len == 0
+
+  test "Removing a built-in default alias persists as DisabledCommandAliases":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_alias_disable_default.toml"
+    defer:
+      removeFile(testFile)
+
+    check "q" in e.commandLineParser.aliases
+    check e.removeCommandAlias("q").isOk
+
+    check "q" notin e.commandLineParser.aliases
+    check "q" notin e.commandConfig.aliases
+    check e.config.disabledCommandAliases == @["q"]
+
+    # The removal survives a save/reload round-trip: a parser built from the
+    # reloaded config must not have the default alias back.
+    check saveConfigToToml(e.config, testFile).isOk
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loadedConfig, vr) = loadResult.get
+    check not vr.hasErrors
+    check loadedConfig.disabledCommandAliases == @["q"]
+
+    var initVr = newValidationResult()
+    let (_, _, cmdConfig, cmdLineParser) = newEditorRegistries(loadedConfig, initVr)
+    check "q" notin cmdConfig.aliases
+    check "q" notin cmdLineParser.aliases
+
+  test "addCommandAlias lifts a persisted disable of the same name":
+    let e = createTestEditor()
+
+    check e.removeCommandAlias("q").isOk
+    check e.config.disabledCommandAliases == @["q"]
+
+    check e.addCommandAlias("q", claQuit).isOk
+
+    check e.config.disabledCommandAliases.len == 0
+    check "q" in e.config.commandAliases
+    check "q" in e.commandLineParser.aliases
+
+  test "Removed default alias does not revive when another alias is added":
+    let e = createTestEditor()
+
+    check e.removeCommandAlias("q").isOk
+    check e.addCommandAlias("zz", claQuit).isOk
+
+    check "q" notin e.commandLineParser.aliases

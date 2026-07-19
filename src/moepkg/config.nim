@@ -703,6 +703,7 @@ type
     keyMapping*: KeyMappingConfig
     shellCommands*: Table[string, UserCommandEntry] ## Shell command definitions
     commandAliases*: Table[string, UserCommandEntry] ## User-defined command aliases
+    disabledCommandAliases*: seq[string] ## Built-in command aliases disabled by the user
 
 proc isToolAvailable(toolCommand: string): bool =
   ## Check if a command-line tool is available in PATH
@@ -957,4 +958,5 @@ proc newEditorConfig*(): EditorConfig =
     keyMapping: KeyMappingConfig(),
     shellCommands: initTable[string, UserCommandEntry](),
     commandAliases: initTable[string, UserCommandEntry](),
+    disabledCommandAliases: @[],
   )

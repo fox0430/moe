@@ -24,8 +24,9 @@
 ## `generateSectionSerializers` from `config_macros`), which derive the section
 ## set from `EditorConfig`'s `{.cfgSection.}` fields so it cannot drift from the
 ## type. Sections without a `{.cfgSection.}` (Theme, Lsp, Debug, KeyMapping,
-## CommandAliases, ShellCommands) and the nested `[StartUp.*]` tables are
-## dispatched by hand here, using the helpers from `config_loader/<section>.nim`.
+## CommandAliases, ShellCommands, DisabledCommandAliases) and the nested
+## `[StartUp.*]` tables are dispatched by hand here, using the helpers from
+## `config_loader/<section>.nim`.
 ## Those sub-modules are re-exported so external callers (`editor.nim`,
 ## `command_handlers/*`, etc.) can keep `import config_loader` unchanged.
 
@@ -80,8 +81,9 @@ proc loadConfigFromToml*(
   # loading). This single macro call expands to the per-section
   # `if toml.hasKey(...)` dispatch derived from EditorConfig's fields, so it
   # stays in sync with the type automatically. Sections with no {.cfgSection.}
-  # (Theme, Lsp, Debug, KeyMapping, CommandAliases, ShellCommands) and the
-  # nested [StartUp.*] sections are handled by hand below.
+  # (Theme, Lsp, Debug, KeyMapping, CommandAliases, ShellCommands,
+  # DisabledCommandAliases) and the nested [StartUp.*] sections are handled by
+  # hand below.
   generateSectionLoaders(toml, config, vr, EditorConfig)
 
   if toml.hasKey("Theme"):
@@ -116,6 +118,11 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("ShellCommands"):
     loadShellCommandsConfig(toml["ShellCommands"].getTable(), config.shellCommands, vr)
+
+  if toml.hasKey("DisabledCommandAliases"):
+    loadDisabledCommandAliasesConfig(
+      toml["DisabledCommandAliases"].getTable(), config.disabledCommandAliases, vr
+    )
 
   return Result[(EditorConfig, ValidationResult), string].ok((config, vr))
 
@@ -163,6 +170,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   appendDebugToml(lines, config.debug)
   appendCommandAliasesToml(lines, config.commandAliases)
   appendShellCommandsToml(lines, config.shellCommands)
+  appendDisabledCommandAliasesToml(lines, config.disabledCommandAliases)
 
   # Ensure directory exists
   let dir = parentDir(path)
