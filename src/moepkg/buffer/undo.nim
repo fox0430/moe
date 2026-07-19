@@ -243,14 +243,8 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
     # Record transaction position in changelist
     b.recordChangePosition(getChangePosition(transaction.changes[0]))
 
-    # Recompute lastChangedLines as the minimum across all changes.
-    # Each individual change in pushUndoChange overwrites lastChangedLines,
-    # so after the transaction only the last change's line remains.
-    var minLine = int.high
-    for ch in transaction.changes:
-      minLine = min(minLine, getChangePosition(ch).line)
-    if minLine != int.high:
-      b.lastChangedLines = minLine
+    # No lastChangedLines recompute needed: pushUndoChange min-merged each
+    # inner change's line into the pending anchor via markLineChanged.
   else:
     # Zero-change transaction: beginTransaction captured a pending snapshot that
     # no undo entry consumes here. Discard it so the next edit's ckSnapshot
@@ -294,12 +288,13 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
 
   # Mark highlight as needing update after rollback
   if transaction.changes.len > 0:
-    b.highlightNeedsUpdate = true
     var minLine = int.high
     for change in transaction.changes:
       minLine = min(minLine, getChangePosition(change).line)
     if minLine != int.high:
-      b.lastChangedLines = minLine
+      b.markLineChanged(minLine)
+    else:
+      b.highlightNeedsUpdate = true
 
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
@@ -364,8 +359,6 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
   # Mark highlight as needing update after undo
   if undoneChanges.len > 0:
-    b.highlightNeedsUpdate = true
-
     # Compute first changed line from undone changes for incremental highlighting
     var minLine = int.high
 
@@ -381,7 +374,9 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       findMinLine(change)
 
     if minLine != int.high:
-      b.lastChangedLines = minLine
+      b.markLineChanged(minLine)
+    else:
+      b.highlightNeedsUpdate = true
 
   # If undo brought us back to saved state, clear all modification markers
   b.clearMarkersIfAtSavedState()
@@ -535,8 +530,6 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
   # Mark highlight as needing update after redo
   if redoneChanges.len > 0:
-    b.highlightNeedsUpdate = true
-
     # Compute first changed line from redone changes for incremental highlighting
     var minLine = int.high
 
@@ -551,7 +544,9 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     for change in redoneChanges:
       findMinLine(change)
     if minLine != int.high:
-      b.lastChangedLines = minLine
+      b.markLineChanged(minLine)
+    else:
+      b.highlightNeedsUpdate = true
 
   # If redo landed back on the saved state, clear all modification markers
   # (symmetric with undo(); the delta restore otherwise leaves stale markers).
