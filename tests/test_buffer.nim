@@ -21,7 +21,7 @@ import std/[unittest, os, strutils, times, options, unicode]
 
 import pkg/[results, celina]
 
-import ../src/moepkg/[buffer, highlight]
+import ../src/moepkg/[buffer, highlight, unicode_utils]
 
 suite "Buffer - Trailing Empty Lines":
   test "Insert text with trailing empty lines preserves them":
@@ -2136,6 +2136,70 @@ suite "Buffer - contentVersion monotonicity":
     buf.deleteLineNoUndo(2)
     check buf.changeSeq == cs
     check buf.contentVersion > cv
+
+  test "NoUndo mutators invalidate cursorCache":
+    # cursorCache is keyed on (line, changeSeq); NoUndo does not bump
+    # changeSeq, so without an explicit reset the next charToBytePos lookup
+    # on the mutated line returns a stale bytePos.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\nbeta\n")
+    # Seed the cache as if a prior lookup had populated it.
+    buf.cursorCache =
+      CursorPosCache(line: 0, charPos: 3, bytePos: 3, changeSeq: buf.changeSeq)
+
+    buf.replaceLineNoUndo(0, "gamma")
+    check buf.cursorCache.line == -1
+
+    buf.cursorCache =
+      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
+    buf.insertLineNoUndo(1, "delta")
+    check buf.cursorCache.line == -1
+
+    buf.cursorCache =
+      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
+    buf.deleteLineNoUndo(1)
+    check buf.cursorCache.line == -1
+
+  test "insertLineNoUndo shifts bookmarks":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+
+    buf.insertLineNoUndo(1, "inserted")
+
+    check buf.hasBookmark(2)
+    check buf.hasBookmark(4)
+    check not buf.hasBookmark(1)
+    check not buf.hasBookmark(3)
+
+  test "deleteLineNoUndo shifts bookmarks":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+
+    buf.deleteLineNoUndo(1)
+
+    check not buf.hasBookmark(1)
+    check buf.hasBookmark(2)
+    check not buf.hasBookmark(3)
+
+  test "NoUndo mutators do NOT touch modifiedLines side array":
+    # substitute preview intent: previewed lines must not appear as "modified"
+    # in the sidebar. lineMarkers/modifiedLines are skipped via
+    # includeSideArrays=false.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\n")
+    for i in 0 ..< buf.modifiedLines.len:
+      buf.modifiedLines[i] = lmkUnmodified
+
+    buf.replaceLineNoUndo(0, "X")
+    buf.insertLineNoUndo(1, "Y")
+    buf.deleteLineNoUndo(2)
+
+    for kind in buf.modifiedLines:
+      check kind == lmkUnmodified
 
   test "Reload then edit makes changeSeq re-ascend but contentVersion monotonic":
     # Regression guard for LSP format/rename stale-guard: reload resets

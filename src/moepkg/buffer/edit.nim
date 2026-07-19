@@ -29,15 +29,21 @@ import pkg/results
 import ../[primitives, unicode_utils]
 import core, internal_mutations, undo
 
-# Public NoUndo procs for external code that bypasses undo recording. They skip
-# the undo stack and changeSeq, but still advance contentVersion: the content
-# changed, so any content-keyed cache must invalidate.
+# NoUndo procs: skip undo/changeSeq but must invalidate cursorCache and shift
+# semantic overlay / folds / bookmarks. lineMarkers/modifiedLines are held back
+# via includeSideArrays=false so substitute-preview does not mark previewed
+# lines as modified in the sidebar.
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Replace line content without recording undo. Used by substitute preview etc.
   if b.readOnly:
     return
   b.backendReplaceLine(lineNumber, content)
   b.advanceContentVersion()
+  b.resetCursorCache()
+  b.emitRowColRemapEvents(
+    BufferChange(kind: ckReplaceLine, replaceLineIdx: lineNumber),
+    includeSideArrays = false,
+  )
 
 proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
   ## Delete a line without recording undo. Used by substitute preview etc.
@@ -45,6 +51,11 @@ proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
     return
   b.backendDeleteLine(lineNumber)
   b.advanceContentVersion()
+  b.resetCursorCache()
+  b.emitRowColRemapEvents(
+    BufferChange(kind: ckDeleteLine, deleteLineIdx: lineNumber),
+    includeSideArrays = false,
+  )
 
 proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Insert a line without recording undo. Used by substitute preview etc.
@@ -52,6 +63,11 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
     return
   b.backendInsertLine(lineNumber, content)
   b.advanceContentVersion()
+  b.resetCursorCache()
+  b.emitRowColRemapEvents(
+    BufferChange(kind: ckInsertLine, insertLineIdx: lineNumber),
+    includeSideArrays = false,
+  )
 
 proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), string] =
   ## Replace line content with undo recording.
