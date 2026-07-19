@@ -25,26 +25,7 @@
 import std/[unicode, tables]
 import pkg/celina
 
-export buffer.runeWidth, buffer.displayWidth
-
-proc foldZeroWidthRune*(buffer: var Buffer, x, y: int, r: Rune) =
-  ## Merge a zero-width rune (combining mark, ZWJ, variation selector) into the
-  ## base cell to the left of column `x`, so it renders on that grapheme rather
-  ## than overwriting the next column. Callers advance the cursor per rune, so
-  ## when a zero-width rune arrives `x` already sits past the base: a narrow
-  ## base occupies `x-1`, a wide base its empty shadow at `x-1` and the lead at
-  ## `x-2`. Rewrite the base via setCell so the wide-char shadow is preserved.
-  ## No-op when no base cell precedes `x` (e.g. a leading combining mark).
-  var bx = x - 1
-  if bx < 0 or bx >= buffer.area.width or y < 0 or y >= buffer.area.height:
-    return
-  # Step left over a wide char's empty shadow cell onto its lead.
-  if buffer[bx, y].isShadow and bx - 1 >= 0:
-    dec bx
-  let base = buffer[bx, y]
-  if base.isEmpty:
-    return
-  buffer.setCell(bx, y, base.symbol & $r, base.width, base.style, base.hyperlink)
+export buffer.runeWidth, buffer.displayWidth, buffer.foldZeroWidthRune
 
 proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
   ## Write a single rune at (x, y), returning its display width so callers can
