@@ -1391,45 +1391,45 @@ proc handlePendingAsyncOperationsImpl(
     if e.state.pending.shellCommand.len > 0:
       let cmd = e.state.pending.shellCommand
       e.state.pending.shellCommand = ""
-      await e.app.suspendAsync()
-      stdout.write("\e[H\e[2J") # Clear screen
-      stdout.flushFile()
-      let exitCode = execShellCmd(cmd)
-      stdout.write("\n\nShell returned " & $exitCode & "\n")
-      stdout.write("Press Enter to continue...")
-      stdout.flushFile()
-      discard stdin.readLine()
-      await e.app.resumeAsync()
+      # withSuspendAsync wraps the body in try/finally so the TUI always
+      # resumes, even if execShellCmd/readLine raises (a missed resume leaves
+      # the terminal in raw mode and destroys the screen).
+      e.app.withSuspendAsync:
+        stdout.write("\e[H\e[2J") # Clear screen
+        stdout.flushFile()
+        let exitCode = execShellCmd(cmd)
+        stdout.write("\n\nShell returned " & $exitCode & "\n")
+        stdout.write("Press Enter to continue...")
+        stdout.flushFile()
+        discard stdin.readLine()
 
     # Handle man page display
     if e.state.pending.manPage.len > 0:
       let page = e.state.pending.manPage
       e.state.pending.manPage = ""
-      await e.app.suspendAsync()
-      stdout.write("\e[H\e[2J") # Clear screen
-      stdout.flushFile()
-      let exitCode = execShellCmd("man " & quoteShell(page))
-      if exitCode != 0:
-        stdout.write("man: " & page & " not found\n")
-      stdout.write("\nPress Enter to continue...")
-      stdout.flushFile()
-      discard stdin.readLine()
-      await e.app.resumeAsync()
+      e.app.withSuspendAsync:
+        stdout.write("\e[H\e[2J") # Clear screen
+        stdout.flushFile()
+        let exitCode = execShellCmd("man " & quoteShell(page))
+        if exitCode != 0:
+          stdout.write("man: " & page & " not found\n")
+        stdout.write("\nPress Enter to continue...")
+        stdout.flushFile()
+        discard stdin.readLine()
 
     # Handle background suspend: send SIGTSTP to self so the shell registers moe
     # as a proper stopped job (visible in `jobs`, resumable via `fg`). Falls back
     # to a blocking readLine on non-POSIX platforms where SIGTSTP is unavailable.
     if e.state.pending.background:
       e.state.pending.background = false
-      await e.app.suspendAsync()
-      when defined(posix):
-        discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
-      else:
-        stdout.write("\e[H\e[2J")
-        stdout.write("moe suspended. Press Enter to return to moe...")
-        stdout.flushFile()
-        discard stdin.readLine()
-      await e.app.resumeAsync()
+      e.app.withSuspendAsync:
+        when defined(posix):
+          discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
+        else:
+          stdout.write("\e[H\e[2J")
+          stdout.write("moe suspended. Press Enter to return to moe...")
+          stdout.flushFile()
+          discard stdin.readLine()
 
     # Handle pending build - spawn as background task
     if e.state.pending.buildOnSave.path.len > 0:
