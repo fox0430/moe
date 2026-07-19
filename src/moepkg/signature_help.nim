@@ -173,24 +173,28 @@ proc calculateSignatureHelpAnchorX*(
   max(0, screenCursorX - (cursorCellX - triggerCellX))
 
 proc calculateSignatureHelpPosition*(
-    cursorX, cursorY: int, termWidth, termHeight: int, signatureLen: int
+    cursorX, cursorY: int,
+    termWidth, termHeight: int,
+    signatureLen: int,
+    bottomReserve: int = 2,
 ): SignatureHelpPopupPosition =
-  ## Calculate popup position and size
-  ## Signature help appears above the cursor line
+  ## Signature help appears above the cursor line.
+  ## `bottomReserve` = rows at the bottom the popup must not cross.
   let contentWidth = min(max(signatureLen + PopupPadding, MinPopupWidth), MaxPopupWidth)
-  let popupWidth = contentWidth + 2 # +2 for border
-  let popupHeight = 3 # 1 line for content + 2 for border
+  let popupWidth = contentWidth + 2
+  let popupHeight = 3
 
   var x = cursorX
-  var y = cursorY - popupHeight # Above cursor
+  var y = cursorY - popupHeight
 
-  # Adjust X if popup would extend past right edge
   if x + popupWidth > termWidth:
     x = max(0, termWidth - popupWidth)
 
-  # If not enough space above, try below
   if y < 0:
     y = cursorY + 1
+
+  if y + popupHeight > termHeight - bottomReserve:
+    y = max(0, termHeight - bottomReserve - popupHeight)
 
   SignatureHelpPopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
 

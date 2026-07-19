@@ -629,15 +629,17 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
 
   let popupHeight = visibleCount + 2 # +2 for border
 
-  # Position popup near cursor
+  # Reserve rows for the (possibly grown) command-line/status area plus
+  # one padding row, matching completion/notification popup behavior.
+  let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
+
   var
     popupX = e.state.screenCursor.x
     popupY = e.state.screenCursor.y + 1
 
-  # Adjust if popup goes off screen
   if popupX + popupWidth > buffer.area.width:
     popupX = max(0, buffer.area.width - popupWidth)
-  if popupY + popupHeight > buffer.area.height - 2:
+  if popupY + popupHeight > buffer.area.height - bottomReserve:
     popupY = max(0, e.state.screenCursor.y - popupHeight)
 
   # Define styles (derived from the current theme)

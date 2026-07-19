@@ -494,6 +494,53 @@ suite "HoverPopup - calculateHoverPopupPosition":
     # Should use maximum available space
     check mgr.display.maxVisibleLines >= DefaultMaxVisibleLines
 
+  test "Grown bottom reserve keeps below-cursor popup clear of command line":
+    let mgr = newHoverPopupManager()
+    mgr.show("Short", 0, 0)
+
+    # Cursor at y=0: no space above → placed below.
+    let steady = calculateHoverPopupPosition(
+      cursorX = 10, cursorY = 0, termWidth = 80, termHeight = 24, mgr = mgr
+    )
+    check steady.y == 1
+
+    # A grown bottom area must push the popup back up so it does not overlap
+    # the command line.
+    let grown = calculateHoverPopupPosition(
+      cursorX = 10,
+      cursorY = 0,
+      termWidth = 80,
+      termHeight = 24,
+      mgr = mgr,
+      bottomReserve = 20,
+    )
+    check grown.y + grown.height <= 24 - 20
+
+  test "Grown bottom reserve shrinks below-cursor scrollable popup":
+    let mgr = newHoverPopupManager()
+    var lines: string
+    for i in 1 .. 30:
+      lines.add("Line " & $i & "\n")
+    mgr.show(lines, 0, 0)
+
+    # Cursor near the top: with default reserve, below-cursor space is used.
+    discard calculateHoverPopupPosition(
+      cursorX = 10, cursorY = 2, termWidth = 80, termHeight = 24, mgr = mgr
+    )
+    let steadyLines = mgr.display.maxVisibleLines
+
+    # Grow the reserve — below-cursor space shrinks, so the popup should
+    # allocate fewer visible lines than in the steady case.
+    discard calculateHoverPopupPosition(
+      cursorX = 10,
+      cursorY = 2,
+      termWidth = 80,
+      termHeight = 24,
+      mgr = mgr,
+      bottomReserve = 15,
+    )
+    check mgr.display.maxVisibleLines < steadyLines
+
 suite "HoverPopup - renderHoverPopup":
   test "Renders popup content to buffer":
     let mgr = newHoverPopupManager()
