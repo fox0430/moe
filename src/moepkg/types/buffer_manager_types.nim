@@ -25,6 +25,7 @@
 
 import std/options
 
+import ../primitives
 import list_viewer_types
 export list_viewer_types
 
@@ -39,6 +40,11 @@ type
     ## State for the buffer manager UI.
     ## items (buffer entries)/selectedIndex/topLine/waitingForG are inherited.
     previousWindowIndex*: int # Window index to return to when closing
+    # Cursor/viewport of the underlying buffer captured on entry, so quitting
+    # the manager restores the position instead of leaving it at (0, 0).
+    originCursor*: BufferPosition
+    originTopLine*: int
+    originLeftColumn*: int
 
   BufferInfo* = object ## Information about a buffer for initializing buffer manager
     filePath*: Option[string]
