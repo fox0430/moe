@@ -452,9 +452,10 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
         displayWidthUpToWithTabs(lineText, sigHelpMgr.triggerCol, e.tabStop),
         displayWidthUpToWithTabs(lineText, cursor.column, e.tabStop),
       )
+      let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
       let popupPos = calculateSignatureHelpPosition(
         anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,
-        sigHelpMgr.display.signature.len,
+        sigHelpMgr.display.signature.len, bottomReserve,
       )
       renderSignatureHelpPopup(buffer, sigHelpMgr.display, popupPos, true)
 
@@ -464,9 +465,10 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
   # Render hover popup (Normal mode)
   if e.state.lspCache.hoverPopup.isActive():
     let hoverMgr = e.state.lspCache.hoverPopup
+    let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
     let popupPos = calculateHoverPopupPosition(
       e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
-      buffer.area.height, hoverMgr,
+      buffer.area.height, hoverMgr, bottomReserve,
     )
     renderHoverPopup(buffer, hoverMgr, popupPos, true)
 

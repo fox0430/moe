@@ -178,26 +178,26 @@ proc hoverPopupScrollIndicatorStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
 
 proc calculateHoverPopupPosition*(
-    cursorX, cursorY: int, termWidth, termHeight: int, mgr: HoverPopupManager
+    cursorX, cursorY: int,
+    termWidth, termHeight: int,
+    mgr: HoverPopupManager,
+    bottomReserve: int = 2,
 ): HoverPopupPosition =
-  ## Calculate popup position and size
-  ## Hover popup appears above the cursor line if possible
-  ## When scrolling is needed, maximize the popup size to fit available space
+  ## Hover popup appears above the cursor line if possible; maximizes size
+  ## when scrolling is needed. `bottomReserve` = rows at the bottom the
+  ## popup must not cross.
 
-  # Calculate content width (max line display width, CJK-aware)
+  # Content width from the widest line (CJK-aware).
   var maxLineLen = 0
   for line in mgr.display.lines:
     maxLineLen = max(maxLineLen, line.displayWidth)
 
-  # Use screen width as max, leaving some margin
-  let maxWidth = termWidth - 2 # -2 for some margin
+  let maxWidth = termWidth - 2
   let contentWidth = min(max(maxLineLen + PopupPadding, MinPopupWidth), maxWidth)
-  let popupWidth = contentWidth + 2 # +2 for border
+  let popupWidth = contentWidth + 2
 
-  # Calculate available space above and below cursor
-  let spaceAbove = cursorY # Lines available above cursor
-  let spaceBelow = termHeight - cursorY - 1
-    # Lines available below cursor (excluding cursor line)
+  let spaceAbove = cursorY
+  let spaceBelow = max(0, termHeight - bottomReserve - cursorY - 1)
 
   # Determine optimal visible lines: maximize if scrolling would be needed
   let totalLines = mgr.display.lines.len
@@ -228,13 +228,11 @@ proc calculateHoverPopupPosition*(
   if x + popupWidth > termWidth:
     x = max(0, termWidth - popupWidth)
 
-  # If not enough space above, try below
   if y < 0:
     y = cursorY + 1
 
-  # If still doesn't fit, just position at top
-  if y + popupHeight > termHeight:
-    y = max(0, termHeight - popupHeight)
+  if y + popupHeight > termHeight - bottomReserve:
+    y = max(0, termHeight - bottomReserve - popupHeight)
 
   HoverPopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
 

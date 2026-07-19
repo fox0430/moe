@@ -734,6 +734,25 @@ suite "SignatureHelp - calculateSignatureHelpPosition edge cases":
     check pos.x >= 0
     check pos.x + pos.width <= 80
 
+  test "Grown bottom reserve keeps below-cursor popup clear of command line":
+    # Cursor at y=1 so above-cursor placement fails and popup goes below.
+    let steady = calculateSignatureHelpPosition(
+      cursorX = 10, cursorY = 1, termWidth = 80, termHeight = 24, signatureLen = 30
+    )
+    check steady.y == 2 # cursorY + 1
+
+    # A grown bottom area (e.g. 5-line message + status + padding) must
+    # push the popup back up so it does not overlap the command line.
+    let grown = calculateSignatureHelpPosition(
+      cursorX = 10,
+      cursorY = 1,
+      termWidth = 80,
+      termHeight = 24,
+      signatureLen = 30,
+      bottomReserve = 20,
+    )
+    check grown.y + grown.height <= 24 - 20
+
 suite "SignatureHelp - calculateSignatureHelpAnchorX":
   test "Pins anchor when caret sits at the trigger":
     let anchor = calculateSignatureHelpAnchorX(
