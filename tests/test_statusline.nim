@@ -19,7 +19,7 @@
 
 ## Tests for status_line.nim - Status line rendering for moe editor
 
-import std/[unittest, options, tables, strutils, os]
+import std/[unittest, options, tables, strutils, os, osproc]
 
 import pkg/celina
 
@@ -1313,3 +1313,65 @@ suite "StatusLine - git cache":
     check gitDiffRefreshIntervalMs == 500
 
     setGitDiffRefreshInterval(DefaultGitDiffRefreshIntervalMs)
+
+suite "StatusLine - tickGitDiffPipelines":
+  # Real git repo so `startGitDiffFromBufferAsync` actually spawns a
+  # subprocess. Once scheduled we must never call `cachedGitDiffCounts`
+  # again — the whole point is that hidden buffers (whose status line is
+  # not being rendered) still get their pipelines reaped.
+  setup:
+    let testDir = getTempDir() / "moe_status_line_tick_test"
+    if dirExists(testDir):
+      removeDir(testDir)
+    createDir(testDir)
+    discard execCmdEx("git init", workingDir = testDir)
+    discard execCmdEx("git config user.email 'test@test.com'", workingDir = testDir)
+    discard execCmdEx("git config user.name 'Test'", workingDir = testDir)
+    let testFile = testDir / "test.txt"
+    writeFile(testFile, "line 1\nline 2\nline 3\n")
+    discard execCmdEx("git add test.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m init", workingDir = testDir)
+
+  teardown:
+    cleanupGitDiffCache()
+    if dirExists(testDir):
+      removeDir(testDir)
+
+  test "tickGitDiffPipelines reaps a hidden buffer's pending pipeline":
+    cleanupGitDiffCache()
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+
+    # Schedule the pipeline once (the render path), then simulate the
+    # buffer going hidden by never touching cachedGitDiffCounts again.
+    discard cachedGitDiffCounts(buf)
+    check gitDiffPendingCount() == 1
+
+    # Drive the pipeline to completion purely through the tick path.
+    var reaped = false
+    for _ in 0 ..< 200:
+      tickGitDiffPipelines()
+      if gitDiffPendingCount() == 0:
+        reaped = true
+        break
+      sleep(50)
+
+    check reaped
+    let counts = gitDiffCacheCounts(buf)
+    check counts.isSome
+    # File is unchanged from HEAD so counts must be zero.
+    check counts.get == (added: 0, modified: 0, deleted: 0)
+
+  test "tickGitDiffPipelines is a no-op when no pipeline is pending":
+    cleanupGitDiffCache()
+    tickGitDiffPipelines()
+    check diffCacheStore.len == 0
+
+    # A path-less buffer yields a populated entry with no pending pipeline.
+    let buf = createTestTextBuffer("", false, "x")
+    discard cachedGitDiffCounts(buf)
+    check gitDiffPendingCount() == 0
+    let before = gitDiffCacheCounts(buf)
+    tickGitDiffPipelines()
+    check gitDiffPendingCount() == 0
+    check gitDiffCacheCounts(buf) == before

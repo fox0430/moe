@@ -294,9 +294,12 @@ proc tickFileAndConfig(e: Editor) =
 proc tickGitAndDebug(e: Editor) =
   ## Git and debug updates. The diff subprocess itself is scheduled lazily
   ## from status_line.cachedGitDiffCounts (called during status-line
-  ## rendering); here we just consume the most recent diff result for the
-  ## sidebar gutter, gated on the user's showGitDiff flag.
+  ## rendering); here we reap in-flight pipelines for all cached buffers
+  ## (so hidden buffers don't leak child/tempfile/fd) and then consume the
+  ## most recent diff result for the sidebar gutter, gated on the user's
+  ## showGitDiff flag.
   ## Depends on `tickFileAndConfig` having refreshed the conflict scan first.
+  tickGitDiffPipelines()
   if e.showGitDiff:
     maybeApplyGitMarkers(e.activeBuffer())
   e.maybeUpdateConflicts()
