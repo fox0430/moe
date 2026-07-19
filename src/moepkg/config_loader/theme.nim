@@ -41,11 +41,12 @@ proc loadThemeConfig*(
   const validKeys = ["kind", "path"]
   checkUnknownKeys(table, validKeys, section, vr)
   loadEnum(table, "kind", config.kind, vr, section, parseThemeKind, ValidThemeKinds)
-  # Only validate path if kind is tkConfig (custom theme file)
-  if config.kind == tkConfig:
-    loadFilePath(table, "path", config.path, vr, section)
-  else:
-    loadString(table, "path", config.path, vr, section)
+  # Path existence is not validated here even when kind = tkConfig: `initTheme`
+  # seeds a missing file with DefaultColors so a fresh environment whose
+  # moerc.toml already points at `~/.config/moe/themes/dark.toml` starts
+  # cleanly. Bootstrap failures (unwritable path) are still surfaced from
+  # `initTheme` under `Theme.path`.
+  loadString(table, "path", config.path, vr, section)
 
 # Standalone theme file loader (the [Colors] table)
 
@@ -216,12 +217,34 @@ proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
 # load doesn't stamp bundled defaults over the user's theme file.
 var themeColorsFromFile* = false
 
+# Forward declaration: `initTheme` bootstraps a missing tkConfig file via
+# `saveThemeToToml`, which is defined further down in the Serializers section.
+proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string]
+
 proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
   ## Initialize the theme based on configuration.
   ## Falls back to default theme on error; both file-level errors and any
   ## invalid keys/values within the theme file are recorded in `vr`.
   ## For `tkVscode`, the underlying error message is recorded under
   ## `Theme.kind`. `tkDefault` never fails.
+  ##
+  ## Bootstrap: when `tkConfig` names a path that does not yet exist, seed
+  ## it with `DefaultColors` (creating parent dirs as needed) before loading,
+  ## so a fresh environment whose `moerc.toml` already points at
+  ## `~/.config/moe/themes/dark.toml` starts up without a "Theme file not
+  ## found" error every launch. If seeding fails (unwritable path, etc.),
+  ## the write error is recorded under `Theme.path` and the load falls
+  ## through to the default theme.
+
+  if config.theme.kind == tkConfig and config.theme.path.len > 0:
+    let expandedPath = expandTilde(config.theme.path)
+    if not fileExists(expandedPath):
+      let saveResult = saveThemeToToml(DefaultColors, config.theme.path)
+      if saveResult.isErr:
+        vr.addError("Theme.path", config.theme.path, saveResult.error)
+        initDefaultTheme()
+        themeColorsFromFile = false
+        return
 
   let themeResult = loadTheme(config, vr)
   if themeResult.isOk:
