@@ -1646,16 +1646,53 @@ suite "Config - initTheme":
     config.theme.kind = tkDefault
     initTheme(config)
 
-  test "Non-existent theme file falls back to default":
+  test "Bootstrap: missing tkConfig file is seeded with DefaultColors":
+    inc testFileCounter
+    let themeFile =
+      getTempDir() / "moe_test_inittheme_bootstrap_" & $testFileCounter & ".toml"
+    defer:
+      if fileExists(themeFile):
+        removeFile(themeFile)
+
+    check not fileExists(themeFile)
+
     var config = newEditorConfig()
     config.theme.kind = tkConfig
-    config.theme.path = "/nonexistent/theme.toml"
+    config.theme.path = themeFile
+    var vr = newValidationResult()
+    initTheme(config, vr)
+
+    check not vr.hasErrors
+    check fileExists(themeFile)
+    check themeColorsFromFile
+
+    let loaded = loadThemeFromToml(themeFile)
+    check loaded.isOk
+
+  test "Bootstrap failure (unwritable path) falls back to default":
+    inc testFileCounter
+    let notADir = getTempDir() / "moe_test_inittheme_boot_notadir_" & $testFileCounter
+    writeFile(notADir, "sentinel")
+    defer:
+      removeFile(notADir)
+    let themeFile = notADir / "theme.toml"
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
     initTheme(config)
 
-  test "Non-existent theme file is reported in ValidationResult":
+  test "Bootstrap failure (unwritable path) is reported in ValidationResult":
+    inc testFileCounter
+    let notADir = getTempDir() / "moe_test_inittheme_boot_report_" & $testFileCounter
+    writeFile(notADir, "sentinel")
+    defer:
+      removeFile(notADir)
+    let themeFile = notADir / "theme.toml"
+
     var config = newEditorConfig()
     config.theme.kind = tkConfig
-    config.theme.path = "/nonexistent/theme.toml"
+    config.theme.path = themeFile
     var vr = newValidationResult()
     initTheme(config, vr)
     check vr.hasErrors
@@ -1990,7 +2027,8 @@ suite "Config - saveConfigToToml round-trip completeness":
     # popupPosition is validated against allowed values on load
     config.notification.popupPosition = "topLeft"
 
-    # Theme: ensure kind != tkConfig so loadFilePath is not used for path
+    # Theme: kind = tkDefault keeps `initTheme` from bootstrapping a file at
+    # the round-trip test path.
     config.theme.kind = tkDefault
     config.theme.path = "test_theme_path"
 
