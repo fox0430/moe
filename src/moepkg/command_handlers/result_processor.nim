@@ -1090,12 +1090,15 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.config.statusLine.multipleStatusLine = val
       e.state.statusMessage = "multiplestatusline = " & $val
     of bsoIgnoreCase:
+      e.config.standard.ignorecase = val
       e.state.input.search.ignorecase = val
       e.state.statusMessage = "ignorecase = " & $val
     of bsoSmartCase:
+      e.config.standard.smartcase = val
       e.state.input.search.smartcase = val
       e.state.statusMessage = "smartcase = " & $val
     of bsoIncSearch:
+      e.config.standard.incrementalSearch = val
       e.state.input.search.incsearch = val
       e.state.statusMessage = "incsearch = " & $val
     of bsoHlSearch:

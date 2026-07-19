@@ -24,11 +24,12 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
-    render_utils, lsp_service, diff_viewer,
+    render_utils, lsp_service, diff_viewer, setting_options,
   ]
-import ../src/moepkg/command_handlers/[command_mode_handler, handler_result]
-import ../src/moepkg/command_handlers/result_processor
 import ../src/moepkg/buffer_backends/gap_buffer
+import
+  ../src/moepkg/command_handlers/
+    [command_mode_handler, handler_result, result_processor]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -1303,6 +1304,53 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
     configState.toggleBoolValue()
     e.applyConfigSettings(e.config)
     check e.state.showSidebar == not original
+
+suite "Editor - :set ignorecase/smartcase/incsearch survive Config-mode re-apply":
+  # Regression: bsoIgnoreCase/SmartCase/IncSearch used to write only the
+  # `state.input.search` mirror; applyConfigSettings (run on every Config-mode
+  # keystroke via pendingApply) then rolled the mirror back to the unchanged
+  # `config.standard.*`, so the toggle silently vanished.
+  test "hrSetBoolOption(bsoIgnoreCase) updates config, survives re-apply":
+    let e = createTestEditor()
+    e.config.standard.ignorecase = false
+    e.state.input.search.ignorecase = false
+
+    let r =
+      HandlerResult(kind: hrSetBoolOption, boolOption: bsoIgnoreCase, boolValue: true)
+    discard e.processResult(r, e.activeBuffer())
+    check e.config.standard.ignorecase
+    check e.state.input.search.ignorecase
+
+    e.applyConfigSettings(e.config)
+    check e.state.input.search.ignorecase
+
+  test "hrSetBoolOption(bsoSmartCase) updates config, survives re-apply":
+    let e = createTestEditor()
+    e.config.standard.smartcase = false
+    e.state.input.search.smartcase = false
+
+    let r =
+      HandlerResult(kind: hrSetBoolOption, boolOption: bsoSmartCase, boolValue: true)
+    discard e.processResult(r, e.activeBuffer())
+    check e.config.standard.smartcase
+    check e.state.input.search.smartcase
+
+    e.applyConfigSettings(e.config)
+    check e.state.input.search.smartcase
+
+  test "hrSetBoolOption(bsoIncSearch) updates config, survives re-apply":
+    let e = createTestEditor()
+    e.config.standard.incrementalSearch = false
+    e.state.input.search.incsearch = false
+
+    let r =
+      HandlerResult(kind: hrSetBoolOption, boolOption: bsoIncSearch, boolValue: true)
+    discard e.processResult(r, e.activeBuffer())
+    check e.config.standard.incrementalSearch
+    check e.state.input.search.incsearch
+
+    e.applyConfigSettings(e.config)
+    check e.state.input.search.incsearch
 
 suite "Startup window - FileTree":
   ## These tests simulate handleStartUpWindows: viewport height is set to
