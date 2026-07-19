@@ -1610,6 +1610,41 @@ suite "Cursor line highlight - Window boundary clipping":
     for x in 5 ..< 40:
       check buffer[x, 1].style.bg == nStyle.bg
 
+suite "Cursor column highlight - wrap segments":
+  test "cursorColumn shows on every wrap segment at cursor's screen column":
+    # Regression: absolute cursorDisplayCol only matched wrap segment 1, so
+    # segments 2+ lost the vertical column highlight.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.showCursorColumn = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showSyntax = false
+    e.state.lineWrap = true
+
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x".repeat(100))
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.cursor.line = 0
+    # col 45 falls in segment 2 (chars 40..79), screen x = 5.
+    window.cursor.column = 45
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let hlStyle = cursorColumnHighlightStyle()
+    for row in 0 .. 2:
+      check buffer[5, row].style.bg == hlStyle.bg
+      check buffer[4, row].style.bg != hlStyle.bg
+      check buffer[6, row].style.bg != hlStyle.bg
+
 suite "getVisualSelection - Detailed":
   test "Default hasSelection is false":
     let e = createTestEditor()
