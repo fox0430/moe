@@ -22,8 +22,10 @@ import std/[unittest, tables, os, strutils]
 import pkg/parsetoml
 
 import
-  ../src/moepkg/
-    [key_bindings, modes, config, config_loader, command_config, editor_init]
+  ../src/moepkg/[
+    key_bindings, modes, config, config_loader, command_config, command_line,
+    editor_init,
+  ]
 
 proc entry(rhs: string): KeyMappingEntry =
   KeyMappingEntry(rhs: rhs, noremap: true)
@@ -122,6 +124,62 @@ suite "editor_init: newEditorRegistries":
         found = true
         break
     check found
+
+suite "editor_init: applyCommandConfig":
+  test "DisabledCommandAliases removes built-in default aliases":
+    let cfg = newEditorConfig()
+    cfg.disabledCommandAliases = @["q", "w"]
+    var vr = newValidationResult()
+    let (_, _, cmdConfig, cmdLineParser) = newEditorRegistries(cfg, vr)
+
+    check "q" notin cmdConfig.aliases
+    check "w" notin cmdConfig.aliases
+    check "q" notin cmdLineParser.aliases
+    check "w" notin cmdLineParser.aliases
+    # Other defaults are untouched.
+    check "wq" in cmdLineParser.aliases
+
+  test "User alias may reuse a disabled default's name":
+    let cfg = newEditorConfig()
+    cfg.disabledCommandAliases = @["q"]
+    cfg.commandAliases["q"] = UserCommandEntry(command: "quitall")
+    var vr = newValidationResult()
+    let (_, _, cmdConfig, cmdLineParser) = newEditorRegistries(cfg, vr)
+
+    check cmdLineParser.aliases["q"] == claQuitAll
+
+  test "Rebuild resets session-level alias changes":
+    let cfg = newEditorConfig()
+    var vr = newValidationResult()
+    let (_, _, cmdConfig, cmdLineParser) = newEditorRegistries(cfg, vr)
+
+    # Session-level changes: add a custom alias, remove a default one.
+    cmdConfig.addAlias("zz", claQuit)
+    cmdConfig.removeAlias("q")
+    cmdConfig.applyToParser(cmdLineParser)
+    check "zz" in cmdLineParser.aliases
+    check "q" notin cmdLineParser.aliases
+
+    # A reload-style rebuild from the same config restores the declared state.
+    cmdConfig.applyCommandConfig(cfg, cmdLineParser)
+    check "zz" notin cmdLineParser.aliases
+    check "zz" notin cmdConfig.aliases
+    check "q" in cmdLineParser.aliases
+
+  test "Rebuild picks up config edits (live reload path)":
+    let cfg = newEditorConfig()
+    var vr = newValidationResult()
+    let (_, _, cmdConfig, cmdLineParser) = newEditorRegistries(cfg, vr)
+
+    # Simulate a live reload with edited aliases/shell commands.
+    cfg.commandAliases["zz"] = UserCommandEntry(command: "quit")
+    cfg.shellCommands["gitlog"] = UserCommandEntry(command: "git log")
+    cfg.disabledCommandAliases = @["q"]
+    cmdConfig.applyCommandConfig(cfg, cmdLineParser)
+
+    check cmdLineParser.aliases["zz"] == claQuit
+    check "q" notin cmdLineParser.aliases
+    check "gitlog" in cmdLineParser.shellCommands
 
 suite "editor_init: applyKeyMappings inline entries":
   test "forceKeySeq with noremap=false records a recursive key sequence":

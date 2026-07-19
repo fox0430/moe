@@ -191,6 +191,10 @@ proc maybeReloadConfig*(e: Editor) =
   for msg in keyVr.toErrorMessages:
     logWarn("editor", "KeyMapping reload: " & msg)
 
+  # Command aliases/shell commands are declarative too: rebuild them from the
+  # reloaded config (this drops session add/removeCommandAlias changes).
+  e.commandConfig.applyCommandConfig(newConfig, e.commandLineParser)
+
   # Update last known modification time
   e.state.timing.lastConfigModTime = currentModTime
 

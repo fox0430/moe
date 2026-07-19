@@ -2044,6 +2044,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     # Add command aliases and shell commands
     config.commandAliases["x"] = UserCommandEntry(command: "quit")
     config.shellCommands["nimbuild"] = UserCommandEntry(command: "nimble build")
+    config.disabledCommandAliases = @["q"]
 
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
@@ -2078,6 +2079,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     check config.lsp == loaded.lsp
     check config.commandAliases == loaded.commandAliases
     check config.shellCommands == loaded.shellCommands
+    check config.disabledCommandAliases == loaded.disabledCommandAliases
 
 suite "Config - saveConfig":
   test "Default config does not crash":
@@ -3483,6 +3485,70 @@ cmd = { command = "Make -C /opt/project BUILD_TYPE=Release" }
     check config.shellCommands["cmd"].command ==
       "Make -C /opt/project BUILD_TYPE=Release"
 
+suite "Config Validation - DisabledCommandAliases section":
+  test "Valid DisabledCommandAliases config":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["q", "w"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.disabledCommandAliases == @["q", "w"]
+
+  test "Names are lowercased":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["Q"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.disabledCommandAliases == @["q"]
+
+  test "Unknown key is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+unknown = ["q"]
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.unknown" in vr.errors[0].name
+
+  test "Non-array value is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = "q"
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.aliases" in vr.errors[0].name
+
+  test "Non-string element is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = [42]
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.aliases[0]" in vr.errors[0].name
+
+  test "Non-default alias name is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["nosuchalias"]
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.aliases[0]" in vr.errors[0].name
+
+  test "Duplicate entries are loaded once":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["q", "q"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.disabledCommandAliases == @["q"]
+
 suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
   test "CommandAliases round-trip":
     inc testFileCounter
@@ -3575,6 +3641,28 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
     check loaded.shellCommands["nimbuild"].command == "nimble build"
     check loaded.shellCommands["nimbuild"].description == "Build project"
 
+  test "DisabledCommandAliases round-trip":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_disabled_aliases_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.disabledCommandAliases = @["w", "q"]
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    # Serialized in sorted order
+    check loaded.disabledCommandAliases == @["q", "w"]
+
   test "Empty CommandAliases and ShellCommands not saved":
     inc testFileCounter
     let testFile = getTempDir() / "moe_test_empty_cmds_" & $testFileCounter & ".toml"
@@ -3591,3 +3679,4 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
     let content = readFile(testFile)
     check "CommandAliases" notin content
     check "ShellCommands" notin content
+    check "DisabledCommandAliases" notin content

@@ -97,6 +97,34 @@ proc reapplyKeyMappings*(
     registry.clearRuntimeMappings(mode)
   registry.applyKeyMappings(km, vr)
 
+proc applyCommandConfig*(
+    cmdConfig: CommandConfig, editorConfig: EditorConfig, parser: CommandLineParser
+) =
+  ## (Re)build the runtime command configuration from `editorConfig` — default
+  ## aliases minus [DisabledCommandAliases], then user [CommandAliases] on top
+  ## (so a user alias may reuse a disabled default's name), plus
+  ## [ShellCommands] — and apply it to `parser`. Mutates `cmdConfig` in place
+  ## (it is shared with the command-mode handler) and resets session-level
+  ## alias changes: the declarative TOML config is authoritative.
+  cmdConfig.aliases.clear()
+  cmdConfig.aliasDescriptions.clear()
+  cmdConfig.shellCommands.clear()
+
+  cmdConfig.loadDefaultConfig
+
+  for alias in editorConfig.disabledCommandAliases:
+    cmdConfig.removeAlias(alias)
+
+  for alias, entry in editorConfig.commandAliases.pairs:
+    let action = resolveCommandName(entry.command)
+    if action.isSome:
+      cmdConfig.addAlias(alias, action.get, entry.description)
+
+  for name, entry in editorConfig.shellCommands.pairs:
+    cmdConfig.addShellCommand(name, entry.command, entry.description)
+
+  cmdConfig.applyToParser(parser)
+
 proc newEditorRegistries*(
     editorConfig: EditorConfig, vr: var ValidationResult
 ): tuple[
@@ -122,20 +150,8 @@ proc newEditorRegistries*(
   # Apply moerc.toml [KeyMapping] overrides on top of the default bindings.
   keyRegistry.applyKeyMappings(editorConfig.keyMapping, vr)
 
-  # Load command configuration.
-  cmdConfig.loadDefaultConfig
-
-  # Load user-defined command aliases from editor config.
-  for alias, entry in editorConfig.commandAliases.pairs:
-    let action = resolveCommandName(entry.command)
-    if action.isSome:
-      cmdConfig.addAlias(alias, action.get, entry.description)
-
-  # Load shell commands from editor config.
-  for name, entry in editorConfig.shellCommands.pairs:
-    cmdConfig.addShellCommand(name, entry.command, entry.description)
-
-  # Apply configuration to parser.
-  cmdConfig.applyToParser(cmdLineParser)
+  # Load command configuration (default aliases minus disabled, user
+  # [CommandAliases], [ShellCommands]) and apply it to the parser.
+  cmdConfig.applyCommandConfig(editorConfig, cmdLineParser)
 
   result = (cmdRegistry, keyRegistry, cmdConfig, cmdLineParser)

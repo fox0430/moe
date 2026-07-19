@@ -85,6 +85,25 @@ proc resolveCommandName*(name: string): Option[CommandLineAction] =
     return some(CommandNameTable[lower])
   return none(CommandLineAction)
 
+proc canonicalCommandName*(action: CommandLineAction): Option[string] =
+  ## Reverse lookup of `CommandNameTable`: return the canonical long-form
+  ## command name for `action` (the name used in TOML `[CommandAliases]`
+  ## config), or none if the action has no canonical name.
+  for name, a in CommandNameTable.pairs:
+    if a == action:
+      return some(name)
+  return none(string)
+
+proc isDefaultCommandAlias*(alias: string): bool =
+  ## True if `alias` names a built-in default command alias — the set
+  ## registered by `loadDefaultConfig` (specs with a non-empty
+  ## `completionDescription`).
+  let key = alias.toLowerAscii()
+  for spec in CommandLineCommandTable:
+    if spec.action.isSome and spec.completionDescription.len > 0 and spec.name == key:
+      return true
+  return false
+
 proc newCommandConfig*(): CommandConfig =
   ## Create a new command configuration with defaults
   CommandConfig(
@@ -103,6 +122,12 @@ proc addAlias*(
     config.aliasDescriptions[key] = description
   else:
     config.aliasDescriptions.del(key)
+
+proc removeAlias*(config: CommandConfig, alias: string) =
+  ## Remove a command alias and its description
+  let key = alias.toLowerAscii()
+  config.aliases.del(key)
+  config.aliasDescriptions.del(key)
 
 proc addShellCommand*(
     config: CommandConfig, name: string, command: string, description = ""

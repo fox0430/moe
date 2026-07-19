@@ -1238,6 +1238,23 @@ Available command names:
 | lspcallhierarchyoutgoing | LSP outgoing calls |
 
 
+### DisabledCommandAliases table
+
+Disable built-in command aliases.
+Each entry must name a built-in default alias (`q`, `w`, `wq`, ...).
+A user alias defined in `[CommandAliases]` may reuse a disabled default's name.
+
+Example:
+```toml
+[DisabledCommandAliases]
+aliases = ["q", "w"]
+```
+
+| Key | Type | Required | Description |
+|:----|:-----|:---------|:------------|
+| aliases | Array of string | yes | Built-in command alias names to disable |
+
+
 ### ShellCommands table
 
 Define shell commands that can be invoked from command mode.
