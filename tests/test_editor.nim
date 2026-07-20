@@ -1238,7 +1238,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
     let originalDisplay = e.state.showLineNumbers
 
     # Toggle in config mode (updates EditorConfig)
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     check e.config.standard.number == not originalDisplay
 
     # Simulate what handleEvent now does for config mode
@@ -1256,7 +1256,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
 
     let original = e.state.showStatusLine
 
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     e.applyConfigSettings(e.config)
     check e.state.showStatusLine == not original
 
@@ -1271,7 +1271,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
 
     let original = e.state.tabStop
 
-    configState.incrementIntValue()
+    configState.incrementIntValue(e.state)
     e.applyConfigSettings(e.config)
     check e.state.tabStop == original + 1
 
@@ -1286,7 +1286,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
 
     let original = e.state.showSyntax
 
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     e.applyConfigSettings(e.config)
     check e.state.showSyntax == not original
 
@@ -1301,7 +1301,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
 
     let original = e.state.showSidebar
 
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     e.applyConfigSettings(e.config)
     check e.state.showSidebar == not original
 

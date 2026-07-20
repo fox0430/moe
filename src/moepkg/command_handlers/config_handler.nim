@@ -88,13 +88,13 @@ proc handleEditModeKey(
     return ConfigModeResult(kind: cmrHandled)
 
 proc handleEnumPopupKey(
-    configState: ConfigModeState, keyCombo: KeyCombo
+    configState: ConfigModeState, editorState: EditorState, keyCombo: KeyCombo
 ): ConfigModeResult =
   ## Handle key press while enum popup is open
   if keyCombo.isSpecial:
     case keyCombo.special
     of skEnter:
-      configState.enumPopupConfirm()
+      configState.enumPopupConfirm(editorState)
       return ConfigModeResult(kind: cmrHandled)
     of skEscape:
       configState.closeEnumPopup()
@@ -122,7 +122,7 @@ proc handleEnumPopupKey(
       configState.enumPopupMoveUp()
       return ConfigModeResult(kind: cmrHandled)
     of " ", "l":
-      configState.enumPopupConfirm()
+      configState.enumPopupConfirm(editorState)
       return ConfigModeResult(kind: cmrHandled)
     of "h":
       configState.closeEnumPopup()
@@ -146,7 +146,7 @@ proc handleConfigModeKey*(
 
   # If enum popup is open, handle separately
   if configState.isEnumPopupOpen():
-    return handleEnumPopupKey(configState, keyCombo)
+    return handleEnumPopupKey(configState, editorState, keyCombo)
 
   # Handle 'gg' command (two g presses)
   if configState.waitingForG:
@@ -183,7 +183,7 @@ proc handleConfigModeKey*(
         of cvkSection:
           discard # Section headers are not interactive
         of cvkBool:
-          configState.toggleBoolValue()
+          configState.toggleBoolValue(editorState)
         of cvkEnum:
           configState.openEnumPopup()
         of cvkInt, cvkFloat, cvkString, cvkColor:
@@ -204,11 +204,11 @@ proc handleConfigModeKey*(
       if item.isSome:
         case item.get.kind
         of cvkEnum:
-          configState.cycleEnumValue(false)
+          configState.cycleEnumValue(editorState, false)
         of cvkInt:
-          configState.decrementIntValue()
+          configState.decrementIntValue(editorState)
         of cvkFloat:
-          configState.decrementFloatValue()
+          configState.decrementFloatValue(editorState)
         else:
           discard
       return ConfigModeResult(kind: cmrHandled)
@@ -218,13 +218,13 @@ proc handleConfigModeKey*(
       if item.isSome:
         case item.get.kind
         of cvkEnum:
-          configState.cycleEnumValue(true)
+          configState.cycleEnumValue(editorState, true)
         of cvkInt:
-          configState.incrementIntValue()
+          configState.incrementIntValue(editorState)
         of cvkFloat:
-          configState.incrementFloatValue()
+          configState.incrementFloatValue(editorState)
         of cvkBool:
-          configState.toggleBoolValue()
+          configState.toggleBoolValue(editorState)
         else:
           discard
       return ConfigModeResult(kind: cmrHandled)
@@ -292,7 +292,7 @@ proc handleConfigModeKey*(
         of cvkSection:
           discard # Section headers are not interactive
         of cvkBool:
-          configState.toggleBoolValue()
+          configState.toggleBoolValue(editorState)
         of cvkEnum:
           configState.openEnumPopup()
         of cvkInt, cvkFloat, cvkString, cvkColor:
@@ -305,11 +305,11 @@ proc handleConfigModeKey*(
       if item.isSome:
         case item.get.kind
         of cvkEnum:
-          configState.cycleEnumValue(false)
+          configState.cycleEnumValue(editorState, false)
         of cvkInt:
-          configState.decrementIntValue()
+          configState.decrementIntValue(editorState)
         of cvkFloat:
-          configState.decrementFloatValue()
+          configState.decrementFloatValue(editorState)
         else:
           discard
       return ConfigModeResult(kind: cmrHandled)

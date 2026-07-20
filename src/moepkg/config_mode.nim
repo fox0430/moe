@@ -27,7 +27,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import config, color, types
+import config, color, types, config_loader
 
 import types/config_mode_types
 export config_mode_types
@@ -294,7 +294,7 @@ proc buildItemList*(state: ConfigModeState) =
         colorValue: colorValueString(index, false),
       )
 
-proc applyChange*(state: ConfigModeState, itemIndex: int) =
+proc applyChange*(state: ConfigModeState, editorState: EditorState, itemIndex: int) =
   ## Apply a change to the actual config using descriptors
   if itemIndex < 0 or itemIndex >= state.items.len:
     return
@@ -326,6 +326,11 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
   if not changed:
     return
 
+  # Revert theme on load failure so UI never claims a kind whose colors
+  # silently fell back to default.
+  let isThemeChange = item.section == "Theme" and item.displayName in ["kind", "path"]
+  let previousTheme = cfg.theme
+
   case item.kind
   of cvkBool:
     desc.boolSet(cfg, item.boolValue)
@@ -339,6 +344,16 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
     desc.stringSetter(cfg, item.stringValue)
   else:
     discard
+
+  if isThemeChange:
+    var vr = newValidationResult()
+    initTheme(cfg, vr)
+    if vr.hasErrors:
+      cfg.theme = previousTheme
+      initTheme(cfg)
+      editorState.statusMessage =
+        "Failed to load theme: " & vr.toErrorMessages.join("; ")
+
   state.pendingApply = true
 
   # Rebuild to update conditional visibility
@@ -537,14 +552,16 @@ proc searchBackward*(state: ConfigModeState): Option[int] =
 
 # Value manipulation
 
-proc toggleBoolValue*(state: ConfigModeState) =
+proc toggleBoolValue*(state: ConfigModeState, editorState: EditorState) =
   ## Toggle a boolean value
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkBool:
     state.items[itemIndex].boolValue = not state.items[itemIndex].boolValue
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
 
-proc cycleEnumValue*(state: ConfigModeState, forward: bool = true) =
+proc cycleEnumValue*(
+    state: ConfigModeState, editorState: EditorState, forward: bool = true
+) =
   ## Cycle through enum options
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex < 0:
@@ -560,27 +577,27 @@ proc cycleEnumValue*(state: ConfigModeState, forward: bool = true) =
     else:
       currentIdx = (currentIdx - 1 + item.enumOptions.len) mod item.enumOptions.len
     state.items[itemIndex].enumValue = item.enumOptions[currentIdx]
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
 
-proc incrementIntValue*(state: ConfigModeState) =
+proc incrementIntValue*(state: ConfigModeState, editorState: EditorState) =
   ## Increment integer value
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkInt:
     let item = state.items[itemIndex]
     if item.intValue < item.intMax:
       state.items[itemIndex].intValue = item.intValue + 1
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
-proc decrementIntValue*(state: ConfigModeState) =
+proc decrementIntValue*(state: ConfigModeState, editorState: EditorState) =
   ## Decrement integer value
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkInt:
     let item = state.items[itemIndex]
     if item.intValue > item.intMin:
       state.items[itemIndex].intValue = item.intValue - 1
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
-proc incrementFloatValue*(state: ConfigModeState) =
+proc incrementFloatValue*(state: ConfigModeState, editorState: EditorState) =
   ## Increment float value by step
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkFloat:
@@ -588,9 +605,9 @@ proc incrementFloatValue*(state: ConfigModeState) =
     let newValue = item.floatValue + item.floatStep
     if newValue <= item.floatMax:
       state.items[itemIndex].floatValue = newValue
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
-proc decrementFloatValue*(state: ConfigModeState) =
+proc decrementFloatValue*(state: ConfigModeState, editorState: EditorState) =
   ## Decrement float value by step
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkFloat:
@@ -598,7 +615,7 @@ proc decrementFloatValue*(state: ConfigModeState) =
     let newValue = item.floatValue - item.floatStep
     if newValue >= item.floatMin:
       state.items[itemIndex].floatValue = newValue
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
 # Display formatting
 
@@ -680,7 +697,7 @@ proc confirmEdit*(state: ConfigModeState, editorState: EditorState): bool =
       let newValue = parseInt(state.editBuffer)
       if newValue >= item.intMin and newValue <= item.intMax:
         state.items[itemIndex].intValue = newValue
-        state.applyChange(itemIndex)
+        state.applyChange(editorState, itemIndex)
         state.cancelEdit()
         return true
       else:
@@ -692,7 +709,7 @@ proc confirmEdit*(state: ConfigModeState, editorState: EditorState): bool =
       let newValue = parseFloat(state.editBuffer)
       if newValue >= item.floatMin and newValue <= item.floatMax:
         state.items[itemIndex].floatValue = newValue
-        state.applyChange(itemIndex)
+        state.applyChange(editorState, itemIndex)
         state.cancelEdit()
         return true
       else:
@@ -701,7 +718,7 @@ proc confirmEdit*(state: ConfigModeState, editorState: EditorState): bool =
       return false # Invalid number
   of cvkString:
     state.items[itemIndex].stringValue = state.editBuffer
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
     state.cancelEdit()
     return true
   of cvkColor:
@@ -838,7 +855,7 @@ proc enumPopupMoveDown*(state: ConfigModeState) =
     else:
       state.enumPopupIndex = 0
 
-proc enumPopupConfirm*(state: ConfigModeState) =
+proc enumPopupConfirm*(state: ConfigModeState, editorState: EditorState) =
   ## Confirm selection in enum popup
   if not state.enumPopupOpen:
     return
@@ -851,7 +868,7 @@ proc enumPopupConfirm*(state: ConfigModeState) =
   let item = state.items[itemIndex]
   if item.kind == cvkEnum and state.enumPopupIndex < item.enumOptions.len:
     state.items[itemIndex].enumValue = item.enumOptions[state.enumPopupIndex]
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
 
   state.closeEnumPopup()
 
