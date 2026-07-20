@@ -605,6 +605,29 @@ suite "HoverPopup - renderHoverPopup":
     # Should not crash
     renderHoverPopup(termBuffer, mgr, pos, showBorder = true)
 
+  test "Renders content without border when showBorder is false":
+    let mgr = newHoverPopupManager()
+    mgr.show("Hello", 0, 0)
+    mgr.display.maxVisibleLines = 1
+    mgr.display.maxVisibleWidth = 20
+
+    let pos = HoverPopupPosition(x: 0, y: 0, width: 10, height: 3)
+
+    var termBuffer = newBuffer(80, 24)
+
+    renderHoverPopup(termBuffer, mgr, pos, showBorder = false)
+
+    # No border characters at popup corners
+    check termBuffer[0, 0].symbol != "┌"
+    check termBuffer[9, 0].symbol != "┐"
+
+    # Content still renders at (0, 0) since no border offset applies
+    check termBuffer[0, 0].symbol == "H"
+    check termBuffer[1, 0].symbol == "e"
+    check termBuffer[2, 0].symbol == "l"
+    check termBuffer[3, 0].symbol == "l"
+    check termBuffer[4, 0].symbol == "o"
+
   test "Wide char content writes continuation cell to prevent ghost":
     # Wide (2-col) characters must set an empty continuation cell at x+1 so
     # celina's diff can repaint the second column on popup close.

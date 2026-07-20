@@ -335,6 +335,12 @@ suite "SignatureHelp - renderSignatureHelpPopup":
     check termBuffer[0, 0].symbol != "┌"
     check termBuffer[9, 0].symbol != "┐"
 
+    # Content still renders at (0, 0) since no border offset applies
+    check termBuffer[0, 0].symbol == "t"
+    check termBuffer[1, 0].symbol == "e"
+    check termBuffer[2, 0].symbol == "s"
+    check termBuffer[3, 0].symbol == "t"
+
   test "Wide char signature writes continuation cell to prevent ghost":
     # Wide (2-col) characters must set an empty continuation cell at x+1 so
     # celina's diff can repaint the second column on popup close.

@@ -225,9 +225,8 @@ proc renderSignatureHelpPopup*(
     else:
       pos.width
 
-  # Draw border if enabled
+  # Top border
   if showBorder:
-    # Top border
     if pos.y >= 0 and pos.y < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
         termBuffer[pos.x, pos.y] = cell("┌", signatureHelpBorderStyle())
@@ -238,41 +237,43 @@ proc renderSignatureHelpPopup*(
         termBuffer[pos.x + pos.width - 1, pos.y] =
           cell("┐", signatureHelpBorderStyle())
 
-    # Side borders and content
-    if contentY >= 0 and contentY < termBuffer.area.height:
-      # Left border
-      if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, contentY] = cell("│", signatureHelpBorderStyle())
+  # Side borders and content (content always rendered)
+  if contentY >= 0 and contentY < termBuffer.area.height:
+    # Left border
+    if showBorder and pos.x >= 0 and pos.x < termBuffer.area.width:
+      termBuffer[pos.x, contentY] = cell("│", signatureHelpBorderStyle())
 
-      # Content - signature with highlighted active parameter
-      var x = contentX
-      var charIdx = 0
-      for r in display.signature.runes:
-        if x >= contentX + contentWidth or x >= termBuffer.area.width:
-          break
+    # Content - signature with highlighted active parameter
+    var x = contentX
+    var charIdx = 0
+    for r in display.signature.runes:
+      if x >= contentX + contentWidth or x >= termBuffer.area.width:
+        break
 
-        # Determine style based on whether this character is in the active parameter
-        let style =
-          if display.activeParamStart >= 0 and charIdx >= display.activeParamStart and
-              charIdx < display.activeParamEnd:
-            signatureHelpHighlightStyle()
-          else:
-            signatureHelpNormalStyle()
+      # Determine style based on whether this character is in the active parameter
+      let style =
+        if display.activeParamStart >= 0 and charIdx >= display.activeParamStart and
+            charIdx < display.activeParamEnd:
+          signatureHelpHighlightStyle()
+        else:
+          signatureHelpNormalStyle()
 
-        x += setRuneCell(termBuffer, x, contentY, r, style)
-        inc charIdx
+      x += setRuneCell(termBuffer, x, contentY, r, style)
+      inc charIdx
 
-      # Fill remaining space with background
-      while x < contentX + contentWidth and x < termBuffer.area.width:
-        termBuffer[x, contentY] = cell(" ", signatureHelpNormalStyle())
-        inc x
+    # Fill remaining space with background
+    while x < contentX + contentWidth and x < termBuffer.area.width:
+      termBuffer[x, contentY] = cell(" ", signatureHelpNormalStyle())
+      inc x
 
-      # Right border
-      if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
-        termBuffer[pos.x + pos.width - 1, contentY] =
-          cell("│", signatureHelpBorderStyle())
+    # Right border
+    if showBorder and pos.x + pos.width - 1 >= 0 and
+        pos.x + pos.width - 1 < termBuffer.area.width:
+      termBuffer[pos.x + pos.width - 1, contentY] =
+        cell("│", signatureHelpBorderStyle())
 
-    # Bottom border
+  # Bottom border
+  if showBorder:
     let bottomY = contentY + 1
     if bottomY >= 0 and bottomY < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
