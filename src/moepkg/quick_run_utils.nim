@@ -290,13 +290,38 @@ proc prepareQuickRun*(
     command: command.get, filePath: path, isTempFile: useTempFile
   )
 
+proc cleanupTempFiles(filePath: string, isTempFile: bool) =
+  ## Cleanup temporary files created by QuickRun.
+  if not isTempFile:
+    return
+  try:
+    # Cleanup temporary a source code file.
+    if filePath.fileExists:
+      removeFile(filePath)
+    # Cleanup temporary a executable.
+    let baseName = filePath.splitFile.name
+    if baseName.fileExists:
+      removeFile(baseName)
+    # Also cleanup .out files for C/C++
+    if ".out".fileExists:
+      removeFile(".out")
+  except OSError:
+    discard
+
+proc cleanupTempFiles(p: QuickRunProcess) =
+  cleanupTempFiles(p.filePath, p.isTempFile)
+
 proc startBackgroundQuickRun*(
     prepared: QuickRunPrepareResult
 ): Future[Result[QuickRunProcess, string]] {.async: (raises: []).} =
   ## Start a background process for build and run commands (async).
+  ## On failure, cleans up the temp source file that `prepareQuickRun`
+  ## may have written, so a failed start never leaves `quickruntemp.<ext>`
+  ## behind.
 
   let backgroundProcess = await startBackgroundProcess(prepared.command)
   if backgroundProcess.isErr:
+    cleanupTempFiles(prepared.filePath, prepared.isTempFile)
     return Result[QuickRunProcess, string].err fmt"QuickRun failed: {backgroundProcess.error}"
 
   return Result[QuickRunProcess, string].ok QuickRunProcess(
@@ -305,23 +330,6 @@ proc startBackgroundQuickRun*(
     isTempFile: prepared.isTempFile,
     process: backgroundProcess.get,
   )
-
-proc cleanupTempFiles(p: QuickRunProcess) =
-  ## Cleanup temporary files created by QuickRun
-  if p.isTempFile:
-    try:
-      # Cleanup temporary a source code file.
-      if p.filePath.fileExists:
-        removeFile(p.filePath)
-      # Cleanup temporary a executable.
-      let baseName = p.filePath.splitFile.name
-      if baseName.fileExists:
-        removeFile(baseName)
-      # Also cleanup .out files for C/C++
-      if ".out".fileExists:
-        removeFile(".out")
-    except OSError:
-      discard
 
 proc abandonQuickRunProcess*(p: QuickRunProcess) =
   ## Kill a running QuickRun process and remove its temporary files (temp

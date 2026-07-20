@@ -699,6 +699,48 @@ suite "QuickRunUtils - startBackgroundQuickRun":
 
     check waitFor(runTest())
 
+  test "Failed start removes temp source file":
+    const tempPath = "quickruntemp_start_fail.py"
+    writeFile(tempPath, "print('leaked?')")
+    defer:
+      if fileExists(tempPath):
+        removeFile(tempPath)
+
+    proc runTest(): Future[bool] {.async.} =
+      let prepared = QuickRunPrepareResult(
+        command: BackgroundProcessCommand(
+          cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
+        ),
+        filePath: tempPath,
+        isTempFile: true,
+      )
+      let r = await startBackgroundQuickRun(prepared)
+      return r.isErr
+
+    check waitFor(runTest())
+    check not fileExists(tempPath)
+
+  test "Failed start keeps file when isTempFile is false":
+    const keepPath = "quickruntemp_start_fail_keep.nim"
+    writeFile(keepPath, "echo 1")
+    defer:
+      if fileExists(keepPath):
+        removeFile(keepPath)
+
+    proc runTest(): Future[bool] {.async.} =
+      let prepared = QuickRunPrepareResult(
+        command: BackgroundProcessCommand(
+          cmd: "/nonexistent/command", args: @[], workingDir: getCurrentDir()
+        ),
+        filePath: keepPath,
+        isTempFile: false,
+      )
+      let r = await startBackgroundQuickRun(prepared)
+      return r.isErr
+
+    check waitFor(runTest())
+    check fileExists(keepPath)
+
 suite "QuickRunUtils - waitForResultAsync":
   test "Wait for process and get output":
     proc runTest(): Future[tuple[isOk: bool, output: seq[string]]] {.async.} =
