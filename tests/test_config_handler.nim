@@ -305,7 +305,7 @@ suite "config_handler: Int Value Editing":
     if intIndex >= 0:
       configState.selectedIndex = intIndex
       # Increment first to make sure we can decrement
-      configState.incrementIntValue()
+      configState.incrementIntValue(editorState)
       let originalValue = configState.items[intIndex].intValue
 
       let keyCombo = KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {})
@@ -327,7 +327,7 @@ suite "config_handler: Int Value Editing":
 
     if intIndex >= 0:
       configState.selectedIndex = intIndex
-      configState.incrementIntValue()
+      configState.incrementIntValue(editorState)
       let originalValue = configState.items[intIndex].intValue
 
       let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
@@ -394,7 +394,7 @@ suite "config_handler: Float Value Editing":
     if floatIndex >= 0:
       configState.selectedIndex = floatIndex
       # Increment first to make sure we can decrement
-      configState.incrementFloatValue()
+      configState.incrementFloatValue(editorState)
       let originalValue = configState.items[floatIndex].floatValue
       let step = configState.items[floatIndex].floatStep
 
@@ -1203,7 +1203,7 @@ suite "config_handler: Float Value Editing Extended":
 
     if floatIndex >= 0:
       configState.selectedIndex = floatIndex
-      configState.incrementFloatValue()
+      configState.incrementFloatValue(editorState)
       let originalValue = configState.items[floatIndex].floatValue
       let step = configState.items[floatIndex].floatStep
 
