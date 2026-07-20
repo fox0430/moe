@@ -792,41 +792,6 @@ proc addUnderlineRanges*(
   ## Highlight overload: forwards to the seq-level `addUnderlineRanges`.
   highlight.colorSegments.addUnderlineRanges(ranges)
 
-proc addColorSegment*(
-    h: var Highlight,
-    line, length: int,
-    color: EditorColorPairIndex,
-    style = defaultStyle,
-) =
-  ## Add a colorSegment to end of the line.
-  ## Ignore If need to overwrite.
-
-  var position = -1
-  for i in 0 .. h.colorSegments.high:
-    if h.colorSegments[i].lastRow == line:
-      position = i
-    elif position > -1 and h.colorSegments[i].lastRow > line:
-      break
-
-  if position > -1:
-    template beforeSegment(): ColorSegment =
-      h.colorSegments[position]
-
-    if beforeSegment.firstColumn > beforeSegment.lastColumn:
-      beforeSegment.lastColumn = beforeSegment.firstColumn
-
-    h.colorSegments.insert(
-      ColorSegment(
-        firstRow: line,
-        firstColumn: beforeSegment.lastColumn + 1,
-        lastRow: line,
-        lastColumn: beforeSegment.lastColumn + 1 + length,
-        color: color,
-        style: style,
-      ),
-      position + 1,
-    )
-
 iterator parseReservedWord(
     buffer: string, reservedWords: seq[ReservedWord], color: EditorColorPairIndex
 ): (string, EditorColorPairIndex) =
