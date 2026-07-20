@@ -175,6 +175,9 @@ proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
   e.pruneBufferIdFromAllWindows(bufId)
   let bidx = e.bufferIndexById(bufId)
   if bidx >= 0:
+    # Mirror removeBufferAt: evict before delete so the buffer's pointer can't
+    # alias a future buffer via a leftover cache entry.
+    evictGitCacheForBuffer(e.buffers[bidx])
     e.deleteBufferAt(bidx)
 
   let prevActive = e.windowManager.activeWindowIndex
