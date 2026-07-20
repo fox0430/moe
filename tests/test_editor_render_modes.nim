@@ -24,8 +24,10 @@ import std/[unittest, strutils]
 import pkg/celina
 
 import
-  ../src/moepkg/
-    [editor, config, config_loader, config_mode, render_utils, color, unicode_utils]
+  ../src/moepkg/[
+    editor, config, config_loader, config_mode, render_utils, color, colorcode,
+    unicode_utils,
+  ]
 import ../src/moepkg/editor_render_modes
 import ../src/moepkg/types/config_mode_types
 
@@ -388,3 +390,43 @@ suite "renderConfig - search highlight with multibyte displayName":
       check expectedX != byteIdx # Precondition: zero-width/combining chars create gap
       check hlXs.len > 0
       check hlXs[0] == expectedX
+
+suite "renderConfig - color value highlight with multibyte displayName":
+  test "Color swatch positioned by display columns, not byte offsets":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+
+    configState.items.add ConfigItem(
+      kind: cvkColor,
+      displayName: "あいう",
+      section: "Theme Colors",
+      depth: 1,
+      descriptorIndex: -1,
+      colorIsFg: true,
+      colorValue: "#ff0000",
+    )
+    let colorIdx = configState.items.high
+
+    let maxNameWidth = calcMaxNameWidth(configState.items, buffer.area.width)
+
+    configState.selectedIndex = colorIdx
+    configState.topLine = colorIdx
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let swatchBg = colorCodeStyle(parseThemeColor("#ff0000").get).bg
+    var swatchXs: seq[int]
+    for x in 0 ..< buffer.area.width:
+      if buffer[x, 0].style.bg == swatchBg:
+        swatchXs.add x
+
+    let displayedLine = formatItemForDisplay(configState.items[colorIdx], maxNameWidth)
+    let expectedX = displayWidth(displayedLine) - displayWidth("#ff0000")
+    let byteBasedX = displayedLine.len - "#ff0000".len
+
+    check expectedX != byteBasedX # Precondition: CJK chars make byte != display cols
+    check swatchXs.len == "#ff0000".len
+    check swatchXs[0] == expectedX
