@@ -247,8 +247,12 @@ proc maybeUpdateLsp*(e: Editor) =
   if activeBuffer.contentVersion !=
       e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0):
     let lspResult = e.lsp.onBufferChange(activeBuffer)
-    if lspResult.isOk:
-      e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
+    if lspResult.isErr and activeBuffer.filePath.isSome:
+      logLspDegraded("didChange " & activeBuffer.filePath.get, lspResult.error)
+    # Advance even on failure: this proc fires every frame, and leaving the
+    # tracked version behind would re-run (and re-log) the same failing
+    # didChange every tick until the buffer is edited again.
+    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
 
 proc pollLspCompletion*(e: Editor) =
   ## Poll for pending LSP completion responses

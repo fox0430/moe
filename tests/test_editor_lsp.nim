@@ -19,11 +19,11 @@
 
 ## Tests for editor_lsp.nim
 
-import std/[unittest, os, options, tables, importutils]
+import std/[unittest, os, options, strutils, tables, importutils]
 
 import pkg/chronos
 
-import ../src/moepkg/[editor, buffer, config, config_loader, types]
+import ../src/moepkg/[editor, buffer, config, config_loader, message_log, types]
 import ../src/moepkg/editor_lsp {.all.}
 import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -126,6 +126,39 @@ suite "editor_lsp - maybeUpdateLsp":
     # the server on "ab" forever.
     check e.lsp.sentDocumentVersion(path).get > syncedVersion
     check e.lsp.documents[path].shadow == "ac"
+
+  test "Failed onBufferChange logs to LSP message log and advances tracker":
+    # An unknown extension has no LSP config, so the untracked -> didOpen
+    # fallback in onBufferChange fails. The proc must surface that via
+    # logLspDegraded and advance lastLspContentVersions so the next tick does
+    # not re-run and re-log the same failing didChange.
+    privateAccess(LspIntegration)
+
+    let tmpDir = getTempDir() / "moe_test_maybe_update_lsp_err"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    clearLspMessageLog()
+
+    let path = tmpDir / "file.unknownlspext"
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+
+    e.maybeUpdateLsp()
+
+    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+    let logAfterFirst = getLspMessageLog()
+    check logAfterFirst.len == 1
+    check logAfterFirst[0].startsWith("[LSP] didChange ")
+
+    # Second call at the same contentVersion is a no-op: no extra log entry.
+    e.maybeUpdateLsp()
+    check getLspMessageLog().len == 1
 
 suite "editor_lsp - server config plumbing":
   test "custom command/extensions override the built-in default":
