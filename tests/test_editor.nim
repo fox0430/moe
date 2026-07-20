@@ -2861,3 +2861,40 @@ suite "Editor - addCommandAlias/removeCommandAlias":
     check e.addCommandAlias("zz", claQuit).isOk
 
     check "q" notin e.commandLineParser.aliases
+
+suite "Editor - tab/indent setters sync .editorconfig override":
+  # Regression: Editor-layer setters used to write only config.standard.*,
+  # leaving buf.editorConfig unchanged. Since the getter prefers the override,
+  # a write via `e.tabStop = v` was silently overshadowed on read.
+  test "tabStop= updates both the config and the buffer override":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.editorConfig = some(BufferEditorConfig(tabStop: some(2)))
+
+    e.tabStop = 8
+
+    check e.config.standard.tabStop == 8
+    check buf.editorConfig.get.tabStop == some(8)
+    check e.tabStop == 8
+
+  test "shiftWidth= updates both the config and the buffer override":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.editorConfig = some(BufferEditorConfig(shiftWidth: some(2)))
+
+    e.shiftWidth = 8
+
+    check e.config.standard.shiftWidth == 8
+    check buf.editorConfig.get.shiftWidth == some(8)
+    check e.shiftWidth == 8
+
+  test "expandTab= updates both the config and the buffer override":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.editorConfig = some(BufferEditorConfig(expandTab: some(false)))
+
+    e.expandTab = true
+
+    check e.config.standard.expandTab == true
+    check buf.editorConfig.get.expandTab == some(true)
+    check e.expandTab == true
