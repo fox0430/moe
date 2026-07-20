@@ -872,7 +872,7 @@ suite "EditorWindowManager - Split Size Proportions":
     check wm.windows[0].viewport.height == 10
     check wm.windows[1].viewport.y == 11
     check wm.windows[1].viewport.height == 13
-    check wm.windows[0].viewport.height + WindowSeparatorWidth +
+    check wm.windows[0].viewport.height + WindowSeparatorHeight +
       wm.windows[1].viewport.height == 24
 
   test "3 hsplits produce correct heights (single status line)":
@@ -900,8 +900,8 @@ suite "EditorWindowManager - Split Size Proportions":
     check wm.windows[1].viewport.height == 6
     check wm.windows[2].viewport.y == 14
     check wm.windows[2].viewport.height == 10
-    check wm.windows[0].viewport.height + WindowSeparatorWidth +
-      wm.windows[1].viewport.height + WindowSeparatorWidth +
+    check wm.windows[0].viewport.height + WindowSeparatorHeight +
+      wm.windows[1].viewport.height + WindowSeparatorHeight +
       wm.windows[2].viewport.height == 24
 
   # hsplit size checks (multi status line)
