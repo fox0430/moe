@@ -2478,6 +2478,43 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.viewport.topLine == 5
     check win.viewport.leftColumn == 2
 
+  test "processResult(modeTransition→BufferManager) swaps buffer and preserves origin for quit":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_bm_mode_transition.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 5
+    win.cursor.column = 2
+    win.viewport.topLine = 4
+    win.viewport.leftColumn = 3
+
+    discard e.processResult(
+      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.BufferManager)),
+      e.activeBuffer(),
+    )
+    check win.mode == EditorMode.BufferManager
+    check win.modeState.kind == mskBufferManager
+    check win.buffer != origBuf
+    check win.cursor.line == 0
+    check win.cursor.column == 0
+    check win.viewport.topLine == 0
+    check win.viewport.leftColumn == 0
+
+    # Quit path relies on saveOriginalBuffer captured during modeTransition entry.
+    discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 5
+    check win.cursor.column == 2
+    check win.viewport.topLine == 4
+    check win.viewport.leftColumn == 3
+
   test "processResult(hrBookmarkManagerQuit) restores the pre-manager cursor/viewport":
     let e = createTestEditor()
     let f = getTempDir() / "moe_test_bkm_quit_restore.txt"

@@ -1581,7 +1581,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       bmState.originCursor = activeWin.cursor
       bmState.originTopLine = activeWin.viewport.topLine
       bmState.originLeftColumn = activeWin.viewport.leftColumn
+      activeWin.saveOriginalBuffer()
       activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
+      activeWin.buffer = bmState.createBufferManagerTextBuffer()
+      activeWin.cursor = BufferPosition(line: 0, column: 0)
+      activeWin.viewport.resetViewportTop()
+      activeWin.viewport.leftColumn = 0
       activeWin.mode = EditorMode.BufferManager
 
     # Initialize bookmark manager state when entering BookmarkManager mode
