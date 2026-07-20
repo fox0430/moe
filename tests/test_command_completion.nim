@@ -543,13 +543,11 @@ suite "CommandCompletion - triggerArgumentCompletion":
 
     check mgr.state == ccsIdle
 
-  test "Set option with 'se' alias":
+  test "'se' is not a set alias and does not trigger":
     let mgr = newCommandCompletionManager()
     mgr.triggerArgumentCompletion(":se num")
 
-    check mgr.state == ccsActive
-    check mgr.mode == cmSetOption
-    check mgr.baseCommand == "se"
+    check mgr.state == ccsIdle
 
   test "File path completion for write command":
     let mgr = newCommandCompletionManager()

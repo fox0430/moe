@@ -350,7 +350,7 @@ proc triggerArgumentCompletion*(
   let baseArgX = 1 + cmd.runeLen + 1
 
   # Determine completion mode based on command
-  if cmd in ["set", "se"]:
+  if cmd == "set":
     mgr.mode = cmSetOption
     mgr.menu.entries = collectSetOptions(arg)
     mgr.argStartX = baseArgX
