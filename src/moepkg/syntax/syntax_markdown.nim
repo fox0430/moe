@@ -359,8 +359,32 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       else:
         lexer.kind = gtBuiltin
     else:
-      lexer.kind = gtBuiltin
-      inc position
+      # Only treat `<` as an HTML tag / autolink opener when it looks like one:
+      # `<letter...` or `</letter...`, with a matching `>` on the same line.
+      # Without this check, a bare `<` (as in `a < b`) would always be
+      # highlighted.
+      let looksLikeTag =
+        lexer.buf[position + 1] in {'a' .. 'z', 'A' .. 'Z'} or (
+          lexer.buf[position + 1] == '/' and
+          lexer.buf[position + 2] in {'a' .. 'z', 'A' .. 'Z'}
+        )
+      if looksLikeTag:
+        var scan = position + 1
+        var hasClose = false
+        while lexer.buf[scan] notin {'\0', '\n', '\r', '<'}:
+          if lexer.buf[scan] == '>':
+            hasClose = true
+            break
+          inc scan
+        if hasClose:
+          lexer.kind = gtBuiltin
+          inc position
+        else:
+          lexer.kind = gtPunctuation
+          inc position
+      else:
+        lexer.kind = gtPunctuation
+        inc position
   of '*':
     if lexer.isLineStart and lexer.buf[position + 1] == ' ':
       # `* ` list marker
@@ -581,11 +605,28 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       lexer.kind = gtLongStringLit
       inc position, 2
       lexer.lang.markdown.inDisplayMath = true
-    else:
-      # Opening $ - emit just the delimiter
-      lexer.kind = gtStringLit
+    elif lexer.buf[position + 1] in {' ', '\t', '\n', '\r', '\0'}:
+      # A `$` followed by whitespace/EOL is not a math delimiter (pandoc rule).
+      lexer.kind = gtPunctuation
       inc position
-      lexer.lang.markdown.inMathMode = true
+    else:
+      # Only enter inline math if a closing `$` exists on the same line;
+      # otherwise an unclosed `$` would flip the rest of the document into
+      # math styling.
+      var scan = position + 1
+      var hasClose = false
+      while lexer.buf[scan] notin {'\0', '\n', '\r'}:
+        if lexer.buf[scan] == '$':
+          hasClose = true
+          break
+        inc scan
+      if hasClose:
+        lexer.kind = gtStringLit
+        inc position
+        lexer.lang.markdown.inMathMode = true
+      else:
+        lexer.kind = gtPunctuation
+        inc position
   of ')', ']', '{', '}', ':', ',', ';', '.', '/', '\'', '\"':
     lexer.kind = gtPunctuation
     inc position
