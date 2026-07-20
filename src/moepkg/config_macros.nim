@@ -900,17 +900,43 @@ macro generateConfigDescriptors*(
           floatStep: `stepVal`,
         )
     of "string":
-      result.add quote do:
-        `target`.add ConfigItemDescriptor(
-          kind: cvkString,
-          displayName: `dispLit`,
-          section: `secLit`,
-          visibleWhen: `visibleExpr`,
-          stringGet: proc(`cIdent`: EditorConfig): string =
-            `path`,
-          stringSetter: proc(`cIdent`: EditorConfig, `vIdent`: string) =
-            `path` = `vIdent`,
-        )
+      let enumStrP = findPragma(pragmas, "cfgEnumStrings")
+      if enumStrP != nil:
+        let opts = parseStringArrayLit(pragmaArg(enumStrP))
+        if opts.len == 0:
+          error(
+            "cfgEnumStrings requires a non-empty array of string literals " &
+              "(e.g. `{.cfgEnumStrings: [\"a\", \"b\"].}`)",
+            enumStrP,
+          )
+        var arr = newNimNode(nnkBracket)
+        for o in opts:
+          arr.add newLit(o)
+        let optsExpr = newCall(ident("@"), arr)
+        result.add quote do:
+          `target`.add ConfigItemDescriptor(
+            kind: cvkEnum,
+            displayName: `dispLit`,
+            section: `secLit`,
+            visibleWhen: `visibleExpr`,
+            enumGet: proc(`cIdent`: EditorConfig): string =
+              `path`,
+            enumSet: proc(`cIdent`: EditorConfig, `vIdent`: string) =
+              `path` = `vIdent`,
+            enumOptions: `optsExpr`,
+          )
+      else:
+        result.add quote do:
+          `target`.add ConfigItemDescriptor(
+            kind: cvkString,
+            displayName: `dispLit`,
+            section: `secLit`,
+            visibleWhen: `visibleExpr`,
+            stringGet: proc(`cIdent`: EditorConfig): string =
+              `path`,
+            stringSetter: proc(`cIdent`: EditorConfig, `vIdent`: string) =
+              `path` = `vIdent`,
+          )
     else:
       if isEnumTypeIdent(fieldType):
         # cfgEnum overrides the auto-derived option order. Useful when the UI
