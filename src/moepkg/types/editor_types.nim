@@ -235,10 +235,29 @@ flag3(showCodeLens, bool, lsp, codeLens, enable)
 flag3(showDocumentHighlight, bool, lsp, documentHighlight, enable)
 flag3(showInlayHint, bool, lsp, inlayHint, enable)
 flag2(lineWrap, bool, standard, lineWrap)
-flag2(tabStop, int, standard, tabStop)
-flag2(shiftWidth, int, standard, shiftWidth)
 flag2(softTabStop, int, standard, softTabStop)
-flag2(expandTab, bool, standard, expandTab)
+
+# tabStop / shiftWidth / expandTab: delegate to EditorState so the per-buffer
+# .editorconfig override is updated alongside the global config, matching the
+# custom setters in types.nim.
+proc tabStop*(e: Editor): int =
+  e.state.tabStop
+
+proc `tabStop=`*(e: Editor, v: int) =
+  e.state.tabStop = v
+
+proc shiftWidth*(e: Editor): int =
+  e.state.shiftWidth
+
+proc `shiftWidth=`*(e: Editor, v: int) =
+  e.state.shiftWidth = v
+
+proc expandTab*(e: Editor): bool =
+  e.state.expandTab
+
+proc `expandTab=`*(e: Editor, v: bool) =
+  e.state.expandTab = v
+
 flag2(autoIndent, bool, standard, autoIndent)
 flag2(smartIndent, bool, standard, smartIndent)
 flag2(autoCloseParen, bool, standard, autoCloseParen)
