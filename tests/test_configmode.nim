@@ -1445,7 +1445,7 @@ suite "ConfigMode - cfgEnumStrings descriptor":
     let idx = findPopupPosition(state)
     check idx >= 0
     state.selectedIndex = idx
-    state.cycleEnumValue(forward = true)
+    state.cycleEnumValue(testEditorState(cfg), forward = true)
     check cfg.notification.popupPosition == "topRight"
     check state.items[idx].enumValue == "topRight"
 
