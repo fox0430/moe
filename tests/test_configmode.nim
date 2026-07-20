@@ -1417,6 +1417,38 @@ suite "ConfigMode - Item coverage":
       else:
         check item.descriptorIndex >= 0
 
+suite "ConfigMode - cfgEnumStrings descriptor":
+  # Notification.popupPosition is a `string` field constrained via
+  # `{.cfgEnumStrings: [...].}`. The descriptor macro must render it as
+  # `cvkEnum` (fixed choice list) rather than `cvkString` (free text) so the
+  # UI cannot write values the loader would silently reset on next reload.
+  proc findPopupPosition(state: ConfigModeState): int =
+    result = -1
+    for i, item in state.items:
+      if item.section == "Notification" and item.displayName == "popupPosition":
+        return i
+
+  test "popupPosition renders as cvkEnum, not cvkString":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    let idx = findPopupPosition(state)
+    check idx >= 0
+    check state.items[idx].kind == cvkEnum
+    check state.items[idx].enumOptions ==
+      @["bottomRight", "topRight", "topLeft", "bottomLeft"]
+    check state.items[idx].enumValue == cfg.notification.popupPosition
+
+  test "cycling popupPosition writes back to the string field":
+    let cfg = newEditorConfig()
+    cfg.notification.popupPosition = "bottomRight"
+    let state = newConfigModeState(cfg)
+    let idx = findPopupPosition(state)
+    check idx >= 0
+    state.selectedIndex = idx
+    state.cycleEnumValue(forward = true)
+    check cfg.notification.popupPosition == "topRight"
+    check state.items[idx].enumValue == "topRight"
+
 suite "ConfigMode - Edge cases and guard conditions":
   test "startEdit does nothing for bool item":
     let cfg = newEditorConfig()
