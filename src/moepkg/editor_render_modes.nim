@@ -149,12 +149,13 @@ proc renderConfig*(
     if item.kind == cvkColor and not isBeingEdited:
       let parsed = parseThemeColor(item.colorValue)
       if parsed.isOk and not parsed.get.isTermDefaultColor:
-        # The value is the trailing colorValue of the formatted content; derive
-        # its column from the formatted line length (not maxNameWidth) so an
-        # over-long name can't misplace the highlight.
-        let valueX =
-          startX + formatItemForDisplay(item, maxNameWidth).len - item.colorValue.len
-        if valueX + item.colorValue.len <= startX + width:
+        # Column from displayWidth, not byte len, so a multibyte displayName
+        # can't shift the highlight past the value.
+        let
+          formatted = formatItemForDisplay(item, maxNameWidth)
+          valueWidth = displayWidth(item.colorValue)
+          valueX = startX + displayWidth(formatted) - valueWidth
+        if valueX + valueWidth <= startX + width:
           buffer.setString(valueX, screenY, item.colorValue, colorCodeStyle(parsed.get))
 
     inc screenY
