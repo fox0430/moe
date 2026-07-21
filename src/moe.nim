@@ -312,8 +312,8 @@ proc main() =
   # buffer matching the URI (not only the active one) so diagnostics for
   # background buffers aren't dropped.
   editor.lsp.setDiagnosticsCallback(
-    proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
-      editor.applyDiagnosticsForUri(uri, diagnostics)
+    proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.} =
+      editor.applyDiagnosticsForUri(uri, diagnostics, version)
   )
 
   # Re-open buffers automatically when a language server recovers from a crash,

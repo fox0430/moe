@@ -311,7 +311,8 @@ proc getProgressText*(state: LspProgressState): string =
 
 proc setDiagnosticsCallback*(
     lsp: LspIntegration,
-    callback: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.},
+    callback:
+      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.},
 ) =
   ## Set callback for diagnostics updates
   lsp.service.onDiagnosticsUpdate = callback
@@ -730,6 +731,17 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
   lsp.documents[path].shadow = text
   return ok()
 
+proc flushPendingBufferChange*(lsp: LspIntegration, buffer: TextBuffer) {.raises: [].} =
+  ## Send any queued didChange for `buffer` now, before an out-of-band request
+  ## puts a positional request ahead of the edit on the wire. No-op when the
+  ## server's shadow already matches (self-gated by `onBufferChange`). Best-
+  ## effort: transport errors are swallowed so callers on any raises contract
+  ## stay stable.
+  try:
+    discard lsp.onBufferChange(buffer)
+  except Exception:
+    discard
+
 proc sentDocumentVersion*(lsp: LspIntegration, path: string): Option[int] =
   ## The last didOpen/didChange version sent to the server for `path`,
   ## or `none` if the document is not tracked as open. Exposed for tests.
@@ -807,6 +819,16 @@ proc resolveLspPath(lsp: LspIntegration, buffer: TextBuffer): Result[string, str
   if buffer.filePath.isNone:
     return err("Buffer has no file path")
   ok(buffer.filePath.get)
+
+proc resolveLspPathForRequest(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[string, string] {.raises: [].} =
+  ## `resolveLspPath` + flush pending didChange before a positional request.
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return pathRes
+  lsp.flushPendingBufferChange(buffer)
+  pathRes
 
 proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
   ## Resolve the language ID for a buffer when LSP is enabled and the buffer
@@ -1525,7 +1547,7 @@ proc requestCodeLensResolve*(
 ): Future[Result[CodeLens, string]] {.async: (raises: [CancelledError]).} =
   ## Resolve a code lens to get its command
   ## Used when the initial codeLens response doesn't include the command
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestCodeLensResolve(pathRes.get, lens)
@@ -1537,7 +1559,7 @@ proc requestExecuteCommand*(
     arguments: seq[JsonNode] = @[],
 ): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
   ## Execute a command on the LSP server (used for code lens commands)
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestExecuteCommand(pathRes.get, command, arguments)
@@ -1603,7 +1625,7 @@ proc requestFormatting*(
     lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
 ): Future[Result[seq[TextEdit], string]] {.async: (raises: [CancelledError]).} =
   ## Request formatting for a buffer
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestFormatting(pathRes.get, tabSize, insertSpaces)
@@ -1613,7 +1635,7 @@ proc requestRename*(
 ): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
   ## Request rename at a position
   ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestRename(
@@ -1625,7 +1647,7 @@ proc requestDefinition*(
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request go to definition at a position
   ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestDefinition(
@@ -1637,7 +1659,7 @@ proc requestReferences*(
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request find references at a position
   ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestReferences(
@@ -1648,7 +1670,7 @@ proc requestDocumentSymbols*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Future[Result[DocumentSymbolResult, string]] {.async: (raises: [CancelledError]).} =
   ## Request document symbols
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestDocumentSymbols(pathRes.get)
@@ -1657,7 +1679,7 @@ proc requestFoldingRanges*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Future[Result[seq[FoldingRange], string]] {.async: (raises: [CancelledError]).} =
   ## Request folding ranges for a buffer
-  let pathRes = resolveLspPath(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestFoldingRange(pathRes.get)

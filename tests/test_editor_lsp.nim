@@ -215,6 +215,8 @@ suite "editor_lsp - server config plumbing":
     check svcCfg.get.command == "nimlangserver" # built-in default preserved
 
 suite "editor_lsp - applyDiagnosticsForUri":
+  privateAccess(LspIntegration)
+
   proc oneDiagnostic(msg: string): seq[lspTypes.Diagnostic] =
     @[
       lspTypes.Diagnostic(
@@ -234,7 +236,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     e.addBuffer(other)
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other")
+      pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other"), none(int)
     )
 
     check other.diagnostics.len == 1
@@ -248,7 +250,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-active.nim"), oneDiagnostic("on active")
+      pathToUri("/tmp/moe-diag-active.nim"), oneDiagnostic("on active"), none(int)
     )
     check activeBuffer.diagnostics.len == 1
 
@@ -259,7 +261,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-nonexistent.nim"), oneDiagnostic("nowhere")
+      pathToUri("/tmp/moe-diag-nonexistent.nim"), oneDiagnostic("nowhere"), none(int)
     )
     check activeBuffer.diagnostics.len == 0
 
@@ -276,7 +278,9 @@ suite "editor_lsp - applyDiagnosticsForUri":
     let normalized = dir / name
     activeBuffer.filePath = some(unnormalized)
 
-    e.applyDiagnosticsForUri(pathToUri(normalized), oneDiagnostic("via normalized"))
+    e.applyDiagnosticsForUri(
+      pathToUri(normalized), oneDiagnostic("via normalized"), none(int)
+    )
 
     check activeBuffer.diagnostics.len == 1
     check activeBuffer.diagnostics[0].message == "via normalized"
@@ -291,10 +295,50 @@ suite "editor_lsp - applyDiagnosticsForUri":
     let path = getTempDir() / "moe_test_diag_disabled.nim"
     activeBuffer.filePath = some(path)
 
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("dropped"))
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("dropped"), none(int))
 
     check activeBuffer.diagnostics.len == 0
     check activeBuffer.getLineMarker(0).isNone
+
+  test "drops publish tagged with a version older than last didChange":
+    # Regression (P0'-3): reload / rapid-edit races leave an in-flight publish
+    # on the wire tagged with the pre-edit version. Applying it to the new
+    # content shifts diagnostics onto the wrong lines.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let path = normalizedPath(absolutePath(getTempDir() / "moe_test_diag_stale.nim"))
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some(path)
+    # Simulate the server-side wire state: we've sent up to version 2.
+    e.lsp.documents[path] = (version: 2, shadow: "")
+
+    # An in-flight publish tagged with version=1 arrives after we've already
+    # sent version=2. It must be dropped.
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("stale"), some(1))
+    check activeBuffer.diagnostics.len == 0
+
+  test "applies publish whose version matches the last didChange":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let path = normalizedPath(absolutePath(getTempDir() / "moe_test_diag_current.nim"))
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some(path)
+    e.lsp.documents[path] = (version: 1, shadow: "")
+
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("current"), some(1))
+    check activeBuffer.diagnostics.len == 1
+    check activeBuffer.diagnostics[0].message == "current"
+
+  test "applies publish with no version (backward compatible)":
+    # Many servers omit the optional version field; those frames still apply.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let path = getTempDir() / "moe_test_diag_untagged.nim"
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some(path)
+
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("untagged"), none(int))
+    check activeBuffer.diagnostics.len == 1
 
 suite "editor_lsp - clearAllDiagnostics":
   test "clears stored diagnostics and markers from all buffers":
@@ -315,8 +359,8 @@ suite "editor_lsp - clearAllDiagnostics":
         message: "boom",
       )
     ]
-    e.applyDiagnosticsForUri(pathToUri(activePath), diag)
-    e.applyDiagnosticsForUri(pathToUri(otherPath), diag)
+    e.applyDiagnosticsForUri(pathToUri(activePath), diag, none(int))
+    e.applyDiagnosticsForUri(pathToUri(otherPath), diag, none(int))
     check activeBuffer.diagnostics.len == 1
     check other.diagnostics.len == 1
     check activeBuffer.getLineMarker(0).isSome
