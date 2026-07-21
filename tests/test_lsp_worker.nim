@@ -566,6 +566,25 @@ suite "LspWorker - notificationToEvents":
     check evt.kind == levDiagnostics
     check evt.diagnosticsJson == "[]"
 
+  test "publishDiagnostics without version leaves diagVersion none":
+    let params = %*{"uri": "file:///t.nim", "diagnostics": []}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagVersion.isNone
+
+  test "publishDiagnostics with integer version populates diagVersion":
+    let params = %*{"uri": "file:///t.nim", "diagnostics": [], "version": 7}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagVersion == some(7)
+
+  test "publishDiagnostics with non-integer version is treated as absent":
+    # Servers occasionally send an unexpected type; refuse to guess.
+    let params = %*{"uri": "file:///t.nim", "diagnostics": [], "version": "3"}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagVersion.isNone
+
   test "window/logMessage with missing type defaults to mtLog":
     let params = %*{"message": "hello"}
     let evt = notificationToEvents("window/logMessage", params)

@@ -215,6 +215,7 @@ type
     of levDiagnostics:
       diagUri*: string
       diagnosticsJson*: string # JSON array of LSP Diagnostic objects
+      diagVersion*: Option[int] # LSP optional, used to drop stale publishes
     of levLogMessage, levShowMessage:
       msgType*: MessageType
       message*: string
@@ -514,7 +515,18 @@ proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
         $params["diagnostics"]
       else:
         "[]"
-    return LspEvent(kind: levDiagnostics, diagUri: uri, diagnosticsJson: diagsJson)
+    # PublishDiagnosticsParams.version is optional; accept only well-formed int.
+    let version =
+      if params.hasKey("version") and params["version"].kind == JInt:
+        some(params["version"].getInt)
+      else:
+        none(int)
+    return LspEvent(
+      kind: levDiagnostics,
+      diagUri: uri,
+      diagnosticsJson: diagsJson,
+      diagVersion: version,
+    )
   of "window/logMessage":
     return LspEvent(
       kind: levLogMessage,

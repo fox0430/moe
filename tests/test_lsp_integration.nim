@@ -1215,6 +1215,48 @@ suite "LspIntegration - Buffer Version Tracking":
     check lsp.onBufferOpen(buffer, serverIsFresh = true).isOk
     check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(1)
 
+suite "LspIntegration - flushPendingBufferChange":
+  privateAccess(LspIntegration)
+
+  var lsp: LspIntegration
+  setup:
+    lsp = newLspIntegration(tmpDir)
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      true
+  teardown:
+    lsp.shutdown()
+
+  test "flush advances wire version when buffer drifted since last sync":
+    # Regression: an out-of-band request (completion, hover) put a positional
+    # request on the wire before the edit that produced its coordinates. The
+    # explicit flush must bring the server up to date first.
+    let path = tmpDir / "flush_drift.nim"
+    let buffer = newTextBuffer("hi", some(path))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(path) == some(1)
+
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    lsp.flushPendingBufferChange(buffer)
+    check lsp.sentDocumentVersion(path) == some(2)
+
+  test "flush is a no-op when server shadow already matches":
+    let path = tmpDir / "flush_insync.nim"
+    let buffer = newTextBuffer("hi", some(path))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(path) == some(1)
+
+    lsp.flushPendingBufferChange(buffer)
+    check lsp.sentDocumentVersion(path) == some(1)
+
+  test "flush is safe when LSP is disabled":
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("hi", some(tmpDir / "flush_disabled.nim"))
+    lsp.flushPendingBufferChange(buffer) # must not raise
+
+  test "flush is safe when buffer has no path":
+    let buffer = newTextBuffer("hi")
+    lsp.flushPendingBufferChange(buffer) # must not raise
+
 suite "LspIntegration - Request Methods (disabled)":
   test "startCompletionRequest returns error when disabled":
     let lsp = newLspIntegration()
@@ -2069,7 +2111,7 @@ suite "LspIntegration - Callbacks":
     let lsp = newLspIntegration()
     var called = false
     lsp.setDiagnosticsCallback(
-      proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
+      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.} =
         called = true
     )
     # Callback is set but won't be called without actual LSP events

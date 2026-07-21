@@ -748,6 +748,9 @@ proc triggerLspCompletionRequest*(
     if oldReqId.isSome:
       handler.lsp.cancelRequest(oldReqId.get)
 
+    # Flush pending didChange so the request lands on post-edit text.
+    handler.lsp.flushPendingBufferChange(buffer)
+
     let reqResult =
       handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
 

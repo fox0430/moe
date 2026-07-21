@@ -93,17 +93,26 @@ proc applyLspServerConfigs*(e: Editor) =
       "LSP server config changed for " & changed.join(", ") &
       "; run :lspRestart to apply"
 
-proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =
+proc applyDiagnosticsForUri*(
+    e: Editor, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+) =
   ## Route a server's publishDiagnostics to the buffer it targets, not just
   ## the active one. Diagnostics for a background buffer would otherwise be
   ## dropped, and the server does not resend them when that buffer is later
   ## focused.
   ## Diagnostics are server-push: there is no request to suppress, so the
   ## Lsp.Diagnostics.enable gate drops them here on receipt instead.
+  ## When the server tagged the publish with a document version, drop frames
+  ## older than the last didChange we sent - avoids applying stale coordinates
+  ## across a reload/rapid-edit while an in-flight publish is on the wire.
   if not e.config.lsp.diagnostics.enable:
     return
 
   let path = normalizedPath(absolutePath(uriToPath(uri)))
+  if version.isSome:
+    let sent = e.lsp.sentDocumentVersion(path)
+    if sent.isSome and version.get < sent.get:
+      return
   for buf in e.buffers:
     if buf.filePath.isSome and normalizedPath(absolutePath(buf.filePath.get)) == path:
       applyDiagnosticsToBuffer(buf, diagnostics)

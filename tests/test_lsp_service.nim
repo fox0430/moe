@@ -938,7 +938,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     var gotUri = ""
     var gotDiags: seq[Diagnostic] = @[]
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic]
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       {.cast(gcsafe).}:
         gotUri = uri
@@ -967,7 +967,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic]
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
     svc.processEvent(
@@ -1292,10 +1292,10 @@ suite "LspService - Callback Setup":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic]
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
-    svc.onDiagnosticsUpdate("test", @[])
+    svc.onDiagnosticsUpdate("test", @[], none(int))
     check called
 
   test "can set custom onLogMessage callback":

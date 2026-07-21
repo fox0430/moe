@@ -1224,7 +1224,7 @@ suite "e2e: LspService driven by lasm":
     let h = startLasm()
     try:
       h.svc.onDiagnosticsUpdate = proc(
-          uri: string, diagnostics: seq[Diagnostic]
+          uri: string, diagnostics: seq[Diagnostic], version: Option[int]
       ) {.gcsafe.} =
         diagUri = uri
         diagReceived = diagnostics
@@ -1318,7 +1318,7 @@ suite "e2e: LspService driven by lasm":
     let h = startLasm()
     try:
       h.svc.onDiagnosticsUpdate = proc(
-          uri: string, diagnostics: seq[Diagnostic]
+          uri: string, diagnostics: seq[Diagnostic], version: Option[int]
       ) {.gcsafe.} =
         diagUri = uri
         diagReceived = diagnostics

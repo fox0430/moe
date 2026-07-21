@@ -124,6 +124,10 @@ proc startContextualRequestOnCache*(
   ## without an `Editor` (e.g. insert handler). Preserves the prior pending
   ## entry when `startImpl` errors so a transient failure does not destroy a
   ## good in-flight response.
+  # Flush pending didChange first so this request doesn't precede the edit
+  # that produced its coordinates on the wire (shared FIFO, per-frame flush).
+  if not buffer.isNil:
+    lsp.flushPendingBufferChange(buffer)
   let reqRes = startImpl()
   if reqRes.isErr:
     return err(reqRes.error)
