@@ -229,7 +229,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.highlight = Highlight(colorSegments: segments)
       b.incrementalHighlight = IncrementalHighlight(
         segments: segments,
-        lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
+        lineStates: LineStateCache(states: lineStates),
         parsedUpTo: chunkEnd,
       )
     else:
