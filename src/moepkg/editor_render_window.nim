@@ -983,30 +983,102 @@ proc renderFoldLine*(
         foldText
     buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())
 
+proc lineDisplayRows(
+    line: int,
+    buffer: TextBuffer,
+    wrapCache: WrapCountCache,
+    lineWrap: bool,
+    maxWidth: int,
+    tabStop: int,
+): int =
+  ## Display rows a single logical line occupies (not counting fold hiding).
+  if lineWrap:
+    if wrapCache != nil:
+      wrapCache.cachedWrapCount(buffer, line)
+    else:
+      calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
+  else:
+    1
+
+proc walkDisplayRows(
+    buffer: TextBuffer,
+    foldState: FoldState,
+    wrapCache: WrapCountCache,
+    lineWrap: bool,
+    maxWidth: int,
+    tabStop: int,
+    stopLine: int,
+): int =
+  ## Sum display rows for logical lines [0, stopLine). Each collapsed fold
+  ## collapses its range to a single marker row; wrap expands a logical line
+  ## to its wrap count. Assumes `foldState.folds` is sorted by startLine.
+  if lineWrap and wrapCache != nil:
+    wrapCache.ensureFresh(buffer, maxWidth, tabStop)
+  let
+    total = min(stopLine, buffer.len)
+    folds = foldState.folds
+  var
+    line = 0
+    foldIdx = 0
+  while line < total:
+    while foldIdx < folds.len and
+        (not folds[foldIdx].collapsed or folds[foldIdx].endLine < line):
+      inc foldIdx
+    if foldIdx < folds.len and folds[foldIdx].startLine <= line:
+      # Fold marker row: whole [startLine, endLine] collapses to 1 row.
+      result += 1
+      line = folds[foldIdx].endLine + 1
+      inc foldIdx
+    else:
+      result += lineDisplayRows(line, buffer, wrapCache, lineWrap, maxWidth, tabStop)
+      inc line
+
 proc renderScrollbar*(
     e: Editor,
     buffer: var Buffer,
     window: EditorWindow,
     visibleHeight: int,
     tabLineOffset: int,
+    lineNumOffset: int,
 ) =
   ## Render a scrollbar on the right edge of the window.
-  ## The scrollbar shows the current viewport position within the buffer.
+  ## Thumb size/position reflect actual display rows: collapsed folds count as
+  ## one marker row and wrapped logical lines count as their wrap segments,
+  ## so the thumb tracks what the viewport actually shows.
   let
-    totalLines = window.buffer.len
     scrollbarWidth = e.calculateScrollbarWidth(window.mode)
     scrollbarStartX = window.viewport.x + window.viewport.width - scrollbarWidth
 
-  if totalLines <= visibleHeight or visibleHeight <= 0 or scrollbarWidth <= 0:
+  if visibleHeight <= 0 or scrollbarWidth <= 0:
     return
 
-  # Calculate thumb size and position
   let
-    thumbSize = max(1, (visibleHeight * visibleHeight) div totalLines)
-    maxTopLine = totalLines - visibleHeight
+    sidebarWidth = e.calculateSidebarWidth(window.mode)
+    maxWidth =
+      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    totalRows = walkDisplayRows(
+      window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
+      maxWidth, e.tabStop, window.buffer.len,
+    )
+
+  if totalRows <= visibleHeight:
+    return
+
+  let
+    rowsAbove =
+      walkDisplayRows(
+        window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
+        maxWidth, e.tabStop, window.viewport.topLine,
+      ) + (if e.lineWrap: window.viewport.topWrapOffset else: 0)
+    thumbSize = max(1, (visibleHeight * visibleHeight) div totalRows)
+    maxRowsAbove = totalRows - visibleHeight
     thumbPos =
-      if maxTopLine > 0:
-        (window.viewport.topLine * (visibleHeight - thumbSize)) div maxTopLine
+      if maxRowsAbove > 0:
+        clamp(
+          (rowsAbove * (visibleHeight - thumbSize)) div maxRowsAbove,
+          0,
+          visibleHeight - thumbSize,
+        )
       else:
         0
 
@@ -1168,7 +1240,7 @@ proc renderWindow*(
 
   # Render scrollbar on the right edge if enabled (file editing modes only)
   if e.calculateScrollbarWidth(window.mode) > 0:
-    e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset)
+    e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset, lineNumOffset)
 
 proc renderWindowSeparator*(
     e: Editor,

@@ -3786,3 +3786,172 @@ suite "renderWindowLineNoWrap - display-width clipping":
     # the 25-cell budget is col 24 and must hold an 'X'; col 25 must not.
     check buffer[24, 0].symbol == "X"
     check buffer[25, 0].symbol != "X"
+
+suite "renderScrollbar - fold/wrap-aware display rows":
+  proc bufOfLines(count: int, text: string = "x"): TextBuffer =
+    var lines: seq[string]
+    for i in 0 ..< count:
+      lines.add(text)
+    newTextBuffer(lines.join("\n"))
+
+  test "walkDisplayRows: plain buffer equals logical line count":
+    let buf = bufOfLines(10)
+    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 10
+
+  test "walkDisplayRows: collapsed fold shrinks range to one marker row":
+    # 30 lines, fold [5,15] collapsed → 5 lines + 1 marker + 14 remaining = 20.
+    let buf = bufOfLines(30)
+    check buf.foldState.addFold(5, 15, collapsed = true)
+    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 20
+
+  test "walkDisplayRows: non-collapsed fold leaves rows unchanged":
+    let buf = bufOfLines(30)
+    check buf.foldState.addFold(5, 15, collapsed = false)
+    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 30
+
+  test "walkDisplayRows: wrap expands long lines to their segment count":
+    # 5 lines; line 1 is 25 chars → 3 wrap segments at maxWidth 10. Others = 1.
+    let buf = newTextBuffer(@["x", "x".repeat(25), "x", "x", "x"].join("\n"))
+    check walkDisplayRows(buf, buf.foldState, nil, true, 10, 4, buf.len) == 7
+
+  test "walkDisplayRows: fold marker counts once regardless of inner wrap":
+    # 5 wrapping lines (each 25 chars → 3 segments at maxWidth 10). Fold [1,3]
+    # collapses three of them to one marker, so total = 3 + 1 + 3 = 7.
+    var lines: seq[string]
+    for i in 0 ..< 5:
+      lines.add("x".repeat(25))
+    let buf = newTextBuffer(lines.join("\n"))
+    check buf.foldState.addFold(1, 3, collapsed = true)
+    check walkDisplayRows(buf, buf.foldState, nil, true, 10, 4, buf.len) == 7
+
+  test "walkDisplayRows: stopLine exclusive; counts lines strictly before it":
+    let buf = bufOfLines(20)
+    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 0) == 0
+    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 5) == 5
+    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 20) == 20
+
+  test "walkDisplayRows: stopLine inside collapsed fold counts the marker once":
+    # fold [5,15] collapsed, stopLine=10 (inside the fold). Loop hits the fold
+    # at line=5, adds 1 for the marker, jumps line to 16 → loop exits.
+    let buf = bufOfLines(30)
+    check buf.foldState.addFold(5, 15, collapsed = true)
+    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 10) == 6
+
+  proc scrollbarEditor(): Editor =
+    ## Editor tuned for direct renderScrollbar cell inspection: no sidebar, no
+    ## line numbers gutter competing for cells.
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    result = newEditor(config, vr)
+    result.state.scrollbar = true
+    result.state.scrollbarWidth = 1
+    result.state.showSidebar = false
+    result.state.showLineNumbers = false
+
+  test "renderScrollbar: no bar when a collapsed fold makes content fit":
+    # 40 logical lines, visibleHeight 20 → without fold the bar draws. Fold
+    # [0,30] collapses to 1 marker row → total display rows = 1 + 9 = 10 ≤ 20,
+    # so the bar's early return fires and no cells are painted.
+    let e = scrollbarEditor()
+    e.state.lineWrap = false
+    var buf = createTestBuffer()
+    var text = newSeq[string](40)
+    for i in 0 ..< 40:
+      text[i] = "line"
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), text.join("\n"))
+    check e.activeBuffer.foldState.addFold(0, 30, collapsed = true)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.width = 40
+    window.viewport.height = 20
+    window.viewport.topLine = 0
+
+    e.renderScrollbar(buf, window, 20, 0, 0)
+
+    let scrollbarX = window.viewport.width - 1
+    let track = scrollbarTrackStyle()
+    let thumb = scrollbarThumbStyle()
+    for row in 0 ..< 20:
+      let s = buf[scrollbarX, row].style
+      check s != track
+      check s != thumb
+
+  test "renderScrollbar: wrap adds display rows that pre-fix math would miss":
+    # 3 logical lines, each 200 chars → 5 wrap segments at width 40. Total
+    # display rows = 15 (> visibleHeight 10), so the bar must render. The
+    # pre-fix code used totalLines=3 ≤ visibleHeight and would early-return
+    # with an empty scrollbar column.
+    let e = scrollbarEditor()
+    e.state.lineWrap = true
+    var buf = createTestBuffer()
+    let longLine = "x".repeat(200)
+    discard e.activeBuffer.insertText(
+      BufferPosition(line: 0, column: 0), @[longLine, longLine, longLine].join("\n")
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.width = 40
+    window.viewport.height = 10
+    window.viewport.topLine = 0
+
+    e.renderScrollbar(buf, window, 10, 0, 0)
+
+    let scrollbarX = window.viewport.width - 1
+    let thumb = scrollbarThumbStyle()
+    let track = scrollbarTrackStyle()
+    var thumbCells = 0
+    var trackCells = 0
+    for row in 0 ..< 10:
+      if buf[scrollbarX, row].style == thumb:
+        inc thumbCells
+      elif buf[scrollbarX, row].style == track:
+        inc trackCells
+    # Bar visible: at least one thumb cell, at least one track cell (thumb
+    # doesn't fill the whole column since totalRows > visibleHeight).
+    check thumbCells >= 1
+    check trackCells >= 1
+    check thumbCells + trackCells == 10
+
+  test "renderScrollbar: thumb moves down as topLine advances (fold-aware)":
+    # 60 lines, visibleHeight 10. With a collapsed fold [0,19] the top half of
+    # the buffer collapses to 1 marker row: rowsAbove for topLine=30 becomes
+    # 1 + 10 = 11, not 30. The thumb should sit near the middle, not the end.
+    let e = scrollbarEditor()
+    e.state.lineWrap = false
+    var buf = createTestBuffer()
+    var text = newSeq[string](60)
+    for i in 0 ..< 60:
+      text[i] = "l"
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), text.join("\n"))
+    check e.activeBuffer.foldState.addFold(0, 19, collapsed = true)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.width = 40
+    window.viewport.height = 10
+    window.viewport.topLine = 30
+
+    e.renderScrollbar(buf, window, 10, 0, 0)
+
+    let scrollbarX = window.viewport.width - 1
+    let thumb = scrollbarThumbStyle()
+    var firstThumbRow = -1
+    for row in 0 ..< 10:
+      if buf[scrollbarX, row].style == thumb:
+        firstThumbRow = row
+        break
+    # totalRows = 1 marker + 40 tail = 41; maxRowsAbove = 41-10 = 31;
+    # rowsAbove = 11; thumbSize = 100/41 = 2; expected thumbPos ≈ 11*8/31 ≈ 2.
+    # Without fold-awareness rowsAbove would be 30, thumbPos ≈ 30*8/50 ≈ 4
+    # (using the pre-fix totals). Either way the thumb sits mid-column, not
+    # at the far bottom — pin the observable: it starts in the upper half.
+    check firstThumbRow >= 0
+    check firstThumbRow < 5
