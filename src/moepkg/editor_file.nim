@@ -33,7 +33,8 @@ import
   editorconfig_helper,
   editor_codelens,
   highlight,
-  highlight_config
+  highlight_config,
+  persist
 
 type SaveAllBuffersResult* = object
   savedCount*: int

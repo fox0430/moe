@@ -28,6 +28,8 @@ import std/[os, appdirs, paths, strformat, strutils, tables, json, options]
 import pkg/results
 
 import logger
+import types/persist_types
+export persist_types
 
 # Default limits (can be overridden by config)
 const
@@ -120,10 +122,6 @@ proc saveCommandHistory*(
     return err(fmt"Failed to save command history: {e.msg}")
 
 # Cursor Position Persistence
-
-type CursorPositionEntry* = object
-  line*: int
-  column*: int
 
 proc getCursorPositionsPath*(): Result[Path, string] =
   ## Get the path to the cursor positions file

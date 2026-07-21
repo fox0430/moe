@@ -21,7 +21,7 @@ import std/[unittest, tables, options, monotimes, times, json]
 
 import pkg/chronos
 
-import ../src/moepkg/[editor, config, types, buffer, color]
+import ../src/moepkg/[editor, config, types, buffer, color, virtual_text]
 import ../src/moepkg/editor_codelens {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
 

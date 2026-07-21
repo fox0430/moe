@@ -38,7 +38,8 @@ import
   git_conflict,
   style_patch,
   status_line,
-  editor_codelens
+  editor_codelens,
+  virtual_text
 import command_handlers/visual_handler
 
 type
