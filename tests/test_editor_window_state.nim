@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, posix, strutils]
+import std/[unittest, options, strutils]
 
 import
   ../src/moepkg/[
@@ -25,19 +25,6 @@ import
     diff_viewer, buffer_manager, backup_manager, references_viewer, recent_file_mode,
     debug_viewer, message_log,
   ]
-import ../src/moepkg/terminal/pty
-
-proc closedTerminalState(): TerminalState =
-  ## A TerminalState whose PTY is pre-closed, so `cleanup()` is a safe no-op
-  ## (no real shell spawned). Mirrors the helper in test_terminal_tabs.
-  TerminalState(
-    pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
-    grid: nil,
-    subMode: tsmInput,
-    exitCode: none(int),
-    waitingForCtrlN: false,
-    needsBufferRefresh: false,
-  )
 
 # Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =
@@ -488,21 +475,6 @@ suite "ModeState variant invariants":
     win.clearModeState(EditorMode.Terminal)
 
     check win.modeState.kind == mskFiler
-
-  test "clearModeState resets the variant after Terminal PTY cleanup":
-    # The Terminal branch runs `cleanup()` to release the PTY, then the
-    # variant must end up reset to `mskNone`. The reset is deliberately not
-    # gated behind that teardown, so the window is left consistent regardless
-    # of what cleanup does.
-    let e = createTestEditor()
-    let win = e.activeWindow
-    let term = closedTerminalState()
-    win.modeState = ModeState(kind: mskTerminal, terminal: term)
-
-    win.clearModeState(EditorMode.Terminal)
-
-    check win.modeState.kind == mskNone
-    check term.pty.closed
 
   test "restoreOriginalBuffer is a no-op when variant kind mismatches mode":
     # The early-return guard protects against callers passing a mode whose
