@@ -554,3 +554,46 @@ suite "EditorState - buffer switch flips state.tabStop":
     check e.state.shiftWidth == 6
     # No expandTab override on B → falls back to global.
     check e.state.expandTab == false
+
+suite "Editor - newEditor routes initial push through applyConfigSettings":
+  ## Non-default config must reach editor state on startup, not only on reload.
+  test "notification popup fields reflect config":
+    let cfg = newEditorConfig()
+    cfg.notification.popupPosition = "topLeft"
+    cfg.notification.popupTimeoutMs = 7777
+    cfg.notification.popupMaxVisible = 9
+    cfg.notification.popupMaxWidth = 42
+    cfg.notification.popupBorder = true
+    let e = newEditor(cfg, newValidationResult())
+    check e.state.notificationPopup.position == nppTopLeft
+    check e.state.notificationPopup.timeoutMs == 7777
+    check e.state.notificationPopup.maxVisible == 9
+    check e.state.notificationPopup.maxWidth == 42
+    check e.state.notificationPopup.showBorder == true
+
+  test "lsp.enable reflects config on init":
+    let cfg = newEditorConfig()
+    cfg.lsp.enable = false
+    let e = newEditor(cfg, newValidationResult())
+    check e.lsp.enabled == false
+
+  test "lsp.timeout reflects config on init":
+    let cfg = newEditorConfig()
+    cfg.lsp.timeout = 12345
+    let e = newEditor(cfg, newValidationResult())
+    check e.lsp.service.requestTimeoutMs == 12345
+
+  test "user-registered [Lsp.<lang>] entry is registered on init":
+    let cfg = newEditorConfig()
+    cfg.lsp.servers["mylang"] =
+      LspServerConfig(command: "mylang-lsp", extensions: @["mylang"])
+    let e = newEditor(cfg, newValidationResult())
+    let after = e.lsp.service.getConfig("mylang")
+    check after.isSome
+    check after.get.command == "mylang-lsp"
+
+  test "git.updateInterval reflects config on init":
+    let cfg = newEditorConfig()
+    cfg.git.updateInterval = 4321
+    let e = newEditor(cfg, newValidationResult())
+    check e.state.timing.gitDiffUpdateInterval == 4321

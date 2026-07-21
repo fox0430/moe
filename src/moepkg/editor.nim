@@ -45,9 +45,8 @@ import
   emergency
 
 import
-  status_line, render_utils, git_conflict, logger, config_loader, search_utils,
-  hover_popup, command_completion, color, message_log, sidebar, recent_file_mode,
-  registers, highlight_config
+  render_utils, git_conflict, logger, config_loader, search_utils, hover_popup,
+  command_completion, color, message_log, recent_file_mode, registers
 
 import command_handlers/handler_manager
 
@@ -309,30 +308,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         initTable[string, seq[int]](),
   )
 
-  # Apply sidebar bookmark marker from config
-  setBookmarkMarker(editorConfig.standard.bookmarkMarker)
-
-  # Sync notification popup settings from config
-  result.state.notificationPopup.timeoutMs = editorConfig.notification.popupTimeoutMs
-  result.state.notificationPopup.maxVisible = editorConfig.notification.popupMaxVisible
-  result.state.notificationPopup.maxWidth = editorConfig.notification.popupMaxWidth
-  result.state.notificationPopup.showBorder = editorConfig.notification.popupBorder
-  case editorConfig.notification.popupPosition
-  of "topRight":
-    result.state.notificationPopup.position = nppTopRight
-  of "topLeft":
-    result.state.notificationPopup.position = nppTopLeft
-  of "bottomLeft":
-    result.state.notificationPopup.position = nppBottomLeft
-  else:
-    result.state.notificationPopup.position = nppBottomRight
-
   # Add initial buffer to buffer list
   result.addBuffer(initialBuffer)
   logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)
-
-  # Apply config-derived highlight settings to the initial buffer
-  applyHighlightConfig(initialBuffer, editorConfig)
 
   # Create default window (always have at least one window)
   result.windowManager.windows.add(
@@ -374,17 +352,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     result.config.notification, result.lsp,
   )
 
-  # Set clipboard tool for register system
-  if result.config.clipboard.enable:
-    result.state.registers.setClipboardTool(result.config.clipboard.tool)
-
-  # Apply LSP enable setting from config
-  result.lsp.setEnabled(result.config.lsp.enable)
-
-  # Apply the user-configured LSP request timeout (config.lsp.timeout, ms).
-  result.lsp.service.setRequestTimeout(result.config.lsp.timeout)
-
-  result.applyLspServerConfigs()
+  # Route the initial config push through the reload path so the two lists
+  # can't drift.
+  result.applyConfigSettings(editorConfig)
 
   # Initialize config file modification time for liveReloadOfConf
   let configPath = getConfigPath()
@@ -418,12 +388,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     if result.state.statusMessage.len == 0:
       result.state.statusMessage = msg
     addMessageLog(msg)
-
-  # Propagate the configured git diff refresh cadence into the status-line
-  # cache's module global. applyConfigSettings does this on config reload;
-  # without an initial call here the cache would run at the hardcoded
-  # default until the first reload.
-  setGitDiffRefreshInterval(editorConfig.git.updateInterval.int64)
 
 proc newEditor*(editorConfig: EditorConfig): Editor =
   ## Create a new Editor with the given configuration.
