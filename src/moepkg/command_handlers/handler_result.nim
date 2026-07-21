@@ -424,34 +424,6 @@ type
       errorMessage*: string
 
 # Utility functions for HandlerResult
-proc wasHandled*(hrResult: HandlerResult): bool =
-  ## Check if the event was handled
-  hrResult.kind in {
-    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
-    hrEnew, hrSave, hrSaveAll, hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext,
-    hrBufferPrev, hrBufferFirst, hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete,
-    hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
-    hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit,
-    hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer, hrReferencesQuit,
-    hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-    hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
-    hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
-    hrEnterCallHierarchy, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
-    hrBufferManagerQuit, hrEnterBufferManager, hrBookmarkManagerJump,
-    hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrEnterBookmarkManager,
-    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
-    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-    hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-    hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrEnterDiffViewer,
-    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences, hrLspDocumentSymbol,
-    hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-    hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-    hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
-    hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrConflictNext,
-    hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro,
-  }
-
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error
   hrResult.kind == hrError
