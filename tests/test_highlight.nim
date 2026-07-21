@@ -2454,6 +2454,25 @@ suite "Highlight - Markdown Incremental":
     )
     checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
 
+suite "Highlight - updateHighlight cache reuse":
+  test "empty-line buffer reuses the incremental cache on re-edit":
+    # All-blank buffer: `segments` stays empty but `lineStates` is populated.
+    # Cache must be reused on the next edit, not rebuilt.
+    var buf = newTextBuffer("\n\n")
+    buf.language = SourceLanguage.langNim
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.incrementalHighlight != nil
+    check buf.incrementalHighlight.segments.len == 0
+    check buf.incrementalHighlight.lineStates.states.len == buf.len
+
+    let cached = buf.incrementalHighlight
+    buf.markLineChanged(0)
+    buf.updateHighlight()
+
+    check buf.incrementalHighlight == cached
+
 suite "Highlight - line-length cap (synmaxcol)":
   test "buildBufferStrCapped truncates long lines and emits a default tail":
     let lines = @["short", "a".repeat(50)]
