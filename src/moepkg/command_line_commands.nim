@@ -359,6 +359,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claHSplit),
     isCanonicalLong: true,
+    takesFilePath: true,
   ),
   CommandLineCommandSpec(
     name: "split",
