@@ -865,6 +865,7 @@ suite "CommandCompletion - FilePathCommands constant":
     check "vsplit" in FilePathCommands
     check "sp" in FilePathCommands
     check "split" in FilePathCommands
+    check "hsplit" in FilePathCommands
     check "filetree" in FilePathCommands
 
 suite "CommandCompletion - popup constants":
