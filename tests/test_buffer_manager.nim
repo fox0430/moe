@@ -28,7 +28,6 @@ suite "BufferManagerState - Constructor":
 
     check state.items.len == 0
     check state.selectedIndex == 0
-    check state.previousWindowIndex == 0
 
 suite "BufferEntry - initBufferManagerEntries":
   test "Create entries from empty buffer list":

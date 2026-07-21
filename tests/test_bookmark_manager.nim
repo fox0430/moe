@@ -45,7 +45,6 @@ suite "BookmarkManagerState - Constructor":
 
     check state.items.len == 0
     check state.selectedIndex == 0
-    check state.previousWindowIndex == 0
 
 suite "BookmarkManagerState - updateEntries":
   test "Update entries from buffers with bookmarks":

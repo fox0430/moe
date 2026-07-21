@@ -29,7 +29,7 @@ export bookmark_manager_types
 export list_viewer
 
 proc newBookmarkManagerState*(): BookmarkManagerState =
-  BookmarkManagerState(items: @[], selectedIndex: 0, previousWindowIndex: 0)
+  BookmarkManagerState(items: @[], selectedIndex: 0)
 
 proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
   ## Update the bookmark manager entries by scanning all buffers for bookmarks

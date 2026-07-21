@@ -134,9 +134,7 @@ proc refresh*(state: FilerState) =
 
   state.needsBufferRefresh = true
 
-proc newFilerState*(
-    path: string, previousPath: Option[string] = none(string)
-): FilerState =
+proc newFilerState*(path: string): FilerState =
   ## Create a new FilerState for the given directory
   let normalizedPath = normalizedPath(absolutePath(expandTilde(path)))
   result = FilerState(
@@ -145,7 +143,6 @@ proc newFilerState*(
     selectedIndex: 0,
     showHidden: true,
     topLine: 0,
-    previousPath: previousPath,
   )
   result.refresh()
 
