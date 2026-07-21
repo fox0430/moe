@@ -29,7 +29,7 @@ export buffer_manager_types
 export list_viewer
 
 proc newBufferManagerState*(): BufferManagerState =
-  BufferManagerState(items: @[], selectedIndex: 0, previousWindowIndex: 0)
+  BufferManagerState(items: @[], selectedIndex: 0)
 
 proc initBufferManagerEntries*(bufferInfos: seq[BufferInfo]): seq[BufferEntry] =
   ## Create buffer entries from buffer information

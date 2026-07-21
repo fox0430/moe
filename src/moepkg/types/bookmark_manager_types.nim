@@ -39,7 +39,6 @@ type
   BookmarkManagerState* = ref object of ListViewer[BookmarkEntry]
     ## State for the bookmark manager UI.
     ## items (bookmark entries)/selectedIndex/topLine/waitingForG are inherited.
-    previousWindowIndex*: int # Window index to return to when closing
     # Cursor/viewport of the underlying buffer captured on entry, so quitting
     # the manager restores the position instead of leaving it at (0, 0).
     originCursor*: BufferPosition

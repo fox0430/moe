@@ -1464,7 +1464,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.setMode(EditorMode.BufferManager)
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos())
-    bmState.previousWindowIndex = e.windowManager.activeWindowIndex
     let activeWin = e.activeWindow
     # Capture the current position so quitting the manager can restore it.
     bmState.originCursor = activeWin.cursor
@@ -1482,7 +1481,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.setMode(EditorMode.BookmarkManager)
     let bkmState = newBookmarkManagerState()
     bkmState.updateEntries(e.buffers)
-    bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
     let activeWin = e.activeWindow
     # Capture the current position so quitting the manager can restore it.
     bkmState.originCursor = activeWin.cursor
@@ -1576,7 +1574,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if newMode == EditorMode.BufferManager:
       let bmState = newBufferManagerState()
       bmState.updateEntries(e.getBufferInfos())
-      bmState.previousWindowIndex = e.windowManager.activeWindowIndex
       # Capture the current position so quitting the manager can restore it.
       bmState.originCursor = activeWin.cursor
       bmState.originTopLine = activeWin.viewport.topLine
@@ -1593,7 +1590,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if newMode == EditorMode.BookmarkManager:
       let bkmState = newBookmarkManagerState()
       bkmState.updateEntries(e.buffers)
-      bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
       # Capture the current position so quitting the manager can restore it.
       bkmState.originCursor = activeWin.cursor
       bkmState.originTopLine = activeWin.viewport.topLine

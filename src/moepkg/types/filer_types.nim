@@ -23,7 +23,7 @@
 ## `types` and the many modules importing it) do not transitively pull in
 ## `highlight` / `syntax/tokenizer` / `celina` via the full `filer` module.
 
-import std/[options, times]
+import std/times
 
 import ../primitives
 
@@ -48,7 +48,6 @@ type
     selectedIndex*: int # Currently selected entry index
     showHidden*: bool # Whether to show hidden files
     topLine*: int # Scroll position (first visible line)
-    previousPath*: Option[string] # Path to return to when closing filer
     needsBufferRefresh*: bool # Flag to trigger buffer regeneration after state changes
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
     # Cursor/viewport of the underlying buffer captured on entry, so quitting
