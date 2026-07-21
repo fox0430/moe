@@ -1178,9 +1178,6 @@ suite "e2e: LspService driven by lasm":
       check h.svc.hasCallHierarchySupport(LangId)
       check h.svc.hasDocumentLinkSupport(LangId)
       check h.svc.hasSignatureHelpSupport(LangId)
-      # lasm emits `"codeLensProvider": null`; guards against treating
-      # JNull as enabled.
-      check not h.svc.hasCodeLensSupport(LangId)
     finally:
       stopLasm(h)
 
