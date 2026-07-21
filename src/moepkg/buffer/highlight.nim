@@ -207,11 +207,11 @@ proc updateHighlight*(b: TextBuffer) =
     var highlightRebuilt = true
 
     if b.language != SourceLanguage.langNone:
-      # Check if incremental cache is valid
+      # Empty `segments` is a valid cached state (all-blank buffer). Gating on
+      # it would force a full rebuild every edit.
       let cacheValid =
         b.incrementalHighlight != nil and
-        b.incrementalHighlight.lineStates.states.len > 0 and
-        b.incrementalHighlight.segments.len > 0
+        b.incrementalHighlight.lineStates.states.len > 0
 
       if cacheValid:
         # Use incremental highlighting for better performance.
