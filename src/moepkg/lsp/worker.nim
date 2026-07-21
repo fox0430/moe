@@ -36,6 +36,11 @@ import ../logger
 export types
 
 type
+  LspTrace* = enum ## LSP `initialize` trace level (client → server).
+    traceOff = "off"
+    traceMessages = "messages"
+    traceVerbose = "verbose"
+
   # Typed params for the notifications the worker builds itself. Serialized with
   # jsony toJson, so they carry exactly these fields (no Option/null noise) and
   # match the previous %* output byte-for-byte.
@@ -262,7 +267,9 @@ type
     sharedState: ptr SharedState
     signal: ThreadSignalPtr # Signal for event-driven wakeup
     tempDir: string
-    rawJsonLog: bool # Emit levRawJson events for the :lspLog viewer (verbose)
+    traceLevel: LspTrace
+      # Both drives the `trace` value sent in `initialize` and gates whether
+      # per-frame levRawJson events are emitted (any non-off level enables them).
     debugLog: bool # Also emit them so req/res reach the debug log file (-d)
 
   LspWorker* = ref object
@@ -275,7 +282,7 @@ type
     signal: ThreadSignalPtr # Signal for event-driven wakeup
     languageId*: string
     nextRequestId: int # For generating unique request IDs
-    rawJsonLog: bool # Forwarded to the worker context on start()
+    traceLevel: LspTrace # Forwarded to the worker context on start()
 
 # Atomic state accessors
 proc loadRunning(s: ptr SharedState): bool =
@@ -674,18 +681,18 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
   proc sendRawJson(direction: LspJsonDirection, node: JsonNode) =
     # Capture the frame only if a sink wants it: the in-memory :lspLog viewer
-    # (trace=verbose) or the debug log file (-d). Both sinks live on the main
-    # thread, so just serialize compactly and hand the frame off via the event
-    # queue; processEvent decides routing (the viewer re-prettifies, the file
-    # logs the line as-is).
-    if not (ctx.rawJsonLog or ctx.debugLog):
+    # (any non-off trace level) or the debug log file (-d). Both sinks live on
+    # the main thread, so just serialize compactly and hand the frame off via
+    # the event queue; processEvent decides routing (the viewer re-prettifies,
+    # the file logs the line as-is).
+    if ctx.traceLevel == traceOff and not ctx.debugLog:
       return
     var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: $node)
     ctx.eventQueue[].push(evt)
 
   proc sendRawJsonStr(direction: LspJsonDirection, frame: string) =
     ## Like sendRawJson but for an already-serialized frame string.
-    if not (ctx.rawJsonLog or ctx.debugLog):
+    if ctx.traceLevel == traceOff and not ctx.debugLog:
       return
     ctx.eventQueue[].push(
       LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: frame)
@@ -1034,9 +1041,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       "rootPath": rootPath,
       "workspaceFolders": newJNull(),
       "capabilities": buildClientCapabilities(),
-      # Only ask the server for verbose $/logTrace traffic when raw-JSON
-      # logging is enabled; otherwise it floods the event queue for nothing.
-      "trace": (if ctx.rawJsonLog: "verbose" else: "off"),
+      # Forward the configured trace level verbatim (LSP spec: off/messages/verbose).
+      # An off level tells the server not to send $/logTrace at all.
+      "trace": $ctx.traceLevel,
     }
 
     # Forward server-specific initializationOptions (e.g. rust-analyzer lens
@@ -1513,9 +1520,12 @@ proc initSharedState(): SharedState =
   result.running.store(false, moRelaxed)
   result.stateVal.store(lwsStopped.ord, moRelaxed)
 
-proc newLspWorker*(languageId: string, rawJsonLog = false): Result[LspWorker, string] =
+proc newLspWorker*(
+    languageId: string, traceLevel: LspTrace = traceOff
+): Result[LspWorker, string] =
   ## Create a new LSP worker. Returns error if signal creation fails.
-  ## rawJsonLog enables per-frame levRawJson debug events (off by default).
+  ## traceLevel is forwarded to `initialize` and gates per-frame levRawJson
+  ## events (any non-off level enables them).
   let signalResult = ThreadSignalPtr.new()
   if signalResult.isErr:
     return err("Failed to create thread signal: " & signalResult.error)
@@ -1528,7 +1538,7 @@ proc newLspWorker*(languageId: string, rawJsonLog = false): Result[LspWorker, st
       signal: signalResult.get,
       languageId: languageId,
       nextRequestId: 1,
-      rawJsonLog: rawJsonLog,
+      traceLevel: traceLevel,
     )
   )
 
@@ -1545,7 +1555,7 @@ proc start*(worker: LspWorker) =
     sharedState: addr worker.sharedState,
     signal: worker.signal,
     tempDir: getTempDir(),
-    rawJsonLog: worker.rawJsonLog,
+    traceLevel: worker.traceLevel,
     # Read once here on the main thread; the worker only emits events, the
     # actual file write happens in processEvent (also on the main thread).
     debugLog: getGlobalLogger().isEnabled,

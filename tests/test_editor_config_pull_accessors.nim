@@ -307,20 +307,28 @@ suite "Editor - applyConfigSettings LSP server configs":
     check after.get.command == "mylang-lsp"
     check after.get.enabled == true
 
-  test "live reload disables raw JSON-RPC logging when trace flips off":
+  test "live reload propagates trace level flips through to the service":
     let e = mkEditor()
 
-    let onCfg = newEditorConfig()
-    onCfg.lsp.servers["nim"] =
+    let verboseCfg = newEditorConfig()
+    verboseCfg.lsp.servers["nim"] =
       LspServerConfig(command: "custom-nim", extensions: @["nim"], trace: ltVerbose)
-    e.applyConfigSettings(onCfg)
-    check e.lsp.service.getConfig("nim").get.rawJsonLog == true
+    e.applyConfigSettings(verboseCfg)
+    check e.lsp.service.getConfig("nim").get.traceLevel == traceVerbose
+
+    # `messages` must round-trip faithfully — previously it was silently
+    # collapsed to `off` because the mapping was rawJsonLog = (trace == verbose).
+    let messagesCfg = newEditorConfig()
+    messagesCfg.lsp.servers["nim"] =
+      LspServerConfig(command: "custom-nim", extensions: @["nim"], trace: ltMessages)
+    e.applyConfigSettings(messagesCfg)
+    check e.lsp.service.getConfig("nim").get.traceLevel == traceMessages
 
     let offCfg = newEditorConfig()
     offCfg.lsp.servers["nim"] =
       LspServerConfig(command: "custom-nim", extensions: @["nim"], trace: ltOff)
     e.applyConfigSettings(offCfg)
-    check e.lsp.service.getConfig("nim").get.rawJsonLog == false
+    check e.lsp.service.getConfig("nim").get.traceLevel == traceOff
 
   test "live reload reverts a removed [Lsp.<lang>] section to defaults":
     let e = mkEditor()
@@ -405,6 +413,27 @@ suite "Editor - applyLspServerConfigs :lspRestart hint on running-worker change"
     e.applyConfigSettings(newCfg)
 
     check e.state.statusMessage.contains("nim, rust")
+
+  test "no hint when only trace level changes (surface field, not launch-affecting)":
+    # traceLevel is a surface field: worker.nim reads it once for `initialize`
+    # and the viewer routing key, but does not re-launch the server on change.
+    # Emitting a :lspRestart hint would be a false positive.
+    let e = mkEditor()
+    e.lsp.service.liveWorkerLangIdsOverride = proc(): seq[string] {.gcsafe.} =
+      @["nim"]
+
+    let firstCfg = newEditorConfig()
+    firstCfg.lsp.servers["nim"] =
+      LspServerConfig(command: "nimlangserver", extensions: @["nim"], trace: ltOff)
+    e.applyConfigSettings(firstCfg)
+    e.state.statusMessage = ""
+
+    let secondCfg = newEditorConfig()
+    secondCfg.lsp.servers["nim"] =
+      LspServerConfig(command: "nimlangserver", extensions: @["nim"], trace: ltVerbose)
+    e.applyConfigSettings(secondCfg)
+
+    check not e.state.statusMessage.contains(":lspRestart")
 
   test "hint when rust-analyzer initializationOptions change":
     let e = mkEditor()

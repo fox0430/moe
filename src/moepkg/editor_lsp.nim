@@ -31,6 +31,15 @@ export lsp_request_context
 proc launchAffectingFields(c: LanguageServerConfig): (string, seq[string], string) =
   (c.command, c.args, c.initializationOptions)
 
+proc toWorkerTrace(t: LspTraceLevel): LspTrace =
+  ## Translate the config-layer enum to the worker-layer enum. Two enums exist
+  ## so config.nim can stay independent of the LSP thread/chronos deps; the
+  ## variants are 1:1 by string value.
+  case t
+  of ltOff: traceOff
+  of ltMessages: traceMessages
+  of ltVerbose: traceVerbose
+
 proc applyLspServerConfigs*(e: Editor) =
   ## Rebuild the LSP service config table from built-in defaults plus the
   ## per-language [Lsp.<lang>] entries in e.config. Called from newEditor and
@@ -54,7 +63,7 @@ proc applyLspServerConfigs*(e: Editor) =
         c.args = @[]
       if serverCfg.extensions.len > 0:
         c.extensions = serverCfg.extensions
-      c.rawJsonLog = serverCfg.trace == LspTraceLevel.ltVerbose
+      c.traceLevel = toWorkerTrace(serverCfg.trace)
       if langId == "rust":
         c.initializationOptions =
           "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
@@ -68,7 +77,7 @@ proc applyLspServerConfigs*(e: Editor) =
           args: @[],
           extensions: serverCfg.extensions,
           enabled: true,
-          rawJsonLog: serverCfg.trace == LspTraceLevel.ltVerbose,
+          traceLevel: toWorkerTrace(serverCfg.trace),
         ),
       )
 

@@ -47,7 +47,9 @@ type
     args*: seq[string]
     extensions*: seq[string]
     enabled*: bool
-    rawJsonLog*: bool ## Emit raw JSON-RPC traffic to the LSP log (debug only)
+    traceLevel*: LspTrace
+      ## LSP trace level; forwarded to `initialize` and
+      ## gates raw JSON-RPC events (any non-off level enables them).
     initializationOptions*: string
       ## Serialized JSON for the server's `initializationOptions` ("" = none).
       ## Stored as a string because JsonNode refs cannot cross the worker
@@ -381,7 +383,7 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
     svc.workers.del(langId)
 
   # Create new worker
-  let workerResult = newLspWorker(langId, config.rawJsonLog)
+  let workerResult = newLspWorker(langId, config.traceLevel)
   if workerResult.isErr:
     return err("Failed to create worker: " & workerResult.error)
   let worker = workerResult.get
@@ -562,8 +564,8 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
       logDebug("lsp", formatRawJsonLogLine(langId, evt.jsonDirection, evt.rawJson))
 
     # In-memory :lspLog viewer: pretty-printed and timestamped, but only for
-    # servers that opted into verbose raw-JSON logging.
-    if langId in svc.configs and svc.configs[langId].rawJsonLog:
+    # servers that opted into raw-JSON logging (any non-off trace level).
+    if langId in svc.configs and svc.configs[langId].traceLevel != traceOff:
       let timestamp = now().format("HH:mm:ss'.'fff")
       let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
       let pretty =
