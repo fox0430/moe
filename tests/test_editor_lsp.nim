@@ -176,7 +176,19 @@ suite "editor_lsp - server config plumbing":
     check svcCfg.get.command == "my-nimlangserver --stdio"
     check svcCfg.get.args.len == 0
     check svcCfg.get.extensions == @["nim", "custom"]
-    check svcCfg.get.rawJsonLog
+    check svcCfg.get.traceLevel == traceVerbose
+
+  test "trace = messages is preserved (not silently downgraded to off)":
+    let config = newEditorConfig()
+    config.lsp.servers["nim"] = LspServerConfig(
+      command: "nimlangserver", extensions: @["nim"], trace: LspTraceLevel.ltMessages
+    )
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+
+    let svcCfg = e.lsp.service.getConfig("nim")
+    check svcCfg.isSome
+    check svcCfg.get.traceLevel == traceMessages
 
   test "language without a built-in default is registered":
     let config = newEditorConfig()
@@ -189,7 +201,7 @@ suite "editor_lsp - server config plumbing":
     check svcCfg.isSome
     check svcCfg.get.command == "zls"
     check svcCfg.get.extensions == @["zig"]
-    check not svcCfg.get.rawJsonLog
+    check svcCfg.get.traceLevel == traceOff
 
   test "empty command leaves the default untouched":
     let config = newEditorConfig()

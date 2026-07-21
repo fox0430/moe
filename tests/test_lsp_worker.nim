@@ -703,14 +703,22 @@ suite "LspWorker - pollEvents (without starting worker)":
     check worker.pollEvents().len == 0
     check worker.pollEvents().len == 0
 
-suite "LspWorker - rawJsonLog construction":
-  test "newLspWorker defaults rawJsonLog off":
+suite "LspWorker - traceLevel construction":
+  test "newLspWorker defaults traceLevel to traceOff":
     let workerResult = newLspWorker("nim")
     check workerResult.isOk
 
-  test "newLspWorker accepts rawJsonLog flag":
-    let workerResult = newLspWorker("nim", rawJsonLog = true)
-    check workerResult.isOk
+  test "newLspWorker accepts traceLevel argument":
+    check newLspWorker("nim", traceLevel = traceMessages).isOk
+    check newLspWorker("nim", traceLevel = traceVerbose).isOk
+
+  test "LspTrace string values match the LSP `initialize` trace spec":
+    # The `initialize` request forwards `$ctx.traceLevel` verbatim to the
+    # server, so a rename of the enum variants would silently violate the
+    # protocol (which mandates exactly "off" | "messages" | "verbose").
+    check $traceOff == "off"
+    check $traceMessages == "messages"
+    check $traceVerbose == "verbose"
 
 suite "LspWorker - sendRequest (without starting worker)":
   test "sendRequest returns incrementing request ids":
