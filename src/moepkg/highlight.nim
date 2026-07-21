@@ -84,7 +84,6 @@ type
 
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
-    version*: int # Synchronized with buffer changeSeq for invalidation
 
   IncrementalHighlight* = ref object ## Incremental highlighting information
     segments*: seq[ColorSegment]
@@ -1429,7 +1428,6 @@ proc updateHighlightIncremental*(
     getLine: proc(i: int): string,
     incrHighlight: var IncrementalHighlight,
     changedStartLine: int,
-    bufferChangeSeq: int,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
     maxLineLen: int = 0,
@@ -1614,8 +1612,6 @@ proc updateHighlightIncremental*(
       if stateIdx < allNewLineStates.len and lineIdx < lineCount:
         incrHighlight.lineStates.states[lineIdx] = allNewLineStates[stateIdx]
         inc stateIdx
-
-  incrHighlight.lineStates.version = bufferChangeSeq
 
 proc detectLanguage*(filename: string): SourceLanguage =
   # Check basename for special files (no extension)

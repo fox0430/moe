@@ -223,7 +223,6 @@ proc updateHighlight*(b: TextBuffer) =
             buf.getLine(i),
           b.incrementalHighlight,
           b.lastChangedLines,
-          b.changeSeq,
           b.reservedWords,
           b.language,
           b.maxHighlightLineLength,
@@ -253,7 +252,7 @@ proc updateHighlight*(b: TextBuffer) =
           b.highlight.colorSegments = segments
           b.incrementalHighlight = IncrementalHighlight(
             segments: segments,
-            lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
+            lineStates: LineStateCache(states: lineStates),
             parsedUpTo: b.len - 1,
           )
         else:
