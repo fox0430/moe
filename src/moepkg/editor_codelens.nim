@@ -802,9 +802,11 @@ proc invalidateInlayHintCache*(lsp: LspIntegration, cache: var LspCacheState) =
   cancelPendingRequest(lsp, cache, lrfInlayHint)
 
 proc invalidateAllLspCaches*(e: Editor) =
-  ## Drop all per-buffer LSP overlay caches. Use after buffer identity changes
-  ## (loadFile, reload, LSP restart) so a pre-swap response cannot paint stale
-  ## coords onto the fresh buffer.
+  ## Drop the persistent overlay caches (SemanticTokens, InlayHint,
+  ## DocumentHighlight, CodeLens) and cancel their in-flight requests. Use after
+  ## buffer identity changes (loadFile, reload, LSP restart) so a pre-swap
+  ## response cannot paint stale coords onto the fresh buffer. Other features
+  ## have no such overlay and are guarded by `classifyResponse`.
   invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
   invalidateInlayHintCache(e.lsp, e.state.lspCache)
   invalidateDocumentHighlightCache(e.lsp, e.state.lspCache)
