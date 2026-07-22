@@ -78,8 +78,8 @@ proc cleanupQuickRunProcesses*(e: Editor) =
     abandonQuickRunProcess(p)
   e.runningQuickRunProcesses = @[]
 
-proc handleRenameModeEvent(e: Editor, event: Event): bool =
-  ## Handle Rename mode events - for LSP rename symbol input
+proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle a KeyCombo in Rename mode - for LSP rename symbol input
   ##
   ## Key Mappings:
   ## - Escape      -> Cancel rename, return to Normal mode
@@ -88,16 +88,6 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
   ## - Character   -> Add character to rename text
   ##
   ## Returns: true (event handled)
-  if event.kind != EventKind.Key:
-    return true
-
-  # Convert event to key combo
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return true
-
-  let keyCombo = keyComboOpt.get
-
   # Escape: Cancel rename and return to base mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
     e.state.exitOverlay()
@@ -142,18 +132,8 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
   # Ignore other special keys
   return true
 
-proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
-  ## Handle Recent File mode events
-  if event.kind != EventKind.Key:
-    return true
-
-  # Convert event to key combo
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return true
-
-  let keyCombo = keyComboOpt.get
-
+proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle a KeyCombo in Recent File mode.
   # Get viewport height for the recent file list
   # Reserve: status/command line (shared row) + 1 line for title
   let viewportHeight = max(0, e.viewport.height - steadyBottomAreaHeight() - 1)
@@ -263,18 +243,8 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
 
   return true
 
-proc handleDebugModeEvent(e: Editor, event: Event): bool =
-  ## Handle Debug mode events
-  if event.kind != EventKind.Key:
-    return true
-
-  # Convert event to key combo
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return true
-
-  let keyCombo = keyComboOpt.get
-
+proc handleDebugModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle a KeyCombo in Debug mode.
   # Get viewport height for the debug viewer
   # Reserve: status/command line (shared row) + 1 line for title
   let viewportHeight = max(0, e.viewport.height - steadyBottomAreaHeight() - 1)
@@ -818,9 +788,9 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   return none(bool)
 
-proc prepareForEvent(e: Editor, event: Event) =
-  ## Per-event setup: clear stale status, refresh input timestamp, cancel
-  ## any in-flight scroll animation.
+proc prepareForInput(e: Editor, isKeyInput: bool) =
+  ## Per-input setup: clear stale status, refresh input timestamp, cancel
+  ## any in-flight scroll animation for key input.
 
   # Clear status message from previous event cycle:
   # messages persist for one render frame, then clear on next input)
@@ -830,8 +800,16 @@ proc prepareForEvent(e: Editor, event: Event) =
   e.updateInputTime()
 
   # Cancel smooth scroll animation on any key press
-  if event.kind == EventKind.Key and e.state.windowDisplay.scrollAnimation.active:
+  if isKeyInput and e.state.windowDisplay.scrollAnimation.active:
     cancelScrollAnimation(e.state.windowDisplay.scrollAnimation)
+
+proc prepareForEvent(e: Editor, event: Event) =
+  ## Per-event setup for Celina events.
+  e.prepareForInput(event.kind == EventKind.Key)
+
+proc prepareForKeyCombo(e: Editor) =
+  ## Per-input setup for frontend-neutral key handling.
+  e.prepareForInput(true)
 
 proc handleQuitEvent(e: Editor): bool =
   ## Handle Ctrl-C (Quit event from celina). Behaviour depends on the
@@ -909,15 +887,12 @@ proc handleQuitEvent(e: Editor): bool =
 
   return true
 
-proc dismissTempMessages(e: Editor, event: Event): bool =
+proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Dismiss temporary messages (e.g. :jumps output) on any key.
   ## Returns true when a message was dismissed (event consumed).
-  if e.state.ui.tempMessages.len == 0 or event.kind != EventKind.Key:
+  if e.state.ui.tempMessages.len == 0:
     return false
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return false
-  let keyCombo = keyComboOpt.get
+
   e.state.ui.tempMessages = @[]
 
   # If ":" was pressed, enter command overlay
@@ -926,144 +901,131 @@ proc dismissTempMessages(e: Editor, event: Event): bool =
   # Otherwise just dismiss and stay in current mode
   return true
 
-proc recordOverlayKey(e: Editor, event: Event) =
+proc recordOverlayKey(e: Editor, keyCombo: KeyCombo) =
   ## Append the overlay key to the active macro register. Overlay handlers
   ## do not record inline, so capture at the dispatcher entry instead.
   ## Suppressed during playback via `withPlaybackGuard` clearing `isRecording`.
   if not e.state.macroState.isRecording:
     return
-  if event.kind != EventKind.Key:
-    return
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return
-  e.state.macroState.recordedKeys.add(keyComboToString(keyComboOpt.get))
+  e.state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
-proc handleOverlayEvent(e: Editor, event: Event): Option[bool] =
+proc handleOverlayKeyCombo(
+    e: Editor, keyCombo: KeyCombo, recordKey = false
+): Option[bool] =
   ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.
   ## Returns some(result) if handled, none otherwise.
   if e.state.isCommandOverlay:
-    e.recordOverlayKey(event)
-    return some(handleCommandModeEvent(e, event))
+    if recordKey:
+      e.recordOverlayKey(keyCombo)
+    return some(e.handleCommandModeKeyCombo(keyCombo))
   if e.state.isSearchOverlay:
-    e.recordOverlayKey(event)
-    return some(handleSearchModeEvent(e, event))
+    if recordKey:
+      e.recordOverlayKey(keyCombo)
+    return some(e.handleSearchModeKeyCombo(keyCombo))
   if e.state.isRenameOverlay:
-    return some(handleRenameModeEvent(e, event))
+    return some(e.handleRenameModeKeyCombo(keyCombo))
   if e.state.mode == EditorMode.Debug:
-    return some(handleDebugModeEvent(e, event))
+    return some(e.handleDebugModeKeyCombo(keyCombo))
   return none(bool)
 
-proc handlePopupEvent(e: Editor, event: Event): Option[bool] =
+proc handlePopupKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Dispatch LSP popups (CodeLens picker, Hover popup). Returns some(true)
   ## when the event was consumed; returns none when no popup is active, or
   ## when a popup was closed and the event should fall through to normal
   ## key processing (e.g. auto-hover popup will reappear on next render).
 
   # Handle CodeLens picker input when active
-  if e.state.lspCache.codeLensPicker.isActive and event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      let keyCombo = keyComboOpt.get
+  if e.state.lspCache.codeLensPicker.isActive:
+    # Escape - cancel picker
+    if keyCombo.isSpecial and keyCombo.special == skEscape:
+      e.state.lspCache.hideCodeLensPicker()
+      e.state.statusMessage = ""
+      return some(true)
 
-      # Escape - cancel picker
-      if keyCombo.isSpecial and keyCombo.special == skEscape:
-        e.state.lspCache.hideCodeLensPicker()
-        e.state.statusMessage = ""
+    # Enter - confirm selection
+    if keyCombo.isSpecial and keyCombo.special == skEnter:
+      asyncSpawn e.codeLensPickerConfirm()
+      return some(true)
+
+    # j or Down - next item
+    if not keyCombo.isSpecial:
+      if keyCombo.char == "j":
+        e.codeLensPickerSelectNext()
+        return some(true)
+      # k or Up - previous item
+      if keyCombo.char == "k":
+        e.codeLensPickerSelectPrev()
+        return some(true)
+      # Number keys 1-9 - direct selection
+      if keyCombo.char.len == 1 and keyCombo.char[0] in '1' .. '9':
+        let num = ord(keyCombo.char[0]) - ord('0')
+        asyncSpawn e.codeLensPickerSelectByNumber(num)
         return some(true)
 
-      # Enter - confirm selection
-      if keyCombo.isSpecial and keyCombo.special == skEnter:
-        asyncSpawn e.codeLensPickerConfirm()
+    if keyCombo.isSpecial:
+      if keyCombo.special == skDown:
+        e.codeLensPickerSelectNext()
+        return some(true)
+      if keyCombo.special == skUp:
+        e.codeLensPickerSelectPrev()
         return some(true)
 
-      # j or Down - next item
+    # Any other key closes picker
+    e.state.lspCache.hideCodeLensPicker()
+    e.state.statusMessage = ""
+    # Don't return - let the key be processed normally
+
+  # Handle Hover popup input when active
+  if e.state.lspCache.hoverPopup.isActive():
+    # Escape always closes the popup
+    if keyCombo.isSpecial and keyCombo.special == skEscape:
+      e.state.lspCache.hideHoverPopup()
+      return some(true)
+
+    # Manual hover (K key): allow j/k/h/l and arrow keys for scrolling
+    if not e.state.lspCache.hoverPopup.isAutoHover:
       if not keyCombo.isSpecial:
         if keyCombo.char == "j":
-          e.codeLensPickerSelectNext()
+          e.state.lspCache.hoverPopupScrollDown()
           return some(true)
-        # k or Up - previous item
         if keyCombo.char == "k":
-          e.codeLensPickerSelectPrev()
+          e.state.lspCache.hoverPopupScrollUp()
           return some(true)
-        # Number keys 1-9 - direct selection
-        if keyCombo.char.len == 1 and keyCombo.char[0] in '1' .. '9':
-          let num = ord(keyCombo.char[0]) - ord('0')
-          asyncSpawn e.codeLensPickerSelectByNumber(num)
+        if keyCombo.char == "l":
+          e.state.lspCache.hoverPopupScrollRight()
+          return some(true)
+        if keyCombo.char == "h":
+          e.state.lspCache.hoverPopupScrollLeft()
           return some(true)
 
       if keyCombo.isSpecial:
         if keyCombo.special == skDown:
-          e.codeLensPickerSelectNext()
+          e.state.lspCache.hoverPopupScrollDown()
           return some(true)
         if keyCombo.special == skUp:
-          e.codeLensPickerSelectPrev()
+          e.state.lspCache.hoverPopupScrollUp()
+          return some(true)
+        if keyCombo.special == skRight:
+          e.state.lspCache.hoverPopupScrollRight()
+          return some(true)
+        if keyCombo.special == skLeft:
+          e.state.lspCache.hoverPopupScrollLeft()
           return some(true)
 
-      # Any other key closes picker
-      e.state.lspCache.hideCodeLensPicker()
-      e.state.statusMessage = ""
-      # Don't return - let the key be processed normally
-
-  # Handle Hover popup input when active
-  if e.state.lspCache.hoverPopup.isActive() and event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      let keyCombo = keyComboOpt.get
-
-      # Escape always closes the popup
-      if keyCombo.isSpecial and keyCombo.special == skEscape:
-        e.state.lspCache.hideHoverPopup()
-        return some(true)
-
-      # Manual hover (K key): allow j/k/h/l and arrow keys for scrolling
-      if not e.state.lspCache.hoverPopup.isAutoHover:
-        if not keyCombo.isSpecial:
-          if keyCombo.char == "j":
-            e.state.lspCache.hoverPopupScrollDown()
-            return some(true)
-          if keyCombo.char == "k":
-            e.state.lspCache.hoverPopupScrollUp()
-            return some(true)
-          if keyCombo.char == "l":
-            e.state.lspCache.hoverPopupScrollRight()
-            return some(true)
-          if keyCombo.char == "h":
-            e.state.lspCache.hoverPopupScrollLeft()
-            return some(true)
-
-        if keyCombo.isSpecial:
-          if keyCombo.special == skDown:
-            e.state.lspCache.hoverPopupScrollDown()
-            return some(true)
-          if keyCombo.special == skUp:
-            e.state.lspCache.hoverPopupScrollUp()
-            return some(true)
-          if keyCombo.special == skRight:
-            e.state.lspCache.hoverPopupScrollRight()
-            return some(true)
-          if keyCombo.special == skLeft:
-            e.state.lspCache.hoverPopupScrollLeft()
-            return some(true)
-
-      # Close popup and fall through to normal key processing.
-      # Auto-hover popup will reappear if cursor is still on a diagnostic.
-      e.state.lspCache.hideHoverPopup()
-      # Don't return - let the key be processed normally
+    # Close popup and fall through to normal key processing.
+    # Auto-hover popup will reappear if cursor is still on a diagnostic.
+    e.state.lspCache.hideHoverPopup()
+    # Don't return - let the key be processed normally
 
   return none(bool)
 
-proc handleEscapeCancellation(e: Editor, event: Event): bool =
+proc handleEscapeCancellationKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## In Normal mode, Escape cancels pending multi-key state (macro register,
   ## operator, text object, register, key router, window command). Also tracks
   ## double-Escape to clear search highlight. Returns true when Escape was
   ## handled; non-Escape keys reset the Escape counter but are not consumed.
-  if e.state.mode != EditorMode.Normal or event.kind != EventKind.Key:
+  if e.state.mode != EditorMode.Normal:
     return false
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return false
-  let keyCombo = keyComboOpt.get
 
   # Handle Escape key to cancel pending multi-key commands
   if keyCombo.isSpecial and keyCombo.special == skEscape:
@@ -1121,18 +1083,16 @@ proc handleEscapeCancellation(e: Editor, event: Event): bool =
     e.state.lastKeyWasEscape = false
     return false
 
-proc handleSpecialModeWindowCommand(e: Editor, event: Event): Option[bool] =
+proc handleSpecialModeWindowCommandKeyCombo(
+    e: Editor, keyCombo: KeyCombo
+): Option[bool] =
   ## Ctrl-W window commands for special/viewer modes (those outside the
   ## file-edit mode set). Returns some(result) if handled, none otherwise.
   if e.state.mode in {
     EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
     EditorMode.VisualLine, EditorMode.Replace,
-  } or event.kind != EventKind.Key:
+  }:
     return none(bool)
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return none(bool)
-  let keyCombo = keyComboOpt.get
 
   # Cancel window command mode on Escape
   if e.state.pendingCommand == PendingWindowCmd and keyCombo.isSpecial and
@@ -1177,8 +1137,74 @@ proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
       otherBufs.add(win.buffer)
   e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
 
+proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle one frontend-neutral key combination.
+  ##
+  ## GUI frontends can call this directly after translating their native key
+  ## input into Moe's `KeyCombo` type. Terminal-specific events such as Quit,
+  ## paste, and mouse input remain handled by `handleEvent`.
+  e.prepareForKeyCombo()
+
+  # Handle temporary messages (like :jumps output) - dismiss on any key
+  if e.dismissTempMessagesKeyCombo(keyCombo):
+    return true
+
+  # Handle overlay modes (Command, Search, Rename) + Debug mode
+  let overlayResult = e.handleOverlayKeyCombo(keyCombo, recordKey = true)
+  if overlayResult.isSome:
+    return overlayResult.get
+
+  # Handle LSP popups (CodeLens picker, Hover popup); some keys fall through
+  let popupResult = e.handlePopupKeyCombo(keyCombo)
+  if popupResult.isSome:
+    return popupResult.get
+
+  # In Normal mode, Escape cancels pending multi-key state
+  if e.handleEscapeCancellationKeyCombo(keyCombo):
+    return true
+
+  # Ctrl-W window commands for special/viewer modes
+  let winResult = e.handleSpecialModeWindowCommandKeyCombo(keyCombo)
+  if winResult.isSome:
+    return winResult.get
+
+  # Handle Recent File mode input (after Ctrl-W window commands)
+  if e.state.mode == EditorMode.RecentFile:
+    return e.handleRecentFileModeKeyCombo(keyCombo)
+
+  # For other modes, use the unified handler manager with active buffer
+  let activeBuffer = e.activeBuffer
+
+  e.updateViewportReservedLines()
+  e.syncCompletionOtherBuffers(activeBuffer)
+
+  let outcome = e.handlerManager.runNestedKeyCombo(e, keyCombo)
+
+  # In Config mode, sync display state only when a value was actually mutated.
+  # Plain cursor movement leaves pendingApply false, avoiding a theme reread and
+  # a full re-highlight of every buffer on each keystroke.
+  if e.currentMode == EditorMode.Config:
+    let win = e.activeWindow
+    if win.modeState.kind == mskConfig and win.modeState.config.pendingApply:
+      e.applyConfigSettings(e.config)
+      win.modeState.config.pendingApply = false
+
+  # For LogViewer mode, update viewport to follow cursor
+  # (LogViewer handles cursor directly without using MotionController)
+  if e.currentMode == EditorMode.LogViewer:
+    e.updateViewportForCursor(e.cursor)
+
+  return outcome != roQuit
+
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Main event handler using the new handler manager system
+  if event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isNone:
+      e.prepareForKeyCombo()
+      return true
+    return e.handleKeyCombo(keyComboOpt.get)
+
   prepareForEvent(e, event)
 
   # Handle Ctrl-C (Quit event from celina)
@@ -1200,63 +1226,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if event.kind == EventKind.Paste:
     return e.handlePasteEvent(event)
 
-  # Handle temporary messages (like :jumps output) - dismiss on any key
-  if e.dismissTempMessages(event):
-    return true
-
-  # Handle overlay modes (Command, Search, Rename) + Debug mode
-  let overlayResult = e.handleOverlayEvent(event)
-  if overlayResult.isSome:
-    return overlayResult.get
-
-  # Handle LSP popups (CodeLens picker, Hover popup); some keys fall through
-  let popupResult = e.handlePopupEvent(event)
-  if popupResult.isSome:
-    return popupResult.get
-
-  # In Normal mode, Escape cancels pending multi-key state
-  if e.handleEscapeCancellation(event):
-    return true
-
-  # Ctrl-W window commands for special/viewer modes
-  let winResult = e.handleSpecialModeWindowCommand(event)
-  if winResult.isSome:
-    return winResult.get
-
-  # Handle Recent File mode input (after Ctrl-W window commands)
-  if e.state.mode == EditorMode.RecentFile:
-    return handleRecentFileModeEvent(e, event)
-
-  # For other modes, use the unified handler manager with active buffer
-  let activeBuffer = e.activeBuffer
-
-  e.updateViewportReservedLines()
-  e.syncCompletionOtherBuffers(activeBuffer)
-
-  # Non-key events (or unmappable keys) fall through; the pre-refactor
-  # `handlerManager.handleEvent` folded these to hrUnhandled which processResult
-  # ignored, so returning true here matches that behaviour.
-  var outcome = roContinue
-  if event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      outcome = e.handlerManager.runNestedKeyCombo(e, keyComboOpt.get)
-
-  # In Config mode, sync display state only when a value was actually mutated.
-  # Plain cursor movement leaves pendingApply false, avoiding a theme reread and
-  # a full re-highlight of every buffer on each keystroke.
-  if e.currentMode == EditorMode.Config:
-    let win = e.activeWindow
-    if win.modeState.kind == mskConfig and win.modeState.config.pendingApply:
-      e.applyConfigSettings(e.config)
-      win.modeState.config.pendingApply = false
-
-  # For LogViewer mode, update viewport to follow cursor
-  # (LogViewer handles cursor directly without using MotionController)
-  if e.currentMode == EditorMode.LogViewer:
-    e.updateViewportForCursor(e.cursor)
-
-  return outcome != roQuit
+  return true
 
 proc hasPendingAsyncOperations*(e: Editor): bool =
   ## Check if there are pending async operations

@@ -1570,7 +1570,7 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
 suite "handleCommandModeEvent - exitOverlay on self-managed branches":
   test "Overlay exited after :recent with no xbel file (empty list)":
     ## When recently-used.xbel doesn't exist, :recent should still succeed
-    ## with an empty file list instead of failing.
+    ## with an empty file list instead of failing on supported platforms.
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
     e.state.input.commandText = ":recent"
@@ -1586,7 +1586,11 @@ suite "handleCommandModeEvent - exitOverlay on self-managed branches":
     check cont == true
     check not e.state.isCommandOverlay
     check e.state.input.commandText == ""
-    check e.state.mode == EditorMode.RecentFile
+    when defined(macosx):
+      check e.state.mode == EditorMode.Normal
+      check e.state.statusMessage == ":recent is not supported on macOS"
+    else:
+      check e.state.mode == EditorMode.RecentFile
 
 suite "enterFilerInActiveWindow":
   test "Sets active window to Filer mode":
@@ -2886,6 +2890,37 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     check e.state.mode == EditorMode.Insert
     check not e.state.insertNormalMode
     check not e.state.isCommandOverlay
+
+suite "handleKeyCombo - frontend-neutral input":
+  proc charKey(c: string): KeyCombo =
+    KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+  test "Normal mode command enters Insert mode":
+    let e = createTestEditorWithBuffer("hello")
+
+    discard e.handleKeyCombo(charKey("i"))
+
+    check e.state.mode == EditorMode.Insert
+
+  test "Command overlay accepts character input":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+
+    discard e.handleKeyCombo(charKey("w"))
+
+    check e.state.isCommandOverlay
+    check e.state.input.commandText == ":w"
+    check e.state.input.commandCursor == 1
+
+  test "Search overlay accepts character input":
+    let e = createTestEditorWithBuffer("hello world")
+    e.state.enterSearchOverlay(Forward)
+
+    discard e.handleKeyCombo(charKey("w"))
+
+    check e.state.isSearchOverlay
+    check e.state.input.search.text == "w"
+    check e.state.input.search.cursor == 1
 
 suite "Macro recording - Command / Search overlay keys":
   # Regression: overlay dispatch used to bypass macro recording, so `qa:s/foo/bar/<CR>q`
