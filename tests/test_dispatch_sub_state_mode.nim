@@ -29,8 +29,8 @@ import std/[unittest, os]
 
 import
   ../src/moepkg/[
-    buffer, types, config_mode, key_bindings, command_registry, registers, command_line,
-    command_config, filer, filetree, help_viewer, motion,
+    buffer, types, config, config_mode, key_bindings, command_registry, registers,
+    command_line, command_config, filer, filetree, help_viewer, motion,
   ]
 import
   ../src/moepkg/command_handlers/[

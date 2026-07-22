@@ -22,7 +22,7 @@
 ## location-jump helpers that other LSP feature modules (call hierarchy,
 ## document link) depend on.
 
-import std/[options, strutils, os]
+import std/[options, strutils, os, tables]
 
 import pkg/results
 

@@ -34,7 +34,8 @@ import
   git_diff,
   git_conflict,
   motion,
-  logger
+  logger,
+  buffer
 
 proc clampCursorAfterReload(e: Editor, buf: TextBuffer) =
   ## A reload swaps the buffer contents wholesale without touching the cursor.

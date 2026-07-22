@@ -25,9 +25,8 @@ import pkg/results
 
 import types, buffer, modes, render_utils
 
-type EditorWindowManager* = ref object ## Manages multiple split windows
-  windows*: seq[EditorWindow]
-  activeWindowIndex*: int
+import types/window_manager_types
+export window_manager_types
 
 const
   WindowSeparatorWidth* = 1 ## Width of separator between vertically split windows

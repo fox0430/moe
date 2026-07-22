@@ -34,17 +34,8 @@
 import std/[tables, sequtils, options, strutils]
 
 import command_line, command_line_commands
-
-type
-  CommandConfig* = ref object ## Configuration for command line commands
-    aliases*: Table[string, CommandLineAction]
-    aliasDescriptions*: Table[string, string] ## Custom descriptions for aliases
-    shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
-    disabledCommands*: seq[CommandLineAction] ## Disabled built-in commands
-
-  KeyMappableCommandAlias* = tuple[name, description: string]
-    ## (alias name, human-readable description) pair used when registering a
-    ## Command mode command alias as a keymap RHS target.
+import types/command_config_types
+export command_config_types
 
 # Mapping from canonical command names to CommandLineAction. Used for
 # resolving user-defined aliases in `[CommandAliases]` config. Derived from

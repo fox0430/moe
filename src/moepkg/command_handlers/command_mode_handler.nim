@@ -29,7 +29,7 @@ import pkg/[celina, chronos]
 import
   ../[
     editor, key_bindings, modes, buffer, types, command_line, command_completion,
-    unicode_utils,
+    unicode_utils, key_router,
   ]
 import handler_manager
 import ./editor_ops

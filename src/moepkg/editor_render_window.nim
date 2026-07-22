@@ -39,7 +39,9 @@ import
   style_patch,
   status_line,
   editor_codelens,
-  virtual_text
+  virtual_text,
+  command_line,
+  buffer
 import command_handlers/visual_handler
 
 type

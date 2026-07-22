@@ -23,7 +23,7 @@
 ## flipping the config value must be visible via the accessor immediately, with
 ## no separate sync step.
 
-import std/[unittest, options, strutils]
+import std/[unittest, options, strutils, tables]
 
 import
   ../src/moepkg/

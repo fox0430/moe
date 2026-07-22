@@ -29,7 +29,7 @@ import
   editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
   logger, types, motion, quick_run_utils, command_completion, build, render_utils,
   tab_line, terminal_mode, clipboard, status_line, cursor_util, syntax_checker,
-  background_process
+  background_process, key_router
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,

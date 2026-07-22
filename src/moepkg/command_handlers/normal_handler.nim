@@ -28,7 +28,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, config, registers,
-    render_utils, search_utils, uri_utils,
+    render_utils, search_utils, uri_utils, key_router,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
 import ../types/editor_types

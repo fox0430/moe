@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times, tables]
+import std/[options, strformat, os, monotimes, times, tables, strutils]
 
 import pkg/results
 
@@ -34,7 +34,9 @@ import
   editor_codelens,
   highlight,
   highlight_config,
-  persist
+  persist,
+  buffer,
+  lsp_integration
 
 type SaveAllBuffersResult* = object
   savedCount*: int

@@ -21,6 +21,8 @@
 
 import std/[options, tables]
 
+import pkg/results
+
 import
   types/editor_types,
   editor_window_state,

@@ -35,7 +35,8 @@ import
   buffer,
   unicode_utils,
   command_completion,
-  color
+  color,
+  window_manager
 
 type WindowLayout = object
   ## Per-frame layout metrics for a window. A pure, idempotent projection of
