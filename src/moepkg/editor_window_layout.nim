@@ -177,10 +177,16 @@ proc calculateWindowCursor*(
 
   return CursorPosition(x: 0, y: 0)
 
-proc calculateSidebarWidth*(e: Editor, mode: EditorMode): int =
-  ## Calculate the width occupied by the sidebar (0 if disabled)
-  sidebarWidthFor(mode, e.showSidebar)
+proc calculateSidebarWidth*(e: Editor, window: EditorWindow): int =
+  ## Calculate the width occupied by the sidebar (0 if disabled).
+  ## Suppressed when the window holds a special mode state (LogViewer, Help,
+  ## Filer, etc.) even if the transient mode is Visual.
+  if window.modeState.kind != mskNone:
+    return 0
+  sidebarWidthFor(window.mode, e.showSidebar)
 
-proc calculateScrollbarWidth*(e: Editor, mode: EditorMode): int =
+proc calculateScrollbarWidth*(e: Editor, window: EditorWindow): int =
   ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
-  scrollbarWidthFor(mode, e.scrollbar, e.scrollbarWidth)
+  if window.modeState.kind != mskNone:
+    return 0
+  scrollbarWidthFor(window.mode, e.scrollbar, e.scrollbarWidth)

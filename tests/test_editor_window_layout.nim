@@ -22,7 +22,7 @@ import std/[unittest, strutils]
 import
   ../src/moepkg/[
     editor, editor_window, editor_window_layout, config, types, buffer, modes,
-    render_utils,
+    render_utils, log_viewer, help_viewer,
   ]
 
 # Helper to create a minimal Editor for testing
@@ -189,20 +189,26 @@ suite "calculateSidebarWidth":
   test "sidebar enabled in file edit mode":
     let e = createTestEditor()
     e.state.showSidebar = true
-    let width = e.calculateSidebarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateSidebarWidth(win)
     # DefaultSidebarWidth = 2
     check width == 2
 
   test "sidebar disabled":
     let e = createTestEditor()
     e.state.showSidebar = false
-    let width = e.calculateSidebarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateSidebarWidth(win)
     check width == 0
 
   test "sidebar disabled for non-file-edit mode":
     let e = createTestEditor()
     e.state.showSidebar = true
-    let width = e.calculateSidebarWidth(EditorMode.RecentFile)
+    let win = e.activeWindow
+    win.mode = EditorMode.RecentFile
+    let width = e.calculateSidebarWidth(win)
     check width == 0
 
 suite "calculateScrollbarWidth":
@@ -210,84 +216,108 @@ suite "calculateScrollbarWidth":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 1
 
   test "scrollbar width 2 in file edit mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 2
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 2
 
   test "scrollbar disabled (width 0)":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 0
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar bool disabled":
     let e = createTestEditor()
     e.state.scrollbar = false
     e.state.scrollbarWidth = 2
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar disabled for non-file-edit mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.RecentFile)
+    let win = e.activeWindow
+    win.mode = EditorMode.RecentFile
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar disabled for Filer mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Filer)
+    let win = e.activeWindow
+    win.mode = EditorMode.Filer
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar enabled in Insert mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Insert)
+    let win = e.activeWindow
+    win.mode = EditorMode.Insert
+    let width = e.calculateScrollbarWidth(win)
     check width == 1
 
   test "scrollbar enabled in Visual mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Visual)
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    let width = e.calculateScrollbarWidth(win)
     check width == 1
 
   test "scrollbar width 3 in Normal mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 3
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 3
 
   test "scrollbar disabled for Help mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Help)
+    let win = e.activeWindow
+    win.mode = EditorMode.Help
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar disabled for BufferManager mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.BufferManager)
+    let win = e.activeWindow
+    win.mode = EditorMode.BufferManager
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar enabled in Replace mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 2
-    let width = e.calculateScrollbarWidth(EditorMode.Replace)
+    let win = e.activeWindow
+    win.mode = EditorMode.Replace
+    let width = e.calculateScrollbarWidth(win)
     check width == 2
 
 suite "calculateViewportOffset":
@@ -396,6 +426,40 @@ suite "calculateWindowCursor":
     )
     check pos.x == 4 # lineNumOffset
     check pos.y == 0
+
+suite "calculateSidebarWidth - modeState gating":
+  test "sidebar width is non-zero in Normal mode with mskNone":
+    let e = createTestEditor()
+    e.state.showSidebar = true
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    win.modeState = ModeState(kind: mskNone)
+    check e.calculateSidebarWidth(win) > 0
+
+  test "sidebar width is 0 in Visual mode with mskLogViewer":
+    let e = createTestEditor()
+    e.state.showSidebar = true
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskLogViewer, logViewer: newLogViewerState())
+    check e.calculateSidebarWidth(win) == 0
+
+  test "sidebar width is 0 in Visual mode with mskHelp":
+    let e = createTestEditor()
+    e.state.showSidebar = true
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskHelp, help: newHelpViewerState())
+    check e.calculateSidebarWidth(win) == 0
+
+  test "scrollbar width is 0 in Visual mode with mskLogViewer":
+    let e = createTestEditor()
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskLogViewer, logViewer: newLogViewerState())
+    check e.calculateScrollbarWidth(win) == 0
 
   test "cursor in middle of line, no wrap":
     let e = createTestEditor()

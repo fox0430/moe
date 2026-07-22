@@ -788,3 +788,76 @@ suite "VisualModeHandler - Command mode command alias bridge":
 
     check r.kind == vmrExecCommand
     check r.execCommandText == "bd"
+
+suite "VisualModeHandler - Escape returns to previousMode":
+  test "Escape from Visual returns to Normal when previousMode is Normal":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.Normal
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == vmrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.Normal
+    check state.mode == EditorMode.Normal
+    check not state.visualSelection.active
+
+  test "Escape from Visual returns to LogViewer when previousMode is LogViewer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "log line 1\nlog line 2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.LogViewer
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == vmrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.LogViewer
+    check state.mode == EditorMode.LogViewer
+    check not state.visualSelection.active
+
+  test "C-c from Visual returns to previousMode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.LogViewer
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl})
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == vmrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.LogViewer
+    check state.mode == EditorMode.LogViewer
+    check not state.visualSelection.active

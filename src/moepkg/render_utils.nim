@@ -413,6 +413,8 @@ proc viewportOffsetFor*(buffer: TextBuffer, state: EditorState): int {.inline.} 
   ## needs from `state`. `state.mode` forwards to the active window's mode,
   ## so the cache key stays in lockstep with the renderer's sidebar /
   ## scrollbar gating.
+  if state.activeWindow.modeState.kind != mskNone:
+    return calculateLineNumOffset(buffer, state.showLineNumbers)
   calculateViewportOffset(
     buffer, state.mode, state.showLineNumbers, state.showSidebar, state.scrollbar,
     state.scrollbarWidth,

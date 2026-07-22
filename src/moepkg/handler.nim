@@ -673,8 +673,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             mouse.y < vp.y + vp.height:
           let
             lineNumOffset = e.calculateLineNumOffsetForMouse(window.buffer)
-            sidebarWidth = e.calculateSidebarWidth(window.mode)
-            scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+            sidebarWidth = e.calculateSidebarWidth(window)
+            scrollbarWidth = e.calculateScrollbarWidth(window)
             # Each window has its own status line
             reservedLines = if e.showStatusLine: 1 else: 0
             posOpt = screenToBufferPosition(
@@ -721,8 +721,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     let
       activeBuffer = e.activeBuffer()
       lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
-      sidebarWidth = e.calculateSidebarWidth(e.activeWindow.mode)
-      scrollbarWidth = e.calculateScrollbarWidth(e.activeWindow.mode)
+      sidebarWidth = e.calculateSidebarWidth(e.activeWindow)
+      scrollbarWidth = e.calculateScrollbarWidth(e.activeWindow)
       # Status line + command line (shared row)
       reservedLines = steadyBottomAreaHeight()
       # Account for tab line offset
