@@ -114,6 +114,23 @@ suite "editor_hover - pollLspHover":
     check not e.state.lspCache.pending.hasKey(lrfHover)
     check e.state.lspCache.hoverPopup.isActive
 
+  test "Discards response while a Command overlay is active":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.enterCommandOverlay()
+
+    const reqId = 44
+    e.lsp.service.pendingResponses[reqId] = (
+      result: some($(%*{"contents": {"kind": "plaintext", "value": "hover text"}})),
+      error: none(string),
+    )
+    e.seedHoverPending(reqId, e.activeBuffer().id, e.activeBuffer().contentVersion)
+
+    e.pollLspHover()
+
+    check not e.state.lspCache.pending.hasKey(lrfHover)
+    check not e.state.lspCache.hoverPopup.isActive
+
   test "Discards response when the active buffer changed while waiting":
     let e = createTestEditor()
     e.lsp.enabled = true
@@ -371,6 +388,27 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
     # Manual show() (as done by pollLspHover) resets the flag
     e.state.lspCache.hoverPopup.show("hover text", 0, 0)
     check not e.state.lspCache.hoverPopup.isAutoHover
+
+  test "Does nothing while a Command overlay is active":
+    let e = createTestEditorForAutoHover()
+    e.state.enterCommandOverlay()
+    e.activeBuffer().diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 10,
+        severity: bdsError,
+        message: "test error",
+      )
+    ]
+    e.state.lspCache.autoHoverCursorLine = -1
+    e.state.lspCache.autoHoverCursorCol = -1
+    e.cursor = BufferPosition(line: 0, column: 3)
+
+    e.maybeAutoHoverDiagnostic()
+
+    check not e.state.lspCache.hoverPopup.isActive
 
   test "Debounce resets tracked position for retry":
     let e = createTestEditorForAutoHover()

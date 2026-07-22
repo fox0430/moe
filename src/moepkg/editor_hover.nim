@@ -83,9 +83,9 @@ proc pollLspHover*(e: Editor) =
   of lrsSuccess:
     e.state.lspCache.pending.del(lrfHover)
 
-    # classifyResponse rejects buffer-switch (origin != active), stale edits,
-    # closed origin, and mode hijacks — no supplementary check needed.
-    if classifyResponse(e, ctx) != lrsFresh:
+    # Overlay (Command/Search/Rename) leaves e.state.mode intact, so it slips
+    # past validModes; showing the popup here would paint over the overlay.
+    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
       return
 
     var hoverText = ""
@@ -134,6 +134,11 @@ proc maybeAutoHoverDiagnostic*(e: Editor) =
 
   # Match manual hover: any Normal/Visual variant (Visual/VisualBlock/VisualLine).
   if e.state.mode notin HoverValidModes:
+    return
+
+  # Overlay (Command/Search/Rename) preserves base mode; showing a diagnostic
+  # popup on top of the overlay would paint over its prompt.
+  if e.state.overlay.isSome:
     return
 
   let cursorLine = e.activeWindow.cursor.line
