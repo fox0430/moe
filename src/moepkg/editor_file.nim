@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times, tables]
+import std/[options, strformat, os, monotimes, times, tables, strutils]
 
 import pkg/results
 

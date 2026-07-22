@@ -752,6 +752,11 @@ type
     quickRun*: tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
     syntaxCheck*: tuple[path: string, language: int]
 
+  FrontendRequests* = object
+    ## Frontend-side effects requested by editor-core state changes.
+    ## Frontends drain these requests from their own event/render loop.
+    mouseCapture*: Option[bool]
+
   UiState* = object ## Transient UI display state, refreshed by render/key events.
     substitutePreview*: SubstitutePreview
       # Live substitute preview (like Vim's inccommand)
@@ -827,6 +832,7 @@ type
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
     pending*: PendingAsyncOps # Pending async operations queued for the main event loop
+    frontend*: FrontendRequests # Frontend-side effect requests
     ui*: UiState # Transient UI display state (preview, progress, find char)
     windowDisplay*: WindowDisplayState
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
@@ -984,6 +990,15 @@ proc screenCursor*(s: EditorState): var CursorPosition =
 proc `screenCursor=`*(s: EditorState, v: CursorPosition) =
   ## Set screen cursor on the active window
   s.activeWindow.screenCursor = v
+
+proc requestMouseCapture*(s: EditorState, enabled: bool) =
+  ## Queue a frontend request to enable or disable mouse capture.
+  s.frontend.mouseCapture = some(enabled)
+
+proc takeMouseCaptureRequest*(s: EditorState): Option[bool] =
+  ## Return and clear the pending mouse-capture frontend request.
+  result = s.frontend.mouseCapture
+  s.frontend.mouseCapture = none(bool)
 
 proc `==`*(a, b: ViewPort): bool =
   ## Structural equality for ViewPort (ref object defaults to pointer comparison)

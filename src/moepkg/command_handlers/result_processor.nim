@@ -26,7 +26,7 @@
 ## later phase can split it further into per-feature files (file_ops,
 ## window_ops, viewer_ops, lsp_ops, ...) without touching handler.nim again.
 
-import std/[options, os, strutils, monotimes]
+import std/[options, os, strutils, monotimes, unicode]
 
 import pkg/[results, chronos]
 

@@ -21,7 +21,7 @@
 
 import std/[options, json, os, algorithm, strutils, tables]
 
-import pkg/results
+import pkg/[chronos, results]
 
 import types/editor_types, lsp_integration, motion, editor_codelens, lsp_request_context
 import command_handlers/[handler_manager, insert_handler]

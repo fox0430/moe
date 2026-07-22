@@ -1236,11 +1236,28 @@ proc hasPendingAsyncOperations*(e: Editor): bool =
     e.state.pending.syntaxCheck.path.len > 0
 
 type
+  FrontendSuspendHook* = proc(): Future[void]
+  FrontendHooks* = object
+    ## Optional frontend callbacks for operations that need the host UI.
+    suspend*: FrontendSuspendHook
+    resume*: FrontendSuspendHook
   BuildInfo =
     tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
   QuickRunInfo =
     tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
   SyntaxCheckInfo = tuple[path: string, language: int]
+
+template withFrontendSuspend(
+    frontend: FrontendHooks, body: untyped
+) =
+  ## Suspend the owning frontend around synchronous terminal interaction.
+  if not frontend.suspend.isNil:
+    await frontend.suspend()
+  try:
+    body
+  finally:
+    if not frontend.resume.isNil:
+      await frontend.resume()
 
 proc runSyntaxCheckAsync(
     editor: Editor, info: SyntaxCheckInfo
@@ -1345,7 +1362,7 @@ proc runQuickRunAsync(
       editor.state.statusMessage = "QuickRun error: " & ex.msg
 
 proc handlePendingAsyncOperationsImpl(
-    e: Editor
+    e: Editor, frontend: FrontendHooks
 ): Future[void] {.async: (raises: [Exception]).} =
   ## Handle pending async operations that require TUI suspend or background processing
   ## Called from the main event loop after handleEvent returns
@@ -1362,10 +1379,10 @@ proc handlePendingAsyncOperationsImpl(
     if e.state.pending.shellCommand.len > 0:
       let cmd = e.state.pending.shellCommand
       e.state.pending.shellCommand = ""
-      # withSuspendAsync wraps the body in try/finally so the TUI always
+      # withFrontendSuspend wraps the body in try/finally so the TUI
       # resumes, even if execShellCmd/readLine raises (a missed resume leaves
       # the terminal in raw mode and destroys the screen).
-      e.app.withSuspendAsync:
+      withFrontendSuspend(frontend):
         stdout.write("\e[H\e[2J") # Clear screen
         stdout.flushFile()
         let exitCode = execShellCmd(cmd)
@@ -1378,7 +1395,7 @@ proc handlePendingAsyncOperationsImpl(
     if e.state.pending.manPage.len > 0:
       let page = e.state.pending.manPage
       e.state.pending.manPage = ""
-      e.app.withSuspendAsync:
+      withFrontendSuspend(frontend):
         stdout.write("\e[H\e[2J") # Clear screen
         stdout.flushFile()
         let exitCode = execShellCmd("man " & quoteShell(page))
@@ -1393,7 +1410,7 @@ proc handlePendingAsyncOperationsImpl(
     # to a blocking readLine on non-POSIX platforms where SIGTSTP is unavailable.
     if e.state.pending.background:
       e.state.pending.background = false
-      e.app.withSuspendAsync:
+      withFrontendSuspend(frontend):
         when defined(posix):
           discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
         else:
@@ -1422,11 +1439,11 @@ proc handlePendingAsyncOperationsImpl(
       asyncSpawn runSyntaxCheckAsync(e, checkInfo)
 
 proc handlePendingAsyncOperations*(
-    e: Editor
+    e: Editor, frontend: FrontendHooks = FrontendHooks()
 ): Future[void] {.async: (raises: [Exception]).} =
   ## Wrapper for handlePendingAsyncOperationsImpl with gcsafe cast
   {.cast(gcsafe).}:
-    await handlePendingAsyncOperationsImpl(e)
+    await handlePendingAsyncOperationsImpl(e, frontend)
 
 proc handleKeyMappingTimeout*(e: Editor): bool =
   ## Called when the key mapping timeout fires.
