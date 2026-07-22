@@ -1570,7 +1570,7 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
 suite "handleCommandModeEvent - exitOverlay on self-managed branches":
   test "Overlay exited after :recent with no xbel file (empty list)":
     ## When recently-used.xbel doesn't exist, :recent should still succeed
-    ## with an empty file list instead of failing.
+    ## with an empty file list instead of failing on supported platforms.
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()
     e.state.input.commandText = ":recent"
@@ -1586,7 +1586,11 @@ suite "handleCommandModeEvent - exitOverlay on self-managed branches":
     check cont == true
     check not e.state.isCommandOverlay
     check e.state.input.commandText == ""
-    check e.state.mode == EditorMode.RecentFile
+    when defined(macosx):
+      check e.state.mode == EditorMode.Normal
+      check e.state.statusMessage == ":recent is not supported on macOS"
+    else:
+      check e.state.mode == EditorMode.RecentFile
 
 suite "enterFilerInActiveWindow":
   test "Sets active window to Filer mode":
