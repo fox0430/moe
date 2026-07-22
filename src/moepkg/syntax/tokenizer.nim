@@ -488,7 +488,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langTypeScript, langTsx: g.typescriptNextToken
   of langXml: g.xmlNextToken
   of langZsh: g.zshNextToken
-  else: discard
+  of langNone: discard
 
   if g.kind != gtEof and g.pos <= startPos and g.state == startState:
     # Monotonic-advance guard: a non-EOF token must make progress, by consuming
