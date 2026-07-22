@@ -323,6 +323,30 @@ proc renderCallHierarchyModeTable*(): string =
 proc renderFilerModeTable*(): string =
   renderKbdHelpGroup(FilerModeCommands)
 
+proc renderFileTreeModeTable*(): string =
+  renderKbdHelpGroup(FileTreeModeCommands)
+
+proc renderBufferManagerModeTable*(): string =
+  renderKbdHelpGroup(BufferManagerModeCommands)
+
+proc renderBookmarkManagerModeTable*(): string =
+  renderKbdHelpGroup(BookmarkManagerModeCommands)
+
+proc renderDocumentSymbolModeTable*(): string =
+  renderKbdHelpGroup(DocumentSymbolModeCommands)
+
+proc renderConfigModeTable*(): string =
+  renderKbdHelpGroup(ConfigModeCommands)
+
+proc renderLogViewerModeTable*(): string =
+  renderKbdHelpGroup(LogViewerModeCommands)
+
+proc renderRecentFileModeTable*(): string =
+  renderKbdHelpGroup(RecentFileModeCommands)
+
+proc renderDebugModeTable*(): string =
+  renderKbdHelpGroup(DebugModeCommands)
+
 proc renderTerminalInputTable*(): string =
   renderKbdHelpGroup(TerminalInputCommands)
 
