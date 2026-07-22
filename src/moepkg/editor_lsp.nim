@@ -64,6 +64,7 @@ proc applyLspServerConfigs*(e: Editor) =
       if serverCfg.extensions.len > 0:
         c.extensions = serverCfg.extensions
       c.traceLevel = toWorkerTrace(serverCfg.trace)
+      c.settings = serverCfg.settings
       if langId == "rust":
         c.initializationOptions =
           "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
@@ -78,6 +79,7 @@ proc applyLspServerConfigs*(e: Editor) =
           extensions: serverCfg.extensions,
           enabled: true,
           traceLevel: toWorkerTrace(serverCfg.trace),
+          settings: serverCfg.settings,
         ),
       )
 

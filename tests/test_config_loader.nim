@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, tables, options, sequtils]
+import std/[unittest, os, strutils, tables, options, sequtils, json]
 
 import pkg/results
 
@@ -3680,3 +3680,50 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
     check "CommandAliases" notin content
     check "ShellCommands" notin content
     check "DisabledCommandAliases" notin content
+
+suite "Config - Lsp server settings round-trip":
+  proc roundTripSettings(settingsJson: string): string =
+    inc testFileCounter
+    let testFile = getTempDir() / "moe_test_lsp_settings_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.lsp.servers["nim"] = LspServerConfig(
+      extensions: @[".nim"],
+      command: "nimlsp",
+      trace: ltOff,
+      settings: settingsJson,
+      rustAnalyzerRunSingle: false,
+      rustAnalyzerDebugSingle: false,
+    )
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.lsp.servers.hasKey("nim")
+    return loaded.lsp.servers["nim"].settings
+
+  test "Bare keys round-trip unchanged":
+    let result = roundTripSettings("""{"rust": {"analyzer": true}}""")
+    check parseJson(result) == parseJson("""{"rust": {"analyzer": true}}""")
+
+  test "Keys with spaces are quoted and preserved":
+    let result = roundTripSettings("""{"foo bar": 1}""")
+    check parseJson(result) == parseJson("""{"foo bar": 1}""")
+
+  test "Keys with dots stay flat instead of becoming nested tables":
+    let result = roundTripSettings("""{"foo.bar": 1}""")
+    check parseJson(result) == parseJson("""{"foo.bar": 1}""")
+
+  test "Null-valued keys are omitted on save":
+    let result = roundTripSettings("""{"keep": 1, "drop": null}""")
+    let parsed = parseJson(result)
+    check parsed{"keep"} == newJInt(1)
+    check parsed{"drop"} == nil

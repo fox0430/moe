@@ -625,6 +625,9 @@ type
     extensions*: seq[string]
     command*: string
     trace*: LspTraceLevel
+    settings*: string
+      ## Serialized JSON for workspace/didChangeConfiguration and
+      ## workspace/configuration responses ("" = none).
     # Rust-analyzer specific options
     rustAnalyzerRunSingle*: bool
     rustAnalyzerDebugSingle*: bool

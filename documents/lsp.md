@@ -67,7 +67,7 @@ extensions = ["nim"]
 # The LSP server command
 command = "nimlangserver"
 
-# The level of verbosity 
+# The level of verbosity
 trace = "verbose"
 ```
 
@@ -199,7 +199,7 @@ This is experimental feature. Not tested.
 
 ![moe-references](https://github.com/fox0430/moe/assets/15966436/fe34a5f9-a68b-4300-ad82-7c8bd7150d01)
 
-### Call Hierarchy 
+### Call Hierarchy
 
 `gh` command in Noemal mode. Open Call Hierarchy viewer
 

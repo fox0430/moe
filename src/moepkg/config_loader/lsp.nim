@@ -20,16 +20,40 @@
 ## TOML loader and serializer for the [Lsp] section (including per-feature
 ## sub-tables and dynamic per-language-server entries).
 
-import std/[algorithm, sequtils, tables]
+import std/[algorithm, json, sequtils, strformat, tables]
 
 import pkg/parsetoml
 
-import ../config
+import ../[config, logger]
 
 import base, save_base
 
 # Top-level TOML section name handled by this module.
 const LspSectionName* = "Lsp"
+
+proc tomlValueToJson*(v: TomlValueRef): JsonNode =
+  case v.kind
+  of TomlValueKind.None:
+    result = newJNull()
+  of TomlValueKind.Int:
+    result = newJInt(v.getInt())
+  of TomlValueKind.Float:
+    result = newJFloat(v.getFloat())
+  of TomlValueKind.Bool:
+    result = newJBool(v.getBool())
+  of TomlValueKind.String:
+    result = newJString(v.getStr())
+  of TomlValueKind.Datetime, TomlValueKind.Date, TomlValueKind.Time:
+    result = newJString($v)
+  of TomlValueKind.Array:
+    result = newJArray()
+    for elem in v.getElems():
+      result.add(tomlValueToJson(elem))
+  of TomlValueKind.Table:
+    result = newJObject()
+    let t = v.getTable()
+    for key, val in t.pairs:
+      result[key] = tomlValueToJson(val)
 
 # Per-feature helpers
 
@@ -58,13 +82,15 @@ proc loadLspServerConfig*(
     table: TomlTableRef, vr: var ValidationResult, section: string
 ): LspServerConfig =
   const validKeys = [
-    "extensions", "command", "trace", "rustAnalyzerRunSingle", "rustAnalyzerDebugSingle"
+    "extensions", "command", "trace", "settings", "rustAnalyzerRunSingle",
+    "rustAnalyzerDebugSingle",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   result = LspServerConfig(
     extensions: @[],
     command: "",
     trace: ltOff,
+    settings: "",
     rustAnalyzerRunSingle: false,
     rustAnalyzerDebugSingle: false,
   )
@@ -73,6 +99,12 @@ proc loadLspServerConfig*(
   loadEnum(
     table, "trace", result.trace, vr, section, parseLspTraceLevel, ValidLspTraceLevels
   )
+  if table.hasKey("settings"):
+    let val = table["settings"]
+    if val.kind == TomlValueKind.Table:
+      result.settings = $tomlValueToJson(val)
+    else:
+      vr.addError(fullKey(section, "settings"), $val, "table")
   loadBool(table, "rustAnalyzerRunSingle", result.rustAnalyzerRunSingle, vr, section)
   loadBool(
     table, "rustAnalyzerDebugSingle", result.rustAnalyzerDebugSingle, vr, section
@@ -216,7 +248,8 @@ proc loadLspConfig*(
     "Rename", "SemanticTokens", "ExecuteCommand",
   ]
   const serverConfigKeys = [
-    "extensions", "command", "trace", "rustAnalyzerRunSingle", "rustAnalyzerDebugSingle"
+    "extensions", "command", "trace", "settings", "rustAnalyzerRunSingle",
+    "rustAnalyzerDebugSingle",
   ]
   for key, value in table:
     if key notin knownKeys:
@@ -238,6 +271,41 @@ proc loadLspConfig*(
         vr.addUnknownKey(fullKey(section, key))
 
 # Serializer
+
+proc jsonToTomlInline*(n: JsonNode): string =
+  case n.kind
+  of JObject:
+    result = "{"
+    var first = true
+    for key, val in n:
+      # TOML has no null literal; omit null-valued keys so they round-trip as
+      # absent rather than being corrupted into an empty string.
+      if val.kind == JNull:
+        continue
+      if not first:
+        result.add ", "
+      first = false
+      result.add toTomlKey(key) & " = " & jsonToTomlInline(val)
+    result.add "}"
+  of JArray:
+    result = "["
+    var idx = 0
+    for elem in n:
+      if idx > 0:
+        result.add ", "
+      result.add jsonToTomlInline(elem)
+      inc idx
+    result.add "]"
+  of JString:
+    result = toTomlString(n.getStr)
+  of JInt:
+    result = $n.getInt
+  of JFloat:
+    result = $n.getFloat
+  of JBool:
+    result = toTomlBool(n.getBool)
+  of JNull:
+    result = "\"\""
 
 proc appendLspToml*(lines: var seq[string], cfg: LspConfig) =
   lines.add "[Lsp]"
@@ -343,6 +411,11 @@ proc appendLspToml*(lines: var seq[string], cfg: LspConfig) =
     lines.add "extensions = " & toTomlStringArray(server.extensions)
     lines.add "command = " & toTomlString(server.command)
     lines.add "trace = " & toTomlString($server.trace)
+    if server.settings.len > 0:
+      try:
+        lines.add "settings = " & jsonToTomlInline(parseJson(server.settings))
+      except JsonParsingError as e:
+        logWarn("config_loader/lsp", &"Invalid JSON in settings for '{name}': {e.msg}")
     lines.add "rustAnalyzerRunSingle = " & toTomlBool(server.rustAnalyzerRunSingle)
     lines.add "rustAnalyzerDebugSingle = " & toTomlBool(server.rustAnalyzerDebugSingle)
     lines.add ""
