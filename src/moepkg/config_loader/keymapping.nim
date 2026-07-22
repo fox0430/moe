@@ -37,13 +37,13 @@ import base, save_base
 const KeyMappingSectionName* = "KeyMapping"
 
 # Allowed [KeyMapping.<key>] section names. "All"/"VisualAll" are meta sections;
-# the rest match EditorMode member names one-to-one (parseEnum below).
-const ValidKeyMappingSections = [
-  "All", "Normal", "Insert", "Visual", "VisualAll", "VisualLine", "VisualBlock",
-  "Replace", "Command", "Filer", "QuickRun", "LogViewer", "Help", "BufferManager",
-  "BookmarkManager", "BackupManager", "DiffViewer", "RecentFile", "Debug", "Config",
-  "References", "DocumentSymbol", "CallHierarchy", "Terminal", "FileTree",
-]
+# the rest are generated from EditorMode so a new mode is accepted automatically
+# and a rename/removal is a compile error instead of a silent load-time drift.
+const ValidKeyMappingSections = block:
+  var s = @["All", "VisualAll"]
+  for m in EditorMode:
+    s.add($m)
+  s
 
 proc loadKeyMappingModeConfig*(
     table: TomlTableRef,
