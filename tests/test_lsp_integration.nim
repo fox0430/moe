@@ -1364,6 +1364,18 @@ suite "LspIntegration - Feature Support Checks (disabled)":
     let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check not lsp.hasDocumentLinkSupport(buffer)
 
+  test "hasFormattingSupport returns false when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check not lsp.hasFormattingSupport(buffer)
+
+  test "hasSelectionRangeSupport returns false when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check not lsp.hasSelectionRangeSupport(buffer)
+
   test "hasExecuteCommandSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)
@@ -1476,6 +1488,22 @@ suite "LspIntegration - Goto/References/Hover capability gating":
     lsp.service.capabilities["nim"] =
       ServerCapabilities(implementationProvider: some(newJBool(true)))
     check lsp.hasImplementationSupport(buffer)
+
+  test "hasFormattingSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasFormattingSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(documentFormattingProvider: some(newJBool(true)))
+    check lsp.hasFormattingSupport(buffer)
+
+  test "hasSelectionRangeSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(path))
+    check not lsp.hasSelectionRangeSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(selectionRangeProvider: some(newJBool(true)))
+    check lsp.hasSelectionRangeSupport(buffer)
 
   test "a literal `false` provider counts as unsupported":
     # A server may advertise `"definitionProvider": false` to disable the
