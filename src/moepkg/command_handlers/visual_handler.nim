@@ -191,11 +191,6 @@ proc handleVisualModeKey*(
   if state.macroState.isRecording:
     state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
-  # Special handling for ESC to clear selection
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    state.editState.pendingTextObject = none(PendingTextObject)
-    state.clearSelection()
-
   let originalMode = state.mode
 
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)
@@ -251,8 +246,22 @@ proc handleVisualModeKey*(
     return VisualModeResult(kind: vmrWaitingForInput)
   of rrCommand:
     discard # Fall through to dispatch below.
+  of rrCancelled:
+    # Escape cleared a pending sequence; stay in visual mode.
+    return VisualModeResult(kind: vmrUnhandled)
   else:
-    # rrCancelled (Escape cleared a pending sequence) or rrUnhandled.
+    # rrUnhandled: no user mapping found.
+    # ESC/C-c with no user mapping returns to previousMode.
+    if (keyCombo.isSpecial and keyCombo.special == skEscape) or (
+      not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == "c"
+    ):
+      state.editState.pendingTextObject = none(PendingTextObject)
+      state.clearSelection()
+      if handler.keyBindingRegistry != nil:
+        handler.keyBindingRegistry.clearSequence
+      let returnMode = state.previousMode
+      state.mode = returnMode
+      return VisualModeResult(kind: vmrHandled, modeTransition: some(returnMode))
     return VisualModeResult(kind: vmrUnhandled)
 
   let cmd = route.command

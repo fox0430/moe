@@ -678,8 +678,8 @@ proc renderWindowLineWrapped*(
     maxScreenY = visibleHeight + tabLineOffset
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    sidebarWidth = e.calculateSidebarWidth(window)
+    scrollbarWidth = e.calculateScrollbarWidth(window)
     maxWidth =
       max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     lineCharLen = line.charLen
@@ -834,8 +834,8 @@ proc renderWindowLineNoWrap*(
   let
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    sidebarWidth = e.calculateSidebarWidth(window)
+    scrollbarWidth = e.calculateScrollbarWidth(window)
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
@@ -955,8 +955,8 @@ proc renderFoldLine*(
   ## Render a collapsed fold marker line (vim-style)
   let
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    sidebarWidth = e.calculateSidebarWidth(window)
+    scrollbarWidth = e.calculateScrollbarWidth(window)
     lineNumScreenX = window.viewport.x + sidebarWidth
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
     foldText = window.buffer.formatFoldText(fold)
@@ -1047,14 +1047,14 @@ proc renderScrollbar*(
   ## one marker row and wrapped logical lines count as their wrap segments,
   ## so the thumb tracks what the viewport actually shows.
   let
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    scrollbarWidth = e.calculateScrollbarWidth(window)
     scrollbarStartX = window.viewport.x + window.viewport.width - scrollbarWidth
 
   if visibleHeight <= 0 or scrollbarWidth <= 0:
     return
 
   let
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
+    sidebarWidth = e.calculateSidebarWidth(window)
     maxWidth =
       max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     totalRows = walkDisplayRows(
@@ -1155,8 +1155,8 @@ proc renderWindow*(
       let cursorLineText = window.buffer.getLine(window.cursor.line)
       if e.lineWrap:
         let
-          sidebarWidth = e.calculateSidebarWidth(window.mode)
-          scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+          sidebarWidth = e.calculateSidebarWidth(window)
+          scrollbarWidth = e.calculateScrollbarWidth(window)
           maxWidth = max(
             1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
           )
@@ -1240,7 +1240,7 @@ proc renderWindow*(
       inc lineIndex
 
   # Render scrollbar on the right edge if enabled (file editing modes only)
-  if e.calculateScrollbarWidth(window.mode) > 0:
+  if e.calculateScrollbarWidth(window) > 0:
     e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset, lineNumOffset)
 
 proc renderWindowSeparator*(
