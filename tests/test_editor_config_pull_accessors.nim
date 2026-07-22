@@ -25,8 +25,7 @@
 
 import std/[unittest, options, strutils, tables]
 
-import
-  ../src/moepkg/[editor, config, config_loader, buffer, lsp_service]
+import ../src/moepkg/[editor, config, config_loader, buffer, lsp_service]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/types/editor_types
 

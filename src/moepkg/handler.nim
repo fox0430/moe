@@ -1241,15 +1241,14 @@ type
     ## Optional frontend callbacks for operations that need the host UI.
     suspend*: FrontendSuspendHook
     resume*: FrontendSuspendHook
+
   BuildInfo =
     tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
   QuickRunInfo =
     tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
   SyntaxCheckInfo = tuple[path: string, language: int]
 
-template withFrontendSuspend(
-    frontend: FrontendHooks, body: untyped
-) =
+template withFrontendSuspend(frontend: FrontendHooks, body: untyped) =
   ## Suspend the owning frontend around synchronous terminal interaction.
   if not frontend.suspend.isNil:
     await frontend.suspend()
