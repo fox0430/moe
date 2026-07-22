@@ -21,7 +21,7 @@
 ## tab lists, buffer switching (:b/:bnext/:bprev/...), deletion, terminal
 ## teardown, and file opening into buffers (:e and friends).
 
-import std/[strutils, strformat, options, os]
+import std/[strutils, strformat, options, os, tables]
 
 import pkg/results
 
@@ -33,7 +33,19 @@ import
   editorconfig_helper,
   highlight,
   highlight_config,
-  logger
+  logger,
+  buffer,
+  window_manager,
+  lsp_integration
+
+proc deleteBufferAt*(e: Editor, idx: int) =
+  ## Remove the buffer at `idx` from `e.buffers` and drop it from
+  ## `bufferIdIndex`. Use this instead of `e.buffers.delete`.
+  ## Also sends LSP didClose so a later re-open doesn't collide with stale
+  ## server state (no-op for non-file buffers and untracked paths).
+  if e.lsp != nil:
+    discard e.lsp.onBufferClose(e.buffers[idx])
+  e.deleteBufferAtNoLsp(idx)
 
 proc findBufferByPath*(e: Editor, path: string): int =
   ## Find a buffer in the buffer list by its file path

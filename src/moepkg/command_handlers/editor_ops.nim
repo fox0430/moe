@@ -24,7 +24,9 @@
 ## a separate module so both consumers can share the code without pulling
 ## in a circular import.
 
-import std/[options, os, times, strutils]
+import std/[options, os, times, strutils, tables]
+
+import pkg/results
 
 import pkg/results
 

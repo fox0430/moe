@@ -34,7 +34,9 @@ import
   editor_codelens,
   highlight,
   highlight_config,
-  persist
+  persist,
+  buffer,
+  lsp_integration
 
 type SaveAllBuffersResult* = object
   savedCount*: int

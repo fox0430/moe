@@ -23,11 +23,10 @@
 ## flipping the config value must be visible via the accessor immediately, with
 ## no separate sync step.
 
-import std/[unittest, options, strutils]
+import std/[unittest, options, strutils, tables]
 
 import
-  ../src/moepkg/
-    [editor, config, config_loader, buffer, window_manager, lsp_service]
+  ../src/moepkg/[editor, config, config_loader, buffer, lsp_service]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/types/editor_types
 

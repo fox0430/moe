@@ -56,16 +56,6 @@ import modes
 
 export types
 
-type KeyRouter* = ref object
-  registry*: KeyBindingRegistry
-  policy*: TimeoutPolicy
-  dispatchState*: DispatchState
-    ## Runtime-mapping key accumulator, owned by the router (no longer borrowed
-    ## from the registry). See `key_bindings/registry.DispatchState`.
-  mapExpandDepth*: int
-    ## Recursion depth for `:map` (noremap=false) replay. Guards against cyclic
-    ## mappings via `MaxMapRecursionDepth`.
-
 proc newKeyRouter*(registry: KeyBindingRegistry, policy: TimeoutPolicy): KeyRouter =
   KeyRouter(
     registry: registry,

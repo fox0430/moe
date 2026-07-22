@@ -19,12 +19,13 @@
 
 ## Tests for editor.nim
 
-import std/[unittest, os, options, strutils, monotimes, times]
+import std/[unittest, os, options, strutils, monotimes, times, tables]
 import pkg/results
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
-    render_utils, lsp_service, diff_viewer, setting_options, editor_init,
+    render_utils, lsp_service, lsp_integration, diff_viewer, setting_options,
+    editor_init, command_config,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import

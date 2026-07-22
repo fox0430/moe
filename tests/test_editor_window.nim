@@ -17,9 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os]
+import std/[unittest, options, os, tables]
+
+import pkg/results
 
 import ../src/moepkg/editor
+import ../src/moepkg/window_manager
 import ../src/moepkg/editor_window {.all.}
 import ../src/moepkg/editor_window_state
 import ../src/moepkg/config

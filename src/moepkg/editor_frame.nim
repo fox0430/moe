@@ -23,7 +23,9 @@
 ## read-only draw (`draw` / `render`, main content + overlay popups). Also the
 ## debug-buffer refresher, notification routing, and editor shutdown.
 
-import std/[options, strutils, monotimes, times]
+import std/[options, strutils, monotimes, times, tables]
+
+import pkg/celina
 
 import pkg/celina
 
@@ -45,7 +47,7 @@ import
 
 import
   status_line, render_utils, logger, message_log, debug_viewer, completion,
-  signature_help, hover_popup, unicode_utils, motion
+  signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)

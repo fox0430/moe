@@ -19,7 +19,7 @@
 
 ## Tests for editor_file.nim
 
-import std/[unittest, os, options, monotimes, times, strutils]
+import std/[unittest, os, options, monotimes, times, strutils, tables]
 import pkg/results
 import ../src/moepkg/[editor, buffer, config, config_loader, highlight]
 

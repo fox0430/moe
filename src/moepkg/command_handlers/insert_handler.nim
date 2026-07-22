@@ -27,14 +27,14 @@
 ## - Auto-completion (Ctrl+N/Ctrl+P to navigate, Tab to commit)
 ## - Macro recording support
 
-import std/[options, unicode, strutils, monotimes]
+import std/[options, unicode, strutils, monotimes, tables]
 
 import pkg/results
 
 import
   ../[
     types, buffer, config, modes, key_bindings, motion, command_registry, unicode_utils,
-    completion, signature_help, lsp_integration, lsp_request_context,
+    completion, signature_help, lsp_integration, lsp_request_context, key_router,
   ]
 import handler_types, insert_commands
 import ../types/editor_types
