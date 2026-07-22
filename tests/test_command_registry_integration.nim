@@ -1102,8 +1102,8 @@ suite "Handler - Paste operations":
 
     check registry.execute(ctx, custom("paste.after")).isOk
     check buffer[0] == "helloあいう world"
-    # Cursor should be at column 4 + 3 chars = 7
-    check ctx.cursor.column == 7
+    # Cursor lands on the first pasted char (column 4 + 1)
+    check ctx.cursor.column == 5
 
   test "paste before cursor (P) - multibyte characterwise":
     let buffer = newTextBuffer("hello world")
@@ -1114,8 +1114,8 @@ suite "Handler - Paste operations":
 
     check registry.execute(ctx, custom("paste.before")).isOk
     check buffer[0] == "helloあいう world"
-    # Cursor should be at column 4 + 3 chars = 7
-    check ctx.cursor.column == 7
+    # Cursor lands on the first pasted char (column 5)
+    check ctx.cursor.column == 5
 
   test "paste after cursor (p) - charwise multi-line":
     let buffer = newTextBuffer("hello")
@@ -1128,8 +1128,8 @@ suite "Handler - Paste operations":
     check buffer.len == 2
     check buffer[0] == "hxy"
     check buffer[1] == "abello"
-    # Cursor lands on last char of pasted text ('b') on the new line
-    check ctx.cursor.line == 1
+    # Cursor lands on the first pasted char ('x')
+    check ctx.cursor.line == 0
     check ctx.cursor.column == 1
 
   test "paste after cursor (p) - charwise multi-line count=2":
@@ -1146,7 +1146,8 @@ suite "Handler - Paste operations":
     check buffer[0] == "hxy"
     check buffer[1] == "abxy"
     check buffer[2] == "abello"
-    check ctx.cursor.line == 2
+    # Cursor lands on the first pasted char ('x')
+    check ctx.cursor.line == 0
     check ctx.cursor.column == 1
 
   test "paste before cursor (P) - charwise multi-line":
@@ -1160,9 +1161,9 @@ suite "Handler - Paste operations":
     check buffer.len == 2
     check buffer[0] == "hexy"
     check buffer[1] == "abllo"
-    # Cursor lands on last char of pasted text ('b') on the new line
-    check ctx.cursor.line == 1
-    check ctx.cursor.column == 1
+    # Cursor lands on the first pasted char ('x')
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 2
 
   test "paste after cursor (p) - charwise multi-line multibyte":
     let buffer = newTextBuffer("hello")
@@ -1175,9 +1176,9 @@ suite "Handler - Paste operations":
     check buffer.len == 2
     check buffer[0] == "hあい"
     check buffer[1] == "うえおello"
-    # Cursor at last rune of paste 'お' = column 2 on the new line
-    check ctx.cursor.line == 1
-    check ctx.cursor.column == 2
+    # Cursor lands on the first pasted rune ('あ')
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 1
 
 suite "Handler - Delete char operations":
   test "delete char at cursor (x)":
