@@ -846,6 +846,10 @@ template shiftPerLineArray(arr: untyped, freshValue: untyped, event: RowColRemap
       else:
         event.firstAffectedRow
     if idx < 0 or idx > arr.len:
+      logDebug(
+        "buffer",
+        "shiftPerLineArray clamp: " & astToStr(arr) & " idx=" & $idx & " len=" & $arr.len,
+      )
       return
     if delta > 0:
       for _ in 0 ..< delta:
