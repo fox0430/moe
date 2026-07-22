@@ -27,8 +27,6 @@ import std/[options, strutils, monotimes, times, tables]
 
 import pkg/celina
 
-import pkg/celina
-
 import
   types/editor_types,
   editor_reload,
