@@ -533,6 +533,170 @@ const FilerModeCommands*: HelpGroup = HelpGroup(
   ]
 )
 
+const FileTreeModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j or Down", description: "Move selection down"),
+    HelpEntry(syntax: "k or Up", description: "Move selection up"),
+    HelpEntry(syntax: "gg", description: "Move to first item"),
+    HelpEntry(syntax: "G", description: "Move to last item"),
+    HelpEntry(syntax: "p", description: "Move to parent node"),
+    HelpEntry(
+      syntax: "Enter", description: "Open file, or toggle expand/collapse directory"
+    ),
+    HelpEntry(syntax: "o", description: "Open file, or expand directory"),
+    HelpEntry(syntax: "l", description: "Open file, or expand directory"),
+    HelpEntry(syntax: "x", description: "Collapse directory (or move to parent)"),
+    HelpEntry(syntax: "h", description: "Collapse directory (or move to parent)"),
+    HelpEntry(syntax: "C", description: "Change root to selected directory"),
+    HelpEntry(syntax: "u", description: "Move root up one level"),
+    HelpEntry(syntax: "/", description: "Start incremental search"),
+    HelpEntry(syntax: "n", description: "Jump to next search match"),
+    HelpEntry(syntax: "N", description: "Jump to previous search match"),
+    HelpEntry(syntax: ".", description: "Toggle hidden files"),
+    HelpEntry(syntax: "R", description: "Refresh tree"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+    HelpEntry(syntax: "Esc", description: "Clear search highlight (press twice)"),
+    HelpEntry(syntax: "Ctrl-w w", description: "Move to next window"),
+    HelpEntry(syntax: "Ctrl-w p", description: "Move to previous window"),
+    HelpEntry(syntax: "Ctrl-w >", description: "Increase window width"),
+    HelpEntry(syntax: "Ctrl-w <", description: "Decrease window width"),
+  ]
+)
+
+const BufferManagerModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j or Down", description: "Go down"),
+    HelpEntry(syntax: "k or Up", description: "Go up"),
+    HelpEntry(syntax: "gg", description: "Go to the first buffer"),
+    HelpEntry(syntax: "G", description: "Go to the last buffer"),
+    HelpEntry(syntax: "Ctrl-d", description: "Half page down"),
+    HelpEntry(syntax: "Ctrl-u", description: "Half page up"),
+    HelpEntry(syntax: "Enter or o", description: "Open the selected buffer"),
+    HelpEntry(syntax: "D", description: "Delete the selected buffer"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+    HelpEntry(syntax: "q or Esc", description: "Close Buffer Manager"),
+  ]
+)
+
+const BookmarkManagerModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j or Down", description: "Go down"),
+    HelpEntry(syntax: "k or Up", description: "Go up"),
+    HelpEntry(syntax: "gg", description: "Go to the first bookmark"),
+    HelpEntry(syntax: "G", description: "Go to the last bookmark"),
+    HelpEntry(syntax: "Ctrl-d", description: "Half page down"),
+    HelpEntry(syntax: "Ctrl-u", description: "Half page up"),
+    HelpEntry(syntax: "Enter", description: "Jump to the selected bookmark"),
+    HelpEntry(syntax: "D", description: "Delete the selected bookmark"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+    HelpEntry(syntax: "q or Esc", description: "Close Bookmark Manager"),
+  ]
+)
+
+const DocumentSymbolModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j or Down", description: "Go down"),
+    HelpEntry(syntax: "k or Up", description: "Go up"),
+    HelpEntry(syntax: "gg", description: "Go to the first symbol"),
+    HelpEntry(syntax: "G", description: "Go to the last symbol"),
+    HelpEntry(syntax: "Ctrl-d", description: "Half page down"),
+    HelpEntry(syntax: "Ctrl-u", description: "Half page up"),
+    HelpEntry(syntax: "Enter", description: "Jump to the selected symbol"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+    HelpEntry(syntax: "q or Esc", description: "Close Document Symbol viewer"),
+  ]
+)
+
+const ConfigModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j or Down", description: "Move selection down"),
+    HelpEntry(syntax: "k or Up", description: "Move selection up"),
+    HelpEntry(syntax: "gg", description: "Go to the first item"),
+    HelpEntry(syntax: "G", description: "Go to the last item"),
+    HelpEntry(syntax: "Ctrl-d", description: "Half page down"),
+    HelpEntry(syntax: "Ctrl-u", description: "Half page up"),
+    HelpEntry(
+      syntax: "Enter",
+      description:
+        "Toggle bool, open enum popup, or start editing int/float/string/color",
+    ),
+    HelpEntry(syntax: "l or Space", description: "Same as Enter"),
+    HelpEntry(
+      syntax: "Right",
+      description: "Cycle enum forward, increment int/float, or toggle bool",
+    ),
+    HelpEntry(
+      syntax: "Left", description: "Cycle enum backward, or decrement int/float"
+    ),
+    HelpEntry(syntax: "h", description: "Cycle enum backward, or decrement int/float"),
+    HelpEntry(syntax: "/", description: "Search forwards"),
+    HelpEntry(syntax: "?", description: "Search backwards"),
+    HelpEntry(syntax: "n", description: "Jump to next search match"),
+    HelpEntry(syntax: "N", description: "Jump to previous search match"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+    HelpEntry(syntax: "Esc", description: "Clear search highlight (press twice)"),
+  ]
+)
+
+const LogViewerModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "h or Left", description: "Go left"),
+    HelpEntry(syntax: "j or Down", description: "Go down"),
+    HelpEntry(syntax: "k or Up", description: "Go up"),
+    HelpEntry(syntax: "l or Right", description: "Go right"),
+    HelpEntry(syntax: "0 or Home", description: "Go to the first character of the line"),
+    HelpEntry(syntax: "$ or End", description: "Go to the end of the line"),
+    HelpEntry(syntax: "w", description: "Go forwards to the start of a word"),
+    HelpEntry(syntax: "b", description: "Go backwards to the start of a word"),
+    HelpEntry(syntax: "e", description: "Go forwards to the end of a word"),
+    HelpEntry(syntax: "{", description: "Go to the previous blank line"),
+    HelpEntry(syntax: "}", description: "Go to the next blank line"),
+    HelpEntry(syntax: "gg", description: "Go to the first line"),
+    HelpEntry(syntax: "G", description: "Go to the last line"),
+    HelpEntry(syntax: "Ctrl-d", description: "Half page down"),
+    HelpEntry(syntax: "Ctrl-u", description: "Half page up"),
+    HelpEntry(syntax: "Ctrl-f", description: "Page down"),
+    HelpEntry(syntax: "Ctrl-b", description: "Page up"),
+    HelpEntry(syntax: "/", description: "Search forwards"),
+    HelpEntry(syntax: "?", description: "Search backwards"),
+    HelpEntry(syntax: "n", description: "Repeat last search forwards"),
+    HelpEntry(syntax: "N", description: "Repeat last search backwards"),
+    HelpEntry(syntax: "*", description: "Search forwards for the word under cursor"),
+    HelpEntry(syntax: "#", description: "Search backwards for the word under cursor"),
+    HelpEntry(syntax: "v", description: "Start character-wise Visual selection"),
+    HelpEntry(syntax: "V", description: "Start line-wise Visual selection"),
+    HelpEntry(syntax: "Ctrl-v", description: "Start block-wise Visual selection"),
+    HelpEntry(syntax: "r", description: "Refresh log content"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+    HelpEntry(syntax: "q", description: "Close Log Viewer"),
+  ]
+)
+
+const RecentFileModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j or Down", description: "Move selection down"),
+    HelpEntry(syntax: "k or Up", description: "Move selection up"),
+    HelpEntry(syntax: "gg", description: "Move to the first file"),
+    HelpEntry(syntax: "G", description: "Move to the last file"),
+    HelpEntry(syntax: "Ctrl-d", description: "Half page down"),
+    HelpEntry(syntax: "Ctrl-u", description: "Half page up"),
+    HelpEntry(syntax: "Enter", description: "Open the selected file"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+  ]
+)
+
+const DebugModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j or Down", description: "Scroll down"),
+    HelpEntry(syntax: "k or Up", description: "Scroll up"),
+    HelpEntry(syntax: "g or Home", description: "Go to top"),
+    HelpEntry(syntax: "G or End", description: "Go to bottom"),
+    HelpEntry(syntax: "Ctrl-d or Page Down", description: "Page down"),
+    HelpEntry(syntax: "Ctrl-u or Page Up", description: "Page up"),
+    HelpEntry(syntax: ":", description: "Enter command mode"),
+  ]
+)
+
 const ExitingHelpNames =
   @["w", "q", "wq", "q!", "qa!", "wqa", "wqa!", "w!", "wq!", "cq"]
 
@@ -642,6 +806,38 @@ proc renderTerminalNormalSection*(): string {.compileTime.} =
 proc renderFilerModeSection*(): string {.compileTime.} =
   ## The "# Filer mode" section body.
   renderGroup(FilerModeCommands)
+
+proc renderFileTreeModeSection*(): string {.compileTime.} =
+  ## The "# FileTree mode" section body.
+  renderGroup(FileTreeModeCommands)
+
+proc renderBufferManagerModeSection*(): string {.compileTime.} =
+  ## The "# Buffer manager mode" section body.
+  renderGroup(BufferManagerModeCommands)
+
+proc renderBookmarkManagerModeSection*(): string {.compileTime.} =
+  ## The "# Bookmark manager mode" section body.
+  renderGroup(BookmarkManagerModeCommands)
+
+proc renderDocumentSymbolModeSection*(): string {.compileTime.} =
+  ## The "# Document symbol viewer mode" section body.
+  renderGroup(DocumentSymbolModeCommands)
+
+proc renderConfigModeSection*(): string {.compileTime.} =
+  ## The "# Configuration mode" section body.
+  renderGroup(ConfigModeCommands)
+
+proc renderLogViewerModeSection*(): string {.compileTime.} =
+  ## The "# Log viewer mode" section body.
+  renderGroup(LogViewerModeCommands)
+
+proc renderRecentFileModeSection*(): string {.compileTime.} =
+  ## The "# Recent file mode" section body.
+  renderGroup(RecentFileModeCommands)
+
+proc renderDebugModeSection*(): string {.compileTime.} =
+  ## The "# Debug mode" section body.
+  renderGroup(DebugModeCommands)
 
 proc renderCommandModeHead*(): string {.compileTime.} =
   ## "# Command mode" groups that appear *before* the `set` options block.

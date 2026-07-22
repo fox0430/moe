@@ -14,8 +14,9 @@
 ## Register, Visual, Replace, Insert, Backupmanager, References, Call
 ## Hierarchy, Filer, Terminal-Input, Terminal-Normal) by reusing the same
 ## `HelpGroup` constants `help_generator.nim` feeds into the TUI help
-## viewer. `Configuration mode` and `FileTree mode` remain hand-written
-## because the TUI help generator has no source-of-truth data for them.
+## viewer. Phase 3 added the remaining viewer/manager modes (FileTree,
+## BufferManager, BookmarkManager, DocumentSymbol, Configuration,
+## LogViewer, RecentFile, Debug).
 
 import std/[os, strutils]
 
@@ -48,6 +49,14 @@ let Sections: seq[tuple[name: string, body: proc(): string]] = @[
   (name: "ReferencesMode", body: renderReferencesModeTable),
   (name: "CallHierarchyMode", body: renderCallHierarchyModeTable),
   (name: "FilerMode", body: renderFilerModeTable),
+  (name: "FileTreeMode", body: renderFileTreeModeTable),
+  (name: "BufferManagerMode", body: renderBufferManagerModeTable),
+  (name: "BookmarkManagerMode", body: renderBookmarkManagerModeTable),
+  (name: "DocumentSymbolMode", body: renderDocumentSymbolModeTable),
+  (name: "ConfigMode", body: renderConfigModeTable),
+  (name: "LogViewerMode", body: renderLogViewerModeTable),
+  (name: "RecentFileMode", body: renderRecentFileModeTable),
+  (name: "DebugMode", body: renderDebugModeTable),
   (name: "TerminalInput", body: renderTerminalInputTable),
   (name: "TerminalNormal", body: renderTerminalNormalTable),
   (name: "CommandMode", body: renderCommandModeTable),
