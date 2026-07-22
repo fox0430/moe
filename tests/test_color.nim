@@ -269,6 +269,13 @@ suite "color - rgbTo256Color":
     let result = rgbTo256Color(128, 128, 128)
     check result >= 232'u8 and result <= 255'u8
 
+  test "grayscale boundary near white does not overflow":
+    # Regression: r=248 previously produced uint8(256) which either raised
+    # RangeDefect or wrapped to index 0 (black).
+    check rgbTo256Color(248, 248, 248) == 231'u8
+    check rgbTo256Color(247, 247, 247) >= 232'u8
+    check rgbTo256Color(247, 247, 247) <= 255'u8
+
   test "pure red":
     # Should map to red in 6x6x6 cube
     # ri = (255 * 6) div 256 = 5

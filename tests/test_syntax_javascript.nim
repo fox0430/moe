@@ -20,6 +20,7 @@
 import std/unittest
 
 import ../src/moepkg/syntax/[tokenizer, syntax_javascript]
+import ../src/moepkg/highlight
 
 suite "syntaxjavascript - javaScriptkeywords constant":
   test "javaScriptkeywords contains declaration keywords":
@@ -1396,15 +1397,14 @@ suite "syntaxjavascript - javaScriptNextToken state preservation":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("test")
     # Simulate a caller-restored mid-stream state.
-    g.templateLiteralDepth = 5
-    g.braceDepthStack = @[1, 2, 3]
-    g.inJsxMode = true
+    g.lang.jslike =
+      JsLikeState(templateLiteralDepth: 5, braceDepthStack: @[1, 2, 3], inJsxMode: true)
 
     g.javaScriptNextToken()
 
-    check g.templateLiteralDepth == 5
-    check g.braceDepthStack == @[1, 2, 3]
-    check g.inJsxMode == true
+    check g.lang.jslike.templateLiteralDepth == 5
+    check g.lang.jslike.braceDepthStack == @[1, 2, 3]
+    check g.lang.jslike.inJsxMode == true
 
 suite "syntaxjavascript - javaScriptNextToken complete JavaScript code":
   test "ES6 module syntax":
@@ -1739,14 +1739,12 @@ suite "syntaxjavascript - JSDoc highlighting":
       if g.kind == gtEof:
         break
     check g.state == gtDocLongComment
-    check g.commentDepth == 1
+    check g.lang.jslike.commentDepth == 1
 
     # Second line: * @param x
-    let savedState = g.state
-    let savedDepth = g.commentDepth
+    let snap1 = captureTokenizerState(g)
     g.initGeneralTokenizer(" * @param x")
-    g.state = savedState
-    g.commentDepth = savedDepth
+    g.restoreTokenizerState(snap1)
     var hasPreprocessor = false
     while true:
       g.javaScriptNextToken()
@@ -1758,17 +1756,15 @@ suite "syntaxjavascript - JSDoc highlighting":
     check g.state == gtDocLongComment
 
     # Third line: */
-    let savedState2 = g.state
-    let savedDepth2 = g.commentDepth
+    let snap2 = captureTokenizerState(g)
     g.initGeneralTokenizer(" */")
-    g.state = savedState2
-    g.commentDepth = savedDepth2
+    g.restoreTokenizerState(snap2)
     while true:
       g.javaScriptNextToken()
       if g.kind == gtEof:
         break
     check g.state == gtNone
-    check g.commentDepth == 0
+    check g.lang.jslike.commentDepth == 0
 
   test "JSDoc unclosed type before comment end":
     var g: GeneralTokenizer

@@ -62,6 +62,9 @@ type
     apsCsi # Got ESC [ (Control Sequence Introducer)
     apsOsc # Got ESC ] (Operating System Command)
     apsStringSeq # Consuming DCS/APC/PM/SOS string until ST
+    apsDesignateCharset
+      # Awaiting the 1-byte payload after ESC (/)/*/+/#; separate state so
+      # the byte can arrive in a later chunk without leaking into normal text.
 
   TerminalGrid* = ref object
     cells*: seq[seq[TerminalCell]] # [row][col]
@@ -409,26 +412,30 @@ proc applySgr(grid: TerminalGrid, params: seq[int]) =
       grid.currentFg = indexedColor(uint8(code - 30))
     of 38:
       # Extended foreground: 38;5;N or 38;2;r;g;b
-      if i + 1 < p.len:
-        if p[i + 1] == 5 and i + 2 < p.len:
-          grid.currentFg = indexedColor(uint8(p[i + 2]))
-          i += 2
-        elif p[i + 1] == 2 and i + 4 < p.len:
-          grid.currentFg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
-          i += 4
+      if i + 1 < p.len and p[i + 1] == 5 and i + 2 < p.len:
+        grid.currentFg = indexedColor(uint8(p[i + 2]))
+        i += 2
+      elif i + 1 < p.len and p[i + 1] == 2 and i + 4 < p.len:
+        grid.currentFg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
+        i += 4
+      else:
+        # Truncated/malformed sub-sequence: drop the rest so leftover params
+        # aren't reinterpreted as unrelated SGR codes.
+        break
     of 39:
       grid.currentFg = defaultColor()
     of 40 .. 47:
       grid.currentBg = indexedColor(uint8(code - 40))
     of 48:
       # Extended background: 48;5;N or 48;2;r;g;b
-      if i + 1 < p.len:
-        if p[i + 1] == 5 and i + 2 < p.len:
-          grid.currentBg = indexedColor(uint8(p[i + 2]))
-          i += 2
-        elif p[i + 1] == 2 and i + 4 < p.len:
-          grid.currentBg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
-          i += 4
+      if i + 1 < p.len and p[i + 1] == 5 and i + 2 < p.len:
+        grid.currentBg = indexedColor(uint8(p[i + 2]))
+        i += 2
+      elif i + 1 < p.len and p[i + 1] == 2 and i + 4 < p.len:
+        grid.currentBg = rgbColor(uint8(p[i + 2]), uint8(p[i + 3]), uint8(p[i + 4]))
+        i += 4
+      else:
+        break
     of 49:
       grid.currentBg = defaultColor()
     of 90 .. 97:
@@ -658,7 +665,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorRow = min(grid.rows - 1, grid.cursorRow + n)
+    grid.cursorRow = min(grid.rows - 1, grid.cursorRow + min(n, grid.rows - 1))
     grid.cursorCol = 0
   of 'F':
     # Cursor Previous Line
@@ -667,28 +674,30 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    grid.cursorRow = max(0, grid.cursorRow - n)
+    grid.cursorRow = max(0, grid.cursorRow - min(n, grid.cursorRow))
     grid.cursorCol = 0
   of 'X':
-    # Erase Character
-    let n =
+    # Erase Character - clamp count so cursorCol + n cannot overflow.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.cols - grid.cursorCol)
     grid.cleanWideCharBoundary(grid.cursorRow, grid.cursorCol)
-    let endCol = min(grid.cursorCol + n, grid.cols)
+    let endCol = grid.cursorCol + n
     if endCol < grid.cols:
       grid.cleanWideCharBoundary(grid.cursorRow, endCol)
     for c in grid.cursorCol ..< endCol:
       grid.cells[grid.cursorRow][c] = defaultCell()
   of 'P':
-    # Delete Character
-    let n =
+    # Delete Character - clamp count so cursorCol + n and cols - n stay in range.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.cols - grid.cursorCol)
     let row = grid.cursorRow
     grid.cleanWideCharBoundary(row, grid.cursorCol)
     let srcStart = grid.cursorCol + n
@@ -700,12 +709,14 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     for c in max(grid.cursorCol, grid.cols - n) ..< grid.cols:
       grid.cells[row][c] = defaultCell()
   of '@':
-    # Insert Character (shift right)
-    let n =
+    # Insert Character (shift right) - clamp count so cursorCol + n and cols - n
+    # cannot overflow/underflow.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.cols - grid.cursorCol)
     let row = grid.cursorRow
     # Clean wide char boundary at insertion point
     grid.cleanWideCharBoundary(row, grid.cursorCol)
@@ -865,14 +876,9 @@ proc processOutput*(grid: TerminalGrid, data: string) =
       of ']':
         grid.parserState = apsOsc
         grid.escapeBuffer = ""
-      of '(':
-        # Designate character set - skip next byte
-        i += 1
-        grid.parserState = apsNormal
-      of ')', '*', '+':
-        # Designate character set - skip next byte
-        i += 1
-        grid.parserState = apsNormal
+      of '(', ')', '*', '+':
+        # Designate G0/G1/G2/G3 character set - 1-byte payload follows.
+        grid.parserState = apsDesignateCharset
       of 'M':
         # Reverse Index (RI): move up, scrolling the region down at the top margin
         if grid.cursorRow == grid.scrollTop:
@@ -911,10 +917,8 @@ proc processOutput*(grid: TerminalGrid, data: string) =
           grid.cells[r] = newRow(grid.cols)
         grid.parserState = apsNormal
       of '#':
-        # DEC line attribute sequences (e.g., ESC # 8) - skip next byte
-        if i + 1 < actualData.len:
-          i += 1
-        grid.parserState = apsNormal
+        # DEC line attribute sequences (e.g., ESC # 8) - 1-byte payload follows.
+        grid.parserState = apsDesignateCharset
       of 'P', '_', '^', 'X':
         # String-type sequences: DCS (P), APC (_), PM (^), SOS (X)
         # Consume everything until ST (ESC \) or BEL
@@ -958,10 +962,12 @@ proc processOutput*(grid: TerminalGrid, data: string) =
           if oscType in {'0', '2'}:
             grid.title = oscStr[2 .. ^1]
         if ch == '\x1b':
-          # OSC terminated by ESC \ (ST), skip the backslash
-          if i + 1 < actualData.len and actualData[i + 1] == '\\':
-            i += 1
-        grid.parserState = apsNormal
+          # Defer ST's trailing '\' to apsEscape so it's handled even when the
+          # chunk ends here (peeking i+1 would leak the '\' into normal output).
+          grid.parserState = apsEscape
+          grid.escapeBuffer = ""
+        else:
+          grid.parserState = apsNormal
       elif grid.escapeBuffer.len >= MaxOscLength:
         # Oversized (likely unterminated) OSC: abort to bound memory (DoS guard).
         # This byte is valid payload, so reprocess it as normal output instead
@@ -974,16 +980,18 @@ proc processOutput*(grid: TerminalGrid, data: string) =
     of apsStringSeq:
       # Consuming DCS/APC/PM/SOS string until ST (ESC \) or BEL
       if ch == '\x1b':
-        # Possible start of ST (ESC \)
-        if i + 1 < actualData.len and actualData[i + 1] == '\\':
-          i += 1 # Skip the backslash
-        grid.parserState = apsNormal
+        # Defer ST's trailing '\' to apsEscape so it's handled even when the
+        # chunk ends here (peeking i+1 would leak the '\' into normal output).
+        grid.parserState = apsEscape
+        grid.escapeBuffer = ""
       elif ch == '\x07':
         # BEL also terminates string sequences
         grid.parserState = apsNormal
       else:
         # Consume and discard the string content
         discard
+    of apsDesignateCharset:
+      grid.parserState = apsNormal
 
     i += 1
   grid.needsRedraw = true

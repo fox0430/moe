@@ -1050,7 +1050,7 @@ suite "syntax_yaml - quoted key with escapes":
     g.state = gtOther
     g.yamlNextToken() # start '
     check g.state == gtCharLit
-    check g.yamlIsKey == true
+    check g.lang.yaml.isKey == true
     g.yamlNextToken() # it
     check g.kind == gtKey
     g.yamlNextToken() # '' escape
@@ -1830,7 +1830,7 @@ suite "syntax_yaml - escape at buffer and line boundaries":
     g.state = gtOther
     g.yamlNextToken() # "a
     check g.kind == gtStringLit # NOT gtKey: the quote does not close on line 0
-    check g.yamlIsKey == false
+    check g.lang.yaml.isKey == false
 
   test "key lookahead with backslash as last buffer char stays in bounds":
     # NOTE: the lookahead is a pure read (`tempPos` never feeds `g.pos`), so
@@ -1845,7 +1845,7 @@ suite "syntax_yaml - escape at buffer and line boundaries":
     g.state = gtOther
     g.yamlNextToken() # the opener run
     check g.kind == gtStringLit # NOT gtKey
-    check g.yamlIsKey == false
+    check g.lang.yaml.isKey == false
     check g.pos <= buf.len
     # Drain the rest (re-tokenizes from the start, covering the opener too).
     checkTokenizesInBounds(buf)

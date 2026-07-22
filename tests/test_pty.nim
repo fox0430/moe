@@ -17,7 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, posix, os, times]
+import std/[unittest, posix, os, strutils, times]
+
+import pkg/results
 
 import ../src/moepkg/terminal/pty
 
@@ -81,3 +83,76 @@ suite "closePty - bounded teardown":
     let pty = PtyHandle(masterFd: -1, childPid: Pid(999999), closed: true)
     pty.closePty() # must not raise or block
     check pty.closed
+
+suite "writeToPty - non-blocking against a stopped child":
+  test "Returns promptly when the child is SIGSTOP'd (EAGAIN never spins)":
+    # Regression: writeToPty used to loop on poll(POLLOUT, 100ms) forever if
+    # EAGAIN persisted, so a SIGSTOP'd or ^S-paused child froze the UI thread
+    # until the child was killed. Now it must buffer and return.
+    let ptyResult = openPtyAndSpawn("cat")
+    require ptyResult.isOk
+    let pty = ptyResult.get
+    defer:
+      discard kill(pty.childPid, SIGCONT)
+      pty.closePty()
+
+    require kill(pty.childPid, SIGSTOP) == 0
+    sleep(50) # let the stop take effect so the kernel PTY buffer can fill
+
+    let payload = "x".repeat(1024)
+    let start = epochTime()
+    var lastResult = pty.writeToPty(payload)
+    # Keep writing until we overflow the userspace cap or run out of budget.
+    # Every individual call MUST return without blocking.
+    for _ in 0 ..< 200:
+      if lastResult.isErr:
+        break
+      lastResult = pty.writeToPty(payload)
+    let elapsed = epochTime() - start
+
+    # 200 * 1KiB well exceeds the 64 KiB userspace cap on top of any kernel
+    # PTY buffer, so we should have hit the overflow err.
+    check lastResult.isErr
+    # Must be dramatically faster than the old poll(100ms) * many iterations.
+    check elapsed < 1.0
+    # Buffer never grew past its documented cap.
+    check pty.writeBuffer.len <= maxPtyWriteBufferBytes
+
+  test "drainWriteBuffer flushes pending bytes once the child resumes":
+    let ptyResult = openPtyAndSpawn("cat")
+    require ptyResult.isOk
+    let pty = ptyResult.get
+    defer:
+      discard kill(pty.childPid, SIGCONT)
+      pty.closePty()
+
+    require kill(pty.childPid, SIGSTOP) == 0
+    sleep(50)
+
+    # Fill until we buffer something in userspace.
+    let payload = "y".repeat(4096)
+    for _ in 0 ..< 32:
+      if pty.writeToPty(payload).isErr:
+        break
+    require pty.writeBuffer.len > 0
+
+    # Resume the child; cat starts consuming, so drainWriteBuffer should
+    # eventually push everything through.
+    require kill(pty.childPid, SIGCONT) == 0
+    let deadline = epochTime() + 2.0
+    while pty.writeBuffer.len > 0 and epochTime() < deadline:
+      discard pty.drainWriteBuffer()
+      # Read the echoed bytes so the kernel keeps making room.
+      discard pty.readFromPty(65536)
+      sleep(10)
+
+    check pty.writeBuffer.len == 0
+
+  test "writeToPty on an empty buffer succeeds without touching the fd":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.writeToPty("").isOk
+
+  test "writeToPty on a closed handle returns err":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: true)
+    let r = pty.writeToPty("hello")
+    check r.isErr

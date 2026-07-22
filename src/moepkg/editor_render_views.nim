@@ -237,8 +237,7 @@ proc computeWindowLayout(
   ## feed the viewport pass) and `renderSplitView` (to paint); calling it in both
   ## phases is cheap and produces identical results.
   let
-    lineNumOffset =
-      calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers)
+    lineNumOffset = calculateLineNumOffset(window.buffer, e.showLineNumbers)
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
     isActiveWindow = (i == e.windowManager.activeWindowIndex)
@@ -255,7 +254,7 @@ proc computeWindowLayout(
       max(0, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     # Utility windows (Filer / Help / BufferManager / ...) render in no-wrap mode
     # regardless of the global lineWrap setting.
-    effectiveLineWrap = e.state.display.lineWrap and window.mode.isFileEditMode
+    effectiveLineWrap = e.lineWrap and window.mode.isFileEditMode
     # For overlay modes (Command, Search, Rename) over the active window, paint
     # the underlying base mode as background.
     renderMode =
@@ -284,12 +283,12 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       e.screenSize.width > 0 and e.screenSize.height > 0:
     e.windowManager.resizeWindows(
       e.screenSize.width, e.screenSize.height, e.screenSize.prevWidth,
-      e.screenSize.prevHeight, e.state.display.multiStatusLine,
+      e.screenSize.prevHeight, e.multiStatusLine,
     )
 
   let
     maxBottomY = findMaxBottomY(e.windowManager.windows)
-    tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
 
   for i, window in e.windowManager.windows:
     let layout = e.computeWindowLayout(window, i, maxBottomY, tabLineOffset)
@@ -300,8 +299,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
     window.syncSelectionCursor()
     adjustViewportForCursor(
       window.viewport, window.cursor, layout.adjustHeight, layout.textAreaWidth,
-      layout.effectiveLineWrap, window.buffer, e.state.display.tabStop,
-      window.wrapCountCache,
+      layout.effectiveLineWrap, window.buffer, e.tabStop, window.wrapCountCache,
     )
 
   # Set screen cursor to active window position.
@@ -365,7 +363,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
 
   let
     maxBottomY = findMaxBottomY(e.windowManager.windows)
-    tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
 
   for i, window in e.windowManager.windows:
     let layout = e.computeWindowLayout(window, i, maxBottomY, tabLineOffset)
@@ -373,7 +371,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
     # Render tab line for this window if enabled.
     # Resolve the window's per-window tab list (BufferIds) to TextBuffer refs.
     # Stale ids (deleted buffers) are skipped silently.
-    if e.state.display.showTabLine:
+    if e.showTabLine:
       var buffersToShow: seq[TextBuffer] = @[]
       for id in window.bufferIds:
         let bufOpt = e.bufferById(id)
@@ -383,8 +381,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         buffersToShow = @[window.buffer]
       renderWindowTabLine(
         buffersToShow, window.buffer, window.mode, buffer, window.viewport.y,
-        window.viewport.x, window.viewport.width, e.state.display.showTabLine,
-        layout.isActiveWindow,
+        window.viewport.x, window.viewport.width, e.showTabLine, layout.isActiveWindow,
       )
 
     # Render based on mode - some special modes support per-window rendering.
@@ -424,8 +421,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
 
     # Render per-window status line if multi-status line mode is enabled
     # (and merge is disabled - merge shows only one status line at bottom)
-    if e.state.display.showStatusLine and e.state.display.multiStatusLine and
-        not e.config.statusLine.merge:
+    if e.showStatusLine and e.multiStatusLine and not e.config.statusLine.merge:
       # Bottom windows: a grown command-line area reserves its own status row
       # above it (bottomAreaHeight = grown rows + 1), so shift the status line
       # up by the grown rows; steady state (reservedLines == 1) is unshifted
@@ -509,7 +505,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   # When multiStatusLine is enabled (and merge is off), per-window status lines
   # are rendered in renderSplitView instead (bottom windows shift theirs above
   # a grown area there, so the grown branch must not add a global one on top).
-  if not e.state.display.multiStatusLine or e.config.statusLine.merge:
+  if not e.multiStatusLine or e.config.statusLine.merge:
     if grown:
       # Pushed up onto its own row above the grown area
       let statusY = areaTopY - 1
@@ -575,13 +571,15 @@ proc renderTempMessages*(e: Editor, buffer: var Buffer) =
     # +2 for border line and "Press ENTER..." prompt
     totalLines = e.state.ui.tempMessages.len + 2
     startY = max(0, buffer.area.height - totalLines)
-    borderLine = " ".repeat(buffer.area.width)
+    borderLine = " ".repeat(max(0, buffer.area.width))
     whiteBorderStyle = getThemeStyle(EditorColorPairIndex.tempMessageBorder)
     theNormalStyle = normalStyle()
 
   # Clear the area where messages will be displayed
   for y in startY ..< buffer.area.height:
-    buffer.setString(buffer.area.x, y, " ".repeat(buffer.area.width), theNormalStyle)
+    buffer.setString(
+      buffer.area.x, y, " ".repeat(max(0, buffer.area.width)), theNormalStyle
+    )
 
   # Render border line at top (white background)
   buffer.setString(buffer.area.x, startY, borderLine, whiteBorderStyle)
@@ -626,20 +624,22 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
     if w > maxDisplayWidth:
       maxDisplayWidth = w
   # Add padding (2 chars each side) + number prefix (3 chars: "N. ") and limit to screen width
-  let contentWidth = min(maxDisplayWidth + 2 + 3, buffer.area.width - 6)
+  let contentWidth = max(1, min(maxDisplayWidth + 2 + 3, buffer.area.width - 6))
   let popupWidth = contentWidth + 2 # +2 for border
 
   let popupHeight = visibleCount + 2 # +2 for border
 
-  # Position popup near cursor
+  # Reserve rows for the (possibly grown) command-line/status area plus
+  # one padding row, matching completion/notification popup behavior.
+  let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
+
   var
     popupX = e.state.screenCursor.x
     popupY = e.state.screenCursor.y + 1
 
-  # Adjust if popup goes off screen
   if popupX + popupWidth > buffer.area.width:
     popupX = max(0, buffer.area.width - popupWidth)
-  if popupY + popupHeight > buffer.area.height - 2:
+  if popupY + popupHeight > buffer.area.height - bottomReserve:
     popupY = max(0, e.state.screenCursor.y - popupHeight)
 
   # Define styles (derived from the current theme)

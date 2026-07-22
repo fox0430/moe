@@ -228,7 +228,7 @@ suite "renderSplitView - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showTabLine = true
+    e.state.showTabLine = true
 
     e.renderSplitView(buffer, false)
 
@@ -238,7 +238,7 @@ suite "renderSplitView - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showTabLine = false
+    e.state.showTabLine = false
 
     e.renderSplitView(buffer, false)
 
@@ -248,7 +248,7 @@ suite "renderSplitView - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.multiStatusLine = true
+    e.state.multiStatusLine = true
 
     e.renderSplitView(buffer, false)
 
@@ -258,7 +258,7 @@ suite "renderSplitView - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
 
     e.renderSplitView(buffer, false)
 
@@ -268,7 +268,7 @@ suite "renderSplitView - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
 
     e.renderSplitView(buffer, false)
 
@@ -611,7 +611,7 @@ suite "renderBottomLines - Status line visibility":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.mode = EditorMode.Normal
-    e.state.display.multiStatusLine = false
+    e.state.multiStatusLine = false
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderBottomLines(buffer)
@@ -734,7 +734,7 @@ suite "renderSplitView - Viewport adjustment":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
 
     # Add long line
     let longLine = "x".repeat(200)
@@ -831,7 +831,7 @@ suite "renderSplitView - Viewport adjustment":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
 
     # Add long line
     let longLine = "x".repeat(200)
@@ -853,7 +853,7 @@ suite "renderSplitView - Display options":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showLineNumbers = true
+    e.state.showLineNumbers = true
 
     e.renderSplitView(buffer, false)
 
@@ -863,7 +863,7 @@ suite "renderSplitView - Display options":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showLineNumbers = false
+    e.state.showLineNumbers = false
 
     e.renderSplitView(buffer, false)
 
@@ -873,7 +873,7 @@ suite "renderSplitView - Display options":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
+    e.state.showStatusLine = true
 
     e.renderSplitView(buffer, false)
 
@@ -883,7 +883,7 @@ suite "renderSplitView - Display options":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = false
+    e.state.showStatusLine = false
 
     e.renderSplitView(buffer, false)
 
@@ -948,9 +948,9 @@ suite "Integration - Full render cycle":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.showTabLine = true
-    e.state.display.showLineNumbers = true
+    e.state.showStatusLine = true
+    e.state.showTabLine = true
+    e.state.showLineNumbers = true
     e.state.mode = EditorMode.Normal
     e.state.statusMessage = "Ready"
 
@@ -1021,8 +1021,8 @@ suite "renderSplitView - Close window cleans up status line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
 
     # Create hsplit
     discard e.hsplit()
@@ -1062,8 +1062,8 @@ suite "renderSplitView - Close window cleans up status line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     # Create hsplit
     discard e.hsplit()
@@ -1104,8 +1104,8 @@ suite "renderSplitView - Close window cleans up status line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
 
     discard e.hsplit()
     check e.windowManager.windows.len == 2
@@ -1122,8 +1122,8 @@ suite "renderSplitView - Close window cleans up status line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     discard e.hsplit()
     check e.windowManager.windows.len == 2
@@ -1140,8 +1140,8 @@ suite "renderSplitView - Close window cleans up status line":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
 
     discard e.vsplit()
     check e.windowManager.windows.len == 2
@@ -1215,8 +1215,8 @@ suite "Status line count - no duplicate status lines":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
@@ -1234,8 +1234,8 @@ suite "Status line count - no duplicate status lines":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
@@ -1253,8 +1253,8 @@ suite "Status line count - no duplicate status lines":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     discard e.hsplit()
     check e.windowManager.windows.len == 2
@@ -1274,8 +1274,8 @@ suite "Status line count - no duplicate status lines":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
 
     discard e.hsplit()
     check e.windowManager.windows.len == 2
@@ -1296,8 +1296,8 @@ suite "Status line count - no duplicate status lines":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     discard e.vsplit()
     check e.windowManager.windows.len == 2
@@ -1319,8 +1319,8 @@ suite "Bottom area - status line and command line share last row":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
@@ -1338,8 +1338,8 @@ suite "Bottom area - status line and command line share last row":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
@@ -1359,9 +1359,9 @@ suite "Bottom area - status line and command line share last row":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
-    e.state.display.showTabLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
+    e.state.showTabLine = true
 
     clearBuffer(buffer)
     e.renderSplitView(buffer, false)
@@ -1383,8 +1383,8 @@ suite "Bottom area - status line and command line share last row":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     # Enter command mode
     e.state.enterCommandOverlay()
@@ -1406,8 +1406,8 @@ suite "Bottom area - status line and command line share last row":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
 
     discard e.hsplit()
     check e.windowManager.windows.len == 2
@@ -1432,8 +1432,8 @@ suite "Status line - grown area in multiStatusLine mode":
     e.viewport.height = 24
     e.screenSize.width = 80
     e.screenSize.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
     e.config.statusLine.merge = false
 
     discard e.vsplit()
@@ -1463,8 +1463,8 @@ suite "Status line - grown area in multiStatusLine mode":
     e.viewport.height = 24
     e.screenSize.width = 80
     e.screenSize.height = 24
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
     e.config.statusLine.merge = false
 
     discard e.hsplit()
@@ -1815,3 +1815,115 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     # Invariant restored and the cursor is not pushed above the viewport top.
     check vp.topWrapOffset < buf.wrapAt(vp.topLine)
     check buf.cursorVisualRow(vp, 5, 0) >= 0
+
+suite "renderCodeLensPicker":
+  test "No crash with normal dimensions":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
+    e.viewport.height = 24
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run Test", command: "test.run"),
+        CodeLensItem(line: 0, column: 0, title: "Debug Test", command: "test.debug"),
+      ],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 2,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash with extremely small terminal (regression: popupWidth overflow)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 5, height: 10)
+    e.viewport.height = 10
+    e.state.screenCursor = CursorPosition(x: 1, y: 1)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 1,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash with zero effective content width":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 6, height: 10)
+    e.viewport.height = 10
+    e.state.screenCursor = CursorPosition(x: 1, y: 1)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 1,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash when picker is not active":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker.isActive = false
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash with zero items":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[], selectedIndex: 0, scrollOffset: 0, maxVisibleItems: 0, isActive: true
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "No crash when popup placed off-screen (adjusts to visible area)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 10)
+    e.viewport.height = 10
+    e.state.screenCursor = CursorPosition(x: 75, y: 8)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run Test Long", command: "cmd"),
+        CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
+      ],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 2,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+  test "Renders popup borders and content on screen":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
+    e.viewport.height = 24
+    e.state.screenCursor = CursorPosition(x: 10, y: 5)
+    e.state.lspCache.codeLensPicker = CodeLensPicker(
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd"),
+        CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
+      ],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisibleItems: 2,
+      isActive: true,
+    )
+    e.renderCodeLensPicker(buffer)
+
+    let screen = buffer.toStrings()
+    let topBorder = screen[6] # popupY = cursor.y + 1 = 6
+    check topBorder.contains("┌")
+    check topBorder.contains("┐")
+    let contentLine = screen[7]
+    check contentLine.contains("│")
+    check contentLine.contains("Run")
+    let bottomBorder = screen[9] # popupY + visibleCount + 1 = 6 + 2 + 1 = 9
+    check bottomBorder.contains("└")
+    check bottomBorder.contains("┘")

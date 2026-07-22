@@ -37,29 +37,9 @@ proc createTestState(): EditorState =
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
     ),
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
   )
 
@@ -243,7 +223,8 @@ suite "CommandExecutor - Motion Execution":
 
     let exec = newCommandExecutor(buf, state, viewport)
     exec.cursor = BufferPosition(line: 0, column: 0)
-    exec.executeMotion(Motion.LastLine, 1)
+    # count=0 = "no explicit prefix, go to last line"; count>=1 means line N.
+    exec.executeMotion(Motion.LastLine, 0)
 
     check exec.cursor.line == 2
 

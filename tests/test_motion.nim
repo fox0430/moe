@@ -282,6 +282,41 @@ suite "Word Motion":
     let result = executor.moveWordEnd(currentPos, 1)
     check result.x == 8 # End of '日本語'
 
+  test "moveWordEnd crosses a single empty line":
+    let buffer = newTextBuffer("foo\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordEnd(CursorPosition(x: 2, y: 0), 1)
+    check result.y == 2
+    check result.x == 2 # End of "bar"
+
+  test "moveWordEnd crosses multiple empty lines":
+    let buffer = newTextBuffer("foo\n\n\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordEnd(CursorPosition(x: 2, y: 0), 1)
+    check result.y == 4
+    check result.x == 2 # End of "bar"
+
+  test "moveWordBackward crosses a single empty line":
+    let buffer = newTextBuffer("foo\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 2), 1)
+    check result.y == 0
+    check result.x == 0 # Start of "foo"
+
+  test "moveWordBackward crosses multiple empty lines":
+    let buffer = newTextBuffer("foo\n\n\n\nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 4), 1)
+    check result.y == 0
+    check result.x == 0 # Start of "foo"
+
+  test "moveWordBackward crosses whitespace-only line":
+    let buffer = newTextBuffer("foo\n  \nbar")
+    let executor = newMotionExecutor(buffer)
+    let result = executor.moveWordBackward(CursorPosition(x: 0, y: 2), 1)
+    check result.y == 0
+    check result.x == 0 # Start of "foo"
+
 suite "Find/Till Char Backward":
   test "findCharBackward finds previous occurrence":
     let buffer = newTextBuffer("abcxabc")
@@ -395,6 +430,13 @@ suite "First/Last Line Motion":
     let currentPos = CursorPosition(x: 0, y: 0)
     let result = executor.moveLastLine(currentPos, 2)
     check result.y == 1 # Line 2 (0-indexed)
+
+  test "moveLastLine with count 1 goes to line 1 (1G, not G)":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 2)
+    let result = executor.moveLastLine(currentPos, 1)
+    check result.y == 0
 
 suite "Matching Bracket":
   test "moveToMatchingBracket forward":

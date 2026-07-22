@@ -19,7 +19,7 @@
 
 ## Common helper procedures for rendering
 
-import std/[options, strutils, unicode, tables]
+import std/[options, unicode, tables]
 
 import pkg/celina
 
@@ -79,8 +79,7 @@ proc isPositionInDocumentHighlight*(
   ## Check if position is within any document highlight range
   ## Returns the highlight kind (1=Text, 2=Read, 3=Write) if found, none otherwise
   ## Uses O(1) line lookup + O(m) column search where m is highlights on that line
-  if not state.display.showDocumentHighlight or
-      not state.lspCache.documentHighlightCache.isValid:
+  if not state.showDocumentHighlight or not state.lspCache.documentHighlightCache.isValid:
     return none(int)
 
   # O(1) lookup by line
@@ -101,7 +100,3 @@ proc getDocumentHighlightStyle*(kind: int): Style =
     documentHighlightWriteStyle()
   else: # Text or unknown
     documentHighlightTextStyle()
-
-proc fillLine*(buffer: var Buffer, x, y, width: int, style: Style) =
-  ## Fill a line with spaces at the given position and width
-  buffer.setString(x, y, " ".repeat(width), style)

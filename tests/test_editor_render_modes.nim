@@ -19,10 +19,17 @@
 
 ## Tests for editor_render_modes.nim
 
-import std/unittest
+import std/[unittest, strutils]
+
 import pkg/celina
-import ../src/moepkg/[editor, config, config_loader, config_mode, render_utils, color]
+
+import
+  ../src/moepkg/[
+    editor, config, config_loader, config_mode, render_utils, color, colorcode,
+    unicode_utils,
+  ]
 import ../src/moepkg/editor_render_modes
+import ../src/moepkg/types/config_mode_types
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -80,7 +87,7 @@ suite "renderConfig - Basic behavior":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     let e = newEditor(config, vr)
-    e.state.display.showStatusLine = false
+    e.state.showStatusLine = false
     var buffer = createTestBuffer()
 
     let configState = newConfigModeState(e.config)
@@ -94,7 +101,7 @@ suite "renderConfig - Basic behavior":
     config.theme.kind = tkDefault
     let vr = newValidationResult()
     let e = newEditor(config, vr)
-    e.state.display.showStatusLine = true
+    e.state.showStatusLine = true
     var buffer = createTestBuffer()
 
     let configState = newConfigModeState(e.config)
@@ -247,3 +254,179 @@ suite "renderConfig - enum popup border":
               inc highlightOnBorder
       check highlightCells > 0
       check highlightOnBorder == 0
+
+suite "renderConfig - narrow viewport / multibyte":
+  test "Narrow viewport width does not crash":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
+    for w in [0, 1, 2, 3, 4]:
+      e.activeWindow.viewport.width = w
+      e.renderConfig(buffer, e.activeWindow, true, 0)
+
+  test "Multibyte string value truncates without crashing":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+    var mbIdx = -1
+    for i, item in configState.items:
+      if item.kind == cvkString:
+        configState.items[i].stringValue =
+          "あいうえおかきくけこさしすせそ"
+        mbIdx = i
+        break
+    if mbIdx < 0:
+      skip()
+    else:
+      configState.selectedIndex = mbIdx
+      e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+        ModeState(kind: mskConfig, config: configState)
+      for w in [4, 8, 12]:
+        e.activeWindow.viewport.width = w
+        e.renderConfig(buffer, e.activeWindow, true, 0)
+
+suite "renderConfig - search highlight with multibyte displayName":
+  proc findHighlightedXs(buffer: Buffer, hlBg: ColorValue): seq[int] =
+    ## Find X positions of all cells drawn with the search highlight background.
+    ## Only returns cells on the first screen row that has any highlighted cells.
+    for y in 0 ..< buffer.area.height:
+      for x in 0 ..< buffer.area.width:
+        if buffer[x, y].style.bg == hlBg:
+          result.add x
+
+  test "Highlight positioned by display columns, not byte offsets":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+
+    # Give the first string item a CJK displayName (multibyte / wide chars)
+    # and a short distinctive value so the search match lands after the wide
+    # section where byte offset ≠ display columns.
+    var strIdx = -1
+    for i, item in configState.items:
+      if item.kind == cvkString:
+        configState.items[i].displayName = "あいう"
+        configState.items[i].stringValue = "XY"
+        strIdx = i
+        break
+
+    if strIdx < 0:
+      skip()
+    else:
+      let maxNameWidth = calcMaxNameWidth(configState.items, buffer.area.width)
+
+      configState.selectedIndex = strIdx
+      configState.topLine = strIdx
+      configState.setSearchQuery("XY")
+      e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+        ModeState(kind: mskConfig, config: configState)
+      e.state.input.search.hlsearch = true
+      e.state.input.search.hlsearchTempDisabled = false
+
+      e.renderConfig(buffer, e.activeWindow, true, 0)
+
+      let hlBg = searchHighlightStyle().bg
+      let hlXs = buffer.findHighlightedXs(hlBg)
+
+      check hlXs.len == 2 # "XY" = 2 characters
+
+      # Compute the expected screen X of the first highlighted cell using the
+      # same display-width-aware conversion the fix applies.
+      let displayedLine = formatItemForDisplay(configState.items[strIdx], maxNameWidth)
+      let byteIdx = displayedLine.find("XY")
+      check byteIdx > 0
+      let charIdx = displayedLine.byteToCharPos(byteIdx)
+      let expectedX = displayWidthUpTo(displayedLine, charIdx)
+
+      check expectedX != byteIdx
+        # Precondition: CJK chars make byte offset ≠ display cols
+      check hlXs.len > 0
+      check hlXs[0] == expectedX
+
+  test "Highlight handles zero-width and combining characters":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+
+    # displayName with combining acute accent (U+0301, 2 bytes, 0 cols) and
+    # zero-width space (U+200B, 3 bytes, 0 cols). Together these add 5 bytes
+    # that contribute 0 display columns, creating a byte/column mismatch.
+    var strIdx = -1
+    for i, item in configState.items:
+      if item.kind == cvkString:
+        configState.items[i].displayName = "a\u0301\u200Bb"
+        configState.items[i].stringValue = "XY"
+        strIdx = i
+        break
+
+    if strIdx < 0:
+      skip()
+    else:
+      let maxNameWidth = calcMaxNameWidth(configState.items, buffer.area.width)
+
+      configState.selectedIndex = strIdx
+      configState.topLine = strIdx
+      configState.setSearchQuery("XY")
+      e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+        ModeState(kind: mskConfig, config: configState)
+      e.state.input.search.hlsearch = true
+      e.state.input.search.hlsearchTempDisabled = false
+
+      e.renderConfig(buffer, e.activeWindow, true, 0)
+
+      let hlBg = searchHighlightStyle().bg
+      let hlXs = buffer.findHighlightedXs(hlBg)
+
+      check hlXs.len == 2
+
+      let displayedLine = formatItemForDisplay(configState.items[strIdx], maxNameWidth)
+      let byteIdx = displayedLine.find("XY")
+      check byteIdx > 0
+      let charIdx = displayedLine.byteToCharPos(byteIdx)
+      let expectedX = displayWidthUpTo(displayedLine, charIdx)
+
+      check expectedX != byteIdx # Precondition: zero-width/combining chars create gap
+      check hlXs.len > 0
+      check hlXs[0] == expectedX
+
+suite "renderConfig - color value highlight with multibyte displayName":
+  test "Color swatch positioned by display columns, not byte offsets":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = newConfigModeState(e.config)
+
+    configState.items.add ConfigItem(
+      kind: cvkColor,
+      displayName: "あいう",
+      section: "Theme Colors",
+      depth: 1,
+      descriptorIndex: -1,
+      colorIsFg: true,
+      colorValue: "#ff0000",
+    )
+    let colorIdx = configState.items.high
+
+    let maxNameWidth = calcMaxNameWidth(configState.items, buffer.area.width)
+
+    configState.selectedIndex = colorIdx
+    configState.topLine = colorIdx
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let swatchBg = colorCodeStyle(parseThemeColor("#ff0000").get).bg
+    var swatchXs: seq[int]
+    for x in 0 ..< buffer.area.width:
+      if buffer[x, 0].style.bg == swatchBg:
+        swatchXs.add x
+
+    let displayedLine = formatItemForDisplay(configState.items[colorIdx], maxNameWidth)
+    let expectedX = displayWidth(displayedLine) - displayWidth("#ff0000")
+    let byteBasedX = displayedLine.len - "#ff0000".len
+
+    check expectedX != byteBasedX # Precondition: CJK chars make byte != display cols
+    check swatchXs.len == "#ff0000".len
+    check swatchXs[0] == expectedX

@@ -494,6 +494,53 @@ suite "HoverPopup - calculateHoverPopupPosition":
     # Should use maximum available space
     check mgr.display.maxVisibleLines >= DefaultMaxVisibleLines
 
+  test "Grown bottom reserve keeps below-cursor popup clear of command line":
+    let mgr = newHoverPopupManager()
+    mgr.show("Short", 0, 0)
+
+    # Cursor at y=0: no space above → placed below.
+    let steady = calculateHoverPopupPosition(
+      cursorX = 10, cursorY = 0, termWidth = 80, termHeight = 24, mgr = mgr
+    )
+    check steady.y == 1
+
+    # A grown bottom area must push the popup back up so it does not overlap
+    # the command line.
+    let grown = calculateHoverPopupPosition(
+      cursorX = 10,
+      cursorY = 0,
+      termWidth = 80,
+      termHeight = 24,
+      mgr = mgr,
+      bottomReserve = 20,
+    )
+    check grown.y + grown.height <= 24 - 20
+
+  test "Grown bottom reserve shrinks below-cursor scrollable popup":
+    let mgr = newHoverPopupManager()
+    var lines: string
+    for i in 1 .. 30:
+      lines.add("Line " & $i & "\n")
+    mgr.show(lines, 0, 0)
+
+    # Cursor near the top: with default reserve, below-cursor space is used.
+    discard calculateHoverPopupPosition(
+      cursorX = 10, cursorY = 2, termWidth = 80, termHeight = 24, mgr = mgr
+    )
+    let steadyLines = mgr.display.maxVisibleLines
+
+    # Grow the reserve — below-cursor space shrinks, so the popup should
+    # allocate fewer visible lines than in the steady case.
+    discard calculateHoverPopupPosition(
+      cursorX = 10,
+      cursorY = 2,
+      termWidth = 80,
+      termHeight = 24,
+      mgr = mgr,
+      bottomReserve = 15,
+    )
+    check mgr.display.maxVisibleLines < steadyLines
+
 suite "HoverPopup - renderHoverPopup":
   test "Renders popup content to buffer":
     let mgr = newHoverPopupManager()
@@ -558,6 +605,29 @@ suite "HoverPopup - renderHoverPopup":
     # Should not crash
     renderHoverPopup(termBuffer, mgr, pos, showBorder = true)
 
+  test "Renders content without border when showBorder is false":
+    let mgr = newHoverPopupManager()
+    mgr.show("Hello", 0, 0)
+    mgr.display.maxVisibleLines = 1
+    mgr.display.maxVisibleWidth = 20
+
+    let pos = HoverPopupPosition(x: 0, y: 0, width: 10, height: 3)
+
+    var termBuffer = newBuffer(80, 24)
+
+    renderHoverPopup(termBuffer, mgr, pos, showBorder = false)
+
+    # No border characters at popup corners
+    check termBuffer[0, 0].symbol != "┌"
+    check termBuffer[9, 0].symbol != "┐"
+
+    # Content still renders at (0, 0) since no border offset applies
+    check termBuffer[0, 0].symbol == "H"
+    check termBuffer[1, 0].symbol == "e"
+    check termBuffer[2, 0].symbol == "l"
+    check termBuffer[3, 0].symbol == "l"
+    check termBuffer[4, 0].symbol == "o"
+
   test "Wide char content writes continuation cell to prevent ghost":
     # Wide (2-col) characters must set an empty continuation cell at x+1 so
     # celina's diff can repaint the second column on popup close.
@@ -607,12 +677,49 @@ suite "HoverPopup - constants":
 suite "HoverPopup - Unicode support":
   test "Correctly calculates max width with Unicode characters":
     let mgr = newHoverPopupManager()
-    mgr.show("こんにちは", 0, 0) # 5 Unicode characters
+    mgr.show("こんにちは", 0, 0) # 5 CJK runes × 2 columns each = 10 display cells
 
-    check mgr.maxLineWidth == 5
+    check mgr.maxLineWidth == 10
 
   test "Correctly calculates max width with mixed content":
     let mgr = newHoverPopupManager()
-    mgr.show("Hello 世界!", 0, 0) # 6 ASCII + 2 CJK + 1 ASCII = 9 runes
+    mgr.show("Hello 世界!", 0, 0)
+      # "Hello " (6) + "世界" (2×2=4) + "!" (1) = 11 display cells
 
-    check mgr.maxLineWidth == 9
+    check mgr.maxLineWidth == 11
+
+  test "Max width picks the widest line by display width, not rune count":
+    # First line: 12 runes, 12 display cells (ASCII).
+    # Second line: 8 CJK runes = 16 display cells.
+    # A rune-count-based scan would incorrectly report 12.
+    let mgr = newHoverPopupManager()
+    mgr.show("hello_world!\nあいうえおかきく", 0, 0)
+
+    check mgr.maxLineWidth == 16
+
+  test "calculateHoverPopupPosition sizes contentWidth by display cells for CJK":
+    # 10 CJK runes = 20 display cells. Popup content must reserve 20 cells + padding,
+    # not 10. Terminal is wide enough that neither MinPopupWidth nor maxWidth clamp.
+    let mgr = newHoverPopupManager()
+    mgr.show("あいうえおかきくけこ", 0, 0)
+
+    let pos = calculateHoverPopupPosition(
+      cursorX = 5, cursorY = 12, termWidth = 80, termHeight = 24, mgr = mgr
+    )
+
+    # popupWidth = contentWidth + 2 (border); contentWidth = 20 + PopupPadding.
+    check pos.width == 20 + PopupPadding + 2
+    check mgr.display.maxVisibleWidth == 20 + PopupPadding
+
+  test "calculateHoverPopupPosition clamps to termWidth for very wide CJK content":
+    # 15 CJK runes = 30 display cells + padding would exceed a 24-cell terminal;
+    # contentWidth clamps at (termWidth - 2), popupWidth at termWidth.
+    let mgr = newHoverPopupManager()
+    mgr.show("あいうえおかきくけこさしすせそ", 0, 0)
+
+    let pos = calculateHoverPopupPosition(
+      cursorX = 0, cursorY = 12, termWidth = 24, termHeight = 24, mgr = mgr
+    )
+
+    check pos.width == 24
+    check mgr.display.maxVisibleWidth == 22

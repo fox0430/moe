@@ -335,6 +335,12 @@ suite "SignatureHelp - renderSignatureHelpPopup":
     check termBuffer[0, 0].symbol != "┌"
     check termBuffer[9, 0].symbol != "┐"
 
+    # Content still renders at (0, 0) since no border offset applies
+    check termBuffer[0, 0].symbol == "t"
+    check termBuffer[1, 0].symbol == "e"
+    check termBuffer[2, 0].symbol == "s"
+    check termBuffer[3, 0].symbol == "t"
+
   test "Wide char signature writes continuation cell to prevent ghost":
     # Wide (2-col) characters must set an empty continuation cell at x+1 so
     # celina's diff can repaint the second column on popup close.
@@ -733,3 +739,108 @@ suite "SignatureHelp - calculateSignatureHelpPosition edge cases":
     # X should be adjusted so popup fits
     check pos.x >= 0
     check pos.x + pos.width <= 80
+
+  test "Grown bottom reserve keeps below-cursor popup clear of command line":
+    # Cursor at y=1 so above-cursor placement fails and popup goes below.
+    let steady = calculateSignatureHelpPosition(
+      cursorX = 10, cursorY = 1, termWidth = 80, termHeight = 24, signatureLen = 30
+    )
+    check steady.y == 2 # cursorY + 1
+
+    # A grown bottom area (e.g. 5-line message + status + padding) must
+    # push the popup back up so it does not overlap the command line.
+    let grown = calculateSignatureHelpPosition(
+      cursorX = 10,
+      cursorY = 1,
+      termWidth = 80,
+      termHeight = 24,
+      signatureLen = 30,
+      bottomReserve = 20,
+    )
+    check grown.y + grown.height <= 24 - 20
+
+suite "SignatureHelp - calculateSignatureHelpAnchorX":
+  test "Pins anchor when caret sits at the trigger":
+    let anchor = calculateSignatureHelpAnchorX(
+      screenCursorX = 12,
+      triggerLine = 3,
+      triggerCol = 8,
+      cursorLine = 3,
+      cursorCol = 8,
+      triggerCellX = 8,
+      cursorCellX = 8,
+    )
+    check anchor == 12
+
+  test "Shifts anchor left by the display width of typed arguments":
+    let anchor = calculateSignatureHelpAnchorX(
+      screenCursorX = 16,
+      triggerLine = 3,
+      triggerCol = 8,
+      cursorLine = 3,
+      cursorCol = 12,
+      triggerCellX = 8,
+      cursorCellX = 12,
+    )
+    # Caret advanced 4 cells past the trigger; anchor rewinds by the same.
+    check anchor == 12
+
+  test "Honors wide-cell characters via the caller-supplied cell offsets":
+    let anchor = calculateSignatureHelpAnchorX(
+      screenCursorX = 20,
+      triggerLine = 3,
+      triggerCol = 8,
+      cursorLine = 3,
+      cursorCol = 10,
+      triggerCellX = 8,
+      cursorCellX = 14, # 2 chars but 6 cells (e.g. two double-width runes)
+    )
+    check anchor == 14
+
+  test "Clamps anchor to zero rather than going negative":
+    let anchor = calculateSignatureHelpAnchorX(
+      screenCursorX = 2,
+      triggerLine = 3,
+      triggerCol = 0,
+      cursorLine = 3,
+      cursorCol = 10,
+      triggerCellX = 0,
+      cursorCellX = 10,
+    )
+    check anchor == 0
+
+  test "Falls back to screenCursorX when caret is on a different line":
+    let anchor = calculateSignatureHelpAnchorX(
+      screenCursorX = 5,
+      triggerLine = 3,
+      triggerCol = 8,
+      cursorLine = 4,
+      cursorCol = 2,
+      triggerCellX = 8,
+      cursorCellX = 2,
+    )
+    check anchor == 5
+
+  test "Falls back to screenCursorX when caret is before the trigger":
+    let anchor = calculateSignatureHelpAnchorX(
+      screenCursorX = 6,
+      triggerLine = 3,
+      triggerCol = 10,
+      cursorLine = 3,
+      cursorCol = 6,
+      triggerCellX = 10,
+      cursorCellX = 6,
+    )
+    check anchor == 6
+
+  test "Falls back to screenCursorX when the trigger column is uninitialised":
+    let anchor = calculateSignatureHelpAnchorX(
+      screenCursorX = 9,
+      triggerLine = 3,
+      triggerCol = -1,
+      cursorLine = 3,
+      cursorCol = 4,
+      triggerCellX = 0,
+      cursorCellX = 4,
+    )
+    check anchor == 9

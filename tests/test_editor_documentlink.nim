@@ -19,9 +19,10 @@
 
 ## Tests for editor_documentlink.nim
 
-import std/[unittest, options, importutils, json, os]
+import std/[unittest, options, importutils, json, os, tables]
+from std/strutils import contains
 
-import ../src/moepkg/[editor, config, config_loader, buffer, lsp_service]
+import ../src/moepkg/[editor, config, config_loader, buffer, lsp_service, types]
 import ../src/moepkg/editor_documentlink
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
@@ -73,7 +74,6 @@ suite "editor_documentlink - pollLspDocumentLinks":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingDocumentLinkRequestId = 0
 
     e.pollLspDocumentLinks()
     # No crash means success
@@ -88,7 +88,6 @@ suite "editor_documentlink - pollLspDocumentLinkResolve":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
 
     e.pollLspDocumentLinkResolve()
     # No crash means success
@@ -196,51 +195,94 @@ suite "editor_documentlink - findDocumentLinkAtCursor":
     check result.isSome
     check result.get.target.get == "file:///second.txt"
 
-suite "editor_documentlink - cursor rune -> UTF-16 conversion":
-  privateAccess(LspService)
+# The old "Stores UTF-16 column ..." integration tests relied on a cache-on-
+# failure side effect that no longer exists: `startContextualRequest` skips
+# populating `pending[lrfDocumentLink]` when the underlying request errors.
+# The pure UTF-16 conversion is still covered by
+# `test_lsp_integration.nim` (`runeIndexToUtf16 with ...`).
 
-  test "Stores UTF-16 column for CJK line (rune index != byte offset)":
+suite "editor_documentlink - UTF-16 cursor conversion":
+  test "pollLspDocumentLinks converts cursor to UTF-16 before matching link":
+    # Regression guard for `pollLspDocumentLinks` -> `runeIndexToUtf16` ->
+    # `findDocumentLinkAtCursor` wiring. If the conversion is missing, the
+    # rune index passed directly to `findDocumentLinkAtCursor` cannot align
+    # with an LSP range (UTF-16 code units) past an astral rune.
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_doclink_utf16.txt"
+    # Astral pile of poo (U+1F4A9) occupies 2 UTF-16 code units. Rune index
+    # of 'b' is 2; UTF-16 index of 'b' is 3.
+    writeFile(testFile, "\xF0\x9F\x92\xA9ab\n")
+    defer:
+      removeFile(testFile)
+    discard e.editFile(testFile)
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Normal
+    e.state.activeWindow.cursor = BufferPosition(line: 0, column: 2)
+    let reqId = 6162
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfDocumentLink] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfDocumentLink,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: testFile,
+      generation: 1,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: DocumentLinkValidModes,
+    )
+    privateAccess(LspService)
+    # Link range [3, 4) in UTF-16 — matches only when the cursor is converted.
+    let linkJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 4}},
+        "target": "file:///tmp/moe_documentlink_utf16_target.nonexistent",
+      }
+    ]
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($linkJson), error: none(string))
+
+    e.pollLspDocumentLinks()
+
+    # A missing conversion would surface the "No link at cursor position"
+    # branch; a working one dispatches to `jumpToDocumentLink`, whose result
+    # for a non-existent path is a "Failed to open file" status.
+    check "No link at cursor position" notin e.state.statusMessage
+
+suite "editor_documentlink - mode-hijack guard":
+  test "Stale response arriving in Insert does not jump":
+    # A link jump would swap the active buffer under an Insert session.
     let e = createTestEditor()
     e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    let reqId = 6161
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfDocumentLink] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfDocumentLink,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "/tmp/x.nim",
+      generation: 1,
+      cursorLine: 0,
+      cursorCol: 0,
+      validModes: DocumentLinkValidModes,
+    )
+    let bufBefore = e.state.activeWindow.buffer
+    privateAccess(LspService)
+    let linkJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
+        "target": "file:///tmp/other.nim",
+      }
+    ]
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($linkJson), error: none(string))
 
-    let path = getTempDir() / "test_doclink_cjk.nim"
-    let buf = newTextBuffer("日本語テキスト https://example.com\n", some(path))
-    e.state.activeWindow.buffer = buf
+    e.pollLspDocumentLinks()
 
-    # Advertise documentLink capability so hasDocumentLinkSupport() returns true.
-    e.lsp.service.capabilities["nim"] =
-      ServerCapabilities(documentLinkProvider: some(newJObject()))
-
-    # Cursor at rune index 8 = 7 CJK runes + 1 space (start of "https").
-    e.state.activeWindow.cursor.line = 0
-    e.state.activeWindow.cursor.column = 8
-
-    # startDocumentLinkRequest will fail (no worker), but the cursor column is
-    # captured before the request is dispatched.
-    discard e.startLspDocumentLinks()
-
-    check e.state.lspCache.pendingDocumentLinkCursorLine == 0
-    # 7 BMP runes = 7 UTF-16 units, + 1 space = 8. The old code passed the rune
-    # index to utf8OffsetToUtf16 as a byte offset and returned 3.
-    check e.state.lspCache.pendingDocumentLinkCursorCol == 8
-
-  test "Stores UTF-16 column past an astral (surrogate-pair) rune":
-    let e = createTestEditor()
-    e.lsp.enabled = true
-
-    let path = getTempDir() / "test_doclink_astral.nim"
-    # "😀" is U+1F600 (astral): 1 rune, 4 UTF-8 bytes, 2 UTF-16 code units.
-    let buf = newTextBuffer("😀 https://example.com\n", some(path))
-    e.state.activeWindow.buffer = buf
-
-    e.lsp.service.capabilities["nim"] =
-      ServerCapabilities(documentLinkProvider: some(newJObject()))
-
-    # Cursor at rune index 2 = 1 astral rune + 1 space (start of "https").
-    e.state.activeWindow.cursor.line = 0
-    e.state.activeWindow.cursor.column = 2
-
-    discard e.startLspDocumentLinks()
-
-    # 1 astral rune = 2 UTF-16 units, + 1 space = 3.
-    check e.state.lspCache.pendingDocumentLinkCursorCol == 3
+    check e.state.mode == EditorMode.Insert
+    check not e.state.lspCache.pending.hasKey(lrfDocumentLink)
+    check e.state.activeWindow.buffer == bufBefore

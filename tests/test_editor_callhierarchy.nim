@@ -19,9 +19,9 @@
 
 ## Tests for editor_callhierarchy.nim
 
-import std/[unittest, os, strutils, options, json, importutils]
+import std/[unittest, os, strutils, options, json, importutils, tables]
 
-import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
+import ../src/moepkg/[editor, buffer, config, config_loader, types, lsp_service]
 import ../src/moepkg/callhierarchy_viewer
 import ../src/moepkg/editor_callhierarchy {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -67,6 +67,23 @@ proc injectLspResponse(e: Editor, requestId: int, resp: JsonNode) =
   privateAccess(LspService)
   e.lsp.service.pendingResponses[requestId] = (result: some($resp), error: none(string))
 
+proc injectPending(e: Editor, feature: LspRequestFeature, requestId: int) =
+  ## Seed lspCache.pending as if startContextualRequest just fired. Skips the
+  ## real request path (no worker in these tests) but keeps classifyResponse
+  ## consistent by pinning buffer/version to the active buffer.
+  let buf = e.activeBuffer
+  e.state.lspCache.pending[feature] = LspRequestContext(
+    requestId: requestId,
+    feature: feature,
+    bufferId: buf.id,
+    contentVersion: buf.contentVersion,
+    path: "/tmp/x.nim",
+    generation: 1,
+    cursorLine: -1,
+    cursorCol: -1,
+    validModes: {}, # any mode; callhierarchy has its own inline guard
+  )
+
 proc createTestEditorWithLspDisabled(): Editor =
   let config = newEditorConfig()
   let vr = newValidationResult()
@@ -101,8 +118,6 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingCallHierarchyRequestId = 0
-    e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
     e.pollLspCallHierarchy()
     # No crash means success
@@ -113,8 +128,7 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
     let e = createTestEditor()
     e.lsp.enabled = true
     let reqId = 4242
-    e.state.lspCache.pendingCallHierarchyRequestId = reqId
-    e.state.lspCache.pendingCallHierarchyKind = chrkIncomingCalls
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
     let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
     e.injectLspResponse(reqId, incomingCallsResponseJson(items))
 
@@ -127,15 +141,13 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
     check e.activeWindow.modeState.callHierarchy.items[0].name == "caller"
     check e.state.statusMessage == "1 incoming call found"
     # Pending state is cleared after the cascade completes.
-    check e.state.lspCache.pendingCallHierarchyRequestId == 0
-    check e.state.lspCache.pendingCallHierarchyKind == chrkNone
+    check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
 
   test "Outgoing-calls response enters CallHierarchy mode":
     let e = createTestEditor()
     e.lsp.enabled = true
     let reqId = 4343
-    e.state.lspCache.pendingCallHierarchyRequestId = reqId
-    e.state.lspCache.pendingCallHierarchyKind = chrkOutgoingCalls
+    e.injectPending(lrfCallHierarchyOutgoing, reqId)
     let items = @[
       makeCallHierarchyItem("calleeA", "file:///x.nim", 5, 0),
       makeCallHierarchyItem("calleeB", "file:///y.nim", 9, 2),
@@ -154,15 +166,14 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
     e.lsp.enabled = true
     let startMode = e.state.mode
     let reqId = 4444
-    e.state.lspCache.pendingCallHierarchyRequestId = reqId
-    e.state.lspCache.pendingCallHierarchyKind = chrkIncomingCalls
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
     e.injectLspResponse(reqId, newJArray())
 
     e.pollLspCallHierarchy()
 
     check e.state.mode == startMode
     check e.state.statusMessage == "No incoming calls found"
-    check e.state.lspCache.pendingCallHierarchyRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
 
   test "Empty prepare response reports no callable symbol":
     # First-stage prepare with an empty result: no second-stage request is
@@ -170,15 +181,13 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
     let e = createTestEditor()
     e.lsp.enabled = true
     let prepareId = 7003
-    e.state.lspCache.pendingCallHierarchyRequestId = prepareId
-    e.state.lspCache.pendingCallHierarchyKind = chrkPrepareIncoming
+    e.injectPending(lrfCallHierarchyPrepareIncoming, prepareId)
     e.injectLspResponse(prepareId, newJArray())
 
     e.pollLspCallHierarchy()
 
     check e.state.statusMessage == "No callable symbol at cursor"
-    check e.state.lspCache.pendingCallHierarchyRequestId == 0
-    check e.state.lspCache.pendingCallHierarchyKind == chrkNone
+    check not e.state.lspCache.pending.hasKey(lrfCallHierarchyPrepareIncoming)
     check e.state.mode != EditorMode.CallHierarchy
 
 suite "editor_callhierarchy - enterCallHierarchyMode":
@@ -338,3 +347,103 @@ suite "editor_callhierarchy - config gate":
 
     check not e.requestLspCallHierarchyOutgoing()
     check e.state.statusMessage == "LSP call hierarchy is disabled"
+
+suite "editor_callhierarchy - mode-hijack guard":
+  test "Stale incoming response arriving in Insert does not switch to CallHierarchy":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    let reqId = 8181
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
+
+  test "Incoming response arriving during CallHierarchy re-entry is applied":
+    # Toggling Incoming <-> Outgoing from inside the viewer must still work:
+    # here state.mode is already CallHierarchy when the response lands. This
+    # is the item-driven flow (storeItemDrivenPending), which sets path = ""
+    # so classifyResponse's buffer/version guard is skipped.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let seedItems = @[makeCallHierarchyItem("seed", "file:///seed.nim", 0, 0)]
+    e.enterCallHierarchyMode(seedItems, chvkOutgoing)
+    check e.state.mode == EditorMode.CallHierarchy
+
+    let reqId = 8282
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfCallHierarchyIncoming] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfCallHierarchyIncoming,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "",
+      generation: 1,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: {},
+      isItemDriven: true,
+    )
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.CallHierarchy
+    check e.activeWindow.modeState.callHierarchy.viewKind == chvkIncoming
+
+suite "editor_callhierarchy - buffer/version guard":
+  test "Stale 2-stage response (contentVersion drift) is dropped":
+    # A 2-stage request (path != "") whose buffer was edited after the request
+    # was sent must be dropped by classifyResponse rather than entering the
+    # viewer with stale data.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let reqId = 9090
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    # Simulate an edit after the request was sent.
+    e.activeBuffer.contentVersion.inc
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode != EditorMode.CallHierarchy
+    check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
+
+  test "Item-driven response (isItemDriven=true) bypasses the buffer/version guard":
+    # Item-driven requests (storeItemDrivenPending) target item.uri rather
+    # than the active buffer; classifyResponse honours ctx.isItemDriven and
+    # skips the buffer/version guard, so a contentVersion drift on the active
+    # buffer does not drop the response.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let reqId = 9191
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfCallHierarchyIncoming] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfCallHierarchyIncoming,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "",
+      generation: 1,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: {},
+      isItemDriven: true,
+    )
+    # Simulate an edit on the active buffer after the request was sent.
+    e.activeBuffer.contentVersion.inc
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    # The response is applied despite the contentVersion drift because the
+    # item-driven path bypasses classifyResponse.
+    check e.state.mode == EditorMode.CallHierarchy
+    check e.activeWindow.modeState.callHierarchy.viewKind == chvkIncoming

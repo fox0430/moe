@@ -24,7 +24,7 @@ import std/[unittest, options, tables, strutils, os, tempfiles]
 
 import
   ../src/moepkg/[
-    buffer, types, key_bindings, modes, motion, command_registry, registers,
+    buffer, types, config, key_bindings, modes, motion, command_registry, registers,
     command_line, command_config, filetree,
   ]
 import
@@ -40,7 +40,7 @@ proc createTestState(): EditorState =
     mode: EditorMode.Normal,
     previousMode: EditorMode.Normal,
   )
-  result = EditorState(activeWindow: window)
+  result = EditorState(activeWindow: window, config: newEditorConfig())
   result.registers = initRegisters()
 
 proc createTestViewport(): ViewPort =
@@ -62,9 +62,8 @@ proc createTestManager(): HandlerManager =
     motionController: motionController,
   )
 
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
-  )
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   let visualHandler = VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,
@@ -197,6 +196,7 @@ proc createVisualTestState(mode: EditorMode): EditorState =
   )
   result = EditorState(
     activeWindow: window,
+    config: newEditorConfig(),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -356,6 +356,7 @@ proc createBlockVisualTestState(
   )
   result = EditorState(
     activeWindow: window,
+    config: newEditorConfig(),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -710,6 +711,14 @@ suite "HandlerManager - Map list commands":
     check "NORMAL" in result.statusMessage
     check "C-a -> g g" in result.statusMessage
 
+  test ":nmap <prefix> with no match shows No mapping found":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+
+    let result = manager.handleCommandMode(buffer, ":nmap C-a")
+    check result.kind == hrHandled
+    check result.statusMessage == "No mapping found: C-a"
+
   test ":map with no args lists mappings from all modes":
     let manager = createTestManager()
     let buffer = newTextBuffer()
@@ -936,10 +945,11 @@ suite "HandlerManager - o/O open line with auto-indent":
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
     )
-    result = EditorState(
-      activeWindow: window,
-      display: DisplaySettings(autoIndent: true, tabStop: 2, expandTab: true),
-    )
+    let cfg = newEditorConfig()
+    cfg.standard.autoIndent = true
+    cfg.standard.tabStop = 2
+    cfg.standard.expandTab = true
+    result = EditorState(activeWindow: window, config: cfg)
     result.registers = initRegisters()
 
   let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
@@ -1215,9 +1225,8 @@ proc createTestManagerWithMotion(
     motionController: motionController,
   )
 
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
-  )
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   let visualHandler = VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,
@@ -2426,6 +2435,135 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
     check r.kind == hrExecCommand
     check r.execCommandText == "bdelete"
     check not buffer.inTransaction
+
+suite "HandlerManager - Insert mode exec.cmdline.* bridge full finalize":
+  # Regression: the bridge used to only commit the transaction; leaking
+  # substituteContext / insertReplayCount / visualBlockInsertContext and
+  # skipping `.` repeat + [count]i replay recording.
+  test "Bridge sets lastEditCommand for . repeat":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    let state = createTestState()
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+
+    check buffer.beginTransaction("test insert").isOk
+    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "abc")
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    let err =
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+    check err == ""
+
+    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+    let r = manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+    )
+
+    check r.kind == hrExecCommand
+    check state.editState.lastEditCommand.isSome
+    check state.editState.lastEditCommand.get.kind == types.lecInsertText
+    check state.editState.lastEditCommand.get.insertedText == "abc"
+
+  test "Bridge clears substituteContext":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "xy")
+    let state = createTestState()
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+
+    check buffer.beginTransaction("test insert").isOk
+    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    state.editState.substituteContext =
+      some(types.SubstituteContext(kind: skChar, deleteCount: 2))
+
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+
+    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+    let r = manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+    )
+
+    check r.kind == hrExecCommand
+    check state.editState.substituteContext.isNone
+
+  test "Bridge clears insertReplayCount and insertReplayLineEntry":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    let state = createTestState()
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+
+    check buffer.beginTransaction("test insert").isOk
+    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    state.editState.insertReplayCount = 3
+    state.editState.insertReplayLineEntry = true
+
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+
+    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+    let r = manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+    )
+
+    check r.kind == hrExecCommand
+    check state.editState.insertReplayCount == 0
+    check state.editState.insertReplayLineEntry == false
+
+  test "Bridge clears visualBlockInsertContext":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+    let state = createTestState()
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+
+    check buffer.beginTransaction("test insert").isOk
+    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    state.editState.visualBlockInsertContext = some(
+      types.VisualBlockInsertContext(
+        kind: vbiInsert, startLine: 0, endLine: 2, insertColumn: 0
+      )
+    )
+
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+
+    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+    let r = manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+    )
+
+    check r.kind == hrExecCommand
+    check state.editState.visualBlockInsertContext.isNone
+
+  test "Bridge replays [count]i typed text":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    let state = createTestState()
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+
+    check buffer.beginTransaction("test insert").isOk
+    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    state.editState.insertReplayCount = 3
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "x")
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+
+    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+    let r = manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+    )
+
+    check r.kind == hrExecCommand
+    check buffer.getLine(0) == "xxx"
 
 suite "HandlerManager - Replace mode fold auto-expand":
   test "Entering Replace mode opens a collapsed fold at the cursor":

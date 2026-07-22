@@ -23,7 +23,7 @@ import std/[unittest, options, tables, strutils]
 
 import pkg/celina
 
-import ../src/moepkg/[types, modes, registers, buffer, unicode_utils]
+import ../src/moepkg/[types, config, modes, registers, buffer, unicode_utils]
 import ../src/moepkg/tab_line {.all.}
 
 proc createTestState(): EditorState =
@@ -36,29 +36,9 @@ proc createTestState(): EditorState =
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
     ),
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
@@ -98,53 +78,53 @@ proc getBufferLine(buffer: celina.Buffer, y: int): string =
 suite "TabLine - toggleTabLine":
   test "Toggle from false to true":
     var state = createTestState()
-    check state.display.showTabLine == false
+    state.showTabLine = false
 
     toggleTabLine(state)
 
-    check state.display.showTabLine == true
+    check state.showTabLine == true
 
   test "Toggle from true to false":
     var state = createTestState()
-    state.display.showTabLine = true
+    state.showTabLine = true
 
     toggleTabLine(state)
 
-    check state.display.showTabLine == false
+    check state.showTabLine == false
 
   test "Toggle twice returns to original state":
     var state = createTestState()
-    let original = state.display.showTabLine
+    let original = state.showTabLine
 
     toggleTabLine(state)
     toggleTabLine(state)
 
-    check state.display.showTabLine == original
+    check state.showTabLine == original
 
 suite "TabLine - setTabLineVisible":
   test "Set visible to true":
     var state = createTestState()
-    check state.display.showTabLine == false
+    state.showTabLine = false
 
     setTabLineVisible(state, true)
 
-    check state.display.showTabLine == true
+    check state.showTabLine == true
 
   test "Set visible to false":
     var state = createTestState()
-    state.display.showTabLine = true
+    state.showTabLine = true
 
     setTabLineVisible(state, false)
 
-    check state.display.showTabLine == false
+    check state.showTabLine == false
 
   test "Set to same value (idempotent)":
     var state = createTestState()
-    state.display.showTabLine = true
+    state.showTabLine = true
 
     setTabLineVisible(state, true)
 
-    check state.display.showTabLine == true
+    check state.showTabLine == true
 
 suite "TabLine - buildTabText":
   test "Build tab text for unnamed buffer":

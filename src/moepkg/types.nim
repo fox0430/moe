@@ -227,8 +227,8 @@ type
     recordedKeys*: seq[string] # Keys being recorded in current macro session
     registers*: Table[char, seq[string]] # Saved macros by register
     lastRegister*: Option[char] # Last executed macro register for @@
-    waitingForRegister*: bool # Waiting for register name after q or @
-    commandType*: string # "record" or "playback"
+    waitingForRegister*: bool # Waiting for register name after q
+    commandType*: string # "record" or empty
     recordStartKey*: string # Key string that started recording (for stop detection)
     pendingCount*: int # Numeric prefix for macro playback
     playbackDepth*: int # Current macro recursion depth
@@ -258,65 +258,34 @@ type
       # True when Insert was entered via o/O, so each replay opens a fresh line
       # (newline + the entry line's indent) instead of inserting inline.
 
-  DisplaySettings* = object ## Display and UI settings grouped together
-    showTabLine*: bool # Whether to show the tab line
-    showStatusLine*: bool # Whether to show the status line
-    multiStatusLine*: bool
-      # Status line for each window (true) or only one at bottom (false)
-    showLineCount*: bool # Whether to show line count in status line
-    showLinePercentage*: bool # Whether to show line percentage in status line
-    showEncoding*: bool # Whether to show file encoding in status line
-    showLineEnding*: bool # Whether to show line ending (LF/CRLF/CR) in status line
-    showLineNumbers*: bool # Whether to show line numbers
-    relativeLineNumbers*: bool # Whether to show relative line numbers
-    showCurrentLineNumber*: bool # Whether to highlight current line number
-    showCursorLine*: bool # Whether to highlight the cursor line
-    showCursorColumn*: bool # Whether to highlight the cursor column
-    showSyntax*: bool # Whether to apply syntax highlighting
-    showIndentationLines*: bool # Whether to show indentation guide lines
-    showSidebar*: bool # Whether to show the sidebar
-    scrollbar*: bool # Whether to show the scrollbar
-    scrollbarWidth*: int # Scrollbar width in characters
-    showModifiedLines*: bool # Whether to highlight modified line numbers
-    showGitDiff*: bool # Whether to show git diff indicators in sidebar
-    showSyntaxChecker*: bool # Whether to show syntax checker results in sidebar
-    showCodeLens*: bool # Whether to show CodeLens
-    showDocumentHighlight*: bool # Whether to show document highlights
-    showInlayHint*: bool # Whether to show LSP inlay hints
-    lineWrap*: bool # Whether to wrap long lines
-    tabStop*: int # Tab width (number of spaces per tab character)
-    shiftWidth*: int # Indent width, 0 = use tabStop
-    softTabStop*: int # Tab/Backspace width in insert mode, 0 = use tabStop
-    expandTab*: bool # Insert spaces instead of tab character
-    autoIndent*: bool # Automatically indent new lines
-    smartIndent*: bool # Language-aware extra indent on Enter (currently Nim)
-    autoCloseParen*: bool # Automatically insert closing parenthesis/bracket/quote
-    autoDeleteParen*: bool # Automatically delete matching parenthesis
-    bracketSplit*: BracketSplitMode
-      # Enter behavior when cursor sits between () [] {} pairs
+  DisplaySettings* = object
+    ## Session-only display overrides; config-derived flags are pull accessors.
+    showLineCount*: bool
+    showLinePercentage*: bool
+    showEncoding*: bool
+    showLineEnding*: bool
 
   SignatureHelpRequestState* = object
     ## Debounce + change-detection state for auto signature help requests.
     ## "Debounce" here is a minimum-interval gate measured from the last issued
     ## request (same shape as documentHighlight/semanticTokens), not a
-    ## reset-on-change timer. Sentinel -1 for the cursor/changeSeq fields means
-    ## "no request issued yet".
+    ## reset-on-change timer. Sentinel -1 for the cursor/contentVersion fields
+    ## means "no request issued yet".
     lastUpdate*: MonoTime # Timestamp of last signature help request
     interval*: int64 # Base debounce interval (milliseconds)
     cursorLine*: int # Cursor line of last request
     cursorColumn*: int # Cursor column of last request
-    changeSeq*: int # Buffer changeSeq of last request
+    contentVersion*: int # Buffer contentVersion of last request
     consecutiveErrors*: int
       # Failed/timed-out requests since the last success. Widens the effective
       # interval (exponential backoff) so a persistently failing server is not
       # retried every base interval.
 
   PendingSemanticTokensRequest* = object
-    ## Snapshot of the in-flight `textDocument/semanticTokens` request.
-    ## Request-id, file-path, change-seq and content-version live in
-    ## `DebouncedLspPoll` (`LspCacheState.semanticTokensPoll`); the fields
-    ## here are semantic-tokens-specific extras that the generic poll type
-    ## does not model.
+    ## Semantic-tokens-specific extras (legend, viewport, range) captured at
+    ## request-send time. The generic stale-guard snapshot (request-id,
+    ## file-path, change-seq, content-version) lives in
+    ## `LspCacheState.pending[lrfSemanticTokens]` as of Phase D.
     rangeFirst*: int
     rangeLast*: int
       # Inclusive row bounds of a range-scoped request. Both `-1` for a
@@ -334,6 +303,54 @@ type
       # instead of the response-time viewport so a scroll in flight does
       # not falsely validate the current viewport against tokens computed
       # for the prior viewport. `-1` when no pending.
+
+  LspRequestFeature* = enum
+    lrfHover
+    lrfSignatureHelp
+    lrfCompletionResolve
+    lrfSelectionRange
+    lrfDocumentSymbol
+    lrfDocumentLink
+    lrfDocumentLinkResolve
+    lrfDefinition
+    lrfDeclaration
+    lrfReferences
+    lrfTypeDefinition
+    lrfImplementation
+    lrfCodeLens
+    lrfInlayHint
+    lrfDocumentHighlight
+    lrfSemanticTokens
+    lrfCallHierarchyPrepareIncoming
+    lrfCallHierarchyPrepareOutgoing
+    lrfCallHierarchyIncoming
+    lrfCallHierarchyOutgoing
+
+  LspRequestContext* = object
+    ## Snapshot of the world at request-send time. See
+    ## docs/config_runtime_push_removal_design.md §10.
+    requestId*: int
+    feature*: LspRequestFeature
+    bufferId*: BufferId
+    contentVersion*: int
+    path*: string
+    generation*: int
+    cursorLine*: int # -1 = not cursor-anchored
+    cursorCol*: int # -1 = not cursor-anchored
+    validModes*: set[EditorMode] # empty = any mode
+    isItemDriven*: bool
+      # Item-driven requests target an LSP item (e.g. CallHierarchyItem) rather
+      # than the active buffer's cursor. classifyResponse skips the
+      # buffer/version guard for these; the caller supplies its own guard.
+    ignoreContentVersion*: bool
+      # Skip the contentVersion drift check; for features whose response
+      # stays meaningful across in-flight edits (e.g. signature help).
+
+  LspResponseState* = enum
+    lrsFresh # buffer/version/mode all match
+    lrsStale # contentVersion drifted since send
+    lrsGone # bufferId no longer exists
+    lrsHijack # mode outside validModes
 
   LspCacheState* = object ## LSP cache and picker state grouped together
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
@@ -356,37 +373,17 @@ type
       # Debounce / backoff / request-time snapshot for `textDocument/inlayHint`.
     inlayHintCache*: InlayHintCache # Cached inlay hints for current viewport
     signatureHelp*: SignatureHelpRequestState # Auto signature help request tracking
-    pendingSignatureHelpRequestId*: int
-      # Request ID for pending signature help request (0 = none)
-    pendingHoverRequestId*: int # Request ID for pending hover request (0 = none)
-    pendingHoverBufferId*: BufferId # BufferId the pending hover request was made for
-    pendingHoverCursorLine*: int # Cursor line when the hover request was made
-    pendingHoverCursorCol*: int # Cursor column when the hover request was made
     autoHoverCursorLine*: int # Last cursor line for auto-hover debounce
     autoHoverCursorCol*: int # Last cursor column for auto-hover debounce
     lastAutoHoverUpdate*: MonoTime # Timestamp of last auto-hover request
-    # Pending location request (definition, references, etc.)
-    pendingLocationRequestId*: int # Request ID (0 = none)
-    pendingLocationRequestKind*: LspLocationRequestKind # Type of location request
-    # Pending document symbols request
-    pendingDocumentSymbolsRequestId*: int # Request ID (0 = none)
-    # Pending selection range request
-    pendingSelectionRangeRequestId*: int # Request ID (0 = none)
     # Selection range expansion chain (innermost -> outermost), rune indexes.
     # Lets repeated Ctrl-s walk the parent chain without re-querying the server.
     selectionRangeChain*: seq[tuple[first, last: BufferPosition]]
     selectionRangeIndex*: int # Current level in the chain (0 = innermost)
-    # Pending call hierarchy request (2-stage: prepare -> incoming/outgoing)
-    pendingCallHierarchyRequestId*: int # Request ID (0 = none)
-    pendingCallHierarchyKind*: CallHierarchyRequestKind # incoming or outgoing
-    # Pending code action request
-    pendingCodeActionRequestId*: int # Request ID (0 = none)
-    # Pending document link request
-    pendingDocumentLinkRequestId*: int # Request ID (0 = none)
-    pendingDocumentLinkCursorLine*: int # Cursor line when request was made
-    pendingDocumentLinkCursorCol*: int # Cursor column (UTF-16) when request was made
-    # Pending document link resolve request (2nd stage)
-    pendingDocumentLinkResolveRequestId*: int # Request ID (0 = none)
+    # Consolidated stale-guard registry; migrated to per-feature entries as
+    # each feature moves off the pending* fields above.
+    pending*: Table[LspRequestFeature, LspRequestContext]
+    featureGeneration*: array[LspRequestFeature, int]
 
   RenameState* = object ## State for LSP rename mode
     text*: string # New name being typed
@@ -410,7 +407,6 @@ type
     lrkImplementation
 
   TimingState* = object ## Timing and debounce state grouped together
-    lastResizeTime*: MonoTime # Timestamp of last processed resize event
     gitDiffUpdateInterval*: int64
       # Minimum milliseconds between git diff
       # refresh cycles. Consumed by status_line's async cache via
@@ -570,6 +566,7 @@ type
       operator*: OperatorType # d, c, y, >, <, ~, gu, gU
       motion*: Motion # h, j, k, l, w, b, e, etc.
       motionCount*: int # Count for motion (3 in "d3w")
+      motionHasCount*: bool # Explicit motion prefix? (dG vs d1G for `.`)
       operatorCount*: int # Count for operator (2 in "2dd")
       targetChar*: string # Target char for f/F/t/T motions (empty otherwise)
     of lecInsertText:
@@ -678,7 +675,7 @@ type
     ## Cache for CodeLens items per buffer
     ## Uses Table for O(1) line lookup instead of O(n) sequential search
     itemsByLine*: Table[int, seq[CodeLensItem]] # Line number -> CodeLens items
-    changeSeq*: int # Buffer changeSeq when cache was last updated
+    contentVersion*: int # Buffer contentVersion when cache was last updated
     filePath*: string # Path of the buffer this cache belongs to
     isValid*: bool # Whether the cache is valid
 
@@ -702,7 +699,7 @@ type
     itemsByLine*: Table[int, seq[DocumentHighlightItem]] # Line number -> items
     cursorLine*: int # Cursor line when highlights were requested
     cursorColumn*: int # Cursor column when highlights were requested
-    changeSeq*: int # Buffer changeSeq when cache was last updated
+    contentVersion*: int # Buffer contentVersion when cache was last updated
     isValid*: bool # Whether the cache is valid
 
   SemanticTokensCache* = object
@@ -792,8 +789,10 @@ type
     editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
     visualSelection*: VisualSelection # Visual mode selection state
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
-    display*: DisplaySettings # Display and UI settings
-    timing*: TimingState # Timing and debounce state
+    display*: DisplaySettings
+    config*: EditorConfig
+      ## Aliases `Editor.config`; kept in sync on swap in applyConfigSettings.
+    timing*: TimingState
     lastKeyWasEscape*: bool
       # Track if last key was Escape (for double-Escape to clear highlight)
     # Full register system (vim-style)
@@ -833,22 +832,115 @@ type
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
 
   DebouncedLspPoll* = object
-    ## Debounce + exponential backoff + request-time snapshot for a single LSP
-    ## poll feature.  Shared across semantic tokens, inlay hints, code lens,
-    ## and document highlight so every feature gets the same robustness:
-    ## exponential backoff on persistent reject (#2880) and contentVersion
-    ## stale-response drop (#2875).
+    ## Debounce + exponential backoff timer for a single LSP poll feature.
+    ## Shared across semantic tokens, inlay hints, code lens, and document
+    ## highlight so every feature gets the same rate-limiting: exponential
+    ## backoff on persistent reject (#2880).
+    ##
+    ## The per-request stale-guard snapshot (request id, buffer id, content
+    ## version, generation) moved to `LspCacheState.pending` in Phase D of the
+    ## LspRequestContext migration; see
+    ## docs/config_runtime_push_removal_design.md §10.
     lastUpdate*: MonoTime
     interval*: int64
     rejectStreak*: int
-    pendingRequestId*: int
-    pendingFilePath*: string
-    pendingChangeSeq*: int
-    pendingContentVersion*: int
-    generation*: int
 
 const MaxLspDebounceBackoffShift* = 6
   ## Max exponent for the reject-streak backoff (interval << 6).
+
+# State-based config pull-type accessors. Editor-based versions live in
+# types/editor_types.nim. See docs/config_runtime_push_removal_design.md.
+
+template flag2(name: untyped, T: typedesc, s1, f: untyped) =
+  proc name*(s: EditorState): T =
+    s.config.s1.f
+
+  proc `name=`*(s: EditorState, v: T) =
+    s.config.s1.f = v
+
+template flag3(name: untyped, T: typedesc, s1, s2, f: untyped) =
+  proc name*(s: EditorState): T =
+    s.config.s1.s2.f
+
+  proc `name=`*(s: EditorState, v: T) =
+    s.config.s1.s2.f = v
+
+flag2(showTabLine, bool, tabLine, enable)
+flag2(showStatusLine, bool, standard, statusLine)
+flag2(multiStatusLine, bool, statusLine, multipleStatusLine)
+flag2(showLineNumbers, bool, standard, number)
+flag2(relativeLineNumbers, bool, standard, relativeNumber)
+flag2(showCursorLine, bool, highlight, currentLine)
+flag2(showCursorColumn, bool, highlight, currentColumn)
+flag2(showSyntax, bool, standard, syntax)
+flag2(showIndentationLines, bool, standard, indentationLines)
+flag2(showSidebar, bool, standard, sidebar)
+flag2(scrollbar, bool, standard, scrollbar)
+flag2(scrollbarWidth, int, standard, scrollbarWidth)
+flag2(showModifiedLines, bool, standard, showModifiedLines)
+flag2(showGitDiff, bool, git, showChangedLine)
+flag2(showSyntaxChecker, bool, syntaxChecker, enable)
+flag3(showCodeLens, bool, lsp, codeLens, enable)
+flag3(showDocumentHighlight, bool, lsp, documentHighlight, enable)
+flag3(showInlayHint, bool, lsp, inlayHint, enable)
+flag2(lineWrap, bool, standard, lineWrap)
+flag2(softTabStop, int, standard, softTabStop)
+
+# tabStop / shiftWidth / expandTab: read prefers per-buffer .editorconfig
+# overrides, write updates both the global config and the active buffer's
+# override so `:set tabstop=N` is immediately visible even under an
+# .editorconfig override (vim-compatible buffer-local `:set`). activeWindow
+# may be nil in transient states (early init, teardown, test harnesses), so
+# guard before dereferencing its buffer.
+proc tabStop*(s: EditorState): int =
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome and buf.editorConfig.get.tabStop.isSome:
+      return buf.editorConfig.get.tabStop.get
+  s.config.standard.tabStop
+
+proc `tabStop=`*(s: EditorState, v: int) =
+  s.config.standard.tabStop = v
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome:
+      buf.editorConfig.get.tabStop = some(v)
+
+proc shiftWidth*(s: EditorState): int =
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome and
+        buf.editorConfig.get.shiftWidth.isSome:
+      return buf.editorConfig.get.shiftWidth.get
+  s.config.standard.shiftWidth
+
+proc `shiftWidth=`*(s: EditorState, v: int) =
+  s.config.standard.shiftWidth = v
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome:
+      buf.editorConfig.get.shiftWidth = some(v)
+
+proc expandTab*(s: EditorState): bool =
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome and
+        buf.editorConfig.get.expandTab.isSome:
+      return buf.editorConfig.get.expandTab.get
+  s.config.standard.expandTab
+
+proc `expandTab=`*(s: EditorState, v: bool) =
+  s.config.standard.expandTab = v
+  if not s.activeWindow.isNil:
+    let buf = s.activeWindow.buffer
+    if not buf.isNil and buf.editorConfig.isSome:
+      buf.editorConfig.get.expandTab = some(v)
+
+flag2(autoIndent, bool, standard, autoIndent)
+flag2(smartIndent, bool, standard, smartIndent)
+flag2(autoCloseParen, bool, standard, autoCloseParen)
+flag2(autoDeleteParen, bool, standard, autoDeleteParen)
+flag2(bracketSplit, BracketSplitMode, standard, bracketSplit)
 
 # Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
 # This eliminates the dual-state sync problem — EditorWindow is the single source of truth.
@@ -1033,16 +1125,9 @@ proc modeStateKind*(mode: EditorMode): ModeStateKind =
   of EditorMode.Terminal: mskTerminal
   else: mskNone
 
-proc resetPending*(poll: var DebouncedLspPoll) =
-  poll.pendingRequestId = 0
-  poll.pendingFilePath = ""
-  poll.pendingChangeSeq = -1
-  poll.pendingContentVersion = -1
-
 proc debounceThreshold*(poll: DebouncedLspPoll): times.Duration =
   let shift = min(poll.rejectStreak, MaxLspDebounceBackoffShift)
   initDuration(milliseconds = poll.interval shl shift)
 
 proc initDebouncedLspPoll*(interval: int64): DebouncedLspPoll =
-  result = DebouncedLspPoll(lastUpdate: getMonoTime(), interval: interval)
-  result.resetPending()
+  DebouncedLspPoll(lastUpdate: getMonoTime(), interval: interval)

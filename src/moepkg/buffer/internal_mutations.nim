@@ -21,11 +21,11 @@
 ## text mutation helpers used by edit.nim / undo.nim. These do NOT record
 ## undo entries — they are the lowest layer above the backend backends.
 
-import std/[options, strutils, unicode]
+import std/[strutils, unicode]
 
 import ../[primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
-import ./core
+import core
 
 # Backend dispatch helpers for internal use (no undo recording)
 proc backendInsertIntoLine*(b: TextBuffer, line, col: int, text: string) =
@@ -136,31 +136,8 @@ proc insertTextWithNewlines*(b: TextBuffer, pos: BufferPosition, text: string) =
     for i, newLine in newLines:
       b.backendInsertLine(pos.line + i, newLine)
 
-    # Adjust fold and bookmark positions for newly inserted lines
-    if newLines.len > 1:
-      b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
-      b.adjustBookmarksForInsert(pos.line, newLines.len - 1)
-
-    # Shift side-arrays at the edit point so entries below pos.line move down
-    # with their content instead of getting cropped off the tail.
-    for i in 1 .. newLines.len - 1:
-      let idx = pos.line + i
-      if idx < b.lineMarkers.len:
-        b.lineMarkers.insert(none(LineMarkerKind), idx)
-      else:
-        b.lineMarkers.add(none(LineMarkerKind))
-      if idx < b.modifiedLines.len:
-        b.modifiedLines.insert(lmkInserted, idx)
-      else:
-        b.modifiedLines.add(lmkInserted)
-
-  b.ensureMarkersSize()
-  b.ensureModifiedLinesSize()
-
-  if '\n' in text:
-    if pos.line < b.modifiedLines.len:
-      if b.modifiedLines[pos.line] != lmkInserted:
-        b.modifiedLines[pos.line] = lmkModified
+  # Side-array shifts and the modified-line mark are deferred to the
+  # sideArrayCallbacks driven from pushUndoChange / undoChange / redoChange.
 
 proc buildMergedLine*(prefix: string, suffix: string): string {.inline.} =
   ## Helper to build a merged line from prefix and suffix
@@ -168,8 +145,10 @@ proc buildMergedLine*(prefix: string, suffix: string): string {.inline.} =
 
 proc deleteRangeSingleLine*(
     b: TextBuffer, line: string, startPos, endPos: BufferPosition
-) =
-  ## Handle single-line deletion
+): bool {.discardable.} =
+  ## Handle single-line deletion.
+  ## Returns true if the deletion joined this line with the next one
+  ## (so callers can shift folds/bookmarks accordingly).
   let lineLen = line.charLen
   var joinedWithNext = false
 
@@ -210,22 +189,15 @@ proc deleteRangeSingleLine*(
     b.backendDeleteLine(startPos.line)
     b.backendInsertLine(startPos.line, newLine)
 
-  if joinedWithNext:
-    let dropIdx = startPos.line + 1
-    if dropIdx < b.lineMarkers.len:
-      b.lineMarkers.delete(dropIdx)
-    if dropIdx < b.modifiedLines.len:
-      b.modifiedLines.delete(dropIdx)
+  # Side-array shifts deferred (see insertTextWithNewlines).
 
-  b.ensureMarkersSize()
-  b.ensureModifiedLinesSize()
+  return joinedWithNext
 
-  if startPos.line < b.modifiedLines.len:
-    if b.modifiedLines[startPos.line] != lmkInserted:
-      b.modifiedLines[startPos.line] = lmkModified
-
-proc deleteRangeMultiLine*(b: TextBuffer, startPos, endPos: BufferPosition) =
-  ## Handle multi-line deletion
+proc deleteRangeMultiLine*(
+    b: TextBuffer, startPos, endPos: BufferPosition
+): bool {.discardable.} =
+  ## Handle multi-line deletion. Returns true when the range also consumed
+  ## `endPos.line + 1` (the join case).
   let
     startLine = b.getLine(startPos.line)
     endLine = b.getLine(endPos.line)
@@ -263,18 +235,6 @@ proc deleteRangeMultiLine*(b: TextBuffer, startPos, endPos: BufferPosition) =
     for i in countdown(endPos.line, startPos.line + 1):
       b.backendDeleteLine(i)
 
-  let totalRemoved =
-    (endPos.line - startPos.line) + (if extraLineToDelete >= 0: 1 else: 0)
-  for _ in 0 ..< totalRemoved:
-    let dropIdx = startPos.line + 1
-    if dropIdx < b.lineMarkers.len:
-      b.lineMarkers.delete(dropIdx)
-    if dropIdx < b.modifiedLines.len:
-      b.modifiedLines.delete(dropIdx)
+  # Side-array shifts deferred (see insertTextWithNewlines).
 
-  b.ensureMarkersSize()
-  b.ensureModifiedLinesSize()
-
-  if startPos.line < b.modifiedLines.len:
-    if b.modifiedLines[startPos.line] != lmkInserted:
-      b.modifiedLines[startPos.line] = lmkModified
+  return extraLineToDelete >= 0

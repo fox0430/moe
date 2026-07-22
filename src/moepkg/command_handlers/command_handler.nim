@@ -19,225 +19,17 @@
 
 ## Command mode handler
 ##
-## This module handles commands specific to Command mode, including:
-## - File operations (:w, :e, :q)
-## - Search and replace (:s)
-## - Settings (:set)
-## - Navigation (:123 for line jumping)
+## Parses `:cmd` input and produces a `HandlerResult` directly.  Each execute*
+## helper corresponds to a specific `CommandLineAction` (cla*) and returns the
+## same `HandlerResult` variant that `processResult` consumes, so no
+## intermediate cmr layer is required.
 
-import std/[options, strutils, os]
+import std/[options, os, strutils]
 
 import ../[buffer, modes, command_line, command_config, command_registry, config_loader]
 import ../setting_options
-import handler_types
+import handler_types, handler_result
 export setting_options, handler_types
-
-type
-  CommandModeResultKind* = enum
-    cmrQuit # Application should quit
-    cmrCloseWindow # Close current window
-    cmrModeSwitch # Switch to different mode
-    cmrMessage # Show status message
-    cmrGotoLine # Jump to specific line
-    cmrVSplit # Vertical split window
-    cmrHSplit # Horizontal split window
-    cmrNew # Create new empty buffer in horizontal split
-    cmrVnew # Create new empty buffer in vertical split
-    cmrEnew # Create new empty buffer
-    cmrEdit # Edit/open file in current window
-    cmrSetBoolOption # Set boolean option
-    cmrSetIntOption # Set integer option
-    cmrSetFloatOption # Set float option
-    cmrSave # Save file
-    cmrSaveAll # Save all modified buffers (:wa)
-    cmrSaveAndQuit # Save file and quit
-    cmrSaveAllAndQuit # Save all modified buffers and quit (:wqa, :xa)
-    cmrBufferNext # Switch to next buffer
-    cmrBufferPrev # Switch to previous buffer
-    cmrBufferFirst # Switch to first buffer
-    cmrBufferLast # Switch to last buffer
-    cmrBuffer # Switch to buffer by number or name
-    cmrBufferDelete # Delete current buffer
-    cmrStripWhitespace # Remove trailing whitespace
-    cmrFiler # Open file explorer
-    cmrLogViewer # Open log viewer
-    cmrHelpViewer # Open help viewer
-    cmrQuickRun # Run the current buffer
-    cmrBufferManager # Open buffer manager
-    cmrBackupManager # Open backup manager
-    cmrRecentFile # Open recent file selection mode
-    cmrClearSearchHighlight # Clear search highlighting (:noh)
-    cmrShellCommand # Execute shell command (:!)
-    cmrBackground # Pause editor and show terminal (:bg)
-    cmrJumpList # Show jump list (:ju, :jump)
-    cmrChanges # Show change list (:changes)
-    cmrBookmarks # Show bookmark list (:bookmarks)
-    cmrConflictNext # Jump to next git conflict block (:conflictnext)
-    cmrConflictPrev # Jump to previous git conflict block (:conflictprev)
-    cmrBuild # Build current buffer (:build)
-    cmrDebug # Open debug mode (:debug)
-    cmrConfig # Open configuration mode (:conf)
-    cmrPutConfigFile # Write sample config file (:putConfigFile)
-    cmrMan # Show manual page (:man)
-    cmrTheme # Change color theme (:theme)
-    cmrLspLog # Open LSP log viewer (:lspLog)
-    cmrLspFormat # LSP document formatting (:lspFormat)
-    cmrLspRestart # Restart LSP server (:lspRestart)
-    cmrLspFold # LSP folding range (:lspFold)
-    cmrLspExecuteCommand # LSP execute command (:lspExeCommand)
-    cmrLspCallHierarchyIncoming # LSP incoming calls (:lspCallHierarchyIncoming)
-    cmrLspCallHierarchyOutgoing # LSP outgoing calls (:lspCallHierarchyOutgoing)
-    cmrSubstitute # Search and replace (:s)
-    cmrDeleteLines # Delete lines (:d, :%d)
-    cmrTerminal # Open terminal emulator (:terminal)
-    cmrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
-    cmrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
-    cmrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
-    cmrMapList # List runtime key mappings (:map, :nmap, etc. with no args)
-    cmrOnlyWindow # Close all other windows (:only)
-    cmrFileTree # Toggle file tree sidebar (:filetree)
-    cmrCquit # Quit with non-zero exit code (:cq)
-    cmrError # Command error
-
-  CommandModeResult* = object ## Result of command mode execution
-    case kind*: CommandModeResultKind
-    of cmrQuit:
-      forceQuit*: bool
-    of cmrCloseWindow:
-      forceClose*: bool
-    of cmrModeSwitch:
-      targetMode*: EditorMode
-    of cmrMessage:
-      message*: string
-    of cmrGotoLine:
-      lineNumber*: int
-    of cmrVSplit:
-      vsplitFilename*: Option[string]
-    of cmrHSplit:
-      hsplitFilename*: Option[string]
-    of cmrNew:
-      discard
-    of cmrVnew:
-      discard
-    of cmrEnew:
-      discard
-    of cmrEdit:
-      editFilename*: Option[string]
-      forceEdit*: bool
-    of cmrSetBoolOption:
-      boolOption*: BoolSettingOption
-      boolValue*: bool
-    of cmrSetIntOption:
-      intOption*: IntSettingOption
-      intValue*: int
-    of cmrSetFloatOption:
-      floatOption*: FloatSettingOption
-      floatValue*: float
-    of cmrSave:
-      saveFilename*: Option[string]
-      forceSave*: bool
-    of cmrSaveAll:
-      forceSaveAll*: bool
-    of cmrSaveAndQuit:
-      saveAndQuitFilename*: Option[string]
-      forceSaveAndQuit*: bool
-    of cmrSaveAllAndQuit:
-      forceSaveAllAndQuit*: bool
-    of cmrBufferNext, cmrBufferPrev, cmrBufferFirst, cmrBufferLast:
-      discard
-    of cmrBuffer:
-      bufferArg*: string # Buffer number or name
-    of cmrBufferDelete:
-      forceBufferDelete*: bool
-    of cmrStripWhitespace:
-      strippedLineCount*: int
-    of cmrFiler:
-      filerPath*: Option[string] # Optional path for filer
-    of cmrLogViewer:
-      discard
-    of cmrHelpViewer:
-      discard
-    of cmrQuickRun:
-      discard
-    of cmrBufferManager:
-      discard
-    of cmrBackupManager:
-      discard
-    of cmrRecentFile:
-      discard
-    of cmrClearSearchHighlight:
-      discard
-    of cmrShellCommand:
-      shellCommand*: string
-    of cmrBackground:
-      discard
-    of cmrJumpList:
-      discard
-    of cmrChanges:
-      discard
-    of cmrBookmarks:
-      discard
-    of cmrConflictNext:
-      discard
-    of cmrConflictPrev:
-      discard
-    of cmrBuild:
-      discard
-    of cmrDebug:
-      discard
-    of cmrConfig:
-      discard
-    of cmrPutConfigFile:
-      discard
-    of cmrMan:
-      manPage*: string
-    of cmrTheme:
-      themeName*: string
-    of cmrLspLog:
-      discard
-    of cmrLspFormat:
-      discard
-    of cmrLspRestart:
-      discard
-    of cmrLspFold:
-      discard
-    of cmrLspExecuteCommand:
-      lspCommand*: string
-      lspCommandArgs*: seq[string]
-    of cmrLspCallHierarchyIncoming:
-      discard
-    of cmrLspCallHierarchyOutgoing:
-      discard
-    of cmrSubstitute:
-      substitutePattern*: string
-      substituteReplacement*: string
-      substituteGlobal*: bool # true for /g flag
-      substituteCount*: int # number of replacements made
-    of cmrDeleteLines:
-      deletedText*: string # deleted content for register storage
-      deletedLineCount*: int # number of lines deleted
-    of cmrTerminal:
-      terminalCommand*: string # Optional command (empty = default shell)
-    of cmrMapAdd:
-      mapAddLhs*: string
-      mapAddRhs*: string
-      mapAddModes*: seq[EditorMode]
-      mapAddNoremap*: bool ## True for :noremap-family (non-recursive) mappings
-    of cmrMapRemove:
-      mapRemoveLhs*: string
-      mapRemoveModes*: seq[EditorMode]
-    of cmrMapClear:
-      mapClearModes*: seq[EditorMode]
-    of cmrMapList:
-      mapListModes*: seq[EditorMode]
-    of cmrOnlyWindow:
-      discard
-    of cmrFileTree:
-      fileTreePath*: Option[string]
-    of cmrCquit:
-      discard
-    of cmrError:
-      errorMessage*: string
 
 proc newCommandModeHandler*(
     parser: CommandLineParser, config: CommandConfig, commandRegistry: CommandRegistry
@@ -245,119 +37,134 @@ proc newCommandModeHandler*(
   ## Create a new Command mode handler
   CommandModeHandler(parser: parser, config: config, commandRegistry: commandRegistry)
 
+const AllEditableModes = @[
+  EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
+  EditorMode.VisualLine, EditorMode.Replace,
+]
+
+proc unsavedChangesErr(): HandlerResult =
+  ## Error returned when a destructive command runs on a modified buffer without
+  ## the ! override.
+  HandlerResult(
+    kind: hrError, errorMessage: "No write since last change (add ! to override)"
+  )
+
+proc modesForMapAction(kind: CommandLineAction): seq[EditorMode] =
+  ## Resolve the target modes for a :map/:unmap/:mapclear-family action. The
+  ## letter prefix (n/i/v/r/c) picks a single mode; the bare form (:map,
+  ## :unmap, :mapclear) covers all editable modes.
+  case kind
+  of claNmap, claNnoremap, claNunmap, claNmapclear:
+    @[EditorMode.Normal]
+  of claImap, claInoremap, claIunmap, claImapclear:
+    @[EditorMode.Insert]
+  of claVmap, claVnoremap, claVunmap, claVmapclear:
+    @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
+  of claRmap, claRunmap, claRmapclear:
+    @[EditorMode.Replace]
+  of claCmap, claCnoremap, claCunmap, claCmapclear:
+    @[EditorMode.Command]
+  else:
+    AllEditableModes
+
 proc executeQuit*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
     force: bool,
     isSharedBuffer: bool = false,
-): CommandModeResult =
-  ## Execute quit command (:q, :q!) - now closes current window
-  ## If isSharedBuffer is true, skip the isModified check since buffer is shared across windows
+): HandlerResult =
+  ## Execute quit command (:q, :q!) - closes current window.
+  ## isSharedBuffer=true skips the isModified check for shared buffers.
   if not force and not isSharedBuffer:
-    # Check if there are unsaved changes
     if buffer.isModified:
-      return CommandModeResult(
-        kind: cmrError, errorMessage: "No write since last change (add ! to override)"
-      )
-
-  return CommandModeResult(kind: cmrCloseWindow, forceClose: force)
+      return unsavedChangesErr()
+  return HandlerResult(kind: hrCloseWindow, forceClose: force)
 
 proc executeSave*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
     filename: Option[string],
     force: bool,
-): CommandModeResult =
+): HandlerResult =
   ## Execute save command (:w, :w!)
-  ## Returns cmrSave to signal that the file should be saved
-  ## The actual save operation is performed by the editor
-  return CommandModeResult(kind: cmrSave, saveFilename: filename, forceSave: force)
+  HandlerResult(kind: hrSave, saveFilename: filename, forceSave: force)
 
-proc executeSaveAll*(handler: CommandModeHandler, force: bool): CommandModeResult =
+proc executeSaveAll*(handler: CommandModeHandler, force: bool): HandlerResult =
   ## Execute save all command (:wa, :wa!)
-  ## Returns cmrSaveAll to signal that every modified buffer should be saved.
-  ## The actual save operation is performed by the editor.
-  return CommandModeResult(kind: cmrSaveAll, forceSaveAll: force)
+  HandlerResult(kind: hrSaveAll, forceSaveAll: force)
 
 proc executeSaveAndQuit*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
     filename: Option[string],
     force: bool,
-): CommandModeResult =
+): HandlerResult =
   ## Execute save and quit command (:wq, :x)
-  ## Returns cmrSaveAndQuit to signal that the file should be saved and editor should quit
-  ## The actual save operation is performed by the editor
-  return CommandModeResult(
-    kind: cmrSaveAndQuit, saveAndQuitFilename: filename, forceSaveAndQuit: force
+  HandlerResult(
+    kind: hrSaveAndQuit, saveAndQuitFilename: filename, forceQuitAfterSave: force
   )
 
-proc executeSaveAllAndQuit*(
-    handler: CommandModeHandler, force: bool
-): CommandModeResult =
+proc executeSaveAllAndQuit*(handler: CommandModeHandler, force: bool): HandlerResult =
   ## Execute save all and quit command (:wqa, :xa, :wqa!)
-  ## Returns cmrSaveAllAndQuit to signal that every modified buffer should be
-  ## saved and then the editor should quit. The actual save and quit operations
-  ## are performed by the editor.
-  return CommandModeResult(kind: cmrSaveAllAndQuit, forceSaveAllAndQuit: force)
+  HandlerResult(kind: hrSaveAllAndQuit, forceSaveAllAndQuitAfter: force)
 
 proc executeQuitAll*(
-    handler: CommandModeHandler, buffer: TextBuffer, force: bool
-): CommandModeResult =
-  ## Execute quit all command (:qa, :qa!) - closes all windows and quits
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    force: bool,
+    otherModifiedCount: int = 0,
+): HandlerResult =
+  ## Execute :qa / :qa!. `otherModifiedCount` covers buffers other than `buffer`.
   if not force:
-    # Check if there are unsaved changes
-    if buffer.isModified:
-      return CommandModeResult(
-        kind: cmrError, errorMessage: "No write since last change (add ! to override)"
+    let total = (if buffer.isModified: 1 else: 0) + otherModifiedCount
+    if total > 0:
+      if total == 1:
+        return unsavedChangesErr()
+      return HandlerResult(
+        kind: hrError,
+        errorMessage:
+          "No write since last change: " & $total &
+          " buffers modified (add ! to override)",
       )
-
-  # Return cmrQuit to signal immediate editor quit
-  return CommandModeResult(kind: cmrQuit, forceQuit: force)
+  HandlerResult(kind: hrQuit)
 
 proc executeEdit*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
     filename: Option[string],
     force: bool,
-): CommandModeResult =
-  ## Execute edit command (:e/:e! with optional filename)
+): HandlerResult =
+  ## Execute edit command (:e/:e! with optional filename).
+  ## Opens a directory in Filer mode; reloads the current buffer when no
+  ## filename is given.
   if filename.isSome:
     let expanded = expandTilde(filename.get)
-    # If path is a directory, open in Filer mode
     if dirExists(expanded):
-      return CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(expanded)))
-    # Open the file in the current window
-    return CommandModeResult(
-      kind: cmrEdit, editFilename: some(absolutePath(expanded)), forceEdit: force
+      return
+        HandlerResult(kind: hrEnterFiler, enterFilerPath: some(absolutePath(expanded)))
+    return HandlerResult(
+      kind: hrEdit, editFilename: some(absolutePath(expanded)), forceEdit: force
     )
-  else:
-    # No filename: reload current buffer
-    if not force and buffer.isModified:
-      return CommandModeResult(
-        kind: cmrError, errorMessage: "No write since last change (add ! to override)"
-      )
-    return
-      CommandModeResult(kind: cmrEdit, editFilename: none(string), forceEdit: force)
+  if not force and buffer.isModified:
+    return unsavedChangesErr()
+  HandlerResult(kind: hrEdit, editFilename: none(string), forceEdit: force)
 
 proc executeGotoLine*(
     handler: CommandModeHandler, buffer: TextBuffer, lineNumber: int
-): CommandModeResult =
+): HandlerResult =
   ## Execute goto line command (:123)
   if lineNumber <= 0:
-    return CommandModeResult(kind: cmrError, errorMessage: "Invalid line number")
-
+    return HandlerResult(kind: hrError, errorMessage: "Invalid line number")
   # Clamp to last line if lineNumber exceeds buffer length
   let clampedLine = min(lineNumber, buffer.len)
+  HandlerResult(kind: hrGotoLine, lineNumber: clampedLine)
 
-  return CommandModeResult(kind: cmrGotoLine, lineNumber: clampedLine)
-
-proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): CommandModeResult =
+proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): HandlerResult =
   ## Validate and dispatch an integer-typed `:set X=N` option.
   doAssert spec.kind == sokInt, "parseSetIntValue called with non-int spec"
   if value.isNone:
-    return CommandModeResult(
-      kind: cmrError,
+    return HandlerResult(
+      kind: hrError,
       errorMessage:
         spec.longName & " requires a value (e.g., " & spec.longName & "=" &
         $spec.intExample & ")",
@@ -365,23 +172,20 @@ proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): CommandModeRe
   try:
     let intVal = parseInt(value.get)
     if intBoundOk(spec.intBound, intVal):
-      return CommandModeResult(
-        kind: cmrSetIntOption, intOption: spec.intOption, intValue: intVal
-      )
-    return CommandModeResult(
-      kind: cmrError, errorMessage: spec.longName & " " & intBoundError(spec.intBound)
+      return
+        HandlerResult(kind: hrSetIntOption, intOption: spec.intOption, intValue: intVal)
+    HandlerResult(
+      kind: hrError, errorMessage: spec.longName & " " & intBoundError(spec.intBound)
     )
   except ValueError:
-    return CommandModeResult(
-      kind: cmrError, errorMessage: "Invalid value for " & spec.longName
-    )
+    HandlerResult(kind: hrError, errorMessage: "Invalid value for " & spec.longName)
 
-proc parseSetFloatValue(spec: SetOptionSpec, value: Option[string]): CommandModeResult =
+proc parseSetFloatValue(spec: SetOptionSpec, value: Option[string]): HandlerResult =
   ## Validate and dispatch a float-typed `:set X=N.N` option.
   doAssert spec.kind == sokFloat, "parseSetFloatValue called with non-float spec"
   if value.isNone:
-    return CommandModeResult(
-      kind: cmrError,
+    return HandlerResult(
+      kind: hrError,
       errorMessage:
         spec.longName & " requires a value (e.g., " & spec.longName & "=" &
         $spec.floatExample & ")",
@@ -389,20 +193,16 @@ proc parseSetFloatValue(spec: SetOptionSpec, value: Option[string]): CommandMode
   try:
     let floatVal = parseFloat(value.get)
     if floatVal >= 0:
-      return CommandModeResult(
-        kind: cmrSetFloatOption, floatOption: spec.floatOption, floatValue: floatVal
+      return HandlerResult(
+        kind: hrSetFloatOption, floatOption: spec.floatOption, floatValue: floatVal
       )
-    return CommandModeResult(
-      kind: cmrError, errorMessage: spec.longName & " must be non-negative"
-    )
+    HandlerResult(kind: hrError, errorMessage: spec.longName & " must be non-negative")
   except ValueError:
-    return CommandModeResult(
-      kind: cmrError, errorMessage: "Invalid value for " & spec.longName
-    )
+    HandlerResult(kind: hrError, errorMessage: "Invalid value for " & spec.longName)
 
 proc executeSet*(
     handler: CommandModeHandler, option: string, value: Option[string]
-): CommandModeResult =
+): HandlerResult =
   ## Execute set command (:set option=value). Dispatches via `SetOptionTable`
   ## so each `:set` option lives in exactly one place (setting_options.nim).
   let opt = option.toLower
@@ -410,17 +210,17 @@ proc executeSet*(
     case spec.kind
     of sokBool:
       if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
-        return CommandModeResult(
-          kind: cmrSetBoolOption, boolOption: spec.boolOption, boolValue: true
+        return HandlerResult(
+          kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: true
         )
       let noLong = "no" & spec.longName
       if opt == noLong:
-        return CommandModeResult(
-          kind: cmrSetBoolOption, boolOption: spec.boolOption, boolValue: false
+        return HandlerResult(
+          kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: false
         )
       if spec.shortName.len > 0 and opt == "no" & spec.shortName:
-        return CommandModeResult(
-          kind: cmrSetBoolOption, boolOption: spec.boolOption, boolValue: false
+        return HandlerResult(
+          kind: hrSetBoolOption, boolOption: spec.boolOption, boolValue: false
         )
     of sokInt:
       if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
@@ -428,74 +228,63 @@ proc executeSet*(
     of sokFloat:
       if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
         return parseSetFloatValue(spec, value)
-  return CommandModeResult(kind: cmrError, errorMessage: "Unknown option: " & option)
+  HandlerResult(kind: hrError, errorMessage: "Unknown option: " & option)
 
-proc executeHelp*(
-    handler: CommandModeHandler, topic: Option[string]
-): CommandModeResult =
-  ## Execute help command (:help, :help topic)
-  # Open the help viewer
-  return CommandModeResult(kind: cmrHelpViewer)
+proc executeHelp*(handler: CommandModeHandler, topic: Option[string]): HandlerResult =
+  ## Execute help command (:help, :help topic) - opens the help viewer.
+  HandlerResult(kind: hrEnterHelpViewer)
 
 proc executeVSplit*(
     handler: CommandModeHandler, filename: Option[string]
-): CommandModeResult =
+): HandlerResult =
   ## Execute vertical split command (:vs, :vs filename)
-  return CommandModeResult(kind: cmrVSplit, vsplitFilename: filename)
+  HandlerResult(kind: hrVSplit, vsplitFilename: filename)
 
 proc executeHSplit*(
     handler: CommandModeHandler, filename: Option[string]
-): CommandModeResult =
+): HandlerResult =
   ## Execute horizontal split command (:sp, :sp filename)
-  return CommandModeResult(kind: cmrHSplit, hsplitFilename: filename)
+  HandlerResult(kind: hrHSplit, hsplitFilename: filename)
 
-proc executeNew*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute new command (:new) - create new empty buffer in horizontal split
-  return CommandModeResult(kind: cmrNew)
+proc executeNew*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrNew)
 
-proc executeVnew*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute vnew command (:vnew) - create new empty buffer in vertical split
-  return CommandModeResult(kind: cmrVnew)
+proc executeVnew*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrVnew)
 
-proc executeEnew*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute enew command (:ene, :enew) - create new empty buffer
-  return CommandModeResult(kind: cmrEnew)
+proc executeEnew*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrEnew)
 
-proc executeBufferNext*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute bnext command (:bn, :bnext) - switch to next buffer
-  return CommandModeResult(kind: cmrBufferNext)
+proc executeBufferNext*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrBufferNext)
 
-proc executeBufferPrev*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute bprev command (:bp, :bprev) - switch to previous buffer
-  return CommandModeResult(kind: cmrBufferPrev)
+proc executeBufferPrev*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrBufferPrev)
 
-proc executeBufferFirst*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute bfirst command (:bf, :bfirst) - switch to first buffer
-  return CommandModeResult(kind: cmrBufferFirst)
+proc executeBufferFirst*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrBufferFirst)
 
-proc executeBufferLast*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute blast command (:bl, :blast) - switch to last buffer
-  return CommandModeResult(kind: cmrBufferLast)
+proc executeBufferLast*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrBufferLast)
 
-proc executeBuffer*(handler: CommandModeHandler, arg: string): CommandModeResult =
-  ## Execute buffer command (:b N or :b name) - switch to buffer by number or name
-  return CommandModeResult(kind: cmrBuffer, bufferArg: arg)
+proc executeBuffer*(handler: CommandModeHandler, arg: string): HandlerResult =
+  HandlerResult(kind: hrBuffer, bufferArg: arg)
 
 proc executeBufferDelete*(
     handler: CommandModeHandler, buffer: TextBuffer, force: bool
-): CommandModeResult =
-  ## Execute bdelete command (:bd, :bdelete) - delete current buffer
+): HandlerResult =
+  ## Execute bdelete command (:bd, :bdelete)
   if not force and buffer.isModified:
-    return CommandModeResult(
-      kind: cmrError, errorMessage: "No write since last change (add ! to override)"
-    )
-  return CommandModeResult(kind: cmrBufferDelete, forceBufferDelete: force)
+    return unsavedChangesErr()
+  HandlerResult(kind: hrBufferDelete, forceBufferDelete: force)
 
 proc executeStripWhitespace*(
     handler: CommandModeHandler, buffer: TextBuffer
-): CommandModeResult =
+): HandlerResult =
   ## Execute stripwhitespace command (:stripwhitespace, :stripws)
-  ## Removes trailing whitespace from all lines
+  ## Removes trailing whitespace from all lines.
+  if buffer.readOnly:
+    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   var strippedCount = 0
   discard buffer.beginTransaction("stripwhitespace")
   for lineIdx in 0 ..< buffer.len:
@@ -507,11 +296,10 @@ proc executeStripWhitespace*(
       discard buffer.replaceLine(lineIdx, trimmed)
       strippedCount.inc
   discard buffer.commitTransaction()
-  return CommandModeResult(kind: cmrStripWhitespace, strippedLineCount: strippedCount)
+  HandlerResult(kind: hrStripWhitespace, strippedLineCount: strippedCount)
 
-proc executeQuickRun*(handler: CommandModeHandler): CommandModeResult =
-  ## Execute quickrun command (:run, :quickrun, :qr)
-  return CommandModeResult(kind: cmrQuickRun)
+proc executeQuickRun*(handler: CommandModeHandler): HandlerResult =
+  HandlerResult(kind: hrQuickRun)
 
 proc executeSubstitute*(
     handler: CommandModeHandler,
@@ -524,31 +312,23 @@ proc executeSubstitute*(
     startLine: int = 0,
     endLine: int = 0,
     currentLine: int = 0,
-): CommandModeResult =
+): HandlerResult =
   ## Execute substitute command (:s, :%s/pattern/replacement/flags)
-  ## flags: "g" for global replacement (all occurrences), otherwise first only
-  ## hasRange: true if a line range was specified (e.g., :1,10s/...)
-  ## isGlobalRange: true if % prefix was used (all lines)
-  ## startLine/endLine: line range (1-based, 0 means current line)
-  ## currentLine: current cursor line (0-based)
+  if buffer.readOnly:
+    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   if pattern.len == 0:
-    return CommandModeResult(kind: cmrError, errorMessage: "Pattern required")
+    return HandlerResult(kind: hrError, errorMessage: "Pattern required")
 
   let isGlobal = "g" in flags
   var replaceCount = 0
 
-  # Process escape sequences in replacement string using common utility
   let processedReplacement = processEscapeSequences(replacement)
 
-  # Determine line range
   var rangeStart, rangeEnd: int
   if isGlobalRange:
-    # % means all lines
     rangeStart = 0
     rangeEnd = buffer.len - 1
   elif hasRange:
-    # Explicit range specified
-    # Convert 1-based to 0-based, 0 means current line
     rangeStart =
       if startLine == 0:
         currentLine
@@ -559,24 +339,20 @@ proc executeSubstitute*(
         currentLine
       else:
         endLine - 1
-    # Validate range
     if rangeStart < 0:
       rangeStart = 0
     if rangeEnd >= buffer.len:
       rangeEnd = buffer.len - 1
     if rangeStart > rangeEnd:
-      return CommandModeResult(
-        kind: cmrError, errorMessage: "Invalid range: start line > end line"
+      return HandlerResult(
+        kind: hrError, errorMessage: "Invalid range: start line > end line"
       )
   else:
-    # No range - current line only
     rangeStart = currentLine
     rangeEnd = currentLine
 
-  # Begin transaction for all changes
   discard buffer.beginTransaction("substitute")
 
-  # Search and replace in specified range
   for lineIdx in rangeStart .. rangeEnd:
     var line = buffer.getLine(lineIdx)
     var modified = false
@@ -586,46 +362,32 @@ proc executeSubstitute*(
     while searchPos <= line.len:
       let idx = line.find(pattern, searchPos)
       if idx < 0:
-        # No more matches - add rest of line
         newLine.add(line[searchPos ..^ 1])
         break
 
-      # Add text before match
       if idx > searchPos:
         newLine.add(line[searchPos ..< idx])
 
-      # Add replacement
       newLine.add(processedReplacement)
       replaceCount.inc
       modified = true
 
-      # Move past the match
       searchPos = idx + pattern.len
 
-      # If not global, only replace first occurrence per line
       if not isGlobal:
         newLine.add(line[searchPos ..^ 1])
         break
 
-    # Update the line if modified
     if modified:
-      # Reveal the line if it is hidden inside a collapsed fold.
       discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
       discard buffer.replaceLine(lineIdx, newLine)
 
   discard buffer.commitTransaction()
 
   if replaceCount == 0:
-    return
-      CommandModeResult(kind: cmrError, errorMessage: "Pattern not found: " & pattern)
+    return HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
 
-  return CommandModeResult(
-    kind: cmrSubstitute,
-    substitutePattern: pattern,
-    substituteReplacement: processedReplacement,
-    substituteGlobal: isGlobal,
-    substituteCount: replaceCount,
-  )
+  HandlerResult(kind: hrSubstitute, hrSubstituteCount: replaceCount)
 
 proc executeDelete*(
     handler: CommandModeHandler,
@@ -635,14 +397,10 @@ proc executeDelete*(
     startLine: int = 0,
     endLine: int = 0,
     currentLine: int = 0,
-): CommandModeResult =
+): HandlerResult =
   ## Execute delete command (:d, :%d, :1,10d)
-  ## hasRange: true if a line range was specified
-  ## isGlobalRange: true if % prefix was used (all lines)
-  ## startLine/endLine: line range (1-based, 0 means current line)
-  ## currentLine: current cursor line (0-based)
-
-  # Determine line range
+  if buffer.readOnly:
+    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   var rangeStart, rangeEnd: int
   if isGlobalRange:
     rangeStart = 0
@@ -665,18 +423,16 @@ proc executeDelete*(
     if rangeEnd >= buffer.len:
       rangeEnd = buffer.len - 1
     if rangeStart > rangeEnd:
-      return CommandModeResult(
-        kind: cmrError, errorMessage: "Invalid range: start line > end line"
+      return HandlerResult(
+        kind: hrError, errorMessage: "Invalid range: start line > end line"
       )
   else:
-    # No range - current line only
     rangeStart = currentLine
     rangeEnd = currentLine
 
   if rangeStart >= buffer.len:
-    return CommandModeResult(kind: cmrError, errorMessage: "Line out of range")
+    return HandlerResult(kind: hrError, errorMessage: "Line out of range")
 
-  # Collect text from all lines in range
   var text = ""
   for lineIdx in rangeStart .. rangeEnd:
     if lineIdx > rangeStart:
@@ -687,26 +443,21 @@ proc executeDelete*(
   let lineCount = rangeEnd - rangeStart + 1
   let deletingAll = rangeStart == 0 and rangeEnd == buffer.len - 1
 
-  # Reveal any folded lines in the range before deleting them.
   discard buffer.foldState.openFoldsInRange(rangeStart, rangeEnd)
 
   discard buffer.beginTransaction("delete lines")
 
   if deletingAll:
-    # Delete all lines except the first, then clear the first
     for i in countdown(buffer.len - 1, 1):
       discard buffer.deleteLine(i)
     discard buffer.replaceLine(0, "")
   else:
-    # Delete lines from bottom to top to avoid index shifting
     for i in countdown(rangeEnd, rangeStart):
       discard buffer.deleteLine(i)
 
   discard buffer.commitTransaction()
 
-  return CommandModeResult(
-    kind: cmrDeleteLines, deletedText: text, deletedLineCount: lineCount
-  )
+  HandlerResult(kind: hrDeleteLines, hrDeletedText: text, hrDeletedLineCount: lineCount)
 
 proc handleCommandModeInput*(
     handler: CommandModeHandler,
@@ -714,259 +465,185 @@ proc handleCommandModeInput*(
     commandText: string,
     isSharedBuffer: bool = false,
     currentLine: int = 0,
-): CommandModeResult =
-  ## Main entry point for handling Command mode input
+    otherModifiedCount: int = 0,
+): HandlerResult =
+  ## Main entry point for handling Command mode input.
   ## isSharedBuffer: true if the buffer is shared across multiple windows
-  ## currentLine: current cursor line (0-based), used for range substitution with '.'
+  ## currentLine: 0-based cursor line, used for range substitution with '.'
+  ## otherModifiedCount: modified buffers other than `buffer` (for :qa)
 
   if commandText.len <= 1: # Just ":"
-    return CommandModeResult(kind: cmrModeSwitch, targetMode: EditorMode.Normal)
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
+    )
 
-  # Parse and execute the command
   let cmdResult = handler.parser.parseAndExecute(commandText)
 
   case cmdResult.kind
   of claQuit:
-    return handler.executeQuit(buffer, cmdResult.forceQuit, isSharedBuffer)
+    handler.executeQuit(buffer, cmdResult.forceQuit, isSharedBuffer)
   of claQuitAll:
-    return handler.executeQuitAll(buffer, cmdResult.forceQuitAll)
+    handler.executeQuitAll(buffer, cmdResult.forceQuitAll, otherModifiedCount)
   of claSave:
-    return handler.executeSave(buffer, cmdResult.filename, cmdResult.forceSave)
+    handler.executeSave(buffer, cmdResult.filename, cmdResult.forceSave)
   of claSaveAll:
-    return handler.executeSaveAll(cmdResult.forceSaveAll)
+    handler.executeSaveAll(cmdResult.forceSaveAll)
   of claSaveAndQuit:
-    return handler.executeSaveAndQuit(
+    handler.executeSaveAndQuit(
       buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit
     )
   of claSaveAllAndQuit:
-    return handler.executeSaveAllAndQuit(cmdResult.forceSaveAllAndQuit)
+    handler.executeSaveAllAndQuit(cmdResult.forceSaveAllAndQuit)
   of claEdit:
-    return handler.executeEdit(buffer, cmdResult.editFilename, cmdResult.forceEdit)
+    handler.executeEdit(buffer, cmdResult.editFilename, cmdResult.forceEdit)
   of claEnew:
-    return handler.executeEnew()
+    handler.executeEnew()
   of claGoto:
-    return handler.executeGotoLine(buffer, cmdResult.lineNumber)
+    handler.executeGotoLine(buffer, cmdResult.lineNumber)
   of claSet:
-    return handler.executeSet(cmdResult.option, cmdResult.value)
+    handler.executeSet(cmdResult.option, cmdResult.value)
   of claHelp:
-    return handler.executeHelp(cmdResult.topic)
+    handler.executeHelp(cmdResult.topic)
   of claVSplit:
-    return handler.executeVSplit(cmdResult.vsplitFilename)
+    handler.executeVSplit(cmdResult.vsplitFilename)
   of claHSplit:
-    return handler.executeHSplit(cmdResult.hsplitFilename)
+    handler.executeHSplit(cmdResult.hsplitFilename)
   of claNew:
-    return handler.executeNew()
+    handler.executeNew()
   of claVnew:
-    return handler.executeVnew()
+    handler.executeVnew()
   of claBufferNext:
-    return handler.executeBufferNext()
+    handler.executeBufferNext()
   of claBufferPrev:
-    return handler.executeBufferPrev()
+    handler.executeBufferPrev()
   of claBufferFirst:
-    return handler.executeBufferFirst()
+    handler.executeBufferFirst()
   of claBufferLast:
-    return handler.executeBufferLast()
+    handler.executeBufferLast()
   of claBufferDelete:
-    return handler.executeBufferDelete(buffer, cmdResult.forceBufferDelete)
+    handler.executeBufferDelete(buffer, cmdResult.forceBufferDelete)
   of claBuffer:
-    return handler.executeBuffer(cmdResult.bufferArg)
+    handler.executeBuffer(cmdResult.bufferArg)
   of claStripWhitespace:
-    return handler.executeStripWhitespace(buffer)
+    handler.executeStripWhitespace(buffer)
   of claFiler:
-    return CommandModeResult(kind: cmrFiler, filerPath: cmdResult.filerPath)
+    HandlerResult(kind: hrEnterFiler, enterFilerPath: cmdResult.filerPath)
   of claLogViewer:
-    return CommandModeResult(kind: cmrLogViewer)
+    HandlerResult(kind: hrEnterLogViewer)
   of claQuickRun:
-    return handler.executeQuickRun()
+    handler.executeQuickRun()
   of claBufferManager:
-    return CommandModeResult(kind: cmrBufferManager)
+    HandlerResult(kind: hrEnterBufferManager)
   of claBackupManager:
-    return CommandModeResult(kind: cmrBackupManager)
+    HandlerResult(kind: hrEnterBackupManager)
   of claRecentFile:
     when defined(macosx):
-      return CommandModeResult(
-        kind: cmrError, errorMessage: ":recent is not supported on macOS"
-      )
+      HandlerResult(kind: hrError, errorMessage: ":recent is not supported on macOS")
     else:
-      return CommandModeResult(kind: cmrRecentFile)
+      HandlerResult(kind: hrRecentFile)
   of claClearSearchHighlight:
-    return CommandModeResult(kind: cmrClearSearchHighlight)
+    HandlerResult(kind: hrClearSearchHighlight)
   of claShellCommand:
-    return
-      CommandModeResult(kind: cmrShellCommand, shellCommand: cmdResult.shellCommand)
+    HandlerResult(kind: hrShellCommand, shellCommand: cmdResult.shellCommand)
   of claBackground:
-    return CommandModeResult(kind: cmrBackground)
+    HandlerResult(kind: hrBackground)
   of claJumpList:
-    return CommandModeResult(kind: cmrJumpList)
+    HandlerResult(kind: hrJumpList)
   of claChanges:
-    return CommandModeResult(kind: cmrChanges)
+    HandlerResult(kind: hrChanges)
   of claBookmarks:
-    return CommandModeResult(kind: cmrBookmarks)
+    HandlerResult(kind: hrEnterBookmarkManager)
   of claConflictNext:
-    return CommandModeResult(kind: cmrConflictNext)
+    HandlerResult(kind: hrConflictNext)
   of claConflictPrev:
-    return CommandModeResult(kind: cmrConflictPrev)
+    HandlerResult(kind: hrConflictPrev)
   of claBuild:
-    return CommandModeResult(kind: cmrBuild)
+    HandlerResult(kind: hrBuild)
   of claDebug:
-    return CommandModeResult(kind: cmrDebug)
+    HandlerResult(kind: hrDebug)
   of claConfig:
-    return CommandModeResult(kind: cmrConfig)
+    HandlerResult(kind: hrConfig)
   of claPutConfigFile:
-    return CommandModeResult(kind: cmrPutConfigFile)
+    HandlerResult(kind: hrPutConfigFile)
   of claMan:
-    return CommandModeResult(kind: cmrMan, manPage: cmdResult.manPage)
+    HandlerResult(kind: hrMan, hrManPage: cmdResult.manPage)
   of claTheme:
-    return CommandModeResult(kind: cmrTheme, themeName: cmdResult.themeName)
+    HandlerResult(kind: hrTheme, hrThemeName: cmdResult.themeName)
   of claLspLog:
-    return CommandModeResult(kind: cmrLspLog)
+    HandlerResult(kind: hrLspLog)
   of claLspFormat:
-    return CommandModeResult(kind: cmrLspFormat)
+    HandlerResult(kind: hrLspFormat)
   of claLspRestart:
-    return CommandModeResult(kind: cmrLspRestart)
+    HandlerResult(kind: hrLspRestart)
   of claLspFold:
-    return CommandModeResult(kind: cmrLspFold)
+    HandlerResult(kind: hrLspFold)
   of claLspExecuteCommand:
-    return CommandModeResult(
-      kind: cmrLspExecuteCommand,
-      lspCommand: cmdResult.lspCommand,
-      lspCommandArgs: cmdResult.lspCommandArgs,
+    HandlerResult(
+      kind: hrLspExecuteCommand,
+      hrLspCommand: cmdResult.lspCommand,
+      hrLspCommandArgs: cmdResult.lspCommandArgs,
     )
   of claLspCallHierarchyIncoming:
-    return CommandModeResult(kind: cmrLspCallHierarchyIncoming)
+    HandlerResult(kind: hrLspCallHierarchyIncoming)
   of claLspCallHierarchyOutgoing:
-    return CommandModeResult(kind: cmrLspCallHierarchyOutgoing)
+    HandlerResult(kind: hrLspCallHierarchyOutgoing)
   of claTerminal:
-    return
-      CommandModeResult(kind: cmrTerminal, terminalCommand: cmdResult.terminalCommand)
+    HandlerResult(
+      kind: hrEnterTerminal, enterTerminalCommand: cmdResult.terminalCommand
+    )
   of claSubstitute:
-    return handler.executeSubstitute(
+    handler.executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
       cmdResult.hasRange, cmdResult.isGlobal, cmdResult.startLine, cmdResult.endLine,
       currentLine,
     )
   of claDeleteLines:
-    return handler.executeDelete(
+    handler.executeDelete(
       buffer, cmdResult.deleteHasRange, cmdResult.deleteIsGlobal,
       cmdResult.deleteStartLine, cmdResult.deleteEndLine, currentLine,
     )
   of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
-    let modes =
-      case cmdResult.kind
-      of claNmap:
-        @[EditorMode.Normal]
-      of claImap:
-        @[EditorMode.Insert]
-      of claVmap:
-        @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
-      of claRmap:
-        @[EditorMode.Replace]
-      of claCmap:
-        @[EditorMode.Command]
-      else:
-        # claMap: all editable modes
-        @[
-          EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
-          EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
-        ]
-    if cmdResult.mapLhs == "":
-      # No arguments: list mappings
-      return CommandModeResult(kind: cmrMapList, mapListModes: modes)
-    return CommandModeResult(
-      kind: cmrMapAdd,
-      mapAddLhs: cmdResult.mapLhs,
-      mapAddRhs: cmdResult.mapRhs,
-      mapAddModes: modes,
-      mapAddNoremap: cmdResult.noremap,
-    )
+    let modes = modesForMapAction(cmdResult.kind)
+    if cmdResult.mapRhs == "":
+      # No rhs: list mappings. mapLhs (if any) filters by prefix.
+      HandlerResult(
+        kind: hrMapList, mapListModes: modes, mapListPrefix: cmdResult.mapLhs
+      )
+    else:
+      HandlerResult(
+        kind: hrMapAdd,
+        mapAddLhs: cmdResult.mapLhs,
+        mapAddRhs: cmdResult.mapRhs,
+        mapAddModes: modes,
+        mapAddNoremap: cmdResult.noremap,
+      )
   of claNoremap, claNnoremap, claInoremap, claVnoremap, claCnoremap:
     # Unreachable: the executor folds these onto the base map kind (carrying
     # noremap=true). Present only to keep the case exhaustive.
-    return CommandModeResult(
-      kind: cmrError, errorMessage: "internal: unfolded noremap action"
-    )
+    HandlerResult(kind: hrError, errorMessage: "internal: unfolded noremap action")
   of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:
-    let modes =
-      case cmdResult.kind
-      of claNunmap:
-        @[EditorMode.Normal]
-      of claIunmap:
-        @[EditorMode.Insert]
-      of claVunmap:
-        @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
-      of claRunmap:
-        @[EditorMode.Replace]
-      of claCunmap:
-        @[EditorMode.Command]
-      else:
-        @[
-          EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
-          EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
-        ]
-    return CommandModeResult(
-      kind: cmrMapRemove, mapRemoveLhs: cmdResult.unmapLhs, mapRemoveModes: modes
+    HandlerResult(
+      kind: hrMapRemove,
+      mapRemoveLhs: cmdResult.unmapLhs,
+      mapRemoveModes: modesForMapAction(cmdResult.kind),
     )
   of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear, claCmapclear:
-    let modes =
-      case cmdResult.kind
-      of claNmapclear:
-        @[EditorMode.Normal]
-      of claImapclear:
-        @[EditorMode.Insert]
-      of claVmapclear:
-        @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
-      of claRmapclear:
-        @[EditorMode.Replace]
-      of claCmapclear:
-        @[EditorMode.Command]
-      else:
-        @[
-          EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
-          EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
-        ]
-    return CommandModeResult(kind: cmrMapClear, mapClearModes: modes)
+    HandlerResult(kind: hrMapClear, mapClearModes: modesForMapAction(cmdResult.kind))
   of claOnlyWindow:
-    return CommandModeResult(kind: cmrOnlyWindow)
+    HandlerResult(kind: hrOnlyWindow)
   of claEditConfigFile:
     let configPath = getConfigPath()
-    return
-      CommandModeResult(kind: cmrEdit, editFilename: some(configPath), forceEdit: false)
+    HandlerResult(kind: hrEdit, editFilename: some(configPath), forceEdit: false)
   of claFileTree:
-    return CommandModeResult(
-      kind: cmrFileTree,
-      fileTreePath:
+    HandlerResult(
+      kind: hrEnterFileTree,
+      enterFileTreePath:
         if cmdResult.kind == claFileTree:
           cmdResult.fileTreePath
         else:
           none(string),
     )
   of claCquit:
-    return CommandModeResult(kind: cmrCquit)
+    HandlerResult(kind: hrCquit)
   of claUnknown:
-    return CommandModeResult(kind: cmrError, errorMessage: cmdResult.errorMessage)
-
-proc shouldQuit*(cmdResult: CommandModeResult): bool =
-  ## Check if the application should quit
-  cmdResult.kind in {cmrQuit, cmrCquit}
-
-proc shouldSwitchMode*(cmdResult: CommandModeResult): bool =
-  ## Check if mode should be switched
-  cmdResult.kind == cmrModeSwitch
-
-proc getTargetMode*(cmdResult: CommandModeResult): EditorMode =
-  ## Get the target mode for switching
-  if cmdResult.kind == cmrModeSwitch:
-    cmdResult.targetMode
-  else:
-    EditorMode.Normal # Default fallback
-
-proc hasError*(cmdResult: CommandModeResult): bool =
-  ## Check if there was an error
-  cmdResult.kind == cmrError
-
-proc getMessage*(cmdResult: CommandModeResult): string =
-  ## Get message or error message
-  case cmdResult.kind
-  of cmrMessage: cmdResult.message
-  of cmrError: cmdResult.errorMessage
-  else: ""
+    HandlerResult(kind: hrError, errorMessage: cmdResult.errorMessage)

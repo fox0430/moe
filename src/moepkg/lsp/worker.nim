@@ -36,6 +36,11 @@ import ../logger
 export types
 
 type
+  LspTrace* = enum ## LSP `initialize` trace level (client → server).
+    traceOff = "off"
+    traceMessages = "messages"
+    traceVerbose = "verbose"
+
   # Typed params for the notifications the worker builds itself. Serialized with
   # jsony toJson, so they carry exactly these fields (no Option/null noise) and
   # match the previous %* output byte-for-byte.
@@ -210,6 +215,7 @@ type
     of levDiagnostics:
       diagUri*: string
       diagnosticsJson*: string # JSON array of LSP Diagnostic objects
+      diagVersion*: Option[int] # LSP optional, used to drop stale publishes
     of levLogMessage, levShowMessage:
       msgType*: MessageType
       message*: string
@@ -262,7 +268,9 @@ type
     sharedState: ptr SharedState
     signal: ThreadSignalPtr # Signal for event-driven wakeup
     tempDir: string
-    rawJsonLog: bool # Emit levRawJson events for the :lspLog viewer (verbose)
+    traceLevel: LspTrace
+      # Both drives the `trace` value sent in `initialize` and gates whether
+      # per-frame levRawJson events are emitted (any non-off level enables them).
     debugLog: bool # Also emit them so req/res reach the debug log file (-d)
 
   LspWorker* = ref object
@@ -275,7 +283,7 @@ type
     signal: ThreadSignalPtr # Signal for event-driven wakeup
     languageId*: string
     nextRequestId: int # For generating unique request IDs
-    rawJsonLog: bool # Forwarded to the worker context on start()
+    traceLevel: LspTrace # Forwarded to the worker context on start()
 
 # Atomic state accessors
 proc loadRunning(s: ptr SharedState): bool =
@@ -464,6 +472,17 @@ proc buildApplyEditResponse*(
     resultObj["failureReason"] = %failureReason
   %*{"jsonrpc": "2.0", "id": idNode, "result": resultObj}
 
+proc dropPendingDidOpen*(pending: var seq[LspCommand], uri: string) =
+  ## Remove any queued lcmdDidOpen for `uri` from `pending`. Used when a
+  ## didClose arrives before the server reaches lwsRunning so the flush
+  ## doesn't emit a didOpen for an already-closed buffer.
+  var i = 0
+  while i < pending.len:
+    if pending[i].openUri == uri:
+      pending.delete(i)
+    else:
+      inc i
+
 proc formatRawJsonLogLine*(
     languageId: string, direction: LspJsonDirection, json: string
 ): string =
@@ -473,6 +492,138 @@ proc formatRawJsonLogLine*(
   ## (`>>>` sent / `<<<` received).
   let arrow = if direction == ljdSent: ">>>" else: "<<<"
   languageId & " " & arrow & " " & json
+
+proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
+  ## Convert a server notification (method + params) into the LspEvent to
+  ## enqueue. Pure - no I/O, no queue access, no raising. Malformed frames
+  ## (missing or wrong-typed fields) resolve to a warning levLogMessage so a
+  ## bad frame never unwinds the caller and drops adjacent frames from the
+  ## same drain.
+  case meth
+  of "textDocument/publishDiagnostics":
+    let uri = params.getOrDefault("uri").getStr
+    if uri.len == 0:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "publishDiagnostics missing/invalid uri; dropping frame",
+      )
+    # Serialize the raw diagnostics array; the main thread parses it
+    # (Diagnostic carries JsonNode fields that must not cross threads)
+    let diagsJson =
+      if params.hasKey("diagnostics"):
+        $params["diagnostics"]
+      else:
+        "[]"
+    # PublishDiagnosticsParams.version is optional; accept only well-formed int.
+    let version =
+      if params.hasKey("version") and params["version"].kind == JInt:
+        some(params["version"].getInt)
+      else:
+        none(int)
+    return LspEvent(
+      kind: levDiagnostics,
+      diagUri: uri,
+      diagnosticsJson: diagsJson,
+      diagVersion: version,
+    )
+  of "window/logMessage":
+    return LspEvent(
+      kind: levLogMessage,
+      msgType:
+        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtLog.ord), mtLog),
+      message: params.getOrDefault("message").getStr,
+    )
+  of "window/showMessage":
+    return LspEvent(
+      kind: levShowMessage,
+      msgType:
+        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtLog.ord), mtLog),
+      message: params.getOrDefault("message").getStr,
+    )
+  of "$/logTrace":
+    var message = params.getOrDefault("message").getStr
+    let verbose = params.getOrDefault("verbose").getStr
+    if verbose.len > 0:
+      message &= "\n" & verbose
+    return LspEvent(kind: levLogMessage, msgType: mtInfo, message: message)
+  of "$/progress":
+    try:
+      let progressParams = parseWorkDoneProgressParams(params)
+      return LspEvent(
+        kind: levProgress,
+        progressToken: getProgressToken(progressParams),
+        progress: progressParams.value,
+      )
+    except CatchableError as e:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "Failed to parse $/progress: " & e.msg,
+      )
+  of "experimental/serverStatus":
+    # rust-analyzer style status notification
+    try:
+      let health =
+        case params.getOrDefault("health").getStr
+        of "warning": shWarning
+        of "error": shError
+        else: shOk
+      let quiescent = params.getOrDefault("quiescent").getBool(true)
+      let msgNode = params.getOrDefault("message")
+      let message =
+        if not msgNode.isNil and msgNode.kind == JString:
+          some(msgNode.getStr)
+        else:
+          none(string)
+      return LspEvent(
+        kind: levStatusUpdate,
+        statusHealth: health,
+        statusQuiescent: quiescent,
+        statusMessage: message,
+      )
+    except CatchableError as e:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "Failed to parse experimental/serverStatus: " & e.msg,
+      )
+  of "extension/statusUpdate":
+    # nimlangserver style status notification
+    try:
+      let projectErrors = params.getOrDefault("projectErrors")
+      let hasErrors =
+        not projectErrors.isNil and projectErrors.kind == JArray and
+        projectErrors.len > 0
+      let health = if hasErrors: shWarning else: shOk
+      let pending = params.getOrDefault("pendingRequests")
+      let quiescent =
+        if not pending.isNil and pending.kind == JArray:
+          pending.len == 0
+        else:
+          true
+      var message = none(string)
+      if hasErrors:
+        for err in projectErrors:
+          if err.kind == JString:
+            message = some(err.getStr)
+            break
+      return LspEvent(
+        kind: levStatusUpdate,
+        statusHealth: health,
+        statusQuiescent: quiescent,
+        statusMessage: message,
+      )
+    except CatchableError as e:
+      return LspEvent(
+        kind: levLogMessage,
+        msgType: mtWarning,
+        message: "Failed to parse extension/statusUpdate: " & e.msg,
+      )
+  else:
+    return LspEvent(
+      kind: levLogMessage, msgType: mtInfo, message: "Unknown LSP notification: " & meth
+    )
 
 # Worker thread main loop
 proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
@@ -516,10 +667,6 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     var evt = LspEvent(kind: levLogMessage, msgType: msgType, message: msg)
     ctx.eventQueue[].push(evt)
 
-  proc sendDiagnostics(uri: string, diagsJson: string) =
-    var evt = LspEvent(kind: levDiagnostics, diagUri: uri, diagnosticsJson: diagsJson)
-    ctx.eventQueue[].push(evt)
-
   proc sendCapabilities(capsJson: string) =
     var evt = LspEvent(kind: levCapabilities, capabilitiesJson: capsJson)
     ctx.eventQueue[].push(evt)
@@ -546,18 +693,18 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
   proc sendRawJson(direction: LspJsonDirection, node: JsonNode) =
     # Capture the frame only if a sink wants it: the in-memory :lspLog viewer
-    # (trace=verbose) or the debug log file (-d). Both sinks live on the main
-    # thread, so just serialize compactly and hand the frame off via the event
-    # queue; processEvent decides routing (the viewer re-prettifies, the file
-    # logs the line as-is).
-    if not (ctx.rawJsonLog or ctx.debugLog):
+    # (any non-off trace level) or the debug log file (-d). Both sinks live on
+    # the main thread, so just serialize compactly and hand the frame off via
+    # the event queue; processEvent decides routing (the viewer re-prettifies,
+    # the file logs the line as-is).
+    if ctx.traceLevel == traceOff and not ctx.debugLog:
       return
     var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: $node)
     ctx.eventQueue[].push(evt)
 
   proc sendRawJsonStr(direction: LspJsonDirection, frame: string) =
     ## Like sendRawJson but for an already-serialized frame string.
-    if not (ctx.rawJsonLog or ctx.debugLog):
+    if ctx.traceLevel == traceOff and not ctx.debugLog:
       return
     ctx.eventQueue[].push(
       LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: frame)
@@ -682,107 +829,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       )
 
   proc handleNotification(meth: string, params: JsonNode) =
-    case meth
-    of "textDocument/publishDiagnostics":
-      let uri = params["uri"].getStr
-      # Serialize the raw diagnostics array; the main thread parses it
-      # (Diagnostic carries JsonNode fields that must not cross threads)
-      let diagsJson =
-        if params.hasKey("diagnostics"):
-          $params["diagnostics"]
-        else:
-          "[]"
-      sendDiagnostics(uri, diagsJson)
-    of "window/logMessage":
-      var evt = LspEvent(
-        kind: levLogMessage,
-        msgType: toEnumOr[MessageType](params["type"].getInt, mtLog),
-        message: params["message"].getStr,
-      )
-      ctx.eventQueue[].push(evt)
-    of "window/showMessage":
-      var evt = LspEvent(
-        kind: levShowMessage,
-        msgType: toEnumOr[MessageType](params["type"].getInt, mtLog),
-        message: params["message"].getStr,
-      )
-      ctx.eventQueue[].push(evt)
-    of "$/logTrace":
-      var message = params["message"].getStr
-      if params.hasKey("verbose"):
-        message &= "\n" & params["verbose"].getStr
-      var evt = LspEvent(kind: levLogMessage, msgType: mtInfo, message: message)
-      ctx.eventQueue[].push(evt)
-    of "$/progress":
-      try:
-        let progressParams = parseWorkDoneProgressParams(params)
-        var evt = LspEvent(
-          kind: levProgress,
-          progressToken: getProgressToken(progressParams),
-          progress: progressParams.value,
-        )
-        ctx.eventQueue[].push(evt)
-      except CatchableError as e:
-        sendLogMessage(mtWarning, "Failed to parse $/progress: " & e.msg)
-    of "experimental/serverStatus":
-      # rust-analyzer style status notification
-      try:
-        let health =
-          case params["health"].getStr
-          of "warning": shWarning
-          of "error": shError
-          else: shOk
-        let quiescent = params.getOrDefault("quiescent").getBool(true)
-        let message =
-          if params.hasKey("message") and params["message"].kind == JString:
-            some(params["message"].getStr)
-          else:
-            none(string)
-        var evt = LspEvent(
-          kind: levStatusUpdate,
-          statusHealth: health,
-          statusQuiescent: quiescent,
-          statusMessage: message,
-        )
-        ctx.eventQueue[].push(evt)
-      except CatchableError as e:
-        sendLogMessage(mtWarning, "Failed to parse experimental/serverStatus: " & e.msg)
-    of "extension/statusUpdate":
-      # nimlangserver style status notification
-      try:
-        # Determine health from projectErrors
-        let health =
-          if params.hasKey("projectErrors") and params["projectErrors"].len > 0:
-            shWarning
-          else:
-            shOk
-        # Determine quiescent from pendingRequests
-        let quiescent =
-          if params.hasKey("pendingRequests"):
-            params["pendingRequests"].len == 0
-          else:
-            true
-        # Build message from projectErrors if any
-        var message = none(string)
-        if params.hasKey("projectErrors") and params["projectErrors"].len > 0:
-          var errors: seq[string] = @[]
-          for err in params["projectErrors"]:
-            if err.kind == JString:
-              errors.add(err.getStr)
-          if errors.len > 0:
-            message = some(errors[0]) # Show first error
-        var evt = LspEvent(
-          kind: levStatusUpdate,
-          statusHealth: health,
-          statusQuiescent: quiescent,
-          statusMessage: message,
-        )
-        ctx.eventQueue[].push(evt)
-      except CatchableError as e:
-        sendLogMessage(mtWarning, "Failed to parse extension/statusUpdate: " & e.msg)
-    else:
-      # Log unknown notifications for debugging
-      sendLogMessage(mtInfo, "Unknown LSP notification: " & meth)
+    ctx.eventQueue[].push(notificationToEvents(meth, params))
 
   proc sendRequest(
       meth: string, paramsJson: string
@@ -1006,9 +1053,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       "rootPath": rootPath,
       "workspaceFolders": newJNull(),
       "capabilities": buildClientCapabilities(),
-      # Only ask the server for verbose $/logTrace traffic when raw-JSON
-      # logging is enabled; otherwise it floods the event queue for nothing.
-      "trace": (if ctx.rawJsonLog: "verbose" else: "off"),
+      # Forward the configured trace level verbatim (LSP spec: off/messages/verbose).
+      # An off level tells the server not to send $/logTrace at all.
+      "trace": $ctx.traceLevel,
     }
 
     # Forward server-specific initializationOptions (e.g. rust-analyzer lens
@@ -1184,6 +1231,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         let params =
           DidCloseParams(textDocument: TextDocumentIdentifier(uri: cmd.closeUri)).toJson
         await sendNotificationLog("textDocument/didClose", params)
+      else:
+        dropPendingDidOpen(pendingDidOpen, cmd.closeUri)
     of lcmdDidChange:
       let changeState = ctx.sharedState.loadState()
       if changeState == lwsRunning:
@@ -1337,7 +1386,35 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
     # Check if this is a response (has "id", no "method")
     if response.hasKey("id") and not response.hasKey("method"):
-      let lspId = response["id"].getInt
+      # JSON-RPC 2.0 allows id to be Number, String, or null. moe emits integer
+      # ids, but accept string ids from lenient servers to keep correlation.
+      let idNode = response["id"]
+      var lspId: int
+      case idNode.kind
+      of JInt:
+        lspId = idNode.getInt
+      of JString:
+        try:
+          lspId = parseInt(idNode.getStr)
+        except ValueError:
+          sendLogMessage(
+            mtWarning,
+            "Dropped LSP response with non-numeric string id: " & idNode.getStr,
+          )
+          return
+      else:
+        let errText =
+          if response.hasKey("error") and response["error"].kind == JObject:
+            response["error"]{"message"}.getStr("unknown error")
+          else:
+            "no error field"
+        sendLogMessage(
+          mtWarning,
+          "Dropped LSP response with unhandled id kind (" & $idNode.kind & "): " &
+            errText,
+        )
+        return
+
       if lspId in pendingRequests:
         let (ourId, _) = pendingRequests[lspId]
         pendingRequests.del(lspId)
@@ -1455,9 +1532,12 @@ proc initSharedState(): SharedState =
   result.running.store(false, moRelaxed)
   result.stateVal.store(lwsStopped.ord, moRelaxed)
 
-proc newLspWorker*(languageId: string, rawJsonLog = false): Result[LspWorker, string] =
+proc newLspWorker*(
+    languageId: string, traceLevel: LspTrace = traceOff
+): Result[LspWorker, string] =
   ## Create a new LSP worker. Returns error if signal creation fails.
-  ## rawJsonLog enables per-frame levRawJson debug events (off by default).
+  ## traceLevel is forwarded to `initialize` and gates per-frame levRawJson
+  ## events (any non-off level enables them).
   let signalResult = ThreadSignalPtr.new()
   if signalResult.isErr:
     return err("Failed to create thread signal: " & signalResult.error)
@@ -1470,7 +1550,7 @@ proc newLspWorker*(languageId: string, rawJsonLog = false): Result[LspWorker, st
       signal: signalResult.get,
       languageId: languageId,
       nextRequestId: 1,
-      rawJsonLog: rawJsonLog,
+      traceLevel: traceLevel,
     )
   )
 
@@ -1487,7 +1567,7 @@ proc start*(worker: LspWorker) =
     sharedState: addr worker.sharedState,
     signal: worker.signal,
     tempDir: getTempDir(),
-    rawJsonLog: worker.rawJsonLog,
+    traceLevel: worker.traceLevel,
     # Read once here on the main thread; the worker only emits events, the
     # actual file write happens in processEvent (also on the main thread).
     debugLog: getGlobalLogger().isEnabled,

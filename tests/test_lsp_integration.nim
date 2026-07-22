@@ -849,6 +849,24 @@ suite "LspIntegration - applyTextEdits":
     check result.isOk
     check buffer.getTextString() == "aZbc"
 
+  test "applyTextEdits end past EOF with character > 0":
+    # Regression: server-reported end line past the last buffer line combined
+    # with character > 0 used to pass buffer.len as an end line to deleteRange.
+    let buffer = newTextBuffer("abc\ndef")
+    let edit = TextEdit(range: newRange(0, 0, 5, 3), newText: "XYZ")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "XYZ"
+
+  test "applyTextEdits end past EOF with character == 0":
+    # Regression: end.line strictly greater than buffer.len also used to feed
+    # an out-of-bounds line into deleteRange via the else branch.
+    let buffer = newTextBuffer("abc\ndef")
+    let edit = TextEdit(range: newRange(0, 0, 9, 0), newText: "Q")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "Q"
+
 suite "LspIntegration - applyLspFoldingRanges":
   test "applyLspFoldingRanges with empty ranges":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -1165,6 +1183,79 @@ suite "LspIntegration - Buffer Version Tracking":
     let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check lsp.onBufferChange(buffer).isOk
     check lsp.sentDocumentVersion(tmpDir / "test.nim") == some(1)
+
+  test "re-open on tracked path resets version (implicit didClose)":
+    # Regression: :bdelete used to leave the path tracked, so a subsequent
+    # onBufferOpen for the same path was a duplicate didOpen at version 1
+    # while the server still held the previous higher version, causing later
+    # didChange notifications to be dropped as stale.
+    lsp.markReady()
+    let buffer = newTextBuffer("hi", some(tmpDir / "reopen.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    for _ in 0 ..< 3:
+      check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+      check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(4)
+
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(1)
+
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "y").isOk
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(2)
+
+  test "serverIsFresh skips defensive didClose on restart re-open":
+    lsp.markReady()
+    let buffer = newTextBuffer("hi", some(tmpDir / "restart.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(2)
+
+    check lsp.onBufferOpen(buffer, serverIsFresh = true).isOk
+    check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(1)
+
+suite "LspIntegration - flushPendingBufferChange":
+  privateAccess(LspIntegration)
+
+  var lsp: LspIntegration
+  setup:
+    lsp = newLspIntegration(tmpDir)
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      true
+  teardown:
+    lsp.shutdown()
+
+  test "flush advances wire version when buffer drifted since last sync":
+    # Regression: an out-of-band request (completion, hover) put a positional
+    # request on the wire before the edit that produced its coordinates. The
+    # explicit flush must bring the server up to date first.
+    let path = tmpDir / "flush_drift.nim"
+    let buffer = newTextBuffer("hi", some(path))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(path) == some(1)
+
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    lsp.flushPendingBufferChange(buffer)
+    check lsp.sentDocumentVersion(path) == some(2)
+
+  test "flush is a no-op when server shadow already matches":
+    let path = tmpDir / "flush_insync.nim"
+    let buffer = newTextBuffer("hi", some(path))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(path) == some(1)
+
+    lsp.flushPendingBufferChange(buffer)
+    check lsp.sentDocumentVersion(path) == some(1)
+
+  test "flush is safe when LSP is disabled":
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("hi", some(tmpDir / "flush_disabled.nim"))
+    lsp.flushPendingBufferChange(buffer) # must not raise
+
+  test "flush is safe when buffer has no path":
+    let buffer = newTextBuffer("hi")
+    lsp.flushPendingBufferChange(buffer) # must not raise
 
 suite "LspIntegration - Request Methods (disabled)":
   test "startCompletionRequest returns error when disabled":
@@ -2020,7 +2111,7 @@ suite "LspIntegration - Callbacks":
     let lsp = newLspIntegration()
     var called = false
     lsp.setDiagnosticsCallback(
-      proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
+      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.} =
         called = true
     )
     # Callback is set but won't be called without actual LSP events

@@ -22,7 +22,10 @@
 
 import std/[options, os, times, algorithm]
 
+import pkg/results
+
 import backup, buffer, list_viewer
+import buffer/atomic_write
 import types/backup_manager_types
 
 export backup_manager_types
@@ -114,8 +117,8 @@ proc deleteBackup*(state: BackupManagerState, index: int): bool =
     return false
 
 proc restoreBackup*(state: BackupManagerState, index: int): bool =
-  ## Restore a backup file to its source
-  ## Returns true on success
+  ## Restore a backup file to its source atomically.
+  ## Returns true on success.
   if index < 0 or index >= state.items.len:
     return false
 
@@ -123,11 +126,21 @@ proc restoreBackup*(state: BackupManagerState, index: int): bool =
   if not fileExists(entry.fullPath):
     return false
 
+  # rename() bypasses the read-only bit; check explicitly.
+  if fileExists(state.sourceFilePath):
+    try:
+      if fpUserWrite notin getFilePermissions(state.sourceFilePath):
+        return false
+    except OSError:
+      return false
+
+  var content: string
   try:
-    copyFile(entry.fullPath, state.sourceFilePath)
-    return true
-  except OSError:
+    content = readFile(entry.fullPath)
+  except CatchableError:
     return false
+
+  not writeAtomic(state.sourceFilePath, content).isErr
 
 proc createBackupManagerTextBuffer*(state: BackupManagerState): TextBuffer =
   ## Create a TextBuffer from backup entries for rendering via the normal view path

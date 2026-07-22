@@ -38,7 +38,8 @@ import
   git_conflict,
   style_patch,
   status_line,
-  editor_codelens
+  editor_codelens,
+  virtual_text
 import command_handlers/visual_handler
 
 type
@@ -75,7 +76,7 @@ type
 template hasSyntaxHighlight(
     e: Editor, buffer: TextBuffer, windowMode: EditorMode
 ): bool =
-  e.state.display.showSyntax and not buffer.highlight.isNil and
+  e.showSyntax and not buffer.highlight.isNil and
     (windowMode.isFileEditMode or buffer.language != langNone or buffer.isUtilityBuffer)
 
 proc resolveLineConflict(
@@ -228,10 +229,10 @@ template gitConflictApplies(lineCtx: LineStyleContext): bool =
   lineCtx.lineConflict != cmkNone
 
 template cursorLineApplies(e: Editor, lineCtx: LineStyleContext): bool =
-  e.state.display.showCursorLine and lineCtx.isCursorLine
+  e.showCursorLine and lineCtx.isCursorLine
 
 template cursorColumnApplies(e: Editor, displayCol: int, cursorDisplayCol: int): bool =
-  e.state.display.showCursorColumn and displayCol >= 0 and displayCol == cursorDisplayCol
+  e.showCursorColumn and displayCol >= 0 and displayCol == cursorDisplayCol
 
 proc overlayPatchSyntax(
     e: Editor,
@@ -357,7 +358,7 @@ proc shouldShowIndentationGuide*(
   ## Uses cached indentInfo to avoid O(n²) performance
   ## displayX: the display column position (accounting for tabs)
   ## charIdx: the character index in the line
-  if not e.state.display.showIndentationLines:
+  if not e.showIndentationLines:
     return false
 
   # Don't show indentation guides in utility buffers (jumplist, log, etc.)
@@ -365,7 +366,7 @@ proc shouldShowIndentationGuide*(
     return false
 
   # Only show guides at indent levels (multiples of tabStop)
-  if displayX mod e.state.display.tabStop != 0:
+  if displayX mod e.tabStop != 0:
     return false
 
   # Don't show on column 0
@@ -556,8 +557,7 @@ proc renderLineSegmentWithSelection*(
     # Tab expands to N spaces up to the next tab stop. Each expanded cell
     # honors indentation-guide drawing; the spaces themselves use a style
     # that may carry the trailingSpaces override.
-    let spacesToNextTab =
-      e.state.display.tabStop - (displayX mod e.state.display.tabStop)
+    let spacesToNextTab = e.tabStop - (displayX mod e.tabStop)
     let tabStyle = style.merge(e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col))
     for i in 0 ..< spacesToNextTab:
       if screenX + displayX < ctx.windowRightEdge:
@@ -653,7 +653,7 @@ proc renderLineSegmentWithSelection*(
 proc fmtLineNum(
     state: EditorState, lineIndex: int, cursorLine: int, width: int
 ): string =
-  if state.display.relativeLineNumbers:
+  if state.relativeLineNumbers:
     formatRelativeLineNumber(lineIndex, cursorLine, width)
   else:
     formatLineNumber(lineIndex, width)
@@ -680,7 +680,8 @@ proc renderWindowLineWrapped*(
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window.mode)
     scrollbarWidth = e.calculateScrollbarWidth(window.mode)
-    maxWidth = window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+    maxWidth =
+      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
@@ -740,7 +741,7 @@ proc renderWindowLineWrapped*(
   if screenY >= maxScreenY:
     return
 
-  let tabStop = e.state.display.tabStop
+  let tabStop = e.tabStop
 
   # Build per-logical-line state once so each wrap segment can reuse it.
   if e.hasSyntaxHighlight(window.buffer, ctx.windowMode):
@@ -869,9 +870,8 @@ proc renderWindowLineNoWrap*(
       # Slicing by byte count would hide content on multibyte/CJK lines and
       # overflow the edge on tab-heavy lines (the lint_string_len hazard).
       let
-        (_, segmentWidth, endByte) = displayWidthSubstrFromByte(
-          displayLine, 0, cellBudget, e.state.display.tabStop
-        )
+        (_, segmentWidth, endByte) =
+          displayWidthSubstrFromByte(displayLine, 0, cellBudget, e.tabStop)
         visibleSlice = displayLine[0 ..< endByte]
       if visibleSlice.len > 0:
         # Append end-of-line virtual text only when the whole line is visible
@@ -984,30 +984,102 @@ proc renderFoldLine*(
         foldText
     buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())
 
+proc lineDisplayRows(
+    line: int,
+    buffer: TextBuffer,
+    wrapCache: WrapCountCache,
+    lineWrap: bool,
+    maxWidth: int,
+    tabStop: int,
+): int =
+  ## Display rows a single logical line occupies (not counting fold hiding).
+  if lineWrap:
+    if wrapCache != nil:
+      wrapCache.cachedWrapCount(buffer, line)
+    else:
+      calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
+  else:
+    1
+
+proc walkDisplayRows(
+    buffer: TextBuffer,
+    foldState: FoldState,
+    wrapCache: WrapCountCache,
+    lineWrap: bool,
+    maxWidth: int,
+    tabStop: int,
+    stopLine: int,
+): int =
+  ## Sum display rows for logical lines [0, stopLine). Each collapsed fold
+  ## collapses its range to a single marker row; wrap expands a logical line
+  ## to its wrap count. Assumes `foldState.folds` is sorted by startLine.
+  if lineWrap and wrapCache != nil:
+    wrapCache.ensureFresh(buffer, maxWidth, tabStop)
+  let
+    total = min(stopLine, buffer.len)
+    folds = foldState.folds
+  var
+    line = 0
+    foldIdx = 0
+  while line < total:
+    while foldIdx < folds.len and
+        (not folds[foldIdx].collapsed or folds[foldIdx].endLine < line):
+      inc foldIdx
+    if foldIdx < folds.len and folds[foldIdx].startLine <= line:
+      # Fold marker row: whole [startLine, endLine] collapses to 1 row.
+      result += 1
+      line = folds[foldIdx].endLine + 1
+      inc foldIdx
+    else:
+      result += lineDisplayRows(line, buffer, wrapCache, lineWrap, maxWidth, tabStop)
+      inc line
+
 proc renderScrollbar*(
     e: Editor,
     buffer: var Buffer,
     window: EditorWindow,
     visibleHeight: int,
     tabLineOffset: int,
+    lineNumOffset: int,
 ) =
   ## Render a scrollbar on the right edge of the window.
-  ## The scrollbar shows the current viewport position within the buffer.
+  ## Thumb size/position reflect actual display rows: collapsed folds count as
+  ## one marker row and wrapped logical lines count as their wrap segments,
+  ## so the thumb tracks what the viewport actually shows.
   let
-    totalLines = window.buffer.len
     scrollbarWidth = e.calculateScrollbarWidth(window.mode)
     scrollbarStartX = window.viewport.x + window.viewport.width - scrollbarWidth
 
-  if totalLines <= visibleHeight or visibleHeight <= 0 or scrollbarWidth <= 0:
+  if visibleHeight <= 0 or scrollbarWidth <= 0:
     return
 
-  # Calculate thumb size and position
   let
-    thumbSize = max(1, (visibleHeight * visibleHeight) div totalLines)
-    maxTopLine = totalLines - visibleHeight
+    sidebarWidth = e.calculateSidebarWidth(window.mode)
+    maxWidth =
+      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    totalRows = walkDisplayRows(
+      window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
+      maxWidth, e.tabStop, window.buffer.len,
+    )
+
+  if totalRows <= visibleHeight:
+    return
+
+  let
+    rowsAbove =
+      walkDisplayRows(
+        window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
+        maxWidth, e.tabStop, window.viewport.topLine,
+      ) + (if e.lineWrap: window.viewport.topWrapOffset else: 0)
+    thumbSize = max(1, (visibleHeight * visibleHeight) div totalRows)
+    maxRowsAbove = totalRows - visibleHeight
     thumbPos =
-      if maxTopLine > 0:
-        (window.viewport.topLine * (visibleHeight - thumbSize)) div maxTopLine
+      if maxRowsAbove > 0:
+        clamp(
+          (rowsAbove * (visibleHeight - thumbSize)) div maxRowsAbove,
+          0,
+          visibleHeight - thumbSize,
+        )
       else:
         0
 
@@ -1047,7 +1119,7 @@ proc renderWindow*(
   # Generate sidebar dynamically from buffer markers if enabled
   # Note: sidebar needs visibleHeight rows (screenY goes from tabLineOffset to visibleHeight + tabLineOffset)
   let maybeSidebar =
-    if e.state.display.showSidebar:
+    if e.showSidebar:
       # When the git-diff gutter is active for a git-tracked file, it is the
       # authoritative (content-based) change indicator, so suppress the session
       # "modified lines" fallback. Both draw the same `~`/`+` glyphs, and the
@@ -1056,8 +1128,9 @@ proc renderWindow*(
       # flagged), making it look like a stuck git marker. For non-git / untracked
       # files the git gutter shows nothing, so the session fallback is kept.
       let showSessionMarkers =
-        e.state.display.showModifiedLines and
-        not (e.state.display.showGitDiff and isBufferGitTracked(window.buffer))
+        e.showModifiedLines and not (
+          e.showGitDiff and isBufferGitTracked(window.buffer)
+        )
       some(
         generateSidebarFromBuffer(
           window.buffer,
@@ -1075,14 +1148,23 @@ proc renderWindow*(
   let (hasSelection, selStart, selEnd) =
     e.getVisualSelection(window.mode, window.active)
 
-  # Compute cursor's display column (accounting for tabs/wide chars and scroll offset)
-  let leftCol = if e.state.display.lineWrap: 0 else: window.viewport.leftColumn
+  # Wrap mode: displayX restarts at 0 on every segment, so use the cursor's
+  # segment-relative column — an absolute one only matches segment 1.
   let cursorDisplayCol =
     if window.cursor.line < lineCount:
       let cursorLineText = window.buffer.getLine(window.cursor.line)
-      bufferColToDisplayCol(
-        cursorLineText, window.cursor.column, e.state.display.tabStop, leftCol
-      )
+      if e.lineWrap:
+        let
+          sidebarWidth = e.calculateSidebarWidth(window.mode)
+          scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+          maxWidth = max(
+            1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+          )
+        cursorWrapPosition(cursorLineText, window.cursor.column, maxWidth, e.tabStop)[1]
+      else:
+        bufferColToDisplayCol(
+          cursorLineText, window.cursor.column, e.tabStop, window.viewport.leftColumn
+        )
     else:
       window.cursor.column
 
@@ -1137,7 +1219,7 @@ proc renderWindow*(
     if maybeSidebar.isSome:
       renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
 
-    if e.state.display.lineWrap:
+    if e.lineWrap:
       # Only the top logical line skips leading wrap segments (sub-line scroll).
       let skipSegments =
         if lineIndex == window.viewport.topLine: window.viewport.topWrapOffset else: 0
@@ -1159,7 +1241,7 @@ proc renderWindow*(
 
   # Render scrollbar on the right edge if enabled (file editing modes only)
   if e.calculateScrollbarWidth(window.mode) > 0:
-    e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset)
+    e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset, lineNumOffset)
 
 proc renderWindowSeparator*(
     e: Editor,
@@ -1183,7 +1265,7 @@ proc renderWindowSeparator*(
       for y in window.viewport.y ..< (window.viewport.y + actualSepHeight):
         if y < buffer.area.height:
           buffer.setString(sepX, y, "│", separatorStyle())
-  elif not e.state.display.multiStatusLine:
+  elif not e.multiStatusLine:
     # Horizontal split - draw horizontal separator at window boundary
     # ONLY when using a single status line
     let sepY = window.viewport.y + window.viewport.height

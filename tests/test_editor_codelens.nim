@@ -21,7 +21,7 @@ import std/[unittest, tables, options, monotimes, times, json]
 
 import pkg/chronos
 
-import ../src/moepkg/[editor, config, types, buffer, color]
+import ../src/moepkg/[editor, config, types, buffer, color, virtual_text]
 import ../src/moepkg/editor_codelens {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
@@ -109,7 +109,7 @@ suite "CodeLens Cache":
     e.state.lspCache.codeLensCache.itemsByLine =
       {0: @[CodeLensItem(line: 0, title: "Item", command: "cmd")]}.toTable
 
-    e.state.lspCache.invalidateCodeLensCache()
+    invalidateCodeLensCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.codeLensCache.isValid
     # Items still exist but cache is marked invalid
@@ -259,11 +259,11 @@ suite "Document Highlight Cache":
     var config = newEditorConfig()
     config.lsp.documentHighlight.enable = false
     let e = newEditor(config)
-    check not e.state.display.showDocumentHighlight
+    check not e.state.showDocumentHighlight
 
     config.lsp.documentHighlight.enable = true
     let e2 = newEditor(config)
-    check e2.state.display.showDocumentHighlight
+    check e2.state.showDocumentHighlight
 
   test "invalidateDocumentHighlightCache":
     let e = createTestEditor()
@@ -272,7 +272,7 @@ suite "Document Highlight Cache":
       0: @[DocumentHighlightItem(line: 0, startColumn: 0, endColumn: 5, kind: 1)]
     }.toTable
 
-    e.state.lspCache.invalidateDocumentHighlightCache()
+    invalidateDocumentHighlightCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.documentHighlightCache.isValid
     check e.state.lspCache.documentHighlightCache.itemsByLine.len == 0
@@ -293,7 +293,7 @@ suite "Document Highlight Cache":
     e.state.lspCache.documentHighlightCache.itemsByLine = {
       0: @[DocumentHighlightItem(line: 0, startColumn: 0, endColumn: 5, kind: 1)]
     }.toTable
-    e.state.display.showDocumentHighlight = true
+    e.state.showDocumentHighlight = true
     e.state.mode = EditorMode.Insert
 
     # Note: Without LSP enabled, the function returns early before clearing
@@ -305,12 +305,14 @@ suite "Semantic Tokens Cache":
     e.state.lspCache.semanticTokensCache.isValid = true
     e.state.lspCache.semanticTokensCache.changeSeq = 5
     e.state.lspCache.semanticTokensCache.filePath = "/test/file.nim"
-    e.state.lspCache.semanticTokensPoll.pendingRequestId = 123
+    e.state.lspCache.pending[lrfSemanticTokens] = LspRequestContext(
+      requestId: 123, feature: lrfSemanticTokens, path: "/test/file.nim"
+    )
 
     invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.semanticTokensPoll.pendingRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSemanticTokens)
 
   test "processSemanticTokensResponse - drops response when contentVersion advanced":
     # Lock in the belt-and-braces guard: a mid-flight edit bumps
@@ -320,17 +322,20 @@ suite "Semantic Tokens Cache":
     let buf = e.activeBuffer()
     buf.filePath = some("/test/file.nim")
 
-    e.state.lspCache.semanticTokensPoll.pendingFilePath = "/test/file.nim"
-    e.state.lspCache.semanticTokensPoll.pendingRequestId = 1
-    e.state.lspCache.semanticTokensPoll.pendingChangeSeq = buf.changeSeq
-    e.state.lspCache.semanticTokensPoll.pendingContentVersion = buf.contentVersion
+    let ctx = LspRequestContext(
+      requestId: 1,
+      feature: lrfSemanticTokens,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "/test/file.nim",
+    )
     # processSemanticTokensResponse reads rangeFirst/Last from extras
     e.state.lspCache.semanticTokensPendingExtras =
       PendingSemanticTokensRequest(rangeFirst: -1, rangeLast: -1)
 
     buf.advanceContentVersion()
 
-    e.processSemanticTokensResponse(newJObject())
+    e.processSemanticTokensResponse(newJObject(), ctx)
 
     check not e.state.lspCache.semanticTokensCache.isValid
 
@@ -351,11 +356,11 @@ suite "Semantic Tokens Cache":
     e.state.lspCache.semanticTokensCache.isValid = true
 
     # The feature gate returns before issuing a request, leaving the cache and
-    # the pending-request id untouched.
+    # the pending-request Table untouched.
     e.updateSemanticTokensCache()
 
     check e.state.lspCache.semanticTokensCache.isValid
-    check e.state.lspCache.semanticTokensPoll.pendingRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSemanticTokens)
 
   test "semanticTokensCacheCoversViewport - visible EOF is a cache hit":
     # Regression: previously the check compared cache.bottomLine against the
@@ -471,13 +476,46 @@ suite "CodeLens Cache Validation":
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
       filePath: "/path/to/file.nim",
-      changeSeq: 5,
+      contentVersion: 5,
       itemsByLine: initTable[int, seq[CodeLensItem]](),
     )
 
     check e.state.lspCache.codeLensCache.isValid
     check e.state.lspCache.codeLensCache.filePath == "/path/to/file.nim"
-    check e.state.lspCache.codeLensCache.changeSeq == 5
+    check e.state.lspCache.codeLensCache.contentVersion == 5
+
+  test "Undo then edit collides on changeSeq: contentVersion key detects staleness":
+    # undo() rewinds changeSeq to the pre-mutation value; a follow-up edit can
+    # land on the same changeSeq that was cached for a different content. Keying
+    # the cache on contentVersion (monotonic) instead of changeSeq keeps stale
+    # results out.
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.filePath = some("/path/to/collide.nim")
+
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    let seqAfterA = buf.changeSeq
+    let verAfterA = buf.contentVersion
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "b").isOk
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: buf.filePath.get,
+      contentVersion: buf.contentVersion,
+      itemsByLine: initTable[int, seq[CodeLensItem]](),
+    )
+    let cachedSeq = buf.changeSeq
+
+    # Undo B then insert C: changeSeq matches the cached-for-"ab" value again,
+    # but contentVersion has advanced past it, so the cache is stale.
+    check buf.undo().isOk
+    check buf.changeSeq == seqAfterA
+    check buf.insertText(BufferPosition(line: 0, column: 1), "c").isOk
+    check buf.changeSeq == cachedSeq
+    check buf.getTextString() == "ac"
+    check buf.contentVersion > verAfterA
+
+    check e.state.lspCache.codeLensCache.contentVersion != buf.contentVersion
 
 suite "CodeLens Response Generation":
   test "stale generation does not overwrite a newer cache":
@@ -486,7 +524,7 @@ suite "CodeLens Response Generation":
     let reqVer = e.activeBuffer().contentVersion
 
     # Generation 2 represents the latest in-flight response.
-    e.state.lspCache.codeLensPoll.generation = 2
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 2
     check not e.state.lspCache.codeLensCache.isValid
 
     # An older (slower) response with a stale generation must not write the cache.
@@ -515,7 +553,7 @@ suite "Document Highlight Item":
       isValid: true,
       cursorLine: 5,
       cursorColumn: 10,
-      changeSeq: 3,
+      contentVersion: 3,
       itemsByLine: {
         5: @[DocumentHighlightItem(line: 5, startColumn: 10, endColumn: 15, kind: 1)],
         10: @[DocumentHighlightItem(line: 10, startColumn: 10, endColumn: 15, kind: 2)],
@@ -528,6 +566,34 @@ suite "Document Highlight Item":
     check cache.itemsByLine[5][0].kind == 1
     check cache.itemsByLine[10][0].kind == 2
     check cache.itemsByLine[15][0].kind == 3
+
+  test "Undo then edit collides on changeSeq: contentVersion key detects staleness":
+    # Same scenario as the CodeLens variant: changeSeq collides across undo+edit
+    # but contentVersion doesn't, so keying the cache on contentVersion rejects
+    # a stale document-highlight result.
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    let seqAfterA = buf.changeSeq
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "b").isOk
+    e.state.lspCache.documentHighlightCache = DocumentHighlightCache(
+      isValid: true,
+      cursorLine: 0,
+      cursorColumn: 0,
+      contentVersion: buf.contentVersion,
+      itemsByLine: initTable[int, seq[DocumentHighlightItem]](),
+    )
+    let cachedSeq = buf.changeSeq
+
+    check buf.undo().isOk
+    check buf.changeSeq == seqAfterA
+    check buf.insertText(BufferPosition(line: 0, column: 1), "c").isOk
+    check buf.changeSeq == cachedSeq
+    check buf.getTextString() == "ac"
+
+    check e.state.lspCache.documentHighlightCache.contentVersion != buf.contentVersion
 
 suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
   test "Converts UTF-16 positions to rune indexes for surrogate pairs":
@@ -553,8 +619,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -586,8 +650,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -626,8 +688,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -655,8 +715,6 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
       )
     ]
 
-    e.state.lspCache.documentHighlightPoll.pendingContentVersion =
-      e.activeBuffer().contentVersion
     processDocumentHighlightResponse(e, highlights)
 
     let cache = e.state.lspCache.documentHighlightCache
@@ -715,7 +773,7 @@ suite "CodeLens Column Extraction":
     e.activeBuffer().filePath = some("/test/file.nim")
     # "a😀b": rune indexes a=0, 😀=1, b=2; UTF-16 offsets a=0, 😀=1..2, b=3
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "a😀b")
-    e.state.lspCache.codeLensPoll.generation = 1
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 1
     waitFor e.processCodeLensResponse(
       @[lensWithCommand(0, 3, "5 refs")], 1, e.activeBuffer().contentVersion
     )
@@ -729,7 +787,7 @@ suite "CodeLens Column Extraction":
     let e = createTestEditor()
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "abcdefgh")
-    e.state.lspCache.codeLensPoll.generation = 1
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 1
     waitFor e.processCodeLensResponse(
       @[lensWithCommand(0, 5, "second"), lensWithCommand(0, 2, "first")],
       1,
@@ -752,7 +810,7 @@ suite "CodeLens Column Extraction":
     check not e.lsp.enabled
     e.activeBuffer().filePath = some("/test/file.nim")
     discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "let x = 1")
-    e.state.lspCache.codeLensPoll.generation = 1
+    e.state.lspCache.featureGeneration[lrfCodeLens] = 1
 
     waitFor e.processCodeLensResponse(
       @[lensWithoutCommand(0, 0)], 1, e.activeBuffer().contentVersion
@@ -764,8 +822,8 @@ suite "CodeLens Column Extraction":
 suite "CodeLens Virtual Text Provider":
   test "buildVirtualTextProviders adds the provider for the owning file":
     let e = createTestEditor()
-    e.state.display.showCodeLens = true
-    e.state.display.showInlayHint = false
+    e.state.showCodeLens = true
+    e.state.showInlayHint = false
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
@@ -779,8 +837,8 @@ suite "CodeLens Virtual Text Provider":
 
   test "skips a cache owned by another file":
     let e = createTestEditor()
-    e.state.display.showCodeLens = true
-    e.state.display.showInlayHint = false
+    e.state.showCodeLens = true
+    e.state.showInlayHint = false
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
@@ -792,8 +850,8 @@ suite "CodeLens Virtual Text Provider":
 
   test "skips an invalid cache":
     let e = createTestEditor()
-    e.state.display.showCodeLens = true
-    e.state.display.showInlayHint = false
+    e.state.showCodeLens = true
+    e.state.showInlayHint = false
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: false,
@@ -826,8 +884,8 @@ suite "CodeLens Virtual Text Provider":
   test "renders inlay hints left of code lenses on the same line":
     let e = createTestEditor()
     e.activeBuffer().filePath = some("/test/current.nim")
-    e.state.display.showInlayHint = true
-    e.state.display.showCodeLens = true
+    e.state.showInlayHint = true
+    e.state.showCodeLens = true
     e.state.lspCache.inlayHintCache = InlayHintCache(
       isValid: true,
       filePath: "/test/current.nim",

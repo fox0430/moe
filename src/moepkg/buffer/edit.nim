@@ -20,7 +20,7 @@
 ## Public editing API: insertText / deleteChar / insert / deleteLine /
 ## deleteRange / replaceLine / splitLine / NoUndo bypass procs.
 
-import std/[options, unicode]
+import std/unicode
 
 from std/strutils import replace, contains
 
@@ -29,15 +29,21 @@ import pkg/results
 import ../[primitives, unicode_utils]
 import core, internal_mutations, undo
 
-# Public NoUndo procs for external code that bypasses undo recording. They skip
-# the undo stack and changeSeq, but still advance contentVersion: the content
-# changed, so any content-keyed cache must invalidate.
+# NoUndo procs: skip undo/changeSeq but must invalidate cursorCache and shift
+# semantic overlay / folds / bookmarks. lineMarkers/modifiedLines are held back
+# via includeSideArrays=false so substitute-preview does not mark previewed
+# lines as modified in the sidebar.
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Replace line content without recording undo. Used by substitute preview etc.
   if b.readOnly:
     return
   b.backendReplaceLine(lineNumber, content)
   b.advanceContentVersion()
+  b.resetCursorCache()
+  b.emitRowColRemapEvents(
+    BufferChange(kind: ckReplaceLine, replaceLineIdx: lineNumber),
+    includeSideArrays = false,
+  )
 
 proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
   ## Delete a line without recording undo. Used by substitute preview etc.
@@ -45,6 +51,11 @@ proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
     return
   b.backendDeleteLine(lineNumber)
   b.advanceContentVersion()
+  b.resetCursorCache()
+  b.emitRowColRemapEvents(
+    BufferChange(kind: ckDeleteLine, deleteLineIdx: lineNumber),
+    includeSideArrays = false,
+  )
 
 proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Insert a line without recording undo. Used by substitute preview etc.
@@ -52,6 +63,11 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
     return
   b.backendInsertLine(lineNumber, content)
   b.advanceContentVersion()
+  b.resetCursorCache()
+  b.emitRowColRemapEvents(
+    BufferChange(kind: ckInsertLine, insertLineIdx: lineNumber),
+    includeSideArrays = false,
+  )
 
 proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), string] =
   ## Replace line content with undo recording.
@@ -191,28 +207,12 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
       b.discardPendingSnapshot()
       return err("Failed to insert line: " & e.msg)
 
-  # Insert marker entry (none by default)
-  if lineIndex < b.lineMarkers.len:
-    b.lineMarkers.insert(none(LineMarkerKind), lineIndex)
-  elif lineIndex == b.lineMarkers.len:
-    b.lineMarkers.add(none(LineMarkerKind))
-
-  # Insert modifiedLines entry (inserted for new lines)
-  if lineIndex < b.modifiedLines.len:
-    b.modifiedLines.insert(lmkInserted, lineIndex)
-  elif lineIndex == b.modifiedLines.len:
-    b.modifiedLines.add(lmkInserted)
-
-  # Record change for undo
+  # Side-array shifts run via the emitRowColRemapEvents subscribers.
   b.pushUndoChange(
     BufferChange(
       kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: normalizedContent
     )
   )
-
-  # Adjust fold and bookmark positions
-  b.foldState.adjustFoldsAfterInsert(lineIndex, 1)
-  b.adjustBookmarksForInsert(lineIndex)
 
   return ok(())
 
@@ -237,24 +237,12 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
       b.discardPendingSnapshot()
       return err("Failed to delete line: " & e.msg)
 
-  # Delete corresponding marker entry
-  if lineIndex < b.lineMarkers.len:
-    b.lineMarkers.delete(lineIndex)
-
-  # Delete corresponding modifiedLines entry
-  if lineIndex < b.modifiedLines.len:
-    b.modifiedLines.delete(lineIndex)
-
-  # Record change for undo
+  # Side-array shifts run via the emitRowColRemapEvents subscribers.
   b.pushUndoChange(
     BufferChange(
       kind: ckDeleteLine, deleteLineIdx: lineIndex, deletedLineText: deletedContent
     )
   )
-
-  # Adjust fold and bookmark positions
-  b.foldState.adjustFoldsAfterDelete(lineIndex, 1)
-  b.adjustBookmarksForDelete(lineIndex)
 
   return ok(())
 
@@ -333,31 +321,29 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
 
   b.captureSnapshotIfNeeded()
 
+  var joinedWithNext = false
   case b.backendKind
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       if startPos.line == endPos.line:
-        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+        joinedWithNext =
+          b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
       else:
-        b.deleteRangeMultiLine(startPos, endPos)
+        joinedWithNext = b.deleteRangeMultiLine(startPos, endPos)
     except IndexDefect as e:
       b.discardPendingSnapshot()
       return err("Failed to delete range: " & e.msg)
 
-  # Record change for undo
+  # Side-array shifts run via the emitRowColRemapEvents subscribers.
   b.pushUndoChange(
     BufferChange(
       kind: ckDeleteRange,
       deleteStartPos: startPos,
       deleteEndPos: endPos,
       deletedRangeText: deletedText,
+      deleteJoinedNextLine: joinedWithNext,
     )
   )
-
-  # Adjust fold and bookmark positions if multiple lines were deleted
-  if endPos.line > startPos.line:
-    b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
-    b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
 
   return ok(())
 
@@ -403,13 +389,10 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
     # Trim leading whitespace from next line
     let trimmedNext = nextLine.strip(leading = true, trailing = false)
 
-    # Add a space between lines if current line doesn't end with whitespace
-    # and next line is not empty
-    if trimmedCurrent.len > 0 and trimmedNext.len > 0:
-      # Don't add space if current line ends with certain punctuation
-      let lastChar = trimmedCurrent[^1]
-      if lastChar notin {' ', '\t', '\n'}:
-        trimmedCurrent.add(' ')
+    # Vim J: separate joined lines with a space, but not when the next line
+    # begins with ')'.
+    if trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')':
+      trimmedCurrent.add(' ')
 
     # Build the joined line
     let joinedLine = trimmedCurrent & trimmedNext

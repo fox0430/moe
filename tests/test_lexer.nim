@@ -104,21 +104,21 @@ suite "lexer - lexCurlyOpen basic tests":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("{")
     let flags: TokenizerFlags = {}
-    let endPos = g.lexCurlyOpen(0, flags)
+    let endPos = g.lexCurlyOpen(0, flags).endPos
     check endPos == 1
     check g.kind == gtPunctuation
 
   test "curly open with hasCurlyDashComments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("{- comment -}")
-    let endPos = g.lexCurlyOpen(0, flagsHaskell)
+    let endPos = g.lexCurlyOpen(0, flagsHaskell).endPos
     check endPos == 13
     check g.kind == gtLongComment
 
   test "curly open not followed by dash":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("{ code }")
-    let endPos = g.lexCurlyOpen(0, flagsHaskell)
+    let endPos = g.lexCurlyOpen(0, flagsHaskell).endPos
     check endPos == 1
     check g.kind == gtPunctuation
 
@@ -126,14 +126,14 @@ suite "lexer - lexCurlyOpen basic tests":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("{- not a comment -}")
     let flags: TokenizerFlags = {}
-    let endPos = g.lexCurlyOpen(0, flags)
+    let endPos = g.lexCurlyOpen(0, flags).endPos
     check endPos == 1
     check g.kind == gtPunctuation
 
   test "not starting at curly":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("x{")
-    let endPos = g.lexCurlyOpen(0, flagsHaskell)
+    let endPos = g.lexCurlyOpen(0, flagsHaskell).endPos
     check endPos == 0
 
 suite "lexer - lexDash basic tests":
@@ -591,7 +591,7 @@ suite "lexer - integration with flagsHaskell":
   test "curly dash comment in haskell":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("{- comment -}")
-    let endPos = g.lexCurlyOpen(0, flagsHaskell)
+    let endPos = g.lexCurlyOpen(0, flagsHaskell).endPos
     check endPos == 13
     check g.kind == gtLongComment
 

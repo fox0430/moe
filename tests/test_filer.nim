@@ -89,15 +89,6 @@ suite "Filer - FilerState creation":
     check state.showHidden == true
     check state.topLine == 0
 
-  test "newFilerState with previousPath":
-    let prevPath = "/some/previous/path"
-    let state = newFilerState(testDir, some(prevPath))
-    check state.previousPath == some(prevPath)
-
-  test "newFilerState without previousPath":
-    let state = newFilerState(testDir)
-    check state.previousPath.isNone
-
 suite "Filer - Directory navigation":
   setup:
     let testDir = getTempDir() / "moe_filer_test"
@@ -794,7 +785,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.len == entries.len
@@ -817,7 +807,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(true)
     # Line 0 should contain the icon for .nim files
@@ -841,19 +830,13 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.getLine(0).contains("▸")
 
   test "Buffer is read-only and utility":
     let state = FilerState(
-      currentPath: "/tmp",
-      entries: @[],
-      selectedIndex: 0,
-      showHidden: false,
-      topLine: 0,
-      previousPath: none(string),
+      currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false, topLine: 0
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.readOnly == true
@@ -886,7 +869,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check not buf.highlight.isNil
@@ -900,7 +882,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
       needsBufferRefresh: false,
     )
     state.refresh()
@@ -913,7 +894,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.filePath.isSome
@@ -921,12 +901,7 @@ suite "Filer - createFilerTextBuffer":
 
   test "highlightNeedsUpdate is false":
     let state = FilerState(
-      currentPath: "/tmp",
-      entries: @[],
-      selectedIndex: 0,
-      showHidden: false,
-      topLine: 0,
-      previousPath: none(string),
+      currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false, topLine: 0
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlightNeedsUpdate == false
@@ -949,7 +924,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.getLine(0).endsWith("mydir/")
@@ -972,7 +946,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.getLine(0).endsWith("file.txt")
@@ -996,7 +969,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.getLine(0).contains("@ ")
@@ -1019,7 +991,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerDirectory
@@ -1042,7 +1013,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerSymlink
@@ -1065,7 +1035,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerSymlinkDir
@@ -1088,7 +1057,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: true,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerHiddenFile
@@ -1111,7 +1079,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerExecutable
@@ -1134,7 +1101,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.default
@@ -1157,7 +1123,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(true)
     check buf.getLine(0).contains("📁")
@@ -1180,7 +1145,6 @@ suite "Filer - createFilerTextBuffer":
       selectedIndex: 0,
       showHidden: false,
       topLine: 0,
-      previousPath: none(string),
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.getLine(0).endsWith("linkdir/")

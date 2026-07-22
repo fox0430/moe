@@ -24,7 +24,13 @@ import std/[options, strutils]
 import pkg/celina
 
 import
-  types/editor_types, color, colorcode, render_utils, config_mode, editor_window_layout
+  types/editor_types,
+  color,
+  colorcode,
+  render_utils,
+  config_mode,
+  editor_window_layout,
+  unicode_utils
 import terminal/ansi_parser
 
 proc renderConfig*(
@@ -51,11 +57,7 @@ proc renderConfig*(
     startX = window.viewport.x
 
   # Calculate max name width for alignment
-  var maxNameWidth = 0
-  for item in configState.items:
-    if item.kind != cvkSection:
-      maxNameWidth = max(maxNameWidth, item.displayName.len + item.depth * 2)
-  maxNameWidth = min(maxNameWidth + 4, width div 2) # Limit to half of width
+  let maxNameWidth = calcMaxNameWidth(configState.items, width)
 
   # Ensure selected entry is visible
   let visibleLines = listEndY - listStartY
@@ -95,16 +97,17 @@ proc renderConfig*(
     if isBeingEdited:
       # Show edit buffer
       let indent = "  ".repeat(item.depth)
-      let name = item.displayName.alignLeft(maxNameWidth - item.depth * 2)
+      let name = item.displayName.alignLeft(max(0, maxNameWidth - item.depth * 2))
       displayLine = indent & name & " : " & editInfo.buffer
     else:
       displayLine = formatItemForDisplay(item, maxNameWidth)
 
-    # Truncate if too long, or pad to full width for consistent background
-    if displayLine.len > width:
-      displayLine = displayLine[0 ..< width - 3] & "..."
-    elif displayLine.len < width:
-      displayLine = displayLine & ' '.repeat(width - displayLine.len)
+    # Truncate or pad in display columns (rune-safe, width <= 0 safe).
+    let contentWidth = displayWidth(displayLine)
+    if contentWidth > width:
+      displayLine = displayLine.truncateToWidthWithSuffix(width, "...")
+    elif contentWidth < width:
+      displayLine = displayLine & ' '.repeat(width - contentWidth)
 
     # Apply style (use theme background color to match clearBuffer)
     let style =
@@ -122,8 +125,7 @@ proc renderConfig*(
 
     # Overlay the search highlight on just the matched characters (like buffer
     # search), instead of repainting the whole line. Skip while editing — the
-    # edit style owns that line. Uses byte offsets as cell columns, matching the
-    # ASCII width assumption the rest of this renderer already relies on.
+    # edit style owns that line.
     if searchQuery.len > 0 and not isBeingEdited:
       let
         hlStyle = searchHighlightStyle()
@@ -134,8 +136,10 @@ proc renderConfig*(
         let idx = lineLower.find(queryLower, searchPos)
         if idx < 0:
           break
+        let charIdx = displayLine.byteToCharPos(idx)
+        let screenX = startX + displayLine.displayWidthUpTo(charIdx)
         buffer.setString(
-          startX + idx, screenY, displayLine[idx ..< idx + queryLower.len], hlStyle
+          screenX, screenY, displayLine[idx ..< idx + queryLower.len], hlStyle
         )
         searchPos = idx + queryLower.len
 
@@ -145,18 +149,19 @@ proc renderConfig*(
     if item.kind == cvkColor and not isBeingEdited:
       let parsed = parseThemeColor(item.colorValue)
       if parsed.isOk and not parsed.get.isTermDefaultColor:
-        # The value is the trailing colorValue of the formatted content; derive
-        # its column from the formatted line length (not maxNameWidth) so an
-        # over-long name can't misplace the highlight.
-        let valueX =
-          startX + formatItemForDisplay(item, maxNameWidth).len - item.colorValue.len
-        if valueX + item.colorValue.len <= startX + width:
+        # Column from displayWidth, not byte len, so a multibyte displayName
+        # can't shift the highlight past the value.
+        let
+          formatted = formatItemForDisplay(item, maxNameWidth)
+          valueWidth = displayWidth(item.colorValue)
+          valueX = startX + displayWidth(formatted) - valueWidth
+        if valueX + valueWidth <= startX + width:
           buffer.setString(valueX, screenY, item.colorValue, colorCodeStyle(parsed.get))
 
     inc screenY
 
   # Clear remaining lines (when sections are collapsed)
-  let emptyLine = ' '.repeat(width)
+  let emptyLine = ' '.repeat(max(0, width))
   while screenY < listEndY:
     buffer.setString(startX, screenY, emptyLine, normalStyle())
     inc screenY
@@ -238,9 +243,8 @@ proc renderConfig*(
         # cursor x = startX + indent + name + " : " + edit cursor position.
         # editInfo.cursor is a rune index, so convert the buffer prefix to its
         # display width to keep the cursor aligned with multibyte values.
-        let cursorWidth = displayWidthUpToWithTabs(
-          editInfo.buffer, editInfo.cursor, e.state.display.tabStop
-        )
+        let cursorWidth =
+          displayWidthUpToWithTabs(editInfo.buffer, editInfo.cursor, e.tabStop)
         e.state.screenCursor.x = startX + indent + nameWidth + 3 + cursorWidth
         e.state.screenCursor.y =
           listStartY + (configState.selectedIndex - configState.topLine)

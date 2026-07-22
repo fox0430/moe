@@ -33,8 +33,8 @@ proc createTestEditor(): Editor =
 suite "calculateTerminalAreaDimensions":
   test "single window, status line enabled":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.showTabLine = false
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
     let win = e.activeWindow
     # Default viewport: width=80, height=20
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
@@ -44,8 +44,8 @@ suite "calculateTerminalAreaDimensions":
 
   test "single window, status line disabled":
     let e = createTestEditor()
-    e.state.display.showStatusLine = false
-    e.state.display.showTabLine = false
+    e.state.showStatusLine = false
+    e.state.showTabLine = false
     let win = e.activeWindow
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
@@ -54,8 +54,8 @@ suite "calculateTerminalAreaDimensions":
 
   test "single window, with tab line":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.showTabLine = true
+    e.state.showStatusLine = true
+    e.state.showTabLine = true
     let win = e.activeWindow
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
@@ -64,8 +64,8 @@ suite "calculateTerminalAreaDimensions":
 
   test "hsplit, top window (non-bottom)":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.showTabLine = false
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
     discard e.hsplit()
     check e.windowManager.windows.len == 2
     # Top window (index 0) is non-bottom
@@ -77,8 +77,8 @@ suite "calculateTerminalAreaDimensions":
 
   test "hsplit, bottom window":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.showTabLine = false
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
     discard e.hsplit()
     check e.windowManager.windows.len == 2
     # Bottom window (index 1) is the active one after hsplit
@@ -90,8 +90,8 @@ suite "calculateTerminalAreaDimensions":
 
   test "minimum rows is 1":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.showTabLine = true
+    e.state.showStatusLine = true
+    e.state.showTabLine = true
     let win = e.activeWindow
     # Set viewport height very small so rows would be <= 0
     win.viewport = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 2, x: 0, y: 0)
@@ -103,54 +103,54 @@ suite "calculateTerminalAreaDimensions":
 suite "calculateReservedLines":
   test "status line enabled, multi status line, bottom window":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
     let reserved = e.calculateReservedLines(isBottomWindow = true)
     # steadyBottomAreaHeight() = 1 (status line and command line share the last row)
     check reserved == 1
 
   test "status line enabled, multi status line, non-bottom window":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = true
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = true
     let reserved = e.calculateReservedLines(isBottomWindow = false)
     # StatusLineReserve = 1
     check reserved == 1
 
   test "status line enabled, single status line, bottom window":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = true)
     # steadyBottomAreaHeight() = 1 (status line and command line share the last row)
     check reserved == 1
 
   test "status line enabled, single status line, non-bottom window":
     let e = createTestEditor()
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = false)
     # No status line for non-bottom window in single status line mode
     check reserved == 0
 
   test "status line disabled, bottom window":
     let e = createTestEditor()
-    e.state.display.showStatusLine = false
+    e.state.showStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = true)
     # steadyBottomAreaHeight() = 1
     check reserved == 1
 
   test "status line disabled, non-bottom window":
     let e = createTestEditor()
-    e.state.display.showStatusLine = false
+    e.state.showStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = false)
     check reserved == 0
 
   test "multi-line status message grows the bottom reserve":
     let e = createTestEditor()
     e.screenSize.width = 80
-    e.state.display.showStatusLine = true
-    e.state.display.multiStatusLine = false
+    e.state.showStatusLine = true
+    e.state.multiStatusLine = false
     e.state.setStatusQuiet("a\nb\nc")
     # 3 message rows + pushed-up status line row
     check e.calculateReservedLines(isBottomWindow = true) == 4
@@ -160,14 +160,14 @@ suite "calculateReservedLines":
   test "multi-line status message without status line":
     let e = createTestEditor()
     e.screenSize.width = 80
-    e.state.display.showStatusLine = false
+    e.state.showStatusLine = false
     e.state.setStatusQuiet("a\nb\nc")
     check e.calculateReservedLines(isBottomWindow = true) == 3
 
   test "wrapped command overlay grows the bottom reserve":
     let e = createTestEditor()
     e.screenSize.width = 80
-    e.state.display.showStatusLine = true
+    e.state.showStatusLine = true
     e.state.enterCommandOverlay()
     # ":" + 100 chars = 101 columns -> 2 rows at width 80, + status line row
     e.state.input.commandText = ":" & "a".repeat(100)
@@ -177,8 +177,8 @@ suite "calculateReservedLines":
   test "terminal dimensions stay steady under a multi-line message":
     let e = createTestEditor()
     e.screenSize.width = 80
-    e.state.display.showStatusLine = true
-    e.state.display.showTabLine = false
+    e.state.showStatusLine = true
+    e.state.showTabLine = false
     e.state.setStatusQuiet("a\nb\nc")
     let win = e.activeWindow
     let (_, rows) = e.calculateTerminalAreaDimensions(win)
@@ -188,105 +188,105 @@ suite "calculateReservedLines":
 suite "calculateSidebarWidth":
   test "sidebar enabled in file edit mode":
     let e = createTestEditor()
-    e.state.display.showSidebar = true
+    e.state.showSidebar = true
     let width = e.calculateSidebarWidth(EditorMode.Normal)
     # DefaultSidebarWidth = 2
     check width == 2
 
   test "sidebar disabled":
     let e = createTestEditor()
-    e.state.display.showSidebar = false
+    e.state.showSidebar = false
     let width = e.calculateSidebarWidth(EditorMode.Normal)
     check width == 0
 
   test "sidebar disabled for non-file-edit mode":
     let e = createTestEditor()
-    e.state.display.showSidebar = true
+    e.state.showSidebar = true
     let width = e.calculateSidebarWidth(EditorMode.RecentFile)
     check width == 0
 
 suite "calculateScrollbarWidth":
   test "scrollbar width 1 in file edit mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 1
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
     let width = e.calculateScrollbarWidth(EditorMode.Normal)
     check width == 1
 
   test "scrollbar width 2 in file edit mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 2
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 2
     let width = e.calculateScrollbarWidth(EditorMode.Normal)
     check width == 2
 
   test "scrollbar disabled (width 0)":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 0
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 0
     let width = e.calculateScrollbarWidth(EditorMode.Normal)
     check width == 0
 
   test "scrollbar bool disabled":
     let e = createTestEditor()
-    e.state.display.scrollbar = false
-    e.state.display.scrollbarWidth = 2
+    e.state.scrollbar = false
+    e.state.scrollbarWidth = 2
     let width = e.calculateScrollbarWidth(EditorMode.Normal)
     check width == 0
 
   test "scrollbar disabled for non-file-edit mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 1
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
     let width = e.calculateScrollbarWidth(EditorMode.RecentFile)
     check width == 0
 
   test "scrollbar disabled for Filer mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 1
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
     let width = e.calculateScrollbarWidth(EditorMode.Filer)
     check width == 0
 
   test "scrollbar enabled in Insert mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 1
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
     let width = e.calculateScrollbarWidth(EditorMode.Insert)
     check width == 1
 
   test "scrollbar enabled in Visual mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 1
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
     let width = e.calculateScrollbarWidth(EditorMode.Visual)
     check width == 1
 
   test "scrollbar width 3 in Normal mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 3
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 3
     let width = e.calculateScrollbarWidth(EditorMode.Normal)
     check width == 3
 
   test "scrollbar disabled for Help mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 1
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
     let width = e.calculateScrollbarWidth(EditorMode.Help)
     check width == 0
 
   test "scrollbar disabled for BufferManager mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 1
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
     let width = e.calculateScrollbarWidth(EditorMode.BufferManager)
     check width == 0
 
   test "scrollbar enabled in Replace mode":
     let e = createTestEditor()
-    e.state.display.scrollbar = true
-    e.state.display.scrollbarWidth = 2
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 2
     let width = e.calculateScrollbarWidth(EditorMode.Replace)
     check width == 2
 
@@ -381,7 +381,7 @@ suite "calculateViewportOffset":
 suite "calculateWindowCursor":
   test "cursor at buffer start, no wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -399,7 +399,7 @@ suite "calculateWindowCursor":
 
   test "cursor in middle of line, no wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -417,7 +417,7 @@ suite "calculateWindowCursor":
 
   test "cursor on second line, no wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Line 1\nLine 2")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -435,7 +435,7 @@ suite "calculateWindowCursor":
 
   test "cursor below a collapsed fold uses visible-row offset, no wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
     # Collapse lines 1..5: interior lines 2..5 are hidden, line 1 shows a marker.
     check buffer.foldState.addFold(1, 5, collapsed = true)
@@ -457,7 +457,7 @@ suite "calculateWindowCursor":
 
   test "cursor below a collapsed fold uses visible-row offset, wrap mode":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
     check buffer.foldState.addFold(1, 5, collapsed = true)
     let viewport =
@@ -477,7 +477,7 @@ suite "calculateWindowCursor":
 
   test "cursor above visible area returns (0, 0)":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Line 1\nLine 2\nLine 3")
     let viewport =
       ViewPort(topLine: 2, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -495,7 +495,7 @@ suite "calculateWindowCursor":
 
   test "cursor with horizontal scroll, no wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("0123456789ABCDEFGHIJ")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 5, width: 80, height: 24, x: 0, y: 0)
@@ -513,7 +513,7 @@ suite "calculateWindowCursor":
 
   test "cursor out of buffer bounds returns (0, 0)":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Hello")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -531,7 +531,7 @@ suite "calculateWindowCursor":
 
   test "cursor at buffer start, with wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     let buffer = newTextBuffer("Hello world")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -549,7 +549,7 @@ suite "calculateWindowCursor":
 
   test "cursor with scrollbar, wrap mode":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     # 20 chars wrapping at maxWidth = 10 - 0 - 1 = 9
     let buffer = newTextBuffer("abcdefghijklmnopqrst")
     let viewport =
@@ -572,7 +572,7 @@ suite "calculateWindowCursor":
 
   test "cursor with scrollbar, no wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -593,7 +593,7 @@ suite "calculateWindowCursor":
 
   test "cursor with scrollbar width 2, wrap mode":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     # 20 chars, maxWidth = 10 - 0 - 2 = 8
     let buffer = newTextBuffer("abcdefghijklmnopqrst")
     let viewport =
@@ -616,7 +616,7 @@ suite "calculateWindowCursor":
 
   test "cursor with scrollbar width 0, wrap mode (no scrollbar)":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     # 20 chars, maxWidth = 10 - 0 - 0 = 10
     let buffer = newTextBuffer("abcdefghijklmnopqrst")
     let viewport =
@@ -637,7 +637,7 @@ suite "calculateWindowCursor":
 
   test "cursor with scrollbar and lineNumOffset, wrap mode":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     # maxWidth = 20 - 4 - 1 = 15
     let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123456789")
     let viewport =
@@ -659,7 +659,7 @@ suite "calculateWindowCursor":
 
   test "cursor with scrollbar on multiline buffer, wrap mode":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     # maxWidth = 10 - 0 - 1 = 9
     # Line 0: "abcdefghij" (10 chars) => 2 screen rows (9+1)
     # Line 1: "klm" => 1 screen row
@@ -682,7 +682,7 @@ suite "calculateWindowCursor":
 
   test "topWrapOffset shifts the wrapped cursor up by the skipped segments":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     # maxWidth = 10 - 0 - 1 = 9 => segments 0-8, 9-17, 18-26, 27-29
     let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123")
     # Start the view one wrap segment down (segment 0 of the top line is hidden).
@@ -705,7 +705,7 @@ suite "calculateWindowCursor":
 
   test "cursor on a segment hidden above topWrapOffset returns (0, 0)":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123")
     # Skip the first two segments of the top line.
     let viewport = ViewPort(
@@ -728,7 +728,7 @@ suite "calculateWindowCursor":
 suite "calculateWindowCursor - wrap mode edge cases":
   test "wrap mode with empty line":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     let buffer = newTextBuffer("Line 1\n\nLine 3") # Middle line is empty
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -746,7 +746,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
 
   test "wrap mode with long line that wraps":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     # Create a line that will wrap (wider than viewport)
     let longLine = "A".repeat(100)
     let buffer = newTextBuffer(longLine & "\nLine 2")
@@ -768,7 +768,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
 
   test "cursor on wrapped portion of line":
     let e = createTestEditor()
-    e.state.display.lineWrap = true
+    e.state.lineWrap = true
     let longLine = "ABCDEFGHIJ" & "KLMNOPQRST" # 20 chars
     let buffer = newTextBuffer(longLine)
     # Viewport width 14, minus lineNumOffset 4 = 10 chars per wrapped line
@@ -790,7 +790,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
 
   test "negative line returns (0, 0)":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Hello")
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -808,7 +808,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
 
   test "cursor below visible area, no wrap":
     let e = createTestEditor()
-    e.state.display.lineWrap = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
     # Small viewport height of 3, with reserved 2 = only 1 visible line
     let viewport = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 3, x: 0, y: 0)

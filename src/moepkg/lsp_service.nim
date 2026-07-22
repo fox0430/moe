@@ -32,7 +32,9 @@ import logger
 export worker, types
 
 const
-  DefaultRequestTimeoutMs* = 5000 ## 5 second timeout for LSP requests
+  DefaultRequestTimeoutMs* = RequestTimeoutSec * 1000
+    ## Matches worker's RequestTimeoutSec; a shorter default would drop
+    ## responses that arrive between the two deadlines (see recordResponse).
   PollIntervalMs = 5 ## Polling interval for async response waiting
   RestartSuppressionSec* = 5.0
     ## Minimum interval between automatic server restarts per language.
@@ -45,7 +47,9 @@ type
     args*: seq[string]
     extensions*: seq[string]
     enabled*: bool
-    rawJsonLog*: bool ## Emit raw JSON-RPC traffic to the LSP log (debug only)
+    traceLevel*: LspTrace
+      ## LSP trace level; forwarded to `initialize` and
+      ## gates raw JSON-RPC events (any non-off level enables them).
     initializationOptions*: string
       ## Serialized JSON for the server's `initializationOptions` ("" = none).
       ## Stored as a string because JsonNode refs cannot cross the worker
@@ -88,9 +92,9 @@ type
     dynamicRegistrations: Table[string, Table[string, Registration]]
     workspaceRoot: string
     enabled*: bool
-    # Consumer-side per-request timeout (ms), from `config.lsp.timeout`. The
-    # worker keeps its own, deliberately longer RequestTimeoutSec (worker.nim);
-    # the two are not meant to match.
+    # Consumer-side per-request timeout (ms), from `config.lsp.timeout`.
+    # Setting this below worker's RequestTimeoutSec drops late replies
+    # (recordResponse discards ids no longer in activeRequests).
     requestTimeoutMs*: int
     # Pending request responses (requestId -> response).
     # The result is kept as the raw JSON string exactly as it crossed the
@@ -116,7 +120,8 @@ type
     # re-opens buffers itself, is not double-counted as a crash recovery.
     initializedLangs: HashSet[string]
     # Global callbacks (forwarded from individual workers)
-    onDiagnosticsUpdate*: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.}
+    onDiagnosticsUpdate*:
+      proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.}
     onLogMessage*:
       proc(langId: string, msgType: MessageType, message: string) {.gcsafe.}
     onProgress*:
@@ -141,6 +146,61 @@ type
     # liveWorkerOverride when nil so existing tests that only set the latter
     # still treat the fake worker as running. nil in production.
     runningWorkerOverride*: proc(path: string): bool {.gcsafe.}
+    # Test seam: when set, overrides liveWorkerLangIds so tests can exercise
+    # the "config changed for a running worker" branch without spawning a real
+    # server. nil in production.
+    liveWorkerLangIdsOverride*: proc(): seq[string] {.gcsafe.}
+
+proc defaultLanguageServerConfigs*(): Table[string, LanguageServerConfig] =
+  ## Built-in default LSP server registrations.
+  ## Extracted so `applyLspServerConfigs` can rebuild the config table from
+  ## scratch on live reload, letting removed [Lsp.<lang>] user sections revert
+  ## to defaults instead of leaving stale overrides in place.
+  result = initTable[string, LanguageServerConfig]()
+
+  result["nim"] = LanguageServerConfig(
+    command: "nimlangserver",
+    args: @[],
+    extensions: @["nim", "nims", "nimble"],
+    enabled: true,
+  )
+
+  result["rust"] = LanguageServerConfig(
+    command: "rust-analyzer", args: @[], extensions: @["rs"], enabled: true
+  )
+
+  result["python"] = LanguageServerConfig(
+    command: "pylsp", args: @[], extensions: @["py", "pyw"], enabled: true
+  )
+
+  result["typescript"] = LanguageServerConfig(
+    command: "typescript-language-server",
+    args: @["--stdio"],
+    extensions: @["ts", "tsx"],
+    enabled: true,
+  )
+
+  result["javascript"] = LanguageServerConfig(
+    command: "typescript-language-server",
+    args: @["--stdio"],
+    extensions: @["js", "jsx", "mjs"],
+    enabled: true,
+  )
+
+  result["go"] = LanguageServerConfig(
+    command: "gopls", args: @[], extensions: @["go"], enabled: true
+  )
+
+  result["c"] = LanguageServerConfig(
+    command: "clangd", args: @[], extensions: @["c", "h"], enabled: true
+  )
+
+  result["cpp"] = LanguageServerConfig(
+    command: "clangd",
+    args: @[],
+    extensions: @["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
+    enabled: true,
+  )
 
 proc newLspService*(workspaceRoot: string = ""): LspService =
   ## Create a new LSP service
@@ -164,7 +224,9 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     lastRestartTimes: initTable[string, float](),
     initializedLangs: initHashSet[string](),
     # Default no-op callbacks to avoid nil checks throughout the code
-    onDiagnosticsUpdate: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
+    onDiagnosticsUpdate: proc(
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+    ) {.gcsafe.} =
       discard,
     onLogMessage: proc(
         langId: string, msgType: MessageType, message: string
@@ -187,49 +249,14 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
   )
 
   # Default language server configurations
-  result.configs["nim"] = LanguageServerConfig(
-    command: "nimlangserver",
-    args: @[],
-    extensions: @["nim", "nims", "nimble"],
-    enabled: true,
-  )
+  result.configs = defaultLanguageServerConfigs()
 
-  result.configs["rust"] = LanguageServerConfig(
-    command: "rust-analyzer", args: @[], extensions: @["rs"], enabled: true
-  )
-
-  result.configs["python"] = LanguageServerConfig(
-    command: "pylsp", args: @[], extensions: @["py", "pyw"], enabled: true
-  )
-
-  result.configs["typescript"] = LanguageServerConfig(
-    command: "typescript-language-server",
-    args: @["--stdio"],
-    extensions: @["ts", "tsx"],
-    enabled: true,
-  )
-
-  result.configs["javascript"] = LanguageServerConfig(
-    command: "typescript-language-server",
-    args: @["--stdio"],
-    extensions: @["js", "jsx", "mjs"],
-    enabled: true,
-  )
-
-  result.configs["go"] = LanguageServerConfig(
-    command: "gopls", args: @[], extensions: @["go"], enabled: true
-  )
-
-  result.configs["c"] = LanguageServerConfig(
-    command: "clangd", args: @[], extensions: @["c", "h"], enabled: true
-  )
-
-  result.configs["cpp"] = LanguageServerConfig(
-    command: "clangd",
-    args: @[],
-    extensions: @["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
-    enabled: true,
-  )
+proc resetConfigsToDefaults*(svc: LspService) =
+  ## Replace the configs table with a fresh copy of the built-in defaults.
+  ## Used by live reload so removed [Lsp.<lang>] sections and cleared fields
+  ## revert to defaults instead of retaining stale merged state.
+  ## Already-running workers keep their old command until they restart.
+  svc.configs = defaultLanguageServerConfigs()
 
 proc setRequestTimeout*(svc: LspService, timeoutMs: int) =
   ## Set the per-request timeout (ms). Non-positive values are ignored.
@@ -245,6 +272,14 @@ proc getConfig*(svc: LspService, langId: string): Option[LanguageServerConfig] =
   if langId in svc.configs:
     return some(svc.configs[langId])
   return none(LanguageServerConfig)
+
+proc liveWorkerLangIds*(svc: LspService): seq[string] =
+  ## Language IDs whose worker is running or starting.
+  if svc.liveWorkerLangIdsOverride != nil:
+    return svc.liveWorkerLangIdsOverride()
+  for langId, worker in svc.workers:
+    if worker.isRunning or worker.isStarting:
+      result.add(langId)
 
 proc getLanguageIdFromPath*(svc: LspService, path: string): Option[string] =
   ## Determine language ID from file path extension
@@ -351,7 +386,7 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
     svc.workers.del(langId)
 
   # Create new worker
-  let workerResult = newLspWorker(langId, config.rawJsonLog)
+  let workerResult = newLspWorker(langId, config.traceLevel)
   if workerResult.isErr:
     return err("Failed to create worker: " & workerResult.error)
   let worker = workerResult.get
@@ -502,7 +537,7 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
     except CatchableError as e:
       svc.onLogMessage(langId, mtWarning, "Failed to parse diagnostics: " & e.msg)
       return
-    svc.onDiagnosticsUpdate(evt.diagUri, diagnostics)
+    svc.onDiagnosticsUpdate(evt.diagUri, diagnostics, evt.diagVersion)
   of levLogMessage:
     svc.onLogMessage(langId, evt.msgType, evt.message)
   of levShowMessage:
@@ -532,8 +567,8 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
       logDebug("lsp", formatRawJsonLogLine(langId, evt.jsonDirection, evt.rawJson))
 
     # In-memory :lspLog viewer: pretty-printed and timestamped, but only for
-    # servers that opted into verbose raw-JSON logging.
-    if langId in svc.configs and svc.configs[langId].rawJsonLog:
+    # servers that opted into raw-JSON logging (any non-off trace level).
+    if langId in svc.configs and svc.configs[langId].traceLevel != traceOff:
       let timestamp = now().format("HH:mm:ss'.'fff")
       let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
       let pretty =
@@ -1338,11 +1373,12 @@ proc getDynamicRegistrations*(svc: LspService, langId: string): seq[Registration
 
 template isCapabilityEnabled(cap: Option[JsonNode]): bool =
   ## A `boolean | Options` server capability counts as supported only when it is
-  ## present and not literally `false`. A server may legitimately advertise
-  ## `"xxxProvider": false` to disable a feature; treating that as enabled fires
-  ## useless requests that hang until the request timeout. An object (Options)
-  ## always means enabled.
-  cap.isSome and (cap.get.kind != JBool or cap.get.getBool)
+  ## present and not literally `false` or `null`. A server may legitimately
+  ## advertise `"xxxProvider": false` (or `null`, which some servers emit via
+  ## Option-field serialisation) to disable a feature; treating either as
+  ## enabled fires useless requests that hang until the request timeout. An
+  ## object (Options) always means enabled.
+  cap.isSome and cap.get.kind != JNull and (cap.get.kind != JBool or cap.get.getBool)
 
 template isCapabilityEnabled[T](cap: Option[T]): bool =
   ## Capabilities typed as `Options` (e.g. CompletionOptions) carry no boolean,

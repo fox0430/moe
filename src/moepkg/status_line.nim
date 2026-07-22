@@ -76,12 +76,16 @@ var
   gitDiffRefreshIntervalMs: int64 = DefaultGitDiffRefreshIntervalMs
 
 proc toggleStatusLine*(state: var EditorState) =
-  ## Toggle the visibility of the status line
-  state.display.showStatusLine = not state.display.showStatusLine
+  state.showStatusLine = not state.showStatusLine
 
 proc setStatusLineVisible*(state: var EditorState, visible: bool) =
-  ## Set the visibility of the status line
-  state.display.showStatusLine = visible
+  state.showStatusLine = visible
+
+proc toggleMultiStatusLine*(state: var EditorState) =
+  state.multiStatusLine = not state.multiStatusLine
+
+proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
+  state.multiStatusLine = enabled
 
 proc toggleLineCount*(state: var EditorState) =
   ## Toggle the visibility of line count in status line
@@ -110,14 +114,6 @@ proc setEncodingVisible*(state: var EditorState, visible: bool) =
 proc setLineEndingVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of line ending in status line
   state.display.showLineEnding = visible
-
-proc toggleMultiStatusLine*(state: var EditorState) =
-  ## Toggle between single status line (at bottom) and multi status lines (per window)
-  state.display.multiStatusLine = not state.display.multiStatusLine
-
-proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
-  ## Set multi status line mode
-  state.display.multiStatusLine = enabled
 
 static:
   # Verify the `statusLine<Mode>Mode` → `statusLine<Mode>ModeLabel` →
@@ -255,27 +251,27 @@ proc setGitDiffRefreshInterval*(ms: int64) =
 proc bufferKey(b: TextBuffer): pointer {.inline.} =
   cast[pointer](b)
 
+proc reapPendingDiff(entry: var GitDiffCacheEntry) =
+  ## Advance a pending diff pipeline; on completion release its child,
+  ## tempfiles, and fds. On error/timeout keep the last known counts.
+  if entry.pending.isNone:
+    return
+  let completion = checkGitDiffComplete(entry.pending.get)
+  if completion.isNone:
+    return
+  if completion.get.isOk:
+    let diffInfo = completion.get.get
+    entry.counts = countGitChangedLines(diffInfo)
+    entry.pendingDiffInfo = some(diffInfo)
+  entry.pending = none(GitDiffProcess)
+  entry.lastRefresh = getMonoTime()
+  entry.populated = true
+
 proc cachedGitDiffCounts(b: TextBuffer): tuple[added, modified, deleted: int] =
   let key = bufferKey(b)
   var entry = diffCacheStore.getOrDefault(key)
 
-  # If a background git diff was running, check if it finished this frame.
-  if entry.pending.isSome:
-    let completion = checkGitDiffComplete(entry.pending.get)
-    if completion.isSome:
-      if completion.get.isOk:
-        let diffInfo = completion.get.get
-        entry.counts = countGitChangedLines(diffInfo)
-        # Stash the completed diff for the sidebar gutter. The actual
-        # `applyGitDiffToBuffer` is deferred to `maybeApplyGitMarkers`,
-        # called from editor.tick under the `showGitDiff` flag — so the
-        # gutter is only mutated when the user has opted in.
-        entry.pendingDiffInfo = some(diffInfo)
-      # On error/timeout we keep the last known counts — better to show
-      # slightly stale info than to flicker to zero.
-      entry.pending = none(GitDiffProcess)
-      entry.lastRefresh = getMonoTime()
-      entry.populated = true
+  reapPendingDiff(entry)
 
   # Decide whether to kick off a new refresh.
   let now = getMonoTime()
@@ -335,6 +331,31 @@ proc cleanupGitDiffCache*() =
       entry.pending = none(GitDiffProcess)
   diffCacheStore.clear()
   branchCacheStore.clear()
+
+proc gitDiffPendingCount*(): int =
+  ## Test hook: number of cache entries currently holding an in-flight diff.
+  for entry in diffCacheStore.values:
+    if entry.pending.isSome:
+      inc result
+
+proc gitDiffCacheCounts*(b: TextBuffer): Option[tuple[added, modified, deleted: int]] =
+  ## Test hook: the reaped `counts` for `b`, or `none` if the entry has not
+  ## been populated yet.
+  let key = bufferKey(b)
+  let entry = diffCacheStore.getOrDefault(key)
+  if entry.populated:
+    some(entry.counts)
+  else:
+    none(tuple[added, modified, deleted: int])
+
+proc tickGitDiffPipelines*() =
+  ## Reap every buffer's pending git-diff pipeline, not just the one whose
+  ## status line is being drawn. Without this a buffer that becomes hidden
+  ## while its pipeline is in flight would leak the subprocess (zombied on
+  ## exit), the three tempfiles, and the pipe fds. Never kicks off new
+  ## refreshes — hidden buffers do not respawn `git diff` on TTL.
+  for entry in diffCacheStore.mvalues:
+    reapPendingDiff(entry)
 
 proc maybeApplyGitMarkers*(b: TextBuffer) =
   ## Consume the most recent async git diff result (if any) and apply it
@@ -557,7 +578,7 @@ proc renderStatusLine*(
     config: StatusLineConfig,
 ) =
   ## Render the status line at the specified Y position
-  if not state.display.showStatusLine:
+  if not state.showStatusLine:
     return
 
   # Use overlay styles if an overlay is active, otherwise use mode styles
@@ -652,7 +673,7 @@ proc renderWindowStatusLine*(
     config: StatusLineConfig,
 ) =
   ## Render a status line for a specific window
-  if not state.display.showStatusLine or not state.display.multiStatusLine:
+  if not state.showStatusLine or not state.multiStatusLine:
     return
 
   # Build mode label (show for active window, or inactive if showModeInactive)

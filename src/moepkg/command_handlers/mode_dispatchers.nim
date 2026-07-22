@@ -146,6 +146,68 @@ proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
     cursor = advancePastText(cursor, unit)
   state.cursor = cursor
 
+proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, string] =
+  ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, `.`-repeat +
+  ## `[count]i` bookkeeping, visual-block replication, insert-state reset, and
+  ## transaction commit. Called by both the Escape path and the imap ->
+  ## Command-mode alias bridge so the bridge does not skip the cleanup.
+  state.snippetSession.active = false
+
+  clearAutoIndentIfUnedited(buffer, state)
+
+  if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
+    let transaction = buffer.currentTransaction.get
+    let insertedText = extractInsertedText(transaction)
+
+    if state.editState.visualBlockInsertContext.isSome:
+      if insertedText.len > 0:
+        let ctx = state.editState.visualBlockInsertContext.get
+        for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
+          let lineCharLen = buffer.getLine(lineNum).runeLen
+          let col = ctx.insertColumn
+          if col > lineCharLen:
+            let padding = ' '.repeat(col - lineCharLen)
+            discard buffer.insertText(
+              BufferPosition(line: lineNum, column: lineCharLen), padding
+            )
+          discard
+            buffer.insertText(BufferPosition(line: lineNum, column: col), insertedText)
+      state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+
+    if insertedText.len > 0:
+      if state.editState.substituteContext.isSome:
+        let subCtx = state.editState.substituteContext.get
+        state.editState.lastEditCommand = some(
+          types.LastEditCommand(
+            kind: types.lecSubstitute,
+            substituteText: insertedText,
+            substituteCount: subCtx.deleteCount,
+            substituteKind: subCtx.kind,
+          )
+        )
+      else:
+        state.editState.lastEditCommand = some(
+          types.LastEditCommand(
+            kind: types.lecInsertText,
+            insertedText: insertedText,
+            insertPosition: state.editState.insertModeStartPos.get,
+          )
+        )
+
+    # Replay before commit so [count]i repeats share the same undo group.
+    replayCountedInsert(buffer, state)
+
+    state.editState.insertModeStartPos = none(BufferPosition)
+    state.editState.insertReplayCount = 0
+    state.editState.insertReplayLineEntry = false
+    state.editState.substituteContext = none(types.SubstituteContext)
+
+  if buffer.inTransaction:
+    let transactionResult = buffer.commitTransaction()
+    if transactionResult.isErr:
+      return err(transactionResult.error)
+  ok()
+
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
@@ -164,80 +226,13 @@ proc handleInsertMode*(
           kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
         )
 
-      # Leaving Insert mode always ends any snippet tabstop session (some
-      # paths, e.g. Escape while the completion popup is open, return a mode
-      # switch without passing through the session key handling).
-      state.snippetSession.active = false
-
-      clearAutoIndentIfUnedited(buffer, state)
-
-      # Extract inserted text before committing transaction
-      if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
-        let transaction = buffer.currentTransaction.get
-        let insertedText = extractInsertedText(transaction)
-
-        # Visual Block insert replication: replicate inserted text to all block lines
-        if state.editState.visualBlockInsertContext.isSome:
-          if insertedText.len > 0:
-            let ctx = state.editState.visualBlockInsertContext.get
-            for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
-              let lineCharLen = buffer.getLine(lineNum).runeLen
-              let col = ctx.insertColumn
-              # Pad with spaces if line is shorter than the target column
-              if col > lineCharLen:
-                let padding = ' '.repeat(col - lineCharLen)
-                discard buffer.insertText(
-                  BufferPosition(line: lineNum, column: lineCharLen), padding
-                )
-              discard buffer.insertText(
-                BufferPosition(line: lineNum, column: col), insertedText
-              )
-          # Always clear context when leaving insert mode
-          state.editState.visualBlockInsertContext =
-            none(types.VisualBlockInsertContext)
-
-        # Record the insert command for repeat (.) if text was actually inserted
-        if insertedText.len > 0:
-          # Check if we entered Insert mode via substitute command (s/S/cc)
-          if state.editState.substituteContext.isSome:
-            let subCtx = state.editState.substituteContext.get
-            state.editState.lastEditCommand = some(
-              types.LastEditCommand(
-                kind: types.lecSubstitute,
-                substituteText: insertedText,
-                substituteCount: subCtx.deleteCount,
-                substituteKind: subCtx.kind,
-              )
-            )
-          else:
-            # Normal insert (i, a, o, O)
-            state.editState.lastEditCommand = some(
-              types.LastEditCommand(
-                kind: types.lecInsertText,
-                insertedText: insertedText,
-                insertPosition: state.editState.insertModeStartPos.get,
-              )
-            )
-
-        # [count]i/a/o/O: replay the typed text the remaining count-1 times.
-        # Done before clearing insertModeStartPos and before commit so the
-        # repeats join the same undo group.
-        replayCountedInsert(buffer, state)
-
-        # Clear insert position tracking and substitute context
-        state.editState.insertModeStartPos = none(BufferPosition)
-        state.editState.insertReplayCount = 0
-        state.editState.insertReplayLineEntry = false
-        state.editState.substituteContext = none(types.SubstituteContext)
-
-      # Commit the transaction when leaving Insert mode
-      let transactionResult = buffer.commitTransaction()
-      if transactionResult.isErr:
+      let finalizeResult = finalizeInsertExit(buffer, state)
+      if finalizeResult.isErr:
         # Even if commit fails, allow mode transition so user isn't stuck in Insert mode
         return HandlerResult(
           kind: hrHandled,
           modeTransition: r.modeTransition,
-          statusMessage: "Failed to commit transaction: " & transactionResult.error,
+          statusMessage: "Failed to commit transaction: " & finalizeResult.error,
         )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
@@ -245,20 +240,15 @@ proc handleInsertMode*(
   of imrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of imrExecCommand:
-    # Command mode command alias bridge fired from Insert mode (e.g.
-    # `imap K = "bdelete"`). Commit any in-progress insert transaction first
-    # so the Command mode command sees a consistent buffer state — otherwise
-    # an open transaction could be left dangling across buffer switches
-    # performed by `:bdelete` / `:bnext`.
-    state.snippetSession.active = false
-    if buffer.inTransaction:
-      let transactionResult = buffer.commitTransaction()
-      if transactionResult.isErr:
-        return HandlerResult(
-          kind: hrError,
-          errorMessage: "Failed to commit transaction: " & transactionResult.error,
-        )
-      state.editState.insertModeStartPos = none(BufferPosition)
+    # `imap K = "bdelete"` bridge: run the full leaving-Insert finalize so
+    # `.` repeat, `[count]i` replay, and substituteContext / block-insert
+    # cleanup all fire before the aliased command runs.
+    let finalizeResult = finalizeInsertExit(buffer, state)
+    if finalizeResult.isErr:
+      return HandlerResult(
+        kind: hrError,
+        errorMessage: "Failed to commit transaction: " & finalizeResult.error,
+      )
     return HandlerResult(
       kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
     )
@@ -271,173 +261,20 @@ proc handleCommandMode*(
     commandText: string,
     isSharedBuffer: bool = false,
     currentLine: int = 0,
+    otherModifiedCount: int = 0,
 ): HandlerResult =
-  ## Handle Command mode input (when Enter is pressed)
-  ## isSharedBuffer: true if the buffer is shared across multiple windows
-  ## currentLine: current cursor line (0-based), used for range substitution with '.'
+  ## Handle Command mode input (when Enter is pressed).
+  ## isSharedBuffer: true if the buffer is shared across multiple windows.
+  ## currentLine: 0-based cursor line, used for range substitution with '.'.
+  ## otherModifiedCount: modified buffers other than `buffer` (for :qa).
+  ## Map ops (hrMap*) need access to `manager.keyBindingRegistry`, so they are
+  ## executed here and folded onto hrHandled/hrError; every other kind is
+  ## returned as-is to the caller.
   let r = manager.commandHandler.handleCommandModeInput(
-    buffer, commandText, isSharedBuffer, currentLine
+    buffer, commandText, isSharedBuffer, currentLine, otherModifiedCount
   )
-
   case r.kind
-  of cmrQuit:
-    return HandlerResult(kind: hrQuit)
-  of cmrCquit:
-    return HandlerResult(kind: hrCquit)
-  of cmrCloseWindow:
-    return HandlerResult(kind: hrCloseWindow, forceClose: r.forceClose)
-  of cmrModeSwitch:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(r.targetMode), statusMessage: ""
-    )
-  of cmrMessage:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: r.message
-    )
-  of cmrGotoLine:
-    return HandlerResult(kind: hrGotoLine, lineNumber: r.lineNumber)
-  of cmrVSplit:
-    return HandlerResult(kind: hrVSplit, vsplitFilename: r.vsplitFilename)
-  of cmrHSplit:
-    return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
-  of cmrNew:
-    return HandlerResult(kind: hrNew)
-  of cmrVnew:
-    return HandlerResult(kind: hrVnew)
-  of cmrEnew:
-    return HandlerResult(kind: hrEnew)
-  of cmrEdit:
-    return
-      HandlerResult(kind: hrEdit, editFilename: r.editFilename, forceEdit: r.forceEdit)
-  of cmrSetBoolOption:
-    return HandlerResult(
-      kind: hrSetBoolOption, boolOption: r.boolOption, boolValue: r.boolValue
-    )
-  of cmrSetIntOption:
-    return
-      HandlerResult(kind: hrSetIntOption, intOption: r.intOption, intValue: r.intValue)
-  of cmrSetFloatOption:
-    return HandlerResult(
-      kind: hrSetFloatOption, floatOption: r.floatOption, floatValue: r.floatValue
-    )
-  of cmrClearSearchHighlight:
-    return HandlerResult(kind: hrClearSearchHighlight)
-  of cmrShellCommand:
-    return HandlerResult(kind: hrShellCommand, shellCommand: r.shellCommand)
-  of cmrBackground:
-    return HandlerResult(kind: hrBackground)
-  of cmrSave:
-    return
-      HandlerResult(kind: hrSave, saveFilename: r.saveFilename, forceSave: r.forceSave)
-  of cmrSaveAll:
-    return HandlerResult(kind: hrSaveAll, forceSaveAll: r.forceSaveAll)
-  of cmrSaveAndQuit:
-    return HandlerResult(
-      kind: hrSaveAndQuit,
-      saveAndQuitFilename: r.saveAndQuitFilename,
-      forceQuitAfterSave: r.forceSaveAndQuit,
-    )
-  of cmrSaveAllAndQuit:
-    return HandlerResult(
-      kind: hrSaveAllAndQuit, forceSaveAllAndQuitAfter: r.forceSaveAllAndQuit
-    )
-  of cmrBufferNext:
-    return HandlerResult(kind: hrBufferNext)
-  of cmrBufferPrev:
-    return HandlerResult(kind: hrBufferPrev)
-  of cmrBufferFirst:
-    return HandlerResult(kind: hrBufferFirst)
-  of cmrBufferLast:
-    return HandlerResult(kind: hrBufferLast)
-  of cmrBufferDelete:
-    return HandlerResult(kind: hrBufferDelete, forceBufferDelete: r.forceBufferDelete)
-  of cmrBuffer:
-    return HandlerResult(kind: hrBuffer, bufferArg: r.bufferArg)
-  of cmrStripWhitespace:
-    return
-      HandlerResult(kind: hrStripWhitespace, strippedLineCount: r.strippedLineCount)
-  of cmrFiler:
-    # Switch to Filer mode with optional path
-    return HandlerResult(kind: hrEnterFiler, enterFilerPath: r.filerPath)
-  of cmrLogViewer:
-    # Switch to LogViewer mode
-    return HandlerResult(kind: hrEnterLogViewer)
-  of cmrHelpViewer:
-    # Switch to HelpViewer mode
-    return HandlerResult(kind: hrEnterHelpViewer)
-  of cmrQuickRun:
-    return HandlerResult(kind: hrQuickRun)
-  of cmrBufferManager:
-    return HandlerResult(kind: hrEnterBufferManager)
-  of cmrBackupManager:
-    return HandlerResult(kind: hrEnterBackupManager)
-  of cmrRecentFile:
-    return HandlerResult(kind: hrRecentFile)
-  of cmrJumpList:
-    return HandlerResult(kind: hrJumpList)
-  of cmrChanges:
-    return HandlerResult(kind: hrChanges)
-  of cmrBookmarks:
-    return HandlerResult(kind: hrEnterBookmarkManager)
-  of cmrConflictNext:
-    return HandlerResult(kind: hrConflictNext)
-  of cmrConflictPrev:
-    return HandlerResult(kind: hrConflictPrev)
-  of cmrBuild:
-    return HandlerResult(kind: hrBuild)
-  of cmrDebug:
-    return HandlerResult(kind: hrDebug)
-  of cmrConfig:
-    return HandlerResult(kind: hrConfig)
-  of cmrPutConfigFile:
-    return HandlerResult(kind: hrPutConfigFile)
-  of cmrMan:
-    return HandlerResult(kind: hrMan, hrManPage: r.manPage)
-  of cmrTheme:
-    return HandlerResult(kind: hrTheme, hrThemeName: r.themeName)
-  of cmrLspLog:
-    return HandlerResult(kind: hrLspLog)
-  of cmrLspFormat:
-    return HandlerResult(kind: hrLspFormat)
-  of cmrLspRestart:
-    return HandlerResult(kind: hrLspRestart)
-  of cmrLspFold:
-    return HandlerResult(kind: hrLspFold)
-  of cmrLspExecuteCommand:
-    return HandlerResult(
-      kind: hrLspExecuteCommand,
-      hrLspCommand: r.lspCommand,
-      hrLspCommandArgs: r.lspCommandArgs,
-    )
-  of cmrLspCallHierarchyIncoming:
-    return HandlerResult(kind: hrLspCallHierarchyIncoming)
-  of cmrLspCallHierarchyOutgoing:
-    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
-  of cmrSubstitute:
-    return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
-  of cmrDeleteLines:
-    return HandlerResult(
-      kind: hrDeleteLines,
-      hrDeletedText: r.deletedText,
-      hrDeletedLineCount: r.deletedLineCount,
-    )
-  of cmrTerminal:
-    return HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: r.terminalCommand)
-  of cmrMapList:
-    var lines: seq[string] = @[]
-    for mode in r.mapListModes:
-      let mappings = manager.keyBindingRegistry.listRuntimeMappings(mode)
-      for m in mappings:
-        lines.add(modeLabel(mode) & "  " & m)
-    let msg =
-      if lines.len > 0:
-        lines.join("\n")
-      else:
-        "No mapping"
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
-    )
-  of cmrMapAdd:
+  of hrMapAdd:
     var firstError = ""
     var modeNames: seq[string] = @[]
     for mode in r.mapAddModes:
@@ -456,7 +293,7 @@ proc handleCommandMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
     )
-  of cmrMapRemove:
+  of hrMapRemove:
     var firstError = ""
     var modeNames: seq[string] = @[]
     for mode in r.mapRemoveModes:
@@ -472,7 +309,7 @@ proc handleCommandMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
     )
-  of cmrMapClear:
+  of hrMapClear:
     var modeNames: seq[string] = @[]
     for mode in r.mapClearModes:
       manager.keyBindingRegistry.clearRuntimeMappings(mode)
@@ -481,152 +318,24 @@ proc handleCommandMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
     )
-  of cmrOnlyWindow:
-    return HandlerResult(kind: hrOnlyWindow)
-  of cmrFileTree:
-    return HandlerResult(kind: hrEnterFileTree, enterFileTreePath: r.fileTreePath)
-  of cmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleCommandMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Command mode key events (for macro playback)
-  ## This builds up the command text character by character
-
-  # Record key for macro if recording is active
-  if state.macroState.isRecording:
-    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
-
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEscape:
-      # Cancel command mode
-      state.input.commandText = ""
-      state.input.commandCursor = 0
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skEnter:
-      # Execute the command
-      let commandText = state.input.commandText
-      state.input.commandText = ""
-      state.input.commandCursor = 0
-      return manager.handleCommandMode(buffer, commandText, false, state.cursor.line)
-    of skBackspace:
-      # Delete character (rune) before cursor - handles unicode properly
-      if state.input.commandCursor > 1: # Keep the ":" prefix
-        let beforeCursor = state.input.commandText[0 ..< state.input.commandCursor]
-        let afterCursor = state.input.commandText[state.input.commandCursor ..^ 1]
-        # Convert to runes and remove last one
-        var runes = beforeCursor.toRunes
-        if runes.len > 1: # Keep the ":" prefix
-          runes.setLen(runes.len - 1)
-          let newBefore = $runes
-          state.input.commandText = newBefore & afterCursor
-          state.input.commandCursor = newBefore.len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skLeft:
-      # Move cursor left by one rune (handles unicode properly)
-      if state.input.commandCursor > 1:
-        let beforeCursor = state.input.commandText[0 ..< state.input.commandCursor]
-        let runes = beforeCursor.toRunes
-        if runes.len > 1: # Keep cursor after ":"
-          state.input.commandCursor = ($runes[0 ..< runes.len - 1]).len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skRight:
-      # Move cursor right by one rune (handles unicode properly)
-      if state.input.commandCursor < state.input.commandText.len:
-        let afterCursor = state.input.commandText[state.input.commandCursor ..^ 1]
-        let runes = afterCursor.toRunes
-        if runes.len > 0:
-          state.input.commandCursor += ($runes[0]).len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skHome:
-      state.input.commandCursor = 1 # After ":"
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skEnd:
-      state.input.commandCursor = state.input.commandText.len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
+  of hrMapList:
+    var lines: seq[string] = @[]
+    for mode in r.mapListModes:
+      let label = modeLabel(mode)
+      for m in manager.keyBindingRegistry.listRuntimeMappings(mode, r.mapListPrefix):
+        lines.add(label & "  " & m)
+    let msg =
+      if lines.len > 0:
+        lines.join("\n")
+      elif r.mapListPrefix.len > 0:
+        "No mapping found: " & r.mapListPrefix
+      else:
+        "No mapping"
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
+    )
   else:
-    # Regular character - insert at cursor position
-    if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.input.commandText =
-        state.input.commandText[0 ..< state.input.commandCursor] & keyCombo.char &
-        state.input.commandText[state.input.commandCursor ..^ 1]
-      state.input.commandCursor += keyCombo.char.len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-
-proc handleSearchMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Search mode key events (for macro playback)
-  ## This builds up the search text character by character
-
-  # Record key for macro if recording is active
-  if state.macroState.isRecording:
-    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
-
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEscape:
-      # Cancel search mode and restore cursor
-      state.input.search.text = ""
-      state.cursor = state.input.search.startPos
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skEnter:
-      # Confirm search and switch to Normal mode
-      # The search result is already applied via incremental search
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skBackspace:
-      # Delete last character (rune) - handles unicode properly
-      if state.input.search.text.len > 0:
-        var runes = state.input.search.text.toRunes
-        if runes.len > 0:
-          runes.setLen(runes.len - 1)
-          state.input.search.text = $runes
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-  else:
-    # Regular character - append to search text
-    if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.input.search.text.add(keyCombo.char)
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
+    return r
 
 proc handleVisualMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
@@ -1077,7 +786,7 @@ proc handleBookmarkManagerMode*(
   of bkmrJumpToBookmark:
     return HandlerResult(
       kind: hrBookmarkManagerJump,
-      bookmarkJumpBufferIndex: r.jumpBufferIndex,
+      bookmarkJumpBufferId: r.jumpBufferId,
       bookmarkJumpLine: r.jumpLine,
     )
   of bkmrDeleteBookmark:
@@ -1168,7 +877,7 @@ proc handleConfigMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Configuration mode input
-  let r = handleConfigModeKey(configState, viewportHeight, keyCombo)
+  let r = handleConfigModeKey(configState, state, viewportHeight, keyCombo)
   case r.kind
   of cmrHandled:
     return HandlerResult(

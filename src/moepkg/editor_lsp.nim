@@ -19,26 +19,102 @@
 
 ## LSP-related procedures for the editor
 
-import std/[options, json, os]
+import std/[options, json, os, algorithm, strutils, tables]
 
 import pkg/results
 
-import types/editor_types, lsp_integration, motion, editor_codelens
+import types/editor_types, lsp_integration, motion, editor_codelens, lsp_request_context
 import command_handlers/[handler_manager, insert_handler]
 
-proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =
+export lsp_request_context
+
+proc launchAffectingFields(c: LanguageServerConfig): (string, seq[string], string) =
+  (c.command, c.args, c.initializationOptions)
+
+proc toWorkerTrace(t: LspTraceLevel): LspTrace =
+  ## Translate the config-layer enum to the worker-layer enum. Two enums exist
+  ## so config.nim can stay independent of the LSP thread/chronos deps; the
+  ## variants are 1:1 by string value.
+  case t
+  of ltOff: traceOff
+  of ltMessages: traceMessages
+  of ltVerbose: traceVerbose
+
+proc applyLspServerConfigs*(e: Editor) =
+  ## Rebuild the LSP service config table from built-in defaults plus the
+  ## per-language [Lsp.<lang>] entries in e.config. Called from newEditor and
+  ## from applyConfigSettings so live reload picks up server-command /
+  ## trace / rust-analyzer edits including deletions and toggle-offs.
+  ## Already-running workers keep their old command until they restart; when
+  ## the change affects a running worker, hint the user to `:lspRestart`.
+  var runningSnapshot: Table[string, LanguageServerConfig]
+  for langId in e.lsp.service.liveWorkerLangIds:
+    let cfgOpt = e.lsp.service.getConfig(langId)
+    if cfgOpt.isSome:
+      runningSnapshot[langId] = cfgOpt.get
+
+  e.lsp.service.resetConfigsToDefaults()
+  for langId, serverCfg in e.config.lsp.servers:
+    let existing = e.lsp.service.getConfig(langId)
+    if existing.isSome:
+      var c = existing.get
+      if serverCfg.command.len > 0:
+        c.command = serverCfg.command
+        c.args = @[]
+      if serverCfg.extensions.len > 0:
+        c.extensions = serverCfg.extensions
+      c.traceLevel = toWorkerTrace(serverCfg.trace)
+      if langId == "rust":
+        c.initializationOptions =
+          "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
+          "},\"debug\":{\"enable\":" & $serverCfg.rustAnalyzerDebugSingle & "}}}"
+      e.lsp.service.setConfig(langId, c)
+    elif serverCfg.command.len > 0:
+      e.lsp.service.setConfig(
+        langId,
+        LanguageServerConfig(
+          command: serverCfg.command,
+          args: @[],
+          extensions: serverCfg.extensions,
+          enabled: true,
+          traceLevel: toWorkerTrace(serverCfg.trace),
+        ),
+      )
+
+  var changed: seq[string]
+  for langId, oldCfg in runningSnapshot:
+    let newCfgOpt = e.lsp.service.getConfig(langId)
+    if newCfgOpt.isNone or
+        newCfgOpt.get.launchAffectingFields != oldCfg.launchAffectingFields:
+      changed.add(langId)
+  if changed.len > 0:
+    changed.sort()
+    e.state.statusMessage =
+      "LSP server config changed for " & changed.join(", ") &
+      "; run :lspRestart to apply"
+
+proc applyDiagnosticsForUri*(
+    e: Editor, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
+) =
   ## Route a server's publishDiagnostics to the buffer it targets, not just
   ## the active one. Diagnostics for a background buffer would otherwise be
   ## dropped, and the server does not resend them when that buffer is later
   ## focused.
   ## Diagnostics are server-push: there is no request to suppress, so the
   ## Lsp.Diagnostics.enable gate drops them here on receipt instead.
+  ## When the server tagged the publish with a document version, drop frames
+  ## older than the last didChange we sent - avoids applying stale coordinates
+  ## across a reload/rapid-edit while an in-flight publish is on the wire.
   if not e.config.lsp.diagnostics.enable:
     return
 
-  let path = uriToPath(uri).absolutePath()
+  let path = normalizedPath(absolutePath(uriToPath(uri)))
+  if version.isSome:
+    let sent = e.lsp.sentDocumentVersion(path)
+    if sent.isSome and version.get < sent.get:
+      return
   for buf in e.buffers:
-    if buf.filePath.isSome and buf.filePath.get.absolutePath() == path:
+    if buf.filePath.isSome and normalizedPath(absolutePath(buf.filePath.get)) == path:
       applyDiagnosticsToBuffer(buf, diagnostics)
       return
   # No matching open buffer: drop. The server only publishes for documents
@@ -58,7 +134,7 @@ proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
   ## otherwise drift on the server side. `context` only tags the degrade log.
   let syncResult = e.lsp.onBufferChange(buf)
   if syncResult.isOk:
-    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
   elif buf.filePath.isSome:
     logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
 
@@ -75,13 +151,13 @@ proc resyncBufferAfterReload*(e: Editor, buf: TextBuffer) =
   discard e.lsp.onBufferClose(buf) # best effort; re-opened next regardless
   let openResult = e.lsp.onBufferOpen(buf)
   if openResult.isOk:
-    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
   else:
     logLspDegraded("reload: didOpen " & buf.filePath.get, openResult.error)
 
 proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
-  ## didOpen a freshly registered buffer and record its synced changeSeq so the
-  ## next didChange delta is computed against the right baseline. No-op when LSP
+  ## didOpen a freshly registered buffer and record its synced contentVersion so
+  ## the next didChange delta is computed against the right baseline. No-op when LSP
   ## is disabled or the buffer has no path (onBufferOpen guards both). Callers
   ## that register a buffer without going through `loadFile` (loadOrCreateBuffer)
   ## must call this, otherwise the server never learns about the document.
@@ -89,7 +165,7 @@ proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
     return
   let openResult = e.lsp.onBufferOpen(buf)
   if openResult.isOk:
-    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
   elif buf.filePath.isSome:
     logLspDegraded("didOpen " & buf.filePath.get, openResult.error)
 
@@ -127,18 +203,19 @@ proc applyWorkspaceEditFromServer*(
       return (applied: false, failureReason: some("LSP is disabled"))
 
     # Reject the edit if any targeted open buffer has local changes the server
-    # has not seen yet: its changeSeq has moved past the changeSeq recorded at
-    # the last didChange we sent (lastLspChangeSeqs). The server positioned its
-    # edit against the text it last received, so applying it onto newer text
-    # would corrupt the buffer. This mirrors the rename flow's staleness guard,
-    # but the baseline is "what the server last saw" rather than a fresh
-    # snapshot, because this request is not one we awaited.
+    # has not seen yet: its contentVersion has moved past the value recorded at
+    # the last didChange we sent (lastLspContentVersions). The server positioned
+    # its edit against the text it last received, so applying it onto newer
+    # text would corrupt the buffer. This mirrors the rename flow's staleness
+    # guard, but the baseline is "what the server last saw" rather than a
+    # fresh snapshot, because this request is not one we awaited.
     for path in collectWorkspaceEditPaths(edit):
       let absPath = normalizedPath(absolutePath(path))
       for buf in e.buffers:
         if buf.filePath.isSome and
             normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-            buf.changeSeq != e.lastLspChangeSeqs.getOrDefault(buf.id, buf.changeSeq):
+            buf.contentVersion !=
+            e.lastLspContentVersions.getOrDefault(buf.id, buf.contentVersion):
           e.state.statusMessage =
             "Buffer changed since last sync; server edit discarded"
           return
@@ -181,11 +258,19 @@ proc maybeUpdateLsp*(e: Editor) =
 
   let activeBuffer = e.activeBuffer()
 
-  # Only notify LSP if this buffer has changed since its last notification
-  if activeBuffer.changeSeq != e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0):
+  # Only notify LSP if this buffer has changed since its last notification.
+  # Key on contentVersion, not changeSeq: undo rewinds changeSeq, so a
+  # follow-up edit could land on the exact value we last synced and be dropped
+  # here, leaving the server permanently out of sync.
+  if activeBuffer.contentVersion !=
+      e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0):
     let lspResult = e.lsp.onBufferChange(activeBuffer)
-    if lspResult.isOk:
-      e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
+    if lspResult.isErr and activeBuffer.filePath.isSome:
+      logLspDegraded("didChange " & activeBuffer.filePath.get, lspResult.error)
+    # Advance even on failure: this proc fires every frame, and leaving the
+    # tracked version behind would re-run (and re-log) the same failing
+    # didChange every tick until the buffer is edited again.
+    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
 
 proc pollLspCompletion*(e: Editor) =
   ## Poll for pending LSP completion responses
@@ -197,8 +282,8 @@ proc pollLspCompletion*(e: Editor) =
     return
 
   # Call the insert handler's poll function
-  e.handlerManager.insertHandler.pollLspCompletion()
-  e.handlerManager.insertHandler.pollLspResolve()
+  e.handlerManager.insertHandler.pollLspCompletion(e.state)
+  e.handlerManager.insertHandler.pollLspResolve(e.state)
 
 proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledError]).} =
   ## Request LSP document formatting and apply edits
@@ -379,7 +464,7 @@ proc renotifyOpenBuffers(e: Editor, langId: string): int =
     if buf.filePath.isSome:
       let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
       if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
-        let openResult = e.lsp.onBufferOpen(buf)
+        let openResult = e.lsp.onBufferOpen(buf, serverIsFresh = true)
         if openResult.isErr:
           inc result
           logLspDegraded("re-open " & buf.filePath.get, openResult.error)
@@ -489,3 +574,6 @@ proc requestLspExecuteCommand*(
       discard
     except Exception as err:
       e.state.statusMessage = "LSP executeCommand error: " & err.msg
+
+# LSP request-context helpers live in `lsp_request_context` (Phase A);
+# re-exported above so existing callers keep working.

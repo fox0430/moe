@@ -91,6 +91,7 @@ type
     name*: string
     description*: string
     count*: int ## Numeric prefix (e.g., 2 in "2w"), defaults to 1
+    hasCount*: bool ## True iff the user typed a numeric prefix; lets `1G` mean line 1.
     case kind*: CommandType
     of ctMotion:
       motion*: Motion
@@ -147,7 +148,7 @@ type
         ## custom-with-args entries differ from the bare registry version).
       commandName*: string
     of rmkKeySequence:
-      targetKeys*: seq[string] ## Key strings for playbackMacro
+      targetKeys*: seq[KeyCombo] ## Parsed RHS keys, ready for replay
 
   ## Runtime key-sequence mapping accumulator. Owned by the `KeyRouter`
   ## (`KeyRouter.dispatchState`), *not* by the registry — runtime-mapping
@@ -179,7 +180,7 @@ type
     of rmdExecuteCommand:
       commandName*: string
     of rmdExecuteKeySequence:
-      targetKeys*: seq[string]
+      targetKeys*: seq[KeyCombo]
       noremap*: bool
     of rmdWaitForMore, rmdNoMatchPassThrough:
       discard
@@ -202,7 +203,7 @@ type
     of rmfExecuteCommand:
       commandName*: string
     of rmfExecuteKeySequence:
-      targetKeys*: seq[string]
+      targetKeys*: seq[KeyCombo]
       noremap*: bool
     of rmfReplayPerKey:
       keysToReplay*: seq[KeyCombo]

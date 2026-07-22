@@ -27,7 +27,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import config, color
+import config, color, types, config_loader
 
 import types/config_mode_types
 export config_mode_types
@@ -294,7 +294,7 @@ proc buildItemList*(state: ConfigModeState) =
         colorValue: colorValueString(index, false),
       )
 
-proc applyChange*(state: ConfigModeState, itemIndex: int) =
+proc applyChange*(state: ConfigModeState, editorState: EditorState, itemIndex: int) =
   ## Apply a change to the actual config using descriptors
   if itemIndex < 0 or itemIndex >= state.items.len:
     return
@@ -305,6 +305,31 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
 
   let desc = configDescriptors[item.descriptorIndex]
   let cfg = state.config
+
+  # Skip no-op writes: confirming an unchanged value would otherwise flip
+  # pendingApply and force handler.nim's applyConfigSettings to reread the
+  # theme and re-highlight every buffer on each keystroke.
+  let changed =
+    case item.kind
+    of cvkBool:
+      desc.boolGet(cfg) != item.boolValue
+    of cvkInt:
+      desc.intGet(cfg) != item.intValue
+    of cvkFloat:
+      desc.floatGet(cfg) != item.floatValue
+    of cvkEnum:
+      desc.enumGet(cfg) != item.enumValue
+    of cvkString:
+      desc.stringGet(cfg) != item.stringValue
+    else:
+      false
+  if not changed:
+    return
+
+  # Revert theme on load failure so UI never claims a kind whose colors
+  # silently fell back to default.
+  let isThemeChange = item.section == "Theme" and item.displayName in ["kind", "path"]
+  let previousTheme = cfg.theme
 
   case item.kind
   of cvkBool:
@@ -320,19 +345,38 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
   else:
     discard
 
+  if isThemeChange:
+    var vr = newValidationResult()
+    initTheme(cfg, vr)
+    if vr.hasErrors:
+      cfg.theme = previousTheme
+      initTheme(cfg)
+      editorState.statusMessage =
+        "Failed to load theme: " & vr.toErrorMessages.join("; ")
+
+  state.pendingApply = true
+
   # Rebuild to update conditional visibility
   let savedDescIdx = item.descriptorIndex
   state.buildItemList()
+  var found = false
   for i, newItem in state.items:
     if newItem.descriptorIndex == savedDescIdx:
       state.selectedIndex = i
+      found = true
       break
-  if state.selectedIndex >= state.items.len:
-    state.selectedIndex = max(0, state.items.len - 1)
+  if not found:
+    # Item hidden by rebuild; anchor near its old slot instead of stale index.
+    state.selectedIndex = clamp(itemIndex, 0, max(0, state.items.len - 1))
 
-proc applyColorChange*(state: ConfigModeState, itemIndex: int) =
+proc applyColorChange*(
+    state: ConfigModeState, editorState: EditorState, itemIndex: int
+) =
   ## Apply a theme color change to the global `themeColors` (live preview).
-  ## Persisted to the theme file by the normal `:w` save path.
+  ## Persisted to the theme file by the normal `:w` save path only when the
+  ## active theme is `tkConfig`; other kinds keep the edit in memory but
+  ## silently drop it on `:writeconf`. Surface that once via statusMessage
+  ## so the user isn't left wondering why the change didn't stick.
   if itemIndex < 0 or itemIndex >= state.items.len:
     return
 
@@ -351,16 +395,25 @@ proc applyColorChange*(state: ConfigModeState, itemIndex: int) =
     colors[item.colorIndex].background = ThemeColor(rgb: parsed.get)
   setThemeColors(colors)
 
+  if editorState.config.theme.kind != tkConfig:
+    editorState.statusMessage =
+      "Theme color preview only; run :theme <name> or set [Theme].path to persist"
+
   # Rebuild and re-select by (colorIndex, colorIsFg) identity
   let
     savedIdx = item.colorIndex
     savedIsFg = item.colorIsFg
   state.buildItemList()
+  var found = false
   for i, newItem in state.items:
     if newItem.kind == cvkColor and newItem.colorIndex == savedIdx and
         newItem.colorIsFg == savedIsFg:
       state.selectedIndex = i
+      found = true
       break
+  if not found:
+    # Item hidden by rebuild; anchor near its old slot instead of stale index.
+    state.selectedIndex = clamp(itemIndex, 0, max(0, state.items.len - 1))
 
 # State management
 
@@ -378,6 +431,7 @@ proc newConfigModeState*(config: EditorConfig): ConfigModeState =
     searchQuery: "",
     searchStartIndex: 0,
     config: config,
+    pendingApply: false,
   )
   result.buildItemList()
 
@@ -498,14 +552,16 @@ proc searchBackward*(state: ConfigModeState): Option[int] =
 
 # Value manipulation
 
-proc toggleBoolValue*(state: ConfigModeState) =
+proc toggleBoolValue*(state: ConfigModeState, editorState: EditorState) =
   ## Toggle a boolean value
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkBool:
     state.items[itemIndex].boolValue = not state.items[itemIndex].boolValue
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
 
-proc cycleEnumValue*(state: ConfigModeState, forward: bool = true) =
+proc cycleEnumValue*(
+    state: ConfigModeState, editorState: EditorState, forward: bool = true
+) =
   ## Cycle through enum options
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex < 0:
@@ -521,27 +577,27 @@ proc cycleEnumValue*(state: ConfigModeState, forward: bool = true) =
     else:
       currentIdx = (currentIdx - 1 + item.enumOptions.len) mod item.enumOptions.len
     state.items[itemIndex].enumValue = item.enumOptions[currentIdx]
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
 
-proc incrementIntValue*(state: ConfigModeState) =
+proc incrementIntValue*(state: ConfigModeState, editorState: EditorState) =
   ## Increment integer value
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkInt:
     let item = state.items[itemIndex]
     if item.intValue < item.intMax:
       state.items[itemIndex].intValue = item.intValue + 1
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
-proc decrementIntValue*(state: ConfigModeState) =
+proc decrementIntValue*(state: ConfigModeState, editorState: EditorState) =
   ## Decrement integer value
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkInt:
     let item = state.items[itemIndex]
     if item.intValue > item.intMin:
       state.items[itemIndex].intValue = item.intValue - 1
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
-proc incrementFloatValue*(state: ConfigModeState) =
+proc incrementFloatValue*(state: ConfigModeState, editorState: EditorState) =
   ## Increment float value by step
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkFloat:
@@ -549,9 +605,9 @@ proc incrementFloatValue*(state: ConfigModeState) =
     let newValue = item.floatValue + item.floatStep
     if newValue <= item.floatMax:
       state.items[itemIndex].floatValue = newValue
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
-proc decrementFloatValue*(state: ConfigModeState) =
+proc decrementFloatValue*(state: ConfigModeState, editorState: EditorState) =
   ## Decrement float value by step
   let itemIndex = state.getSelectedItemIndex()
   if itemIndex >= 0 and state.items[itemIndex].kind == cvkFloat:
@@ -559,14 +615,14 @@ proc decrementFloatValue*(state: ConfigModeState) =
     let newValue = item.floatValue - item.floatStep
     if newValue >= item.floatMin:
       state.items[itemIndex].floatValue = newValue
-      state.applyChange(itemIndex)
+      state.applyChange(editorState, itemIndex)
 
 # Display formatting
 
 proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
   ## Format a config item for display
   let indent = "  ".repeat(item.depth)
-  let name = item.displayName.alignLeft(maxNameWidth - item.depth * 2)
+  let name = item.displayName.alignLeft(max(0, maxNameWidth - item.depth * 2))
 
   case item.kind
   of cvkSection:
@@ -583,6 +639,13 @@ proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
     return indent & name & " : " & item.enumValue
   of cvkColor:
     return indent & name & " : " & item.colorValue
+
+proc calcMaxNameWidth*(items: seq[ConfigItem], maxWidth: int): int =
+  ## Calculate the maximum display name width for config item layout.
+  for item in items:
+    if item.kind != cvkSection:
+      result = max(result, item.displayName.len + item.depth * 2)
+  result = min(result + 4, maxWidth div 2)
 
 # Edit mode (Int/String editing)
 
@@ -619,7 +682,7 @@ proc cancelEdit*(state: ConfigModeState) =
   state.editBuffer = ""
   state.editCursor = 0
 
-proc confirmEdit*(state: ConfigModeState): bool =
+proc confirmEdit*(state: ConfigModeState, editorState: EditorState): bool =
   ## Confirm the edit and apply the value
   ## Returns true if successful
   let itemIndex = state.getSelectedItemIndex()
@@ -634,7 +697,7 @@ proc confirmEdit*(state: ConfigModeState): bool =
       let newValue = parseInt(state.editBuffer)
       if newValue >= item.intMin and newValue <= item.intMax:
         state.items[itemIndex].intValue = newValue
-        state.applyChange(itemIndex)
+        state.applyChange(editorState, itemIndex)
         state.cancelEdit()
         return true
       else:
@@ -646,7 +709,7 @@ proc confirmEdit*(state: ConfigModeState): bool =
       let newValue = parseFloat(state.editBuffer)
       if newValue >= item.floatMin and newValue <= item.floatMax:
         state.items[itemIndex].floatValue = newValue
-        state.applyChange(itemIndex)
+        state.applyChange(editorState, itemIndex)
         state.cancelEdit()
         return true
       else:
@@ -655,14 +718,14 @@ proc confirmEdit*(state: ConfigModeState): bool =
       return false # Invalid number
   of cvkString:
     state.items[itemIndex].stringValue = state.editBuffer
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
     state.cancelEdit()
     return true
   of cvkColor:
     if parseThemeColor(state.editBuffer).isErr:
       return false # Invalid hex / not "termDefault"; keep editing
     state.items[itemIndex].colorValue = state.editBuffer
-    state.applyColorChange(itemIndex)
+    state.applyColorChange(editorState, itemIndex)
     state.cancelEdit()
     return true
   else:
@@ -792,7 +855,7 @@ proc enumPopupMoveDown*(state: ConfigModeState) =
     else:
       state.enumPopupIndex = 0
 
-proc enumPopupConfirm*(state: ConfigModeState) =
+proc enumPopupConfirm*(state: ConfigModeState, editorState: EditorState) =
   ## Confirm selection in enum popup
   if not state.enumPopupOpen:
     return
@@ -805,7 +868,7 @@ proc enumPopupConfirm*(state: ConfigModeState) =
   let item = state.items[itemIndex]
   if item.kind == cvkEnum and state.enumPopupIndex < item.enumOptions.len:
     state.items[itemIndex].enumValue = item.enumOptions[state.enumPopupIndex]
-    state.applyChange(itemIndex)
+    state.applyChange(editorState, itemIndex)
 
   state.closeEnumPopup()
 

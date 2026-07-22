@@ -29,12 +29,12 @@ export bookmark_manager_types
 export list_viewer
 
 proc newBookmarkManagerState*(): BookmarkManagerState =
-  BookmarkManagerState(items: @[], selectedIndex: 0, previousWindowIndex: 0)
+  BookmarkManagerState(items: @[], selectedIndex: 0)
 
 proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
   ## Update the bookmark manager entries by scanning all buffers for bookmarks
   state.items = @[]
-  for i, buf in buffers:
+  for buf in buffers:
     let filePath = if buf.filePath.isSome: buf.filePath.get else: "No Name"
     for bline in buf.bookmarks:
       let text =
@@ -47,7 +47,7 @@ proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
         else:
           ""
       state.items.add(
-        BookmarkEntry(bufferIndex: i, filePath: filePath, line: bline, text: text)
+        BookmarkEntry(bufferId: buf.id, filePath: filePath, line: bline, text: text)
       )
 
   # Clamp selectedIndex to valid range
@@ -68,10 +68,15 @@ proc createBookmarkManagerTextBuffer*(state: BookmarkManagerState): TextBuffer =
   )
 
 proc deleteSelectedBookmark*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
-  ## Delete the currently selected bookmark and refresh entries
+  ## Delete the currently selected bookmark and refresh entries.
+  ## Resolves the buffer by BufferId to survive re-indexing of `buffers`.
   let entry = state.getSelectedItem()
   if entry.isSome:
     let e = entry.get
-    if e.bufferIndex >= 0 and e.bufferIndex < buffers.len:
-      buffers[e.bufferIndex].toggleBookmark(e.line)
+    for buf in buffers:
+      if buf.id == e.bufferId:
+        # hasBookmark guard: a stale entry would otherwise re-add via toggle.
+        if buf.hasBookmark(e.line):
+          buf.toggleBookmark(e.line)
+        break
     state.updateEntries(buffers)

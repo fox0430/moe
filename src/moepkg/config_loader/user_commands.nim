@@ -30,7 +30,8 @@ import ../[config, command_config]
 import base, save_base
 
 # Top-level TOML section names handled by this module.
-const UserCommandsSectionNames* = ["CommandAliases", "ShellCommands"]
+const UserCommandsSectionNames* =
+  ["CommandAliases", "ShellCommands", "DisabledCommandAliases"]
 
 proc loadCommandAliasesConfig*(
     table: TomlTableRef,
@@ -102,6 +103,32 @@ proc loadShellCommandsConfig*(
     shellCommands[key.toLowerAscii()] =
       UserCommandEntry(command: cmd, description: description)
 
+proc loadDisabledCommandAliasesConfig*(
+    table: TomlTableRef,
+    disabledCommandAliases: var seq[string],
+    vr: var ValidationResult,
+) =
+  ## Load disabled built-in command aliases from [DisabledCommandAliases].
+  ## Value format: aliases = ["q", "w"]
+  const section = "DisabledCommandAliases"
+  for key, value in table.pairs:
+    if key != "aliases":
+      vr.addUnknownKey(fullKey(section, key))
+      continue
+    if value.kind != TomlValueKind.Array:
+      vr.addError(fullKey(section, key), $value.kind, "array of strings")
+      continue
+    for i, item in value.getElems():
+      if item.kind != TomlValueKind.String:
+        vr.addError(section & ".aliases[" & $i & "]", $item.kind, "string")
+        continue
+      let name = item.getStr().toLowerAscii()
+      if not isDefaultCommandAlias(name):
+        vr.addError(section & ".aliases[" & $i & "]", name, "default command alias")
+        continue
+      if name notin disabledCommandAliases:
+        disabledCommandAliases.add(name)
+
 proc appendCommandAliasesToml*(
     lines: var seq[string], commandAliases: Table[string, UserCommandEntry]
 ) =
@@ -128,4 +155,12 @@ proc appendShellCommandsToml*(
         val &= ", description = " & toTomlString(entry.description)
       val &= " }"
       lines.add toTomlString(name) & " = " & val
+    lines.add ""
+
+proc appendDisabledCommandAliasesToml*(
+    lines: var seq[string], disabledCommandAliases: seq[string]
+) =
+  if disabledCommandAliases.len > 0:
+    lines.add "[DisabledCommandAliases]"
+    lines.add "aliases = " & toTomlStringArray(disabledCommandAliases.sorted)
     lines.add ""

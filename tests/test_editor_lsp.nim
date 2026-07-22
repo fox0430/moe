@@ -19,11 +19,11 @@
 
 ## Tests for editor_lsp.nim
 
-import std/[unittest, os, options, tables]
+import std/[unittest, os, options, strutils, tables, importutils]
 
 import pkg/chronos
 
-import ../src/moepkg/[editor, buffer, config, config_loader, types]
+import ../src/moepkg/[editor, buffer, config, config_loader, message_log, types]
 import ../src/moepkg/editor_lsp {.all.}
 import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -45,21 +45,21 @@ suite "editor_lsp - maybeUpdateLsp":
   test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
     let activeBuffer = e.activeBuffer()
-    let initialSeq = e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0)
+    let initialVer = e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0)
 
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0) == initialSeq
+    check e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0) == initialVer
 
   test "Does nothing when buffer has not changed":
     let e = createTestEditor()
     e.lsp.enabled = true
     let activeBuffer = e.activeBuffer()
-    e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
+    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
 
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
+    check e.lastLspContentVersions[activeBuffer.id] == activeBuffer.contentVersion
 
   test "Tracking is per-buffer":
     let e = createTestEditor()
@@ -68,13 +68,97 @@ suite "editor_lsp - maybeUpdateLsp":
     # Another buffer's entry must not affect the active buffer's tracking
     let otherBuffer = newTextBuffer("other")
     e.addBuffer(otherBuffer)
-    e.lastLspChangeSeqs[otherBuffer.id] = 999
+    e.lastLspContentVersions[otherBuffer.id] = 999
 
-    e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
+    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
-    check e.lastLspChangeSeqs[otherBuffer.id] == 999
+    check e.lastLspContentVersions[activeBuffer.id] == activeBuffer.contentVersion
+    check e.lastLspContentVersions[otherBuffer.id] == 999
+
+  test "Undo then edit collides on changeSeq: server must still be resynced":
+    # undo() rewinds changeSeq to the pre-mutation value, so a follow-up edit
+    # can land on the exact same changeSeq that was already recorded as synced.
+    # A gate keyed on changeSeq treats the two different contents as identical
+    # and drops the didChange, permanently desyncing the server.
+    privateAccess(LspIntegration)
+
+    let tmpDir = getTempDir() / "moe_test_editor_lsp_content_version"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    let path = tmpDir / "collide.txt"
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.lsp.service.liveWorkerOverride = proc(p: string): bool =
+      true
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    e.openBufferWithLsp(buf)
+    check e.lsp.sentDocumentVersion(path) == some(1)
+
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    e.maybeUpdateLsp()
+    check e.lsp.sentDocumentVersion(path) == some(2)
+    let seqAfterA = buf.changeSeq
+
+    check buf.insertText(BufferPosition(line: 0, column: 1), "b").isOk
+    e.maybeUpdateLsp()
+    let syncedVersion = e.lsp.sentDocumentVersion(path).get
+    check syncedVersion == 3
+    let syncedSeq = buf.changeSeq
+
+    # Undo B then insert C without an intervening maybeUpdateLsp. The undo
+    # rewinds changeSeq to seqAfterA; the follow-up insert increments it back
+    # to syncedSeq. Content is now "ac", not the "ab" the server last saw.
+    check buf.undo().isOk
+    check buf.changeSeq == seqAfterA
+    check buf.insertText(BufferPosition(line: 0, column: 1), "c").isOk
+    check buf.changeSeq == syncedSeq
+    check buf.getTextString() == "ac"
+
+    e.maybeUpdateLsp()
+
+    # The server must have received the "ac" state. With a changeSeq-keyed
+    # gate, syncedSeq == the recorded value and the sync is dropped, leaving
+    # the server on "ab" forever.
+    check e.lsp.sentDocumentVersion(path).get > syncedVersion
+    check e.lsp.documents[path].shadow == "ac"
+
+  test "Failed onBufferChange logs to LSP message log and advances tracker":
+    # An unknown extension has no LSP config, so the untracked -> didOpen
+    # fallback in onBufferChange fails. The proc must surface that via
+    # logLspDegraded and advance lastLspContentVersions so the next tick does
+    # not re-run and re-log the same failing didChange.
+    privateAccess(LspIntegration)
+
+    let tmpDir = getTempDir() / "moe_test_maybe_update_lsp_err"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    clearLspMessageLog()
+
+    let path = tmpDir / "file.unknownlspext"
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+
+    e.maybeUpdateLsp()
+
+    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+    let logAfterFirst = getLspMessageLog()
+    check logAfterFirst.len == 1
+    check logAfterFirst[0].startsWith("[LSP] didChange ")
+
+    # Second call at the same contentVersion is a no-op: no extra log entry.
+    e.maybeUpdateLsp()
+    check getLspMessageLog().len == 1
 
 suite "editor_lsp - server config plumbing":
   test "custom command/extensions override the built-in default":
@@ -92,7 +176,19 @@ suite "editor_lsp - server config plumbing":
     check svcCfg.get.command == "my-nimlangserver --stdio"
     check svcCfg.get.args.len == 0
     check svcCfg.get.extensions == @["nim", "custom"]
-    check svcCfg.get.rawJsonLog
+    check svcCfg.get.traceLevel == traceVerbose
+
+  test "trace = messages is preserved (not silently downgraded to off)":
+    let config = newEditorConfig()
+    config.lsp.servers["nim"] = LspServerConfig(
+      command: "nimlangserver", extensions: @["nim"], trace: LspTraceLevel.ltMessages
+    )
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+
+    let svcCfg = e.lsp.service.getConfig("nim")
+    check svcCfg.isSome
+    check svcCfg.get.traceLevel == traceMessages
 
   test "language without a built-in default is registered":
     let config = newEditorConfig()
@@ -105,7 +201,7 @@ suite "editor_lsp - server config plumbing":
     check svcCfg.isSome
     check svcCfg.get.command == "zls"
     check svcCfg.get.extensions == @["zig"]
-    check not svcCfg.get.rawJsonLog
+    check svcCfg.get.traceLevel == traceOff
 
   test "empty command leaves the default untouched":
     let config = newEditorConfig()
@@ -119,6 +215,8 @@ suite "editor_lsp - server config plumbing":
     check svcCfg.get.command == "nimlangserver" # built-in default preserved
 
 suite "editor_lsp - applyDiagnosticsForUri":
+  privateAccess(LspIntegration)
+
   proc oneDiagnostic(msg: string): seq[lspTypes.Diagnostic] =
     @[
       lspTypes.Diagnostic(
@@ -138,7 +236,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     e.addBuffer(other)
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other")
+      pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other"), none(int)
     )
 
     check other.diagnostics.len == 1
@@ -152,7 +250,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-active.nim"), oneDiagnostic("on active")
+      pathToUri("/tmp/moe-diag-active.nim"), oneDiagnostic("on active"), none(int)
     )
     check activeBuffer.diagnostics.len == 1
 
@@ -163,9 +261,29 @@ suite "editor_lsp - applyDiagnosticsForUri":
     activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
 
     e.applyDiagnosticsForUri(
-      pathToUri("/tmp/moe-diag-nonexistent.nim"), oneDiagnostic("nowhere")
+      pathToUri("/tmp/moe-diag-nonexistent.nim"), oneDiagnostic("nowhere"), none(int)
     )
     check activeBuffer.diagnostics.len == 0
+
+  test "matches when buffer path has unnormalized segments vs normalized URI":
+    # absolutePath is a no-op on absolute paths, so both sides must go
+    # through normalizedPath or a `.` segment on one side drops diagnostics.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    let dir = getTempDir()
+    let name = "moe_diag_unnormalized.nim"
+    # Direct concat: joinPath ("/") collapses `.` so it can't build this form.
+    let unnormalized = dir & "." & $DirSep & name
+    let normalized = dir / name
+    activeBuffer.filePath = some(unnormalized)
+
+    e.applyDiagnosticsForUri(
+      pathToUri(normalized), oneDiagnostic("via normalized"), none(int)
+    )
+
+    check activeBuffer.diagnostics.len == 1
+    check activeBuffer.diagnostics[0].message == "via normalized"
 
   test "drops incoming diagnostics when disabled in config":
     let config = newEditorConfig()
@@ -177,10 +295,50 @@ suite "editor_lsp - applyDiagnosticsForUri":
     let path = getTempDir() / "moe_test_diag_disabled.nim"
     activeBuffer.filePath = some(path)
 
-    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("dropped"))
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("dropped"), none(int))
 
     check activeBuffer.diagnostics.len == 0
     check activeBuffer.getLineMarker(0).isNone
+
+  test "drops publish tagged with a version older than last didChange":
+    # Regression (P0'-3): reload / rapid-edit races leave an in-flight publish
+    # on the wire tagged with the pre-edit version. Applying it to the new
+    # content shifts diagnostics onto the wrong lines.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let path = normalizedPath(absolutePath(getTempDir() / "moe_test_diag_stale.nim"))
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some(path)
+    # Simulate the server-side wire state: we've sent up to version 2.
+    e.lsp.documents[path] = (version: 2, shadow: "")
+
+    # An in-flight publish tagged with version=1 arrives after we've already
+    # sent version=2. It must be dropped.
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("stale"), some(1))
+    check activeBuffer.diagnostics.len == 0
+
+  test "applies publish whose version matches the last didChange":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let path = normalizedPath(absolutePath(getTempDir() / "moe_test_diag_current.nim"))
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some(path)
+    e.lsp.documents[path] = (version: 1, shadow: "")
+
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("current"), some(1))
+    check activeBuffer.diagnostics.len == 1
+    check activeBuffer.diagnostics[0].message == "current"
+
+  test "applies publish with no version (backward compatible)":
+    # Many servers omit the optional version field; those frames still apply.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let path = getTempDir() / "moe_test_diag_untagged.nim"
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some(path)
+
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("untagged"), none(int))
+    check activeBuffer.diagnostics.len == 1
 
 suite "editor_lsp - clearAllDiagnostics":
   test "clears stored diagnostics and markers from all buffers":
@@ -201,8 +359,8 @@ suite "editor_lsp - clearAllDiagnostics":
         message: "boom",
       )
     ]
-    e.applyDiagnosticsForUri(pathToUri(activePath), diag)
-    e.applyDiagnosticsForUri(pathToUri(otherPath), diag)
+    e.applyDiagnosticsForUri(pathToUri(activePath), diag, none(int))
+    e.applyDiagnosticsForUri(pathToUri(otherPath), diag, none(int))
     check activeBuffer.diagnostics.len == 1
     check other.diagnostics.len == 1
     check activeBuffer.getLineMarker(0).isSome

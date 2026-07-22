@@ -186,6 +186,31 @@ suite "syntax_markdown - HTML comment":
     g.markdownNextToken()
     check g.kind == gtBuiltin
 
+  test "closing tag </div> is highlighted":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("</div>")
+    g.markdownNextToken()
+    check g.kind == gtBuiltin
+
+  test "bare `<` in prose is not highlighted":
+    # A `<` used as a comparison (e.g. `a < b`) must not be highlighted;
+    # otherwise every less-than in prose would render as a tag.
+    let tokens = collectTokens("a < b")
+    for t in tokens:
+      check t[0] != gtBuiltin
+
+  test "`<` followed by letters but no closing `>` is not highlighted":
+    # `<div` with no matching `>` on the same line is not an HTML tag.
+    let tokens = collectTokens("<div")
+    for t in tokens:
+      check t[0] != gtBuiltin
+
+  test "autolink `<http://example.com>` is highlighted":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("<http://example.com>")
+    g.markdownNextToken()
+    check g.kind == gtBuiltin
+
 suite "syntax_markdown - bold":
   test "**bold** with asterisks":
     let tokens = collectTokens("**bold**")
@@ -895,13 +920,16 @@ suite "Markdown - inline math mode":
     check hasMathOpen
     check hasMathClose
 
-  test "inline math across lines":
+  test "inline math does not span lines":
+    # Inline `$...$` must find its closing `$` on the same line. An opening
+    # `$` with the closing `$` on a later line would otherwise let an unclosed
+    # `$` pollute subsequent lines.
     let tokens = collectTokens("$x+\ny$")
-    var hasStringLit = false
+    var hasMathOpen = false
     for t in tokens:
-      if t[0] == gtStringLit:
-        hasStringLit = true
-    check hasStringLit
+      if t == (gtStringLit, "$"):
+        hasMathOpen = true
+    check not hasMathOpen
 
 suite "Markdown - display math mode":
   test "display math $$E=mc^2$$":
@@ -1001,12 +1029,27 @@ suite "Markdown - math mode LaTeX tokens":
     check tokens[1] == (gtLongStringLit, "$$")
 
   test "unclosed inline math at EOF":
+    # A `$` with no closing `$` on the same line must not enter math mode,
+    # otherwise it would flip the rest of the document into math styling.
     let tokens = collectTokens("$x+y")
-    check tokens[0] == (gtStringLit, "$")
-    # Content is parsed but no closing $
+    check tokens[0] == (gtPunctuation, "$")
     check tokens.len >= 2
     for t in tokens:
       check t[0] != gtEof
+
+  test "unclosed inline math does not swallow following markdown":
+    let tokens = collectTokens("**abc** - a$\n\n## Heading\n**bold**")
+    # The `$` alone at end of line must not turn `## Heading` and `**bold**`
+    # into math-mode gtNone/gtOperator noise.
+    var hasHeading = false
+    var hasBold = false
+    for t in tokens:
+      if t == (gtBuiltin, "## Heading"):
+        hasHeading = true
+      if t == (gtKeyword, "**bold**"):
+        hasBold = true
+    check hasHeading
+    check hasBold
 
   test "unclosed display math at EOF":
     let tokens = collectTokens("$$x+y")

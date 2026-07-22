@@ -26,7 +26,10 @@ import std/[options, tables, strutils, os]
 
 import pkg/editorconfig
 
-import buffer, config, types, logger
+import buffer, config, logger
+
+const MaxTabWidth = 16
+  ## Matches the global config cfgMax for Standard.tabStop/shiftWidth.
 
 proc getEditorConfigProperties*(filePath: string): Option[Table[string, string]] =
   ## Get EditorConfig properties for a file path.
@@ -63,7 +66,7 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
   if props.hasKey("tab_width"):
     try:
       let val = parseInt(props["tab_width"])
-      if val > 0:
+      if val > 0 and val <= MaxTabWidth:
         bufEc.tabStop = some(val)
     except ValueError:
       discard
@@ -72,13 +75,18 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
   if props.hasKey("indent_size"):
     let sizeStr = props["indent_size"]
     if sizeStr == "tab":
-      # indent_size = tab means use tab_width value
-      if bufEc.tabStop.isSome:
-        bufEc.shiftWidth = bufEc.tabStop
+      # indent_size = tab: shiftWidth follows the tab width. Mirror
+      # tab_width when set; otherwise store 0, the vim-style "follow
+      # tabStop" sentinel that effectiveShiftWidth() resolves at read.
+      bufEc.shiftWidth =
+        if bufEc.tabStop.isSome:
+          bufEc.tabStop
+        else:
+          some(0)
     else:
       try:
         let val = parseInt(sizeStr)
-        if val > 0:
+        if val > 0 and val <= MaxTabWidth:
           bufEc.shiftWidth = some(val)
           # If tab_width was not explicitly set, indent_size also sets tabStop
           if not props.hasKey("tab_width"):
@@ -113,14 +121,20 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
   if props.hasKey("charset"):
     let cs = props["charset"]
     case cs
-    of "utf-8", "utf-8-bom":
+    of "utf-8":
       buffer.encoding = utf8
+      buffer.hasBom = false
+    of "utf-8-bom":
+      buffer.encoding = utf8
+      buffer.hasBom = true
     of "utf-16be":
       buffer.encoding = utf16Be
+      # UTF-16 needs a BOM for endianness detection on reload
+      buffer.hasBom = true
     of "utf-16le":
       buffer.encoding = utf16Le
+      buffer.hasBom = true
     of "latin1":
-      # latin1 is not directly supported, keep as utf8
       discard
     else:
       discard
@@ -138,27 +152,6 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
     "Applied EditorConfig to " & buffer.filePath.get("(unnamed)") & ": " & $props,
   )
 
-proc applyBufferEditorConfig*(
-    display: var DisplaySettings, buffer: TextBuffer, config: EditorConfig
-) =
-  ## Apply per-buffer EditorConfig overrides to DisplaySettings.
-  ## Falls back to global config values for fields not overridden.
-
-  # Always reset to global config values first
-  display.tabStop = config.standard.tabStop
-  display.shiftWidth = config.standard.shiftWidth
-  display.expandTab = config.standard.expandTab
-
-  # Apply per-buffer overrides if present
-  if buffer.editorConfig.isSome:
-    let ec = buffer.editorConfig.get
-    if ec.tabStop.isSome:
-      display.tabStop = ec.tabStop.get
-    if ec.shiftWidth.isSome:
-      display.shiftWidth = ec.shiftWidth.get
-    if ec.expandTab.isSome:
-      display.expandTab = ec.expandTab.get
-
 proc applyEditorConfigToBuffer*(buffer: TextBuffer, config: EditorConfig) =
   ## Convenience proc that gets EditorConfig properties and applies them
   ## to a buffer. Does nothing if EditorConfig is disabled or buffer has no path.
@@ -168,6 +161,10 @@ proc applyEditorConfigToBuffer*(buffer: TextBuffer, config: EditorConfig) =
   let props = getEditorConfigProperties(buffer.filePath.get)
   if props.isSome:
     applyEditorConfig(buffer, props.get)
+  else:
+    # No matching section (or file removed) — drop stale overrides so a reload
+    # falls back to the global config.
+    buffer.editorConfig = none(BufferEditorConfig)
 
 proc shouldTrimTrailingWhitespace*(buffer: TextBuffer): bool =
   ## Check if the buffer has EditorConfig trim_trailing_whitespace enabled.

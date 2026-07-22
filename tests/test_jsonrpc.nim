@@ -310,6 +310,40 @@ suite "Message Parsing - parseJsonRpcMessage":
     check result.isErr
     check result.error.contains("Invalid")
 
+  test "accepts response with string id":
+    let body = """{"jsonrpc":"2.0","id":"42","result":{"ok":true}}"""
+    let result = parseJsonRpcMessage(body)
+    check result.isOk
+    check result.get.kind == jrmkResponse
+    check result.get.respId == 42
+
+  test "accepts request with string id":
+    let body = """{"jsonrpc":"2.0","id":"7","method":"workspace/applyEdit"}"""
+    let result = parseJsonRpcMessage(body)
+    check result.isOk
+    check result.get.kind == jrmkRequest
+    check result.get.reqId == 7
+
+  test "accepts error response with string id":
+    let body =
+      """{"jsonrpc":"2.0","id":"9","error":{"code":-32601,"message":"Method not found"}}"""
+    let result = parseJsonRpcMessage(body)
+    check result.isOk
+    check result.get.kind == jrmkError
+    check result.get.errId == some(9)
+
+  test "rejects response with non-numeric string id":
+    let body = """{"jsonrpc":"2.0","id":"abc","result":{}}"""
+    let result = parseJsonRpcMessage(body)
+    check result.isErr
+    check result.error.contains("Non-numeric string id")
+
+  test "rejects response with unsupported id kind":
+    let body = """{"jsonrpc":"2.0","id":1.5,"result":{}}"""
+    let result = parseJsonRpcMessage(body)
+    check result.isErr
+    check result.error.contains("Unsupported id kind")
+
 suite "Integration - Round-trip Encoding and Parsing":
   test "request round-trip":
     let original = encodeRequest(42, "test/method", %*{"param1": "value1"})

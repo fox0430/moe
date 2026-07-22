@@ -37,6 +37,7 @@ import
     render_utils, clipboard,
   ]
 import ../src/moepkg/handler {.all.}
+import ../src/moepkg/command_handlers/result_processor
 
 proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
   ViewPort(
@@ -54,29 +55,9 @@ proc createTestState(): EditorState =
   )
   EditorState(
     activeWindow: window,
-    display: DisplaySettings(
-      showTabLine: false,
-      showStatusLine: true,
-      multiStatusLine: false,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
-      showLineNumbers: true,
-      showCursorLine: false,
-      showSyntax: true,
-      showIndentationLines: false,
-      showSidebar: false,
-      showGitDiff: false,
-      showSyntaxChecker: false,
-      showCodeLens: false,
-      showDocumentHighlight: false,
-      lineWrap: true,
-      tabStop: 2,
-      expandTab: true,
-      autoIndent: true,
-      autoCloseParen: false,
-      autoDeleteParen: false,
-    ),
+    display:
+      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
+    config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
     macroState: MacroState(
       isRecording: false,
@@ -1345,8 +1326,8 @@ proc createFilerEditor(
 suite "handleMouseEvent - Left Click Filer Mode":
   test "Click selects correct entry (no tab line)":
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=3 → should select entry 3 (topLine=0, no tab offset)
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
@@ -1356,8 +1337,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click selects correct entry with tab line offset":
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = true
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
 
     # Click on y=3 with tab line → adjustedY = 3 - 1 = 2 → entry 2
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
@@ -1367,8 +1348,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click selects correct entry with topLine offset":
     let e = createFilerEditor(20, topLine = 5)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=2, topLine=5 → entry 5 + 2 = 7
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 2))
@@ -1378,8 +1359,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click selects correct entry with both tab line and topLine":
     let e = createFilerEditor(20, topLine = 5)
-    e.state.display.showTabLine = true
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
 
     # Click on y=4, tab offset=1 → adjustedY=3, topLine=5 → entry 8
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 4))
@@ -1389,8 +1370,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click on tab line area is ignored":
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = true
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
 
     # Click on y=0 (tab line row) → adjustedY = -1 → should be ignored
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 0))
@@ -1401,8 +1382,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
     # viewport height=24, statusLine+cmdLine=2 reserved lines
     # valid filer area: y in [0..21] (without tab line)
     let e = createFilerEditor(20)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=23 (last row, command line area) → adjustedY=23 >= 24-2=22 → ignored
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 23))
@@ -1411,8 +1392,8 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
   test "Click beyond entry count is ignored":
     let e = createFilerEditor(3)
-    e.state.display.showTabLine = false
-    e.state.display.showStatusLine = true
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
 
     # Click on y=5, but only 3 entries → clickedIndex=5 >= 3 → ignored
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 5))
@@ -2478,6 +2459,21 @@ suite "middleClickPaste":
 
     check e.activeBuffer.getLine(0) == "hello"
 
+  test "Read-only buffer in Normal mode does not enter Insert or move cursor":
+    let e = createTestEditorForMiddleClick("hello")
+    e.state.mode = EditorMode.Normal
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.activeBuffer.readOnly = true
+
+    e.middleClickPaste()
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.statusMessage == "Buffer is read-only"
+    check e.activeBuffer.getLine(0) == "hello"
+    check e.windowManager.windows[0].cursor.line == 0
+    check e.windowManager.windows[0].cursor.column == 0
+    check not e.activeBuffer.inTransaction
+
   test "Insert mode - paste from clipboard":
     if not isClipboardToolAvailable():
       skip()
@@ -2922,6 +2918,114 @@ suite "handleKeyCombo - frontend-neutral input":
     check e.state.input.search.text == "w"
     check e.state.input.search.cursor == 1
 
+suite "Macro recording - Command / Search overlay keys":
+  # Regression: overlay dispatch used to bypass macro recording, so `qa:s/foo/bar/<CR>q`
+  # would capture only ":" and lose the rest of the command line (same for `/pattern<CR>`).
+  proc createEditorForOverlayRecord(content: string): Editor =
+    let config = newEditorConfig()
+    result = newEditor(config)
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.state.mode = EditorMode.Normal
+
+  proc startRecording(e: Editor, register: char) =
+    e.state.macroState.isRecording = true
+    e.state.macroState.register = register
+    e.state.macroState.recordedKeys = @[]
+    e.state.macroState.recordStartKey = "q"
+
+  test "Command overlay: keys after ':' land in recordedKeys":
+    let e = createEditorForOverlayRecord("hello foo bar")
+    e.startRecording('a')
+    e.state.enterCommandOverlay()
+
+    for ch in "s/foo/bar/":
+      discard e.handleEvent(makeCharEvent($ch))
+    discard e.handleEvent(makeEnterEvent())
+
+    check e.state.macroState.recordedKeys ==
+      @["s", "/", "f", "o", "o", "/", "b", "a", "r", "/", "<Enter>"]
+
+  test "Search overlay: pattern and Enter recorded":
+    let e = createEditorForOverlayRecord("hello world")
+    e.startRecording('a')
+    e.state.enterSearchOverlay(SearchDirection.Forward)
+
+    for ch in "wor":
+      discard e.handleEvent(makeCharEvent($ch))
+    discard e.handleEvent(makeEnterEvent())
+
+    check e.state.macroState.recordedKeys == @["w", "o", "r", "<Enter>"]
+
+  test "Command overlay Escape recorded so playback replays cancel":
+    let e = createEditorForOverlayRecord("hello")
+    e.startRecording('a')
+    e.state.enterCommandOverlay()
+
+    discard e.handleEvent(makeCharEvent("a"))
+    discard e.handleEvent(makeCharEvent("b"))
+    discard
+      e.handleEvent(Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Escape)))
+
+    check e.state.macroState.recordedKeys == @["a", "b", "<Escape>"]
+    check not e.state.isCommandOverlay
+
+  test "Recording paused during playback (withPlaybackGuard)":
+    # Sanity: replayed keys must not re-enter recordedKeys.
+    let e = createEditorForOverlayRecord("hello")
+    e.startRecording('a')
+    e.state.enterCommandOverlay()
+    e.state.macroState.playbackDepth = 1
+    e.state.macroState.isRecording = false # withPlaybackGuard mirror
+
+    discard e.handleEvent(makeCharEvent("x"))
+
+    check e.state.macroState.recordedKeys.len == 0
+
+suite "Macro playback - overlay-aware routing":
+  # Regression: nested key replay dispatched by state.mode, so overlay-mode keys
+  # were mis-interpreted by the base handler. runNestedKeyCombo now consults
+  # `overlayPlaybackHook` (wired from handler.nim) to route via the overlay handler.
+  proc createEditorForOverlayPlayback(content: string): Editor =
+    let config = newEditorConfig()
+    result = newEditor(config)
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].bufferIds = @[buf.id]
+    result.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.state.mode = EditorMode.Normal
+
+  test "Character keys in Command overlay build commandText, not buffer edits":
+    let e = createEditorForOverlayPlayback("hello")
+    e.state.enterCommandOverlay()
+
+    let sKey = KeyCombo(isSpecial: false, char: "s", modifiers: {})
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    let fKey = KeyCombo(isSpecial: false, char: "f", modifiers: {})
+
+    discard e.handlerManager.runKeyCombo(e, sKey)
+    discard e.handlerManager.runKeyCombo(e, slashKey)
+    discard e.handlerManager.runKeyCombo(e, fKey)
+
+    check e.state.input.commandText == ":s/f"
+    check $e.activeBuffer.getLine(0) == "hello"
+
+  test "Character keys in Search overlay build search text":
+    let e = createEditorForOverlayPlayback("hello world")
+    e.state.enterSearchOverlay(SearchDirection.Forward)
+
+    for ch in "wor":
+      let kc = KeyCombo(isSpecial: false, char: $ch, modifiers: {})
+      discard e.handlerManager.runKeyCombo(e, kc)
+
+    check e.state.input.search.text == "wor"
+
 suite "updateViewportReservedLines - steady reserve":
   test "Multi-line status message keeps the motion reserve steady":
     # Motion scrolling reads viewportReservedLines, which must
@@ -2930,7 +3034,7 @@ suite "updateViewportReservedLines - steady reserve":
     # the screen cursor).
     let e = createTestEditorWithBuffer("line0\nline1\nline2")
     e.screenSize.width = 80
-    e.state.display.showTabLine = false
+    e.state.showTabLine = false
 
     e.state.setStatusQuiet("error 1\nerror 2\nerror 3")
     # The message grew the dynamic reserve the old code would have used...
@@ -2940,3 +3044,136 @@ suite "updateViewportReservedLines - steady reserve":
     # ...but the motion reserve stays steady.
     e.updateViewportReservedLines()
     check e.state.windowDisplay.viewportReservedLines == steadyBottomAreaHeight()
+
+proc addSecondWindow(e: Editor, buf2: TextBuffer, vpx: int = 40) =
+  ## Split the 80-wide viewport at `vpx` and add a right-half window.
+  e.windowManager.windows[0].viewport =
+    ViewPort(x: 0, y: 0, width: vpx, height: 24, topLine: 0, leftColumn: 0)
+  let win2 = EditorWindow(
+    buffer: buf2,
+    bufferIds: @[buf2.id],
+    viewport:
+      ViewPort(x: vpx, y: 0, width: 80 - vpx, height: 24, topLine: 0, leftColumn: 0),
+    cursor: BufferPosition(line: 0, column: 0),
+    active: false,
+    mode: EditorMode.Normal,
+  )
+  e.windowManager.windows.add(win2)
+
+suite "handleMouseEvent - Cross-window jump finalizes stale state":
+  test "Insert-mode transaction on old buffer is committed":
+    # Without the finalize hook, bufA's open transaction leaks past the jump.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy\nzzz")
+    e.addSecondWindow(buf2)
+
+    let bufA = e.windowManager.windows[0].buffer
+    e.state.mode = EditorMode.Insert
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    check bufA.beginTransaction("Insert mode edit").isOk
+    check bufA.inTransaction
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 1))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 1
+    check not bufA.inTransaction
+    check e.state.editState.insertModeStartPos.isNone
+    check e.state.mode == EditorMode.Normal
+
+  test "Visual selection is cleared before touching new buffer":
+    # Anchor line 5 on a 6-line buf, click into a 2-line buf: a surviving
+    # visualSelection would OOB in the next Visual operator.
+    let e = createTestEditorWithBuffer("a\nb\nc\nd\ne\nf")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("x\ny")
+    e.addSecondWindow(buf2)
+
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 5, column: 0),
+      current: BufferPosition(line: 5, column: 0),
+      active: true,
+      kind: vskChar,
+    )
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 1
+    check not e.state.visualSelection.active
+    check e.state.mode == EditorMode.Normal
+
+  test "Pending operator does not fire on the newly-active buffer":
+    # PendingOperator.startPos has no buffer identity; a surviving one would
+    # apply bufA's coordinates to bufB on the next motion.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy")
+    e.addSecondWindow(buf2)
+
+    e.state.mode = EditorMode.Normal
+    e.state.editState.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: BufferPosition(line: 2, column: 0),
+      )
+    )
+    e.state.editState.pendingTextObject = some(PendingTextObject(modifier: tomInner))
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 1
+    check e.state.editState.pendingOperator.isNone
+    check e.state.editState.pendingTextObject.isNone
+
+  test "Ctrl-o (insert-normal) commits Insert transaction on jump":
+    # Ctrl-o keeps an open Insert transaction while state.mode is Normal;
+    # the mode-branch alone would miss it.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy")
+    e.addSecondWindow(buf2)
+
+    let bufA = e.windowManager.windows[0].buffer
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    check bufA.beginTransaction("Insert mode edit").isOk
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
+    check handled == true
+
+    check not bufA.inTransaction
+    check not e.state.insertNormalMode
+    check e.state.editState.insertModeStartPos.isNone
+
+  test "Click on the same window keeps mode/state intact":
+    # The finalize hook must fire only on cross-window jumps.
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+
+    let bufA = e.windowManager.windows[0].buffer
+    e.state.mode = EditorMode.Insert
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    check bufA.beginTransaction("Insert mode edit").isOk
+
+    # Two windows so the same-window branch (not the single-window one) runs.
+    let buf2 = newTextBuffer("xxx")
+    e.addSecondWindow(buf2)
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(10, 1))
+    check handled == true
+
+    check e.windowManager.activeWindowIndex == 0
+    check bufA.inTransaction
+    check e.state.mode == EditorMode.Insert
+    check e.state.editState.insertModeStartPos.isSome

@@ -1617,10 +1617,12 @@ suite "Completion - triggerCompletion preserves lspItems":
     check mgr.menu.entries[0].source == csLsp
 
 suite "Completion - renderCompletionPopup with multibyte characters":
-  test "Multibyte word truncated correctly by rune count":
-    # contentWidth=6 (borderless, width=6), word "日本語テスト" is 6 runes
-    # but each CJK char is 2 cells wide, so it won't fit in 6 cells.
-    # Here we test that truncation uses runeLen, not byte len.
+  test "Multibyte word truncated correctly by display width":
+    # contentWidth=5 cells, "日本語テスト" is 6 CJK runes × 2 cells = 12 cells.
+    # Truncation must be display-width aware: fit as many wide clusters as
+    # possible followed by "…". Two "日本" clusters (4 cells) + "…" (1 cell)
+    # = 5 cells fits exactly. Slicing by rune index would keep 4 CJK runes and
+    # overflow to 9 cells.
     let menu = CompletionMenu(
       entries: @[
         CompletionEntry(word: "日本語テスト", matchScore: 100, source: csBuffer)
@@ -1630,17 +1632,16 @@ suite "Completion - renderCompletionPopup with multibyte characters":
       scrollOffset: 0,
       maxVisible: 10,
     )
-    # Narrow popup: contentWidth = 5 (width=5, no border)
     let pos = PopupPosition(x: 0, y: 0, width: 5, height: 1)
 
     var termBuffer = newBuffer(80, 24)
     renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
 
-    # "日本語テスト" has runeLen=6 > contentWidth=5, so truncated to 4 runes + "…"
-    # First rune "日" rendered at x=0
     check termBuffer[0, 0].symbol == "日"
+    check termBuffer[2, 0].symbol == "本"
+    check termBuffer[4, 0].symbol == "…"
 
-  test "ASCII word not affected by runeLen fix":
+  test "ASCII word truncates on display width":
     let menu = CompletionMenu(
       entries: @[CompletionEntry(word: "longword", matchScore: 100, source: csBuffer)],
       selectedIndex: 0,
@@ -1648,7 +1649,7 @@ suite "Completion - renderCompletionPopup with multibyte characters":
       scrollOffset: 0,
       maxVisible: 10,
     )
-    # contentWidth=5: "longword" (runeLen=8 > 5) → truncated to "long…"
+    # contentWidth=5: "longword" (8 cells > 5) → "long…"
     let pos = PopupPosition(x: 0, y: 0, width: 5, height: 1)
 
     var termBuffer = newBuffer(80, 24)
@@ -1658,6 +1659,7 @@ suite "Completion - renderCompletionPopup with multibyte characters":
     check termBuffer[1, 0].symbol == "o"
     check termBuffer[2, 0].symbol == "n"
     check termBuffer[3, 0].symbol == "g"
+    check termBuffer[4, 0].symbol == "…"
 
   test "Wide char word writes continuation cell to prevent ghost":
     # When the popup contains wide (2-col) characters, the cell at x+1 must
@@ -1918,3 +1920,187 @@ suite "Completion - snippet display label":
   test "Buffer entries with no label fall back to the word for display":
     let entry = CompletionEntry(word: "template", source: csBuffer)
     check entry.displayText == "template"
+
+suite "Completion - renderCompletionPopup narrow width":
+  test "Narrow popup width does not crash (word only)":
+    let menu = CompletionMenu(
+      entries: @[CompletionEntry(word: "println", matchScore: 100, source: csBuffer)],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [0, 1, 2, 3, 4]:
+      let pos = PopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = true)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+  test "Narrow popup width does not crash (word + detail)":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "println", matchScore: 100, source: csLsp, detail: some("fn(args)")
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [0, 1, 2, 3, 4, 8]:
+      let pos = PopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = true)
+
+  test "Multibyte word/detail truncate without crashing":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "あいうえおかき",
+          matchScore: 100,
+          source: csLsp,
+          detail: some("さしすせそ"),
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    var termBuffer = newBuffer(80, 24)
+    for w in [4, 6, 8, 10]:
+      let pos = PopupPosition(x: 0, y: 0, width: w, height: 3)
+      renderCompletionPopup(termBuffer, menu, pos, showBorder = true)
+
+suite "Completion - display-width sizing (CJK/wide chars)":
+  test "calculateMaxWordWidth reports display cells for CJK words":
+    # "テスト" = 3 CJK runes × 2 cells = 6 cells; "abc" = 3 cells.
+    let entries = @[
+      CompletionEntry(word: "abc", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "テスト", matchScore: 90, source: csBuffer),
+    ]
+    check calculateMaxWordWidth(entries) == 6
+
+  test "calculateMaxWordWidth mixes ASCII and CJK by display width":
+    # "hello世界" = 5 ASCII + 2 CJK × 2 = 9 cells; "abcdefgh" = 8 cells.
+    let entries = @[
+      CompletionEntry(word: "abcdefgh", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "hello世界", matchScore: 90, source: csBuffer),
+    ]
+    check calculateMaxWordWidth(entries) == 9
+
+  test "calculateMaxDetailWidth reports display cells for CJK details":
+    # "文字列" = 6 cells; "int" = 3 cells.
+    let entries = @[
+      CompletionEntry(word: "a", matchScore: 100, source: csLsp, detail: some("int")),
+      CompletionEntry(
+        word: "b", matchScore: 90, source: csLsp, detail: some("文字列")
+      ),
+    ]
+    check calculateMaxDetailWidth(entries) == 6
+
+  test "calculateDocPanelPosition sizes contentWidth by display cells":
+    # Two lines; widest is 20 CJK runes × 2 = 40 cells. Below DocPanelMaxWidth (60).
+    var wide = ""
+    for _ in 0 ..< 20:
+      wide.add("あ")
+    let docPanel = DocPanel(lines: @["short", wide], scrollOffset: 0, visible: true)
+    let completionPos = PopupPosition(x: 0, y: 0, width: 20, height: 5)
+    let pos = calculateDocPanelPosition(completionPos, 200, 24, docPanel)
+
+    # popupWidth = contentWidth + 2 (border); contentWidth = 40 + PopupPadding.
+    check pos.width == 40 + PopupPadding + 2
+
+  test "calculateDocPanelPosition clamps CJK content at DocPanelMaxWidth":
+    # 40 CJK runes × 2 = 80 cells + padding would exceed DocPanelMaxWidth (60).
+    var wide = ""
+    for _ in 0 ..< 40:
+      wide.add("あ")
+    let docPanel = DocPanel(lines: @[wide], scrollOffset: 0, visible: true)
+    let completionPos = PopupPosition(x: 0, y: 0, width: 20, height: 5)
+    let pos = calculateDocPanelPosition(completionPos, 200, 24, docPanel)
+
+    check pos.width == DocPanelMaxWidth + 2
+
+suite "Completion - truncation display-width boundaries":
+  test "CJK word that exactly fits is not truncated":
+    # "日本" = 4 cells; contentWidth = 4 → no truncation, no ellipsis.
+    let menu = CompletionMenu(
+      entries: @[CompletionEntry(word: "日本", matchScore: 100, source: csBuffer)],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 4, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    check termBuffer[0, 0].symbol == "日"
+    check termBuffer[2, 0].symbol == "本"
+
+  test "CJK word one cell over the limit becomes ellipsis-terminated":
+    # "日本語" = 6 cells; contentWidth = 5 → "日" (2) + "…" (1) fits in 3 cells,
+    # but "日本" (4) + "…" would be 5 cells which fits exactly.
+    let menu = CompletionMenu(
+      entries: @[CompletionEntry(word: "日本語", matchScore: 100, source: csBuffer)],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 5, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    check termBuffer[0, 0].symbol == "日"
+    check termBuffer[2, 0].symbol == "本"
+    check termBuffer[4, 0].symbol == "…"
+
+  test "CJK word truncates before overflowing wide cluster":
+    # contentWidth = 3, wide next cluster (2 cells) + ellipsis (1) = 3 fits but
+    # only "日" (2) + "…" (1) is placeable without splitting a wide char.
+    let menu = CompletionMenu(
+      entries: @[CompletionEntry(word: "日本語", matchScore: 100, source: csBuffer)],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 3, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    check termBuffer[0, 0].symbol == "日"
+    check termBuffer[2, 0].symbol == "…"
+
+  test "CJK detail truncates by display width, not rune count":
+    # Word "a" (1 cell) + gap DetailSeparator; detail "型情報表示" = 10 cells.
+    # Popup wide enough for word, gap, then a small detail slot forces truncation.
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "a", matchScore: 100, source: csLsp, detail: some("型情報表示")
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    # word 1 + gap 2 + detail slot 5 = 8 cells total content
+    let pos = PopupPosition(x: 0, y: 0, width: 8, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Word at col 0, gap fills cols 1..2, detail begins at col 3.
+    check termBuffer[0, 0].symbol == "a"
+    # First CJK detail cluster occupies cols 3-4 (wide), second at 5-6, "…" at 7.
+    check termBuffer[3, 0].symbol == "型"
+    check termBuffer[5, 0].symbol == "情"
+    check termBuffer[7, 0].symbol == "…"

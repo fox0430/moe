@@ -169,6 +169,27 @@ suite "Buffer - Multiple Undo/Redo":
     check r.isOk
     check b.getLine(0) == "abc"
 
+  test "undo after multi-count redo unwinds most recent change first":
+    let b = newTextBuffer("a")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "b")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "c")
+    discard b.insertText(BufferPosition(line: 0, column: 3), "d")
+    check b.getLine(0) == "abcd"
+
+    discard b.undo(3)
+    check b.getLine(0) == "a"
+
+    let r = b.redo(3)
+    check r.isOk
+    check b.getLine(0) == "abcd"
+
+    discard b.undo()
+    check b.getLine(0) == "abc"
+    discard b.undo()
+    check b.getLine(0) == "ab"
+    discard b.undo()
+    check b.getLine(0) == "a"
+
   test "undo/redo sequence":
     let b = newTextBuffer("test")
     discard b.insertText(BufferPosition(line: 0, column: 4), " 1")
@@ -305,6 +326,56 @@ suite "Buffer - Transaction lastChangedLines":
     # lastChangedLines should be unchanged
     check b.lastChangedLines == valBefore
 
+  test "consecutive edits keep minimum lastChangedLines while pending":
+    # Regression test: a second edit further down before updateHighlight
+    # consumes the pending anchor must not move the anchor past the first
+    # edit, or the first edit's line keeps a stale highlight.
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
+
+    discard b.insertText(BufferPosition(line: 2, column: 0), "x")
+    discard b.insertText(BufferPosition(line: 10, column: 0), "y")
+
+    check b.highlightNeedsUpdate
+    check b.lastChangedLines == 2
+
+  test "edit after consumed update starts a fresh anchor":
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5")
+
+    discard b.insertText(BufferPosition(line: 1, column: 0), "x")
+    check b.lastChangedLines == 1
+
+    # Simulate updateHighlight consuming the pending update.
+    b.highlightNeedsUpdate = false
+
+    discard b.insertText(BufferPosition(line: 4, column: 0), "y")
+    check b.lastChangedLines == 4
+
+  test "commitTransaction keeps pending pre-transaction anchor":
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12")
+
+    discard b.insertText(BufferPosition(line: 2, column: 0), "x")
+    discard b.beginTransaction("later lines")
+    discard b.insertText(BufferPosition(line: 10, column: 0), "y")
+    discard b.insertText(BufferPosition(line: 12, column: 0), "z")
+    discard b.commitTransaction()
+
+    check b.lastChangedLines == 2
+
+  test "undo after consumed update re-anchors at the undone line":
+    let b = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5")
+
+    discard b.insertText(BufferPosition(line: 0, column: 0), "x")
+    b.highlightNeedsUpdate = false
+    b.lastChangedLines = 0
+
+    discard b.insertText(BufferPosition(line: 4, column: 0), "y")
+    b.highlightNeedsUpdate = false
+
+    let r = b.undo()
+    check r.isOk
+    check b.highlightNeedsUpdate
+    check b.lastChangedLines == 4
+
 suite "Buffer - Modified Flag":
   test "isModified returns false for new buffer":
     let b = newTextBuffer("test")
@@ -439,6 +510,57 @@ suite "Buffer - Modified Flag":
     check b.getLine(0) == "test"
     check b.changeSeq == b.savedSeq
     check not b.isModified
+
+  test "isModified after save -> undo -> different edit (savedSeq collision)":
+    # Regression: undo restores changeSeq, so a subsequent different edit can
+    # re-hit the saved value and mask a dirty buffer (silent loss on :q).
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "C")
+    check b.getLine(0) == "ABC"
+    b.markSaved()
+    check not b.isModified
+
+    discard b.undo()
+    check b.getLine(0) == "AB"
+    check b.isModified
+
+    discard b.insertText(BufferPosition(line: 0, column: 2), "D")
+    check b.getLine(0) == "ABD"
+    check b.isModified
+
+  test "isModified restored to false after undo/redo lands on saved state":
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    b.markSaved()
+    check not b.isModified
+
+    discard b.undo()
+    check b.isModified
+
+    discard b.redo()
+    check b.getLine(0) == "AB"
+    check not b.isModified
+
+  test "isModified after save -> undo -> different edit (PieceTable)":
+    setConfiguredBackend(PieceTable)
+    defer:
+      setConfiguredBackend(GapBuffer)
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "C")
+    b.markSaved()
+    check not b.isModified
+
+    discard b.undo()
+    check b.isModified
+
+    discard b.insertText(BufferPosition(line: 0, column: 2), "D")
+    check b.getLine(0) == "ABD"
+    check b.isModified
 
 suite "Buffer - Cursor Position Suggestion":
   test "undo returns suggested cursor position":
@@ -1193,3 +1315,53 @@ suite "Buffer - Transaction Cursor Cache Staleness":
     let r = b.redo()
     check r.isOk
     check b.getLine(0) == "ABCDEFGHIKLMN"
+
+suite "Buffer - readOnly guard on undo/redo":
+  # buffer/edit rejects mutations on readOnly buffers, but undo()/redo() used to
+  # replay history without checking the flag — so a buffer set readOnly AFTER
+  # edits were recorded could still be mutated through the history stacks. The
+  # guards below complete "readOnly rejects on every mutation path".
+  test "undo on a readOnly buffer returns err and leaves content unchanged":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check b.getLine(0) == "hello!"
+    let undoLenBefore = b.undoStack.len
+    let redoLenBefore = b.redoStack.len
+
+    b.readOnly = true
+    let r = b.undo()
+    check r.isErr
+    check r.error == "Buffer is read-only"
+    check b.getLine(0) == "hello!"
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore
+
+  test "redo on a readOnly buffer returns err and leaves content unchanged":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    let u = b.undo()
+    check u.isOk
+    check b.getLine(0) == "hello"
+    let undoLenBefore = b.undoStack.len
+    let redoLenBefore = b.redoStack.len
+
+    b.readOnly = true
+    let r = b.redo()
+    check r.isErr
+    check r.error == "Buffer is read-only"
+    check b.getLine(0) == "hello"
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore
+
+  test "undo err on readOnly precedes the 'nothing to undo' err":
+    # Guard ordering matters: readOnly must reject even before we look at the
+    # stacks, so a fresh readOnly buffer reports the right reason (not
+    # "Nothing to undo").
+    let b = newTextBuffer("hello")
+    b.readOnly = true
+    let ru = b.undo()
+    check ru.isErr
+    check ru.error == "Buffer is read-only"
+    let rr = b.redo()
+    check rr.isErr
+    check rr.error == "Buffer is read-only"

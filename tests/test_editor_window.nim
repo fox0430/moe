@@ -403,10 +403,10 @@ suite "syncActiveWindow":
 suite "setActiveWindowScreenCursor":
   test "sets screen cursor for active window":
     let e = createTestEditor()
-    e.state.display.showLineNumbers = false
-    e.state.display.showSidebar = false
-    e.state.display.showTabLine = false
-    e.state.display.lineWrap = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.state.showTabLine = false
+    e.state.lineWrap = false
     # Set up buffer with enough content
     let buffer = newTextBuffer("Hello world test content")
     e.activeWindow.buffer = buffer
@@ -421,10 +421,10 @@ suite "setActiveWindowScreenCursor":
 
   test "accounts for line numbers":
     let e = createTestEditor()
-    e.state.display.showLineNumbers = true
-    e.state.display.showSidebar = false
-    e.state.display.showTabLine = false
-    e.state.display.lineWrap = false
+    e.state.showLineNumbers = true
+    e.state.showSidebar = false
+    e.state.showTabLine = false
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
     e.activeWindow.buffer = buffer
     e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
@@ -438,10 +438,10 @@ suite "setActiveWindowScreenCursor":
 
   test "accounts for tab line":
     let e = createTestEditor()
-    e.state.display.showLineNumbers = false
-    e.state.display.showSidebar = false
-    e.state.display.showTabLine = true
-    e.state.display.lineWrap = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.state.showTabLine = true
+    e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
     e.activeWindow.buffer = buffer
     e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
@@ -732,7 +732,7 @@ indent_size = 4
     # The split startup path must give freshly loaded files the same per-buffer
     # setup as no-split startup, so conflict navigation works immediately.
     let e = createTestEditor()
-    e.state.display.showGitDiff = false
+    e.state.showGitDiff = false
     let newBuffer =
       newTextBuffer(conflictContent, some(getTempDir() / "moe_split_conflict.txt"))
 
@@ -742,7 +742,7 @@ indent_size = 4
 
   test "applyConfig = true restores persisted bookmarks":
     let e = createTestEditor()
-    e.state.display.showGitDiff = false
+    e.state.showGitDiff = false
     e.config.persist.bookmarks = true
     let testFile = getTempDir() / "moe_split_bookmark.txt"
     e.savedBookmarks[absolutePath(testFile)] = @[2]

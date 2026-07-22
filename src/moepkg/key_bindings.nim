@@ -39,6 +39,10 @@ export registry
 # `setupDefaultBindings` below.
 import key_bindings/[commands, normal_bindings, visual_bindings, insert_bindings]
 
+const MaxNumericPrefix* = 1_000_000
+  ## Cap on the count prefix. Iterative motions loop `count` times even when
+  ## the cursor is stuck, so an unbounded value (e.g. `99999999w`) locks up.
+
 proc unbindKey*(registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo) =
   ## Remove a key binding
   if mode in registry.bindings:
@@ -96,6 +100,11 @@ proc parseKeyString*(s: string): seq[KeyCombo] =
     if combo.isSome:
       result.add(combo.get)
     elif part.len > 1 and '-' notin part:
+      # Reject uppercase modifier-letter runs — "CC" is almost always a typo
+      # for "C-C", so silently treating it as two Shift+C presses is worse
+      # than surfacing an error at the caller.
+      if part.allIt(it in {'C', 'M', 'S'}):
+        return @[]
       # Vim-style concatenated characters: "jj", "gg", "gd" etc.
       for ch in part:
         let charCombo = parseKeyCombo($ch)
@@ -215,18 +224,13 @@ proc addRuntimeMapping*(
     if rhsKeys.len == 0:
       return "Invalid mapping target: " & rhsStr
 
-    # Convert RHS keys to string representation for playbackMacro
-    var targetKeyStrs: seq[string] = @[]
-    for k in rhsKeys:
-      targetKeyStrs.add(keyComboToString(k))
-
     let mapping = RuntimeKeyMapping(
       triggerKeys: lhsKeys,
       triggerStr: lhsStr,
       targetStr: rhsStr,
       noremap: noremap,
       kind: rmkKeySequence,
-      targetKeys: targetKeyStrs,
+      targetKeys: rhsKeys,
     )
 
     # Remove existing mapping for same trigger
@@ -294,11 +298,17 @@ proc clearRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode) =
     registry.runtimeMappings[mode] = @[]
     registry.rebuildEffectiveBindings(mode)
 
-proc listRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode): seq[string] =
-  ## List all runtime mappings for the given mode as human-readable strings
+proc listRuntimeMappings*(
+    registry: KeyBindingRegistry, mode: EditorMode, prefix: string = ""
+): seq[string] =
+  ## List runtime mappings for the given mode as human-readable strings.
+  ## When `prefix` is non-empty, only mappings whose triggerStr starts with it
+  ## are returned (Vim-compat: `:nmap <prefix>` filters the listing).
   if mode notin registry.runtimeMappings:
     return @[]
   for m in registry.runtimeMappings[mode]:
+    if prefix.len > 0 and not m.triggerStr.startsWith(prefix):
+      continue
     result.add(m.triggerStr & " -> " & m.targetStr)
 
 proc clearRuntimeMappingState*(state: var DispatchState) =
@@ -342,7 +352,11 @@ proc routeRuntimeMapping*(
 
   if mappings.len == 0:
     if state.keys.len > 0:
+      # Mappings unbound mid-sequence: flush the stale accumulator + current
+      # key so the caller can replay them instead of dropping input.
+      let flushed = state.keys & @[keyCombo]
       clearRuntimeMappingState(state)
+      return RuntimeMappingDecision(kind: rmdNoMatchFlush, accumulatedKeys: flushed)
     return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
 
   state.keys.add(keyCombo)
@@ -439,7 +453,13 @@ proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   if registry.sequenceState.numericPrefix.len > 0:
     try:
       let num = parseInt(registry.sequenceState.numericPrefix)
-      let prefixValue = if num > 0: num else: 1
+      let prefixValue =
+        if num <= 0:
+          1
+        elif num > MaxNumericPrefix:
+          MaxNumericPrefix
+        else:
+          num
       logDebug("keybind", "getNumericPrefix returning: " & $prefixValue)
       return prefixValue
     except ValueError:
@@ -452,8 +472,8 @@ proc getNumericPrefix*(registry: KeyBindingRegistry): int =
 proc applyCountToCommand(registry: KeyBindingRegistry, cmd: Command): Command =
   ## Apply numeric prefix count to a command and clear the prefix
   result = cmd
+  result.hasCount = registry.sequenceState.numericPrefix.len > 0
   result.count = registry.getNumericPrefix()
-  # Clear numeric prefix after applying
   registry.clearNumericPrefix()
   logDebug("keybind", "Applied count=" & $result.count & " to command: " & cmd.name)
 

@@ -568,7 +568,7 @@ timeout = 0
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Lsp.timeout" in vr.errors[0].name
-    check config.lsp.timeout == 5000 # Default value
+    check config.lsp.timeout == 30000 # Default value
 
   test "Negative LSP timeout is rejected":
     let tomlStr = """
@@ -578,7 +578,7 @@ timeout = -1
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Lsp.timeout" in vr.errors[0].name
-    check config.lsp.timeout == 5000 # Default value
+    check config.lsp.timeout == 30000 # Default value
 
   test "Loader accepts any positive LSP timeout (no upper bound)":
     # timeout has no upper bound anywhere: only correctness matters (> 0), and
@@ -1646,16 +1646,53 @@ suite "Config - initTheme":
     config.theme.kind = tkDefault
     initTheme(config)
 
-  test "Non-existent theme file falls back to default":
+  test "Bootstrap: missing tkConfig file is seeded with DefaultColors":
+    inc testFileCounter
+    let themeFile =
+      getTempDir() / "moe_test_inittheme_bootstrap_" & $testFileCounter & ".toml"
+    defer:
+      if fileExists(themeFile):
+        removeFile(themeFile)
+
+    check not fileExists(themeFile)
+
     var config = newEditorConfig()
     config.theme.kind = tkConfig
-    config.theme.path = "/nonexistent/theme.toml"
+    config.theme.path = themeFile
+    var vr = newValidationResult()
+    initTheme(config, vr)
+
+    check not vr.hasErrors
+    check fileExists(themeFile)
+    check themeColorsFromFile
+
+    let loaded = loadThemeFromToml(themeFile)
+    check loaded.isOk
+
+  test "Bootstrap failure (unwritable path) falls back to default":
+    inc testFileCounter
+    let notADir = getTempDir() / "moe_test_inittheme_boot_notadir_" & $testFileCounter
+    writeFile(notADir, "sentinel")
+    defer:
+      removeFile(notADir)
+    let themeFile = notADir / "theme.toml"
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
     initTheme(config)
 
-  test "Non-existent theme file is reported in ValidationResult":
+  test "Bootstrap failure (unwritable path) is reported in ValidationResult":
+    inc testFileCounter
+    let notADir = getTempDir() / "moe_test_inittheme_boot_report_" & $testFileCounter
+    writeFile(notADir, "sentinel")
+    defer:
+      removeFile(notADir)
+    let themeFile = notADir / "theme.toml"
+
     var config = newEditorConfig()
     config.theme.kind = tkConfig
-    config.theme.path = "/nonexistent/theme.toml"
+    config.theme.path = themeFile
     var vr = newValidationResult()
     initTheme(config, vr)
     check vr.hasErrors
@@ -1990,7 +2027,8 @@ suite "Config - saveConfigToToml round-trip completeness":
     # popupPosition is validated against allowed values on load
     config.notification.popupPosition = "topLeft"
 
-    # Theme: ensure kind != tkConfig so loadFilePath is not used for path
+    # Theme: kind = tkDefault keeps `initTheme` from bootstrapping a file at
+    # the round-trip test path.
     config.theme.kind = tkDefault
     config.theme.path = "test_theme_path"
 
@@ -2006,6 +2044,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     # Add command aliases and shell commands
     config.commandAliases["x"] = UserCommandEntry(command: "quit")
     config.shellCommands["nimbuild"] = UserCommandEntry(command: "nimble build")
+    config.disabledCommandAliases = @["q"]
 
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
@@ -2040,6 +2079,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     check config.lsp == loaded.lsp
     check config.commandAliases == loaded.commandAliases
     check config.shellCommands == loaded.shellCommands
+    check config.disabledCommandAliases == loaded.disabledCommandAliases
 
 suite "Config - saveConfig":
   test "Default config does not crash":
@@ -2469,6 +2509,65 @@ suite "Config - saveConfigToToml saves theme file":
 
     let result = saveConfigToToml(config, configFile)
     check result.isOk
+
+  test "Existing theme file is preserved when initTheme fell back to defaults":
+    # Regression: pre-fix, saveConfigToToml unconditionally overwrote the
+    # user's theme file with DefaultColors after any tkConfig load failure.
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_theme_survive_" & $testFileCounter & ".toml"
+    let themeFile =
+      getTempDir() / "moe_test_save_cfg_theme_survive_colors_" & $testFileCounter &
+      ".toml"
+    defer:
+      removeFile(configFile)
+      removeFile(themeFile)
+      if fileExists(themeFile & ".bac"):
+        removeFile(themeFile & ".bac")
+
+    let userThemeToml = """
+[Colors]
+foreground = "#abcdef"
+background = "#123456"
+"""
+    writeFile(themeFile, userThemeToml)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+
+    setThemeColors(DefaultColors)
+    themeColorsFromFile = false
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk
+    check readFile(themeFile) == userThemeToml
+
+  test "Bootstrap: theme file is written when it doesn't exist yet":
+    inc testFileCounter
+    let configFile =
+      getTempDir() / "moe_test_save_cfg_theme_bootstrap_" & $testFileCounter & ".toml"
+    let themeFile =
+      getTempDir() / "moe_test_save_cfg_theme_bootstrap_colors_" & $testFileCounter &
+      ".toml"
+    defer:
+      removeFile(configFile)
+      if fileExists(themeFile):
+        removeFile(themeFile)
+
+    check not fileExists(themeFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+
+    setThemeColors(DefaultColors)
+    themeColorsFromFile = false
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk
+    check fileExists(themeFile)
+    check loadThemeFromToml(themeFile).isOk
 
 suite "Config Validation - KeyMapping section":
   test "Normal key mappings":
@@ -3386,6 +3485,70 @@ cmd = { command = "Make -C /opt/project BUILD_TYPE=Release" }
     check config.shellCommands["cmd"].command ==
       "Make -C /opt/project BUILD_TYPE=Release"
 
+suite "Config Validation - DisabledCommandAliases section":
+  test "Valid DisabledCommandAliases config":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["q", "w"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.disabledCommandAliases == @["q", "w"]
+
+  test "Names are lowercased":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["Q"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.disabledCommandAliases == @["q"]
+
+  test "Unknown key is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+unknown = ["q"]
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.unknown" in vr.errors[0].name
+
+  test "Non-array value is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = "q"
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.aliases" in vr.errors[0].name
+
+  test "Non-string element is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = [42]
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.aliases[0]" in vr.errors[0].name
+
+  test "Non-default alias name is detected":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["nosuchalias"]
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "DisabledCommandAliases.aliases[0]" in vr.errors[0].name
+
+  test "Duplicate entries are loaded once":
+    let tomlStr = """
+[DisabledCommandAliases]
+aliases = ["q", "q"]
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.disabledCommandAliases == @["q"]
+
 suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
   test "CommandAliases round-trip":
     inc testFileCounter
@@ -3478,6 +3641,28 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
     check loaded.shellCommands["nimbuild"].command == "nimble build"
     check loaded.shellCommands["nimbuild"].description == "Build project"
 
+  test "DisabledCommandAliases round-trip":
+    inc testFileCounter
+    let testFile =
+      getTempDir() / "moe_test_disabled_aliases_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.disabledCommandAliases = @["w", "q"]
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    # Serialized in sorted order
+    check loaded.disabledCommandAliases == @["q", "w"]
+
   test "Empty CommandAliases and ShellCommands not saved":
     inc testFileCounter
     let testFile = getTempDir() / "moe_test_empty_cmds_" & $testFileCounter & ".toml"
@@ -3494,3 +3679,4 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
     let content = readFile(testFile)
     check "CommandAliases" notin content
     check "ShellCommands" notin content
+    check "DisabledCommandAliases" notin content

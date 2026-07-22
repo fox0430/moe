@@ -21,7 +21,7 @@
 
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
-import ../[encoding, highlight, primitives, unicode_utils]
+import ../[encoding, highlight, logger, primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta
 
@@ -142,6 +142,12 @@ type
       ## to this so a transaction collapsing N mutations is reverted atomically.
     endSeq*: int
       ## changeSeq value AFTER this entry was applied. redo() restores to this.
+    id*: int64
+      ## Monotonic identity for this undo-tree node, assigned on push and
+      ## preserved across undo/redo. Used by isModified to catch changeSeq
+      ## collisions (undo -> different edit re-hitting savedSeq). Inner
+      ## transaction changes carry 0; only the wrapper that lands on
+      ## undoStack gets an id. 0 = initial state.
     case kind*: BufferChangeKind
     of ckInsertText:
       insertPos*: BufferPosition
@@ -159,6 +165,9 @@ type
       deleteStartPos*: BufferPosition
       deleteEndPos*: BufferPosition
       deletedRangeText*: string
+      deleteJoinedNextLine*: bool
+        ## True when the range consumed `deleteEndPos.line + 1`. Subscribers
+        ## shift side arrays by `(endLine - startLine + 1)` in that case.
     of ckReplaceLine:
       replaceLineIdx*: int
       replaceLineOldText*: string
@@ -178,6 +187,9 @@ type
         ## keeps O(changed lines) instead of a full O(lines) copy. The piece
         ## tree restore is absolute; only this side array is delta-encoded.
       snapshotFoldState*: FoldState
+      snapshotBookmarks*: seq[int]
+        ## Restored wholesale like snapshotLineMarkers / snapshotFoldState;
+        ## the non-snapshot line-op branches shift via adjustBookmarksFor*.
 
   RowColRemapEventKind* = enum
     rrekSingleLine
@@ -190,8 +202,13 @@ type
       row*, editCol*, colDelta*, lineRuneLenAfter*: int
     of rrekMultiLine:
       firstAffectedRow*, lastAffectedRowBefore*, lastAffectedRowAfter*: int
+      preservesFirstRow*: bool
+        ## True when `firstAffectedRow` keeps its identity across the edit
+        ## (ckInsertText with newlines, ckDeleteRange with a surviving merged
+        ## first row). Per-line-array subscribers use it to shift at
+        ## `firstAffectedRow + 1`; row-reference subscribers ignore it.
     of rrekClear:
-      nil
+      discard
 
   RowColRemapCallback* = proc(b: TextBuffer, event: RowColRemapEvent) {.closure.}
 
@@ -229,6 +246,7 @@ type
     isUtilityBuffer*: bool # Utility buffers (jumplist, log, etc.) disable decorations
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
+    hasBom*: bool # BOM stripped on load, re-emitted on save (UTF-8/16/32)
     endOfLine*: bool # Whether file should end with newline
     lastFileModTime*: Option[Time]
       # File modification time when loaded (for external change detection)
@@ -250,6 +268,11 @@ type
     # Change sequence tracking for modified flag
     changeSeq*: int # Current change sequence number
     savedSeq*: int # Sequence number when file was last saved
+    nextChangeId*: int64
+      ## BufferChange.id counter. Monotonic; only reload resets. First id = 1.
+    savedChangeId*: int64
+      ## undoStack top id at last save (0 for initial state / empty stack).
+      ## isModified uses this instead of savedSeq to defeat the collision.
 
     contentVersion*: int
       ## Monotonic content generation. Advanced via `advanceContentVersion` on
@@ -268,6 +291,7 @@ type
     pendingSnapshotMarkers*: CowSeq[Option[LineMarkerKind]]
     pendingSnapshotModifiedLines*: seq[LineModificationKind]
     pendingSnapshotFolds*: FoldState
+    pendingSnapshotBookmarks*: seq[int]
 
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
     lineMarkers*: CowSeq[Option[LineMarkerKind]] # Each line can have at most one marker
@@ -279,8 +303,10 @@ type
     modifiedLines*: seq[LineModificationKind]
       # How each line was modified since last save
 
-    # Row/col remap subscribers (decoration shift on buffer mutation)
+    # Row/col remap subscribers. `sideArrayCallbacks` are skipped on undo/redo
+    # because savedLineMarkers / savedModifiedLines restore them wholesale.
     remapCallbacks: seq[RowColRemapCallback]
+    sideArrayCallbacks: seq[RowColRemapCallback]
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -493,15 +519,33 @@ proc adjustBookmarksForDelete*(b: TextBuffer, line: int, count: int = 1) =
   for i in countdown(toRemove.high, 0):
     b.bookmarks.delete(toRemove[i])
 
+proc currentChangeId*(b: TextBuffer): int64 {.inline.} =
+  ## Id of the undoStack top, or 0 for initial state (empty stack).
+  if b.undoStack.len > 0: b.undoStack.peekLast.id else: 0
+
+proc isAtSavedState*(b: TextBuffer): bool {.inline.} =
+  ## Both signals must match. Id is authoritative; changeSeq compare kept as an
+  ## AND so direct writes to changeSeq (test harnesses) still count as dirty.
+  b.currentChangeId == b.savedChangeId and b.changeSeq == b.savedSeq
+
 proc isModified*(b: TextBuffer): bool {.inline.} =
-  ## Check if buffer has unsaved changes
-  b.changeSeq != b.savedSeq
+  ## In-flight transactions have not yet reached undoStack, so inner-change
+  ## count is checked explicitly before the saved-state compare.
+  if b.inTransaction and b.currentTransaction.isSome and
+      b.currentTransaction.get.changes.len > 0:
+    return true
+  not b.isAtSavedState
 
 proc markSaved*(b: TextBuffer) {.inline.} =
-  ## Mark the buffer as unmodified by syncing savedSeq to changeSeq.
   b.savedSeq = b.changeSeq
+  b.savedChangeId = b.currentChangeId
   for i in 0 ..< b.modifiedLines.len:
     b.modifiedLines[i] = lmkUnmodified
+
+proc allocateChangeId*(b: TextBuffer): int64 {.inline.} =
+  ## Preinc so 0 stays reserved for "initial state".
+  b.nextChangeId.inc
+  b.nextChangeId
 
 # Core text operations
 proc getTextString*(b: TextBuffer): string =
@@ -556,9 +600,13 @@ iterator lines*(b: TextBuffer): string =
     for line in b.storage.pieceTable.lines:
       yield line
 
-# Forward declaration for the semantic overlay remap callback. Registered
-# in newTextBuffer and driven by emitRowColRemapEvents below.
+# Forward declarations for the built-in remap callbacks, registered in
+# newTextBuffer and driven by emitRowColRemapEvents below.
 proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent)
+proc foldShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc bookmarkShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 
 proc newBufferStorage*(backend: BufferBackend, content: sink string): BufferStorage =
   ## Build a fresh backend value of `backend` from `content` (consumed exactly
@@ -606,6 +654,11 @@ proc newTextBuffer*(
 
   result.remapCallbacks = @[]
   result.remapCallbacks.add(semanticRemapCallback)
+  result.remapCallbacks.add(foldShiftCallback)
+  result.remapCallbacks.add(bookmarkShiftCallback)
+  result.sideArrayCallbacks = @[]
+  result.sideArrayCallbacks.add(lineMarkerShiftCallback)
+  result.sideArrayCallbacks.add(modifiedLinesShiftCallback)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =
   ## Bracket operator for accessing lines by index
@@ -737,9 +790,10 @@ proc countNewlines(s: string): int {.inline.} =
       inc result
 
 proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent) =
-  ## Subscriber callback that shifts the LSP semantic overlay row/col keys
-  ## to stay approximately correct across edits.
-  if b.highlight.isNil or b.highlight.semantic.len == 0:
+  ## Shift the LSP semantic overlay to stay approximately in sync with edits.
+  ## `semanticContentVersion` is stamped even on an empty overlay so
+  ## updateHighlight's mismatch guard does not fire an unnecessary re-request.
+  if b.highlight.isNil:
     return
   case event.kind
   of rrekSingleLine:
@@ -756,103 +810,240 @@ proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent) =
     return
   b.highlight.semanticContentVersion = b.contentVersion
 
-proc emitRowColRemapEvents*(b: TextBuffer, change: BufferChange) =
-  ## Compute row/col remap events from a forward edit and notify all
-  ## subscribers. Row-keyed decorations (semantic overlay, inline diagnostics,
-  ## etc.) register a RowColRemapCallback to keep their line/column offsets
-  ## approximately in sync between LSP re-requests.
+template shiftRowRefsForMultiLine(
+    event: RowColRemapEvent, onInsert, onDelete: untyped
+) =
+  ## Shared skeleton for row-referring subscribers (folds, bookmarks). Ignores
+  ## `preservesFirstRow`: the shift procs use the row range directly.
+  case event.kind
+  of rrekSingleLine, rrekClear:
+    return
+  of rrekMultiLine:
+    let delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+    if delta > 0:
+      onInsert(event.firstAffectedRow, delta)
+    elif delta < 0:
+      onDelete(event.firstAffectedRow, -delta)
+
+proc foldShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Shift folds to follow their rows across line-count-changing edits.
+  shiftRowRefsForMultiLine(
+    event, b.foldState.adjustFoldsAfterInsert, b.foldState.adjustFoldsAfterDelete
+  )
+
+proc bookmarkShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Shift bookmarks to follow their rows across line-count-changing edits.
+  shiftRowRefsForMultiLine(
+    event, b.adjustBookmarksForInsert, b.adjustBookmarksForDelete
+  )
+
+template shiftPerLineArray(arr: untyped, freshValue: untyped, event: RowColRemapEvent) =
+  ## Shift a per-line side array to match a line-count-changing edit. When
+  ## `preservesFirstRow` is set, `firstAffectedRow` keeps its slot and the
+  ## insert/delete happens at `firstAffectedRow + 1`. Both branches clamp `idx`
+  ## against `arr.len` so a NoUndo path that leaves the array shorter than the
+  ## buffer degrades gracefully instead of raising IndexDefect.
+  case event.kind
+  of rrekSingleLine, rrekClear:
+    return
+  of rrekMultiLine:
+    let delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+    let idx =
+      if event.preservesFirstRow:
+        event.firstAffectedRow + 1
+      else:
+        event.firstAffectedRow
+    if idx < 0 or idx > arr.len:
+      return
+    if delta > 0:
+      for _ in 0 ..< delta:
+        arr.insert(freshValue, idx)
+    elif delta < 0:
+      let removable = min(-delta, arr.len - idx)
+      for _ in 0 ..< removable:
+        arr.delete(idx)
+
+proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Shift per-line markers to follow their row across insert/delete edits.
+  shiftPerLineArray(b.lineMarkers, none(LineMarkerKind), event)
+
+proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  ## Twin of lineMarkerShiftCallback. New slots default to `lmkInserted` so
+  ## pushUndoChange's "mark changePos as modified" step sees the right state.
+  shiftPerLineArray(b.modifiedLines, lmkInserted, event)
+
+proc reversed(event: RowColRemapEvent): RowColRemapEvent =
+  ## Flip a forward event into its inverse. `lineRuneLenAfter` is preserved:
+  ## emitRowColRemapEvents recomputes it via `getLine` at reverse dispatch time
+  ## (after the backend undo), so it already matches the post-reverse state.
+  case event.kind
+  of rrekMultiLine:
+    RowColRemapEvent(
+      kind: rrekMultiLine,
+      firstAffectedRow: event.firstAffectedRow,
+      lastAffectedRowBefore: event.lastAffectedRowAfter,
+      lastAffectedRowAfter: event.lastAffectedRowBefore,
+      preservesFirstRow: event.preservesFirstRow,
+    )
+  of rrekSingleLine:
+    RowColRemapEvent(
+      kind: rrekSingleLine,
+      row: event.row,
+      editCol: event.editCol,
+      colDelta: -event.colDelta,
+      lineRuneLenAfter: event.lineRuneLenAfter,
+    )
+  of rrekClear:
+    event
+
+proc emitRowColRemapEvents*(
+    b: TextBuffer,
+    change: BufferChange,
+    reverse: bool = false,
+    includeSideArrays: bool = true,
+) =
+  ## Notify subscribers of a buffer edit so they can keep row/col-keyed
+  ## decorations in sync. `reverse=true` flips the event for undo dispatch;
+  ## `includeSideArrays=false` skips lineMarkers/modifiedLines when a wholesale
+  ## restore will overwrite them anyway (undo/redo path).
+  template dispatch(ev: RowColRemapEvent) =
+    # Each callback is isolated: one raising must not skip later shifts,
+    # otherwise side arrays drift silently against the backend. Errors are
+    # logged so drift is diagnosable instead of invisible.
+    let toFire =
+      if reverse:
+        reversed(ev)
+      else:
+        ev
+    for cb in b.remapCallbacks:
+      try:
+        cb(b, toFire)
+      except CatchableError as e:
+        logError("buffer", "remapCallback raised: " & e.msg)
+    if includeSideArrays:
+      for cb in b.sideArrayCallbacks:
+        try:
+          cb(b, toFire)
+        except CatchableError as e:
+          logError("buffer", "sideArrayCallback raised: " & e.msg)
+
   case change.kind
   of ckTransaction:
-    for inner in change.transactionChanges:
-      b.emitRowColRemapEvents(inner)
+    if reverse:
+      for j in countdown(change.transactionChanges.high, 0):
+        b.emitRowColRemapEvents(
+          change.transactionChanges[j],
+          reverse = true,
+          includeSideArrays = includeSideArrays,
+        )
+    else:
+      for inner in change.transactionChanges:
+        b.emitRowColRemapEvents(inner, includeSideArrays = includeSideArrays)
     return
   of ckSnapshot:
-    let event = RowColRemapEvent(kind: rrekClear)
-    for cb in b.remapCallbacks:
-      cb(b, event)
+    dispatch(RowColRemapEvent(kind: rrekClear))
     return
   of ckInsertText:
     let nl = countNewlines(change.insertText)
     if nl == 0:
       let colDelta = change.insertText.runeLen
       let newLen = b.getLine(change.insertPos.line).charLen
-      let event = RowColRemapEvent(
-        kind: rrekSingleLine,
-        row: change.insertPos.line,
-        editCol: change.insertPos.column,
-        colDelta: colDelta,
-        lineRuneLenAfter: newLen,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekSingleLine,
+          row: change.insertPos.line,
+          editCol: change.insertPos.column,
+          colDelta: colDelta,
+          lineRuneLenAfter: newLen,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
     else:
-      let event = RowColRemapEvent(
-        kind: rrekMultiLine,
-        firstAffectedRow: change.insertPos.line,
-        lastAffectedRowBefore: change.insertPos.line,
-        lastAffectedRowAfter: change.insertPos.line + nl,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: change.insertPos.line,
+          lastAffectedRowBefore: change.insertPos.line,
+          lastAffectedRowAfter: change.insertPos.line + nl,
+          preservesFirstRow: true,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
   of ckDeleteText:
     let nl = countNewlines(change.deletedText)
     if nl == 0:
       let colDelta = -change.deletedText.runeLen
       let newLen = b.getLine(change.deletePos.line).charLen
-      let event = RowColRemapEvent(
-        kind: rrekSingleLine,
-        row: change.deletePos.line,
-        editCol: change.deletePos.column,
-        colDelta: colDelta,
-        lineRuneLenAfter: newLen,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekSingleLine,
+          row: change.deletePos.line,
+          editCol: change.deletePos.column,
+          colDelta: colDelta,
+          lineRuneLenAfter: newLen,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
     else:
-      let event = RowColRemapEvent(
-        kind: rrekMultiLine,
-        firstAffectedRow: change.deletePos.line,
-        lastAffectedRowBefore: change.deletePos.line + nl,
-        lastAffectedRowAfter: change.deletePos.line,
+      dispatch(
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: change.deletePos.line,
+          lastAffectedRowBefore: change.deletePos.line + nl,
+          lastAffectedRowAfter: change.deletePos.line,
+          preservesFirstRow: true,
+        )
       )
-      for cb in b.remapCallbacks:
-        cb(b, event)
   of ckInsertLine:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.insertLineIdx,
-      lastAffectedRowBefore: change.insertLineIdx - 1,
-      lastAffectedRowAfter: change.insertLineIdx,
+    dispatch(
+      RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.insertLineIdx,
+        lastAffectedRowBefore: change.insertLineIdx - 1,
+        lastAffectedRowAfter: change.insertLineIdx,
+      )
     )
-    for cb in b.remapCallbacks:
-      cb(b, event)
   of ckDeleteLine:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.deleteLineIdx,
-      lastAffectedRowBefore: change.deleteLineIdx,
-      lastAffectedRowAfter: change.deleteLineIdx - 1,
+    dispatch(
+      RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.deleteLineIdx,
+        lastAffectedRowBefore: change.deleteLineIdx,
+        lastAffectedRowAfter: change.deleteLineIdx - 1,
+      )
     )
-    for cb in b.remapCallbacks:
-      cb(b, event)
   of ckDeleteRange:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.deleteStartPos.line,
-      lastAffectedRowBefore: change.deleteEndPos.line,
-      lastAffectedRowAfter: change.deleteStartPos.line,
-    )
-    for cb in b.remapCallbacks:
-      cb(b, event)
+    # Single-line-join: emit as a drop of `startLine + 1` alone, so
+    # folds/bookmarks/markers at startLine survive (semantic tokens on that
+    # line go stale until the LSP repaints — self-healing).
+    # Other paths: startLine's row identity survives with merged content, so
+    # `preservesFirstRow=true` and drops happen at startLine + 1..
+    let startLine = change.deleteStartPos.line
+    let endLine = change.deleteEndPos.line
+    let event =
+      if startLine == endLine and change.deleteJoinedNextLine:
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: startLine + 1,
+          lastAffectedRowBefore: startLine + 1,
+          lastAffectedRowAfter: startLine,
+        )
+      else:
+        let lastBefore = endLine + (if change.deleteJoinedNextLine: 1 else: 0)
+        RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: startLine,
+          lastAffectedRowBefore: lastBefore,
+          lastAffectedRowAfter: startLine,
+          preservesFirstRow: true,
+        )
+    dispatch(event)
   of ckReplaceLine:
-    let event = RowColRemapEvent(
-      kind: rrekMultiLine,
-      firstAffectedRow: change.replaceLineIdx,
-      lastAffectedRowBefore: change.replaceLineIdx,
-      lastAffectedRowAfter: change.replaceLineIdx,
+    dispatch(
+      RowColRemapEvent(
+        kind: rrekMultiLine,
+        firstAffectedRow: change.replaceLineIdx,
+        lastAffectedRowBefore: change.replaceLineIdx,
+        lastAffectedRowAfter: change.replaceLineIdx,
+      )
     )
-    for cb in b.remapCallbacks:
-      cb(b, event)
 
 proc registerRowColRemapCallback*(b: TextBuffer, cb: RowColRemapCallback) =
   ## Register a callback to receive row/col remap events. All registered
@@ -924,6 +1115,7 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
     b.pendingSnapshotMarkers = b.lineMarkers
     b.pendingSnapshotModifiedLines = b.modifiedLines
     b.pendingSnapshotFolds = b.foldState
+    b.pendingSnapshotBookmarks = b.bookmarks
   # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry).
   # PieceTable diffs pendingSnapshotModifiedLines into a ckSnapshot delta instead.
   if b.backendKind != PieceTable and not b.hasPendingModifiedLinesSnapshot:
@@ -942,6 +1134,7 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.pendingSnapshotMarkers.clear()
   b.pendingSnapshotModifiedLines.setLen(0)
   b.pendingSnapshotFolds = initFoldState()
+  b.pendingSnapshotBookmarks.setLen(0)
   b.hasPendingModifiedLinesSnapshot = false
   b.pendingModifiedLinesSnapshot.setLen(0)
   b.hasPendingLineMarkersSnapshot = false
@@ -964,6 +1157,9 @@ proc clearUndoRedoState*(b: TextBuffer) =
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
   b.discardPendingSnapshot()
+  # Reset id state too so post-reload isModified starts clean (0 == 0).
+  b.nextChangeId = 0
+  b.savedChangeId = 0
 
 proc advanceContentVersion*(b: TextBuffer) {.inline.} =
   ## Advance the monotonic content version. Call from EVERY content-mutating
@@ -971,6 +1167,17 @@ proc advanceContentVersion*(b: TextBuffer) {.inline.} =
   ## mutators that bypass `changeSeq`. It only ever increases, so it stays a
   ## safe cache-invalidation key. See the `contentVersion` field doc.
   b.contentVersion.inc
+
+proc markLineChanged*(b: TextBuffer, line: int) =
+  ## Merge `line` into the pending incremental-highlight re-parse anchor.
+  ## While an update is pending (not yet consumed by updateHighlight), keep
+  ## the minimum so a later change further down cannot move the anchor past
+  ## an earlier change higher up, leaving it stale-highlighted.
+  if b.highlightNeedsUpdate:
+    b.lastChangedLines = min(b.lastChangedLines, line)
+  else:
+    b.lastChangedLines = line
+    b.highlightNeedsUpdate = true
 
 proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
@@ -998,14 +1205,13 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # updateHighlight's mismatch guard and wipe the overlay every keystroke.
   b.emitRowColRemapEvents(change)
 
-  # Mark highlight as needing update and track changed range
-  b.highlightNeedsUpdate = true
-
-  # Track the first changed line for incremental highlighting
+  # Mark highlight as needing update and track the first changed line for
+  # incremental highlighting
   let changePos = getChangePosition(change)
-  b.lastChangedLines = changePos.line
+  b.markLineChanged(changePos.line)
 
   # Mark the changed line as modified
+  b.ensureMarkersSize()
   b.ensureModifiedLinesSize()
   if changePos.line >= 0 and changePos.line < b.modifiedLines.len:
     # Only upgrade to lmkModified if not already marked as inserted
@@ -1028,7 +1234,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
     b.hasPendingLineMarkersSnapshot = false
 
   if b.inTransaction and b.currentTransaction.isSome:
-    # Add to current transaction
+    # Inner changes carry id 0; the wrapper committed later gets the id.
     var transaction = b.currentTransaction.get
     transaction.changes.add(changeWithSnapshot)
     b.currentTransaction = some(transaction)
@@ -1038,6 +1244,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
       BufferChange(
         startSeq: preSeq,
         endSeq: postSeq,
+        id: b.allocateChangeId(),
         kind: ckSnapshot,
         snapshotData: b.pendingSnapshot.get,
         snapshotCursorPos: getChangePosition(change),
@@ -1045,10 +1252,12 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
         modifiedLinesDelta:
           computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
         snapshotFoldState: b.pendingSnapshotFolds,
+        snapshotBookmarks: b.pendingSnapshotBookmarks,
       )
     )
     # Pending snapshot state is now consumed into the entry; reset it all.
     b.discardPendingSnapshot()
   else:
     # Add directly to undo stack
+    changeWithSnapshot.id = b.allocateChangeId()
     b.undoStack.addLast(changeWithSnapshot)

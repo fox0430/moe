@@ -52,7 +52,10 @@ proc registerMotionCommand*(
 
       let count =
         if acceptsCount:
-          parseCount(args)
+          # LastLine treats "no arg" as bare G (go to last line); moveLastLine
+          # takes count=0 as that sentinel and count>=1 as an explicit line.
+          let defaultCount = if motion == Motion.LastLine: 0 else: 1
+          parseCount(args, default = defaultCount)
         else:
           1
       let cmd = MotionCommand(motion: motion, count: count)
@@ -259,7 +262,7 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     "Last Line",
     "Move to last line",
     Motion.LastLine,
-    false,
+    acceptsCount = true,
     shouldRecordJump = true,
   )
   registry.registerMotionCommand(

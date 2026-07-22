@@ -387,6 +387,21 @@ suite "CommandLine - parseCommandLine":
     check cmd.action == claSet
     check cmd.args == @["tabstop=4"]
 
+  test "Parse : w with leading whitespace":
+    let cmd = parser.parseCommandLine(": w")
+    check cmd.action == claSave
+    check cmd.args.len == 0
+
+  test "Parse :  w  file.txt with leading and repeated whitespace":
+    let cmd = parser.parseCommandLine(":  w  file.txt")
+    check cmd.action == claSave
+    check cmd.args == @["file.txt"]
+
+  test "Parse :w\\tfile.txt with tab separator":
+    let cmd = parser.parseCommandLine(":w\tfile.txt")
+    check cmd.action == claSave
+    check cmd.args == @["file.txt"]
+
 suite "CommandLine - execute":
   setup:
     let parser = newCommandLineParser()
@@ -462,6 +477,24 @@ suite "CommandLine - execute":
     check result.kind == claEdit
     check result.editFilename == some("test.nim")
     check result.forceEdit == true
+
+  test "Execute :w!filename (bang glued to filename)":
+    let result = parser.parseAndExecute(":w!myfile.txt")
+    check result.kind == claSave
+    check result.filename == some("myfile.txt")
+    check result.forceSave == true
+
+  test "Execute :e!filename (bang glued to filename)":
+    let result = parser.parseAndExecute(":e!test.nim")
+    check result.kind == claEdit
+    check result.editFilename == some("test.nim")
+    check result.forceEdit == true
+
+  test "Execute :wq!filename (bang glued to filename)":
+    let result = parser.parseAndExecute(":wq!out.txt")
+    check result.kind == claSaveAndQuit
+    check result.saveFilename == some("out.txt")
+    check result.forceSaveAndQuit == true
 
   test "Execute :enew":
     let result = parser.parseAndExecute(":enew")

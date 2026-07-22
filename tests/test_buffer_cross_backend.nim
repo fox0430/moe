@@ -343,10 +343,7 @@ suite "CrossBackend - Undo/Redo":
       check b.lineMarkers[0].isNone
       check b.lineMarkers[1] == some(Bookmark)
 
-  # PieceTable takes a separate ckSnapshot path that does not restore bookmarks
-  # or folds; the ckInsertText branch of undoChange is only reached for the
-  # operation-based backends, so these regression tests exclude PieceTable.
-  for be in [GapBuffer, SqrtDecomp, Rope]:
+  for be in BufferBackend:
     test "undo multi-line insertText shifts bookmarks back [" & $be & "]":
       let b = buf("l0\nl1\nl2\nl3\nl4", be)
       b.bookmarks = @[3]
@@ -375,6 +372,110 @@ suite "CrossBackend - Undo/Redo":
       discard b.undo()
       check b.foldState.folds[0].startLine == 3
       check b.foldState.folds[0].endLine == 4
+
+    test "undo insertLine restores bookmarks [" & $be & "]":
+      let b = buf("l0\nl1\nl2", be)
+      b.bookmarks = @[2]
+      discard b.insert(0, "new")
+      check b.bookmarks == @[3]
+      discard b.undo()
+      check b.len == 3
+      check b.bookmarks == @[2]
+      check b.hasBookmark(2)
+
+    test "redo insertLine reshifts bookmarks [" & $be & "]":
+      let b = buf("l0\nl1\nl2", be)
+      b.bookmarks = @[2]
+      discard b.insert(0, "new")
+      discard b.undo()
+      discard b.redo()
+      check b.bookmarks == @[3]
+
+    test "undo deleteLine restores bookmarks [" & $be & "]":
+      let b = buf("l0\nl1\nl2", be)
+      b.bookmarks = @[2]
+      discard b.deleteLine(0)
+      check b.bookmarks == @[1]
+      discard b.undo()
+      check b.bookmarks == @[2]
+
+    test "transaction rollback restores bookmarks [" & $be & "]":
+      let b = buf("l0\nl1\nl2", be)
+      b.bookmarks = @[2]
+      discard b.beginTransaction("test")
+      discard b.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+      check b.bookmarks == @[4]
+      discard b.rollbackTransaction()
+      check b.len == 3
+      check b.bookmarks == @[2]
+
+  # deleteRange single-line branch that ends past line end joins with next line.
+  # This still shrinks line count by 1 and must shift folds/bookmarks like the
+  # multi-line branch.
+  for be in BufferBackend:
+    test "deleteRange single-line joined with next shifts bookmarks [" & $be & "]":
+      let b = buf("abc\n\ndef", be)
+      b.bookmarks = @[2]
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.len == 2
+      check b[0] == "ab"
+      check b[1] == "def"
+      check b.bookmarks == @[1]
+
+    test "deleteRange single-line joined with next shifts folds [" & $be & "]":
+      let b = buf("abc\n\ndef\nghi", be)
+      b.foldState.folds.add(Fold(startLine: 2, endLine: 3, collapsed: false))
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.len == 3
+      check b.foldState.folds[0].startLine == 1
+      check b.foldState.folds[0].endLine == 2
+
+    test "deleteRange single-line joined with next drops bookmark on merged line [" & $be &
+      "]":
+      let b = buf("abc\nlost\nkeep", be)
+      b.bookmarks = @[1, 2]
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.len == 2
+      check b[0] == "ablost"
+      check b[1] == "keep"
+      check b.bookmarks == @[1]
+
+    test "deleteRange single-line joined undo/redo cycle does not drift bookmarks [" &
+      $be & "]":
+      let b = buf("abc\n\ndef", be)
+      b.bookmarks = @[2]
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.bookmarks == @[1]
+      for _ in 0 ..< 3:
+        discard b.undo()
+        check b.bookmarks == @[2]
+        discard b.redo()
+        check b.bookmarks == @[1]
+
+    test "deleteRange single-line joined undo/redo cycle does not drift folds [" & $be &
+      "]":
+      let b = buf("abc\n\ndef\nghi", be)
+      b.foldState.folds.add(Fold(startLine: 2, endLine: 3, collapsed: false))
+      discard b.deleteRange(
+        BufferPosition(line: 0, column: 2), BufferPosition(line: 0, column: 4)
+      )
+      check b.foldState.folds[0].startLine == 1
+      check b.foldState.folds[0].endLine == 2
+      for _ in 0 ..< 3:
+        discard b.undo()
+        check b.foldState.folds[0].startLine == 2
+        check b.foldState.folds[0].endLine == 3
+        discard b.redo()
+        check b.foldState.folds[0].startLine == 1
+        check b.foldState.folds[0].endLine == 2
 
 suite "CrossBackend - replaceLine Undo/Redo":
   for be in BufferBackend:

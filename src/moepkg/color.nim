@@ -899,7 +899,7 @@ proc rgbTo256Color(r, g, b: int16): uint8 =
   if r == g and g == b:
     if r < 8:
       return 16 # Black
-    elif r > 248:
+    elif r >= 248:
       return 231 # White
     else:
       # Use grayscale ramp (232-255, 24 levels)

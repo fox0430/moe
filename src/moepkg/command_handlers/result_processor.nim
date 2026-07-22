@@ -26,7 +26,7 @@
 ## later phase can split it further into per-feature files (file_ops,
 ## window_ops, viewer_ops, lsp_ops, ...) without touching handler.nim again.
 
-import std/[options, os, strutils]
+import std/[options, os, strutils, monotimes]
 
 import pkg/[results, chronos]
 
@@ -35,10 +35,84 @@ import
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
     config_loader, lsp_service, message_log, uri_utils, primitives, syntax_checker,
-    status_line, cursor_util, quick_run_utils,
+    status_line, cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode,
+    log_viewer, git_conflict, registers, setting_options, command_completion,
+    key_bindings,
   ]
-import ../key_bindings except Command
-import ./[command_mode_handler, handler_result]
+import editor_ops, handler_result, handler_manager
+
+type
+  OverlayExitAction* = enum
+    ## Post-processResult teardown for a Command-overlay dispatch.
+    oxaAppExit ## processResult returned false; wrapper skips teardown
+    oxaExitToNormal ## exitOverlay + setMode(Normal): one-shot actions
+    oxaExitToNewMode ## exitOverlay only; per-kind proc already set target mode
+    oxaExitAndResync ## exitOverlay + setMode(state.mode): base-mode resync
+    oxaHandledGeneric ## hrHandled/hrUnhandled/hrError: inspect r.modeTransition
+
+  ReplayOutcome* = enum
+    ## Outcome from a single replayed key, after full processResult side effects.
+    roContinue
+    roQuit ## hrQuit / hrCquit — main loop terminates
+    roAbort ## hrError — statusMessage already set; loop stops, app continues
+
+  OverlayPlaybackHook* = proc(e: Editor, keyCombo: KeyCombo): Option[bool] {.closure.}
+    ## Playback overlay dispatch. `none` = no overlay, fall through; `some(true)`
+    ## = handled, continue; `some(false)` = handled, requested app exit. Wired
+    ## from handler.nim to avoid an import cycle (overlay handlers import here).
+
+var overlayPlaybackHook*: OverlayPlaybackHook = nil
+
+proc executeCommandOverlay*(e: Editor, commandText: string): bool
+
+proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
+  ## Pure lookup from `HandlerResultKind` to the wrapper's post-processResult
+  ## action. Case must be exhaustive so a newly added kind fails to compile
+  ## here until classified.
+  case r.kind
+  of hrQuit, hrCquit:
+    oxaAppExit
+  of hrHandled, hrUnhandled, hrError:
+    oxaHandledGeneric
+  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrJumpList, hrChanges,
+      hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat,
+      hrLspRestart, hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
+      hrLspCallHierarchyOutgoing:
+    oxaExitToNormal
+  of hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
+      hrEnterBufferManager, hrEnterBackupManager, hrRecentFile, hrDebug,
+      hrEnterBookmarkManager, hrConfig:
+    oxaExitToNewMode
+  of hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrNew, hrVnew, hrEdit,
+      hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
+      hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll, hrSaveAndQuit,
+      hrSaveAllAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
+      hrBuffer, hrBufferDelete, hrStripWhitespace, hrOnlyWindow, hrEnterFileTree:
+    oxaExitAndResync
+  of hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
+      hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh,
+      hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
+      hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
+      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
+      hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrBufferManagerSelectBuffer,
+      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrBookmarkManagerJump,
+      hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrBackupManagerRestore,
+      hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
+      hrBackupManagerQuit, hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFileOpenFile,
+      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight,
+      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
+      hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
+      hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
+      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+      hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
+      hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
+      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrMapAdd,
+      hrMapRemove, hrMapClear, hrMapList:
+    # Kinds produced from within per-mode dispatchers (not Command overlay);
+    # if they ever reach the overlay path, resync to base mode.
+    # hrMap* are folded to hrHandled/hrError in handleCommandMode so this arm
+    # is defensive only.
+    oxaExitAndResync
 
 proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Apply the editor-level side effects implied by `r`. Returns true to
@@ -133,9 +207,19 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
   of hrFilerQuit:
-    # Close filer and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.Filer)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close filer and return to Normal mode, restoring the cursor/viewport
+    # that were active before the filer was opened.
+    let win = e.activeWindow
+    var origin = none(FilerState)
+    if win.modeState.kind == mskFiler:
+      origin = some(win.modeState.filer)
+    win.clearModeState(EditorMode.Filer) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.resetViewportTop(st.originTopLine)
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrTerminalQuit:
@@ -334,10 +418,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrCallHierarchyQuit:
     # Close call hierarchy viewer and return to Normal mode, restoring the
     # cursor/viewport that were active before the viewer was opened.
-    if e.state.lspCache.pendingCallHierarchyRequestId != 0:
-      e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
-      e.state.lspCache.pendingCallHierarchyRequestId = 0
-    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    cancelAllCallHierarchy(e)
     let win = e.activeWindow
     var origin = none(CallHierarchyViewerState)
     if win.modeState.kind == mskCallHierarchy:
@@ -355,10 +436,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Jump to selected call hierarchy item. Restore the pre-viewer cursor first
     # so the jump list anchors at the original position (enabling jump-back).
     let path = lsp_service.uriToPath(r.callHierarchyJumpUri)
-    if e.state.lspCache.pendingCallHierarchyRequestId != 0:
-      e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
-      e.state.lspCache.pendingCallHierarchyRequestId = 0
-    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    cancelAllCallHierarchy(e)
     let win = e.activeWindow
     var originCursor = BufferPosition(line: 0, column: 0)
     if win.modeState.kind == mskCallHierarchy:
@@ -379,9 +457,19 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     discard e.requestCallHierarchyOutgoingForItem(r.callHierarchyOutgoingItem)
     return true
   of hrBufferManagerQuit:
-    # Close buffer manager and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.BufferManager)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close buffer manager and return to Normal mode, restoring the
+    # cursor/viewport that were active before the manager was opened.
+    let win = e.activeWindow
+    var origin = none(BufferManagerState)
+    if win.modeState.kind == mskBufferManager:
+      origin = some(win.modeState.bufferManager)
+    win.clearModeState(EditorMode.BufferManager) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.resetViewportTop(st.originTopLine)
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrBufferManagerSelectBuffer:
@@ -435,18 +523,28 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Cannot delete the last buffer"
     return true
   of hrBookmarkManagerQuit:
-    # Close bookmark manager and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.BookmarkManager)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close bookmark manager and return to Normal mode, restoring the
+    # cursor/viewport that were active before the manager was opened.
+    let win = e.activeWindow
+    var origin = none(BookmarkManagerState)
+    if win.modeState.kind == mskBookmarkManager:
+      origin = some(win.modeState.bookmarkManager)
+    win.clearModeState(EditorMode.BookmarkManager) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.resetViewportTop(st.originTopLine)
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrBookmarkManagerJump:
-    # Jump to the selected bookmark (buffer + line)
-    let bufferIndex = r.bookmarkJumpBufferIndex
+    # Resolve BufferId at jump time to survive buffer-list mutations.
     let jumpLine = r.bookmarkJumpLine
     let activeWin = e.activeWindow
     activeWin.restoreOriginalBuffer(EditorMode.BookmarkManager)
-    if bufferIndex >= 0 and bufferIndex < e.buffers.len:
+    let bufferIndex = e.bufferIndexById(r.bookmarkJumpBufferId)
+    if bufferIndex >= 0:
       e.switchToBufferByIndex(bufferIndex)
       let buf = e.activeBuffer()
       let clampedLine = min(jumpLine, max(0, buf.len - 1))
@@ -511,6 +609,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrConfigQuit:
     # Close config mode and return to previous mode
     let activeWin = e.activeWindow
+    # Flush any pending config apply before wiping the config mode state.
+    # The outer handleEvent's pendingApply check runs after processResult,
+    # so a mapping RHS that both mutates a value and exits Config in one
+    # event (e.g. `:map <F5> togglekey ZQ`) would otherwise lose the change.
+    if activeWin.modeState.kind == mskConfig and activeWin.modeState.config.pendingApply:
+      e.applyConfigSettings(e.config)
     activeWin.clearModeState(EditorMode.Config)
     activeWin.mode = e.state.previousMode
     e.setMode(e.state.previousMode)
@@ -804,6 +908,9 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrError:
     e.state.statusMessage = r.errorMessage
   of hrCloseWindow:
+    let activeWin = e.activeWindow
+    if e.terminalStates.hasKey(activeWin.buffer.id):
+      e.closeTerminalBuffer(activeWin.buffer.id)
     let shouldQuit = e.closeWindow()
     if shouldQuit:
       return false
@@ -843,16 +950,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrBufferDelete:
     e.deleteCurrentBuffer()
   of hrExecCommand:
-    # @: - repeat last Command mode command
-    # Execute via handleCommandModeKeyCombo which has full result processing
+    # @: - repeat last Command mode command via the shared overlay wrapper.
     let count = r.execCommandCount
     let commandText = ":" & r.execCommandText
-    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
     for i in 0 ..< count:
-      e.state.input.commandText = commandText
-      e.state.input.commandCursor = commandText.len
-      let continueRunning = e.handleCommandModeKeyCombo(enterKey)
-      if not continueRunning:
+      if not e.executeCommandOverlay(commandText):
         return false
   of hrQuickRun:
     # Prepare QuickRun (sync) and set pending for async execution. Mirrors
@@ -873,16 +975,555 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       if e.config.notification.screenNotifications and
           e.config.notification.quickRunScreenNotify:
         e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
-  of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
-      hrSetFloatOption, hrClearSearchHighlight, hrSave, hrSaveAll, hrStripWhitespace,
-      hrShellCommand, hrBackground, hrMan, hrSubstitute, hrDeleteLines, hrBuild,
-      hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrChanges,
-      hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
-      hrEnterHelpViewer, hrEnterBufferManager, hrEnterBookmarkManager,
-      hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,
-      hrEnterCallHierarchy, hrEnterTerminal, hrOnlyWindow, hrConflictNext,
-      hrConflictPrev:
-    discard # Handled by handleCommandModeEvent or other code paths
+  of hrSave:
+    e.processSaveResult(r, activeBuffer)
+  of hrSaveAll:
+    e.processSaveAllResult(r)
+  of hrVSplit:
+    let expandedVsplit =
+      if r.vsplitFilename.isSome:
+        some(expandTilde(r.vsplitFilename.get))
+      else:
+        none(string)
+    let filerPath =
+      if expandedVsplit.isSome and dirExists(expandedVsplit.get):
+        some(absolutePath(expandedVsplit.get))
+      else:
+        none(string)
+    let splitFilename =
+      if filerPath.isSome:
+        none(string)
+      else:
+        expandedVsplit
+    let splitResult = e.vsplit(splitFilename)
+    if splitResult.isErr:
+      logError("handler", "Vertical split failed: " & splitResult.error)
+      e.state.statusMessage = "Error: " & splitResult.error
+    elif filerPath.isSome:
+      e.enterFilerInActiveWindow(filerPath.get)
+  of hrHSplit:
+    let expandedHsplit =
+      if r.hsplitFilename.isSome:
+        some(expandTilde(r.hsplitFilename.get))
+      else:
+        none(string)
+    let filerPath =
+      if expandedHsplit.isSome and dirExists(expandedHsplit.get):
+        some(absolutePath(expandedHsplit.get))
+      else:
+        none(string)
+    let splitFilename =
+      if filerPath.isSome:
+        none(string)
+      else:
+        expandedHsplit
+    let splitResult = e.hsplit(splitFilename)
+    if splitResult.isErr:
+      logError("handler", "Horizontal split failed: " & splitResult.error)
+      e.state.statusMessage = "Error: " & splitResult.error
+    elif filerPath.isSome:
+      e.enterFilerInActiveWindow(filerPath.get)
+  of hrNew:
+    let newResult = e.new()
+    if newResult.isErr:
+      logError("handler", "New failed: " & newResult.error)
+      e.state.statusMessage = "Error: " & newResult.error
+  of hrVnew:
+    let vnewResult = e.vnew()
+    if vnewResult.isErr:
+      logError("handler", "Vnew failed: " & vnewResult.error)
+      e.state.statusMessage = "Error: " & vnewResult.error
+  of hrEdit:
+    if r.editFilename.isSome:
+      let editResult = e.editFile(r.editFilename.get)
+      if editResult.isErr:
+        logError("handler", "Edit failed: " & editResult.error)
+        e.state.statusMessage = "Error: " & editResult.error
+      else:
+        e.state.statusMessage = "Opened: " & r.editFilename.get
+    else:
+      let reloadResult = e.reloadCurrentFile()
+      if reloadResult.isErr:
+        logError("handler", "Reload failed: " & reloadResult.error)
+        e.state.statusMessage = "Error: " & reloadResult.error
+  of hrSetBoolOption:
+    let opt = r.boolOption
+    let val = r.boolValue
+    case opt
+    of bsoNumber:
+      e.config.standard.number = val
+      e.state.statusMessage = "number = " & $val
+    of bsoRelativeNumber:
+      e.config.standard.relativeNumber = val
+      e.state.statusMessage = "relativenumber = " & $val
+    of bsoCursorLine:
+      e.config.highlight.currentLine = val
+      e.state.statusMessage = "cursorline = " & $val
+    of bsoCursorColumn:
+      e.config.highlight.currentColumn = val
+      e.state.statusMessage = "cursorcolumn = " & $val
+    of bsoStatusLine:
+      e.config.standard.statusLine = val
+      e.state.statusMessage = "statusline = " & $val
+    of bsoSyntax:
+      e.config.standard.syntax = val
+      e.state.statusMessage = "syntax = " & $val
+    of bsoIndentationLines:
+      e.config.standard.indentationLines = val
+      e.state.statusMessage = "indentationlines = " & $val
+    of bsoAutoIndent:
+      e.config.standard.autoIndent = val
+      e.state.statusMessage = "autoindent = " & $val
+    of bsoAutoCloseParen:
+      e.config.standard.autoCloseParen = val
+      e.state.statusMessage = "autocloseparen = " & $val
+    of bsoAutoDeleteParen:
+      e.config.standard.autoDeleteParen = val
+      e.state.statusMessage = "autodeleteparen = " & $val
+    of bsoClipboard:
+      e.config.clipboard.enable = val
+      e.state.statusMessage = "clipboard = " & $val
+    of bsoSmoothScroll:
+      e.config.smoothScroll.enable = val
+      e.state.statusMessage = "smoothscroll = " & $val
+    of bsoLiveReloadOfConf:
+      e.config.standard.liveReloadOfConf = val
+      e.state.statusMessage = "livereload = " & $val
+    of bsoShowIcons:
+      e.config.filer.showIcons = val
+      e.state.statusMessage = "icon = " & $val
+    of bsoHighlightCurrentLine:
+      e.config.highlight.currentLine = val
+      e.state.statusMessage = "highlightcurrentline = " & $val
+    of bsoHighlightCurrentWord:
+      e.config.highlight.currentWord = val
+      e.state.statusMessage = "highlightcurrentword = " & $val
+    of bsoHighlightFullWidthSpace:
+      e.config.highlight.fullWidthSpace = val
+      e.state.statusMessage = "highlightfullspace = " & $val
+    of bsoHighlightPairOfParen:
+      e.config.highlight.pairOfParen = val
+      e.state.statusMessage = "highlightparen = " & $val
+    of bsoHighlightFindChar:
+      e.config.highlight.findCharHighlight = val
+      e.state.statusMessage = "highlightfindchar = " & $val
+    of bsoHighlightColorCode:
+      e.config.highlight.colorCodeHighlight = val
+      e.state.statusMessage = "highlightcolorcode = " & $val
+    of bsoHighlightGitConflict:
+      e.config.highlight.gitConflict = val
+      e.state.statusMessage = "highlightgitconflict = " & $val
+    of bsoHighlightGitConflictTwoColor:
+      e.config.highlight.gitConflictTwoColor = val
+      e.state.statusMessage = "highlightgitconflicttwocolor = " & $val
+    of bsoMultipleStatusLine:
+      e.config.statusLine.multipleStatusLine = val
+      e.state.statusMessage = "multiplestatusline = " & $val
+    of bsoIgnoreCase:
+      e.config.standard.ignorecase = val
+      e.state.input.search.ignorecase = val
+      e.state.statusMessage = "ignorecase = " & $val
+    of bsoSmartCase:
+      e.config.standard.smartcase = val
+      e.state.input.search.smartcase = val
+      e.state.statusMessage = "smartcase = " & $val
+    of bsoIncSearch:
+      e.config.standard.incrementalSearch = val
+      e.state.input.search.incsearch = val
+      e.state.statusMessage = "incsearch = " & $val
+    of bsoHlSearch:
+      e.state.input.search.hlsearch = val
+      e.state.statusMessage = "hlsearch = " & $val
+    of bsoBuildOnSave:
+      e.config.buildOnSave.enable = val
+      e.state.statusMessage = "buildonsave = " & $val
+    of bsoShowGitInactive:
+      e.config.statusLine.showGitInactive = val
+      e.state.statusMessage = "showgitinactive = " & $val
+    of bsoLineWrap:
+      e.config.standard.lineWrap = val
+      e.state.statusMessage = "wrap = " & $val
+    of bsoExpandTab:
+      e.state.expandTab = val
+      e.state.statusMessage = "expandtab = " & $e.state.expandTab
+    of bsoScrollbar:
+      e.config.standard.scrollbar = val
+      e.state.statusMessage = "scrollbar = " & $val
+  of hrSetIntOption:
+    let opt = r.intOption
+    let val = r.intValue
+    case opt
+    of isoTabStop:
+      e.state.tabStop = val
+      e.state.statusMessage = "tabstop = " & $e.state.tabStop
+    of isoShiftWidth:
+      e.state.shiftWidth = val
+      e.state.statusMessage = "shiftwidth = " & $e.state.shiftWidth
+    of isoSoftTabStop:
+      e.config.standard.softTabStop = val
+      e.state.statusMessage = "softtabstop = " & $val
+    of isoScrollbarWidth:
+      e.config.standard.scrollbarWidth = val
+      e.state.statusMessage = "scrollbarwidth = " & $val
+  of hrSetFloatOption:
+    let opt = r.floatOption
+    let val = r.floatValue
+    case opt
+    of fsoScrollFriction:
+      e.config.smoothScroll.friction = val
+      e.state.statusMessage = "scrollfriction = " & $val
+    of fsoScrollAirDrag:
+      e.config.smoothScroll.airDrag = val
+      e.state.statusMessage = "scrollairdrag = " & $val
+  of hrClearSearchHighlight:
+    e.state.input.search.hlsearch = false
+  of hrStripWhitespace:
+    let count = r.strippedLineCount
+    if count > 0:
+      e.state.statusMessage = "Stripped trailing whitespace from " & $count & " lines"
+    else:
+      e.state.statusMessage = "No trailing whitespace found"
+  of hrShellCommand:
+    e.state.pending.shellCommand = r.shellCommand
+  of hrBackground:
+    e.state.pending.background = true
+  of hrMan:
+    e.state.pending.manPage = r.hrManPage
+  of hrSubstitute:
+    let count = r.hrSubstituteCount
+    e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
+  of hrDeleteLines:
+    e.state.registers.setDeletedRegister(r.hrDeletedText, true)
+    let count = r.hrDeletedLineCount
+    e.state.statusMessage =
+      $count & " line" & (if count == 1: "" else: "s") & " deleted"
+    let maxLine = e.activeBuffer().len - 1
+    if e.activeWindow.cursor.line > maxLine:
+      e.activeWindow.cursor.line = maxLine
+    e.activeWindow.cursor.column = 0
+  of hrBuild:
+    let filePath = if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: ""
+    if filePath.len == 0:
+      e.state.statusMessage = "Build error: File not saved"
+      logError("handler", "Build failed: No file path")
+    else:
+      e.state.pending.buildOnSave = (
+        path: filePath,
+        language: activeBuffer.language.ord,
+        customCmd: "",
+        workspaceRoot: parentDir(filePath),
+      )
+      e.state.statusMessage = "Building: " & filePath
+  of hrDebug:
+    var debugLines: seq[string] = @[]
+    let debugConfig = e.config.debug
+    for i, window in e.windowManager.windows:
+      generateWindowInfo(
+        debugLines,
+        i,
+        i == e.windowManager.activeWindowIndex,
+        e.bufferIndexById(window.buffer.id),
+        window.viewport.x,
+        window.viewport.y,
+        window.viewport.width,
+        window.viewport.height,
+        window.viewport.topLine,
+        window.viewport.leftColumn,
+        window.cursor.line,
+        window.cursor.column,
+        debugConfig.windowNode.enable,
+      )
+    for i, buf in e.buffers:
+      generateBufferInfo(
+        debugLines,
+        i,
+        buf.filePath,
+        buf.isModified,
+        buf.readOnly,
+        $buf.language,
+        $buf.encoding,
+        buf.len,
+        buf.changeSeq,
+        debugConfig.bufferStatus.enable,
+      )
+    generateEditorStateInfo(
+      debugLines, e.state.mode, e.state.previousMode, e.activeWindow.cursor.line,
+      e.activeWindow.cursor.column, e.state.input.commandText, e.state.statusMessage,
+      debugConfig.editorView.enable,
+    )
+    generateSearchInfo(
+      debugLines,
+      e.state.input.search.text,
+      e.state.input.search.lastText,
+      $e.state.input.search.direction,
+      e.state.input.search.history.len,
+      e.state.input.search.ignorecase,
+      e.state.input.search.smartcase,
+      e.state.input.search.incsearch,
+      e.state.input.search.hlsearch,
+      debugConfig.search.enable,
+    )
+    generateDisplayInfo(
+      debugLines, e.showStatusLine, e.multiStatusLine, e.showLineNumbers,
+      e.showCursorLine, e.showSyntax, e.showIndentationLines, e.showSidebar,
+      e.scrollbarWidth, e.showModifiedLines, e.lineWrap, e.tabStop,
+      debugConfig.editorView.enable,
+    )
+    generateMacroInfo(
+      debugLines, e.state.macroState.isRecording, e.state.macroState.register,
+      e.state.macroState.registers.len, e.state.macroState.playbackDepth,
+      debugConfig.macroState.enable,
+    )
+    generateVisualInfo(
+      debugLines,
+      e.state.visualSelection.active,
+      $e.state.visualSelection.kind,
+      e.state.visualSelection.start.line,
+      e.state.visualSelection.start.column,
+      e.state.visualSelection.current.line,
+      e.state.visualSelection.current.column,
+      debugConfig.visual.enable,
+    )
+    generateJumpListInfo(
+      debugLines, e.state.jumpList.list.len, e.state.jumpList.index,
+      debugConfig.jumpList.enable,
+    )
+    generateLspInfo(
+      debugLines, e.state.lspCache.codeLensCache.itemsByLine.len,
+      e.state.lspCache.locations.isSome, e.state.lspCache.codeLensCache.isValid,
+      debugConfig.lsp.enable,
+    )
+    let debugState = newDebugViewerState()
+    debugState.lines = debugLines
+    let debugBuffer = debugState.createDebugTextBuffer()
+    let splitResult = e.vsplitWithBuffer(debugBuffer)
+    if splitResult.isErr:
+      e.state.statusMessage = "Failed to open debug: " & splitResult.error
+    else:
+      e.state.statusMessage = "Debug info (auto-refresh)"
+      e.state.windowDisplay.debugBuffer = debugBuffer
+      e.state.timing.lastDebugUpdate = getMonoTime()
+      if e.state.timing.debugUpdateInterval == 0:
+        e.state.timing.debugUpdateInterval = 500
+      e.activeWindow.modeState = ModeState(kind: mskDebug, debug: debugState)
+      e.state.previousMode = e.state.mode
+      e.setMode(EditorMode.Debug)
+  of hrConfig:
+    let configBuffer = newTextBuffer("")
+    configBuffer.readOnly = true
+    let splitResult = e.vsplitWithBuffer(configBuffer)
+    if splitResult.isErr:
+      e.state.statusMessage = "Failed to open config: " & splitResult.error
+    else:
+      e.state.previousMode = e.state.mode
+      e.setMode(EditorMode.Config)
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.Config
+      let cfgState = newConfigModeState(e.config)
+      activeWin.modeState = ModeState(kind: mskConfig, config: cfgState)
+  of hrTheme:
+    e.applyThemeCommand(r.hrThemeName)
+  of hrLspLog:
+    let logLines = getLspMessageLog()
+    let logContent =
+      if logLines.len > 0:
+        logLines.join("\n")
+      else:
+        ""
+    let logBuffer = newTextBuffer(logContent)
+    logBuffer.readOnly = true
+    let splitResult = e.hsplitWithBuffer(logBuffer)
+    if splitResult.isErr:
+      e.state.statusMessage = "Failed to open LSP log: " & splitResult.error
+    else:
+      e.setMode(EditorMode.LogViewer)
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.LogViewer
+      let logState = newLogViewerState(lckLsp)
+      activeWin.modeState = ModeState(kind: mskLogViewer, logViewer: logState)
+  of hrJumpList:
+    if e.state.jumpList.list.len == 0:
+      e.state.statusMessage = "Jump list is empty"
+    else:
+      e.state.ui.tempMessages = @[]
+      e.state.ui.tempMessages.add(" jump  line  col  file")
+      for i, pos in e.state.jumpList.list:
+        let marker = if i == e.state.jumpList.index: ">" else: " "
+        let jumpNum = e.state.jumpList.list.len - i
+        let lineNum = pos.line + 1
+        let colNum = pos.column + 1
+        let bufOpt = e.bufferById(pos.bufferId)
+        let fileName =
+          if bufOpt.isSome:
+            let buf = bufOpt.get
+            if buf.filePath.isSome: buf.filePath.get.extractFilename else: "[No Name]"
+          else:
+            "[Invalid]"
+        e.state.ui.tempMessages.add(
+          marker & ($jumpNum).align(4) & " " & ($lineNum).align(5) & " " &
+            ($colNum).align(4) & "  " & fileName
+        )
+  of hrChanges:
+    let buf = e.activeBuffer()
+    if buf.changeList.len == 0:
+      e.state.statusMessage = "No changes"
+    else:
+      e.state.ui.tempMessages = @[]
+      e.state.ui.tempMessages.add("change  line  col  text")
+      for i in 0 ..< buf.changeList.len:
+        let pos = buf.changeList[i]
+        let lineNum = pos.line + 1
+        let colNum = pos.column + 1
+        let marker = if i == buf.changeListIndex + 1: ">" else: " "
+        let text =
+          if pos.line < buf.len:
+            let line = buf.getLine(pos.line)
+            if line.runeLen > 40:
+              line.runeSubStr(0, 40) & "..."
+            else:
+              line
+          else:
+            ""
+        let changeNum = buf.changeList.len - i
+        e.state.ui.tempMessages.add(
+          marker & ($changeNum).align(4) & " " & ($lineNum).align(5) & " " &
+            ($colNum).align(4) & "  " & text
+        )
+      let w = e.activeWindow
+      let curMarker = if buf.changeListIndex == buf.changeList.len - 1: ">" else: " "
+      e.state.ui.tempMessages.add(
+        curMarker & "0".align(4) & " " & ($(w.cursor.line + 1)).align(5) & " " &
+          ($(w.cursor.column + 1)).align(4) & "  "
+      )
+  of hrConflictNext:
+    let buf = e.activeBuffer()
+    let fromLine = e.activeWindow.cursor.line
+    let nxt = buf.findNextConflict(fromLine)
+    if nxt.isSome:
+      e.activeWindow.cursor.line = nxt.get.startLine
+      e.activeWindow.cursor.column = 0
+      e.updateViewportForCursor(e.cursor)
+    else:
+      e.state.statusMessage = "No next git conflict"
+  of hrConflictPrev:
+    let buf = e.activeBuffer()
+    let fromLine = e.activeWindow.cursor.line
+    let prv = buf.findPrevConflict(fromLine)
+    if prv.isSome:
+      e.activeWindow.cursor.line = prv.get.startLine
+      e.activeWindow.cursor.column = 0
+      e.updateViewportForCursor(e.cursor)
+    else:
+      e.state.statusMessage = "No previous git conflict"
+  of hrRecentFile:
+    let loadResult = e.enterRecentFileMode()
+    if loadResult.isErr:
+      logError("handler", "Failed to enter Recent File mode: " & loadResult.error)
+      e.state.statusMessage = "Error: " & loadResult.error
+    else:
+      e.state.previousMode = e.state.mode
+      e.setMode(EditorMode.RecentFile)
+      e.state.statusMessage = ""
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.RecentFile
+  of hrEnterLogViewer:
+    let logLines = getMessageLog()
+    let logContent =
+      if logLines.len > 0:
+        logLines.join("\n")
+      else:
+        ""
+    let logBuffer = newTextBuffer(logContent)
+    logBuffer.readOnly = true
+    let splitResult = e.hsplitWithBuffer(logBuffer)
+    if splitResult.isErr:
+      e.state.statusMessage = "Failed to open log: " & splitResult.error
+    else:
+      e.setMode(EditorMode.LogViewer)
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.LogViewer
+      let logState = newLogViewerState(lckEditor)
+      activeWin.modeState = ModeState(kind: mskLogViewer, logViewer: logState)
+  of hrEnterHelpViewer:
+    e.state.previousMode = e.state.mode
+    let helpState = newHelpViewerState()
+    let helpBuffer = helpState.createHelpTextBuffer()
+    let splitResult = e.hsplitWithBuffer(helpBuffer)
+    if splitResult.isErr:
+      e.state.statusMessage = "Failed to open help: " & splitResult.error
+    else:
+      e.setMode(EditorMode.Help)
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.Help
+      activeWin.cursor = BufferPosition(line: 0, column: 0)
+      activeWin.viewport.resetViewportTop()
+      activeWin.viewport.leftColumn = 0
+      activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
+  of hrEnterBufferManager:
+    e.state.previousMode = e.state.mode
+    e.setMode(EditorMode.BufferManager)
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    let activeWin = e.activeWindow
+    # Capture the current position so quitting the manager can restore it.
+    bmState.originCursor = activeWin.cursor
+    bmState.originTopLine = activeWin.viewport.topLine
+    bmState.originLeftColumn = activeWin.viewport.leftColumn
+    activeWin.mode = EditorMode.BufferManager
+    activeWin.saveOriginalBuffer()
+    activeWin.buffer = bmState.createBufferManagerTextBuffer()
+    activeWin.cursor = BufferPosition(line: 0, column: 0)
+    activeWin.viewport.resetViewportTop()
+    activeWin.viewport.leftColumn = 0
+    activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
+  of hrEnterBookmarkManager:
+    e.state.previousMode = e.state.mode
+    e.setMode(EditorMode.BookmarkManager)
+    let bkmState = newBookmarkManagerState()
+    bkmState.updateEntries(e.buffers)
+    let activeWin = e.activeWindow
+    # Capture the current position so quitting the manager can restore it.
+    bkmState.originCursor = activeWin.cursor
+    bkmState.originTopLine = activeWin.viewport.topLine
+    bkmState.originLeftColumn = activeWin.viewport.leftColumn
+    activeWin.mode = EditorMode.BookmarkManager
+    activeWin.saveOriginalBuffer()
+    activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
+    activeWin.cursor = BufferPosition(line: 0, column: 0)
+    activeWin.viewport.resetViewportTop()
+    activeWin.viewport.leftColumn = 0
+    activeWin.modeState = ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
+  of hrEnterBackupManager:
+    let baseBackupDir = e.config.autoBackup.getBaseBackupDir()
+    var sourceFilePath = ""
+    if e.activeBuffer.filePath.isSome:
+      sourceFilePath = absolutePath(e.activeBuffer.filePath.get)
+    let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
+    let bkBuffer = bkState.createBackupManagerTextBuffer()
+    let splitResult = e.vsplitWithBuffer(bkBuffer)
+    if splitResult.isErr:
+      e.state.statusMessage = "Failed to open backup manager: " & splitResult.error
+    else:
+      e.state.previousMode = e.state.mode
+      e.setMode(EditorMode.BackupManager)
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.BackupManager
+      activeWin.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+  of hrEnterTerminal:
+    e.state.previousMode = e.state.mode
+    e.enterTerminalInActiveWindow(r.enterTerminalCommand)
+  of hrOnlyWindow:
+    e.windowManager.onlyWindow(e.screenSize.width, e.screenSize.height)
+    e.syncActiveWindow()
+    if e.windowManager.windows.len > 0:
+      e.setActiveWindowScreenCursor(e.activeWindow)
+  of hrMapAdd, hrMapRemove, hrMapClear, hrMapList:
+    discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
+  of hrPlaybackMacro:
+    discard # Consumed by processReplayedResult; only reaches here defensively.
+  of hrDebugViewerQuit, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterDiffViewer,
+      hrEnterReferences, hrEnterDocumentSymbol, hrEnterCallHierarchy:
+    discard # Handled by per-mode dispatchers or produced from within those modes
 
   # Handle overlay transitions
   let overlayTransition = r.getOverlayTransition()
@@ -917,6 +1558,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         else:
           getCurrentDir()
       let filerState = newFilerState(startPath)
+      # Capture the current position so quitting the filer can restore it.
+      filerState.originCursor = activeWin.cursor
+      filerState.originTopLine = activeWin.viewport.topLine
+      filerState.originLeftColumn = activeWin.viewport.leftColumn
       activeWin.saveOriginalBuffer()
       activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
       activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)
@@ -929,15 +1574,26 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if newMode == EditorMode.BufferManager:
       let bmState = newBufferManagerState()
       bmState.updateEntries(e.getBufferInfos())
-      bmState.previousWindowIndex = e.windowManager.activeWindowIndex
+      # Capture the current position so quitting the manager can restore it.
+      bmState.originCursor = activeWin.cursor
+      bmState.originTopLine = activeWin.viewport.topLine
+      bmState.originLeftColumn = activeWin.viewport.leftColumn
+      activeWin.saveOriginalBuffer()
       activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
+      activeWin.buffer = bmState.createBufferManagerTextBuffer()
+      activeWin.cursor = BufferPosition(line: 0, column: 0)
+      activeWin.viewport.resetViewportTop()
+      activeWin.viewport.leftColumn = 0
       activeWin.mode = EditorMode.BufferManager
 
     # Initialize bookmark manager state when entering BookmarkManager mode
     if newMode == EditorMode.BookmarkManager:
       let bkmState = newBookmarkManagerState()
       bkmState.updateEntries(e.buffers)
-      bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
+      # Capture the current position so quitting the manager can restore it.
+      bkmState.originCursor = activeWin.cursor
+      bkmState.originTopLine = activeWin.viewport.topLine
+      bkmState.originLeftColumn = activeWin.viewport.leftColumn
       activeWin.saveOriginalBuffer()
       activeWin.modeState =
         ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
@@ -1002,3 +1658,315 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         e.state.statusMessage = syntaxMsg.get
 
   return true # Continue running
+
+const MaxMacroRecursionDepth = 100
+  ## Macro recursion depth guard (@a inside @a...) before abort.
+
+const MaxMapRecursionDepth = 50
+  ## `:map` (noremap=false) expansion depth guard. Kept below
+  ## MaxMacroRecursionDepth so a cyclic mapping reports "recursive mapping"
+  ## before the macro depth guard fires.
+
+proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome
+proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome
+
+proc runNestedKeyCombo*(
+  manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): ReplayOutcome
+
+proc processReplayedResult*(
+    e: Editor, r: HandlerResult, activeBuffer: TextBuffer
+): ReplayOutcome =
+  ## Mini processor for keys fired from a nested replay context (macro,
+  ## mapping RHS, timeout batch). Applies full side effects via
+  ## `processResult` — no kind is silently dropped — and returns whether the
+  ## loop should keep going. `hrPlaybackMacro` is intercepted here and drives
+  ## the nested `playbackMacroImpl` loop count times.
+  if r.kind == hrPlaybackMacro:
+    for _ in 0 ..< r.playbackMacroCount:
+      let outcome = playbackMacroImpl(e, r.playbackMacroKeys)
+      if outcome != roContinue:
+        return outcome
+    # Finalize insert-normal after the macro. applyNormalModePostProcessing
+    # skips hrPlaybackMacro's clean-up branch so the OUTER insertNormalMode
+    # survives the propagation; if the macro's own keys never cleared it
+    # (empty macro, all keys stayed pending), fold it back into Insert here.
+    let state = e.state
+    if state.insertNormalMode and state.mode == EditorMode.Normal and
+        not hasPendingBuiltinInput(e):
+      state.insertNormalMode = false
+      e.setMode(EditorMode.Insert)
+    return roContinue
+  let shouldContinue = processResult(e, r, activeBuffer)
+  if r.kind == hrError:
+    return roAbort
+  if not shouldContinue:
+    return roQuit
+  roContinue
+
+template withPlaybackGuard(e: Editor, body: untyped): ReplayOutcome =
+  ## Shared depth guard + isRecording suspension for macro / runtime-mapping
+  ## replay loops. `body` must assign to `outcome`.
+  block:
+    let state = e.state
+    if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
+      e.state.statusMessage =
+        "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")"
+      roAbort
+    else:
+      state.macroState.playbackDepth += 1
+      let wasRecording = state.macroState.isRecording
+      state.macroState.isRecording = false
+      var outcome {.inject.} = roContinue
+      body
+      state.macroState.isRecording = wasRecording
+      state.macroState.playbackDepth -= 1
+      outcome
+
+proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome =
+  ## Iterate `combos` through `runNestedKeyCombo` — no per-key parse. Used by
+  ## runtime key-sequence mappings whose RHS is pre-parsed at registration.
+  withPlaybackGuard(e):
+    for k in combos:
+      outcome = runNestedKeyCombo(e.handlerManager, e, k)
+      if outcome != roContinue:
+        break
+
+proc playbackMacroImpl(e: Editor, keys: seq[string]): ReplayOutcome =
+  ## Iterate user-recorded macro `keys` (register storage is seq[string]).
+  ## Aborts on the first `stringToKeyCombo` failure but keeps executing the
+  ## good prefix (matches pre-refactor behaviour).
+  withPlaybackGuard(e):
+    for keyStr in keys:
+      let keyComboOpt = stringToKeyCombo(keyStr)
+      if keyComboOpt.isNone:
+        e.state.statusMessage = "Invalid key in macro: " & keyStr
+        outcome = roAbort
+        break
+      outcome = runNestedKeyCombo(e.handlerManager, e, keyComboOpt.get)
+      if outcome != roContinue:
+        break
+
+proc replayRuntimeKeySequence*(
+    manager: HandlerManager, editor: Editor, targetKeys: seq[KeyCombo], noremap: bool
+): ReplayOutcome =
+  ## Replay the RHS of a fired runtime key-sequence mapping. `:noremap` runs
+  ## verbatim under `withReplay` (isReplayingMapping suppresses re-expansion);
+  ## `:map` runs without withReplay so each replayed key re-enters the
+  ## precheck, bounded by `mapExpandDepth` / `MaxMapRecursionDepth`.
+  if noremap:
+    var outcome = roContinue
+    editor.keyRouter.withReplay:
+      outcome = playbackKeyCombosImpl(editor, targetKeys)
+    return outcome
+
+  if editor.keyRouter.mapExpandDepth >= MaxMapRecursionDepth:
+    editor.state.statusMessage = "recursive mapping (max " & $MaxMapRecursionDepth & ")"
+    return roAbort
+  editor.keyRouter.mapExpandDepth += 1
+  try:
+    result = playbackKeyCombosImpl(editor, targetKeys)
+  finally:
+    editor.keyRouter.mapExpandDepth -= 1
+
+proc checkRuntimeKeySeqMapping*(
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
+): Option[ReplayOutcome] =
+  ## Ask the KeyRouter whether `keyCombo` is part of a runtime mapping. Returns
+  ## `none` to let the caller fall through to built-in resolution, or `some`
+  ## outcome when the mapping fired (or is still building).
+  ##
+  ## Flush semantics: rrUnhandledBatch replays accumulated keys *except* the
+  ## current one; the caller re-processes the current key normally. The
+  ## Command overlay path lives in `command_mode_handler.handleCommandModeKeyCombo`.
+  let state = editor.state
+  let route = editor.keyRouter.feedKey(state.mode, keyCombo)
+  case route.kind
+  of rrUnhandled, rrCancelled, rrCommand:
+    # rrCommand is produced only by resolveBuiltin (Normal dispatcher), never by
+    # feedKey; listed for exhaustiveness. Fall through to built-in resolution.
+    return none(ReplayOutcome)
+  of rrExecuteRuntimeCommand:
+    let cmdResult = manager.executeCommandDirect(route.commandName)
+    if cmdResult.isSome:
+      return some(processReplayedResult(editor, cmdResult.get, editor.activeBuffer))
+    return none(ReplayOutcome)
+  of rrExecuteRuntimeKeySequence:
+    return
+      some(replayRuntimeKeySequence(manager, editor, route.targetKeys, route.noremap))
+  of rrWaiting:
+    return some(roContinue)
+  of rrUnhandledBatch:
+    let keysToFlush = route.keys[0 ..< route.keys.len - 1]
+    var outcome = roContinue
+    editor.keyRouter.withReplay:
+      for k in keysToFlush:
+        outcome = runNestedKeyCombo(manager, editor, k)
+        if outcome != roContinue:
+          break
+    if outcome != roContinue:
+      return some(outcome)
+    return none(ReplayOutcome)
+
+proc runNestedKeyCombo*(
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): ReplayOutcome =
+  ## Single entry point that fuses precheck (runtime key-sequence mapping) with
+  ## dispatch and full processResult side effects. Both the top-level event
+  ## loop and nested-playback loops (macro, mapping RHS, timeout batch) call
+  ## this so every kind's side effect fires exactly once.
+  # When an overlay is active the live loop routes through the overlay handler;
+  # replay must do the same or recorded overlay keys hit the base-mode handler.
+  if not overlayPlaybackHook.isNil:
+    let overlayResult = overlayPlaybackHook(e, keyCombo)
+    if overlayResult.isSome:
+      return if overlayResult.get: roContinue else: roQuit
+  if not manager.keyBindingRegistry.isReplayingMapping:
+    let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
+    if expand.isSome:
+      return expand.get
+  let r = manager.handleKeyCombo(e, keyCombo)
+  processReplayedResult(e, r, e.activeBuffer)
+
+proc outcomeToHandlerResult(e: Editor, outcome: ReplayOutcome): HandlerResult =
+  ## Fold a ReplayOutcome into the HandlerResult shape test-facing wrappers
+  ## return. `roAbort` pulls the diagnostic from `state.statusMessage`, which
+  ## the abort site (`playbackMacroImpl`, `replayRuntimeKeySequence`, or
+  ## `processResult`'s hrError arm) has already populated.
+  case outcome
+  of roContinue:
+    HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
+  of roQuit:
+    HandlerResult(kind: hrQuit)
+  of roAbort:
+    HandlerResult(kind: hrError, errorMessage: e.state.statusMessage)
+
+proc playbackMacro*(editor: Editor, keys: seq[string]): HandlerResult =
+  ## Test-facing wrapper. Real callers go through `hrPlaybackMacro` +
+  ## `processReplayedResult`; this preserves a HandlerResult return for
+  ## tests that inspect it directly. Side effects are applied via
+  ## `playbackMacroImpl`; the returned HandlerResult is a status signal.
+  outcomeToHandlerResult(editor, playbackMacroImpl(editor, keys))
+
+proc playbackKeyCombos*(editor: Editor, combos: seq[KeyCombo]): HandlerResult =
+  ## Test-facing wrapper for the pre-parsed variant. Used by tests that
+  ## execute a `RuntimeKeyMapping.targetKeys` (now seq[KeyCombo]) directly.
+  outcomeToHandlerResult(editor, playbackKeyCombosImpl(editor, combos))
+
+proc runKeyCombo*(
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): HandlerResult =
+  ## HandlerResult-returning form of `runNestedKeyCombo`, for tests that
+  ## inspect kind/errorMessage. Full processResult side effects fire on every
+  ## path (precheck, direct dispatch, hrPlaybackMacro expansion) so the
+  ## observable state after this call matches production `handleEvent`. The
+  ## returned HandlerResult is a status signal (hrHandled/hrQuit/hrError),
+  ## not the raw dispatched result — inspect `state.mode`, `state.overlay`,
+  ## and other mutations directly.
+  outcomeToHandlerResult(e, runNestedKeyCombo(manager, e, keyCombo))
+
+proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
+  ## Consume `state.requestQuickRun` (set by buffer-mode key handlers) and
+  ## fire QuickRun via pending state. Returns true when a QuickRun request
+  ## was consumed; callers should skip further hr-teardown in that case.
+  if not e.state.requestQuickRun:
+    return false
+  e.state.requestQuickRun = false
+  let prepareResult = prepareQuickRun(activeBuffer, e.config)
+  if prepareResult.isErr:
+    e.state.statusMessage = "QuickRun error: " & prepareResult.error
+    logError("handler", "QuickRun prepare failed: " & prepareResult.error)
+  else:
+    let prepared = prepareResult.get
+    e.state.pending.quickRun = (
+      cmd: prepared.command.cmd,
+      args: prepared.command.args,
+      filePath: prepared.filePath,
+      isTempFile: prepared.isTempFile,
+    )
+    if e.config.notification.screenNotifications and
+        e.config.notification.quickRunScreenNotify:
+      e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
+  e.state.exitOverlay()
+  e.setMode(EditorMode.Normal)
+  return true
+
+proc handleInsertNormalReturn(e: Editor) =
+  ## After a Command overlay completes, if we were in insert-normal mode
+  ## (Ctrl-o), return to Insert (for :w/:set) or commit the Insert transaction
+  ## (when the command switched to a non-Normal/Insert mode).
+  if not e.state.insertNormalMode:
+    return
+  if e.state.mode == EditorMode.Normal:
+    e.state.insertNormalMode = false
+    e.setMode(EditorMode.Insert)
+  elif e.state.mode != EditorMode.Insert:
+    e.state.insertNormalMode = false
+    let activeBuffer = e.activeBuffer()
+    if activeBuffer.inTransaction:
+      clearAutoIndentIfUnedited(activeBuffer, e.state)
+      discard activeBuffer.commitTransaction()
+    e.state.editState.insertModeStartPos = none(BufferPosition)
+    e.state.editState.substituteContext = none(types.SubstituteContext)
+
+proc executeCommandOverlay*(e: Editor, commandText: string): bool =
+  ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
+  ## side effects via processResult, teardown driven by classifyOverlayExit,
+  ## then Insert-Normal recovery. Returns false when the caller should stop
+  ## the main loop (app quit).
+  # 1. pre-teardown (kind-independent)
+  e.state.commandCompletionManager.cancelCompletion()
+  if e.state.ui.substitutePreview.isActive:
+    e.cancelSubstitutePreview()
+
+  # 2. dispatch
+  let activeBuffer = e.activeBuffer()
+  let isShared = e.isBufferShared(activeBuffer)
+  var otherModifiedCount = 0
+  for buf in e.buffers:
+    if buf != activeBuffer and buf.isModified:
+      otherModifiedCount.inc
+  let r = e.handlerManager.handleCommandMode(
+    activeBuffer, commandText, isShared, e.activeWindow.cursor.line, otherModifiedCount
+  )
+  if commandText.len > 1:
+    e.addCommandToHistory(commandText[1 ..^ 1])
+
+  # 3. requestQuickRun poll (set independently of r.kind by buffer-mode keys)
+  if e.tryHandleQuickRunRequest(activeBuffer):
+    e.handleInsertNormalReturn()
+    return true
+
+  # 4. side effects
+  let shouldContinue = e.processResult(r, activeBuffer)
+  if not shouldContinue:
+    return false
+
+  # 5. teardown
+  case classifyOverlayExit(r)
+  of oxaAppExit:
+    return false # unreachable — processResult would have returned false
+  of oxaExitToNormal:
+    e.state.exitOverlay()
+    e.setMode(EditorMode.Normal)
+  of oxaExitToNewMode:
+    e.state.exitOverlay()
+  of oxaExitAndResync:
+    e.state.exitOverlay()
+    e.setMode(e.state.mode)
+  of oxaHandledGeneric:
+    e.state.exitOverlay()
+    let t = r.getModeTransition()
+    if t.isSome:
+      e.setMode(t.get)
+    else:
+      e.setMode(e.state.mode)
+
+  # 6. status message from HandlerResult payload
+  let statusMsg = r.getStatusMessage()
+  if statusMsg.len > 0:
+    e.state.statusMessage = statusMsg
+
+  # 7. Insert-Normal recovery (Ctrl-o)
+  e.handleInsertNormalReturn()
+  return true

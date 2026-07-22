@@ -26,6 +26,7 @@ import std/[unittest, options, posix, tables]
 import ../src/moepkg/[editor, config, types, buffer, modes, terminal_mode]
 import ../src/moepkg/terminal/pty
 import ../src/moepkg/terminal/ansi_parser
+import ../src/moepkg/command_handlers/[handler_result, result_processor]
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -240,3 +241,18 @@ suite "Terminal tabs - cleanupAllTerminals":
 
     check s.pty.closed
     check e.terminalStates.len == 0
+
+suite "Terminal tabs - hrCloseWindow via processResult":
+  test "processResult(hrCloseWindow) cleans up terminal state":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let termBufId = termBuf.id
+
+    check e.terminalStates.hasKey(termBufId)
+    check e.terminalStates.len == 1
+
+    discard e.processResult(HandlerResult(kind: hrCloseWindow), e.activeBuffer())
+
+    check e.terminalStates.len == 0
+    check not e.terminalStates.hasKey(termBufId)
+    check e.activeWindow.mode != EditorMode.Terminal

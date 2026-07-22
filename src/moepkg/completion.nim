@@ -29,7 +29,9 @@ import
 
 import pkg/[celina, jsony]
 
-import buffer, word_dictionary, command_completion, fuzzy_match, color, popup_render
+import
+  buffer, word_dictionary, command_completion, fuzzy_match, color, popup_render,
+  unicode_utils
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
@@ -98,7 +100,6 @@ type
     lastLspRequestTime*: MonoTime ## Time of last LSP completion request
     isIncomplete*: bool ## Whether last LSP completion list was incomplete
     lastLspPrefix*: string ## Prefix used for last LSP request
-    resolveRequestId*: Option[int] ## Pending resolve request ID
     resolvedIndex*: int ## Index of item being resolved
 
   PopupPosition* = object
@@ -937,19 +938,19 @@ proc isActive*(mgr: CompletionManager): bool =
   mgr.state in {csActive, csPendingLsp}
 
 proc calculateMaxWordWidth*(entries: seq[CompletionEntry]): int =
-  ## Calculate the maximum displayed word width in the entries
+  ## Calculate the maximum displayed word width (in terminal columns) in the entries
   result = 0
   for entry in entries:
-    let width = entry.displayText.runeLen
+    let width = entry.displayText.displayWidth
     if width > result:
       result = width
 
 proc calculateMaxDetailWidth*(entries: seq[CompletionEntry]): int =
-  ## Calculate the maximum detail width in the entries
+  ## Calculate the maximum detail width (in terminal columns) in the entries
   result = 0
   for entry in entries:
     if entry.detail.isSome:
-      let width = entry.detail.get.runeLen
+      let width = entry.detail.get.displayWidth
       if width > result:
         result = width
 
@@ -1049,10 +1050,10 @@ proc renderCompletionPopup*(
           else:
             popupNormalStyle()
 
-        # Truncate word to fit
+        # Truncate word by display width (CJK/wide-char safe, contentWidth <= 0 safe)
         var displayWord = entry.displayText
-        if displayWord.runeLen > contentWidth:
-          displayWord = $displayWord.toRunes[0 ..< contentWidth - 1] & "…"
+        if displayWord.displayWidth > contentWidth:
+          displayWord = truncateToWidthWithSuffix(displayWord, contentWidth, "…")
 
         # Draw word
         var x =
@@ -1069,15 +1070,12 @@ proc renderCompletionPopup*(
           let detailStartX = contentX + maxWordW + DetailSeparatorWidth
           x = fillCells(termBuffer, x, y, min(detailStartX, contentLimit), style)
 
-          # Render detail text
-          var displayDetail = entry.detail.get
+          # Render detail by display width (CJK/wide-char safe, availableDetailWidth <= 0 safe)
           let availableDetailWidth = contentLimit - x
-          if displayDetail.runeLen > availableDetailWidth:
-            if availableDetailWidth > 1:
-              displayDetail = displayDetail[0 ..< availableDetailWidth - 1] & "…"
-            else:
-              displayDetail = ""
-
+          var displayDetail = entry.detail.get
+          if displayDetail.displayWidth > availableDetailWidth:
+            displayDetail =
+              truncateToWidthWithSuffix(displayDetail, availableDetailWidth, "…")
           x =
             drawClippedRunes(termBuffer, x, y, contentLimit, displayDetail, detailStyle)
 
@@ -1119,10 +1117,10 @@ proc calculateDocPanelPosition*(
   ## highlighted candidate's row (border + selectedIndex - scrollOffset), so the
   ## panel tracks the selection instead of pinning to the popup's first row.
 
-  # Calculate content dimensions
+  # Calculate content dimensions (max line display width, CJK-aware)
   var maxLineLen = 0
   for line in docPanel.lines:
-    maxLineLen = max(maxLineLen, line.runeLen)
+    maxLineLen = max(maxLineLen, line.displayWidth)
 
   let contentWidth =
     min(max(maxLineLen + PopupPadding, DocPanelMinWidth), DocPanelMaxWidth)
@@ -1236,7 +1234,6 @@ proc setLspItems*(
   mgr.lspItems = items
   mgr.isIncomplete = isIncomplete
   mgr.lspRequestId = none(int)
-  mgr.resolveRequestId = none(int)
 
   # Update entries with the new LSP items
   mgr.menu.entries = mgr.filterAndSortEntries(mgr.menu.prefix)

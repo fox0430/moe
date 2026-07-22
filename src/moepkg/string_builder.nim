@@ -45,9 +45,8 @@ proc add*(sb: var StringBuilder, s: string) =
     sb.totalLen += s.len
 
 proc removeLast*(sb: var StringBuilder, count: int) =
-  ## Remove last 'count' characters from the builder
-  ## O(k) where k is number of parts affected
-  ## Used for backspace operations in Insert mode
+  ## Remove last 'count' bytes from the builder, snapping the cut point back
+  ## to a UTF-8 rune boundary so the tail is never left mid-sequence.
   if count <= 0:
     return
 
@@ -58,15 +57,19 @@ proc removeLast*(sb: var StringBuilder, count: int) =
     let lastLen = sb.parts[lastIdx].len
 
     if lastLen <= remaining:
-      # Remove entire last part
       sb.totalLen -= lastLen
       sb.parts.delete(lastIdx)
       remaining -= lastLen
     else:
-      # Remove partial last part
-      let newLen = lastLen - remaining
-      sb.parts[lastIdx] = sb.parts[lastIdx][0 ..< newLen]
-      sb.totalLen -= remaining
+      var newLen = lastLen - remaining
+      while newLen > 0 and (sb.parts[lastIdx][newLen].uint8 and 0xC0'u8) == 0x80'u8:
+        dec newLen
+      if newLen == 0:
+        sb.totalLen -= lastLen
+        sb.parts.delete(lastIdx)
+      else:
+        sb.totalLen -= (lastLen - newLen)
+        sb.parts[lastIdx] = sb.parts[lastIdx][0 ..< newLen]
       remaining = 0
 
 proc clear*(sb: var StringBuilder) =

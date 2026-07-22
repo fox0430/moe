@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times, tables, sets]
+import std/[options, strformat, os, monotimes, times, tables]
 
 import pkg/results
 
@@ -33,7 +33,8 @@ import
   editorconfig_helper,
   editor_codelens,
   highlight,
-  highlight_config
+  highlight_config,
+  persist
 
 type SaveAllBuffersResult* = object
   savedCount*: int
@@ -51,7 +52,7 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Parameters:
   ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
   ##              If false, compare disk file with working tree (saved only)
-  if e.state.display.showGitDiff:
+  if e.showGitDiff:
     let activeBuffer = e.activeBuffer()
     discard updateBufferWithGitDiff(activeBuffer, useBuffer)
 
@@ -76,7 +77,6 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Apply EditorConfig settings if enabled
   applyEditorConfigToBuffer(e.activeBuffer, e.config)
-  applyBufferEditorConfig(e.state.display, e.activeBuffer, e.config)
 
   # Restore cursor position if persisted, otherwise reset to file start
   # Don't restore for temporary git files
@@ -107,7 +107,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Update git diff information if sidebar and git diff are enabled
   # Use useBuffer=false to compare disk file with working tree (not buffer with HEAD)
-  if e.state.display.showGitDiff:
+  if e.showGitDiff:
     let diffResult = updateBufferWithGitDiff(e.activeBuffer, useBuffer = false)
     if diffResult.isErr:
       # Log error but don't fail the file load
@@ -130,7 +130,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
     if lspResult.isErr:
       logLspDegraded("didOpen", lspResult.error & " (" & path & ")")
     else:
-      e.lastLspChangeSeqs[e.activeBuffer.id] = e.activeBuffer.changeSeq
+      e.lastLspContentVersions[e.activeBuffer.id] = e.activeBuffer.contentVersion
 
   ok(())
 
@@ -302,7 +302,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
     logInfo("editor", "Saved file: " & savePath)
 
     # Refresh git diff for the saved buffer (mirrors single-file save)
-    if e.state.display.showGitDiff:
+    if e.showGitDiff:
       discard updateBufferWithGitDiff(buffer, useBuffer = false)
 
     if e.lsp.enabled:
@@ -333,19 +333,12 @@ proc autoSave*(e: Editor) =
   if elapsed < threshold:
     return
 
-  # Check all windows for modified buffers and save them
+  # Iterate `e.buffers`, not windows: windows only expose foreground tabs,
+  # so background-tab buffers would silently miss auto save.
   var savedCount = 0
   var savedPaths: seq[string] = @[]
-  var savedBufferIds = initHashSet[BufferId]()
-    # Track already saved buffers to avoid duplicates
 
-  for window in e.windowManager.windows:
-    let buffer = window.buffer
-
-    # Skip if already saved (same buffer in multiple windows)
-    if buffer.id in savedBufferIds:
-      continue
-
+  for buffer in e.buffers:
     # Check if buffer is modified and has a file path
     if buffer.isModified and buffer.filePath.isSome:
       let savePath = buffer.filePath.get
@@ -360,12 +353,11 @@ proc autoSave*(e: Editor) =
       let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
 
       if saveResult.isOk:
-        savedBufferIds.incl(buffer.id)
         savedCount += 1
         savedPaths.add(savePath)
 
         # Refresh git diff after saving
-        if e.state.display.showGitDiff:
+        if e.showGitDiff:
           discard updateBufferWithGitDiff(buffer, useBuffer = false)
 
         # Notify LSP that a document was saved
@@ -428,26 +420,18 @@ proc autoBackup*(e: Editor) =
   if backupElapsed < backupThreshold:
     return
 
-  # Backup all modified buffers
+  # Iterate `e.buffers`, not windows: windows only expose foreground tabs,
+  # so background-tab buffers would silently miss auto backup.
   var backupCount = 0
   var backupPaths: seq[string] = @[]
-  var backedUpBufferIds = initHashSet[BufferId]()
-    # Track already backed up buffers to avoid duplicates
 
-  for window in e.windowManager.windows:
-    let buffer = window.buffer
-
-    # Skip if already backed up (same buffer in multiple windows)
-    if buffer.id in backedUpBufferIds:
-      continue
-
+  for buffer in e.buffers:
     # Only backup modified buffers with a file path
     if buffer.isModified and buffer.filePath.isSome:
       let backupResult =
         backupBuffer(buffer.filePath, buffer.getFileContent(), e.config.autoBackup)
 
       if backupResult.isOk:
-        backedUpBufferIds.incl(buffer.id)
         backupCount += 1
         backupPaths.add(backupResult.get)
 

@@ -21,7 +21,7 @@
 ## PieceTable, and the inverse-application helpers used by both undo()
 ## and redo().
 
-import std/[deques, options, strutils]
+import std/[deques, options]
 
 import pkg/results
 
@@ -56,13 +56,6 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
       )
       b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
-      # Reverse the fold/bookmark shift that insertTextWithNewlines applied on
-      # the forward path. Without this, folds and bookmarks below the insert
-      # point stay shifted after undo and drift further on every redo/undo cycle.
-      let newlineCount = change.insertText.count('\n')
-      if newlineCount > 0:
-        b.foldState.adjustFoldsAfterDelete(change.insertPos.line, newlineCount)
-        b.adjustBookmarksForDelete(change.insertPos.line, newlineCount)
     of ckDeleteText:
       # Undo delete by inserting the deleted text
       let line = b.getLine(change.deletePos.line)
@@ -73,13 +66,9 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckInsertLine:
       # Undo insert line by deleting it
       b.backendDeleteLine(change.insertLineIdx)
-      b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
-      b.adjustBookmarksForDelete(change.insertLineIdx)
     of ckDeleteLine:
       # Undo delete line by inserting it
       b.backendInsertLine(change.deleteLineIdx, change.deletedLineText)
-      b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
-      b.adjustBookmarksForInsert(change.deleteLineIdx)
     of ckDeleteRange:
       # Undo delete range by inserting the deleted text
       # Handle both single-line and multi-line deletions correctly
@@ -111,7 +100,15 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # b.modifiedLines currently holds the post-mutation state; reverse it.
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
+      b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
+
+    # Drive the row-remap subscribers backwards. ckSnapshot restored state
+    # wholesale; ckTransaction recurses through its inner changes.
+    # `includeSideArrays=false`: the wholesale savedLineMarkers /
+    # savedModifiedLines restore below would clobber their output.
+    if change.kind notin {ckSnapshot, ckTransaction}:
+      b.emitRowColRemapEvents(change, reverse = true, includeSideArrays = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
@@ -141,21 +138,22 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
   BufferChange(
     startSeq: change.startSeq,
     endSeq: change.endSeq,
+    id: change.id, # preserve identity across undo/redo
     kind: ckSnapshot,
     snapshotData: b.storage.pieceTable.takeSnapshot(),
     snapshotCursorPos: change.snapshotCursorPos,
     snapshotLineMarkers: b.lineMarkers,
     modifiedLinesDelta: change.modifiedLinesDelta,
     snapshotFoldState: b.foldState,
+    snapshotBookmarks: b.bookmarks,
   )
 
 proc clearMarkersIfAtSavedState(b: TextBuffer) {.inline.} =
-  ## After undo/redo lands on the saved sequence the buffer matches disk, so no
-  ## line is session-modified. The pre-delta code restored this implicitly via
-  ## the wholesale modifiedLines copy; the delta-based restore must make it
-  ## explicit on BOTH paths (redo() previously lacked this, leaving a stale
-  ## lmkModified marker after edit -> save -> undo -> redo).
-  if b.changeSeq == b.savedSeq:
+  ## After undo/redo lands on the saved undo-tree node the buffer matches disk,
+  ## so no line is session-modified. The pre-delta code restored this implicitly
+  ## via the wholesale modifiedLines copy; the delta-based restore must do it
+  ## on BOTH paths (redo() previously lacked this).
+  if b.isAtSavedState:
     for i in 0 ..< b.modifiedLines.len:
       b.modifiedLines[i] = lmkUnmodified
 
@@ -210,6 +208,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         BufferChange(
           startSeq: preTxnSeq,
           endSeq: postTxnSeq,
+          id: b.allocateChangeId(),
           kind: ckSnapshot,
           snapshotData: b.pendingSnapshot.get,
           snapshotCursorPos:
@@ -221,6 +220,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
           modifiedLinesDelta:
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
           snapshotFoldState: b.pendingSnapshotFolds,
+          snapshotBookmarks: b.pendingSnapshotBookmarks,
         )
       )
       # Pending snapshot state is now consumed into the entry; reset it all.
@@ -229,6 +229,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
       let transactionChange = BufferChange(
         startSeq: preTxnSeq,
         endSeq: postTxnSeq,
+        id: b.allocateChangeId(),
         kind: ckTransaction,
         transactionChanges: transaction.changes,
         transactionDescription: transaction.description,
@@ -242,14 +243,8 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
     # Record transaction position in changelist
     b.recordChangePosition(getChangePosition(transaction.changes[0]))
 
-    # Recompute lastChangedLines as the minimum across all changes.
-    # Each individual change in pushUndoChange overwrites lastChangedLines,
-    # so after the transaction only the last change's line remains.
-    var minLine = int.high
-    for ch in transaction.changes:
-      minLine = min(minLine, getChangePosition(ch).line)
-    if minLine != int.high:
-      b.lastChangedLines = minLine
+    # No lastChangedLines recompute needed: pushUndoChange min-merged each
+    # inner change's line into the pending anchor via markLineChanged.
   else:
     # Zero-change transaction: beginTransaction captured a pending snapshot that
     # no undo entry consumes here. Discard it so the next edit's ckSnapshot
@@ -274,6 +269,7 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.lineMarkers = b.pendingSnapshotMarkers
     b.modifiedLines = b.pendingSnapshotModifiedLines
     b.foldState = b.pendingSnapshotFolds
+    b.bookmarks = b.pendingSnapshotBookmarks
     # Drop every pending-snapshot artifact, matching commit/push cleanup, so a
     # later ckSnapshot delta is never computed against a rolled-back base.
     b.discardPendingSnapshot()
@@ -292,12 +288,13 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
 
   # Mark highlight as needing update after rollback
   if transaction.changes.len > 0:
-    b.highlightNeedsUpdate = true
     var minLine = int.high
     for change in transaction.changes:
       minLine = min(minLine, getChangePosition(change).line)
     if minLine != int.high:
-      b.lastChangedLines = minLine
+      b.markLineChanged(minLine)
+    else:
+      b.highlightNeedsUpdate = true
 
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
@@ -307,6 +304,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Undo the last 'count' changes (or all changes in a transaction group)
   ## Returns the suggested cursor position for the first undone change
   ## Returns error if nothing to undo or if the undo operation fails
+  if b.readOnly:
+    return Result[BufferPosition, string].err "Buffer is read-only"
   if b.undoStack.len == 0:
     return Result[BufferPosition, string].err "Nothing to undo"
 
@@ -360,8 +359,6 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
   # Mark highlight as needing update after undo
   if undoneChanges.len > 0:
-    b.highlightNeedsUpdate = true
-
     # Compute first changed line from undone changes for incremental highlighting
     var minLine = int.high
 
@@ -377,7 +374,9 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       findMinLine(change)
 
     if minLine != int.high:
-      b.lastChangedLines = minLine
+      b.markLineChanged(minLine)
+    else:
+      b.highlightNeedsUpdate = true
 
   # If undo brought us back to saved state, clear all modification markers
   b.clearMarkersIfAtSavedState()
@@ -407,12 +406,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       b.backendDeleteAtLineCol(change.deletePos.line, bytePos, change.deletedText.len)
     of ckInsertLine:
       b.backendInsertLine(change.insertLineIdx, change.insertLineText)
-      b.foldState.adjustFoldsAfterInsert(change.insertLineIdx, 1)
-      b.adjustBookmarksForInsert(change.insertLineIdx)
     of ckDeleteLine:
       b.backendDeleteLine(change.deleteLineIdx)
-      b.foldState.adjustFoldsAfterDelete(change.deleteLineIdx, 1)
-      b.adjustBookmarksForDelete(change.deleteLineIdx)
     of ckDeleteRange:
       # Re-apply delete range using the same logic as the original deleteRange
       # Handle both single-line and multi-line deletions correctly
@@ -420,12 +415,9 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       let endPos = change.deleteEndPos
 
       if startPos.line == endPos.line:
-        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+        discard b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
       else:
-        b.deleteRangeMultiLine(startPos, endPos)
-        # Adjust fold and bookmark positions for multi-line delete
-        b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
-        b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
+        discard b.deleteRangeMultiLine(startPos, endPos)
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineNewText)
     of ckTransaction:
@@ -452,7 +444,14 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # b.modifiedLines currently holds the pre-mutation state; re-apply it.
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
+      b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
+
+    # Drive the row-remap subscribers forward. Symmetric to undoChange:
+    # ckSnapshot/ckTransaction opt out; savedLineMarkers / savedModifiedLines
+    # below overwrite the two per-line arrays so `includeSideArrays=false`.
+    if change.kind notin {ckSnapshot, ckTransaction}:
+      b.emitRowColRemapEvents(change, includeSideArrays = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
@@ -478,6 +477,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Redo the last 'count' undone changes
   ## Returns the suggested cursor position for the first redone change
   ## Returns error if nothing to redo or if the redo operation fails
+  if b.readOnly:
+    return Result[BufferPosition, string].err "Buffer is read-only"
   if b.redoStack.len == 0:
     return Result[BufferPosition, string].err "Nothing to redo"
 
@@ -522,15 +523,13 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     if b.changeListIndex < b.changeList.len - 1:
       b.changeListIndex.inc
 
-  # Add redone changes back to undo stack in reverse order
-  # This restores the original undo stack order after redo
-  for i in countdown(redoneChanges.len - 1, 0):
-    b.undoStack.addLast(redoneChanges[i])
+  # Symmetric with undo(): push in the order the changes were redone so the
+  # last-applied change sits on top of undoStack.
+  for change in redoneChanges:
+    b.undoStack.addLast(change)
 
   # Mark highlight as needing update after redo
   if redoneChanges.len > 0:
-    b.highlightNeedsUpdate = true
-
     # Compute first changed line from redone changes for incremental highlighting
     var minLine = int.high
 
@@ -545,7 +544,9 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     for change in redoneChanges:
       findMinLine(change)
     if minLine != int.high:
-      b.lastChangedLines = minLine
+      b.markLineChanged(minLine)
+    else:
+      b.highlightNeedsUpdate = true
 
   # If redo landed back on the saved state, clear all modification markers
   # (symmetric with undo(); the delta restore otherwise leaves stale markers).

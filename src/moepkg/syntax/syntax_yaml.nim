@@ -227,7 +227,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         inc(pos)
   elif g.state == gtCharLit:
     # abusing gtCharLit as single-quoted string lit
-    g.kind = if g.yamlIsKey: gtKey else: gtStringLit
+    g.kind = if g.lang.yaml.isKey: gtKey else: gtStringLit
     # Check if we're at an escape sequence ''
     if g.buf[pos] == '\'' and g.buf[pos + 1] == '\'':
       inc(pos, 2)
@@ -522,7 +522,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       g.kind = gtPunctuation
     of '\"':
       inc(pos)
-      g.yamlIsKey = false
+      g.lang.yaml.isKey = false
       var tempPos = pos
       while g.buf[tempPos] != '\0':
         case g.buf[tempPos]
@@ -531,7 +531,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
           while g.buf[tempPos] in {' ', '\t'}:
             inc(tempPos)
           if g.buf[tempPos] == ':' and g.buf[tempPos + 1] in {'\0', '\t' .. '\r', ' '}:
-            g.yamlIsKey = true
+            g.lang.yaml.isKey = true
           break
         of '\\':
           # Keep the lookahead line-bounded: skipping `\<newline>` would make
@@ -545,8 +545,8 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
           break
         else:
           inc(tempPos)
-      g.state = if g.yamlIsKey: gtKey else: gtStringLit
-      g.kind = if g.yamlIsKey: gtKey else: gtStringLit
+      g.state = if g.lang.yaml.isKey: gtKey else: gtStringLit
+      g.kind = if g.lang.yaml.isKey: gtKey else: gtStringLit
       # Continue reading string content until escape or end quote. This
       # deliberately does NOT stop at newlines, so the opener token can span
       # lines (unlike the per-line fold in the continuation branch above).
@@ -556,7 +556,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       while g.buf[pos] notin {'\0', '\\', '\"'}:
         inc(pos)
     of '\'':
-      g.yamlIsKey = false
+      g.lang.yaml.isKey = false
       var tempPos = pos + 1
       while g.buf[tempPos] != '\0':
         if g.buf[tempPos] == '\'':
@@ -567,7 +567,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
             while g.buf[tempPos] in {' ', '\t'}:
               inc(tempPos)
             if g.buf[tempPos] == ':' and g.buf[tempPos + 1] in {'\0', '\t' .. '\r', ' '}:
-              g.yamlIsKey = true
+              g.lang.yaml.isKey = true
             break
         elif g.buf[tempPos] in {'\n', '\r'}:
           break

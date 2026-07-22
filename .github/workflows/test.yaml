@@ -79,15 +79,20 @@ jobs:
         nim-version: 2.2.10
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install lasm
-      run: |
-        nimble install lasm@#head
-
     - name: Build moe
       run: |
         nimble build
 
+    - name: Install lasm
+      run: |
+        nimble install --noLockfile lasm -y
+
     - name: Run unit test
+      env:
+        # xvfb-run leaves TERM=dumb (the runner default) so moe's color mode
+        # fallback collapses distinct theme colors to the same 8-color index
+        # and color-sensitive render tests fail. Force a 256-color terminal.
+        TERM: xterm-256color
       run: |
         nimble setup
-        xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim ptest
+        xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim

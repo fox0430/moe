@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, options, monotimes, times, os]
+import std/[strformat, strutils, sequtils, options, monotimes, times, os]
 
 import pkg/[results, chronos]
 
@@ -45,9 +45,8 @@ import
   emergency
 
 import
-  status_line, render_utils, git_conflict, logger, config_loader, search_utils,
-  hover_popup, command_completion, color, message_log, sidebar, recent_file_mode,
-  registers, highlight_config
+  render_utils, git_conflict, logger, config_loader, search_utils, hover_popup,
+  command_completion, color, message_log, recent_file_mode, registers, persist
 
 import command_handlers/handler_manager
 
@@ -61,19 +60,36 @@ export
 proc addCommandAlias*(
     e: Editor, alias: string, action: CommandLineAction
 ): Result[(), string] =
-  ## Add a new command alias
-  e.commandConfig.addAlias(alias, action)
+  ## Add a new command alias.
+  ## Updates the runtime command config, the parser, and the persisted
+  ## config ([CommandAliases]) so the alias survives save/reload.
+  let
+    commandName = canonicalCommandName(action)
+    key = alias.toLowerAscii()
+  if commandName.isNone:
+    return err fmt"Unknown command action: {action}"
+  e.commandConfig.addAlias(key, action)
   e.commandConfig.applyToParser(e.commandLineParser)
+  e.config.commandAliases[key] = UserCommandEntry(command: commandName.get)
+  # Re-adding an alias lifts any persisted disable of the same name.
+  e.config.disabledCommandAliases.keepItIf(it != key)
   ok(())
 
 proc removeCommandAlias*(e: Editor, alias: string): Result[(), string] =
-  ## Remove a command alias
-  if e.commandLineParser.aliases.hasKey(alias):
-    e.commandLineParser.removeAlias(alias)
-    # Note: This doesn't remove from config until save is called
-    ok(())
-  else:
-    err fmt"Alias not found: {alias}"
+  ## Remove a command alias.
+  ## Updates the runtime command config, the parser, and the persisted
+  ## config ([CommandAliases] / [DisabledCommandAliases]) so the removal
+  ## survives save/reload. Removing a built-in default alias is persisted
+  ## as a [DisabledCommandAliases] entry.
+  let key = alias.toLowerAscii()
+  if not e.commandLineParser.aliases.hasKey(key):
+    return err fmt"Alias not found: {alias}"
+  e.commandConfig.removeAlias(key)
+  e.commandConfig.applyToParser(e.commandLineParser)
+  e.config.commandAliases.del(key)
+  if isDefaultCommandAlias(key) and key notin e.config.disabledCommandAliases:
+    e.config.disabledCommandAliases.add(key)
+  ok(())
 
 proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   ## Create a new Editor with the given configuration and validation result.
@@ -141,52 +157,23 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
 
   result = Editor(
     lsp: lspIntegration,
-    lastLspChangeSeqs: initTable[BufferId, int](),
+    lastLspContentVersions: initTable[BufferId, int](),
     state: EditorState(
       # activeWindow will be set after window creation below
       cursorVisible: true,
-      # Display settings (grouped in DisplaySettings)
       display: DisplaySettings(
-        showTabLine: editorConfig.tabLine.enable,
-        showStatusLine: editorConfig.standard.statusLine,
-        multiStatusLine: editorConfig.statusLine.multipleStatusLine,
         showLineCount: true,
         showLinePercentage: true,
         showEncoding: true,
         showLineEnding: true,
-        showLineNumbers: editorConfig.standard.number,
-        relativeLineNumbers: editorConfig.standard.relativeNumber,
-        showCursorLine: editorConfig.highlight.currentLine,
-        showCursorColumn: editorConfig.highlight.currentColumn,
-        showSyntax: editorConfig.standard.syntax,
-        showIndentationLines: editorConfig.standard.indentationLines,
-        showSidebar: editorConfig.standard.sidebar,
-        scrollbar: editorConfig.standard.scrollbar,
-        scrollbarWidth: editorConfig.standard.scrollbarWidth,
-        showModifiedLines: editorConfig.standard.showModifiedLines,
-        showGitDiff: editorConfig.git.showChangedLine,
-        showSyntaxChecker: editorConfig.syntaxChecker.enable,
-        showCodeLens: editorConfig.lsp.codeLens.enable,
-        showDocumentHighlight: editorConfig.lsp.documentHighlight.enable,
-        showInlayHint: editorConfig.lsp.inlayHint.enable,
-        lineWrap: editorConfig.standard.lineWrap,
-        tabStop: editorConfig.standard.tabStop,
-        shiftWidth: editorConfig.standard.shiftWidth,
-        softTabStop: editorConfig.standard.softTabStop,
-        expandTab: editorConfig.standard.expandTab,
-        autoIndent: editorConfig.standard.autoIndent,
-        smartIndent: editorConfig.standard.smartIndent,
-        autoCloseParen: editorConfig.standard.autoCloseParen,
-        autoDeleteParen: editorConfig.standard.autoDeleteParen,
-        bracketSplit: editorConfig.standard.bracketSplit,
       ),
+      config: editorConfig,
       windowDisplay: WindowDisplayState(
         viewportReservedLines: steadyBottomAreaHeight(), # Status+command share same row
         savedViewportTopLine: 0, # Saved viewport position for operators
       ),
       # Timing state (grouped in TimingState)
       timing: TimingState(
-        lastResizeTime: getMonoTime(),
         gitDiffUpdateInterval: editorConfig.git.updateInterval,
         lastConflictScan: getMonoTime(),
         lastConflictScanSeq: -1,
@@ -290,7 +277,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
           interval: 100, # 100ms debounce for signature help
           cursorLine: -1,
           cursorColumn: -1,
-          changeSeq: -1,
+          contentVersion: -1,
           consecutiveErrors: 0,
         ),
       ),
@@ -321,30 +308,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         initTable[string, seq[int]](),
   )
 
-  # Apply sidebar bookmark marker from config
-  setBookmarkMarker(editorConfig.standard.bookmarkMarker)
-
-  # Sync notification popup settings from config
-  result.state.notificationPopup.timeoutMs = editorConfig.notification.popupTimeoutMs
-  result.state.notificationPopup.maxVisible = editorConfig.notification.popupMaxVisible
-  result.state.notificationPopup.maxWidth = editorConfig.notification.popupMaxWidth
-  result.state.notificationPopup.showBorder = editorConfig.notification.popupBorder
-  case editorConfig.notification.popupPosition
-  of "topRight":
-    result.state.notificationPopup.position = nppTopRight
-  of "topLeft":
-    result.state.notificationPopup.position = nppTopLeft
-  of "bottomLeft":
-    result.state.notificationPopup.position = nppBottomLeft
-  else:
-    result.state.notificationPopup.position = nppBottomRight
-
   # Add initial buffer to buffer list
   result.addBuffer(initialBuffer)
   logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)
-
-  # Apply config-derived highlight settings to the initial buffer
-  applyHighlightConfig(initialBuffer, editorConfig)
 
   # Create default window (always have at least one window)
   result.windowManager.windows.add(
@@ -380,61 +346,15 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     some(keyRegistry),
   )
 
-  # Create handler manager after executer (which creates motion controller)
   result.handlerManager = newHandlerManager(
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
     cmdRegistry, result.config.clipboard, result.config.smoothScroll,
-    result.config.notification, result.lsp, result.config.autocomplete.enable,
-    result.config.lsp.completion.enable,
+    result.config.notification, result.lsp,
   )
 
-  # Set clipboard tool for register system
-  if result.config.clipboard.enable:
-    result.state.registers.setClipboardTool(result.config.clipboard.tool)
-
-  # Apply LSP enable setting from config
-  result.lsp.setEnabled(result.config.lsp.enable)
-
-  # Apply the user-configured LSP request timeout (config.lsp.timeout, ms).
-  result.lsp.service.setRequestTimeout(result.config.lsp.timeout)
-
-  # Propagate per-language server settings from the config ([Lsp.<lang>])
-  # into the LSP service. Without this, user overrides for command,
-  # extensions, or trace were ignored and only the hardcoded defaults ran.
-  # The command string may include arguments; the worker splits it, so args
-  # is cleared when a custom command is given. trace=verbose enables raw
-  # JSON-RPC logging (off by default to avoid the per-keystroke cost).
-  for langId, serverCfg in result.config.lsp.servers:
-    let existing = result.lsp.service.getConfig(langId)
-    if existing.isSome:
-      var c = existing.get
-      if serverCfg.command.len > 0:
-        c.command = serverCfg.command
-        c.args = @[]
-      if serverCfg.extensions.len > 0:
-        c.extensions = serverCfg.extensions
-      if serverCfg.trace == LspTraceLevel.ltVerbose:
-        c.rawJsonLog = true
-      if langId == "rust":
-        # Drive rust-analyzer's run/debug CodeLenses from the user settings.
-        # Sent explicitly (including false) so the lenses are suppressed when
-        # disabled, instead of relying on rust-analyzer's on-by-default lens.
-        c.initializationOptions =
-          "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
-          "},\"debug\":{\"enable\":" & $serverCfg.rustAnalyzerDebugSingle & "}}}"
-      result.lsp.service.setConfig(langId, c)
-    elif serverCfg.command.len > 0:
-      # A language with no built-in default: register it from the user config
-      result.lsp.service.setConfig(
-        langId,
-        LanguageServerConfig(
-          command: serverCfg.command,
-          args: @[],
-          extensions: serverCfg.extensions,
-          enabled: true,
-          rawJsonLog: serverCfg.trace == LspTraceLevel.ltVerbose,
-        ),
-      )
+  # Route the initial config push through the reload path so the two lists
+  # can't drift.
+  result.applyConfigSettings(editorConfig)
 
   # Initialize config file modification time for liveReloadOfConf
   let configPath = getConfigPath()
@@ -468,12 +388,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     if result.state.statusMessage.len == 0:
       result.state.statusMessage = msg
     addMessageLog(msg)
-
-  # Propagate the configured git diff refresh cadence into the status-line
-  # cache's module global. applyConfigSettings does this on config reload;
-  # without an initial call here the cache would run at the hardcoded
-  # default until the first reload.
-  setGitDiffRefreshInterval(editorConfig.git.updateInterval.int64)
 
 proc newEditor*(editorConfig: EditorConfig): Editor =
   ## Create a new Editor with the given configuration.

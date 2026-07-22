@@ -28,9 +28,14 @@
 ## user adjusted the selection by hand), and expansion stops at the outermost
 ## level instead of collapsing back to the innermost range.
 
-import std/options
+import std/[options, tables]
 
-import types/editor_types, lsp_integration, unicode_utils
+import pkg/results
+
+import types/editor_types, editor_lsp, lsp_integration, unicode_utils
+
+const SelectionRangeValidModes* =
+  {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
 
 proc normalizedSelection(sel: VisualSelection): tuple[first, last: BufferPosition] =
   ## Order the selection endpoints so `first` precedes `last`.
@@ -43,7 +48,9 @@ proc normalizedSelection(sel: VisualSelection): tuple[first, last: BufferPositio
     (b, a)
 
 proc toRuneRange(e: Editor, r: Range): tuple[first, last: BufferPosition] =
-  ## Convert an LSP (UTF-16) range into rune-index buffer positions.
+  ## Convert an LSP half-open UTF-16 range into rune-index buffer positions
+  ## with an inclusive end — Vim visual selection covers the rune under
+  ## `current`, so the exclusive LSP end is stepped back one rune.
   let buf = e.activeBuffer()
   let startLine = r.start.line
   let startText =
@@ -51,18 +58,43 @@ proc toRuneRange(e: Editor, r: Range): tuple[first, last: BufferPosition] =
       buf.getLine(startLine)
     else:
       ""
-  let endLine = r.`end`.line
-  let endText =
-    if endLine >= 0 and endLine < buf.len:
-      buf.getLine(endLine)
-    else:
-      ""
-  (
-    BufferPosition(
-      line: startLine, column: utf16ToRuneIndex(startText, r.start.character)
-    ),
-    BufferPosition(line: endLine, column: utf16ToRuneIndex(endText, r.`end`.character)),
+  let first = BufferPosition(
+    line: startLine, column: utf16ToRuneIndex(startText, r.start.character)
   )
+
+  if buf.len == 0:
+    return (first, first)
+
+  let lspEndLine = r.`end`.line
+  var endLine: int
+  var endColExcl: int
+  if lspEndLine >= buf.len:
+    endLine = buf.len - 1
+    endColExcl = buf.getLine(endLine).charLen
+  else:
+    endLine = lspEndLine
+    let endText =
+      if endLine >= 0:
+        buf.getLine(endLine)
+      else:
+        ""
+    endColExcl = utf16ToRuneIndex(endText, r.`end`.character)
+
+  var last: BufferPosition
+  if endColExcl > 0:
+    last = BufferPosition(line: endLine, column: endColExcl - 1)
+  elif endLine > 0:
+    # End at column 0: the last included rune is the newline at the end of the
+    # previous line.
+    let prev = endLine - 1
+    last = BufferPosition(line: prev, column: buf.getLine(prev).charLen)
+  else:
+    last = first
+
+  if last.line < first.line or (last.line == first.line and last.column < first.column):
+    last = first
+
+  (first, last)
 
 proc flattenSelectionChain(
     e: Editor, sr: SelectionRange
@@ -124,40 +156,42 @@ proc startLspSelectionRange*(e: Editor): bool =
   e.state.lspCache.selectionRangeChain = @[]
   e.state.lspCache.selectionRangeIndex = 0
 
-  # Cancel any pending selection range request
-  if e.state.lspCache.pendingSelectionRangeRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingSelectionRangeRequestId)
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
-
   let activeBuffer = e.activeBuffer()
-  let reqResult = e.lsp.startSelectionRangeRequest(
-    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
+  let line = e.activeWindow.cursor.line
+  let col = e.activeWindow.cursor.column
+  let ctxRes = e.startContextualRequest(
+    lrfSelectionRange,
+    proc(): Result[int, string] =
+      e.lsp.startSelectionRangeRequest(activeBuffer, line, col),
+    validModes = SelectionRangeValidModes,
   )
-
-  if reqResult.isErr:
-    e.state.statusMessage = "LSP selection range failed: " & reqResult.error
+  if ctxRes.isErr:
+    e.state.statusMessage = "LSP selection range failed: " & ctxRes.error
     return false
-
-  e.state.lspCache.pendingSelectionRangeRequestId = reqResult.get
   return true
 
 proc pollLspSelectionRange*(e: Editor) =
   ## Poll for a pending selection range response and seed the expansion chain.
   if not e.lsp.enabled:
     return
-
-  let requestId = e.state.lspCache.pendingSelectionRangeRequestId
-  if requestId == 0:
+  if not e.state.lspCache.pending.hasKey(lrfSelectionRange):
     return
+  let ctx = e.state.lspCache.pending[lrfSelectionRange]
 
   # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    e.state.lspCache.pending.del(lrfSelectionRange)
+
+    # Overlay (Command/Search/Rename) leaves e.state.mode intact, so it slips
+    # past validModes; applying here would force Visual and drop the overlay.
+    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
+      return
+
     var applied = false
     if resultOpt.isSome:
       let ranges = parseSelectionRangeResponse(resultOpt.get)
@@ -173,11 +207,11 @@ proc pollLspSelectionRange*(e: Editor) =
     if not applied:
       e.state.statusMessage = "No selection range available"
   of lrsError:
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    e.state.lspCache.pending.del(lrfSelectionRange)
     if errorOpt.isSome:
       e.state.statusMessage = "LSP selection range failed: " & errorOpt.get
   of lrsTimeout:
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    e.state.lspCache.pending.del(lrfSelectionRange)
     e.state.statusMessage = "LSP selection range timed out"
 
 proc requestLspSelectionRange*(e: Editor): bool =

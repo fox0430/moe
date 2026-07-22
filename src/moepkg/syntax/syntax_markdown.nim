@@ -45,7 +45,7 @@ proc mathNextToken(lexer: var GeneralTokenizer, position: var int, doubleClose: 
         # Closing $$
         lexer.kind = gtLongStringLit
         inc position, 2
-        lexer.mdInDisplayMath = false
+        lexer.lang.markdown.inDisplayMath = false
       else:
         # Single $ inside display math is just content
         lexer.kind = gtNone
@@ -54,7 +54,7 @@ proc mathNextToken(lexer: var GeneralTokenizer, position: var int, doubleClose: 
       # Closing $
       lexer.kind = gtStringLit
       inc position
-      lexer.mdInMathMode = false
+      lexer.lang.markdown.inMathMode = false
   of '\\':
     inc position
     case lexer.buf[position]
@@ -119,7 +119,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   lexer.start = lexer.pos
 
   # Inside display math mode ($$...$$)
-  if lexer.mdInDisplayMath:
+  if lexer.lang.markdown.inDisplayMath:
     lexer.mathNextToken(position, doubleClose = true)
 
     lexer.length = position - lexer.pos
@@ -129,7 +129,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     return
 
   # Inside inline math mode ($...$)
-  if lexer.mdInMathMode:
+  if lexer.lang.markdown.inMathMode:
     lexer.mathNextToken(position, doubleClose = false)
 
     lexer.length = position - lexer.pos
@@ -157,7 +157,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     return
 
   # Inside a code block: handle language name, content lines, and closing ```
-  if lexer.mdInCodeBlock:
+  if lexer.lang.markdown.inCodeBlock:
     case lexer.buf[position]
     of '\0':
       lexer.kind = gtEof
@@ -176,7 +176,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         inc position, 3
         while lexer.buf[position] notin eolChars:
           inc position
-        lexer.mdInCodeBlock = false
+        lexer.lang.markdown.inCodeBlock = false
       else:
         # Regular content
         lexer.kind = gtLongStringLit
@@ -205,11 +205,11 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   # closing `---` line. Tracked line-by-line via `mdInFrontmatter` (rather than
   # consumed greedily in one token) so the state is captured at line boundaries
   # and incremental re-parsing can resume correctly from inside the block.
-  if lexer.mdInFrontmatter:
+  if lexer.lang.markdown.inFrontmatter:
     case lexer.buf[position]
     of '\0':
       lexer.kind = gtEof
-      lexer.mdInFrontmatter = false
+      lexer.lang.markdown.inFrontmatter = false
     of '\n', '\r':
       lexer.kind = gtWhitespace
       while lexer.buf[position] in {'\n', '\r'}:
@@ -223,7 +223,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       lexer.kind = gtPreprocessor
       if lexer.buf[position] == '-' and lexer.buf[position + 1] == '-' and
           lexer.buf[position + 2] == '-' and lexer.buf[position + 3] != '-':
-        lexer.mdInFrontmatter = false
+        lexer.lang.markdown.inFrontmatter = false
       position = lexer.endLine(position)
 
     lexer.length = position - lexer.pos
@@ -253,7 +253,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         # Opening ``` - emit just the backticks
         lexer.kind = gtSpecialVar
         inc position, 3
-        lexer.mdInCodeBlock = true
+        lexer.lang.markdown.inCodeBlock = true
         # state = gtSpecialVar signals that lang name may follow
         lexer.state = gtSpecialVar
         # If there's content on this line, it will be lexed as lang name on next call
@@ -303,7 +303,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     if lexer.isLineStart:
       if lexer.buf[position + 1] == '-' and lexer.buf[position + 2] == '-':
         inc position, 3
-        if lexer.buf[position] != '-' and lexer.mdFirstLine:
+        if lexer.buf[position] != '-' and lexer.lang.markdown.firstLine:
           # Frontmatter start (--- on the very first line of the document).
           # YAML frontmatter is only valid at the document start; a `---` line
           # anywhere else is a thematic break (handled by the `else` below),
@@ -313,7 +313,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           # the top of this proc handles the body and the closing delimiter so
           # that the multi-line state survives incremental re-parsing.
           lexer.kind = gtPreprocessor
-          lexer.mdInFrontmatter = true
+          lexer.lang.markdown.inFrontmatter = true
           position = lexer.endLine(position)
         else:
           # Thematic break / horizontal rule (`---`, `----`, ...).
@@ -359,8 +359,32 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       else:
         lexer.kind = gtBuiltin
     else:
-      lexer.kind = gtBuiltin
-      inc position
+      # Only treat `<` as an HTML tag / autolink opener when it looks like one:
+      # `<letter...` or `</letter...`, with a matching `>` on the same line.
+      # Without this check, a bare `<` (as in `a < b`) would always be
+      # highlighted.
+      let looksLikeTag =
+        lexer.buf[position + 1] in {'a' .. 'z', 'A' .. 'Z'} or (
+          lexer.buf[position + 1] == '/' and
+          lexer.buf[position + 2] in {'a' .. 'z', 'A' .. 'Z'}
+        )
+      if looksLikeTag:
+        var scan = position + 1
+        var hasClose = false
+        while lexer.buf[scan] notin {'\0', '\n', '\r', '<'}:
+          if lexer.buf[scan] == '>':
+            hasClose = true
+            break
+          inc scan
+        if hasClose:
+          lexer.kind = gtBuiltin
+          inc position
+        else:
+          lexer.kind = gtPunctuation
+          inc position
+      else:
+        lexer.kind = gtPunctuation
+        inc position
   of '*':
     if lexer.isLineStart and lexer.buf[position + 1] == ' ':
       # `* ` list marker
@@ -561,7 +585,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         lexer.state = gtNone
       inc position
     # Detect indented code block: 4+ spaces or tab at line start
-    if not lexer.mdInCodeBlock and lexer.buf[position] notin eolChars:
+    if not lexer.lang.markdown.inCodeBlock and lexer.buf[position] notin eolChars:
       # Count leading spaces/tabs after the last newline in the consumed whitespace
       var i = position - 1
       var spaceCount = 0
@@ -580,12 +604,29 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       # Opening $$ - emit just the delimiter
       lexer.kind = gtLongStringLit
       inc position, 2
-      lexer.mdInDisplayMath = true
-    else:
-      # Opening $ - emit just the delimiter
-      lexer.kind = gtStringLit
+      lexer.lang.markdown.inDisplayMath = true
+    elif lexer.buf[position + 1] in {' ', '\t', '\n', '\r', '\0'}:
+      # A `$` followed by whitespace/EOL is not a math delimiter (pandoc rule).
+      lexer.kind = gtPunctuation
       inc position
-      lexer.mdInMathMode = true
+    else:
+      # Only enter inline math if a closing `$` exists on the same line;
+      # otherwise an unclosed `$` would flip the rest of the document into
+      # math styling.
+      var scan = position + 1
+      var hasClose = false
+      while lexer.buf[scan] notin {'\0', '\n', '\r'}:
+        if lexer.buf[scan] == '$':
+          hasClose = true
+          break
+        inc scan
+      if hasClose:
+        lexer.kind = gtStringLit
+        inc position
+        lexer.lang.markdown.inMathMode = true
+      else:
+        lexer.kind = gtPunctuation
+        inc position
   of ')', ']', '{', '}', ':', ',', ';', '.', '/', '\'', '\"':
     lexer.kind = gtPunctuation
     inc position
@@ -603,7 +644,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   # later `---` is a thematic break, not frontmatter. The first call always lands
   # in this normal-parsing path (every continuation branch above returns early and
   # only runs once a multi-line state is already set), so clearing it here is enough.
-  lexer.mdFirstLine = false
+  lexer.lang.markdown.firstLine = false
 
   lexer.length = position - lexer.pos
 

@@ -17,18 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-## Display/view toggle commands for the editor: status line, line count,
-## encoding, line wrap, sidebar, git diff, syntax checker, etc.
+## Display toggle commands. Config-backed read accessors live in
+## types/editor_types.nim.
 
 import types/editor_types, status_line, git_diff
 
 proc toggleStatusLine*(e: Editor) =
-  ## Toggle the visibility of the status line
-  e.state.toggleStatusLine()
+  e.showStatusLine = not e.showStatusLine
 
 proc setStatusLineVisible*(e: Editor, visible: bool) =
-  ## Set the visibility of the status line
-  e.state.setStatusLineVisible(visible)
+  e.showStatusLine = visible
 
 proc toggleLineCount*(e: Editor) =
   ## Toggle the visibility of line count in status line
@@ -55,49 +53,35 @@ proc setEncodingVisible*(e: Editor, visible: bool) =
   e.state.setEncodingVisible(visible)
 
 proc toggleLineWrap*(e: Editor) =
-  ## Toggle line wrapping
-  e.state.display.lineWrap = not e.state.display.lineWrap
+  e.lineWrap = not e.lineWrap
 
 proc setLineWrap*(e: Editor, enabled: bool) =
-  ## Set line wrapping
-  e.state.display.lineWrap = enabled
+  e.lineWrap = enabled
 
 proc toggleMultiStatusLine*(e: Editor) =
-  ## Toggle between single status line (at bottom) and multi status lines (per window)
-  e.state.display.multiStatusLine = not e.state.display.multiStatusLine
+  e.multiStatusLine = not e.multiStatusLine
 
 proc setMultiStatusLine*(e: Editor, enabled: bool) =
-  ## Set multi status line mode
-  e.state.display.multiStatusLine = enabled
+  e.multiStatusLine = enabled
 
 proc toggleSidebar*(e: Editor) =
-  ## Toggle the visibility of the sidebar
-  e.state.display.showSidebar = not e.state.display.showSidebar
+  e.showSidebar = not e.showSidebar
 
 proc setSidebarVisible*(e: Editor, visible: bool) =
-  ## Set the visibility of the sidebar
-  e.state.display.showSidebar = visible
+  e.showSidebar = visible
 
 proc toggleGitDiff*(e: Editor) =
-  ## Toggle git diff indicators in sidebar
-  e.state.display.showGitDiff = not e.state.display.showGitDiff
-
-  # Update git diff information when enabled
-  if e.state.display.showGitDiff:
+  e.showGitDiff = not e.showGitDiff
+  if e.showGitDiff:
     discard updateBufferWithGitDiff(e.activeBuffer)
 
 proc setGitDiffVisible*(e: Editor, visible: bool) =
-  ## Set git diff indicators visibility in sidebar
-  e.state.display.showGitDiff = visible
-
-  # Update git diff information when enabled
+  e.showGitDiff = visible
   if visible:
     discard updateBufferWithGitDiff(e.activeBuffer)
 
 proc toggleSyntaxChecker*(e: Editor) =
-  ## Toggle syntax checker results in sidebar
-  e.state.display.showSyntaxChecker = not e.state.display.showSyntaxChecker
+  e.showSyntaxChecker = not e.showSyntaxChecker
 
 proc setSyntaxCheckerVisible*(e: Editor, visible: bool) =
-  ## Set syntax checker results visibility in sidebar
-  e.state.display.showSyntaxChecker = visible
+  e.showSyntaxChecker = visible

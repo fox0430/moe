@@ -292,22 +292,18 @@ proc moveFirstLine(e: MotionExecutor, currentPos: CursorPosition): CursorPositio
   result.x = 0
 
 proc moveLastLine(
-    e: MotionExecutor, currentPos: CursorPosition, count: int = 1
+    e: MotionExecutor, currentPos: CursorPosition, count: int = 0
 ): CursorPosition =
+  ## count == 0 means "no explicit prefix — go to last line" (bare G).
+  ## count >= 1 means "go to line `count` (1-indexed, clamped)".
   result = currentPos
-  if count == 1:
-    # G without number: go to last line
-    if e.buffer.len > 0:
-      result.y = e.buffer.len - 1
-      result.x = 0
+  if e.buffer.len == 0:
+    return
+  if count <= 0:
+    result.y = e.buffer.len - 1
   else:
-    # 123G: go to specific line number (count), but clamp to buffer bounds
-    if e.buffer.len > 0:
-      result.y = min(count - 1, e.buffer.len - 1) # Convert to 0-based and clamp
-      result.x = 0
-    else:
-      result.y = 0
-      result.x = 0
+    result.y = min(count - 1, e.buffer.len - 1)
+  result.x = 0
 
 proc findChar(
     e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
@@ -457,36 +453,43 @@ proc moveWordBackward(
       break
 
     var pos = result.x
+    var currentLine: string
+    var lineContent: string
+    var runes: seq[Rune]
+
+    template loadCurrentLine() =
+      currentLine = e.buffer.getLine(result.y)
+      lineContent =
+        if currentLine.len > 0 and currentLine[^1] == '\n':
+          currentLine[0 ..< ^1]
+        else:
+          currentLine
+      runes = lineContent.toRunes()
 
     # Move back one position first
     if pos > 0:
       pos -= 1
+      loadCurrentLine()
     elif result.y > 0:
       # Move to previous line
       result.y -= 1
-      let prevLine = e.buffer.getLine(result.y)
-      let prevContent =
-        if prevLine.len > 0 and prevLine[^1] == '\n':
-          prevLine[0 ..< ^1]
-        else:
-          prevLine
-      let prevRunes = prevContent.toRunes()
-      pos = max(0, prevRunes.len - 1)
+      loadCurrentLine()
+      pos = max(0, runes.len - 1)
     else:
       # At beginning of buffer
       break
 
-    let currentLine = e.buffer.getLine(result.y)
-    let lineContent =
-      if currentLine.len > 0 and currentLine[^1] == '\n':
-        currentLine[0 ..< ^1]
+    # Skip whitespace and empty lines backwards.
+    while true:
+      while pos > 0 and pos < runes.len and isWhitespace(runes[pos]):
+        pos -= 1
+      if (runes.len == 0 or (pos < runes.len and isWhitespace(runes[pos]))) and
+          result.y > 0:
+        result.y -= 1
+        loadCurrentLine()
+        pos = max(0, runes.len - 1)
       else:
-        currentLine
-    let runes = lineContent.toRunes()
-
-    # Skip whitespace backwards
-    while pos > 0 and isWhitespace(runes[pos]):
-      pos -= 1
+        break
 
     # Now we're on a non-whitespace character
     # Skip backwards through the word/symbol sequence to find its start
@@ -543,9 +546,10 @@ proc moveWordEnd(
       # At end of buffer
       break
 
-    # Skip whitespace
-    while pos < runes.len and isWhitespace(runes[pos]):
-      pos += 1
+    # Skip whitespace and empty lines.
+    while true:
+      while pos < runes.len and isWhitespace(runes[pos]):
+        pos += 1
       if pos >= runes.len and result.y + 1 < e.buffer.len:
         result.y += 1
         pos = 0
@@ -556,6 +560,8 @@ proc moveWordEnd(
           else:
             currentLine
         runes = lineContent.toRunes()
+      else:
+        break
 
     # Move to end of word/symbol sequence
     if pos < runes.len:
@@ -1327,7 +1333,7 @@ proc executeMotion*(
   newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
 
   # Get line wrap state (needed for viewport update and horizontal scroll)
-  let lineWrap = controller.cursorManager.state.display.lineWrap
+  let lineWrap = controller.cursorManager.state.lineWrap
 
   # Update viewport to follow cursor with line wrap support (unless suppressed)
   if updateViewport:
@@ -1337,10 +1343,9 @@ proc executeMotion*(
         viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
 
     controller.viewportManager.updateViewport(
-      newPos, lineCount, controller.cursorManager.state.display.showStatusLine,
+      newPos, lineCount, controller.cursorManager.state.showStatusLine,
       controller.cursorManager.state.windowDisplay.viewportReservedLines, lineWrap,
-      controller.executor.buffer, lineNumOffset,
-      controller.cursorManager.state.display.tabStop,
+      controller.executor.buffer, lineNumOffset, controller.cursorManager.state.tabStop,
     )
 
   # Disable horizontal scrolling when line wrap is enabled

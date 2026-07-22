@@ -214,6 +214,23 @@ suite "Registers":
     check r.getNumberRegister(1).getLines() == @["deleted3", "deleted4"]
     check r.getNumberRegister(2).getLines() == @["deleted1", "deleted2"]
 
+  test "setDeletedRegister seq[string] characterwise single line goes to small delete":
+    let r = initRegisters()
+    r.setDeletedRegister(@["seed"], true)
+    r.setDeletedRegister(@["small"], false)
+
+    check r.getSmallDeleteRegister().getContent() == "small"
+    check r.getNoNamedRegister().getContent() == "small"
+    check r.getNumberRegister(1).getLines() == @["seed"]
+    check r.getNumberRegister(2).isEmpty
+
+  test "setDeletedRegister seq[string] characterwise multiline goes to number register":
+    let r = initRegisters()
+    r.setDeletedRegister(@["line1", "line2"], false)
+
+    check r.getNumberRegister(1).getLines() == @["line1", "line2"]
+    check r.getSmallDeleteRegister().isEmpty
+
   test "setDeletedRegister characterwise single line goes to small delete":
     let r = initRegisters()
     r.setDeletedRegister("small", false)

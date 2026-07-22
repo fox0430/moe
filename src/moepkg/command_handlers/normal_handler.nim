@@ -100,9 +100,9 @@ proc updateCursorToJumpPosition(
     cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
     lineNumOffset = viewportOffsetFor(buffer, state)
   handler.motionController.viewportManager.updateViewport(
-    cursorPos, buffer.len, state.display.showStatusLine,
-    state.windowDisplay.viewportReservedLines, state.display.lineWrap, buffer,
-    lineNumOffset, state.display.tabStop,
+    cursorPos, buffer.len, state.showStatusLine,
+    state.windowDisplay.viewportReservedLines, state.lineWrap, buffer, lineNumOffset,
+    state.tabStop,
   )
   return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
@@ -550,59 +550,6 @@ proc handleNormalModeKey*(
           state.macroState.waitingForRegister = false
           state.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-      elif state.macroState.commandType == "playback":
-        # Play back the macro from the specified register
-        let count = state.macroState.pendingCount
-        state.macroState.pendingCount = 0 # Reset for next use
-        if registerChar == '@':
-          # @@ - repeat last macro
-          if state.macroState.lastRegister.isSome:
-            let reg = state.macroState.lastRegister.get
-            if state.macroState.registers.hasKey(reg):
-              state.macroState.waitingForRegister = false
-              state.macroState.commandType = ""
-              let keys = state.macroState.registers[reg]
-              return requestMacroPlayback(keys, count)
-            else:
-              state.statusMessage = "Register @" & $reg & " is empty"
-              state.macroState.waitingForRegister = false
-              state.macroState.commandType = ""
-              return
-                NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-          else:
-            state.statusMessage = "No previous macro"
-            state.macroState.waitingForRegister = false
-            state.macroState.commandType = ""
-            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-        elif registerChar == ':':
-          # @: - repeat last Command mode command
-          state.macroState.waitingForRegister = false
-          state.macroState.commandType = ""
-          if state.input.commandState.history.len > 0:
-            let lastCmd = state.input.commandState.history[0]
-            return NormalModeResult(
-              kind: nmrExecCommand, execCommandText: lastCmd, execCommandCount: count
-            )
-          else:
-            state.statusMessage = "No previous Command mode command"
-            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-        elif registerChar >= 'a' and registerChar <= 'z':
-          if state.macroState.registers.hasKey(registerChar):
-            state.macroState.lastRegister = some(registerChar)
-            state.macroState.waitingForRegister = false
-            state.macroState.commandType = ""
-            let keys = state.macroState.registers[registerChar]
-            return requestMacroPlayback(keys, count)
-          else:
-            state.statusMessage = "Register @" & $registerChar & " is empty"
-            state.macroState.waitingForRegister = false
-            state.macroState.commandType = ""
-            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-        else:
-          state.statusMessage = "Invalid register (use a-z, @, or :)"
-          state.macroState.waitingForRegister = false
-          state.macroState.commandType = ""
-          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Cancel on any non-char key
       state.statusMessage = ""
@@ -612,9 +559,11 @@ proc handleNormalModeKey*(
 
   # Handle macro recording - check if we're in recording mode
   if state.macroState.isRecording:
-    # Check if this key matches the key that started recording (stop recording)
+    # Don't treat the key as "stop recording" while the router is holding
+    # it as an f/t/r/" operand.
     let currentKeyStr = keyComboToString(keyCombo)
-    if currentKeyStr == state.macroState.recordStartKey:
+    if currentKeyStr == state.macroState.recordStartKey and
+        not handler.keyBindingRegistry.isWaitingForChar():
       # Stop recording
       state.macroState.registers[state.macroState.register] =
         state.macroState.recordedKeys

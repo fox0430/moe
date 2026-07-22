@@ -19,9 +19,9 @@
 
 ## Tests for editor_documentsymbol.nim
 
-import std/unittest
+import std/[unittest, options, importutils, json, tables]
 
-import ../src/moepkg/[editor, config, config_loader]
+import ../src/moepkg/[editor, buffer, config, config_loader, lsp_service, types]
 import ../src/moepkg/editor_documentsymbol
 
 proc createTestEditor(): Editor =
@@ -72,7 +72,6 @@ suite "editor_documentsymbol - pollLspDocumentSymbols":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
 
     e.pollLspDocumentSymbols()
     # No crash means success
@@ -87,3 +86,62 @@ suite "editor_documentsymbol - config gate":
 
     check not e.startLspDocumentSymbols()
     check e.state.statusMessage == "LSP document symbol is disabled"
+
+suite "editor_documentsymbol - mode-hijack guard":
+  test "Stale response arriving in Insert does not switch to DocumentSymbol":
+    # A Symbols request initiated from Normal must not force the viewer if the
+    # user has since moved to Insert (or an overlay) - it would hijack input.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.setMode(EditorMode.Insert)
+    e.state.mode = EditorMode.Insert
+    let reqId = 5151
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfDocumentSymbol] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfDocumentSymbol,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "/tmp/x.nim",
+      generation: 1,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: DocumentSymbolValidModes,
+    )
+    privateAccess(LspService)
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($newJArray()), error: none(string))
+
+    e.pollLspDocumentSymbols()
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.lspCache.pending.hasKey(lrfDocumentSymbol)
+
+suite "editor_documentsymbol - stale-guard":
+  test "Response for an edited buffer (contentVersion bumped) is dropped":
+    # Phase B regression: classifyResponse now guards on contentVersion, so a
+    # response arriving after an edit no longer forces the viewer open on
+    # symbols computed from the pre-edit text.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let reqId = 5252
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfDocumentSymbol] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfDocumentSymbol,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion - 1, # older than current => stale
+      path: "/tmp/x.nim",
+      generation: 1,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: DocumentSymbolValidModes,
+    )
+    privateAccess(LspService)
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($newJArray()), error: none(string))
+
+    e.pollLspDocumentSymbols()
+
+    check e.state.mode != EditorMode.DocumentSymbol
+    check not e.state.lspCache.pending.hasKey(lrfDocumentSymbol)

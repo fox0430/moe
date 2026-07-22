@@ -55,16 +55,11 @@ proc emergencySaveBuffers*(
 
   var savedPaths: seq[string] = @[]
   var metadata = newJObject()
-  var processedBuffers: seq[TextBuffer] = @[]
 
-  for window in editor.windowManager.windows:
-    let buf = window.buffer
-
-    if buf in processedBuffers:
-      continue
-
+  # Iterate `e.buffers`, not windows: windows only expose the foreground tab,
+  # so background-tab buffers would be lost.
+  for buf in editor.buffers:
     if not buf.isModified:
-      processedBuffers.add(buf)
       continue
 
     let recoveryName =
@@ -89,8 +84,6 @@ proc emergencySaveBuffers*(
       metadata[finalName] = %*{"originalPath": originalPath}
     except CatchableError as e:
       stderr.writeLine "moe: emergency save failed for " & finalName & ": " & e.msg
-
-    processedBuffers.add(buf)
 
   if savedPaths.len > 0:
     try:

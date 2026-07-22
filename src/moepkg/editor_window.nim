@@ -60,9 +60,6 @@ proc syncActiveWindow*(e: Editor) =
   # anchor without each call site having to remember to update it.
   e.state.windowDisplay.currentBufferId = e.activeWindow.buffer.id
 
-  # Apply per-buffer EditorConfig overrides to display settings
-  applyBufferEditorConfig(e.state.display, e.activeWindow.buffer, e.config)
-
 proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   ## Calculate and set screen cursor position for the active window
 
@@ -74,7 +71,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
       maxBottomY = bottomY
 
   # Calculate tab line offset
-  let tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+  let tabLineOffset = if e.showTabLine: TabLineHeight else: 0
 
   let
     windowBottomY = window.viewport.y + window.viewport.height
@@ -82,8 +79,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     sidebarWidth = e.calculateSidebarWidth(window.mode)
     scrollbarWidth = e.calculateScrollbarWidth(window.mode)
     lineNumOffset =
-      calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers) +
-      sidebarWidth
+      calculateLineNumOffset(window.buffer, e.showLineNumbers) + sidebarWidth
     # Steady reserve so the clamp agrees with the scroll (see steadyReservedLines).
     reservedLines = e.steadyReservedLines(isBottomWindow)
 
@@ -108,8 +104,7 @@ proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
   if e.windowManager.windows.len > 1:
     # Rescale the whole split layout, same as a runtime terminal resize.
     e.windowManager.resizeWindows(
-      termWidth, termHeight, e.screenSize.width, e.screenSize.height,
-      e.state.display.multiStatusLine,
+      termWidth, termHeight, e.screenSize.width, e.screenSize.height, e.multiStatusLine
     )
   else:
     # Set viewport to real terminal size with the command line row reserved
@@ -140,7 +135,7 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
     let absPath = absolutePath(buf.filePath.get)
     if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
       buf.bookmarks = e.savedBookmarks[absPath]
-    if e.state.display.showGitDiff:
+    if e.showGitDiff:
       discard updateBufferWithGitDiff(buf, useBuffer = false)
   # Scan conflict markers regardless of the highlight config (like loadFile) so
   # conflict-navigation works as soon as this buffer becomes active.
@@ -235,7 +230,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplit(
-    e.activeBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, filename
+    e.activeBuffer, e.viewport, e.cursor, e.multiStatusLine, filename
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -265,7 +260,7 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.activeBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, buffer
+    e.activeBuffer, e.viewport, e.cursor, e.multiStatusLine, buffer
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -391,7 +386,7 @@ proc decreaseWindowHeight*(e: Editor) =
 
 proc equalizeWindowSizes*(e: Editor) =
   ## Equalize all window sizes
-  e.windowManager.equalizeAllWindows(e.state.display.multiStatusLine)
+  e.windowManager.equalizeAllWindows(e.multiStatusLine)
   e.syncActiveWindow()
 
 proc swapWindow*(e: Editor) =
@@ -409,7 +404,7 @@ proc closeWindow*(e: Editor): bool =
       " activeWindowIndex=" & $e.windowManager.activeWindowIndex,
   )
 
-  let shouldQuit = e.windowManager.closeWindow(e.state.display.multiStatusLine)
+  let shouldQuit = e.windowManager.closeWindow(e.multiStatusLine)
 
   if shouldQuit:
     return true

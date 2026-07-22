@@ -68,14 +68,72 @@ suite "CommandConfig - addAlias":
     check config.aliases.len == 1
     check config.aliases["x"] == claSaveAndQuit
 
+suite "CommandConfig - removeAlias":
+  test "Removes an existing alias":
+    let config = newCommandConfig()
+
+    config.addAlias("x", claQuit)
+    config.removeAlias("x")
+
+    check config.aliases.len == 0
+    check "x" notin config.aliases
+
+  test "Removes the alias description too":
+    let config = newCommandConfig()
+
+    config.addAlias("x", claQuit, "Quit editor")
+    config.removeAlias("x")
+
+    check "x" notin config.aliases
+    check "x" notin config.aliasDescriptions
+
+  test "Normalises alias to lowercase":
+    let config = newCommandConfig()
+
+    config.addAlias("x", claQuit)
+    config.removeAlias("X")
+
+    check "x" notin config.aliases
+
+  test "Removing an unknown alias is a no-op":
+    let config = newCommandConfig()
+
+    config.addAlias("x", claQuit)
+    config.removeAlias("unknown")
+
+    check config.aliases.len == 1
+    check config.aliases["x"] == claQuit
+
+suite "CommandConfig - canonicalCommandName":
+  test "Returns the canonical long-form name":
+    check canonicalCommandName(claQuit) == some("quit")
+
+  test "Round-trips with resolveCommandName":
+    let name = canonicalCommandName(claSaveAndQuit)
+
+    check name.isSome
+    check resolveCommandName(name.get) == some(claSaveAndQuit)
+
 suite "CommandConfig - addShellCommand":
   test "Adds a shell command":
     let config = newCommandConfig()
 
-    config.addShellCommand("myCmd", "echo hello")
+    config.addShellCommand("mycmd", "echo hello")
 
     check config.shellCommands.len == 1
-    check config.shellCommands["myCmd"].command == "echo hello"
+    check config.shellCommands["mycmd"].command == "echo hello"
+
+  test "Normalises shell command name to lowercase":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+
+    config.addShellCommand("GitStatus", "git status")
+    config.applyToParser(parser)
+
+    check "gitstatus" in parser.shellCommands
+    let parsed = parser.parseCommandLine(":GitStatus")
+    check parsed.action == claShellCommand
+    check parsed.args == @["git status"]
 
   test "Adds multiple shell commands":
     let config = newCommandConfig()

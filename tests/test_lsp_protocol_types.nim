@@ -345,6 +345,28 @@ suite "types - parseServerCapabilities":
     check caps.completionProvider.get.resolveProvider == some(true)
     check caps.completionProvider.get.triggerCharacters == some(@["."])
 
+  test "semanticTokensProvider: false is treated as unsupported":
+    let caps = parseServerCapabilities(%*{"semanticTokensProvider": false})
+    check caps.semanticTokensProvider.isNone
+
+  test "semanticTokensProvider: null is treated as unsupported":
+    let caps = parseServerCapabilities(%*{"semanticTokensProvider": nil})
+    check caps.semanticTokensProvider.isNone
+
+  test "semanticTokensProvider object is parsed":
+    let caps = parseServerCapabilities(
+      %*{
+        "semanticTokensProvider": {
+          "legend": {"tokenTypes": ["keyword"], "tokenModifiers": ["static"]},
+          "full": true,
+        }
+      }
+    )
+    check caps.semanticTokensProvider.isSome
+    check caps.semanticTokensProvider.get.legend.tokenTypes == @["keyword"]
+    check caps.semanticTokensProvider.get.legend.tokenModifiers == @["static"]
+    check caps.semanticTokensProvider.get.full.isSome
+
 suite "types - parseLocations":
   test "parse single location object":
     let j = %*{
@@ -376,6 +398,37 @@ suite "types - parseLocations":
 
   test "parse non-object non-array returns empty":
     let j = newJString("not a location")
+    let locs = parseLocations(j)
+    check locs.len == 0
+
+  test "malformed entry does not drop other locations":
+    let j = %*[
+      {
+        "uri": "file:///a.nim",
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
+      },
+      {
+        "range":
+          {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 3}}
+      },
+      newJNull(),
+      {
+        "uri": "file:///b.nim",
+        "range":
+          {"start": {"line": 2, "character": 0}, "end": {"line": 2, "character": 4}},
+      },
+    ]
+    let locs = parseLocations(j)
+    check locs.len == 2
+    check locs[0].uri == "file:///a.nim"
+    check locs[1].uri == "file:///b.nim"
+
+  test "single object missing uri yields empty result":
+    let j = %*{
+      "range":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}}
+    }
     let locs = parseLocations(j)
     check locs.len == 0
 

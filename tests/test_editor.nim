@@ -24,11 +24,12 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
-    render_utils, lsp_service, diff_viewer,
+    render_utils, lsp_service, diff_viewer, setting_options, editor_init,
   ]
-import ../src/moepkg/command_handlers/[command_mode_handler, handler_result]
-import ../src/moepkg/command_handlers/result_processor
 import ../src/moepkg/buffer_backends/gap_buffer
+import
+  ../src/moepkg/command_handlers/
+    [command_mode_handler, handler_result, result_processor]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -480,25 +481,65 @@ suite "Editor - reloadCurrentFile cursor clamp":
     # Normal-mode clamp keeps the cursor on the last character, not past it.
     check e.cursor.column == 1
 
+  test "Reload picks up .editorconfig edits (removed keys clear overrides)":
+    let e = createTestEditor()
+    let testDir = getTempDir() / "moe_test_reload_editorconfig"
+    let path = testDir / "sample.py"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+""",
+    )
+    writeFile(path, "print('hi')\n")
+
+    check e.editFile(path).isOk
+    check e.activeBuffer.editorConfig.isSome
+    check e.activeBuffer.editorConfig.get.expandTab == some(true)
+    check e.state.shiftWidth == 4
+
+    # Drop the matching section so a reload should discard the overrides.
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.nim]
+indent_style = space
+""",
+    )
+
+    check e.reloadCurrentFile().isOk
+    check e.activeBuffer.editorConfig.isNone
+    check e.state.shiftWidth == e.config.standard.shiftWidth
+
 suite "Editor - Display toggle functions":
   test "Toggle status line visibility":
     let e = createTestEditor()
 
-    let initial = e.state.display.showStatusLine
+    let initial = e.state.showStatusLine
     e.toggleStatusLine()
-    check e.state.display.showStatusLine == not initial
+    check e.state.showStatusLine == not initial
 
     e.toggleStatusLine()
-    check e.state.display.showStatusLine == initial
+    check e.state.showStatusLine == initial
 
   test "Set status line visibility":
     let e = createTestEditor()
 
     e.setStatusLineVisible(false)
-    check e.state.display.showStatusLine == false
+    check e.state.showStatusLine == false
 
     e.setStatusLineVisible(true)
-    check e.state.display.showStatusLine == true
+    check e.state.showStatusLine == true
 
   test "Toggle line count visibility":
     let e = createTestEditor()
@@ -524,39 +565,39 @@ suite "Editor - Display toggle functions":
   test "Toggle line wrap":
     let e = createTestEditor()
 
-    let initial = e.state.display.lineWrap
+    let initial = e.state.lineWrap
     e.toggleLineWrap()
-    check e.state.display.lineWrap == not initial
+    check e.state.lineWrap == not initial
 
   test "Set line wrap":
     let e = createTestEditor()
 
     e.setLineWrap(false)
-    check e.state.display.lineWrap == false
+    check e.state.lineWrap == false
 
     e.setLineWrap(true)
-    check e.state.display.lineWrap == true
+    check e.state.lineWrap == true
 
   test "Toggle multi status line":
     let e = createTestEditor()
 
-    let initial = e.state.display.multiStatusLine
+    let initial = e.state.multiStatusLine
     e.toggleMultiStatusLine()
-    check e.state.display.multiStatusLine == not initial
+    check e.state.multiStatusLine == not initial
 
   test "Toggle sidebar visibility":
     let e = createTestEditor()
 
-    let initial = e.state.display.showSidebar
+    let initial = e.state.showSidebar
     e.toggleSidebar()
-    check e.state.display.showSidebar == not initial
+    check e.state.showSidebar == not initial
 
   test "Toggle syntax checker visibility":
     let e = createTestEditor()
 
-    let initial = e.state.display.showSyntaxChecker
+    let initial = e.state.showSyntaxChecker
     e.toggleSyntaxChecker()
-    check e.state.display.showSyntaxChecker == not initial
+    check e.state.showSyntaxChecker == not initial
 
 suite "Editor - Substitute preview":
   test "Start substitute preview":
@@ -1038,86 +1079,73 @@ suite "Editor - applyConfigSettings syncs display state":
 
     e.config.standard.number = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showLineNumbers == false
+    check e.state.showLineNumbers == false
 
     e.config.standard.number = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showLineNumbers == true
+    check e.state.showLineNumbers == true
 
   test "Syncs showStatusLine from config.standard.statusLine":
     let e = createTestEditor()
 
     e.config.standard.statusLine = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showStatusLine == false
+    check e.state.showStatusLine == false
 
     e.config.standard.statusLine = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showStatusLine == true
+    check e.state.showStatusLine == true
 
   test "Syncs tabStop from config.standard.tabStop":
     let e = createTestEditor()
 
     e.config.standard.tabStop = 8
     e.applyConfigSettings(e.config)
-    check e.state.display.tabStop == 8
+    check e.state.tabStop == 8
 
     e.config.standard.tabStop = 4
     e.applyConfigSettings(e.config)
-    check e.state.display.tabStop == 4
+    check e.state.tabStop == 4
 
   test "Syncs showSyntax from config.standard.syntax":
     let e = createTestEditor()
 
     e.config.standard.syntax = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showSyntax == false
+    check e.state.showSyntax == false
 
   test "Syncs showDocumentHighlight from config.lsp.documentHighlight.enable":
     let e = createTestEditor()
 
     e.config.lsp.documentHighlight.enable = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showDocumentHighlight == false
+    check e.state.showDocumentHighlight == false
 
     e.config.lsp.documentHighlight.enable = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showDocumentHighlight == true
+    check e.state.showDocumentHighlight == true
 
   test "Syncs showCodeLens from config.lsp.codeLens.enable":
     let e = createTestEditor()
 
     e.config.lsp.codeLens.enable = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showCodeLens == true
+    check e.state.showCodeLens == true
 
     e.config.lsp.codeLens.enable = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showCodeLens == false
+    check e.state.showCodeLens == false
 
   test "Syncs showInlayHint from config.lsp.inlayHint.enable":
     let e = createTestEditor()
 
     e.config.lsp.inlayHint.enable = false
     e.applyConfigSettings(e.config)
-    check e.state.display.showInlayHint == false
+    check e.state.showInlayHint == false
 
     e.config.lsp.inlayHint.enable = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showInlayHint == true
-
-  test "Syncs lspCompletionEnabled from config.lsp.completion.enable":
-    # The insert handler caches lsp.completion.enable (it has no e.config access),
-    # so a config reload must re-sync the flag.
-    let e = createTestEditor()
-
-    e.config.lsp.completion.enable = false
-    e.applyConfigSettings(e.config)
-    check e.handlerManager.insertHandler.lspCompletionEnabled == false
-
-    e.config.lsp.completion.enable = true
-    e.applyConfigSettings(e.config)
-    check e.handlerManager.insertHandler.lspCompletionEnabled == true
+    check e.state.showInlayHint == true
 
   test "Disabling diagnostics clears stored diagnostics and markers":
     # Diagnostics are server-push, so disabling only stops future updates;
@@ -1147,42 +1175,42 @@ suite "Editor - applyConfigSettings syncs display state":
 
     e.config.standard.indentationLines = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showIndentationLines == true
+    check e.state.showIndentationLines == true
 
   test "Syncs showSidebar from config.standard.sidebar":
     let e = createTestEditor()
 
     e.config.standard.sidebar = true
     e.applyConfigSettings(e.config)
-    check e.state.display.showSidebar == true
+    check e.state.showSidebar == true
 
   test "Syncs expandTab from config.standard.expandTab":
     let e = createTestEditor()
 
     e.config.standard.expandTab = false
     e.applyConfigSettings(e.config)
-    check e.state.display.expandTab == false
+    check e.state.expandTab == false
 
   test "Syncs autoIndent from config.standard.autoIndent":
     let e = createTestEditor()
 
     e.config.standard.autoIndent = false
     e.applyConfigSettings(e.config)
-    check e.state.display.autoIndent == false
+    check e.state.autoIndent == false
 
   test "Syncs autoCloseParen from config.standard.autoCloseParen":
     let e = createTestEditor()
 
     e.config.standard.autoCloseParen = true
     e.applyConfigSettings(e.config)
-    check e.state.display.autoCloseParen == true
+    check e.state.autoCloseParen == true
 
   test "Syncs autoDeleteParen from config.standard.autoDeleteParen":
     let e = createTestEditor()
 
     e.config.standard.autoDeleteParen = true
     e.applyConfigSettings(e.config)
-    check e.state.display.autoDeleteParen == true
+    check e.state.autoDeleteParen == true
 
   test "Syncs search settings from config":
     let e = createTestEditor()
@@ -1207,15 +1235,15 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let originalDisplay = e.state.display.showLineNumbers
+    let originalDisplay = e.state.showLineNumbers
 
     # Toggle in config mode (updates EditorConfig)
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     check e.config.standard.number == not originalDisplay
 
     # Simulate what handleEvent now does for config mode
     e.applyConfigSettings(e.config)
-    check e.state.display.showLineNumbers == not originalDisplay
+    check e.state.showLineNumbers == not originalDisplay
 
   test "Config mode toggle statusLine syncs to display":
     let e = createTestEditor()
@@ -1226,11 +1254,11 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.showStatusLine
+    let original = e.state.showStatusLine
 
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     e.applyConfigSettings(e.config)
-    check e.state.display.showStatusLine == not original
+    check e.state.showStatusLine == not original
 
   test "Config mode change tabStop syncs to display":
     let e = createTestEditor()
@@ -1241,11 +1269,11 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.tabStop
+    let original = e.state.tabStop
 
-    configState.incrementIntValue()
+    configState.incrementIntValue(e.state)
     e.applyConfigSettings(e.config)
-    check e.state.display.tabStop == original + 1
+    check e.state.tabStop == original + 1
 
   test "Config mode toggle syntax syncs to display":
     let e = createTestEditor()
@@ -1256,11 +1284,11 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.showSyntax
+    let original = e.state.showSyntax
 
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     e.applyConfigSettings(e.config)
-    check e.state.display.showSyntax == not original
+    check e.state.showSyntax == not original
 
   test "Config mode toggle sidebar syncs to display":
     let e = createTestEditor()
@@ -1271,11 +1299,58 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
         configState.selectedIndex = i
         break
 
-    let original = e.state.display.showSidebar
+    let original = e.state.showSidebar
 
-    configState.toggleBoolValue()
+    configState.toggleBoolValue(e.state)
     e.applyConfigSettings(e.config)
-    check e.state.display.showSidebar == not original
+    check e.state.showSidebar == not original
+
+suite "Editor - :set ignorecase/smartcase/incsearch survive Config-mode re-apply":
+  # Regression: bsoIgnoreCase/SmartCase/IncSearch used to write only the
+  # `state.input.search` mirror; applyConfigSettings (run on every Config-mode
+  # keystroke via pendingApply) then rolled the mirror back to the unchanged
+  # `config.standard.*`, so the toggle silently vanished.
+  test "hrSetBoolOption(bsoIgnoreCase) updates config, survives re-apply":
+    let e = createTestEditor()
+    e.config.standard.ignorecase = false
+    e.state.input.search.ignorecase = false
+
+    let r =
+      HandlerResult(kind: hrSetBoolOption, boolOption: bsoIgnoreCase, boolValue: true)
+    discard e.processResult(r, e.activeBuffer())
+    check e.config.standard.ignorecase
+    check e.state.input.search.ignorecase
+
+    e.applyConfigSettings(e.config)
+    check e.state.input.search.ignorecase
+
+  test "hrSetBoolOption(bsoSmartCase) updates config, survives re-apply":
+    let e = createTestEditor()
+    e.config.standard.smartcase = false
+    e.state.input.search.smartcase = false
+
+    let r =
+      HandlerResult(kind: hrSetBoolOption, boolOption: bsoSmartCase, boolValue: true)
+    discard e.processResult(r, e.activeBuffer())
+    check e.config.standard.smartcase
+    check e.state.input.search.smartcase
+
+    e.applyConfigSettings(e.config)
+    check e.state.input.search.smartcase
+
+  test "hrSetBoolOption(bsoIncSearch) updates config, survives re-apply":
+    let e = createTestEditor()
+    e.config.standard.incrementalSearch = false
+    e.state.input.search.incsearch = false
+
+    let r =
+      HandlerResult(kind: hrSetBoolOption, boolOption: bsoIncSearch, boolValue: true)
+    discard e.processResult(r, e.activeBuffer())
+    check e.config.standard.incrementalSearch
+    check e.state.input.search.incsearch
+
+    e.applyConfigSettings(e.config)
+    check e.state.input.search.incsearch
 
 suite "Startup window - FileTree":
   ## These tests simulate handleStartUpWindows: viewport height is set to
@@ -1982,6 +2057,27 @@ suite "Editor - bufferIdIndex synchronization":
     check e.bufferIdIndex.len == e.buffers.len
     check not e.bufferIdIndex.hasKey(openedId)
 
+  test "deleteBufferAt sends LSP didClose so re-open doesn't collide":
+    # Regression: :bdelete used to leave the path tracked in lsp.documents,
+    # so a later :e <same file> reset version to 1 and duplicated didOpen,
+    # causing servers to drop subsequent didChange as stale.
+    # `.txt` keeps this test from spawning a real language worker.
+    let e = createTestEditor()
+    e.lsp.setEnabled(true)
+    let testFile = getTempDir() / "moe_test_bdelete_lsp_close.txt"
+    writeFile(testFile, "x")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    check e.lsp.sentDocumentVersion(testFile).isSome
+
+    let idx = e.findBufferByPath(testFile)
+    check idx >= 0
+    e.deleteBufferAt(idx)
+
+    check e.lsp.sentDocumentVersion(testFile).isNone
+
   test "bufferById returns the same TextBuffer as a linear scan":
     let e = createTestEditor()
     let testFile = getTempDir() / "moe_test_bufferById_match.txt"
@@ -2308,6 +2404,153 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     check win.modeState.kind == mskNone
     check win.suspendedMode.isNone
 
+suite "Editor - list viewer quit restores origin cursor/viewport":
+  # Regression: hrFilerQuit/hrBufferManagerQuit/hrBookmarkManagerQuit
+  # used to restore the original buffer but leave the cursor/viewport wherever
+  # the viewer had moved them, losing the editing position. Each state now
+  # snapshots the origin cursor/viewport on entry and the quit path restores
+  # it, mirroring the References/DocumentSymbol/CallHierarchy viewers.
+  test "processResult(hrFilerQuit) restores the pre-filer cursor/viewport":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_filer_quit_restore.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 5
+    win.cursor.column = 2
+    win.viewport.topLine = 4
+    win.viewport.leftColumn = 3
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check win.mode == EditorMode.Filer
+    check win.modeState.kind == mskFiler
+    check win.cursor.line == 0
+    check win.viewport.topLine == 0
+
+    # Simulate navigation inside the filer.
+    win.cursor.line = 3
+    win.viewport.topLine = 2
+
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 5
+    check win.cursor.column == 2
+    check win.viewport.topLine == 4
+    check win.viewport.leftColumn == 3
+
+  test "processResult(hrBufferManagerQuit) restores the pre-manager cursor/viewport":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_bm_quit_restore.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 6
+    win.cursor.column = 1
+    win.viewport.topLine = 5
+    win.viewport.leftColumn = 2
+
+    discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
+    check win.mode == EditorMode.BufferManager
+    check win.modeState.kind == mskBufferManager
+    check win.cursor.line == 0
+    check win.viewport.topLine == 0
+
+    # Simulate navigation inside the manager.
+    win.cursor.line = 2
+    win.viewport.topLine = 1
+
+    discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 6
+    check win.cursor.column == 1
+    check win.viewport.topLine == 5
+    check win.viewport.leftColumn == 2
+
+  test "processResult(modeTransition→BufferManager) swaps buffer and preserves origin for quit":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_bm_mode_transition.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 5
+    win.cursor.column = 2
+    win.viewport.topLine = 4
+    win.viewport.leftColumn = 3
+
+    discard e.processResult(
+      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.BufferManager)),
+      e.activeBuffer(),
+    )
+    check win.mode == EditorMode.BufferManager
+    check win.modeState.kind == mskBufferManager
+    check win.buffer != origBuf
+    check win.cursor.line == 0
+    check win.cursor.column == 0
+    check win.viewport.topLine == 0
+    check win.viewport.leftColumn == 0
+
+    # Quit path relies on saveOriginalBuffer captured during modeTransition entry.
+    discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 5
+    check win.cursor.column == 2
+    check win.viewport.topLine == 4
+    check win.viewport.leftColumn == 3
+
+  test "processResult(hrBookmarkManagerQuit) restores the pre-manager cursor/viewport":
+    let e = createTestEditor()
+    let f = getTempDir() / "moe_test_bkm_quit_restore.txt"
+    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    defer:
+      removeFile(f)
+
+    discard e.editFile(f)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    win.cursor.line = 7
+    win.cursor.column = 3
+    win.viewport.topLine = 6
+    win.viewport.leftColumn = 1
+
+    discard
+      e.processResult(HandlerResult(kind: hrEnterBookmarkManager), e.activeBuffer())
+    check win.mode == EditorMode.BookmarkManager
+    check win.modeState.kind == mskBookmarkManager
+    check win.cursor.line == 0
+    check win.viewport.topLine == 0
+
+    # Simulate navigation inside the manager.
+    win.cursor.line = 4
+    win.viewport.topLine = 3
+
+    discard
+      e.processResult(HandlerResult(kind: hrBookmarkManagerQuit), e.activeBuffer())
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer == origBuf
+    check win.cursor.line == 7
+    check win.cursor.column == 3
+    check win.viewport.topLine == 6
+    check win.viewport.leftColumn == 1
+
 suite "Editor - Command mode command alias bridge end-to-end (#2597)":
   # Regression: the `keyMappableCommandModeAliases` bridge in
   # `command_handlers/handler_manager.nim` rewrites a `K = "bdelete"` keymap
@@ -2378,3 +2621,317 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
     check e.activeBuffer().id == f2Id # still focused on the dirty buffer
     check e.buffers.len == bufferCountBefore
     check "No write since last change" in e.state.statusMessage
+
+suite "Editor - :theme routes through config so save/reload stay in sync":
+  test ":theme default resets config.theme to tkDefault":
+    let e = createTestEditor()
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = getTempDir() / "moe_test_theme_prev.toml"
+
+    e.applyThemeCommand("default")
+
+    check e.config.theme.kind == tkDefault
+    check e.config.theme.path == ""
+    check e.state.statusMessage == "Theme changed to: default"
+
+  test ":theme <name> updates config.theme.path to the loaded file":
+    let e = createTestEditor()
+
+    let fakeHome = getTempDir() / "moe_test_theme_home"
+    let themesDir = fakeHome / ".config" / "moe" / "themes"
+    createDir(themesDir)
+    let themeFile = themesDir / "mytheme.toml"
+    writeFile(
+      themeFile,
+      """
+[Colors]
+foreground = "#eeeeee"
+background = "#111111"
+""",
+    )
+
+    let originalHome = getEnv("HOME")
+    putEnv("HOME", fakeHome)
+    defer:
+      putEnv("HOME", originalHome)
+      removeDir(fakeHome)
+
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = getTempDir() / "moe_test_theme_prev.toml"
+
+    e.applyThemeCommand("mytheme")
+
+    check e.config.theme.kind == tkConfig
+    check e.config.theme.path == themeFile
+    check e.state.statusMessage == "Theme changed to: mytheme"
+
+  test ":theme <missing> leaves config.theme untouched":
+    let e = createTestEditor()
+
+    let fakeHome = getTempDir() / "moe_test_theme_missing_home"
+    createDir(fakeHome / ".config" / "moe" / "themes")
+
+    let originalHome = getEnv("HOME")
+    putEnv("HOME", fakeHome)
+    defer:
+      putEnv("HOME", originalHome)
+      removeDir(fakeHome)
+
+    let previousPath = getTempDir() / "moe_test_theme_previous.toml"
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = previousPath
+
+    e.applyThemeCommand("nope")
+
+    check e.config.theme.kind == tkConfig
+    check e.config.theme.path == previousPath
+    check e.state.statusMessage == "Theme not found: nope"
+
+suite "Editor - processResult(hrSave) actually saves (regression)":
+  test "processResult(hrSave) writes modified buffer to disk":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_hSave_regression.txt"
+    writeFile(testFile, "original")
+    defer:
+      removeFile(testFile)
+
+    check e.editFile(testFile).isOk
+    discard
+      e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "modified: ")
+    check e.activeBuffer().isModified
+
+    let r = HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
+    let ok = e.processResult(r, e.activeBuffer())
+    check ok
+
+    check readFile(testFile).startsWith("modified: original")
+    check not e.activeBuffer().isModified
+
+  test "processResult(hrSave) still returns true when save fails":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_hSave_readonly" / "nested.txt"
+    defer:
+      removeFile(testFile)
+      removeDir(testFile.parentDir)
+
+    createDir(testFile.parentDir)
+    writeFile(testFile, "content")
+    check e.editFile(testFile).isOk
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "X")
+    setFilePermissions(testFile, {fpUserRead})
+    defer:
+      setFilePermissions(testFile, {fpUserRead, fpUserWrite})
+
+    let r = HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
+    let ok = e.processResult(r, e.activeBuffer())
+    check ok
+
+suite "Editor - processResult(hrSaveAll) actually saves (regression)":
+  test "processResult(hrSaveAll) writes every modified buffer to disk":
+    let e = createTestEditor()
+    let f1 = getTempDir() / "moe_test_hSaveAll_regr_a.txt"
+    let f2 = getTempDir() / "moe_test_hSaveAll_regr_b.txt"
+    writeFile(f1, "A")
+    writeFile(f2, "B")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    check e.editFile(f1).isOk
+    check e.editFile(f2).isOk
+
+    # Dirty the first buffer (active = f2 after second editFile)
+    discard e.buffers[1].insertText(BufferPosition(line: 0, column: 0), "modA: ")
+    check e.buffers[1].isModified
+    # Dirty f2 as well
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "modB: ")
+    check e.activeBuffer().isModified
+
+    let r = HandlerResult(kind: hrSaveAll, forceSaveAll: false)
+    let ok = e.processResult(r, e.activeBuffer())
+    check ok
+
+    check readFile(f1) == "modA: A"
+    check readFile(f2) == "modB: B"
+    check not e.buffers[1].isModified
+    check not e.activeBuffer().isModified
+
+suite "Editor - addCommandAlias/removeCommandAlias":
+  test "addCommandAlias updates parser, command config, and persisted config":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+
+    check e.commandLineParser.aliases["zz"] == claQuit
+    check e.commandConfig.aliases["zz"] == claQuit
+    check e.config.commandAliases["zz"].command == "quit"
+
+  test "addCommandAlias normalises the alias to lowercase":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("ZZ", claQuit).isOk
+
+    check "zz" in e.commandLineParser.aliases
+    check "zz" in e.commandConfig.aliases
+    check "zz" in e.config.commandAliases
+
+  test "removeCommandAlias updates parser, command config, and persisted config":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+
+    check "zz" notin e.commandLineParser.aliases
+    check "zz" notin e.commandConfig.aliases
+    check "zz" notin e.config.commandAliases
+
+  test "removeCommandAlias normalises the alias to lowercase":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("ZZ").isOk
+
+    check "zz" notin e.commandLineParser.aliases
+
+  test "removeCommandAlias fails for an unknown alias":
+    let e = createTestEditor()
+
+    let r = e.removeCommandAlias("nosuchalias")
+
+    check r.isErr
+    check "nosuchalias" in r.error
+
+  test "Removed alias does not revive when another alias is added (regression)":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+    # Pre-fix, applyToParser re-applied commandConfig.aliases (which still
+    # held "zz") and revived the removed alias.
+    check e.addCommandAlias("yy", claSaveAndQuit).isOk
+
+    check "zz" notin e.commandLineParser.aliases
+    check "yy" in e.commandLineParser.aliases
+
+  test "Added alias survives a save/reload round-trip":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_alias_roundtrip.toml"
+    defer:
+      removeFile(testFile)
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check saveConfigToToml(e.config, testFile).isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loadedConfig, vr) = loadResult.get
+    check not vr.hasErrors
+    check loadedConfig.commandAliases["zz"].command == "quit"
+    check resolveCommandName(loadedConfig.commandAliases["zz"].command) == some(claQuit)
+
+  test "Removed alias stays removed after a save/reload round-trip":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_alias_remove_roundtrip.toml"
+    defer:
+      removeFile(testFile)
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+    check saveConfigToToml(e.config, testFile).isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loadedConfig, _) = loadResult.get
+    check "zz" notin loadedConfig.commandAliases
+
+  test "Removing a user-defined alias does not touch disabledCommandAliases":
+    let e = createTestEditor()
+
+    check e.addCommandAlias("zz", claQuit).isOk
+    check e.removeCommandAlias("zz").isOk
+
+    check e.config.disabledCommandAliases.len == 0
+
+  test "Removing a built-in default alias persists as DisabledCommandAliases":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_alias_disable_default.toml"
+    defer:
+      removeFile(testFile)
+
+    check "q" in e.commandLineParser.aliases
+    check e.removeCommandAlias("q").isOk
+
+    check "q" notin e.commandLineParser.aliases
+    check "q" notin e.commandConfig.aliases
+    check e.config.disabledCommandAliases == @["q"]
+
+    # The removal survives a save/reload round-trip: a parser built from the
+    # reloaded config must not have the default alias back.
+    check saveConfigToToml(e.config, testFile).isOk
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loadedConfig, vr) = loadResult.get
+    check not vr.hasErrors
+    check loadedConfig.disabledCommandAliases == @["q"]
+
+    var initVr = newValidationResult()
+    let (_, _, cmdConfig, cmdLineParser) = newEditorRegistries(loadedConfig, initVr)
+    check "q" notin cmdConfig.aliases
+    check "q" notin cmdLineParser.aliases
+
+  test "addCommandAlias lifts a persisted disable of the same name":
+    let e = createTestEditor()
+
+    check e.removeCommandAlias("q").isOk
+    check e.config.disabledCommandAliases == @["q"]
+
+    check e.addCommandAlias("q", claQuit).isOk
+
+    check e.config.disabledCommandAliases.len == 0
+    check "q" in e.config.commandAliases
+    check "q" in e.commandLineParser.aliases
+
+  test "Removed default alias does not revive when another alias is added":
+    let e = createTestEditor()
+
+    check e.removeCommandAlias("q").isOk
+    check e.addCommandAlias("zz", claQuit).isOk
+
+    check "q" notin e.commandLineParser.aliases
+
+suite "Editor - tab/indent setters sync .editorconfig override":
+  # Regression: Editor-layer setters used to write only config.standard.*,
+  # leaving buf.editorConfig unchanged. Since the getter prefers the override,
+  # a write via `e.tabStop = v` was silently overshadowed on read.
+  test "tabStop= updates both the config and the buffer override":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.editorConfig = some(BufferEditorConfig(tabStop: some(2)))
+
+    e.tabStop = 8
+
+    check e.config.standard.tabStop == 8
+    check buf.editorConfig.get.tabStop == some(8)
+    check e.tabStop == 8
+
+  test "shiftWidth= updates both the config and the buffer override":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.editorConfig = some(BufferEditorConfig(shiftWidth: some(2)))
+
+    e.shiftWidth = 8
+
+    check e.config.standard.shiftWidth == 8
+    check buf.editorConfig.get.shiftWidth == some(8)
+    check e.shiftWidth == 8
+
+  test "expandTab= updates both the config and the buffer override":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.editorConfig = some(BufferEditorConfig(expandTab: some(false)))
+
+    e.expandTab = true
+
+    check e.config.standard.expandTab == true
+    check buf.editorConfig.get.expandTab == some(true)
+    check e.expandTab == true

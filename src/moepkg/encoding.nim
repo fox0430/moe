@@ -17,13 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-## Character encoding detection for text files
+## Character encoding detection and transcoding for text files
 ##
 ## This module provides utilities for detecting character encodings from
 ## raw file content. It supports various Unicode encodings (UTF-8, UTF-16, UTF-32)
-## with BOM and without BOM detection.
+## with BOM and without BOM detection, plus decoding to / encoding from the
+## editor's internal UTF-8 representation.
 
 import std/unicode
+
+import pkg/results
 
 type CharacterEncoding* = enum
   ## Supported character encodings
@@ -234,3 +237,142 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
     return validEncodings[0]
 
   return CharacterEncoding.unknown
+
+proc utf16ToUtf8(s: string, littleEndian: bool): Result[string, string] =
+  if (s.len mod 2) != 0:
+    return Result[string, string].err "byte length is not a multiple of 2"
+
+  var res = newStringOfCap(s.len)
+  var i = 0
+
+  proc advance(): int =
+    result =
+      if littleEndian:
+        ord(s[i]) + 256 * ord(s[i + 1])
+      else:
+        256 * ord(s[i]) + ord(s[i + 1])
+    i += 2
+
+  while i < s.len:
+    let curr = advance()
+    if curr >= 0xD800 and curr <= 0xDBFF:
+      if i >= s.len:
+        return Result[string, string].err "truncated surrogate pair"
+      let next = advance()
+      if next < 0xDC00 or next > 0xDFFF:
+        return Result[string, string].err "invalid surrogate pair"
+      let point = 0x10000 + ((curr - 0xD800) shl 10) + (next - 0xDC00)
+      res.add Rune(point).toUTF8
+    elif curr >= 0xDC00 and curr <= 0xDFFF:
+      return Result[string, string].err "unpaired low surrogate"
+    else:
+      res.add Rune(curr).toUTF8
+
+  Result[string, string].ok res
+
+proc utf8ToUtf16(s: string, littleEndian: bool): string =
+  result = newStringOfCap(s.len * 2)
+
+  template addUnit(unit: int) =
+    if littleEndian:
+      result.add char(unit and 0xFF)
+      result.add char((unit shr 8) and 0xFF)
+    else:
+      result.add char((unit shr 8) and 0xFF)
+      result.add char(unit and 0xFF)
+
+  for r in s.runes:
+    let point = int(r)
+    if point < 0x10000:
+      addUnit(point)
+    elif point <= 0x10FFFF:
+      let v = point - 0x10000
+      addUnit(0xD800 + (v shr 10))
+      addUnit(0xDC00 + (v and 0x3FF))
+    else:
+      addUnit(0xFFFD)
+
+proc utf32ToUtf8(s: string, littleEndian: bool): Result[string, string] =
+  if (s.len mod 4) != 0:
+    return Result[string, string].err "byte length is not a multiple of 4"
+
+  var res = newStringOfCap(s.len div 2)
+  var i = 0
+
+  proc advance(): uint32 =
+    result =
+      if littleEndian:
+        uint32(ord(s[i])) + 0x100'u32 * uint32(ord(s[i + 1])) +
+          0x10000'u32 * uint32(ord(s[i + 2])) + 0x1000000'u32 * uint32(ord(s[i + 3]))
+      else:
+        0x1000000'u32 * uint32(ord(s[i])) + 0x10000'u32 * uint32(ord(s[i + 1])) +
+          0x100'u32 * uint32(ord(s[i + 2])) + uint32(ord(s[i + 3]))
+    i += 4
+
+  while i < s.len:
+    let point = advance()
+    if point > 0x10FFFF'u32:
+      return Result[string, string].err "code point out of range"
+    res.add Rune(int(point)).toUTF8
+
+  Result[string, string].ok res
+
+proc utf8ToUtf32(s: string, littleEndian: bool): string =
+  result = newStringOfCap(s.len * 4)
+  for r in s.runes:
+    var point = uint32(r)
+    if point > 0x10FFFF'u32:
+      point = 0xFFFD
+    if littleEndian:
+      result.add char(point and 0xFF)
+      result.add char((point shr 8) and 0xFF)
+      result.add char((point shr 16) and 0xFF)
+      result.add char((point shr 24) and 0xFF)
+    else:
+      result.add char((point shr 24) and 0xFF)
+      result.add char((point shr 16) and 0xFF)
+      result.add char((point shr 8) and 0xFF)
+      result.add char(point and 0xFF)
+
+proc decodeToUtf8*(s: string, encoding: CharacterEncoding): Result[string, string] =
+  ## Decode raw file bytes (BOM already stripped) to UTF-8 for internal
+  ## storage. `utf8`/`unknown` are returned unchanged; the generic
+  ## `utf16`/`utf32` values assume big endian (the Unicode default when
+  ## the byte order is unspecified).
+  case encoding
+  of CharacterEncoding.utf16Le:
+    utf16ToUtf8(s, littleEndian = true)
+  of CharacterEncoding.utf16Be, CharacterEncoding.utf16:
+    utf16ToUtf8(s, littleEndian = false)
+  of CharacterEncoding.utf32Le:
+    utf32ToUtf8(s, littleEndian = true)
+  of CharacterEncoding.utf32Be, CharacterEncoding.utf32:
+    utf32ToUtf8(s, littleEndian = false)
+  of CharacterEncoding.utf8, CharacterEncoding.unknown:
+    Result[string, string].ok s
+
+proc encodeFromUtf8*(s: string, encoding: CharacterEncoding): string =
+  ## Encode internal UTF-8 text to the given on-disk encoding (without BOM).
+  ## Invalid code points are replaced with U+FFFD.
+  case encoding
+  of CharacterEncoding.utf16Le:
+    utf8ToUtf16(s, littleEndian = true)
+  of CharacterEncoding.utf16Be, CharacterEncoding.utf16:
+    utf8ToUtf16(s, littleEndian = false)
+  of CharacterEncoding.utf32Le:
+    utf8ToUtf32(s, littleEndian = true)
+  of CharacterEncoding.utf32Be, CharacterEncoding.utf32:
+    utf8ToUtf32(s, littleEndian = false)
+  of CharacterEncoding.utf8, CharacterEncoding.unknown:
+    s
+
+proc bomBytes*(encoding: CharacterEncoding): string =
+  ## BOM byte sequence for the given encoding (big endian for the generic
+  ## utf16/utf32 values). Empty for unknown.
+  case encoding
+  of CharacterEncoding.utf8: "\xEF\xBB\xBF"
+  of CharacterEncoding.utf16Le: "\xFF\xFE"
+  of CharacterEncoding.utf16Be, CharacterEncoding.utf16: "\xFE\xFF"
+  of CharacterEncoding.utf32Le: "\xFF\xFE\x00\x00"
+  of CharacterEncoding.utf32Be, CharacterEncoding.utf32: "\x00\x00\xFE\xFF"
+  of CharacterEncoding.unknown: ""

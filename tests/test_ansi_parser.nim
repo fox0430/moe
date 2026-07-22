@@ -226,6 +226,30 @@ suite "TerminalGrid - SGR colors":
     check grid.cells[0][0].bg.g == 128
     check grid.cells[0][0].bg.b == 255
 
+  test "Truncated 38;5 does not leak into subsequent SGR codes":
+    # `38;5` without the color index used to fall through and be reinterpreted
+    # as SGR 5 (blink), corrupting attribute state.
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[38;5mX")
+    check taBlink notin grid.cells[0][0].attrs
+
+  test "Truncated 38;2 does not leak into subsequent SGR codes":
+    # `38;2;R;G` without B previously set taDim (from the leftover `2`) and
+    # ran R/G through the SGR case as well.
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[38;2;255;128mX")
+    check taDim notin grid.cells[0][0].attrs
+
+  test "Truncated 48;5 does not leak into subsequent SGR codes":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[48;5mX")
+    check taBlink notin grid.cells[0][0].attrs
+
+  test "Truncated 48;2 does not leak into subsequent SGR codes":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[48;2;0;128mX")
+    check taDim notin grid.cells[0][0].attrs
+
 suite "TerminalGrid - Cursor visibility":
   test "Hide cursor (CSI ?25l)":
     let grid = newTerminalGrid(80, 24)
@@ -1002,6 +1026,35 @@ suite "TerminalGrid - OSC sequences":
     check grid.parserState == apsNormal # aborted once the payload crossed the cap
     check grid.escapeBuffer.len == 0
 
+  test "OSC ST split across PTY reads does not leak backslash into output":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]2;t\x1b") # chunk ends on ESC of ST
+    grid.processOutput("\\rest")
+    check grid.title == "t"
+    check grid.parserState == apsNormal
+    check grid.cells[0][0].ch == "r"
+    check grid.cells[0][1].ch == "e"
+    check grid.cells[0][2].ch == "s"
+    check grid.cells[0][3].ch == "t"
+
+  test "OSC followed by a new escape in the same chunk starts that escape":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1b]2;t\x1b[31mR")
+    check grid.title == "t"
+    check grid.cells[0][0].ch == "R"
+    check grid.cells[0][0].fg.kind == ckIndexed
+    check grid.cells[0][0].fg.index == 1
+
+  test "DCS ST split across PTY reads does not leak backslash into output":
+    let grid = newTerminalGrid(20, 3)
+    grid.processOutput("\x1bPpayload\x1b") # chunk ends on ESC of ST
+    grid.processOutput("\\rest")
+    check grid.parserState == apsNormal
+    check grid.cells[0][0].ch == "r"
+    check grid.cells[0][1].ch == "e"
+    check grid.cells[0][2].ch == "s"
+    check grid.cells[0][3].ch == "t"
+
 suite "TerminalGrid - CSI sequences":
   test "unterminated CSI past the cap aborts to normal and frees the buffer":
     let grid = newTerminalGrid(20, 3)
@@ -1065,3 +1118,99 @@ suite "TerminalGrid - CSI overflow guard (regression)":
     grid.cursorCol = 10
     grid.processOutput("\x1b[999999999999999999D")
     check grid.cursorCol == 0
+
+  test "ESC[999999999999999999E (cursor next line) clamps to grid bottom":
+    let grid = newTerminalGrid(80, 24)
+    grid.cursorCol = 5
+    grid.processOutput("\x1b[999999999999999999E")
+    check grid.cursorRow == grid.rows - 1
+    check grid.cursorCol == 0
+
+  test "ESC[999999999999999999F (cursor previous line) clamps to grid top":
+    let grid = newTerminalGrid(80, 24)
+    grid.cursorRow = 10
+    grid.cursorCol = 5
+    grid.processOutput("\x1b[999999999999999999F")
+    check grid.cursorRow == 0
+    check grid.cursorCol == 0
+
+  test "ESC[999999999999999999X (erase character) clamps to end of line":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("hello")
+    grid.cursorCol = 1
+    grid.processOutput("\x1b[999999999999999999X")
+    # From col 1 to end of line should be blanked
+    check grid.cells[0][0].ch == "h"
+    for c in 1 ..< grid.cols:
+      check grid.cells[0][c].ch == ""
+
+  test "ESC[999999999999999999P (delete character) clamps to end of line":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("hello")
+    grid.cursorCol = 1
+    grid.processOutput("\x1b[999999999999999999P")
+    # From col 1 to end of line should be blanked (nothing left to shift in)
+    check grid.cells[0][0].ch == "h"
+    for c in 1 ..< grid.cols:
+      check grid.cells[0][c].ch == ""
+
+  test "ESC[999999999999999999@ (insert character) clamps to end of line":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("hello")
+    grid.cursorCol = 1
+    grid.processOutput("\x1b[999999999999999999@")
+    # From col 1 to end of line should be blank (all pushed off)
+    check grid.cells[0][0].ch == "h"
+    for c in 1 ..< grid.cols:
+      check grid.cells[0][c].ch == ""
+
+suite "TerminalGrid - Charset designation across chunk boundaries":
+  test "ESC ( <payload> in one chunk consumes the payload":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("A\x1b(0B")
+    check grid.parserState == apsNormal
+    check grid.cursorCol == 2
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][1].ch == "B"
+
+  test "ESC ( split from its payload preserves the payload across reads":
+    # Chunk ends right after ESC (. Without a persistent state the next chunk's
+    # first byte would be misread as normal text instead of the charset payload.
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("A\x1b(")
+    check grid.parserState == apsDesignateCharset
+    grid.processOutput("0B")
+    check grid.parserState == apsNormal
+    check grid.cursorCol == 2
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][1].ch == "B" # '0' was the payload, not text
+
+  test "ESC ) / ESC * / ESC + all use the same cross-chunk path":
+    for intro in ["\x1b)", "\x1b*", "\x1b+"]:
+      let grid = newTerminalGrid(10, 3)
+      grid.processOutput("X" & intro)
+      check grid.parserState == apsDesignateCharset
+      grid.processOutput("BY")
+      check grid.parserState == apsNormal
+      check grid.cells[0][0].ch == "X"
+      check grid.cells[0][1].ch == "Y"
+
+  test "ESC # split from its payload preserves the payload across reads":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("X\x1b#")
+    check grid.parserState == apsDesignateCharset
+    grid.processOutput("8Y")
+    check grid.parserState == apsNormal
+    check grid.cells[0][0].ch == "X"
+    check grid.cells[0][1].ch == "Y"
+
+  test "CSI following a split charset designation still parses correctly":
+    # Regression: previously the first byte of the next chunk (here ESC) was
+    # eaten as the payload, so the following CSI SGR was misinterpreted.
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("\x1b(")
+    grid.processOutput("0\x1b[31mR")
+    check grid.parserState == apsNormal
+    check grid.currentFg.kind == ckIndexed
+    check grid.currentFg.index == 1
+    check grid.cells[0][0].ch == "R"

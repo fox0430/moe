@@ -374,6 +374,32 @@ suite "EditorWindowManager - Horizontal Split":
     check result.isOk
     check wm.windows.len == 2
 
+  test "hsplit with extremely small terminal height (single status line)":
+    let wm = createSingleWindowManager(80, 2)
+    let result = wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
+
+  test "hsplit with extremely small terminal height (multi status line)":
+    let wm = createSingleWindowManager(80, 3)
+    let result = wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = true,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
+
 suite "EditorWindowManager - vsplitWithBuffer":
   test "vsplitWithBuffer uses provided buffer":
     let wm = createSingleWindowManager()
@@ -408,6 +434,36 @@ suite "EditorWindowManager - hsplitWithBuffer":
     check result.isOk
     check result.get == newBuf
     check wm.windows[0].buffer == newBuf
+
+  test "hsplitWithBuffer with extremely small terminal height (single status line)":
+    let wm = createSingleWindowManager(80, 2)
+    let newBuf = newTextBuffer()
+    let result = wm.hsplitWithBuffer(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+      newBuf,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
+
+  test "hsplitWithBuffer with extremely small terminal height (multi status line)":
+    let wm = createSingleWindowManager(80, 3)
+    let newBuf = newTextBuffer()
+    let result = wm.hsplitWithBuffer(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = true,
+      newBuf,
+    )
+    check result.isOk
+    check wm.windows.len == 2
+    for i, win in wm.windows:
+      check win.viewport.height >= 0
 
 suite "EditorWindowManager - resizeWindows":
   test "resizeWindows with invalid dimensions does nothing":
@@ -522,6 +578,27 @@ suite "EditorWindowManager - resizeWindows":
     for win in [left, right]:
       check win.viewport.y == 0
       check win.viewport.height == 30 - steadyBottomAreaHeight()
+
+  test "tall-left + stacked-right upscale keeps neighbors visible":
+    # Regression: equalizeWidthsForResize used to stretch single-element
+    # groups to newWidth, overlapping mismatched-height right neighbors.
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 20, active = true))
+    wm.windows.add(createTestWindow(41, 0, 39, 10))
+    wm.windows.add(createTestWindow(41, 11, 39, 9))
+    wm.activeWindowIndex = 0
+
+    wm.resizeWindows(180, 45, 80, 20, multiStatusLine = false)
+
+    let
+      tall = wm.windows[0]
+      top = wm.windows[1]
+      bot = wm.windows[2]
+    check tall.viewport.x == 0
+    check tall.viewport.x + tall.viewport.width <= top.viewport.x
+    check tall.viewport.x + tall.viewport.width <= bot.viewport.x
+    check top.viewport.x + top.viewport.width == 180
+    check bot.viewport.x + bot.viewport.width == 180
 
 suite "EditorWindowManager - Integration":
   test "Multiple vsplits create equal width windows":
@@ -795,7 +872,7 @@ suite "EditorWindowManager - Split Size Proportions":
     check wm.windows[0].viewport.height == 10
     check wm.windows[1].viewport.y == 11
     check wm.windows[1].viewport.height == 13
-    check wm.windows[0].viewport.height + WindowSeparatorWidth +
+    check wm.windows[0].viewport.height + WindowSeparatorHeight +
       wm.windows[1].viewport.height == 24
 
   test "3 hsplits produce correct heights (single status line)":
@@ -823,8 +900,8 @@ suite "EditorWindowManager - Split Size Proportions":
     check wm.windows[1].viewport.height == 6
     check wm.windows[2].viewport.y == 14
     check wm.windows[2].viewport.height == 10
-    check wm.windows[0].viewport.height + WindowSeparatorWidth +
-      wm.windows[1].viewport.height + WindowSeparatorWidth +
+    check wm.windows[0].viewport.height + WindowSeparatorHeight +
+      wm.windows[1].viewport.height + WindowSeparatorHeight +
       wm.windows[2].viewport.height == 24
 
   # hsplit size checks (multi status line)

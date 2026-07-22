@@ -25,28 +25,18 @@ import std/[options, tables]
 import pkg/celina
 
 import
-  ../buffer,
-  ../types,
-  ../commands,
-  ../command_registry,
-  ../modes,
-  ../command_line,
-  ../command_config,
-  ../window_manager,
-  ../lsp_integration,
-  ../config,
-  ../persist,
-  ../background_process,
-  ../quick_run_utils,
-  ../virtual_text
+  ../[
+    buffer, types, commands, command_registry, modes, command_line, command_config,
+    window_manager, lsp_integration, config, quick_run_utils, key_router,
+  ]
 import ../key_bindings except Command
-import ../key_router
 import ../command_handlers/handler_types
+import background_process_types, persist_types, virtual_text_types
 
 export
   buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, config, persist, handler_types, tables, celina,
-  background_process, key_router, virtual_text
+  window_manager, lsp_integration, config, handler_types, tables, celina, key_router,
+  background_process_types, persist_types, virtual_text_types
 
 type
   ScreenSize* = object
@@ -74,10 +64,12 @@ type
       ## never mutate directly.
     config*: EditorConfig
     lsp*: LspIntegration
-    lastLspChangeSeqs*: Table[BufferId, int]
-      ## Per-buffer changeSeq at the time of the last LSP didChange
-      ## notification. Keyed per buffer: a single shared value would let one
-      ## buffer's seq mask unsynced changes in another.
+    lastLspContentVersions*: Table[BufferId, int]
+      ## Per-buffer contentVersion at the time of the last LSP didChange
+      ## notification. contentVersion is monotonic (never rewinds on undo or
+      ## reload), so unlike changeSeq it cannot collide across an undo + edit
+      ## and mask an unsynced state. Keyed per buffer: a single shared value
+      ## would let one buffer's version mask unsynced changes in another.
     app*: AsyncApp
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
@@ -160,10 +152,15 @@ proc addBuffer*(e: Editor, buf: TextBuffer) =
 proc deleteBufferAt*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from
   ## `bufferIdIndex`. Use this instead of `e.buffers.delete`.
-  let id = e.buffers[idx].id
+  ## Also sends LSP didClose so a later re-open doesn't collide with stale
+  ## server state (no-op for non-file buffers and untracked paths).
+  let buf = e.buffers[idx]
+  let id = buf.id
+  if e.lsp != nil:
+    discard e.lsp.onBufferClose(buf)
   e.buffers.delete(idx)
   e.bufferIdIndex.del(id)
-  e.lastLspChangeSeqs.del(id)
+  e.lastLspContentVersions.del(id)
 
 proc pruneBufferIdFromAllWindows*(e: Editor, id: BufferId) =
   ## Remove `id` from every window's per-window tab list (`bufferIds`).
@@ -192,3 +189,67 @@ proc `cursor=`*(e: Editor, pos: BufferPosition) {.inline.} =
 proc setMode*(e: Editor, mode: EditorMode) {.inline.} =
   ## Set the current mode in the active window
   e.activeWindow.mode = mode
+
+# Editor-based config pull-type accessors. State-based ones live in types.nim.
+
+template flag2(name: untyped, T: typedesc, s1, f: untyped) =
+  proc name*(e: Editor): T =
+    e.state.name
+
+  proc `name=`*(e: Editor, v: T) =
+    e.config.s1.f = v
+
+template flag3(name: untyped, T: typedesc, s1, s2, f: untyped) =
+  proc name*(e: Editor): T =
+    e.state.name
+
+  proc `name=`*(e: Editor, v: T) =
+    e.config.s1.s2.f = v
+
+flag2(showTabLine, bool, tabLine, enable)
+flag2(showStatusLine, bool, standard, statusLine)
+flag2(multiStatusLine, bool, statusLine, multipleStatusLine)
+flag2(showLineNumbers, bool, standard, number)
+flag2(relativeLineNumbers, bool, standard, relativeNumber)
+flag2(showCursorLine, bool, highlight, currentLine)
+flag2(showCursorColumn, bool, highlight, currentColumn)
+flag2(showSyntax, bool, standard, syntax)
+flag2(showIndentationLines, bool, standard, indentationLines)
+flag2(showSidebar, bool, standard, sidebar)
+flag2(scrollbar, bool, standard, scrollbar)
+flag2(scrollbarWidth, int, standard, scrollbarWidth)
+flag2(showModifiedLines, bool, standard, showModifiedLines)
+flag2(showGitDiff, bool, git, showChangedLine)
+flag2(showSyntaxChecker, bool, syntaxChecker, enable)
+flag3(showCodeLens, bool, lsp, codeLens, enable)
+flag3(showDocumentHighlight, bool, lsp, documentHighlight, enable)
+flag3(showInlayHint, bool, lsp, inlayHint, enable)
+flag2(lineWrap, bool, standard, lineWrap)
+flag2(softTabStop, int, standard, softTabStop)
+
+# tabStop / shiftWidth / expandTab: delegate to EditorState so the per-buffer
+# .editorconfig override is updated alongside the global config, matching the
+# custom setters in types.nim.
+proc tabStop*(e: Editor): int =
+  e.state.tabStop
+
+proc `tabStop=`*(e: Editor, v: int) =
+  e.state.tabStop = v
+
+proc shiftWidth*(e: Editor): int =
+  e.state.shiftWidth
+
+proc `shiftWidth=`*(e: Editor, v: int) =
+  e.state.shiftWidth = v
+
+proc expandTab*(e: Editor): bool =
+  e.state.expandTab
+
+proc `expandTab=`*(e: Editor, v: bool) =
+  e.state.expandTab = v
+
+flag2(autoIndent, bool, standard, autoIndent)
+flag2(smartIndent, bool, standard, smartIndent)
+flag2(autoCloseParen, bool, standard, autoCloseParen)
+flag2(autoDeleteParen, bool, standard, autoDeleteParen)
+flag2(bracketSplit, BracketSplitMode, standard, bracketSplit)

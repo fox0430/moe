@@ -32,8 +32,9 @@
 ##
 ## The router owns the runtime-mapping accumulator directly via its
 ## `dispatchState` field (a `DispatchState`); the routing helpers
-## (`routeRuntimeMapping`/`flushRuntimeMapping`/`clearRuntimeMappingState`) take
-## it as a `var` parameter. The built-in sequence accumulator
+## (`routeRuntimeMapping`/`flushRuntimeMapping`) take it as a `var` parameter.
+## Stale accumulator on empty mappings is handled inside `routeRuntimeMapping`
+## via `rmdNoMatchFlush`. The built-in sequence accumulator
 ## (`KeyBindingRegistry.sequenceState`) is *deliberately* registry-owned — this
 ## split is the intended end state, not a pending migration:
 ##
@@ -63,7 +64,7 @@ type KeyRouter* = ref object
     ## from the registry). See `key_bindings/registry.DispatchState`.
   mapExpandDepth*: int
     ## Recursion depth for `:map` (noremap=false) replay. Guards against cyclic
-    ## mappings; see `MaxMapRecursionDepth` in handler_manager.
+    ## mappings via `MaxMapRecursionDepth`.
 
 proc newKeyRouter*(registry: KeyBindingRegistry, policy: TimeoutPolicy): KeyRouter =
   KeyRouter(
@@ -129,19 +130,6 @@ proc mappingsFor(router: KeyRouter, mode: EditorMode): seq[RuntimeKeyMapping] =
     router.registry.getRuntimeKeySeqMappings(mode)
   else:
     router.registry.getAllRuntimeMappings(mode)
-
-proc flushPendingAccumulator*(router: KeyRouter, mode: EditorMode): seq[KeyCombo] =
-  ## If the mappings table for `mode` is empty but the accumulator still has
-  ## leftover keys (e.g. mappings were unbound mid-sequence), drain and return
-  ## them so the caller can replay them before continuing. Returns `@[]`
-  ## otherwise and leaves the accumulator untouched.
-  ##
-  ## The caller is expected to wrap the replay in `withReplay` so re-entrant
-  ## feedKey calls observe `isReplayingMapping = true`.
-  let mappings = router.mappingsFor(mode)
-  if mappings.len == 0 and router.dispatchState.keys.len > 0:
-    result = router.dispatchState.keys
-    clearRuntimeMappingState(router.dispatchState)
 
 proc decisionToRoute(decision: RuntimeMappingDecision, key: KeyCombo): RouteResult =
   case decision.kind

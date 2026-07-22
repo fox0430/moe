@@ -30,7 +30,8 @@ type EditorWindowManager* = ref object ## Manages multiple split windows
   activeWindowIndex*: int
 
 const
-  WindowSeparatorWidth* = 1 ## Width of separator between split windows
+  WindowSeparatorWidth* = 1 ## Width of separator between vertically split windows
+  WindowSeparatorHeight* = 1 ## Height of separator between horizontally split windows
   StatusLineHeight* = 1 ## Height of a status line
 
 proc newEditorWindowManager*(): EditorWindowManager =
@@ -210,8 +211,30 @@ proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth
     if wm.windows[idx].fixedWidth.isSome:
       wm.windows[idx].viewport.width = wm.windows[idx].fixedWidth.get
     else:
-      let minX = wm.windows[idx].viewport.x
-      wm.windows[idx].viewport.width = newWidth - minX
+      # A single-element horizontal group can still have vertically-overlapping
+      # right neighbors (grouper requires matching y AND height); stop at them.
+      let
+        win = wm.windows[idx]
+        minX = win.viewport.x
+        winTop = win.viewport.y
+        winBottom = win.viewport.y + win.viewport.height
+      var rightBoundary = newWidth
+      for i in 0 ..< wm.windows.len:
+        if i == idx:
+          continue
+        let
+          other = wm.windows[i]
+          otherTop = other.viewport.y
+          otherBottom = other.viewport.y + other.viewport.height
+        if winTop < otherBottom and otherTop < winBottom and other.viewport.x > minX and
+            other.viewport.x < rightBoundary:
+          rightBoundary = other.viewport.x
+      let width =
+        if rightBoundary < newWidth:
+          rightBoundary - WindowSeparatorWidth - minX
+        else:
+          newWidth - minX
+      wm.windows[idx].viewport.width = max(1, width)
     return
 
   var sortedGroup = group
@@ -303,7 +326,7 @@ proc equalizeHeightsInGroup*(
       if multiStatusLine:
         0
       else:
-        (sortedGroup.len - 1) * WindowSeparatorWidth
+        (sortedGroup.len - 1) * WindowSeparatorHeight
     numStatusLines =
       if multiStatusLine:
         sortedGroup.len * StatusLineHeight
@@ -312,7 +335,7 @@ proc equalizeHeightsInGroup*(
     totalContentHeight =
       totalHeight - numSeparators - numStatusLines - steadyBottomAreaHeight()
     windowContentHeight = totalContentHeight div sortedGroup.len
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorWidth
+    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
 
   var currentY = startY
   for i, idx in sortedGroup:
@@ -367,7 +390,7 @@ proc equalizeHeightsForResize*(
       if multiStatusLine:
         0
       else:
-        (sortedGroup.len - 1) * WindowSeparatorWidth
+        (sortedGroup.len - 1) * WindowSeparatorHeight
     # Calculate total content height (excluding status lines)
     numStatusLines =
       if multiStatusLine:
@@ -376,7 +399,7 @@ proc equalizeHeightsForResize*(
         StatusLineHeight
     totalContentHeight = availableHeight - numSeparators - numStatusLines
     windowContentHeight = totalContentHeight div sortedGroup.len
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorWidth
+    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
 
   var currentY = minY
   for i, idx in sortedGroup:
@@ -708,8 +731,8 @@ proc hsplit*(
     origX = wm.windows[wm.activeWindowIndex].viewport.x
     origY = wm.windows[wm.activeWindowIndex].viewport.y
 
-    # Separator offset (WindowSeparatorWidth for single status line, 0 for multi status line)
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorWidth
+    # Separator offset (WindowSeparatorHeight for single status line, 0 for multi status line)
+    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
 
     # Calculate available content height:
     # origHeight includes command line for bottom window
@@ -720,7 +743,7 @@ proc hsplit*(
         2 * StatusLineHeight + steadyBottomAreaHeight()
       else:
         StatusLineHeight + steadyBottomAreaHeight()
-    availableContentHeight = origHeight - numReservedLines - separatorOffset
+    availableContentHeight = max(0, origHeight - numReservedLines - separatorOffset)
 
     # Split content area: favor top window (round up) to preserve scroll position
     topContentHeight = (availableContentHeight + 1) div 2 # round up
@@ -805,15 +828,15 @@ proc hsplitWithBuffer*(
     origX = wm.windows[wm.activeWindowIndex].viewport.x
     origY = wm.windows[wm.activeWindowIndex].viewport.y
 
-    # Separator offset (WindowSeparatorWidth for single status line, 0 for multi status line)
-    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorWidth
+    # Separator offset (WindowSeparatorHeight for single status line, 0 for multi status line)
+    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
 
     numReservedLines =
       if multiStatusLine:
         2 * StatusLineHeight + steadyBottomAreaHeight()
       else:
         StatusLineHeight + steadyBottomAreaHeight()
-    availableContentHeight = origHeight - numReservedLines - separatorOffset
+    availableContentHeight = max(0, origHeight - numReservedLines - separatorOffset)
 
     # Split content area: favor top window (round up) to preserve scroll position
     topContentHeight = (availableContentHeight + 1) div 2 # round up

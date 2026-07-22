@@ -147,6 +147,65 @@ suite "LspWorker - formatRawJsonLogLine":
     let line = formatRawJsonLogLine("", ljdReceived, """{"x":1}""")
     check line == """ <<< {"x":1}"""
 
+suite "LspWorker - dropPendingDidOpen":
+  # Regression: a didClose that arrives before the server reaches lwsRunning
+  # must remove the queued didOpen for the same URI. Otherwise the post-init
+  # flush emits a didOpen for a buffer the user already closed, and a later
+  # reopen sends a second didOpen without an intervening didClose - a
+  # protocol violation.
+  proc openCmd(uri: string, version = 1): LspCommand =
+    LspCommand(
+      kind: lcmdDidOpen,
+      openUri: uri,
+      openLangId: "nim",
+      openVersion: version,
+      openText: "x",
+    )
+
+  test "removes the sole matching entry":
+    var pending = @[openCmd("file:///a.nim")]
+    dropPendingDidOpen(pending, "file:///a.nim")
+    check pending.len == 0
+
+  test "leaves non-matching URIs untouched":
+    var pending = @[openCmd("file:///a.nim"), openCmd("file:///b.nim")]
+    dropPendingDidOpen(pending, "file:///b.nim")
+    check pending.len == 1
+    check pending[0].openUri == "file:///a.nim"
+
+  test "removes every duplicate for the same URI":
+    var pending = @[
+      openCmd("file:///a.nim", 1), openCmd("file:///a.nim", 2), openCmd("file:///b.nim")
+    ]
+    dropPendingDidOpen(pending, "file:///a.nim")
+    check pending.len == 1
+    check pending[0].openUri == "file:///b.nim"
+
+  test "is a no-op when the URI is not queued":
+    var pending = @[openCmd("file:///a.nim")]
+    dropPendingDidOpen(pending, "file:///missing.nim")
+    check pending.len == 1
+    check pending[0].openUri == "file:///a.nim"
+
+  test "is a no-op on an empty queue":
+    var pending: seq[LspCommand] = @[]
+    dropPendingDidOpen(pending, "file:///a.nim")
+    check pending.len == 0
+
+  test "preserves the relative order of surviving entries":
+    var pending = @[
+      openCmd("file:///a.nim"),
+      openCmd("file:///b.nim"),
+      openCmd("file:///c.nim"),
+      openCmd("file:///b.nim"),
+      openCmd("file:///d.nim"),
+    ]
+    dropPendingDidOpen(pending, "file:///b.nim")
+    check pending.len == 3
+    check pending[0].openUri == "file:///a.nim"
+    check pending[1].openUri == "file:///c.nim"
+    check pending[2].openUri == "file:///d.nim"
+
 suite "LspWorker - LspCommand object":
   test "LspCommand lcmdStart variant":
     let cmd = LspCommand(
@@ -473,6 +532,135 @@ suite "LspWorker - LspEvent object":
     check evt.applyEditReqIdJson == "7"
     check parseJson(evt.applyEditEditJson).hasKey("changes")
 
+suite "LspWorker - notificationToEvents":
+  # Regression: a malformed publishDiagnostics frame used to raise KeyError on
+  # the raw `params["uri"]` access, unwinding the drain loop and stranding
+  # adjacent frames until the next mainLoop tick. It must now resolve to a
+  # warning event instead.
+  test "publishDiagnostics with valid uri returns a diagnostics event":
+    let params = %*{"uri": "file:///t.nim", "diagnostics": [{"message": "x"}]}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagUri == "file:///t.nim"
+    # Serialized array preserves the diagnostics content
+    check parseJson(evt.diagnosticsJson).kind == JArray
+    check parseJson(evt.diagnosticsJson).len == 1
+
+  test "publishDiagnostics with missing uri returns a warning, not a raise":
+    let params = %*{"diagnostics": []}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtWarning
+    check "dropping frame" in evt.message
+
+  test "publishDiagnostics with non-string uri returns a warning":
+    # A JNumber where a string was expected: getStr defaults to "" and we drop.
+    let params = %*{"uri": 42, "diagnostics": []}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtWarning
+
+  test "publishDiagnostics without diagnostics field defaults to empty array":
+    let params = %*{"uri": "file:///t.nim"}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagnosticsJson == "[]"
+
+  test "publishDiagnostics without version leaves diagVersion none":
+    let params = %*{"uri": "file:///t.nim", "diagnostics": []}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagVersion.isNone
+
+  test "publishDiagnostics with integer version populates diagVersion":
+    let params = %*{"uri": "file:///t.nim", "diagnostics": [], "version": 7}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagVersion == some(7)
+
+  test "publishDiagnostics with non-integer version is treated as absent":
+    # Servers occasionally send an unexpected type; refuse to guess.
+    let params = %*{"uri": "file:///t.nim", "diagnostics": [], "version": "3"}
+    let evt = notificationToEvents("textDocument/publishDiagnostics", params)
+    check evt.kind == levDiagnostics
+    check evt.diagVersion.isNone
+
+  test "window/logMessage with missing type defaults to mtLog":
+    let params = %*{"message": "hello"}
+    let evt = notificationToEvents("window/logMessage", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtLog
+    check evt.message == "hello"
+
+  test "window/logMessage with missing message returns empty string":
+    let params = %*{"type": 1}
+    let evt = notificationToEvents("window/logMessage", params)
+    check evt.kind == levLogMessage
+    check evt.message == ""
+
+  test "window/showMessage with empty params does not raise":
+    let evt = notificationToEvents("window/showMessage", newJObject())
+    check evt.kind == levShowMessage
+    check evt.message == ""
+
+  test "$/logTrace with only message":
+    let params = %*{"message": "trace line"}
+    let evt = notificationToEvents("$/logTrace", params)
+    check evt.kind == levLogMessage
+    check evt.msgType == mtInfo
+    check evt.message == "trace line"
+
+  test "$/logTrace with message and verbose concatenates":
+    let params = %*{"message": "head", "verbose": "detail"}
+    let evt = notificationToEvents("$/logTrace", params)
+    check evt.message == "head\ndetail"
+
+  test "$/logTrace without message returns empty message":
+    let evt = notificationToEvents("$/logTrace", newJObject())
+    check evt.kind == levLogMessage
+    check evt.message == ""
+
+  test "experimental/serverStatus with missing health defaults to shOk":
+    let evt = notificationToEvents("experimental/serverStatus", newJObject())
+    check evt.kind == levStatusUpdate
+    check evt.statusHealth == shOk
+    check evt.statusQuiescent
+    check evt.statusMessage.isNone
+
+  test "experimental/serverStatus maps warning/error strings":
+    let warn = notificationToEvents(
+      "experimental/serverStatus", %*{"health": "warning", "quiescent": false}
+    )
+    check warn.statusHealth == shWarning
+    check not warn.statusQuiescent
+    let err = notificationToEvents(
+      "experimental/serverStatus", %*{"health": "error", "message": "boom"}
+    )
+    check err.statusHealth == shError
+    check err.statusMessage == some("boom")
+
+  test "extension/statusUpdate reports warning when projectErrors are present":
+    let params = %*{"projectErrors": ["cannot resolve foo"], "pendingRequests": []}
+    let evt = notificationToEvents("extension/statusUpdate", params)
+    check evt.kind == levStatusUpdate
+    check evt.statusHealth == shWarning
+    check evt.statusQuiescent
+    check evt.statusMessage == some("cannot resolve foo")
+
+  test "extension/statusUpdate with no projectErrors is healthy":
+    let params = %*{"projectErrors": [], "pendingRequests": ["req1"]}
+    let evt = notificationToEvents("extension/statusUpdate", params)
+    check evt.statusHealth == shOk
+    check not evt.statusQuiescent
+    check evt.statusMessage.isNone
+
+  test "unknown notification method returns an info log event":
+    let evt = notificationToEvents("some/unknown", newJObject())
+    check evt.kind == levLogMessage
+    check evt.msgType == mtInfo
+    check "Unknown LSP notification" in evt.message
+    check "some/unknown" in evt.message
+
 suite "LspWorker - newLspWorker":
   test "creates worker with language id":
     let workerResult = newLspWorker("nim")
@@ -534,14 +722,22 @@ suite "LspWorker - pollEvents (without starting worker)":
     check worker.pollEvents().len == 0
     check worker.pollEvents().len == 0
 
-suite "LspWorker - rawJsonLog construction":
-  test "newLspWorker defaults rawJsonLog off":
+suite "LspWorker - traceLevel construction":
+  test "newLspWorker defaults traceLevel to traceOff":
     let workerResult = newLspWorker("nim")
     check workerResult.isOk
 
-  test "newLspWorker accepts rawJsonLog flag":
-    let workerResult = newLspWorker("nim", rawJsonLog = true)
-    check workerResult.isOk
+  test "newLspWorker accepts traceLevel argument":
+    check newLspWorker("nim", traceLevel = traceMessages).isOk
+    check newLspWorker("nim", traceLevel = traceVerbose).isOk
+
+  test "LspTrace string values match the LSP `initialize` trace spec":
+    # The `initialize` request forwards `$ctx.traceLevel` verbatim to the
+    # server, so a rename of the enum variants would silently violate the
+    # protocol (which mandates exactly "off" | "messages" | "verbose").
+    check $traceOff == "off"
+    check $traceMessages == "messages"
+    check $traceVerbose == "verbose"
 
 suite "LspWorker - sendRequest (without starting worker)":
   test "sendRequest returns incrementing request ids":

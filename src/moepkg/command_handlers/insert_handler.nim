@@ -34,7 +34,7 @@ import pkg/results
 import
   ../[
     types, buffer, config, modes, key_bindings, motion, command_registry, unicode_utils,
-    completion, signature_help, lsp_integration,
+    completion, signature_help, lsp_integration, lsp_request_context,
   ]
 import handler_types, insert_commands
 import ../types/editor_types
@@ -68,11 +68,8 @@ proc newInsertModeHandler*(
     motionController: MotionController,
     commandRegistry: CommandRegistry,
     lsp: LspIntegration = nil,
-    autocompleteEnabled: bool = true,
-    lspCompletionEnabled: bool = true,
     notificationConfig: NotificationConfig = NotificationConfig(),
 ): InsertModeHandler =
-  ## Create a new Insert mode handler
   InsertModeHandler(
     keyBindingRegistry: keyBindingRegistry,
     motionController: motionController,
@@ -80,8 +77,6 @@ proc newInsertModeHandler*(
     completionManager: newCompletionManager(),
     signatureHelpManager: newSignatureHelpManager(),
     lsp: lsp,
-    autocompleteEnabled: autocompleteEnabled,
-    lspCompletionEnabled: lspCompletionEnabled,
     notificationConfig: notificationConfig,
   )
 
@@ -123,7 +118,7 @@ proc handleCharacterInsertion*(
       handler.signatureHelpManager.decrementParenDepth()
 
   # Check if auto-close paren is enabled and text is a single character opening paren
-  if state.display.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
+  if state.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
     let openChar = text[0]
     let closeChar = getClosingChar(openChar)
 
@@ -149,7 +144,7 @@ proc handleBackspace*(
 
   if pos.column > 0:
     # Check if auto-delete paren is enabled
-    if state.display.autoDeleteParen:
+    if state.autoDeleteParen:
       let currentLine = buffer.getLine(pos.line)
 
       try:
@@ -165,7 +160,7 @@ proc handleBackspace*(
         discard
 
     # softTabStop-aware backspace: delete to previous boundary in leading whitespace
-    if state.display.expandTab:
+    if state.expandTab:
       let currentLine = buffer.getLine(pos.line)
       # Check if cursor is within leading whitespace
       var allSpaces = true
@@ -241,7 +236,7 @@ proc handleTab*(
   ## When expandTab is true, aligns to the next softTabStop boundary
   let pos = state.cursor
 
-  if state.display.expandTab:
+  if state.expandTab:
     # Insert spaces to align to next softTabStop boundary
     let sts = effectiveSoftTabStop(state)
     let tabWidth = max(1, sts) # Ensure at least 1 space
@@ -382,8 +377,7 @@ proc insertCharInSession(
     elif text[0] == ')':
       handler.signatureHelpManager.decrementParenDepth()
 
-  let autoClose =
-    state.display.autoCloseParen and text.len == 1 and isOpeningParen(text[0])
+  let autoClose = state.autoCloseParen and text.len == 1 and isOpeningParen(text[0])
   let toInsert =
     if autoClose:
       text & $getClosingChar(text[0])
@@ -431,7 +425,7 @@ proc backspaceInSession(
   # Mirrors handleBackspace's own pair check so the remap knows the deleted
   # range in advance.
   let pairDeleted =
-    state.display.autoDeleteParen and before.column > 0 and (
+    state.autoDeleteParen and before.column > 0 and (
       try:
         isAdjacentPair(buffer.getLine(before.line), before.column - 1)
       except IndexDefect, CatchableError:
@@ -703,14 +697,15 @@ proc triggerLspCompletionRequest*(
   ## Shows buffer completions immediately, then switches to LSP when response arrives
 
   # Skip if autocomplete is disabled
-  if not handler.autocompleteEnabled:
+  if not state.config.autocomplete.enable:
     return
 
   # Extract prefix for debounce/skip check
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
 
-  if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled:
+  if not handler.lsp.isNil and handler.lsp.isEnabled and
+      state.config.lsp.completion.enable:
     # If LSP completion is available, check whether we can skip the request and
     # filter client-side. The skip check must run BEFORE the fallback
     # triggerCompletion below, which recollects buffer words. When
@@ -741,7 +736,8 @@ proc triggerLspCompletionRequest*(
     buffer, state.cursor.line, state.cursor.column, buffer.language
   )
 
-  if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled and
+  if not handler.lsp.isNil and handler.lsp.isEnabled and
+      state.config.lsp.completion.enable and
       # If LSP completion is available and the server advertises completion support,
       # start an async request in background. The capability gate lives here (not in
       # the skip branch above) because that branch only filters already-received
@@ -752,6 +748,9 @@ proc triggerLspCompletionRequest*(
     if oldReqId.isSome:
       handler.lsp.cancelRequest(oldReqId.get)
 
+    # Flush pending didChange so the request lands on post-edit text.
+    handler.lsp.flushPendingBufferChange(buffer)
+
     let reqResult =
       handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
 
@@ -760,7 +759,7 @@ proc triggerLspCompletionRequest*(
       handler.completionManager.lastLspPrefix = prefix
       handler.completionManager.setLspRequestPending(reqResult.get)
 
-proc pollLspCompletion*(handler: InsertModeHandler) =
+proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
   ## Poll for pending LSP completion response
   if handler.lsp.isNil or not handler.lsp.isEnabled:
     return
@@ -786,13 +785,20 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
   of lrsSuccess:
     if rawOpt.isSome:
       let (items, isIncomplete) = parseCompletionResponse(rawOpt.get)
+      # A fresh completion list obsoletes any resolve targeted at the previous
+      # list's selection: without this cancel, a slow resolve response could
+      # be applied to whatever entry now occupies `resolvedIndex`.
+      cancelPendingRequest(handler.lsp, state.lspCache, lrfCompletionResolve)
       handler.completionManager.setLspItems(items, isIncomplete)
   of lrsError, lrsTimeout:
     # Clear pending state on error/timeout
     logLspDegraded("Completion", status, errorOpt.get(""))
+    cancelPendingRequest(handler.lsp, state.lspCache, lrfCompletionResolve)
     handler.completionManager.setLspItems(@[])
 
-proc triggerResolveRequest*(handler: InsertModeHandler, buffer: TextBuffer) =
+proc triggerResolveRequest*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+) =
   ## Trigger a completionItem/resolve request for the selected item
   if handler.lsp.isNil or not handler.lsp.isEnabled:
     return
@@ -803,43 +809,52 @@ proc triggerResolveRequest*(handler: InsertModeHandler, buffer: TextBuffer) =
   if rawJsonOpt.isNone:
     return
 
-  # Cancel any pending resolve request before starting a new one
-  if handler.completionManager.resolveRequestId.isSome:
-    handler.lsp.cancelRequest(handler.completionManager.resolveRequestId.get)
-    handler.completionManager.resolveRequestId = none(int)
-
-  let reqResult = handler.lsp.startCompletionResolveRequest(buffer, rawJsonOpt.get)
-  if reqResult.isOk:
-    handler.completionManager.resolveRequestId = some(reqResult.get)
+  let ctxRes = startContextualRequestOnCache(
+    handler.lsp,
+    state.lspCache,
+    lrfCompletionResolve,
+    buffer,
+    proc(): Result[int, string] =
+      handler.lsp.startCompletionResolveRequest(buffer, rawJsonOpt.get),
+    validModes = {EditorMode.Insert},
+  )
+  if ctxRes.isOk:
     handler.completionManager.resolvedIndex =
       handler.completionManager.menu.selectedIndex
 
-proc pollLspResolve*(handler: InsertModeHandler) =
+proc pollLspResolve*(handler: InsertModeHandler, state: EditorState) =
   ## Poll for pending completionItem/resolve response
   if handler.lsp.isNil or not handler.lsp.isEnabled:
     return
 
-  if handler.completionManager.resolveRequestId.isNone:
+  if not state.lspCache.pending.hasKey(lrfCompletionResolve):
     return
 
-  let reqId = handler.completionManager.resolveRequestId.get
+  let ctx = state.lspCache.pending[lrfCompletionResolve]
 
   handler.lsp.poll()
 
-  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(reqId)
+  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard
   of lrsSuccess:
+    state.lspCache.pending.del(lrfCompletionResolve)
+    # updateResolvedEntry gates on entry identity (menu word == resolved word);
+    # a version drift while resolve is in flight doesn't invalidate that item.
+    let buf = state.activeWindow.buffer
+    if buf.isNil or buf.id != ctx.bufferId:
+      return
+    if state.mode != EditorMode.Insert:
+      return
     if resultOpt.isSome:
       let resolved = parseCompletionItem(resultOpt.get)
       handler.completionManager.updateResolvedEntry(resolved)
       handler.completionManager.updateDocPanel()
-    handler.completionManager.resolveRequestId = none(int)
   of lrsError, lrsTimeout:
+    state.lspCache.pending.del(lrfCompletionResolve)
     logLspDegraded("Completion resolve", status, errorOpt.get(""))
-    handler.completionManager.resolveRequestId = none(int)
 
 proc isCtrlN(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+N
@@ -940,7 +955,7 @@ proc handleInsertModeKey*(
         handler.completionManager.selectNext()
       let res = handler.commitCompletion(buffer, state, keepPopupOpen = true)
       handler.completionManager.updateDocPanel()
-      handler.triggerResolveRequest(buffer)
+      handler.triggerResolveRequest(buffer, state)
       return res
 
     if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
@@ -955,7 +970,7 @@ proc handleInsertModeKey*(
         handler.completionManager.selectPrevious()
       let res = handler.commitCompletion(buffer, state, keepPopupOpen = true)
       handler.completionManager.updateDocPanel()
-      handler.triggerResolveRequest(buffer)
+      handler.triggerResolveRequest(buffer, state)
       return res
 
     if keyCombo.isSpecial and keyCombo.special == skEnter:
@@ -1074,7 +1089,7 @@ proc handleInsertModeKey*(
       discard handler.insertCharInSession(buffer, state, keyCombo.char)
       # Mirror the normal character path's auto-completion trigger so the
       # popup keeps working inside placeholders.
-      if handler.autocompleteEnabled:
+      if state.config.autocomplete.enable:
         let line = buffer.getLine(state.cursor.line)
         let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
         if pathPrefix.len > 0:
@@ -1127,10 +1142,10 @@ proc handleInsertModeKey*(
       # Bracket-pair splitting inserts a second newline past the cursor plus
       # reindentation on both lines, an edit shape the [before, cursor) remap
       # below cannot represent: suppress it for this newline.
-      let savedBracketSplit = state.display.bracketSplit
-      state.display.bracketSplit = bsmDisable
+      let savedBracketSplit = state.bracketSplit
+      state.bracketSplit = bsmDisable
       let res = handler.handleNewline(buffer, state)
-      state.display.bracketSplit = savedBracketSplit
+      state.bracketSplit = savedBracketSplit
       remapAfterEdit(session, before, before, state.cursor)
       # A newline struck inside the current stop's typed content splits it
       # across lines, which the single-line `len` cannot represent: collapse it
@@ -1203,17 +1218,28 @@ proc handleInsertModeKey*(
   if keyCombo.isCtrlR:
     # Ctrl+R - trigger signature help (LSP)
     handler.completionManager.cancelCompletion()
-    # Request signature help from LSP if available
     if not handler.lsp.isNil and handler.lsp.isEnabled:
-      # Cancel any pending signature help request
-      if state.lspCache.pendingSignatureHelpRequestId != 0:
-        handler.lsp.cancelRequest(state.lspCache.pendingSignatureHelpRequestId)
-        state.lspCache.pendingSignatureHelpRequestId = 0
-      let reqResult = handler.lsp.startSignatureHelpRequest(
-        buffer, state.cursor.line, state.cursor.column
+      let cursorLine = state.cursor.line
+      let cursorCol = state.cursor.column
+      let ctxRes = startContextualRequestOnCache(
+        handler.lsp,
+        state.lspCache,
+        lrfSignatureHelp,
+        buffer,
+        proc(): Result[int, string] =
+          handler.lsp.startSignatureHelpRequest(buffer, cursorLine, cursorCol),
+        validModes = {EditorMode.Insert},
+        cursor = some(BufferPosition(line: cursorLine, column: cursorCol)),
+        ignoreContentVersion = true,
       )
-      if reqResult.isOk:
-        state.lspCache.pendingSignatureHelpRequestId = reqResult.get
+      if ctxRes.isOk:
+        # Sync the auto-poll tracker so requestSignatureHelpFromLsp does not
+        # fire a redundant follow-up request for the same position/contentVersion
+        # once this response arrives.
+        state.lspCache.signatureHelp.cursorLine = cursorLine
+        state.lspCache.signatureHelp.cursorColumn = cursorCol
+        state.lspCache.signatureHelp.contentVersion = buffer.contentVersion
+        state.lspCache.signatureHelp.lastUpdate = getMonoTime()
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   if keyCombo.isCtrlO:
@@ -1275,7 +1301,7 @@ proc handleInsertModeKey*(
     discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
     # All auto-triggering (path and word completion alike) is gated on
     # autocomplete.enable so the flag governs both consistently.
-    if handler.autocompleteEnabled:
+    if state.config.autocomplete.enable:
       # Check for path completion first
       let line = buffer.getLine(state.cursor.line)
       let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)

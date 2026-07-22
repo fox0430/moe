@@ -18,56 +18,59 @@
 #[############################################################################]#
 
 ## File I/O: loadFile / saveFile / getFileContent / reloadFile,
-## plus encoding detection, line-ending normalization, and progressive
-## syntax-highlight initialization for the first chunk of the file.
+## plus encoding detection/transcoding (UTF-16/32 are stored as UTF-8
+## internally and encoded back on save), line-ending normalization, and
+## progressive syntax-highlight initialization for the first chunk of
+## the file.
 
 import std/[options, os, strutils, times]
 
 import pkg/[celina, results]
 
-import ../[encoding, highlight, logger, uri_utils]
-import core
+import ../[encoding, highlight, logger]
+import core, atomic_write
+import highlight as buffer_highlight
 
 const ExternalModErrorMsg* =
   "File was modified externally. Use :w! to force save, or :e! to reload."
 
 proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
-  ## Detect line ending style, detect trailing newline, and normalize \r
-  ## to \n in a single pass. Backends only handle \n as line separator;
-  ## \r in line content causes terminal rendering corruption.
+  ## Detect line ending style and normalize to \n in a single pass.
+  ## Each \r is classified per-occurrence: \r\n pairs are stripped to \n,
+  ## standalone \r is converted to \n. Mixed line endings are preserved
+  ## as separate line breaks instead of being lost or duplicated.
 
-  # Detect if file ends with newline (before modifying content)
   if content.len > 0:
     b.endOfLine =
       content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")
 
-  # Single-pass detection + normalization: scan for \r
   var hasCR = false
   var hasCRLF = false
-  for i in 0 ..< content.len:
-    if content[i] == '\r':
-      hasCR = true
-      if i + 1 < content.len and content[i + 1] == '\n':
+  var writePos = 0
+  var readPos = 0
+  while readPos < content.len:
+    let c = content[readPos]
+    if c == '\r':
+      if readPos + 1 < content.len and content[readPos + 1] == '\n':
         hasCRLF = true
-      # Replace \r with \n (for CR-only) or skip \r (for CRLF, handled below)
-      break # One \r is enough to determine the line ending style
+        content[writePos] = '\n'
+        inc writePos
+        readPos += 2
+      else:
+        hasCR = true
+        content[writePos] = '\n'
+        inc writePos
+        inc readPos
+    else:
+      content[writePos] = c
+      inc writePos
+      inc readPos
+  content.setLen(writePos)
 
   if hasCRLF:
     b.lineEnding = CRLF
-    # Strip \r in-place: copy non-\r bytes forward
-    var writePos = 0
-    for readPos in 0 ..< content.len:
-      if content[readPos] != '\r':
-        content[writePos] = content[readPos]
-        inc writePos
-      # Skip \r (only occurs before \n in CRLF files)
-    content.setLen(writePos)
   elif hasCR:
     b.lineEnding = CR
-    # Replace \r with \n in-place
-    for i in 0 ..< content.len:
-      if content[i] == '\r':
-        content[i] = '\n'
   else:
     b.lineEnding = LF
 
@@ -89,9 +92,61 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
-  # Detect line ending, normalize \r, and detect encoding before backend init.
+  # Detect the encoding on the RAW bytes, before any line-ending rewrite:
+  # in UTF-16/32 a \r byte is only part of a wider code unit, so normalizing
+  # first would rewrite code units (e.g. UTF-16LE CRLF `0D 00 0A 00` read as
+  # a lone \r) and corrupt the file on save. Decode to UTF-8 for internal
+  # storage, then normalize line endings on the decoded text.
+  var encoding = detectCharacterEncoding(content)
+  var hasBom = false
+  var bomLen = 0
+  case encoding
+  of CharacterEncoding.utf8:
+    # detectCharacterEncoding returns utf8 for BOM-tagged and plain alike.
+    if content.startsWith("\xEF\xBB\xBF"):
+      hasBom = true
+      content = content[3 .. ^1]
+  of CharacterEncoding.utf16:
+    # BOM present; resolve the endianness it encodes
+    hasBom = true
+    bomLen = 2
+    encoding =
+      if content.startsWith("\xFF\xFE"):
+        CharacterEncoding.utf16Le
+      else:
+        CharacterEncoding.utf16Be
+  of CharacterEncoding.utf32:
+    hasBom = true
+    bomLen = 4
+    encoding =
+      if content.startsWith("\xFF\xFE"):
+        CharacterEncoding.utf32Le
+      else:
+        CharacterEncoding.utf32Be
+  else:
+    discard
+
+  if encoding in {
+    CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
+    CharacterEncoding.utf32Be,
+  }:
+    # Detection only samples the head of the file, so decoding can still fail;
+    # fall back to raw bytes then (the pre-transcoding behavior).
+    let decoded = decodeToUtf8(content[bomLen .. ^1], encoding)
+    if decoded.isOk:
+      content = decoded.get
+    else:
+      logWarn(
+        "buffer",
+        "Failed to decode " & path & " as " & encodingToString(encoding) & ": " &
+          decoded.error & "; keeping raw bytes",
+      )
+      encoding = CharacterEncoding.unknown
+      hasBom = false
+
+  b.encoding = encoding
+  b.hasBom = hasBom
   b.detectAndNormalizeLineEnding(content)
-  b.encoding = detectCharacterEncoding(content)
 
   # Reassign only the backend storage. Because the backend variant lives in the
   # embedded `storage` field (not as a discriminant on TextBuffer), this single
@@ -174,7 +229,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.highlight = Highlight(colorSegments: segments)
       b.incrementalHighlight = IncrementalHighlight(
         segments: segments,
-        lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
+        lineStates: LineStateCache(states: lineStates),
         parsedUpTo: chunkEnd,
       )
     else:
@@ -199,15 +254,10 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.highlight = Highlight(colorSegments: @[])
     b.incrementalHighlight = nil
 
-  # Apply URI underlines for the initial chunk. The rest is handled
-  # progressively by continueUriScan.
+  # URI underlines for the initial chunk; the rest is handled progressively
+  # by continueUriScan.
   let uriChunkEnd = min(999, b.len - 1)
-  for lineIdx in 0 .. uriChunkEnd:
-    let line = b.getLine(lineIdx)
-    for m in findAllUris(line, b.maxHighlightLineLength):
-      b.highlight.addModifier(
-        lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
-      )
+  discard buffer_highlight.scanAndApplyUriUnderlines(b, 0, uriChunkEnd)
   b.uriScanParsedUpTo = uriChunkEnd
 
   b.highlightNeedsUpdate = false
@@ -217,7 +267,8 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 proc getFileContent*(buffer: TextBuffer): string =
   ## Get the buffer content as it would be written to a file,
   ## with proper trailing newline handling based on endOfLine setting.
-  ## Internal \n line endings are restored to the original line ending style.
+  ## Internal \n line endings are restored to the original line ending style
+  ## and internal UTF-8 is encoded back to the buffer's on-disk encoding.
   result = buffer.getTextString
 
   # Restore original line ending style (internal representation uses \n only)
@@ -254,6 +305,15 @@ proc getFileContent*(buffer: TextBuffer): string =
         result.setLen(result.len - 2)
       elif result.endsWith("\n") or result.endsWith("\r"):
         result.setLen(result.len - 1)
+
+  # Restore the on-disk encoding (internal representation is UTF-8).
+  if buffer.encoding in {
+    CharacterEncoding.utf16, CharacterEncoding.utf16Le, CharacterEncoding.utf16Be,
+    CharacterEncoding.utf32, CharacterEncoding.utf32Le, CharacterEncoding.utf32Be,
+  }:
+    result = encodeFromUtf8(result, buffer.encoding)
+  if buffer.hasBom:
+    result = bomBytes(buffer.encoding) & result
 
 proc isExternallyModified*(b: TextBuffer): bool =
   ## Check if the file was modified externally (outside the editor)
@@ -292,13 +352,13 @@ proc saveFile*(
         buffer.isExternallyModified():
       return Result[(), string].err ExternalModErrorMsg
 
-    # Write to file
-    try:
-      writeFile(path, content)
-      logDebug("buffer", "File written successfully: " & path)
-    except IOError as e:
-      logError("buffer", "Failed to write file " & path & ": " & e.msg)
-      return Result[(), string].err e.msg
+    # Atomic-ish write: temp+rename with hardlink/symlink fallback plus fsync.
+    # Guards against truncation on crash and durability loss on power failure.
+    let wr = writeAtomic(path, content)
+    if wr.isErr:
+      logError("buffer", "Failed to write file " & path & ": " & wr.error)
+      return Result[(), string].err wr.error
+    logDebug("buffer", "File written successfully: " & path)
 
     buffer.markSaved()
     buffer.filePath = some(path)

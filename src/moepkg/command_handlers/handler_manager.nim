@@ -49,14 +49,6 @@ import handler_modules, mode_dispatchers, command_passthrough
 
 export handler_modules, mode_dispatchers
 
-const MaxMacroRecursionDepth = 100
-  ## Maximum macro recursion depth to prevent infinite loops
-
-const MaxMapRecursionDepth = 50
-  ## Recursion limit for `:map` (noremap=false) expansion. Kept below
-  ## MaxMacroRecursionDepth so a cyclic mapping reports "recursive mapping"
-  ## before the macro depth guard fires.
-
 proc newHandlerManager*(
     motionController: MotionController,
     keyBindingRegistry: KeyBindingRegistry,
@@ -68,18 +60,13 @@ proc newHandlerManager*(
       SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     notificationConfig: NotificationConfig = NotificationConfig(),
     lsp: LspIntegration = nil,
-    autocompleteEnabled: bool = true,
-    lspCompletionEnabled: bool = true,
 ): HandlerManager =
-  ## Create a new handler manager with all mode handlers
-
   let normalHandler = newNormalModeHandler(
     motionController, keyBindingRegistry, commandRegistry, clipboardConfig,
     smoothScrollConfig, notificationConfig,
   )
   let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, lsp, autocompleteEnabled,
-    lspCompletionEnabled, notificationConfig,
+    keyBindingRegistry, motionController, commandRegistry, lsp, notificationConfig
   )
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
@@ -100,15 +87,6 @@ proc newHandlerManager*(
     commandConfig: commandConfig,
     commandRegistry: commandRegistry,
   )
-
-# Forward declarations for the Normal-mode recursive cluster.
-proc handleKeyCombo*(
-  manager: HandlerManager, e: Editor, keyCombo: KeyCombo
-): HandlerResult
-
-proc playbackMacro*(
-  manager: HandlerManager, editor: Editor, keys: seq[string]
-): HandlerResult
 
 proc executeCommandDirect*(
     manager: HandlerManager, commandName: string
@@ -181,86 +159,29 @@ proc executeCommandDirect*(
         "' cannot be executed directly in special modes; use key sequence mapping instead"
     return none(HandlerResult)
 
-proc replayRuntimeKeySequence*(
-    manager: HandlerManager, editor: Editor, targetKeys: seq[string], noremap: bool
-): HandlerResult =
-  ## Replay the RHS of a fired runtime key-sequence mapping. Shared by the
-  ## immediate-match path (handler_manager) and the timeout-flush path (handler)
-  ## so `:map`/`:noremap` behave identically whether the trigger completes
-  ## instantly or after a prefix-collision timeout.
-  ##
-  ## - noremap=true: replay verbatim under `withReplay`, so re-entrant feedKey
-  ##   calls see `isReplayingMapping` and skip mapping expansion (non-recursive).
-  ## - noremap=false: replay *without* `withReplay`, so each replayed key
-  ##   re-enters handleKeyCombo with expansion enabled (`:map` recursion),
-  ##   bounded by `mapExpandDepth` / `MaxMapRecursionDepth` to break cycles.
-  if noremap:
-    var r: HandlerResult
-    editor.keyRouter.withReplay:
-      r = manager.playbackMacro(editor, targetKeys)
-    return r
-
-  if editor.keyRouter.mapExpandDepth >= MaxMapRecursionDepth:
-    return HandlerResult(
-      kind: hrError,
-      errorMessage: "recursive mapping (max " & $MaxMapRecursionDepth & ")",
-    )
-  editor.keyRouter.mapExpandDepth += 1
-  try:
-    result = manager.playbackMacro(editor, targetKeys)
-  finally:
-    editor.keyRouter.mapExpandDepth -= 1
-
-proc checkRuntimeKeySeqMapping(
-    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): Option[HandlerResult] =
-  ## Ask the KeyRouter whether `keyCombo` is part of a runtime mapping. The
-  ## router picks the right mapping table for the current mode and returns a
-  ## `RouteResult` telling us what to do. Built-in command resolution happens
-  ## *after* this proc returns `none`, inside the mode-specific dispatcher.
-  ##
-  ## Flush semantics here are the "base mode" variant: when no match exists
-  ## we replay all accumulated keys *except the current one* and let the
-  ## caller re-process the current key. The Command overlay path lives in
-  ## `command_mode_handler.handleCommandModeKeyCombo` and uses the full-flush
-  ## variant.
+proc hasPendingBuiltinInput*(editor: Editor): bool =
+  ## True while any built-in multi-step input is still building: an operator or
+  ## text-object waiting for its target, a numeric/register prefix in progress,
+  ## a macro register-select pending, or the key-router's builtin sequence FSM
+  ## mid-sequence (multi-key, count, f/t/r operand wait). Callers use this to
+  ## decide whether it's safe to finalize Ctrl-o insert-normal or defer.
   let state = editor.state
-  let route = editor.keyRouter.feedKey(state.mode, keyCombo)
-  case route.kind
-  of rrUnhandled, rrCancelled, rrCommand:
-    # rrCommand is produced only by resolveBuiltin (Normal dispatcher), never by
-    # feedKey; listed for exhaustiveness. Fall through to built-in resolution.
-    return none(HandlerResult)
-  of rrExecuteRuntimeCommand:
-    let cmdResult = manager.executeCommandDirect(route.commandName)
-    if cmdResult.isSome:
-      return cmdResult
-    return none(HandlerResult)
-  of rrExecuteRuntimeKeySequence:
-    return
-      some(manager.replayRuntimeKeySequence(editor, route.targetKeys, route.noremap))
-  of rrWaiting:
-    return some(
-      HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    )
-  of rrUnhandledBatch:
-    # Replay all accumulated keys except the current one, then let the
-    # caller re-process the current key normally.
-    let keysToFlush = route.keys[0 ..< route.keys.len - 1]
-    var earlyExit = none(HandlerResult)
-    editor.keyRouter.withReplay:
-      for k in keysToFlush:
-        let flushResult = manager.handleKeyCombo(editor, k)
-        if flushResult.kind == hrHandled and flushResult.modeTransition.isSome:
-          state.mode = flushResult.modeTransition.get
-        if flushResult.kind == hrError or flushResult.kind == hrQuit:
-          earlyExit = some(flushResult)
-          break
-    if earlyExit.isSome:
-      return earlyExit
-    return none(HandlerResult)
+  state.editState.pendingOperator.isSome or state.editState.pendingTextObject.isSome or
+    state.pendingCommand != PendingNone or state.pendingRegister.isSome or
+    state.macroState.waitingForRegister or editor.keyRouter.hasActiveBuiltinSequence()
+
+proc endInsertNormalSession(buffer: TextBuffer, state: EditorState) =
+  ## Commit the pending Insert transaction (if any) and reset all insert-session
+  ## tracking that carries over across a Ctrl-o boundary. Shared teardown so
+  ## every insert-normal exit path clears the same set of fields.
+  state.insertNormalMode = false
+  if buffer.inTransaction:
+    clearAutoIndentIfUnedited(buffer, state)
+    discard buffer.commitTransaction()
+  state.editState.insertModeStartPos = none(BufferPosition)
+  state.editState.insertReplayCount = 0
+  state.editState.insertReplayLineEntry = false
+  state.editState.substituteContext = none(types.SubstituteContext)
 
 proc applyNormalModePostProcessing(
     manager: HandlerManager, editor: Editor, normalResult: HandlerResult
@@ -273,11 +194,7 @@ proc applyNormalModePostProcessing(
 
   if state.insertNormalMode and normalResult.kind == hrHandled:
     let hasOverlay = normalResult.overlayTransition.isSome
-    let hasPending =
-      state.editState.pendingOperator.isSome or state.editState.pendingTextObject.isSome or
-      state.pendingCommand != PendingNone or state.pendingRegister.isSome or
-      state.macroState.waitingForRegister or editor.keyRouter.hasActiveBuiltinSequence()
-    if not hasPending and not hasOverlay:
+    if not hasPendingBuiltinInput(editor) and not hasOverlay:
       if normalResult.modeTransition.isSome and
           normalResult.modeTransition.get == EditorMode.Insert:
         state.insertNormalMode = false
@@ -291,31 +208,20 @@ proc applyNormalModePostProcessing(
           statusMessage: normalResult.statusMessage,
         )
       else:
-        state.insertNormalMode = false
-        if buffer.inTransaction:
-          clearAutoIndentIfUnedited(buffer, state)
-          discard buffer.commitTransaction()
-        state.editState.insertModeStartPos = none(BufferPosition)
-        state.editState.insertReplayCount = 0
-        state.editState.insertReplayLineEntry = false
-        state.editState.substituteContext = none(types.SubstituteContext)
+        endInsertNormalSession(buffer, state)
         let newMode = normalResult.modeTransition.get
         if newMode == EditorMode.Replace:
           discard buffer.beginTransaction("Replace mode edit")
         return normalResult
 
-  if state.insertNormalMode and normalResult.kind notin {
-    hrHandled, hrUnhandled, hrError
-  }:
-    state.insertNormalMode = false
-    if buffer.inTransaction:
-      clearAutoIndentIfUnedited(buffer, state)
-      discard buffer.commitTransaction()
-    state.editState.insertModeStartPos = none(BufferPosition)
-    state.editState.insertReplayCount = 0
-    state.editState.insertReplayLineEntry = false
-    state.editState.substituteContext = none(types.SubstituteContext)
+  if state.insertNormalMode and
+      normalResult.kind notin {hrHandled, hrUnhandled, hrError, hrPlaybackMacro}:
+    endInsertNormalSession(buffer, state)
 
+  # hrPlaybackMacro defers the return-to-Insert finalization to the
+  # nested-playback processor so it fires after the macro's own keys run
+  # (an empty macro or one whose keys never satisfy the "clean command"
+  # criteria would otherwise leave insert-normal state stuck).
   return normalResult
 
 proc handleNormalMode*(
@@ -380,15 +286,13 @@ proc handleNormalMode*(
   of nmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
   of nmrPlaybackMacro:
-    # Playback the macro through handler_manager which can dispatch to any mode
-    # Loop for the specified count (e.g., 3@a plays macro 3 times)
-    let count = if r.macroCount > 0: r.macroCount else: 1
-    for i in 0 ..< count:
-      let playbackResult = manager.playbackMacro(editor, r.macroKeys)
-      if playbackResult.kind == hrError or playbackResult.kind == hrQuit:
-        return playbackResult
+    # Hand macro playback to the nested-playback processor (result_processor.nim)
+    # so every key's side effects fire — the local playbackMacro loop used to
+    # drop non-quit non-error kinds.
     return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      kind: hrPlaybackMacro,
+      playbackMacroKeys: r.macroKeys,
+      playbackMacroCount: if r.macroCount > 0: r.macroCount else: 1,
     )
   of nmrExecCommand:
     # @: - repeat last Command mode command
@@ -413,21 +317,12 @@ proc handleNormalMode*(
     # case exhaustiveness.
     return HandlerResult(kind: hrUnhandled)
 
-proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResult =
-  ## Editor-based event entry point. Stays entirely on the Editor dispatch path.
-  if event.kind != EventKind.Key:
-    return HandlerResult(kind: hrUnhandled)
-  let keyComboOpt = eventToKeyCombo(event)
-  if keyComboOpt.isNone:
-    return HandlerResult(kind: hrUnhandled)
-  manager.handleKeyCombo(e, keyComboOpt.get)
-
 proc handleKeyCombo*(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo
 ): HandlerResult =
-  ## Editor-based dispatch. Migrated modes (Normal/Insert/Visual/Replace)
-  ## are handled directly here; sub-state modes are forwarded
-  ## to dispatchSubStateMode.
+  ## Pure per-mode dispatcher. The runtime key-sequence mapping precheck lives
+  ## in `runNestedKeyCombo` (result_processor.nim) so this proc can be reused
+  ## verbatim by macro/mapping-RHS replay without re-entering the precheck.
 
   # Complete any active scroll animation on key input (instant jump to target)
   if e.state.windowDisplay.scrollAnimation.active:
@@ -435,12 +330,6 @@ proc handleKeyCombo*(
       completeScrollAnimation(e.state.windowDisplay.scrollAnimation)
     if completed:
       e.state.cursor.line = cursorLine
-
-  # Runtime key-sequence mapping precheck (noremap: skip during replay)
-  if not manager.keyBindingRegistry.isReplayingMapping:
-    let expandResult = manager.checkRuntimeKeySeqMapping(e, keyCombo)
-    if expandResult.isSome:
-      return expandResult.get
 
   case e.state.mode
   of EditorMode.Normal:
@@ -454,46 +343,3 @@ proc handleKeyCombo*(
     return manager.handleReplaceMode(e, keyCombo)
   else:
     return manager.dispatchSubStateMode(e, keyCombo)
-
-proc playbackMacro*(
-    manager: HandlerManager, editor: Editor, keys: seq[string]
-): HandlerResult =
-  ## Editor-based macro playback. Iterates keys and dispatches each through
-  ## the Editor-aware handleKeyCombo so migrated modes (Insert/Visual/Replace)
-  ## are handled correctly during playback.
-  let state = editor.state
-
-  if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
-    return HandlerResult(
-      kind: hrError,
-      errorMessage:
-        "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")",
-    )
-
-  state.macroState.playbackDepth += 1
-  editor.keyRouter.clearBuiltinSequence()
-  let wasRecording = state.macroState.isRecording
-  state.macroState.isRecording = false
-
-  for keyStr in keys:
-    let keyComboOpt = stringToKeyCombo(keyStr)
-    if keyComboOpt.isNone:
-      state.macroState.isRecording = wasRecording
-      state.macroState.playbackDepth -= 1
-      return
-        HandlerResult(kind: hrError, errorMessage: "Invalid key in macro: " & keyStr)
-
-    let keyResult = manager.handleKeyCombo(editor, keyComboOpt.get)
-
-    if keyResult.kind == hrHandled and keyResult.modeTransition.isSome:
-      state.mode = keyResult.modeTransition.get
-
-    if keyResult.kind == hrError or keyResult.kind == hrQuit:
-      state.macroState.isRecording = wasRecording
-      state.macroState.playbackDepth -= 1
-      return keyResult
-
-  state.macroState.isRecording = wasRecording
-  state.macroState.playbackDepth -= 1
-  editor.keyRouter.clearBuiltinSequence()
-  HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")

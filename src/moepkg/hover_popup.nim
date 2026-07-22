@@ -95,7 +95,8 @@ proc show*(mgr: HoverPopupManager, hoverText: string, line, col: int) =
   # Cache max line width
   mgr.display.cachedMaxLineWidth = 0
   for line in mgr.display.lines:
-    mgr.display.cachedMaxLineWidth = max(mgr.display.cachedMaxLineWidth, line.runeLen)
+    mgr.display.cachedMaxLineWidth =
+      max(mgr.display.cachedMaxLineWidth, line.displayWidth)
 
 proc hide*(mgr: HoverPopupManager) =
   ## Hide hover popup
@@ -177,26 +178,26 @@ proc hoverPopupScrollIndicatorStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
 
 proc calculateHoverPopupPosition*(
-    cursorX, cursorY: int, termWidth, termHeight: int, mgr: HoverPopupManager
+    cursorX, cursorY: int,
+    termWidth, termHeight: int,
+    mgr: HoverPopupManager,
+    bottomReserve: int = 2,
 ): HoverPopupPosition =
-  ## Calculate popup position and size
-  ## Hover popup appears above the cursor line if possible
-  ## When scrolling is needed, maximize the popup size to fit available space
+  ## Hover popup appears above the cursor line if possible; maximizes size
+  ## when scrolling is needed. `bottomReserve` = rows at the bottom the
+  ## popup must not cross.
 
-  # Calculate content width (max line length)
+  # Content width from the widest line (CJK-aware).
   var maxLineLen = 0
   for line in mgr.display.lines:
-    maxLineLen = max(maxLineLen, line.runeLen)
+    maxLineLen = max(maxLineLen, line.displayWidth)
 
-  # Use screen width as max, leaving some margin
-  let maxWidth = termWidth - 2 # -2 for some margin
+  let maxWidth = termWidth - 2
   let contentWidth = min(max(maxLineLen + PopupPadding, MinPopupWidth), maxWidth)
-  let popupWidth = contentWidth + 2 # +2 for border
+  let popupWidth = contentWidth + 2
 
-  # Calculate available space above and below cursor
-  let spaceAbove = cursorY # Lines available above cursor
-  let spaceBelow = termHeight - cursorY - 1
-    # Lines available below cursor (excluding cursor line)
+  let spaceAbove = cursorY
+  let spaceBelow = max(0, termHeight - bottomReserve - cursorY - 1)
 
   # Determine optimal visible lines: maximize if scrolling would be needed
   let totalLines = mgr.display.lines.len
@@ -227,13 +228,11 @@ proc calculateHoverPopupPosition*(
   if x + popupWidth > termWidth:
     x = max(0, termWidth - popupWidth)
 
-  # If not enough space above, try below
   if y < 0:
     y = cursorY + 1
 
-  # If still doesn't fit, just position at top
-  if y + popupHeight > termHeight:
-    y = max(0, termHeight - popupHeight)
+  if y + popupHeight > termHeight - bottomReserve:
+    y = max(0, termHeight - bottomReserve - popupHeight)
 
   HoverPopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
 
@@ -265,9 +264,8 @@ proc renderHoverPopup*(
       pos.width
   let contentHeight = mgr.visibleLineCount()
 
-  # Draw border if enabled
+  # Top border
   if showBorder:
-    # Top border
     if pos.y >= 0 and pos.y < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
         termBuffer[pos.x, pos.y] = cell("┌", hoverPopupBorderStyle())
@@ -283,59 +281,60 @@ proc renderHoverPopup*(
           termBuffer[pos.x + pos.width - 1, pos.y] =
             cell("┐", hoverPopupBorderStyle())
 
-    # Content lines
-    for i in 0 ..< contentHeight:
-      let lineY = contentY + i
-      if lineY < 0 or lineY >= termBuffer.area.height:
+  # Content lines (always rendered; side borders drawn only when showBorder)
+  for i in 0 ..< contentHeight:
+    let lineY = contentY + i
+    if lineY < 0 or lineY >= termBuffer.area.height:
+      continue
+
+    let lineIdx = mgr.display.scrollOffset + i
+    let lineText =
+      if lineIdx < mgr.display.lines.len:
+        mgr.display.lines[lineIdx]
+      else:
+        ""
+
+    # Left border - show horizontal scroll left indicator if scrollable
+    if showBorder and pos.x >= 0 and pos.x < termBuffer.area.width:
+      if i == contentHeight div 2 and mgr.canScrollLeft():
+        termBuffer[pos.x, lineY] = cell("◀", hoverPopupScrollIndicatorStyle())
+      else:
+        termBuffer[pos.x, lineY] = cell("│", hoverPopupBorderStyle())
+
+    # Content - with horizontal scroll offset
+    var x = contentX
+    var charIdx = 0
+    for r in lineText.runes:
+      # Skip characters before horizontal offset
+      if charIdx < mgr.display.horizontalOffset:
+        inc charIdx
         continue
 
-      let lineIdx = mgr.display.scrollOffset + i
-      let lineText =
-        if lineIdx < mgr.display.lines.len:
-          mgr.display.lines[lineIdx]
-        else:
-          ""
+      if x >= contentX + contentWidth or x >= termBuffer.area.width:
+        break
+      if x >= 0:
+        x += setRuneCell(termBuffer, x, lineY, r, hoverPopupNormalStyle())
+      else:
+        x += runeWidth(r)
+      inc charIdx
 
-      # Left border - show horizontal scroll left indicator if scrollable
-      if pos.x >= 0 and pos.x < termBuffer.area.width:
-        if i == contentHeight div 2 and mgr.canScrollLeft():
-          termBuffer[pos.x, lineY] = cell("◀", hoverPopupScrollIndicatorStyle())
-        else:
-          termBuffer[pos.x, lineY] = cell("│", hoverPopupBorderStyle())
+    # Fill remaining space with background
+    while x < contentX + contentWidth and x < termBuffer.area.width:
+      if x >= 0:
+        termBuffer[x, lineY] = cell(" ", hoverPopupNormalStyle())
+      inc x
 
-      # Content - with horizontal scroll offset
-      var x = contentX
-      var charIdx = 0
-      for r in lineText.runes:
-        # Skip characters before horizontal offset
-        if charIdx < mgr.display.horizontalOffset:
-          inc charIdx
-          continue
+    # Right border - show horizontal scroll right indicator if scrollable
+    if showBorder and pos.x + pos.width - 1 >= 0 and
+        pos.x + pos.width - 1 < termBuffer.area.width:
+      if i == contentHeight div 2 and mgr.canScrollRight():
+        termBuffer[pos.x + pos.width - 1, lineY] =
+          cell("▶", hoverPopupScrollIndicatorStyle())
+      else:
+        termBuffer[pos.x + pos.width - 1, lineY] = cell("│", hoverPopupBorderStyle())
 
-        if x >= contentX + contentWidth or x >= termBuffer.area.width:
-          break
-        if x >= 0:
-          x += setRuneCell(termBuffer, x, lineY, r, hoverPopupNormalStyle())
-        else:
-          x += runeWidth(r)
-        inc charIdx
-
-      # Fill remaining space with background
-      while x < contentX + contentWidth and x < termBuffer.area.width:
-        if x >= 0:
-          termBuffer[x, lineY] = cell(" ", hoverPopupNormalStyle())
-        inc x
-
-      # Right border - show horizontal scroll right indicator if scrollable
-      if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
-        if i == contentHeight div 2 and mgr.canScrollRight():
-          termBuffer[pos.x + pos.width - 1, lineY] =
-            cell("▶", hoverPopupScrollIndicatorStyle())
-        else:
-          termBuffer[pos.x + pos.width - 1, lineY] =
-            cell("│", hoverPopupBorderStyle())
-
-    # Bottom border
+  # Bottom border
+  if showBorder:
     let bottomY = contentY + contentHeight
     if bottomY >= 0 and bottomY < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:

@@ -24,7 +24,7 @@
 
 import std/options
 
-import types/editor_types, terminal_mode, message_log
+import types/editor_types, message_log
 
 proc saveOriginalBuffer*(win: EditorWindow) =
   ## Stash the current buffer as `originalBuffer` so a later mode exit can
@@ -79,16 +79,16 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
   ## All side effects are gated on the variant actually matching `mode`, so
   ## callers that clear an unrelated mode do not disturb whatever state happens
   ## to be live on the window.
+  ##
+  ## Not for Terminal: `mskTerminal`'s PTY is owned by `Editor.terminalStates`,
+  ## not by the window. Terminal teardown must go through `closeTerminalBuffer`
+  ## so the map entry, PTY, and window state are dropped together — calling
+  ## this proc with `EditorMode.Terminal` would strand the `terminalStates`
+  ## entry (and, before it was removed, would have double-freed the PTY).
   if win.modeState.kind != modeStateKind(mode):
     return
 
   win.restoreOriginalBufferUnchecked()
-
-  # Snapshot the Terminal's PTY owner before touching the variant. The reset
-  # to `mskNone` below must not be gated behind PTY teardown: resetting first
-  # keeps the window consistent even if `cleanup` ever starts to fail, and the
-  # local ref keeps the TerminalState alive until cleanup runs.
-  let term = if win.modeState.kind == mskTerminal: win.modeState.terminal else: nil
 
   if win.modeState.kind == mskFileTree:
     win.fixedWidth = none(int)
@@ -100,7 +100,3 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
   # beforehand (takeSuspendedMode), so this only fires for non-resume exits
   # (window close, buffer/tab switch, ...).
   win.suspendedMode = none(SuspendedMode)
-
-  # Terminal owns a PTY that must be cleaned up before the ref is dropped.
-  if term != nil:
-    term.cleanup()

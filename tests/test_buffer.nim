@@ -21,7 +21,7 @@ import std/[unittest, os, strutils, times, options, unicode]
 
 import pkg/[results, celina]
 
-import ../src/moepkg/[buffer, highlight]
+import ../src/moepkg/[buffer, highlight, unicode_utils]
 
 suite "Buffer - Trailing Empty Lines":
   test "Insert text with trailing empty lines preserves them":
@@ -314,6 +314,18 @@ suite "Buffer - Editing Operations":
     check buf.len == 2
     check buf[0] == "A B C"
     check buf[1] == "D"
+
+  test "joinLines skips separator space before ')'":
+    let buf = newTextBuffer("foo(\n)")
+    discard buf.joinLines(0)
+    check buf.len == 1
+    check buf[0] == "foo()"
+
+  test "joinLines skips separator space before ')' with leading whitespace":
+    let buf = newTextBuffer("foo(\n   )bar")
+    discard buf.joinLines(0)
+    check buf.len == 1
+    check buf[0] == "foo()bar"
 
 suite "Buffer - Undo/Redo":
   test "undo insertText":
@@ -893,6 +905,253 @@ suite "Buffer - Sidebar Markers":
   test "marker out of bounds":
     let buf = newTextBuffer("Line1")
     check buf.getLineMarker(10).isNone
+
+  test "deleteRange multi-line preserves startLine marker (merged row)":
+    # startLine's marker survives; endLine's must not slide into its slot.
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
+    buf.setLineMarker(3, LineMarkerKind.GitDeleted)
+
+    # Delete (1, 3)..(2, 2): merges tail of Line2 with head of Line3.
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+
+    check buf.len == 3
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    # SyntaxError on the surviving merged row (was line 1) must be kept.
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    # GitDeleted (was on line 3, now line 2) shifts up.
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "deleteRange multi-line with join preserves startLine marker":
+    # Multi-line-plus-join: startLine's marker survives too.
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(4, LineMarkerKind.GitAdded)
+
+    # Delete (1, 0)..(2, endOfLine): joins Line4 up into row 1.
+    let line2Len = buf[2].len
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
+    )
+
+    # Line3 dropped, Line4 joined onto Line2's tail — 3 lines total.
+    # Marker on startLine survives; markers below shift up by 2.
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitAdded
+
+  test "undo of multi-line deleteRange restores markers":
+    # Reverse dispatch must reinsert marker slots to match savedLineMarkers.
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitChanged)
+    buf.setLineMarker(3, LineMarkerKind.GitDeleted)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+
+    check buf.len == 4
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitChanged
+    check buf.getLineMarker(3).get == LineMarkerKind.GitDeleted
+
+  test "redo of multi-line deleteRange re-applies marker shifts":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(3, LineMarkerKind.GitDeleted)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    discard buf.redo()
+
+    check buf.len == 3
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "undo of single-line-join deleteRange restores markers":
+    # Single-line-join reverse must reinsert one marker slot at startLine+1.
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitDeleted)
+
+    # Delete from end of Line1 through Line2's endOfLine → joins Line2 up.
+    let line1Len = buf[0].len
+    discard buf.deleteRange(
+      BufferPosition(line: 0, column: line1Len),
+      BufferPosition(line: 0, column: line1Len),
+    )
+    discard buf.undo()
+
+    check buf.len == 3
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "undo of insertText with newlines restores markers":
+    # Reverse must delete the slots inserted at firstAffectedRow+1..
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.GitDeleted)
+
+    # Insert "\nX\nY" at (0, 3): line 0 stays, two new lines appear at 1..2,
+    # existing lines 1..2 shift down to 3..4.
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
+    check buf.len == 5
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(3).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(4).get == LineMarkerKind.GitDeleted
+
+    discard buf.undo()
+
+    check buf.len == 3
+    check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
+    check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
+  # Guards the refactor's promise that folds, bookmarks, lineMarkers, and
+  # modifiedLines all shift through the same emitRowColRemapEvents fan-out.
+  # The marker suite above covers the per-line-array half; these cover the
+  # row-reference half.
+
+  test "fold shifts down after ckInsertText with newlines":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    check buf.foldState.addFold(2, 3) == true
+
+    # Insert two newlines before the fold; fold rows must slide down by 2.
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 4
+    check buf.foldState.folds[0].endLine == 5
+
+  test "fold shifts up after multi-line deleteRange (non-join)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    check buf.foldState.addFold(3, 4) == true
+
+    # Delete (1, 3)..(2, 2): drops one physical row, fold at 3..4 → 2..3.
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "fold shifts up by two after multi-line deleteRange with join":
+    # Regression guard for the undercount-by-one bug the refactor fixed:
+    # the join case drops (endLine - startLine + 1) rows, not (endLine - startLine).
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5\nLine6")
+    check buf.foldState.addFold(4, 5) == true
+
+    let line2Len = buf[2].len
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
+    )
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "undo of multi-line deleteRange restores fold position":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    check buf.foldState.addFold(3, 4) == true
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 3
+    check buf.foldState.folds[0].endLine == 4
+
+  test "redo of multi-line deleteRange re-applies fold shift":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    check buf.foldState.addFold(3, 4) == true
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    discard buf.redo()
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "fold shifts on top-level insert(lineIndex)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    check buf.foldState.addFold(1, 2) == true
+
+    discard buf.insert(0, "New")
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "fold shifts on top-level deleteLine":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    check buf.foldState.addFold(2, 3) == true
+
+    discard buf.deleteLine(0)
+    check buf.foldState.folds[0].startLine == 1
+    check buf.foldState.folds[0].endLine == 2
+
+  test "bookmark shifts down after ckInsertText with newlines":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.toggleBookmark(2)
+
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nX\nY")
+    check buf.bookmarks == @[4]
+
+  test "bookmark shifts up after multi-line deleteRange (non-join)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.toggleBookmark(3)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    check buf.bookmarks == @[2]
+
+  test "bookmark shifts up by two after multi-line deleteRange with join":
+    # Regression guard for the undercount-by-one bug (bookmark twin of the fold test).
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+    buf.toggleBookmark(4)
+
+    let line2Len = buf[2].len
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
+    )
+    check buf.bookmarks == @[2]
+
+  test "undo of multi-line deleteRange restores bookmark position":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.toggleBookmark(3)
+
+    discard buf.deleteRange(
+      BufferPosition(line: 1, column: 3), BufferPosition(line: 2, column: 2)
+    )
+    discard buf.undo()
+    check buf.bookmarks == @[3]
+
+  test "bookmark shifts on top-level insert(lineIndex)":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.toggleBookmark(1)
+
+    discard buf.insert(0, "New")
+    check buf.bookmarks == @[2]
+
+  test "bookmark shifts on top-level deleteLine":
+    let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
+    buf.toggleBookmark(2)
+
+    discard buf.deleteLine(0)
+    check buf.bookmarks == @[1]
 
 suite "Buffer - Unicode":
   test "insertText Unicode":
@@ -1722,6 +1981,80 @@ suite "Buffer - CRLF Line Ending Handling":
     let saved = readFile(path)
     check saved == "aaa\rnew\rbbb\r"
 
+  test "mixed CRLF + standalone CR: standalone CR becomes a line break":
+    # CRLF-first file with an isolated CR in the middle: the CR must produce
+    # its own line break instead of being silently stripped.
+    let path = getTempDir() / "moe_test_mixed_crlf_first.txt"
+    writeFile(path, "a\r\nb\rc")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+
+  test "mixed CR + embedded CRLF: CRLF stays a single line break":
+    # CR-first file with an embedded CRLF: the CRLF pair must not double
+    # into two line breaks.
+    let path = getTempDir() / "moe_test_mixed_cr_first.txt"
+    writeFile(path, "a\rb\r\nc")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+
+  test "mixed line endings: consecutive CRLF-CR-CRLF produces three breaks":
+    let path = getTempDir() / "moe_test_mixed_triple.txt"
+    writeFile(path, "a\r\nb\rc\r\nd")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf.len == 4
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+    check buf[3] == "d"
+
+  test "consecutive standalone CRs produce consecutive line breaks":
+    let path = getTempDir() / "moe_test_double_cr.txt"
+    writeFile(path, "a\r\rb")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CR
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == ""
+    check buf[2] == "b"
+
+  test "trailing CR at end of buffer is treated as a line break":
+    let path = getTempDir() / "moe_test_trailing_cr.txt"
+    writeFile(path, "a\r")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CR
+    check buf.endOfLine
+    check buf.len == 1
+    check buf[0] == "a"
+
 suite "Buffer - contentVersion monotonicity":
   # contentVersion is the completion cache's invalidation key. Unlike changeSeq
   # (restored by undo, reset to 0 by reload) it must only ever increase, so a
@@ -1803,6 +2136,70 @@ suite "Buffer - contentVersion monotonicity":
     buf.deleteLineNoUndo(2)
     check buf.changeSeq == cs
     check buf.contentVersion > cv
+
+  test "NoUndo mutators invalidate cursorCache":
+    # cursorCache is keyed on (line, changeSeq); NoUndo does not bump
+    # changeSeq, so without an explicit reset the next charToBytePos lookup
+    # on the mutated line returns a stale bytePos.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\nbeta\n")
+    # Seed the cache as if a prior lookup had populated it.
+    buf.cursorCache =
+      CursorPosCache(line: 0, charPos: 3, bytePos: 3, changeSeq: buf.changeSeq)
+
+    buf.replaceLineNoUndo(0, "gamma")
+    check buf.cursorCache.line == -1
+
+    buf.cursorCache =
+      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
+    buf.insertLineNoUndo(1, "delta")
+    check buf.cursorCache.line == -1
+
+    buf.cursorCache =
+      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
+    buf.deleteLineNoUndo(1)
+    check buf.cursorCache.line == -1
+
+  test "insertLineNoUndo shifts bookmarks":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+
+    buf.insertLineNoUndo(1, "inserted")
+
+    check buf.hasBookmark(2)
+    check buf.hasBookmark(4)
+    check not buf.hasBookmark(1)
+    check not buf.hasBookmark(3)
+
+  test "deleteLineNoUndo shifts bookmarks":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+
+    buf.deleteLineNoUndo(1)
+
+    check not buf.hasBookmark(1)
+    check buf.hasBookmark(2)
+    check not buf.hasBookmark(3)
+
+  test "NoUndo mutators do NOT touch modifiedLines side array":
+    # substitute preview intent: previewed lines must not appear as "modified"
+    # in the sidebar. lineMarkers/modifiedLines are skipped via
+    # includeSideArrays=false.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\n")
+    for i in 0 ..< buf.modifiedLines.len:
+      buf.modifiedLines[i] = lmkUnmodified
+
+    buf.replaceLineNoUndo(0, "X")
+    buf.insertLineNoUndo(1, "Y")
+    buf.deleteLineNoUndo(2)
+
+    for kind in buf.modifiedLines:
+      check kind == lmkUnmodified
 
   test "Reload then edit makes changeSeq re-ascend but contentVersion monotonic":
     # Regression guard for LSP format/rename stale-guard: reload resets
@@ -2164,6 +2561,9 @@ suite "Buffer - reload resets stale content-keyed state":
 
     let buf = newTextBuffer(backend = GapBuffer)
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    # Simulate updateHighlight consuming the pending anchor; otherwise the
+    # next edit min-merges into the still-pending line 0.
+    buf.highlightNeedsUpdate = false
     discard buf.insertText(BufferPosition(line: 3, column: 0), "X")
     check buf.lastChangedLines > 0 # the edit moved the seed off line 0
 
@@ -2348,3 +2748,136 @@ suite "Buffer - reload path convergence":
       )
     check diverged.len == 0
     check uncomparable.len == 0
+
+suite "Buffer - UTF-16/32 file transcoding":
+  test "UTF-16LE BOM file with CRLF survives load/save round-trip":
+    # "ab\r\ncd\r\n" in UTF-16 LE with BOM. Before transcoding, the \r byte
+    # of each CRLF (`0D 00 0A 00`) was classified as a lone \r on the raw
+    # bytes and the file was corrupted by a plain open + save.
+    let original = "\xFF\xFE" & "a\x00b\x00\x0D\x00\x0A\x00c\x00d\x00\x0D\x00\x0A\x00"
+    let testFile = getTempDir() / "moe_test_utf16le_crlf.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf16Le
+    check buf.hasBom
+    check buf.lineEnding == CRLF
+    check buf.endOfLine
+    check buf.len == 2
+    check buf[0] == "ab"
+    check buf[1] == "cd"
+    check buf.getFileContent == original
+
+  test "UTF-16BE BOM file survives load/save round-trip":
+    # "あ\ni\n" in UTF-16 BE with BOM
+    let original = "\xFE\xFF" & "\x30\x42\x00\x0A\x00\x69\x00\x0A"
+    let testFile = getTempDir() / "moe_test_utf16be.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf16Be
+    check buf.lineEnding == LF
+    check buf[0] == "あ"
+    check buf[1] == "i"
+    check buf.getFileContent == original
+
+  test "UTF-32LE BOM file survives load/save round-trip":
+    # "a\r\nb\r\n" in UTF-32 LE with BOM
+    let original =
+      "\xFF\xFE\x00\x00" & "\x61\x00\x00\x00\x0D\x00\x00\x00\x0A\x00\x00\x00" &
+      "\x62\x00\x00\x00\x0D\x00\x00\x00\x0A\x00\x00\x00"
+    let testFile = getTempDir() / "moe_test_utf32le.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf32Le
+    check buf.hasBom
+    check buf.lineEnding == CRLF
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf.getFileContent == original
+
+  test "BOM-less UTF-16LE detected via validation decodes and round-trips":
+    # "Ø\nØ" in UTF-16 LE without BOM: invalid as UTF-8 and as UTF-16 BE
+    # (D800 would be an unpaired surrogate), so detection resolves utf16Le.
+    let original = "\xD8\x00\x0A\x00\xD8\x00"
+    let testFile = getTempDir() / "moe_test_utf16le_nobom.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf16Le
+    check not buf.hasBom
+    check buf[0] == "Ø"
+    check buf[1] == "Ø"
+    check buf.getFileContent == original
+
+  test "Editing a UTF-16LE buffer saves valid UTF-16LE bytes":
+    let original = "\xFF\xFE" & "a\x00\x0D\x00\x0A\x00"
+    let testFile = getTempDir() / "moe_test_utf16le_edit.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    discard buf.insertText(BufferPosition(line: 0, column: 1), "😀")
+    check buf.saveFile(testFile).isOk
+    # "a😀\r\n" in UTF-16 LE with BOM (😀 = D83D DE00)
+    check readFile(testFile) == "\xFF\xFE" & "a\x00\x3D\xD8\x00\xDE\x0D\x00\x0A\x00"
+
+  test "Undecodable UTF-16 BOM file falls back to raw bytes":
+    # BOM claims UTF-16 LE but the payload has an odd byte count
+    let original = "\xFF\xFE\x41"
+    let testFile = getTempDir() / "moe_test_utf16_invalid.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.unknown
+    check not buf.hasBom
+    check buf.getFileContent == original
+
+  test "UTF-8 BOM file: BOM stripped from buffer, re-emitted on save":
+    let original = "\xEF\xBB\xBF" & "ab\ncd\n"
+    let testFile = getTempDir() / "moe_test_utf8_bom.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf8
+    check buf.hasBom
+    check buf.lineEnding == LF
+    check buf.endOfLine
+    check buf.len == 2
+    check buf[0] == "ab"
+    check buf[1] == "cd"
+    check buf.getFileContent == original
+
+  test "BOM-less UTF-8 file stays BOM-less on save":
+    let original = "ab\ncd\n"
+    let testFile = getTempDir() / "moe_test_utf8_nobom.txt"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf8
+    check not buf.hasBom
+    check buf.getFileContent == original

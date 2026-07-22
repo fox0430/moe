@@ -19,13 +19,32 @@
 
 ## Tests for editor_selectionrange.nim
 
-import std/[unittest, json, options, importutils]
+import std/[tables, unittest, json, options, importutils]
 
 import
-  ../src/moepkg/
-    [editor, config, config_loader, buffer, modes, lsp_service, editor_selectionrange]
+  ../src/moepkg/[
+    editor, config, config_loader, buffer, modes, lsp_service, editor_selectionrange,
+    types,
+  ]
 
 privateAccess(LspService)
+
+proc seedSelectionRangePending(
+    e: Editor, reqId: int, bufId: BufferId, contentVersion: int
+) =
+  ## Install a pre-formed selectionRange LspRequestContext so pollLspSelectionRange
+  ## treats reqId as its currently-pending request.
+  e.state.lspCache.pending[lrfSelectionRange] = LspRequestContext(
+    requestId: reqId,
+    feature: lrfSelectionRange,
+    bufferId: bufId,
+    contentVersion: contentVersion,
+    path: "/tmp/x.nim",
+    generation: 1,
+    cursorLine: -1,
+    cursorCol: -1,
+    validModes: {},
+  )
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -66,7 +85,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
   test "Does nothing when no pending request":
     let e = createTestEditor()
     e.lsp.enabled = true
-    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
 
     e.pollLspSelectionRange()
     # No crash means success
@@ -85,7 +104,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
     # UTF-16 offsets: a=0, 😀=1..2, b=3
     # Byte offsets:   a=0, 😀=1..4, b=5
 
-    # Mock an LSP selection range response covering 'b'
+    # Mock an LSP selection range response covering 'b' (half-open [3, 4))
     let responseJson = %*[
       {
         "range":
@@ -94,7 +113,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
     ]
 
     let requestId = 1
-    e.state.lspCache.pendingSelectionRangeRequestId = requestId
+    e.seedSelectionRangePending(requestId, buf.id, buf.contentVersion)
     e.lsp.service.activeRequests[requestId] = LspPendingRequest(
       requestId: requestId,
       langId: "",
@@ -107,12 +126,123 @@ suite "editor_selectionrange - pollLspSelectionRange":
 
     e.pollLspSelectionRange()
 
-    # After fix: columns are rune indexes (2, 3)
-    # Old buggy:  columns would be byte offsets (5, 6)
+    # LSP [3, 4) covers rune index 2 ('b'). Vim visual is inclusive on both
+    # ends, so current lands on the same rune as start.
     check e.state.mode == EditorMode.Visual
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
-    check e.state.visualSelection.current == BufferPosition(line: 0, column: 3)
-    check e.cursor == BufferPosition(line: 0, column: 3)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 2)
+    check e.cursor == BufferPosition(line: 0, column: 2)
+
+  test "Discards response when the active buffer changed while waiting":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo")
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+      }
+    ]
+
+    const reqId = 7
+    # Simulate a buffer switch: the request was sent for a different buffer.
+    # classifyResponse treats an unknown bufferId as lrsGone.
+    e.seedSelectionRangePending(reqId, BufferId(int(buf.id) + 1), buf.contentVersion)
+    e.lsp.service.activeRequests[reqId] = LspPendingRequest(
+      requestId: reqId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($responseJson), error: none(string))
+
+    let modeBefore = e.state.mode
+    e.pollLspSelectionRange()
+
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
+    check e.state.mode == modeBefore
+    check not e.state.visualSelection.active
+    check e.state.lspCache.selectionRangeChain.len == 0
+
+  test "Discards response when the buffer was edited while waiting":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo")
+    let versionAtRequest = buf.contentVersion
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+      }
+    ]
+
+    const reqId = 8
+    e.seedSelectionRangePending(reqId, buf.id, versionAtRequest)
+    e.lsp.service.activeRequests[reqId] = LspPendingRequest(
+      requestId: reqId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($responseJson), error: none(string))
+
+    # Edit in flight: contentVersion advances beyond the snapshot.
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "bar")
+    check buf.contentVersion != versionAtRequest
+
+    let modeBefore = e.state.mode
+    e.pollLspSelectionRange()
+
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
+    check e.state.mode == modeBefore
+    check not e.state.visualSelection.active
+
+  test "Discards response while a Command overlay is active":
+    # Overlay sits on top of the base mode (mode stays Normal), so validModes
+    # can't catch it — the poll must reject it inline.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo")
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}}
+      }
+    ]
+
+    const reqId = 9
+    e.seedSelectionRangePending(reqId, buf.id, buf.contentVersion)
+    e.lsp.service.activeRequests[reqId] = LspPendingRequest(
+      requestId: reqId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($responseJson), error: none(string))
+
+    e.state.overlay = some(OverlayKind.okCommand)
+    let modeBefore = e.state.mode
+    e.pollLspSelectionRange()
+
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
+    check e.state.mode == modeBefore
+    check not e.state.visualSelection.active
+    check e.state.lspCache.selectionRangeChain.len == 0
 
 suite "editor_selectionrange - config gate":
   test "startLspSelectionRange returns false when disabled in config":
@@ -127,7 +257,8 @@ suite "editor_selectionrange - config gate":
 
 suite "editor_selectionrange - chain expansion":
   proc seedResponse(e: Editor, requestId: int, responseJson: JsonNode) =
-    e.state.lspCache.pendingSelectionRangeRequestId = requestId
+    let buf = e.activeBuffer()
+    e.seedSelectionRangePending(requestId, buf.id, buf.contentVersion)
     e.lsp.service.activeRequests[requestId] = LspPendingRequest(
       requestId: requestId,
       langId: "",
@@ -158,27 +289,28 @@ suite "editor_selectionrange - chain expansion":
     ]
     e.seedResponse(1, responseJson)
 
-    # First poll selects the innermost range.
+    # First poll selects the innermost range. LSP [4, 7) covers "bar" at rune
+    # indexes 4..6 — Vim visual is inclusive, so current lands on 6.
     e.pollLspSelectionRange()
     check e.state.mode == EditorMode.Visual
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 4)
-    check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 6)
     check e.state.lspCache.selectionRangeIndex == 0
     check e.state.lspCache.selectionRangeChain.len == 2
 
     # Second request expands to the parent without contacting the server.
     check e.requestLspSelectionRange()
-    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
     check e.state.lspCache.selectionRangeIndex == 1
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
-    check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
 
     # Third request stops at the outermost level (no change, no new request).
     check e.requestLspSelectionRange()
-    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check not e.state.lspCache.pending.hasKey(lrfSelectionRange)
     check e.state.lspCache.selectionRangeIndex == 1
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
-    check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
 
   test "Selection moved off the chain triggers a fresh request":
     let e = createTestEditor()
@@ -209,3 +341,25 @@ suite "editor_selectionrange - chain expansion":
     discard e.requestLspSelectionRange()
     check e.state.lspCache.selectionRangeChain.len == 0
     check e.state.lspCache.selectionRangeIndex == 0
+
+  test "LSP end at next line column 0 collapses onto previous line end":
+    # A range ending at (line+1, 0) covers everything through the newline at
+    # the end of `line`. The inclusive visual last must point at that newline.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo\nbar")
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 0}}
+      }
+    ]
+    e.seedResponse(2, responseJson)
+    e.pollLspSelectionRange()
+
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 3)

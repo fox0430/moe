@@ -46,14 +46,22 @@ type
   GitDiffInfo* = object ## Git diff information for a file
     lines*: seq[GitDiffLine] ## Changed lines
 
-  GitDiffProcess* = ref object ## Background git diff process
-    process: Process ## The running process
-    startTime: float ## Process start time (for timeout)
-    filePath: string ## File path being diffed
-    workingDir: string ## Working directory for the process
-    isBufferDiff: bool ## True if comparing buffer contents, false for file diff
-    tempOriginal: string ## Temp file for original content (buffer diff only)
-    tempModified: string ## Temp file for modified content (buffer diff only)
+  GitDiffStage* = enum
+    ## Buffer-diff pipeline stage; advances on each `checkGitDiffComplete`.
+    gdsGitRoot ## `git rev-parse --show-toplevel`
+    gdsGitShow ## `git show HEAD:<relpath>`
+    gdsGitDiff ## `git diff --no-index <orig> <mod>`
+
+  GitDiffProcess* = ref object ## Background git diff pipeline
+    process: Process
+    stage: GitDiffStage
+    startTime: float ## Overall pipeline start (for timeout)
+    filePath: string
+    workingDir: string
+    bufferContent: string ## Held until tempModified is written
+    tempOriginal: string
+    tempModified: string
+    tempDiffOut: string ## `git diff` stdout is redirected here (avoids pipe deadlock)
 
 proc removeTempFileSafely(filePath: string) =
   ## Safely remove a temporary file, ignoring errors
@@ -71,11 +79,39 @@ proc removeTempFileSafely(filePath: string) =
 proc cleanupTempFiles(diffProc: GitDiffProcess) =
   ## Clean up temporary files created for buffer diff
   ## Safe to call multiple times or when temp files don't exist
-  if not diffProc.isBufferDiff:
-    return
-
   removeTempFileSafely(diffProc.tempOriginal)
   removeTempFileSafely(diffProc.tempModified)
+  removeTempFileSafely(diffProc.tempDiffOut)
+
+proc terminateProcess(p: Process) =
+  try:
+    p.terminate()
+  except CatchableError as e:
+    logError("git diff", "Failed to terminate process: " & e.msg)
+    try:
+      p.kill()
+    except CatchableError as killErr:
+      logError("git diff", "Failed to kill process: " & killErr.msg)
+
+proc drainOutput(p: Process): string =
+  try:
+    p.outputStream().readAll()
+  except CatchableError as e:
+    logError("git diff", "Failed to read process output: " & e.msg)
+    ""
+
+proc closeSafely(p: Process) =
+  try:
+    p.close()
+  except CatchableError as e:
+    logError("git diff", "Failed to close process: " & e.msg)
+
+proc readFileSafely(path: string): string =
+  try:
+    readFile(path)
+  except CatchableError as e:
+    logError("git diff", "Failed to read temp file " & path & ": " & e.msg)
+    ""
 
 proc abandonGitDiffProcess*(diffProc: GitDiffProcess) =
   ## Terminate a pending GitDiffProcess and release its resources without
@@ -83,18 +119,8 @@ proc abandonGitDiffProcess*(diffProc: GitDiffProcess) =
   ## (e.g. status-line cache) to clean up on buffer close or editor
   ## shutdown. Safe to call multiple times; swallows all process/OS
   ## errors so it can be used from shutdown paths.
-  try:
-    diffProc.process.terminate()
-  except CatchableError as e:
-    logWarn("git diff", "Failed to terminate pending git diff: " & e.msg)
-    try:
-      diffProc.process.kill()
-    except CatchableError as killErr:
-      logError("git diff", "Failed to kill pending git diff: " & killErr.msg)
-  try:
-    diffProc.process.close()
-  except CatchableError as e:
-    logWarn("git diff", "Failed to close pending git diff process: " & e.msg)
+  terminateProcess(diffProc.process)
+  closeSafely(diffProc.process)
   cleanupTempFiles(diffProc)
 
 proc getGitRoot(filePath: string): Result[string, string] =
@@ -147,7 +173,7 @@ proc getHeadContent(relativePath, gitRoot: string): Result[string, string] =
           "git",
           workingDir = gitRoot,
           args = ["show", "HEAD:" & relativePath],
-          options = {poUsePath},
+          options = {poUsePath, poStdErrToStdOut},
         )
       except OSError as e:
         return err("Failed to execute git show: " & e.msg)
@@ -365,29 +391,115 @@ proc getGitDiff*(filePath: string): Result[GitDiffInfo, string] =
   # Parse git diff output using shared parser
   return ok(parseDiffOutput(output))
 
+proc advanceToGitShow(
+    diffProc: GitDiffProcess, gitRootOutput: string
+): Option[Result[GitDiffInfo, string]] =
+  let gitRoot = gitRootOutput.strip()
+  if gitRoot.len == 0:
+    return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
+
+  let relativePath = calculateRelativePath(diffProc.filePath, gitRoot)
+  let fileDir = diffProc.filePath.parentDir()
+
+  let tempOriginal =
+    try:
+      genTempPath("moe_original_", ".tmp", fileDir)
+    except OSError as e:
+      return some(
+        Result[GitDiffInfo, string].err("Failed to create temp file path: " & e.msg)
+      )
+
+  # Redirect via `sh -c` so `git show` writes straight to the temp file.
+  # stdout would deadlock the poll loop for blobs larger than the pipe
+  # buffer, and a chatty stderr (LFS/textconv filters) would do the same;
+  # both fds are routed off the Nim-side pipe so `peekExitCode` polling
+  # can never wedge on a full pipe.
+  let shellCmd = "exec git show \"HEAD:$1\" > \"$2\" 2>/dev/null"
+  let nextProc =
+    try:
+      startProcess(
+        "sh",
+        workingDir = gitRoot,
+        args = ["-c", shellCmd, "sh", relativePath, tempOriginal],
+        options = {poUsePath, poStdErrToStdOut},
+      )
+    except OSError as e:
+      removeTempFileSafely(tempOriginal)
+      return some(Result[GitDiffInfo, string].err("Failed to start git show: " & e.msg))
+
+  diffProc.process = nextProc
+  diffProc.stage = gdsGitShow
+  diffProc.workingDir = gitRoot
+  diffProc.tempOriginal = tempOriginal
+  return none(Result[GitDiffInfo, string])
+
+proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, string]] =
+  let fileDir = diffProc.filePath.parentDir()
+
+  let tempModified =
+    try:
+      genTempPath("moe_modified_", ".tmp", fileDir)
+    except OSError as e:
+      removeTempFileSafely(diffProc.tempOriginal)
+      return some(
+        Result[GitDiffInfo, string].err("Failed to create temp file path: " & e.msg)
+      )
+
+  try:
+    writeFile(tempModified, diffProc.bufferContent)
+  except IOError as e:
+    removeTempFileSafely(diffProc.tempOriginal)
+    removeTempFileSafely(tempModified)
+    return some(
+      Result[GitDiffInfo, string].err("Failed to write modified temp file: " & e.msg)
+    )
+
+  diffProc.tempModified = tempModified
+  diffProc.bufferContent = ""
+
+  let tempDiffOut =
+    try:
+      genTempPath("moe_diffout_", ".tmp", fileDir)
+    except OSError as e:
+      cleanupTempFiles(diffProc)
+      return some(
+        Result[GitDiffInfo, string].err("Failed to create temp file path: " & e.msg)
+      )
+
+  diffProc.tempDiffOut = tempDiffOut
+
+  # Same rationale as `advanceToGitShow`: redirect stdout to a temp file and
+  # discard stderr, so a large diff (>~64KB, easy to hit with a bulk edit
+  # under --unified=0) cannot block `git diff` on a full pipe while
+  # `peekExitCode` spins waiting for it to exit.
+  let shellCmd =
+    "exec git diff --no-index --unified=0 \"$1\" \"$2\" > \"$3\" 2>/dev/null"
+  let nextProc =
+    try:
+      startProcess(
+        "sh",
+        workingDir = diffProc.workingDir,
+        args = ["-c", shellCmd, "sh", diffProc.tempOriginal, tempModified, tempDiffOut],
+        options = {poUsePath, poStdErrToStdOut},
+      )
+    except OSError as e:
+      cleanupTempFiles(diffProc)
+      return some(Result[GitDiffInfo, string].err("Failed to start git diff: " & e.msg))
+
+  diffProc.process = nextProc
+  diffProc.stage = gdsGitDiff
+  return none(Result[GitDiffInfo, string])
+
 proc checkGitDiffComplete*(
     diffProc: GitDiffProcess, timeout: float = DEFAULT_GIT_DIFF_TIMEOUT
 ): Option[Result[GitDiffInfo, string]] =
-  ## Check if git diff process has completed
-  ## Returns:
-  ## - none() if process is still running (and not timed out)
-  ## - some(ok(GitDiffInfo)) if process completed successfully
-  ## - some(err(msg)) if process failed or timed out
+  ## Poll the buffer-diff pipeline. Returns:
+  ## - `none` while a stage is still running
+  ## - `some(ok(info))` after the final stage completes successfully
+  ## - `some(err(msg))` on timeout or any stage failure
 
-  # Check for timeout
   if epochTime() - diffProc.startTime > timeout:
-    # Kill the process - try terminate() first, then kill() if that fails
-    try:
-      diffProc.process.terminate()
-    except CatchableError as e:
-      # If terminate() fails, try kill() as a last resort
-      logError("git diff", "Failed to terminate git diff process: " & e.msg)
-      try:
-        diffProc.process.kill()
-      except CatchableError as killErr:
-        # Process termination failed completely
-        logError("git diff", "Failed to kill git diff process: " & killErr.msg)
-    # Clean up temp files if this is a buffer diff
+    terminateProcess(diffProc.process)
     cleanupTempFiles(diffProc)
     return some(
       Result[GitDiffInfo, string].err(
@@ -395,55 +507,31 @@ proc checkGitDiffComplete*(
       )
     )
 
-  # Check if process has completed
   let exitCode = diffProc.process.peekExitCode()
   if exitCode == PROCESS_RUNNING:
-    # Process still running
     return none(Result[GitDiffInfo, string])
 
-  # Process has completed - read output
-  let output =
-    try:
-      let stream = diffProc.process.outputStream()
-      stream.readAll()
-    except CatchableError as e:
-      logError("git diff", "Failed to read git diff output stream: " & e.msg)
-      ""
+  let output = drainOutput(diffProc.process)
+  closeSafely(diffProc.process)
 
-  # Close the process
-  try:
-    diffProc.process.close()
-  except CatchableError as e:
-    logError("git diff", "Failed to close git diff process: " & e.msg)
-
-  # Clean up temp files if this is a buffer diff
-  cleanupTempFiles(diffProc)
-
-  # Check exit code
-  # For buffer diffs (--no-index), exit code 1 means differences found (normal)
-  # For regular diffs, exit code 0 means success
-  if diffProc.isBufferDiff:
-    # Exit code 0 = no differences, 1 = differences found
+  case diffProc.stage
+  of gdsGitRoot:
+    if exitCode != 0:
+      return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
+    return advanceToGitShow(diffProc, output)
+  of gdsGitShow:
+    if exitCode != 0:
+      removeTempFileSafely(diffProc.tempOriginal)
+      return some(Result[GitDiffInfo, string].err("File is not in git repository"))
+    return advanceToGitDiff(diffProc)
+  of gdsGitDiff:
+    let diffOutput = readFileSafely(diffProc.tempDiffOut)
+    cleanupTempFiles(diffProc)
     if exitCode != 0 and exitCode != 1:
       return some(
         Result[GitDiffInfo, string].err("Git diff failed with exit code " & $exitCode)
       )
-  else:
-    # Regular file diff
-    if exitCode != 0:
-      # Exit code 1 might just mean no changes, check output
-      if output.len == 0:
-        # No changes
-        return some(Result[GitDiffInfo, string].ok(GitDiffInfo(lines: @[])))
-      # Git command failed for another reason
-      return some(
-        Result[GitDiffInfo, string].err(
-          "Git command failed with exit code " & $exitCode
-        )
-      )
-
-  # Parse output and return result
-  return some(Result[GitDiffInfo, string].ok(parseDiffOutput(output)))
+    return some(Result[GitDiffInfo, string].ok(parseDiffOutput(diffOutput)))
 
 proc getGitDiffFromBuffer*(buffer: TextBuffer): Result[GitDiffInfo, string] =
   ## Get git diff information by comparing buffer contents with HEAD
@@ -498,60 +586,34 @@ proc getGitDiffFromBuffer*(buffer: TextBuffer): Result[GitDiffInfo, string] =
   return ok(parseDiffOutput(output))
 
 proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, string] =
-  ## Start git diff for buffer contents as a background process
-  ## Returns GitDiffProcess object that can be polled for completion
-  ## Use checkGitDiffComplete() to check if the process has finished
-  ##
-  ## This compares in-memory buffer contents with git HEAD, allowing
-  ## real-time diff updates without saving the file.
+  ## Start the buffer-vs-HEAD diff pipeline as a background state machine.
+  ## Returns a `GitDiffProcess` that must be polled with `checkGitDiffComplete`;
+  ## every `git` invocation runs in a subprocess so this call never blocks.
 
   if buffer.filePath.isNone:
     return err("Buffer has no associated file path")
 
   let filePath = buffer.filePath.get
+  let fileDir = filePath.parentDir()
 
-  # Get git repository root
-  let gitRootResult = getGitRoot(filePath)
-  if gitRootResult.isErr:
-    return err(gitRootResult.error)
-  let gitRoot = gitRootResult.get
-
-  # Prepare temporary files for comparison
-  let bufferContent = buffer.getFileContent()
-  let tempFilesResult = prepareBufferDiffTempFiles(filePath, gitRoot, bufferContent)
-  if tempFilesResult.isErr:
-    return err(tempFilesResult.error)
-
-  let (tempOriginal, tempModified) = tempFilesResult.get
-
-  # Prepare git diff command
-  let gitCmd = "git"
-  let args = ["diff", "--no-index", "--unified=0", tempOriginal, tempModified]
-
-  # Start the process in background
   let process =
     try:
       startProcess(
-        gitCmd,
-        workingDir = gitRoot,
-        args = args,
+        "git",
+        workingDir = fileDir,
+        args = ["rev-parse", "--show-toplevel"],
         options = {poUsePath, poStdErrToStdOut},
       )
     except OSError as e:
-      # Clean up temp files on error
-      removeTempFileSafely(tempOriginal)
-      removeTempFileSafely(tempModified)
       return err("Failed to start git process: " & e.msg)
 
-  # Create and return the process object
   let diffProc = GitDiffProcess(
     process: process,
+    stage: gdsGitRoot,
     startTime: epochTime(),
     filePath: filePath,
-    workingDir: gitRoot,
-    isBufferDiff: true,
-    tempOriginal: tempOriginal,
-    tempModified: tempModified,
+    workingDir: fileDir,
+    bufferContent: buffer.getFileContent(),
   )
 
   return ok(diffProc)

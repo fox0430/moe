@@ -128,7 +128,7 @@ suite "isVisualAllMode - Comprehensive":
 suite "isPositionInDocumentHighlight - Detailed":
   test "Returns none when disabled":
     let e = createTestEditor()
-    e.state.display.showDocumentHighlight = false
+    e.state.showDocumentHighlight = false
     e.state.lspCache.documentHighlightCache.isValid = true
 
     let result =
@@ -137,7 +137,7 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Returns none when cache invalid":
     let e = createTestEditor()
-    e.state.display.showDocumentHighlight = true
+    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = false
 
     let result =
@@ -146,7 +146,7 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Returns none for line without highlights":
     let e = createTestEditor()
-    e.state.display.showDocumentHighlight = true
+    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.itemsByLine =
       {0: @[DocumentHighlightItem(startColumn: 5, endColumn: 10, kind: 2)]}.toTable
@@ -157,7 +157,7 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Returns kind for position in range":
     let e = createTestEditor()
-    e.state.display.showDocumentHighlight = true
+    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.itemsByLine =
       {0: @[DocumentHighlightItem(startColumn: 5, endColumn: 10, kind: 2)]}.toTable
@@ -169,7 +169,7 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Exclusive end column":
     let e = createTestEditor()
-    e.state.display.showDocumentHighlight = true
+    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.itemsByLine =
       {0: @[DocumentHighlightItem(startColumn: 5, endColumn: 10, kind: 1)]}.toTable
@@ -186,7 +186,7 @@ suite "isPositionInDocumentHighlight - Detailed":
 
   test "Multiple highlights on same line":
     let e = createTestEditor()
-    e.state.display.showDocumentHighlight = true
+    e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.itemsByLine = {
       0: @[

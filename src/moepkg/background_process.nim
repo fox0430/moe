@@ -22,16 +22,8 @@ import std/strformat
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
-type
-  BackgroundProcessCommand* = object
-    cmd*: string
-    args*: seq[string]
-    workingDir*: string
-
-  BackgroundProcess* = ref object
-    process*: AsyncProcessRef
-
-  StartProcessResult* = Result[BackgroundProcess, string]
+import types/background_process_types
+export background_process_types
 
 proc isRunning*(bp: BackgroundProcess): bool =
   if bp.process.isNil:

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, monotimes, times, os, options]
+import std/[strformat, os, options]
 
 import pkg/[celina, results, chronos]
 
@@ -75,25 +75,6 @@ proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
   # Open file tree sidebar if configured
   if e.config.startUpFileTree.enable:
     e.toggleFileTree(none(string), e.activeBuffer())
-
-proc handleResize(e: Editor) =
-  ## Debounce resize events to prevent terminal buffer overflow
-  ## Only process if at least 50ms have passed since last resize
-  const resizeDebounceMs = initDuration(milliseconds = 50)
-  let
-    now = getMonoTime()
-    timeSinceLastResize = now - e.state.timing.lastResizeTime
-
-  if timeSinceLastResize < resizeDebounceMs:
-    # Too soon after last resize, skip processing
-    return
-
-  # Update last resize time
-  e.state.timing.lastResizeTime = now
-
-  # Physically clear the terminal screen to remove artifacts
-  terminal.clearScreen()
-  # Set the editor's full redraw flag
 
 proc emergencySaveAndQuit(
     editor: Editor, e: ref Exception, cmdLineConfig: CmdLineConfig, log: Logger
@@ -166,8 +147,8 @@ proc runEditor(
     app.onEventAsync proc(e: Event, app: AsyncApp): Future[EventResult] {.async.} =
       editorCallback(editor, cmdLineConfig, log):
         if e.kind == EventKind.Resize:
-          # Special handling for resize events to force screen clear
-          editor.handleResize
+          # celina's async_app already updates the terminal size, clears the
+          # screen and forces a full render on the next frame.
           return erContinue
 
         let shouldContinue = editor.handleEvent(e)
@@ -331,8 +312,8 @@ proc main() =
   # buffer matching the URI (not only the active one) so diagnostics for
   # background buffers aren't dropped.
   editor.lsp.setDiagnosticsCallback(
-    proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
-      editor.applyDiagnosticsForUri(uri, diagnostics)
+    proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.} =
+      editor.applyDiagnosticsForUri(uri, diagnostics, version)
   )
 
   # Re-open buffers automatically when a language server recovers from a crash,
@@ -361,6 +342,10 @@ proc main() =
         editor.windowManager.windows[editor.windowManager.activeWindowIndex]
       activeWin.mode = EditorMode.Filer
       let filerState = newFilerState(dirPath)
+      # Capture the current position so quitting the filer can restore it.
+      filerState.originCursor = activeWin.cursor
+      filerState.originTopLine = activeWin.viewport.topLine
+      filerState.originLeftColumn = activeWin.viewport.leftColumn
       activeWin.saveOriginalBuffer()
       activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
       activeWin.buffer = filerState.createFilerTextBuffer(editor.config.filer.showIcons)

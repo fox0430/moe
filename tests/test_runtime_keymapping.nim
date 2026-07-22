@@ -22,17 +22,15 @@
 import std/[unittest, tables, strutils, options]
 
 import
-  ../src/moepkg/
-    [keybind_config, key_router, modes, command_line, command_config, buffer]
-import ../src/moepkg/command_handlers/command_handler
-import ../src/moepkg/key_bindings
-import ../src/moepkg/types
-import ../src/moepkg/motion
-import ../src/moepkg/command_registry
-import ../src/moepkg/registers
-import ../src/moepkg/command_handlers/handler_manager
-import ../src/moepkg/command_handlers/visual_handler
-import ../src/moepkg/command_handlers/insert_handler
+  ../src/moepkg/[
+    keybind_config, key_router, modes, command_line, command_config, buffer,
+    key_bindings, types, config, motion, command_registry, registers,
+  ]
+import
+  ../src/moepkg/command_handlers/[
+    command_handler, handler_result, handler_manager, result_processor, visual_handler,
+    insert_handler,
+  ]
 from ../src/moepkg/types/editor_types import Editor
 
 import editor_test_helper
@@ -147,6 +145,27 @@ suite "parseKeyString":
     # "C-1" is invalid modifier syntax
     let keys = parseKeyString("C-1")
     check keys.len == 0
+
+  test "Uppercase modifier-letter run rejected (CC is typo for C-C)":
+    check parseKeyString("CC").len == 0
+    check parseKeyString("MM").len == 0
+    check parseKeyString("SS").len == 0
+    check parseKeyString("CM").len == 0
+    check parseKeyString("SC").len == 0
+    check parseKeyString("CMS").len == 0
+
+  test "Lowercase Vim-style doubled letters still accepted":
+    # "cc" (change line), "mm" (set mark m), "ss" — real Vim mappings.
+    check parseKeyString("cc").len == 2
+    check parseKeyString("mm").len == 2
+    check parseKeyString("ss").len == 2
+
+  test "Vim-style with uppercase non-modifier letter still accepted":
+    # "gT" (previous tab), "zM" (foldlevel 0), etc.
+    let gT = parseKeyString("gT")
+    check gT.len == 2
+    check gT[0].char == "g"
+    check gT[1].char == "T"
 
   test "Whitespace only returns empty":
     let keys = parseKeyString("   ")
@@ -595,6 +614,20 @@ suite "listRuntimeMappings":
     check "C-a -> Escape" in normalList
     check "C-b -> Enter" in insertList
 
+  test "Prefix filter keeps only lhs that start with the prefix":
+    var registry = newKeyBindingRegistry()
+    discard registry.addRuntimeMapping(Normal, "<leader>ab", "Escape")
+    discard registry.addRuntimeMapping(Normal, "<leader>ac", "Escape")
+    discard registry.addRuntimeMapping(Normal, "C-b", "Escape")
+
+    let filtered = registry.listRuntimeMappings(Normal, "<leader>a")
+    check filtered.len == 2
+    check "<leader>ab -> Escape" in filtered
+    check "<leader>ac -> Escape" in filtered
+
+    let miss = registry.listRuntimeMappings(Normal, "zz")
+    check miss.len == 0
+
 suite "getRuntimeKeySeqMappings":
   test "Returns only key-sequence mappings":
     var registry = newKeyBindingRegistry()
@@ -703,10 +736,11 @@ suite "Command mode command parsing - map commands":
     check result.mapLhs == ""
     check result.mapRhs == ""
 
-  test "Parse :nmap with only LHS returns error":
+  test "Parse :nmap with only LHS returns prefix list request":
     let result = parser.parseAndExecute(":nmap C-s")
-    check result.kind == claUnknown
-    check "Usage" in result.errorMessage
+    check result.kind == claNmap
+    check result.mapLhs == "C-s"
+    check result.mapRhs == ""
 
   test "Parse :rmap C-a Escape":
     let result = parser.parseAndExecute(":rmap C-a Escape")
@@ -739,6 +773,18 @@ suite "Command mode command parsing - map commands":
     check result.mapLhs == "d"
     check result.mapRhs == "Escape"
     check result.noremap == true
+
+  test "Parse :nmap preserves tab inside RHS":
+    let result = parser.parseAndExecute(":nmap C-a foo\tbar")
+    check result.kind == claNmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == "foo\tbar"
+
+  test "Parse :nmap preserves multiple tabs and spaces inside RHS":
+    let result = parser.parseAndExecute(":nmap C-a a\t\tb  c")
+    check result.kind == claNmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == "a\t\tb  c"
 
 suite "Command mode command parsing - unmap commands":
   setup:
@@ -813,102 +859,102 @@ suite "CommandModeHandler - map commands":
     let commandRegistry = newCommandRegistry()
     let handler = newCommandModeHandler(parser, config, commandRegistry)
 
-  test "handleCommandModeInput :nmap returns cmrMapAdd":
+  test "handleCommandModeInput :nmap returns hrMapAdd":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nmap C-s file.save")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddLhs == "C-s"
     check result.mapAddRhs == "file.save"
     check EditorMode.Normal in result.mapAddModes
     check result.mapAddModes.len == 1
     check result.mapAddNoremap == false
 
-  test "handleCommandModeInput :nnoremap returns cmrMapAdd with noremap=true":
+  test "handleCommandModeInput :nnoremap returns hrMapAdd with noremap=true":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nnoremap C-s file.save")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Normal in result.mapAddModes
     check result.mapAddNoremap == true
 
-  test "handleCommandModeInput :imap returns cmrMapAdd for Insert":
+  test "handleCommandModeInput :imap returns hrMapAdd for Insert":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":imap j Escape")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Insert in result.mapAddModes
 
-  test "handleCommandModeInput :vmap returns cmrMapAdd for Visual modes":
+  test "handleCommandModeInput :vmap returns hrMapAdd for Visual modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":vmap d visual.delete")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Visual in result.mapAddModes
     check EditorMode.VisualBlock in result.mapAddModes
     check EditorMode.VisualLine in result.mapAddModes
 
-  test "handleCommandModeInput :map returns cmrMapAdd for all modes":
+  test "handleCommandModeInput :map returns hrMapAdd for all modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":map C-s file.save")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddModes.len == 6
 
-  test "handleCommandModeInput :nunmap returns cmrMapRemove":
+  test "handleCommandModeInput :nunmap returns hrMapRemove":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nunmap C-s")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check result.mapRemoveLhs == "C-s"
     check EditorMode.Normal in result.mapRemoveModes
 
-  test "handleCommandModeInput :nmapclear returns cmrMapClear":
+  test "handleCommandModeInput :nmapclear returns hrMapClear":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":nmapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check EditorMode.Normal in result.mapClearModes
 
-  test "handleCommandModeInput :rmap returns cmrMapAdd for Replace":
+  test "handleCommandModeInput :rmap returns hrMapAdd for Replace":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":rmap C-a Escape")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check EditorMode.Replace in result.mapAddModes
     check result.mapAddModes.len == 1
 
-  test "handleCommandModeInput :unmap returns cmrMapRemove for all modes":
+  test "handleCommandModeInput :unmap returns hrMapRemove for all modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":unmap C-s")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check result.mapRemoveLhs == "C-s"
     check result.mapRemoveModes.len == 6
 
-  test "handleCommandModeInput :iunmap returns cmrMapRemove for Insert":
+  test "handleCommandModeInput :iunmap returns hrMapRemove for Insert":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":iunmap C-a")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check EditorMode.Insert in result.mapRemoveModes
     check result.mapRemoveModes.len == 1
 
-  test "handleCommandModeInput :vunmap returns cmrMapRemove for Visual modes":
+  test "handleCommandModeInput :vunmap returns hrMapRemove for Visual modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":vunmap d")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check EditorMode.Visual in result.mapRemoveModes
     check EditorMode.VisualBlock in result.mapRemoveModes
     check EditorMode.VisualLine in result.mapRemoveModes
 
-  test "handleCommandModeInput :mapclear returns cmrMapClear for all modes":
+  test "handleCommandModeInput :mapclear returns hrMapClear for all modes":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":mapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check result.mapClearModes.len == 6
 
-  test "handleCommandModeInput :imapclear returns cmrMapClear for Insert":
+  test "handleCommandModeInput :imapclear returns hrMapClear for Insert":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":imapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check EditorMode.Insert in result.mapClearModes
     check result.mapClearModes.len == 1
 
   test "handleCommandModeInput :imap jj Escape (Vim-style)":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":imap jj Escape")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddLhs == "jj"
     check result.mapAddRhs == "Escape"
     check EditorMode.Insert in result.mapAddModes
@@ -922,6 +968,7 @@ proc createTestState(mode: EditorMode = EditorMode.Normal): EditorState =
       mode: mode,
       previousMode: EditorMode.Normal,
     ),
+    config: newEditorConfig(),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -954,9 +1001,8 @@ proc createTestManager(): HandlerManager =
     motionController: motionController,
   )
 
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
-  )
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   let visualHandler = VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,
@@ -990,17 +1036,18 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "j j", "Escape")
     check err == ""
 
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # First 'j' should be accumulated (waiting for more keys)
     let j1 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r1 = manager.handleKeyCombo(editor, j1)
+    let r1 = manager.runKeyCombo(editor, j1)
     check r1.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 1
 
     # Second 'j' should trigger the mapping (Escape → Normal mode)
     let j2 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r2 = manager.handleKeyCombo(editor, j2)
+    let r2 = manager.runKeyCombo(editor, j2)
     check r2.kind == hrHandled
     # Accumulator should be cleared after match
     check editor.keyRouter.dispatchState.keys.len == 0
@@ -1016,16 +1063,17 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "j j", "Escape")
     check err == ""
 
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # First 'j' accumulates
     let j1 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r1 = manager.handleKeyCombo(editor, j1)
+    let r1 = manager.runKeyCombo(editor, j1)
     check r1.kind == hrHandled
 
     # 'k' does not match 'j j' → flush 'j' and process 'k' normally
     let k = KeyCombo(isSpecial: false, char: "k", modifiers: {})
-    discard manager.handleKeyCombo(editor, k)
+    discard manager.runKeyCombo(editor, k)
     # Accumulator should be cleared after flush
     check editor.keyRouter.dispatchState.keys.len == 0
 
@@ -1038,8 +1086,8 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
 
     # No runtime mappings registered. 'a' should pass through normally.
     let a = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let r = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), a
+    let r = manager.runKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager), a
     )
     # Should be handled by insert mode handler, not blocked by mapping precheck
     check r.kind == hrHandled
@@ -1057,8 +1105,9 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
 
     # Pressing C-a should be consumed by the mapping and Escape replayed
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    let r = manager.handleKeyCombo(editor, keyCombo)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    let r = manager.runKeyCombo(editor, keyCombo)
     check r.kind == hrHandled
     # Accumulator should be cleared
     check editor.keyRouter.dispatchState.keys.len == 0
@@ -1086,8 +1135,9 @@ suite "Integration - noremap verification":
 
     # Press C-a: should expand to C-b only, NOT further to Escape
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let r = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyA
+    let r = manager.runKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager),
+      keyA,
     )
     check r.kind == hrHandled
     # isReplayingMapping should be false after completion
@@ -1112,8 +1162,9 @@ suite "Integration - noremap verification":
     # With isReplayingMapping = true, handleKeyCombo should skip mapping precheck
     manager.keyBindingRegistry.isReplayingMapping = true
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    discard manager.handleKeyCombo(editor, keyA)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    discard manager.runKeyCombo(editor, keyA)
     # The key should have been processed normally (not consumed by mapping)
     # Accumulator should remain empty
     check editor.keyRouter.dispatchState.keys.len == 0
@@ -1132,8 +1183,9 @@ suite "Integration - noremap verification":
 
     # Press C-a in Insert mode: should NOT trigger the Normal mapping
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    discard manager.handleKeyCombo(editor, keyA)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    discard manager.runKeyCombo(editor, keyA)
     # Accumulator should be empty (no key-seq mappings registered for Insert)
     check editor.keyRouter.dispatchState.keys.len == 0
 
@@ -1155,8 +1207,9 @@ suite "Integration - recursive map (noremap=false)":
     ) == ""
 
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    let r = manager.handleKeyCombo(editor, keyA)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    let r = manager.runKeyCombo(editor, keyA)
     check r.kind == hrHandled
     # C-a → C-b → Escape: recursion reaches Escape, so we land in Normal mode.
     check state.mode == EditorMode.Normal
@@ -1175,8 +1228,9 @@ suite "Integration - recursive map (noremap=false)":
     ) == ""
 
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    let r = manager.handleKeyCombo(editor, keyA)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    let r = manager.runKeyCombo(editor, keyA)
     check r.kind == hrError
     check "recursive mapping" in r.errorMessage
     # The depth counter must unwind to zero even on the error path.
@@ -1281,17 +1335,18 @@ suite "Integration - Vim-style jj mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
     check err == ""
 
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # First 'j' should accumulate
     let j1 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r1 = manager.handleKeyCombo(editor, j1)
+    let r1 = manager.runKeyCombo(editor, j1)
     check r1.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 1
 
     # Second 'j' should trigger the mapping
     let j2 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r2 = manager.handleKeyCombo(editor, j2)
+    let r2 = manager.runKeyCombo(editor, j2)
     check r2.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 0
 
@@ -1317,8 +1372,9 @@ suite "Integration - Normal mode key-seq mapping":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    let r = manager.handleKeyCombo(editor, keyCombo)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    let r = manager.runKeyCombo(editor, keyCombo)
     check r.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 0
 
@@ -1333,17 +1389,18 @@ suite "Integration - Normal mode key-seq mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Normal, "zz", "Escape")
     check err == ""
 
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # First 'z' should accumulate
     let z1 = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let r1 = manager.handleKeyCombo(editor, z1)
+    let r1 = manager.runKeyCombo(editor, z1)
     check r1.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 1
 
     # Second 'z' should trigger
     let z2 = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let r2 = manager.handleKeyCombo(editor, z2)
+    let r2 = manager.runKeyCombo(editor, z2)
     check r2.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 0
 
@@ -1365,8 +1422,9 @@ suite "Integration - mapping removal and clear":
 
     # Key should pass through to normal insert handler
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    discard manager.handleKeyCombo(editor, keyA)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    discard manager.runKeyCombo(editor, keyA)
     check editor.keyRouter.dispatchState.keys.len == 0
 
   test "Cleared mappings no longer trigger":
@@ -1393,6 +1451,28 @@ suite "Integration - mapping removal and clear":
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Normal).len == 0
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Insert).len == 1
 
+  test "Mappings cleared mid-sequence: accumulator flushed, no input lost":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    discard manager.keyBindingRegistry.addRuntimeMapping(Insert, "jk", "Escape")
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    discard manager.runKeyCombo(editor, j)
+    check editor.keyRouter.dispatchState.keys.len == 1
+
+    manager.keyBindingRegistry.clearRuntimeMappings(Insert)
+
+    let x = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    let r = manager.runKeyCombo(editor, x)
+    check r.kind == hrHandled
+    check editor.keyRouter.dispatchState.keys.len == 0
+
 suite "Timeout flush - exact match with longer match pending":
   test "Exact match and longer match: keys accumulate (wait state)":
     ## When both "j" (exact) and "jj" (longer) are mapped,
@@ -1411,8 +1491,9 @@ suite "Timeout flush - exact match with longer match pending":
 
     # Press 'j': should accumulate because both exact and longer match exist
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
-    let r = manager.handleKeyCombo(editor, j)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+    let r = manager.runKeyCombo(editor, j)
     check r.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 1
 
@@ -1431,7 +1512,8 @@ suite "Timeout flush - exact match with longer match pending":
     let err2 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
     check err2 == ""
 
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # Simulate accumulated state (as if 'j' was pressed and we're waiting)
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
@@ -1448,12 +1530,12 @@ suite "Timeout flush - exact match with longer match pending":
 
     check exactMatch.isSome
     check exactMatch.get.targetKeys.len == 1
-    check exactMatch.get.targetKeys[0] == "a"
+    check exactMatch.get.targetKeys[0] == toKeyCombo('a')
 
-    # Execute the exact match via playbackMacro
+    # Execute the exact match via playbackKeyCombos
     clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
-    let r = manager.playbackMacro(editor, exactMatch.get.targetKeys)
+    let r = playbackKeyCombos(editor, exactMatch.get.targetKeys)
     manager.keyBindingRegistry.isReplayingMapping = false
     check r.kind == hrHandled
     # Should still be in Insert mode (mapping target was 'a', not Escape)
@@ -1473,7 +1555,8 @@ suite "Timeout flush - exact match with longer match pending":
     let err2 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "a")
     check err2 == ""
 
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # Simulate accumulated state
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
@@ -1490,10 +1573,10 @@ suite "Timeout flush - exact match with longer match pending":
 
     check exactMatch.isSome
 
-    # Execute via playbackMacro (mirrors handleKeyMappingTimeout logic)
+    # Execute via playbackKeyCombos (mirrors handleKeyMappingTimeout logic)
     clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
-    discard manager.playbackMacro(editor, exactMatch.get.targetKeys)
+    discard playbackKeyCombos(editor, exactMatch.get.targetKeys)
     manager.keyBindingRegistry.isReplayingMapping = false
 
     # playbackMacro applies mode transitions internally
@@ -1511,7 +1594,8 @@ suite "Timeout flush - exact match with longer match pending":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
     check err == ""
 
-    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # Simulate accumulated state
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
@@ -1532,7 +1616,7 @@ suite "Timeout flush - exact match with longer match pending":
     clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
     for k in accKeys:
-      let r = manager.handleKeyCombo(editor, k)
+      let r = manager.runKeyCombo(editor, k)
       check r.kind == hrHandled
     manager.keyBindingRegistry.isReplayingMapping = false
 
@@ -1550,6 +1634,60 @@ suite "Timeout flush - exact match with longer match pending":
     # No keys accumulated
     check router.dispatchState.keys.len == 0
     # Nothing to flush - this is the guard check in handleKeyMappingTimeout
+
+suite "Nested playback mini processor":
+  test "processReplayedResult on hrError sets statusMessage and returns roAbort":
+    # Pre-fix, rrUnhandledBatch broke on hrError but never routed
+    # errorMessage onto state.statusMessage; the user saw no diagnostic.
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    let state = createTestState(EditorMode.Normal)
+    let viewport = createTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    let r = HandlerResult(kind: hrError, errorMessage: "boom")
+    let outcome = processReplayedResult(editor, r, buffer)
+    check outcome == roAbort
+    check state.statusMessage == "boom"
+
+  test "processReplayedResult on hrQuit returns roQuit":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    let state = createTestState(EditorMode.Normal)
+    let viewport = createTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    let outcome = processReplayedResult(editor, HandlerResult(kind: hrQuit), buffer)
+    check outcome == roQuit
+
+  test "processReplayedResult on hrHandled returns roContinue":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    let state = createTestState(EditorMode.Normal)
+    let viewport = createTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    let r = HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+    check processReplayedResult(editor, r, buffer) == roContinue
+
+  test "playbackMacroImpl invalid key aborts and records statusMessage":
+    # Pre-fix, playbackMacro dropped the invalid-key hrError silently past the
+    # replay boundary; post-fix, the mini processor routes it to statusMessage.
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    let state = createTestState(EditorMode.Normal)
+    let viewport = createTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    let r = playbackMacro(editor, @["<not-a-real-key>"])
+    check r.kind == hrError
+    check state.statusMessage.startsWith("Invalid key in macro")
 
 suite "All mapping commands are valid":
   test "All BuiltinCommandId values are registered in CommandRegistry":
@@ -1613,10 +1751,11 @@ suite "Command mode command parsing - cmap commands":
     check result.mapLhs == ""
     check result.mapRhs == ""
 
-  test "Parse :cmap with only LHS returns error":
+  test "Parse :cmap with only LHS returns prefix list request":
     let result = parser.parseAndExecute(":cmap C-a")
-    check result.kind == claUnknown
-    check "Usage" in result.errorMessage
+    check result.kind == claCmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == ""
 
   test "Parse :cunmap C-a":
     let result = parser.parseAndExecute(":cunmap C-a")
@@ -1641,33 +1780,33 @@ suite "CommandModeHandler - cmap commands":
     let commandRegistry = newCommandRegistry()
     let handler = newCommandModeHandler(parser, config, commandRegistry)
 
-  test "handleCommandModeInput :cmap returns cmrMapAdd with CommandLine mode":
+  test "handleCommandModeInput :cmap returns hrMapAdd with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmap C-a Home")
-    check result.kind == cmrMapAdd
+    check result.kind == hrMapAdd
     check result.mapAddLhs == "C-a"
     check result.mapAddRhs == "Home"
     check EditorMode.Command in result.mapAddModes
     check result.mapAddModes.len == 1
 
-  test "handleCommandModeInput :cmap without args returns cmrMapList":
+  test "handleCommandModeInput :cmap without args returns hrMapList":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmap")
-    check result.kind == cmrMapList
+    check result.kind == hrMapList
     check EditorMode.Command in result.mapListModes
 
-  test "handleCommandModeInput :cunmap returns cmrMapRemove with CommandLine mode":
+  test "handleCommandModeInput :cunmap returns hrMapRemove with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cunmap C-a")
-    check result.kind == cmrMapRemove
+    check result.kind == hrMapRemove
     check result.mapRemoveLhs == "C-a"
     check EditorMode.Command in result.mapRemoveModes
     check result.mapRemoveModes.len == 1
 
-  test "handleCommandModeInput :cmapclear returns cmrMapClear with CommandLine mode":
+  test "handleCommandModeInput :cmapclear returns hrMapClear with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmapclear")
-    check result.kind == cmrMapClear
+    check result.kind == hrMapClear
     check EditorMode.Command in result.mapClearModes
     check result.mapClearModes.len == 1
 

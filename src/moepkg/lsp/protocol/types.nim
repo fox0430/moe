@@ -602,14 +602,16 @@ proc parseRange*(node: JsonNode): Range =
   Range(start: parsePosition(node{"start"}), `end`: parsePosition(node{"end"}))
 
 proc parseLocation*(node: JsonNode): Location =
-  Location(uri: node["uri"].getStr, range: parseRange(node["range"]))
+  ## Use `{}` so a missing `uri`/`range` yields an empty URI instead of a
+  ## KeyError that would wipe the whole Location list in parseLocations.
+  Location(uri: node{"uri"}.getStr, range: parseRange(node{"range"}))
 
 proc parseLocationLink*(node: JsonNode): LocationLink =
-  result.targetUri = node["targetUri"].getStr
-  result.targetRange = parseRange(node["targetRange"])
-  result.targetSelectionRange = parseRange(node["targetSelectionRange"])
+  result.targetUri = node{"targetUri"}.getStr
+  result.targetRange = parseRange(node{"targetRange"})
+  result.targetSelectionRange = parseRange(node{"targetSelectionRange"})
   if node.hasKey("originSelectionRange"):
-    result.originSelectionRange = some(parseRange(node["originSelectionRange"]))
+    result.originSelectionRange = some(parseRange(node{"originSelectionRange"}))
 
 proc locationLinkToLocation*(link: LocationLink): Location =
   ## Convert LocationLink to Location (uses targetSelectionRange for precise navigation)
@@ -1032,10 +1034,11 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.textDocumentSync = some(node["textDocumentSync"])
   if node.hasKey("completionProvider"):
     let cp = node["completionProvider"]
-    # A server may advertise a literal `false` to disable the feature. The spec
-    # types this as Options, but be defensive: only a non-`false` value counts
-    # as supported so we never fire requests that hang until the timeout.
-    if cp.kind != JBool or cp.getBool:
+    # A server may advertise a literal `false` (or `null`, via Option-field
+    # serialisation) to disable the feature. The spec types this as Options,
+    # but be defensive: only a truthy/object value counts as supported so we
+    # never fire requests that hang until the timeout.
+    if cp.kind != JNull and (cp.kind != JBool or cp.getBool):
       var opts = CompletionOptions()
       if cp.kind == JObject:
         if cp.hasKey("triggerCharacters"):
@@ -1048,8 +1051,8 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
       result.completionProvider = some(opts)
   if node.hasKey("signatureHelpProvider"):
     let sh = node["signatureHelpProvider"]
-    # See completionProvider above: skip a literal `false`.
-    if sh.kind != JBool or sh.getBool:
+    # See completionProvider above: skip literal `false` and `null`.
+    if sh.kind != JNull and (sh.kind != JBool or sh.getBool):
       var opts = SignatureHelpOptions()
       if sh.kind == JObject:
         if sh.hasKey("triggerCharacters"):
@@ -1091,11 +1094,15 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   if node.hasKey("renameProvider"):
     result.renameProvider = some(node["renameProvider"])
   if node.hasKey("executeCommandProvider"):
-    result.executeCommandProvider =
-      some(parseExecuteCommandOptions(node["executeCommandProvider"]))
+    let ec = node["executeCommandProvider"]
+    # See completionProvider above: skip literal `false` and `null`.
+    if ec.kind != JNull and (ec.kind != JBool or ec.getBool):
+      result.executeCommandProvider = some(parseExecuteCommandOptions(ec))
   if node.hasKey("semanticTokensProvider"):
-    result.semanticTokensProvider =
-      some(parseSemanticTokensOptions(node["semanticTokensProvider"]))
+    let stp = node["semanticTokensProvider"]
+    # Some servers send a bare `false` / `null` instead of an options object.
+    if stp.kind == JObject:
+      result.semanticTokensProvider = some(parseSemanticTokensOptions(stp))
   if node.hasKey("inlayHintProvider"):
     result.inlayHintProvider = some(node["inlayHintProvider"])
   if node.hasKey("selectionRangeProvider"):
@@ -1280,14 +1287,21 @@ proc parseFoldingRange*(node: JsonNode): FoldingRange =
 # Additional helper functions for LSP client
 
 proc parseLocations*(node: JsonNode): seq[Location] =
-  ## Parse Location or Location[] from JSON (handles both single and array responses)
-  result = @[]
+  ## Parse Location or Location[] from JSON. Malformed entries (non-object or
+  ## missing uri) are skipped so one bad item doesn't drop the whole list.
   case node.kind
   of JArray:
     for item in node:
-      result.add(parseLocation(item))
+      if item.kind != JObject:
+        continue
+      let loc = parseLocation(item)
+      if loc.uri.len == 0:
+        continue
+      result.add(loc)
   of JObject:
-    result.add(parseLocation(node))
+    let loc = parseLocation(node)
+    if loc.uri.len > 0:
+      result.add(loc)
   else:
     discard
 

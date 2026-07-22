@@ -122,10 +122,6 @@ proc addKeySequenceMapping*(
   if targetKeys.len == 0:
     return
 
-  var targetKeyStrs: seq[string] = @[]
-  for k in targetKeys:
-    targetKeyStrs.add(keyComboToString(k))
-
   if not registry.runtimeMappings.hasKey(mode):
     registry.runtimeMappings[mode] = @[]
 
@@ -136,7 +132,7 @@ proc addKeySequenceMapping*(
       triggerStr: keyStr,
       targetStr: targetKeyStr,
       noremap: noremap,
-      targetKeys: targetKeyStrs,
+      targetKeys: targetKeys,
     )
   )
 

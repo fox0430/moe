@@ -111,8 +111,10 @@ suite "EditorConfig Support":
     var props = initTable[string, string]()
     props["charset"] = "utf-8"
     let buf = newTextBuffer()
+    buf.hasBom = true
     applyEditorConfig(buf, props)
     check buf.encoding == utf8
+    check buf.hasBom == false
 
   test "applyEditorConfig with insert_final_newline true":
     var props = initTable[string, string]()
@@ -165,44 +167,6 @@ suite "EditorConfig Support":
     check buf.lineEnding == LF
     check buf.encoding == utf8
     check buf.endOfLine == true
-
-  test "applyBufferEditorConfig overrides display settings":
-    var display = DisplaySettings(tabStop: 2, shiftWidth: 0, expandTab: false)
-    let conf = newEditorConfig()
-    let buf = newTextBuffer()
-    var bufEc = BufferEditorConfig()
-    bufEc.tabStop = some(4)
-    bufEc.shiftWidth = some(4)
-    bufEc.expandTab = some(true)
-    buf.editorConfig = some(bufEc)
-    applyBufferEditorConfig(display, buf, conf)
-    check display.tabStop == 4
-    check display.shiftWidth == 4
-    check display.expandTab == true
-
-  test "applyBufferEditorConfig falls back to global config":
-    var display = DisplaySettings(tabStop: 8, shiftWidth: 4, expandTab: true)
-    let conf = newEditorConfig()
-    let buf = newTextBuffer()
-    # No editorConfig overrides
-    applyBufferEditorConfig(display, buf, conf)
-    # Should reset to global config values
-    check display.tabStop == conf.standard.tabStop
-    check display.shiftWidth == conf.standard.shiftWidth
-    check display.expandTab == conf.standard.expandTab
-
-  test "applyBufferEditorConfig partial overrides":
-    var display = DisplaySettings(tabStop: 2, shiftWidth: 0, expandTab: false)
-    let conf = newEditorConfig()
-    let buf = newTextBuffer()
-    var bufEc = BufferEditorConfig()
-    bufEc.tabStop = some(4)
-    # shiftWidth and expandTab not set
-    buf.editorConfig = some(bufEc)
-    applyBufferEditorConfig(display, buf, conf)
-    check display.tabStop == 4
-    check display.shiftWidth == conf.standard.shiftWidth
-    check display.expandTab == conf.standard.expandTab
 
   test "shouldTrimTrailingWhitespace returns false with no editorConfig":
     let buf = newTextBuffer()
@@ -283,14 +247,32 @@ suite "EditorConfig Support":
     check buf.editorConfig.isSome
     check buf.editorConfig.get.tabStop.isNone
 
+  test "applyEditorConfig with tab_width exceeding upper bound":
+    var props = initTable[string, string]()
+    props["tab_width"] = "999999"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop.isNone
+
+  test "applyEditorConfig with tab_width at upper bound":
+    var props = initTable[string, string]()
+    props["tab_width"] = "16"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop == some(16)
+
   test "applyEditorConfig with indent_size tab without tab_width":
     var props = initTable[string, string]()
     props["indent_size"] = "tab"
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.editorConfig.isSome
-    # tab_width not set, so shiftWidth should be none
-    check buf.editorConfig.get.shiftWidth.isNone
+    # tab_width not set: shiftWidth records the vim-style 0 sentinel so
+    # effectiveShiftWidth() follows the effective tabStop at read time.
+    check buf.editorConfig.get.shiftWidth == some(0)
+    check buf.editorConfig.get.tabStop.isNone
 
   test "applyEditorConfig with non-numeric indent_size":
     var props = initTable[string, string]()
@@ -309,6 +291,15 @@ suite "EditorConfig Support":
     check buf.editorConfig.isSome
     check buf.editorConfig.get.shiftWidth.isNone
 
+  test "applyEditorConfig with indent_size exceeding upper bound":
+    var props = initTable[string, string]()
+    props["indent_size"] = "999999"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth.isNone
+    check buf.editorConfig.get.tabStop.isNone
+
   # charset variants
 
   test "applyEditorConfig with charset utf-8-bom":
@@ -317,6 +308,7 @@ suite "EditorConfig Support":
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.encoding == utf8
+    check buf.hasBom == true
 
   test "applyEditorConfig with charset utf-16be":
     var props = initTable[string, string]()
@@ -324,6 +316,7 @@ suite "EditorConfig Support":
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.encoding == utf16Be
+    check buf.hasBom == true
 
   test "applyEditorConfig with charset utf-16le":
     var props = initTable[string, string]()
@@ -331,6 +324,7 @@ suite "EditorConfig Support":
     let buf = newTextBuffer()
     applyEditorConfig(buf, props)
     check buf.encoding == utf16Le
+    check buf.hasBom == true
 
   test "applyEditorConfig with charset latin1 keeps default":
     var props = initTable[string, string]()
@@ -459,6 +453,34 @@ indent_size = 2
     applyEditorConfigToBuffer(buf, conf)
 
     # No properties matched for .txt, so editorConfig should remain none
+    check buf.editorConfig.isNone
+
+  test "applyEditorConfigToBuffer drops stale overrides when no section matches":
+    let testDir = getTempDir() / "moe_ec_test_drop_stale"
+    let testFile = testDir / "test.txt"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.nim]
+indent_style = space
+""",
+    )
+    writeFile(testFile, "hello\n")
+
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    buf.filePath = some(testFile)
+    # Simulate an override left over from a prior .editorconfig state.
+    buf.editorConfig = some(BufferEditorConfig(expandTab: some(true), tabStop: some(2)))
+
+    applyEditorConfigToBuffer(buf, conf)
+
     check buf.editorConfig.isNone
 
   # 3. Negative numeric values

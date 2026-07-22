@@ -87,16 +87,16 @@ suite "LspService - Config Management":
     check retrieved.get.args == @["--stdio"]
     check "xyz" in retrieved.get.extensions
 
-  test "LanguageServerConfig rawJsonLog defaults to false":
+  test "LanguageServerConfig traceLevel defaults to traceOff":
     let svc = newLspService()
-    check svc.getConfig("nim").get.rawJsonLog == false
+    check svc.getConfig("nim").get.traceLevel == traceOff
 
-  test "setConfig persists rawJsonLog":
+  test "setConfig persists traceLevel":
     let svc = newLspService()
     var c = svc.getConfig("nim").get
-    c.rawJsonLog = true
+    c.traceLevel = traceMessages
     svc.setConfig("nim", c)
-    check svc.getConfig("nim").get.rawJsonLog
+    check svc.getConfig("nim").get.traceLevel == traceMessages
 
   test "setConfig updates existing config":
     let svc = newLspService()
@@ -616,6 +616,37 @@ suite "LspService - Capability Checking (without workers)":
     check not svc.hasCompletionSupport("nim")
     check not svc.hasSignatureHelpSupport("nim")
 
+  test "explicit `null` capability is treated as unsupported":
+    # Some servers (notably Nim-based ones that serialise Option[T] fields
+    # verbatim) emit `"xxxProvider": null` when a capability is not set. Both
+    # capability paths — Option[JsonNode] (hover/definition/references/...)
+    # and Option[Options] (completion/signatureHelp/executeCommand) — must
+    # reject JNull the same way they reject literal `false`, otherwise every
+    # gated request fires and hangs until the timeout.
+    let svc = newLspService()
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levCapabilities,
+        capabilitiesJson: $(
+          %*{
+            "hoverProvider": newJNull(),
+            "definitionProvider": newJNull(),
+            "referencesProvider": newJNull(),
+            "completionProvider": newJNull(),
+            "signatureHelpProvider": newJNull(),
+            "executeCommandProvider": newJNull(),
+          }
+        ),
+      ),
+    )
+    check not svc.hasHoverSupport("nim")
+    check not svc.hasDefinitionSupport("nim")
+    check not svc.hasReferencesSupport("nim")
+    check not svc.hasCompletionSupport("nim")
+    check not svc.hasSignatureHelpSupport("nim")
+    check not svc.hasExecuteCommandSupport("nim")
+
   test "`true` and object capabilities are treated as supported":
     let svc = newLspService()
     svc.processEvent(
@@ -907,7 +938,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     var gotUri = ""
     var gotDiags: seq[Diagnostic] = @[]
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic]
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       {.cast(gcsafe).}:
         gotUri = uri
@@ -936,7 +967,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic]
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
     svc.processEvent(
@@ -955,7 +986,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
 
   test "levRawJson forwards pretty, timestamped lines to the viewer when verbose":
     let svc = newLspService()
-    svc.setConfig("nim", LanguageServerConfig(enabled: true, rawJsonLog: true))
+    svc.setConfig("nim", LanguageServerConfig(enabled: true, traceLevel: traceVerbose))
     var logs: seq[string] = @[]
     svc.onLogMessage = proc(
         langId: string, msgType: MessageType, message: string
@@ -977,9 +1008,9 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     check joined.contains("\"method\"")
     check joined.contains("initialize")
 
-  test "levRawJson does not touch the viewer when verbose is off":
+  test "levRawJson does not touch the viewer when trace is off":
     let svc = newLspService()
-    svc.setConfig("nim", LanguageServerConfig(enabled: true, rawJsonLog: false))
+    svc.setConfig("nim", LanguageServerConfig(enabled: true, traceLevel: traceOff))
     var called = false
     svc.onLogMessage = proc(
         langId: string, msgType: MessageType, message: string
@@ -994,12 +1025,33 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     )
     check not called
 
+  test "levRawJson also forwards to the viewer when trace = messages":
+    # Previously the viewer only fired for `verbose`; `messages` was silently
+    # treated as `off`. Any non-off level must now reach the viewer.
+    let svc = newLspService()
+    svc.setConfig("nim", LanguageServerConfig(enabled: true, traceLevel: traceMessages))
+    var called = false
+    svc.onLogMessage = proc(
+        langId: string, msgType: MessageType, message: string
+    ) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        called = true
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levRawJson,
+        jsonDirection: ljdSent,
+        rawJson: """{"method":"initialize","id":1}""",
+      ),
+    )
+    check called
+
   test "levRawJson mirrors a compact line to the debug log file when -d is on":
-    # File logging is independent of the per-server verbose setting: only the
+    # File logging is independent of the per-server trace level: only the
     # debug logger being enabled (-d) gates it.
     privateAccess(Logger)
     let svc = newLspService()
-    svc.setConfig("nim", LanguageServerConfig(enabled: true, rawJsonLog: false))
+    svc.setConfig("nim", LanguageServerConfig(enabled: true, traceLevel: traceOff))
     let prev = getGlobalLogger()
     let logger = initLogger(enabled = true)
     setGlobalLogger(logger)
@@ -1240,10 +1292,10 @@ suite "LspService - Callback Setup":
     let svc = newLspService()
     var called = false
     svc.onDiagnosticsUpdate = proc(
-        uri: string, diagnostics: seq[Diagnostic]
+        uri: string, diagnostics: seq[Diagnostic], version: Option[int]
     ) {.gcsafe.} =
       called = true
-    svc.onDiagnosticsUpdate("test", @[])
+    svc.onDiagnosticsUpdate("test", @[], none(int))
     check called
 
   test "can set custom onLogMessage callback":
@@ -1277,8 +1329,8 @@ suite "LspService - Callback Setup":
     check called
 
 suite "LspService - Constants":
-  test "DefaultRequestTimeoutMs is defined":
-    check DefaultRequestTimeoutMs == 5000
+  test "DefaultRequestTimeoutMs matches worker RequestTimeoutSec":
+    check DefaultRequestTimeoutMs == RequestTimeoutSec * 1000
 
 suite "LspService - LanguageServerConfig":
   test "LanguageServerConfig has all expected fields":

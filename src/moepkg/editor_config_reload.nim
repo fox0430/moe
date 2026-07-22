@@ -39,51 +39,15 @@ import
   registers
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
-  ## Apply configuration settings to the editor
-  ## Updates display settings, search settings, and other runtime state
-  ## Note: Some settings require editor restart to take effect
-
-  # Update display settings from config
-  e.state.display.showTabLine = newConfig.tabLine.enable
-  e.state.display.showStatusLine = newConfig.standard.statusLine
-  e.state.display.multiStatusLine = newConfig.statusLine.multipleStatusLine
-  e.state.display.showLineNumbers = newConfig.standard.number
-  e.state.display.relativeLineNumbers = newConfig.standard.relativeNumber
-  e.state.display.showCursorLine = newConfig.highlight.currentLine
-  e.state.display.showCursorColumn = newConfig.highlight.currentColumn
-  e.state.display.showSyntax = newConfig.standard.syntax
-  e.state.display.showIndentationLines = newConfig.standard.indentationLines
-  e.state.display.showSidebar = newConfig.standard.sidebar
-  e.state.display.scrollbar = newConfig.standard.scrollbar
-  e.state.display.scrollbarWidth = newConfig.standard.scrollbarWidth
-  e.state.display.showModifiedLines = newConfig.standard.showModifiedLines
-  e.state.display.showGitDiff = newConfig.git.showChangedLine
-  e.state.display.showSyntaxChecker = newConfig.syntaxChecker.enable
-  e.state.display.showCodeLens = newConfig.lsp.codeLens.enable
-  e.state.display.showDocumentHighlight = newConfig.lsp.documentHighlight.enable
-  e.state.display.showInlayHint = newConfig.lsp.inlayHint.enable
-
-  # The insert handler caches lsp.completion.enable and autocomplete.enable as
-  # flags (it has no access to e.config), so re-sync them on reload like the
-  # display flags above.
-  e.handlerManager.insertHandler.lspCompletionEnabled = newConfig.lsp.completion.enable
-  e.handlerManager.insertHandler.autocompleteEnabled = newConfig.autocomplete.enable
+  ## Apply configuration settings to the editor.
+  ## Display/edit flags are pull-read from `e.config`, so the ref swap at the
+  ## bottom of this proc is the only sync step they need. Other runtime state
+  ## (search, timings, LSP, clipboard, notifications) still needs manual apply.
 
   if not newConfig.lsp.diagnostics.enable:
-    # Diagnostics are server-push; when disabled, incoming publishDiagnostics are
-    # dropped in applyDiagnosticsForUri. Clear what was already applied so
-    # existing markers and hover content disappear on reload too.
+    # Diagnostics are server-push; drop applied markers/hover so a disable
+    # takes effect visually too.
     e.clearAllDiagnostics()
-
-  e.state.display.tabStop = newConfig.standard.tabStop
-  e.state.display.shiftWidth = newConfig.standard.shiftWidth
-  e.state.display.softTabStop = newConfig.standard.softTabStop
-  e.state.display.expandTab = newConfig.standard.expandTab
-  e.state.display.autoIndent = newConfig.standard.autoIndent
-  e.state.display.smartIndent = newConfig.standard.smartIndent
-  e.state.display.autoCloseParen = newConfig.standard.autoCloseParen
-  e.state.display.autoDeleteParen = newConfig.standard.autoDeleteParen
-  e.state.display.bracketSplit = newConfig.standard.bracketSplit
 
   # Update search settings
   e.state.input.search.ignorecase = newConfig.standard.ignorecase
@@ -157,8 +121,14 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
     TimeoutPolicy(timeoutlen: newConfig.standard.timeoutlen, enabled: true)
   )
 
-  # Store the new config
+  # Store the new config; state.config aliases the same ref.
   e.config = newConfig
+  e.state.config = newConfig
+
+  # Re-apply [Lsp.<lang>] entries so live reload / :lspRestart pick up server
+  # command/args/trace/rust-analyzer edits. Already-running workers keep
+  # their old command until they restart (out of scope here).
+  e.applyLspServerConfigs()
 
 proc maybeReloadConfig*(e: Editor) =
   ## Check if config file was modified and reload if:
@@ -220,6 +190,10 @@ proc maybeReloadConfig*(e: Editor) =
   e.keyBindingRegistry.reapplyKeyMappings(newConfig.keyMapping, keyVr)
   for msg in keyVr.toErrorMessages:
     logWarn("editor", "KeyMapping reload: " & msg)
+
+  # Command aliases/shell commands are declarative too: rebuild them from the
+  # reloaded config (this drops session add/removeCommandAlias changes).
+  e.commandConfig.applyCommandConfig(newConfig, e.commandLineParser)
 
   # Update last known modification time
   e.state.timing.lastConfigModTime = currentModTime

@@ -28,7 +28,7 @@ import pkg/celina
 
 import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,
-  popup_render, color
+  popup_render, color, unicode_utils
 
 import types/command_completion_types
 export command_completion_types
@@ -125,19 +125,17 @@ proc collectCommands*(parser: CommandLineParser): seq[CommandCompletionEntry] =
   result.sort do(a, b: CommandCompletionEntry) -> int:
     cmp(a.command, b.command)
 
-proc extractCommandPrefix*(commandText: string): string =
-  ## Extract the command prefix from commandText (after ":")
-  ## Example: ":wq" -> "wq", ":set num" -> "set"
-  if commandText.len <= 1:
+proc stripQuotes(raw: string): string =
+  if raw.len == 0:
     return ""
 
-  # Remove the leading ":"
-  result = commandText[1 ..^ 1]
-
-  # If there's a space, return only the command part
-  let spacePos = result.find(' ')
-  if spacePos >= 0:
-    result = result[0 ..< spacePos]
+  let trimmed = raw.strip()
+  if trimmed.len >= 2 and (
+    (trimmed[0] == '"' and trimmed[^1] == '"') or
+    (trimmed[0] == '\'' and trimmed[^1] == '\'')
+  ):
+    return trimmed[1 ..^ 2]
+  return trimmed
 
 proc parseCommandLine*(commandText: string): tuple[cmd: string, arg: string] =
   ## Parse command text into command and argument parts
@@ -151,8 +149,13 @@ proc parseCommandLine*(commandText: string): tuple[cmd: string, arg: string] =
     return (text, "")
 
   let cmd = text[0 ..< spacePos]
-  let arg = text[spacePos + 1 ..^ 1].strip()
+  let arg = stripQuotes(text[spacePos + 1 ..^ 1])
   return (cmd, arg)
+
+proc extractCommandPrefix*(commandText: string): string =
+  ## Extract the command prefix from commandText (after ":")
+  ## Example: ":wq" -> "wq", ":set num" -> "set"
+  parseCommandLine(commandText).cmd
 
 proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionEntry] =
   ## Collect file and directory paths for completion
@@ -209,8 +212,8 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
   try:
     for kind, path in walkDir(searchDir):
       let filename = extractFilename(path)
-      # Skip hidden files unless prefix starts with .
-      if filename.startsWith(".") and not filterPrefix.startsWith("."):
+      if filename.startsWith(".") and filterPrefix.len > 0 and
+          not filterPrefix.startsWith("."):
         continue
 
       if filterPrefix.len == 0 or
@@ -347,7 +350,7 @@ proc triggerArgumentCompletion*(
   let baseArgX = 1 + cmd.runeLen + 1
 
   # Determine completion mode based on command
-  if cmd in ["set", "se"]:
+  if cmd == "set":
     mgr.mode = cmSetOption
     mgr.menu.entries = collectSetOptions(arg)
     mgr.argStartX = baseArgX
@@ -473,18 +476,18 @@ proc cmdPopupDescSelectedStyle*(): Style =
   )
 
 proc calculateMaxCommandWidth*(entries: seq[CommandCompletionEntry]): int =
-  ## Calculate the maximum command width in the entries
+  ## Calculate the maximum command width (in terminal columns) in the entries
   result = 0
   for entry in entries:
-    let width = entry.command.runeLen
+    let width = entry.command.displayWidth
     if width > result:
       result = width
 
 proc calculateMaxDescriptionWidth*(entries: seq[CommandCompletionEntry]): int =
-  ## Calculate the maximum description width in the entries
+  ## Calculate the maximum description width (in terminal columns) in the entries
   result = 0
   for entry in entries:
-    let width = entry.description.runeLen
+    let width = entry.description.displayWidth
     if width > result:
       result = width
 
@@ -586,11 +589,11 @@ proc renderCommandCompletionPopup*(
           else:
             cmdPopupDescNormalStyle()
 
-        # Truncate command if needed
-        var displayCmd = entry.command
+        # Truncate command by display width (CJK/wide-char safe, cmdDisplayWidth <= 0 safe)
         let cmdDisplayWidth = min(maxCmdWidth, contentWidth - DescriptionGap - 1)
-        if displayCmd.runeLen > cmdDisplayWidth:
-          displayCmd = $displayCmd.toRunes[0 ..< cmdDisplayWidth - 1] & "…"
+        var displayCmd = entry.command
+        if displayCmd.displayWidth > cmdDisplayWidth:
+          displayCmd = truncateToWidthWithSuffix(displayCmd, cmdDisplayWidth, "…")
 
         # Draw command
         var x =
@@ -600,13 +603,12 @@ proc renderCommandCompletionPopup*(
         let cmdEndX = contentX + min(maxCmdWidth, cmdDisplayWidth) + DescriptionGap
         x = fillCells(termBuffer, x, y, min(cmdEndX, contentLimit), cmdStyle)
 
-        # Draw description if available
+        # Draw description if available (display-width safe, remainingWidth <= 0 safe)
         if entry.description.len > 0:
           let remainingWidth = contentLimit - x
           var displayDesc = entry.description
-          if displayDesc.runeLen > remainingWidth:
-            displayDesc = $displayDesc.toRunes[0 ..< remainingWidth - 1] & "…"
-
+          if displayDesc.displayWidth > remainingWidth:
+            displayDesc = truncateToWidthWithSuffix(displayDesc, remainingWidth, "…")
           x = drawClippedRunes(termBuffer, x, y, contentLimit, displayDesc, descStyle)
 
         # Fill remaining space with background

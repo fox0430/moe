@@ -45,7 +45,6 @@ suite "BookmarkManagerState - Constructor":
 
     check state.items.len == 0
     check state.selectedIndex == 0
-    check state.previousWindowIndex == 0
 
 suite "BookmarkManagerState - updateEntries":
   test "Update entries from buffers with bookmarks":
@@ -57,17 +56,17 @@ suite "BookmarkManagerState - updateEntries":
     # buf1 has 2 bookmarks (lines 1, 3), buf2 has 1 (line 0), buf3 has 0
     check state.items.len == 3
 
-    check state.items[0].bufferIndex == 0
+    check state.items[0].bufferId == buffers[0].id
     check state.items[0].filePath == "/path/file1.nim"
     check state.items[0].line == 1
     check state.items[0].text == "line 1"
 
-    check state.items[1].bufferIndex == 0
+    check state.items[1].bufferId == buffers[0].id
     check state.items[1].filePath == "/path/file1.nim"
     check state.items[1].line == 3
     check state.items[1].text == "line 3"
 
-    check state.items[2].bufferIndex == 1
+    check state.items[2].bufferId == buffers[1].id
     check state.items[2].filePath == "/path/file2.nim"
     check state.items[2].line == 0
     check state.items[2].text == "alpha"
@@ -261,7 +260,7 @@ suite "BookmarkManagerState - getSelectedItem":
 suite "BookmarkEntry - formatLine":
   test "Format entry with file path and line":
     let entry = BookmarkEntry(
-      bufferIndex: 0, filePath: "/path/file.nim", line: 41, text: "proc hello"
+      bufferId: BufferId(1), filePath: "/path/file.nim", line: 41, text: "proc hello"
     )
 
     let formatted = formatLine(entry)
@@ -269,15 +268,17 @@ suite "BookmarkEntry - formatLine":
     check formatted == "  /path/file.nim:42  proc hello"
 
   test "Format entry with No Name":
-    let entry =
-      BookmarkEntry(bufferIndex: 0, filePath: "No Name", line: 0, text: "first line")
+    let entry = BookmarkEntry(
+      bufferId: BufferId(1), filePath: "No Name", line: 0, text: "first line"
+    )
 
     let formatted = formatLine(entry)
 
     check formatted == "  No Name:1  first line"
 
   test "Format entry with empty text":
-    let entry = BookmarkEntry(bufferIndex: 0, filePath: "/file.nim", line: 5, text: "")
+    let entry =
+      BookmarkEntry(bufferId: BufferId(1), filePath: "/file.nim", line: 5, text: "")
 
     let formatted = formatLine(entry)
 
@@ -380,9 +381,9 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
 
     check state.items.len == 2
     # Remaining: buf1 line 0, buf2 line 1
-    check state.items[0].bufferIndex == 0
+    check state.items[0].bufferId == buf1.id
     check state.items[0].line == 0
-    check state.items[1].bufferIndex == 1
+    check state.items[1].bufferId == buf2.id
     check state.items[1].line == 1
 
   test "Delete consecutively removes bookmarks one by one":
@@ -410,6 +411,40 @@ suite "BookmarkManagerState - deleteSelectedBookmark":
     state.deleteSelectedBookmark(buffers)
     check state.items.len == 0
     check buf.bookmarks.len == 0
+
+  test "Delete resolves by BufferId, not seq position":
+    # Regression: bufferIndex-based lookup would mis-target after buffers shift.
+    let state = newBookmarkManagerState()
+    var buf1 = newTextBuffer("a\nb")
+    buf1.filePath = some("buf1.nim")
+    var buf2 = newTextBuffer("c\nd")
+    buf2.filePath = some("buf2.nim")
+    buf2.toggleBookmark(1)
+
+    state.updateEntries(@[buf1, buf2])
+    check state.items.len == 1
+    check state.items[0].bufferId == buf2.id
+
+    # buf1 drops out — buf2 is now at index 0 in the seq.
+    let shifted = @[buf2]
+    state.selectedIndex = 0
+    state.deleteSelectedBookmark(shifted)
+
+    # Must delete from buf2 (matched by id), not buf2's old position 1.
+    check buf2.hasBookmark(1) == false
+    check state.items.len == 0
+
+  test "Delete is no-op when target buffer is gone":
+    let state = newBookmarkManagerState()
+    var buf = newTextBuffer("a\nb")
+    buf.toggleBookmark(0)
+    state.updateEntries(@[buf])
+    check state.items.len == 1
+
+    # Target buffer no longer in the seq — delete must not touch anything.
+    let empty: seq[TextBuffer] = @[]
+    state.deleteSelectedBookmark(empty)
+    check buf.hasBookmark(0) == true
 
   test "Delete clamps selectedIndex":
     let state = newBookmarkManagerState()
@@ -485,9 +520,9 @@ suite "BookmarkManagerState - Integration":
     state.updateEntries(@[buf1, buf2])
 
     check state.items.len == 3
-    check state.items[0].bufferIndex == 0
+    check state.items[0].bufferId == buf1.id
     check state.items[0].line == 0
-    check state.items[1].bufferIndex == 0
+    check state.items[1].bufferId == buf1.id
     check state.items[1].line == 2
-    check state.items[2].bufferIndex == 1
+    check state.items[2].bufferId == buf2.id
     check state.items[2].line == 1

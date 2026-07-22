@@ -27,9 +27,8 @@
 
 import std/options
 
-import ../[modes, buffer]
+import ../[modes, buffer, setting_options]
 import ../lsp/protocol/types as lspTypes
-import command_handler
 
 type
   HandlerResultKind* = enum
@@ -154,8 +153,13 @@ type
     hrFileTreeOpenFile # Open file from fileTree
     hrFileTreeQuit # Close fileTree sidebar
     hrOpenUri # Open URI/file under cursor
+    hrPlaybackMacro # Playback a recorded macro (@a, N@a) via nested playback loop
     hrUnhandled # Command was not handled
     hrError # Error occurred
+    hrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
+    hrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
+    hrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
+    hrMapList # List runtime key mappings
 
   HandlerResult* = object ## Unified result type for all handlers
     case kind*: HandlerResultKind
@@ -246,7 +250,7 @@ type
     of hrEnterBufferManager:
       discard
     of hrBookmarkManagerJump:
-      bookmarkJumpBufferIndex*: int
+      bookmarkJumpBufferId*: BufferId
       bookmarkJumpLine*: int
     of hrBookmarkManagerDelete:
       bookmarkDeleteEntryIndex*: int
@@ -398,40 +402,28 @@ type
       discard
     of hrOpenUri:
       openUri*: string
+    of hrPlaybackMacro:
+      playbackMacroKeys*: seq[string]
+      playbackMacroCount*: int
+    of hrMapAdd:
+      mapAddLhs*: string
+      mapAddRhs*: string
+      mapAddModes*: seq[EditorMode]
+      mapAddNoremap*: bool
+    of hrMapRemove:
+      mapRemoveLhs*: string
+      mapRemoveModes*: seq[EditorMode]
+    of hrMapClear:
+      mapClearModes*: seq[EditorMode]
+    of hrMapList:
+      mapListModes*: seq[EditorMode]
+      mapListPrefix*: string
     of hrUnhandled:
       discard
     of hrError:
       errorMessage*: string
 
 # Utility functions for HandlerResult
-proc wasHandled*(hrResult: HandlerResult): bool =
-  ## Check if the event was handled
-  hrResult.kind in {
-    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
-    hrEnew, hrSave, hrSaveAll, hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext,
-    hrBufferPrev, hrBufferFirst, hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete,
-    hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
-    hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit,
-    hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer, hrReferencesQuit,
-    hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-    hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
-    hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
-    hrEnterCallHierarchy, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
-    hrBufferManagerQuit, hrEnterBufferManager, hrBookmarkManagerJump,
-    hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrEnterBookmarkManager,
-    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
-    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-    hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-    hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrEnterDiffViewer,
-    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences, hrLspDocumentSymbol,
-    hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-    hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-    hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
-    hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrConflictNext,
-    hrConflictPrev,
-  }
-
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error
   hrResult.kind == hrError

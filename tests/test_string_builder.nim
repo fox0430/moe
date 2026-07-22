@@ -120,3 +120,40 @@ suite "StringBuilder - Edge Cases":
     sb.removeLast(2) # "abd" (removes "ef")
     sb.add("xyz")
     check sb.toString() == "abdxyz"
+
+suite "StringBuilder - UTF-8 Boundary Safety":
+  test "byte count landing mid-multibyte snaps back to rune boundary":
+    var sb = newStringBuilder()
+    sb.add("aあ") # 1 + 3 bytes
+    sb.removeLast(2) # would slice mid-"あ" → must drop the whole "あ"
+    check sb.toString() == "a"
+    check sb.len == 1
+
+  test "byte count landing on rune boundary is exact":
+    var sb = newStringBuilder()
+    sb.add("aあ")
+    sb.removeLast(3) # exactly "あ"
+    check sb.toString() == "a"
+    check sb.len == 1
+
+  test "partial cut inside CJK part preserves leading rune":
+    var sb = newStringBuilder()
+    sb.add("あい") # 6 bytes
+    sb.removeLast(3) # trailing "い" (aligned)
+    check sb.toString() == "あ"
+    check sb.len == 3
+
+  test "mid-rune byte count in CJK-only part drops the whole trailing rune":
+    var sb = newStringBuilder()
+    sb.add("あい") # 6 bytes
+    sb.removeLast(2) # would land mid-"い" → snap to before "い"
+    check sb.toString() == "あ"
+    check sb.len == 3
+
+  test "removed length never leaves invalid UTF-8 tail":
+    var sb = newStringBuilder()
+    sb.add("x")
+    sb.add("あ") # separate part
+    sb.removeLast(2) # peel "あ" whole, remaining 0 after part boundary
+    check sb.toString() == "x"
+    check sb.len == 1

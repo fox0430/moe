@@ -19,10 +19,19 @@
 
 ## LSP Document Link request / poll orchestration (two-stage: links + resolve)
 
-import std/[options, strutils]
+import std/[options, strutils, tables]
 
-import types/editor_types, lsp_service, lsp_integration, buffer, editor_navigation
+import
+  types/editor_types,
+  editor_lsp,
+  lsp_service,
+  lsp_integration,
+  buffer,
+  editor_navigation
 import lsp/protocol/types as lspTypes
+
+const DocumentLinkValidModes* =
+  {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
 
 proc findDocumentLinkAtCursor*(
     links: seq[lspTypes.DocumentLink], line, column: int
@@ -109,59 +118,57 @@ proc startLspDocumentLinks*(e: Editor): bool =
     e.state.statusMessage = "Document links not supported"
     return false
 
-  # Cancel any existing requests
-  if e.state.lspCache.pendingDocumentLinkRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingDocumentLinkRequestId)
-    e.state.lspCache.pendingDocumentLinkRequestId = 0
-  if e.state.lspCache.pendingDocumentLinkResolveRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingDocumentLinkResolveRequestId)
-    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+  # Any in-flight resolve is orphaned once we start a fresh link scan.
+  cancelIfPending(e, lrfDocumentLinkResolve)
 
-  # Save cursor position (convert to UTF-16 for LSP comparison)
-  let lineText =
-    if e.activeWindow.cursor.line >= 0 and e.activeWindow.cursor.line < activeBuffer.len:
-      activeBuffer.getLine(e.activeWindow.cursor.line)
-    else:
-      ""
-  e.state.lspCache.pendingDocumentLinkCursorLine = e.activeWindow.cursor.line
-  e.state.lspCache.pendingDocumentLinkCursorCol =
-    runeIndexToUtf16(lineText, e.activeWindow.cursor.column)
-
-  let reqResult = e.lsp.startDocumentLinkRequest(activeBuffer)
-  if reqResult.isErr:
-    e.state.statusMessage = "LSP document links failed: " & reqResult.error
+  let ctxRes = e.startContextualRequest(
+    lrfDocumentLink,
+    proc(): Result[int, string] =
+      e.lsp.startDocumentLinkRequest(activeBuffer),
+    validModes = DocumentLinkValidModes,
+  )
+  if ctxRes.isErr:
+    e.state.statusMessage = "LSP document links failed: " & ctxRes.error
     return false
-
-  e.state.lspCache.pendingDocumentLinkRequestId = reqResult.get
   return true
 
 proc pollLspDocumentLinks*(e: Editor) =
   ## Poll for pending document links response (stage 1)
   if not e.lsp.enabled:
     return
-
-  let requestId = e.state.lspCache.pendingDocumentLinkRequestId
-  if requestId == 0:
+  if not e.state.lspCache.pending.hasKey(lrfDocumentLink):
     return
+  let ctx = e.state.lspCache.pending[lrfDocumentLink]
 
   # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    e.state.lspCache.pendingDocumentLinkRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentLink)
+    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
+      return
     if resultOpt.isSome:
       let links = parseDocumentLinksResponse(resultOpt.get)
       if links.len == 0:
         e.state.statusMessage = "No document links found"
         return
 
-      # Find link at saved cursor position
-      let cursorLine = e.state.lspCache.pendingDocumentLinkCursorLine
-      let cursorCol = e.state.lspCache.pendingDocumentLinkCursorCol
-      let linkOpt = findDocumentLinkAtCursor(links, cursorLine, cursorCol)
+      # Use the current cursor (converted to UTF-16 to match LSP ranges) so a
+      # prior in-flight response preserved across a failed retry does not jump
+      # to the old cursor's link.
+      let activeBuffer = e.activeBuffer()
+      let curLine = e.activeWindow.cursor.line
+      let curCol = e.activeWindow.cursor.column
+      let lineText =
+        if curLine >= 0 and curLine < activeBuffer.len:
+          activeBuffer.getLine(curLine)
+        else:
+          ""
+      let linkOpt =
+        findDocumentLinkAtCursor(links, curLine, runeIndexToUtf16(lineText, curCol))
 
       if linkOpt.isNone:
         e.state.statusMessage =
@@ -172,16 +179,18 @@ proc pollLspDocumentLinks*(e: Editor) =
 
       # If link has no target, try to resolve it
       if link.target.isNone:
-        let activeBuffer = e.activeBuffer()
         if e.lsp.hasDocumentLinkResolveSupport(activeBuffer):
-          # Start resolve request
-          let resolveResult = e.lsp.startDocumentLinkResolveRequest(activeBuffer, link)
-          if resolveResult.isOk:
-            e.state.lspCache.pendingDocumentLinkResolveRequestId = resolveResult.get
-            return
-          else:
-            e.state.statusMessage = "Failed to resolve link: " & resolveResult.error
-            return
+          let resolveCtx = e.startContextualRequest(
+            lrfDocumentLinkResolve,
+            proc(): Result[int, string] =
+              e.lsp.startDocumentLinkResolveRequest(activeBuffer, link),
+            validModes = DocumentLinkValidModes,
+            # jumpToDocumentLink dispatches by URI, not active buffer.
+            isItemDriven = true,
+          )
+          if resolveCtx.isErr:
+            e.state.statusMessage = "Failed to resolve link: " & resolveCtx.error
+          return
         else:
           e.state.statusMessage =
             "Document link has no target and resolve not supported"
@@ -191,41 +200,42 @@ proc pollLspDocumentLinks*(e: Editor) =
     else:
       e.state.statusMessage = "No document links found"
   of lrsError:
-    e.state.lspCache.pendingDocumentLinkRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentLink)
     if errorOpt.isSome:
       e.state.statusMessage = "LSP document links failed: " & errorOpt.get
   of lrsTimeout:
-    e.state.lspCache.pendingDocumentLinkRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentLink)
     e.state.statusMessage = "LSP document links timed out"
 
 proc pollLspDocumentLinkResolve*(e: Editor) =
   ## Poll for pending document link resolve response (stage 2)
   if not e.lsp.enabled:
     return
-
-  let requestId = e.state.lspCache.pendingDocumentLinkResolveRequestId
-  if requestId == 0:
+  if not e.state.lspCache.pending.hasKey(lrfDocumentLinkResolve):
     return
+  let ctx = e.state.lspCache.pending[lrfDocumentLinkResolve]
 
   # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
 
   case status
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentLinkResolve)
+    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
+      return
     if resultOpt.isSome:
       let resolvedLink = parseDocumentLinkResolveResponse(resultOpt.get)
       discard e.jumpToDocumentLink(resolvedLink)
     else:
       e.state.statusMessage = "Document link resolve returned no result"
   of lrsError:
-    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentLinkResolve)
     if errorOpt.isSome:
       e.state.statusMessage = "LSP document link resolve failed: " & errorOpt.get
   of lrsTimeout:
-    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+    e.state.lspCache.pending.del(lrfDocumentLinkResolve)
     e.state.statusMessage = "LSP document link resolve timed out"
 
 proc requestLspDocumentLinks*(e: Editor): bool =

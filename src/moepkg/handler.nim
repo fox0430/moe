@@ -19,19 +19,32 @@
 
 import std/[options, os, strutils, sequtils, unicode]
 
+when defined(posix):
+  from std/posix import nil
+
 import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
 
 import
   editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
   logger, types, motion, quick_run_utils, command_completion, build, render_utils,
-  tab_line, terminal_mode, clipboard, status_line, cursor_util, syntax_checker
+  tab_line, terminal_mode, clipboard, status_line, cursor_util, syntax_checker,
+  background_process
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
     result_processor,
   ]
 export command_mode_handler, search_mode_handler, cursor_util
+
+# Wire the playback overlay hook so nested key replay routes to the overlay
+# handler when Command / Search overlay is active.
+overlayPlaybackHook = proc(e: Editor, keyCombo: KeyCombo): Option[bool] =
+  if e.state.isCommandOverlay:
+    return some(e.handleCommandModeKeyCombo(keyCombo))
+  if e.state.isSearchOverlay:
+    return some(e.handleSearchModeKeyCombo(keyCombo))
+  return none(bool)
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess) =
   e.runningBackgroundProcesses.add(p)
@@ -204,7 +217,8 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
       hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
-      hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev:
+      hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
+      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -402,7 +416,7 @@ proc screenToBufferPosition(
 
 proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
   ## Calculate line number offset (matching rendering calculation)
-  calculateLineNumOffset(buffer, e.state.display.showLineNumbers)
+  calculateLineNumOffset(buffer, e.showLineNumbers)
 
 proc middleClickPaste(e: Editor) =
   ## Paste clipboard content at current cursor position for middle-click.
@@ -424,6 +438,12 @@ proc middleClickPaste(e: Editor) =
       e.insertPastedTextInCommand(pastedText)
     else:
       e.insertPastedTextInSearch(pastedText)
+    return
+
+  # A read-only active buffer must not slip into Insert mode via middle-click:
+  # the Insert-entry gate lives in normal_handler, which mouse events bypass.
+  if e.activeBuffer().readOnly:
+    e.state.statusMessage = "Buffer is read-only"
     return
 
   if e.state.mode == EditorMode.Normal:
@@ -479,6 +499,52 @@ proc middleClickPaste(e: Editor) =
 
   if ownTransaction:
     discard activeBuffer.commitTransaction()
+
+proc finalizeCurrentWindowForMouseJump(e: Editor) =
+  ## Exit the current mode before a mouse click hands focus to another window.
+  ## visualSelection and pendingOperator carry no buffer identity, and an open
+  ## transaction is per-buffer, so any of them would misfire on the new buffer.
+  let activeBuffer = e.activeBuffer()
+
+  case e.state.mode
+  of EditorMode.Insert, EditorMode.Replace:
+    if activeBuffer.inTransaction:
+      clearAutoIndentIfUnedited(activeBuffer, e.state)
+      discard activeBuffer.commitTransaction()
+    e.state.editState.insertModeStartPos = none(BufferPosition)
+    e.state.editState.substituteContext = none(types.SubstituteContext)
+    e.state.editState.replaceHistory = @[]
+    e.state.editState.insertReplayCount = 0
+    e.state.editState.insertReplayLineEntry = false
+    e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+    let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
+    adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+  of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
+    e.state.visualSelection.active = false
+  else:
+    discard
+
+  # Ctrl-o holds an open Insert transaction while state.mode is Normal.
+  if e.state.insertNormalMode:
+    if activeBuffer.inTransaction:
+      clearAutoIndentIfUnedited(activeBuffer, e.state)
+      discard activeBuffer.commitTransaction()
+    e.state.insertNormalMode = false
+    e.state.editState.insertModeStartPos = none(BufferPosition)
+
+  e.state.editState.pendingOperator = none(PendingOperator)
+  e.state.editState.pendingTextObject = none(PendingTextObject)
+  e.state.pendingRegister = none(char)
+  discard e.keyRouter.cancel()
+  if e.state.macroState.waitingForRegister:
+    e.state.macroState.waitingForRegister = false
+    e.state.macroState.commandType = ""
+    e.state.macroState.pendingCount = 0
+
+  # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
+  # the target window's own saved mode.
+  e.state.previousMode = e.state.mode
+  e.state.mode = EditorMode.Normal
 
 proc handleMouseEvent(e: Editor, event: Event): bool =
   ## Handle mouse events for cursor movement
@@ -576,7 +642,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     # Multiple windows mode
     if e.windowManager.windows.len > 1:
       # Check tab line click first
-      if e.state.display.showTabLine:
+      if e.showTabLine:
         for i, window in e.windowManager.windows:
           let vp = window.viewport
           if mouse.y == vp.y and mouse.x >= vp.x and mouse.x < vp.x + vp.width:
@@ -592,6 +658,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
               hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, mouse.x)
             if tabIdx >= 0:
               if i != e.windowManager.activeWindowIndex:
+                e.finalizeCurrentWindowForMouseJump()
                 e.windowManager.activeWindowIndex = i
                 for j, w in e.windowManager.windows.mpairs:
                   w.active = (j == i)
@@ -609,11 +676,11 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             sidebarWidth = e.calculateSidebarWidth(window.mode)
             scrollbarWidth = e.calculateScrollbarWidth(window.mode)
             # Each window has its own status line
-            reservedLines = if e.state.display.showStatusLine: 1 else: 0
+            reservedLines = if e.showStatusLine: 1 else: 0
             posOpt = screenToBufferPosition(
               vp, window.buffer, mouse.x, mouse.y, lineNumOffset, sidebarWidth,
-              reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
-              scrollbarWidth, window.wrapCountCache,
+              reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+              window.wrapCountCache,
             )
 
           if posOpt.isNone:
@@ -622,6 +689,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           let pos = posOpt.get
 
           if i != e.windowManager.activeWindowIndex:
+            e.finalizeCurrentWindowForMouseJump()
             e.windowManager.activeWindowIndex = i
             for j, w in e.windowManager.windows.mpairs:
               w.active = (j == i)
@@ -636,7 +704,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
     # Single window mode
     # Check tab line click first
-    if e.state.display.showTabLine and mouse.y == 0:
+    if e.showTabLine and mouse.y == 0:
       var buffersToShow: seq[TextBuffer] = @[]
       for id in e.activeWindow.bufferIds:
         let bufOpt = e.bufferById(id)
@@ -658,12 +726,12 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       # Status line + command line (shared row)
       reservedLines = steadyBottomAreaHeight()
       # Account for tab line offset
-      tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+      tabLineOffset = if e.showTabLine: TabLineHeight else: 0
       adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
         e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, sidebarWidth,
-        reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
-        scrollbarWidth, e.activeWindow.wrapCountCache,
+        reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+        e.activeWindow.wrapCountCache,
       )
 
     if posOpt.isNone:
@@ -680,7 +748,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
   if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
     let filerState = e.activeWindow.modeState.filer
     let
-      tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+      tabLineOffset = if e.showTabLine: TabLineHeight else: 0
       reservedLines = steadyBottomAreaHeight()
       adjustedMouseY = mouse.y - tabLineOffset
 
@@ -833,12 +901,26 @@ proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # Otherwise just dismiss and stay in current mode
   return true
 
-proc handleOverlayKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
+proc recordOverlayKey(e: Editor, keyCombo: KeyCombo) =
+  ## Append the overlay key to the active macro register. Overlay handlers
+  ## do not record inline, so capture at the dispatcher entry instead.
+  ## Suppressed during playback via `withPlaybackGuard` clearing `isRecording`.
+  if not e.state.macroState.isRecording:
+    return
+  e.state.macroState.recordedKeys.add(keyComboToString(keyCombo))
+
+proc handleOverlayKeyCombo(
+    e: Editor, keyCombo: KeyCombo, recordKey = false
+): Option[bool] =
   ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.
   ## Returns some(result) if handled, none otherwise.
   if e.state.isCommandOverlay:
+    if recordKey:
+      e.recordOverlayKey(keyCombo)
     return some(e.handleCommandModeKeyCombo(keyCombo))
   if e.state.isSearchOverlay:
+    if recordKey:
+      e.recordOverlayKey(keyCombo)
     return some(e.handleSearchModeKeyCombo(keyCombo))
   if e.state.isRenameOverlay:
     return some(e.handleRenameModeKeyCombo(keyCombo))
@@ -1043,7 +1125,7 @@ proc updateViewportReservedLines(e: Editor) =
   e.state.windowDisplay.viewportReservedLines = e.steadyReservedLines(isBottomWindow)
 
   # Add tab line height if shown
-  if e.state.display.showTabLine:
+  if e.showTabLine:
     e.state.windowDisplay.viewportReservedLines += TabLineHeight
 
 proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
@@ -1068,7 +1150,7 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     return true
 
   # Handle overlay modes (Command, Search, Rename) + Debug mode
-  let overlayResult = e.handleOverlayKeyCombo(keyCombo)
+  let overlayResult = e.handleOverlayKeyCombo(keyCombo, recordKey = true)
   if overlayResult.isSome:
     return overlayResult.get
 
@@ -1096,19 +1178,23 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   e.updateViewportReservedLines()
   e.syncCompletionOtherBuffers(activeBuffer)
 
-  let r = e.handlerManager.handleKeyCombo(e, keyCombo)
+  let outcome = e.handlerManager.runNestedKeyCombo(e, keyCombo)
 
-  # Sync display settings when in Config mode (config changes update EditorConfig
-  # but the cached display state needs to be kept in sync)
+  # In Config mode, sync display state only when a value was actually mutated.
+  # Plain cursor movement leaves pendingApply false, avoiding a theme reread and
+  # a full re-highlight of every buffer on each keystroke.
   if e.currentMode == EditorMode.Config:
-    e.applyConfigSettings(e.config)
+    let win = e.activeWindow
+    if win.modeState.kind == mskConfig and win.modeState.config.pendingApply:
+      e.applyConfigSettings(e.config)
+      win.modeState.config.pendingApply = false
 
   # For LogViewer mode, update viewport to follow cursor
   # (LogViewer handles cursor directly without using MotionController)
   if e.currentMode == EditorMode.LogViewer:
     e.updateViewportForCursor(e.cursor)
 
-  return e.processResult(r, activeBuffer)
+  return outcome != roQuit
 
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Main event handler using the new handler manager system
@@ -1276,40 +1362,45 @@ proc handlePendingAsyncOperationsImpl(
     if e.state.pending.shellCommand.len > 0:
       let cmd = e.state.pending.shellCommand
       e.state.pending.shellCommand = ""
-      await e.app.suspendAsync()
-      stdout.write("\e[H\e[2J") # Clear screen
-      stdout.flushFile()
-      let exitCode = execShellCmd(cmd)
-      stdout.write("\n\nShell returned " & $exitCode & "\n")
-      stdout.write("Press Enter to continue...")
-      stdout.flushFile()
-      discard stdin.readLine()
-      await e.app.resumeAsync()
+      # withSuspendAsync wraps the body in try/finally so the TUI always
+      # resumes, even if execShellCmd/readLine raises (a missed resume leaves
+      # the terminal in raw mode and destroys the screen).
+      e.app.withSuspendAsync:
+        stdout.write("\e[H\e[2J") # Clear screen
+        stdout.flushFile()
+        let exitCode = execShellCmd(cmd)
+        stdout.write("\n\nShell returned " & $exitCode & "\n")
+        stdout.write("Press Enter to continue...")
+        stdout.flushFile()
+        discard stdin.readLine()
 
     # Handle man page display
     if e.state.pending.manPage.len > 0:
       let page = e.state.pending.manPage
       e.state.pending.manPage = ""
-      await e.app.suspendAsync()
-      stdout.write("\e[H\e[2J") # Clear screen
-      stdout.flushFile()
-      let exitCode = execShellCmd("man " & quoteShell(page))
-      if exitCode != 0:
-        stdout.write("man: " & page & " not found\n")
-      stdout.write("\nPress Enter to continue...")
-      stdout.flushFile()
-      discard stdin.readLine()
-      await e.app.resumeAsync()
+      e.app.withSuspendAsync:
+        stdout.write("\e[H\e[2J") # Clear screen
+        stdout.flushFile()
+        let exitCode = execShellCmd("man " & quoteShell(page))
+        if exitCode != 0:
+          stdout.write("man: " & page & " not found\n")
+        stdout.write("\nPress Enter to continue...")
+        stdout.flushFile()
+        discard stdin.readLine()
 
-    # Handle background suspend
+    # Handle background suspend: send SIGTSTP to self so the shell registers moe
+    # as a proper stopped job (visible in `jobs`, resumable via `fg`). Falls back
+    # to a blocking readLine on non-POSIX platforms where SIGTSTP is unavailable.
     if e.state.pending.background:
       e.state.pending.background = false
-      await e.app.suspendAsync()
-      stdout.write("\e[H\e[2J")
-      stdout.write("moe suspended. Press Enter to return to moe...")
-      stdout.flushFile()
-      discard stdin.readLine()
-      await e.app.resumeAsync()
+      e.app.withSuspendAsync:
+        when defined(posix):
+          discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
+        else:
+          stdout.write("\e[H\e[2J")
+          stdout.write("moe suspended. Press Enter to return to moe...")
+          stdout.flushFile()
+          discard stdin.readLine()
 
     # Handle pending build - spawn as background task
     if e.state.pending.buildOnSave.path.len > 0:
@@ -1362,34 +1453,35 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     # `flushTimeout` never returns these variants; guard for exhaustiveness.
     return true
   of rrExecuteRuntimeCommand:
-    if not inCommandOverlay:
-      let cmdResult = e.handlerManager.executeCommandDirect(route.commandName)
-      if cmdResult.isSome:
-        # Route through `processResult` so bridge-produced `hrExecCommand`
-        # (and other non-trivial kinds) are dispatched the same way as in the
-        # main feedKey path. Without this, `K = "bdelete"` would silently no-op
-        # when fired via timeout flush.
-        shouldContinue = e.processResult(cmdResult.get, e.activeBuffer)
+    # `mappingsFor(Command)` filters rmkCommand out, so `flushTimeout(Command)`
+    # cannot return this variant. If the invariant is ever broken, prefer a
+    # loud failure over a silent drop that would swallow the mapping.
+    doAssert not inCommandOverlay,
+      "flushTimeout(Command) returned rrExecuteRuntimeCommand; " &
+        "mappingsFor(Command) must filter rmkCommand out (see key_router.mappingsFor)"
+    let cmdResult = e.handlerManager.executeCommandDirect(route.commandName)
+    if cmdResult.isSome:
+      # Route through `processResult` so bridge-produced `hrExecCommand`
+      # (and other non-trivial kinds) are dispatched the same way as in the
+      # main feedKey path. Without this, `K = "bdelete"` would silently no-op
+      # when fired via timeout flush.
+      shouldContinue = e.processResult(cmdResult.get, e.activeBuffer)
   of rrExecuteRuntimeKeySequence:
     if inCommandOverlay:
       # Command overlay replays through a different dispatcher
       # (handleCommandModeKeyCombo) that has no mapping-expansion precheck, so it
       # stays non-recursive regardless of noremap (known limitation).
       e.keyRouter.withReplay:
-        for targetKeyStr in route.targetKeys:
-          let targetKeyOpt = stringToKeyCombo(targetKeyStr)
-          if targetKeyOpt.isSome:
-            if not e.handleCommandModeKeyCombo(targetKeyOpt.get):
-              shouldContinue = false
-              break
+        for k in route.targetKeys:
+          if not e.handleCommandModeKeyCombo(k):
+            shouldContinue = false
+            break
     else:
       # Base mode: honour noremap so a timeout-fired mapping expands the same way
       # as an immediate match (recursive for :map, verbatim for :noremap).
-      let r =
+      let outcome =
         e.handlerManager.replayRuntimeKeySequence(e, route.targetKeys, route.noremap)
-      if r.kind == hrHandled and r.modeTransition.isSome:
-        e.state.mode = r.modeTransition.get
-      if r.kind == hrQuit:
+      if outcome == roQuit:
         shouldContinue = false
   of rrUnhandledBatch:
     if inCommandOverlay:
@@ -1401,13 +1493,13 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     else:
       e.keyRouter.withReplay:
         for k in route.keys:
-          let r = e.handlerManager.handleKeyCombo(e, k)
-          if r.kind == hrHandled and r.modeTransition.isSome:
-            e.state.mode = r.modeTransition.get
-          if r.kind == hrQuit:
+          case e.handlerManager.runNestedKeyCombo(e, k)
+          of roContinue:
+            discard
+          of roQuit:
             shouldContinue = false
             break
-          if r.kind == hrError:
+          of roAbort:
             break
 
   return shouldContinue
