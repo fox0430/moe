@@ -40,36 +40,8 @@ import std/[algorithm, tables, unicode]
 
 import pkg/celina
 
-import color
-
-type
-  VirtualTextChunk* = object ## A run of virtual text drawn with a single color.
-    text*: string
-    color*: EditorColorPairIndex
-
-  VirtualTextPlacement* = enum
-    vtpEndOfLine ## After the last rune of the line
-    vtpInline ## Before `column` (rune index); reserved, not yet rendered
-    vtpAbove ## Separate virtual line above; reserved, not yet rendered
-    vtpBelow ## Separate virtual line below; reserved, not yet rendered
-
-  VirtualText* = object
-    ## A single virtual text item supplied by a feature for one line.
-    line*: int
-    column*: int ## Rune index. Ignored for `vtpEndOfLine`.
-    placement*: VirtualTextPlacement
-    chunks*: seq[VirtualTextChunk]
-    priority*: int ## Lower draws first (further left for end-of-line / inline)
-
-  VirtualTextProvider* =
-    proc(line: int): seq[VirtualText] {.closure, gcsafe, raises: [].}
-    ## A feature's supplier of virtual text for a given buffer line.
-
-  VirtualTextLine* = object
-    ## Per-line virtual text already grouped by placement, ready to render.
-    endOfLine*: seq[VirtualTextChunk] ## All end-of-line chunks, priority order
-    inlineByColumn*: Table[int, seq[VirtualTextChunk]]
-      ## column -> chunks (priority order)
+import types/virtual_text_types
+export virtual_text_types
 
 proc totalWidth*(chunks: seq[VirtualTextChunk]): int =
   ## Total display width (sum of rune widths) of the chunks.

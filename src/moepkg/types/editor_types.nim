@@ -25,28 +25,18 @@ import std/[options, tables]
 import pkg/celina
 
 import
-  ../buffer,
-  ../types,
-  ../commands,
-  ../command_registry,
-  ../modes,
-  ../command_line,
-  ../command_config,
-  ../window_manager,
-  ../lsp_integration,
-  ../config,
-  ../persist,
-  ../background_process,
-  ../quick_run_utils,
-  ../virtual_text
+  ../[
+    buffer, types, commands, command_registry, modes, command_line, command_config,
+    window_manager, lsp_integration, config, quick_run_utils, key_router,
+  ]
 import ../key_bindings except Command
-import ../key_router
 import ../command_handlers/handler_types
+import background_process_types, persist_types, virtual_text_types
 
 export
   buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, config, persist, handler_types, tables, celina,
-  background_process, key_router, virtual_text
+  window_manager, lsp_integration, config, handler_types, tables, celina, key_router,
+  background_process_types, persist_types, virtual_text_types
 
 type
   ScreenSize* = object
