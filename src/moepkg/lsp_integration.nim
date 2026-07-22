@@ -994,6 +994,8 @@ proc startInlayHintRequest*(
 defineSupportCheck(hasDocumentLinkSupport)
 defineSupportCheck(hasDocumentLinkResolveSupport)
 defineSupportCheck(hasRenameSupport)
+defineSupportCheck(hasFormattingSupport)
+defineSupportCheck(hasSelectionRangeSupport)
 
 # TextEdit application helpers
 proc compareTextEditReverse(a, b: (int, TextEdit)): int =

@@ -157,6 +157,10 @@ proc startLspSelectionRange*(e: Editor): bool =
   e.state.lspCache.selectionRangeIndex = 0
 
   let activeBuffer = e.activeBuffer()
+  if not e.lsp.hasSelectionRangeSupport(activeBuffer):
+    e.state.statusMessage = "LSP selection range is not supported"
+    return false
+
   let line = e.activeWindow.cursor.line
   let col = e.activeWindow.cursor.column
   let ctxRes = e.startContextualRequest(

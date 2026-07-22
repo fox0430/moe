@@ -255,6 +255,18 @@ suite "editor_selectionrange - config gate":
     check not e.startLspSelectionRange()
     check e.state.statusMessage == "LSP selection range is disabled"
 
+  test "startLspSelectionRange returns false when server lacks capability":
+    # Config is on and LSP is enabled, but the server never advertised
+    # textDocument/selectionRange. Without the capability gate we would fire a
+    # request that only fails after the response timeout.
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    check not e.startLspSelectionRange()
+    check e.state.statusMessage == "LSP selection range is not supported"
+
 suite "editor_selectionrange - chain expansion":
   proc seedResponse(e: Editor, requestId: int, responseJson: JsonNode) =
     let buf = e.activeBuffer()

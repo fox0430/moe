@@ -301,6 +301,10 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         return false
 
       let activeBuffer = e.activeBuffer()
+      if not e.lsp.hasFormattingSupport(activeBuffer):
+        e.state.statusMessage = "LSP document formatting is not supported"
+        return false
+
       # Snapshot the buffer state before awaiting: the server's edits are
       # positioned against this state and must not be applied if the user
       # typed while the request was in flight

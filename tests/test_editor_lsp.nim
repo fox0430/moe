@@ -460,3 +460,13 @@ suite "editor_lsp - per-feature config gates":
 
     waitFor e.requestLspExecuteCommand("test.command")
     check e.state.statusMessage == "LSP execute command is disabled"
+
+  test "requestLspFormat returns false when server lacks formatting capability":
+    # Config is on and LSP is enabled, but the server never advertised
+    # textDocument/formatting. Without the capability gate we would fire a
+    # request that only fails after the response timeout.
+    let config = newEditorConfig()
+    let e = createEditorWithLsp(config)
+
+    check not waitFor e.requestLspFormat()
+    check e.state.statusMessage == "LSP document formatting is not supported"
