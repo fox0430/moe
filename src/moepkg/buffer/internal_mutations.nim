@@ -89,8 +89,7 @@ proc insertTextWithNewlines*(b: TextBuffer, pos: BufferPosition, text: string) =
   if '\n' notin text:
     # Simple case: no newlines, just insert into current line
     let line = b.getLine(pos.line)
-    let bytePos =
-      charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
+    let bytePos = charToBytePos(line, pos.column)
     b.backendInsertIntoLine(pos.line, bytePos, text)
   else:
     # Complex case: text contains newlines, need to split current line and insert multiple lines
