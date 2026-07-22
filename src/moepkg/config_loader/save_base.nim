@@ -58,6 +58,24 @@ proc escapeTomlBasicString*(val: string): string =
 proc toTomlString*(val: string): string =
   "\"" & escapeTomlBasicString(val) & "\""
 
+proc isTomlBareKey*(key: string): bool =
+  ## A TOML bare key may only contain A-Za-z0-9_- and must be non-empty.
+  if key.len == 0:
+    return false
+  for c in key:
+    if c notin {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '-'}:
+      return false
+  true
+
+proc toTomlKey*(key: string): string =
+  ## Emit a table key, quoting it unless it is a valid TOML bare key. Without
+  ## this, keys containing spaces, dots, or other special characters would
+  ## produce invalid TOML or be silently reinterpreted as nested tables.
+  if isTomlBareKey(key):
+    key
+  else:
+    toTomlString(key)
+
 proc toTomlStringArray*(val: seq[string]): string =
   result = "["
   for i, s in val:

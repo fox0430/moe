@@ -363,6 +363,70 @@ suite "LspWorker - buildApplyEditResponse":
     check resp["id"].kind == JNull
     check resp["result"]["applied"].getBool
 
+suite "LspWorker - buildWorkspaceConfigurationResponse":
+  test "returns one null per item when settings is null":
+    let params = %*{"items": [{"section": "foo"}, {"section": "bar"}]}
+    let result = buildWorkspaceConfigurationResponse(params, newJNull())
+    check result.kind == JArray
+    check result.len == 2
+    check result[0].kind == JNull
+    check result[1].kind == JNull
+
+  test "returns empty array when items is empty":
+    let params = %*{"items": []}
+    let result = buildWorkspaceConfigurationResponse(params, newJNull())
+    check result.kind == JArray
+    check result.len == 0
+
+  test "returns empty array when items is missing":
+    let params = %*{}
+    let result = buildWorkspaceConfigurationResponse(params, newJNull())
+    check result.kind == JArray
+    check result.len == 0
+
+  test "returns empty array when items is not an array":
+    let params = %*{"items": "not-an-array"}
+    let result = buildWorkspaceConfigurationResponse(params, newJNull())
+    check result.kind == JArray
+    check result.len == 0
+
+  test "returns empty array when params is null":
+    let result = buildWorkspaceConfigurationResponse(newJNull(), newJNull())
+    check result.kind == JArray
+    check result.len == 0
+
+  test "returns settings for item without section":
+    let settings = %*{"foo": "bar"}
+    let params = %*{"items": [{}]}
+    let result = buildWorkspaceConfigurationResponse(params, settings)
+    check result.kind == JArray
+    check result.len == 1
+    check result[0] == settings
+
+  test "returns section lookup for item with section":
+    let settings = %*{"rust": {"analyzer": {"enable": true}}}
+    let params = %*{"items": [{"section": "rust.analyzer"}]}
+    let result = buildWorkspaceConfigurationResponse(params, settings)
+    check result.kind == JArray
+    check result.len == 1
+    check result[0] == %*{"enable": true}
+
+  test "returns null for missing section":
+    let settings = %*{"foo": "bar"}
+    let params = %*{"items": [{"section": "baz"}]}
+    let result = buildWorkspaceConfigurationResponse(params, settings)
+    check result.kind == JArray
+    check result.len == 1
+    check result[0].kind == JNull
+
+  test "returns full settings for empty section":
+    let settings = %*{"foo": "bar"}
+    let params = %*{"items": [{"section": ""}]}
+    let result = buildWorkspaceConfigurationResponse(params, settings)
+    check result.kind == JArray
+    check result.len == 1
+    check result[0] == settings
+
 suite "LspWorker - LspEvent object":
   test "LspEvent levInitialized variant":
     let evt = LspEvent(kind: levInitialized)
