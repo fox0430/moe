@@ -2137,29 +2137,6 @@ suite "Buffer - contentVersion monotonicity":
     check buf.changeSeq == cs
     check buf.contentVersion > cv
 
-  test "NoUndo mutators invalidate cursorCache":
-    # cursorCache is keyed on (line, changeSeq); NoUndo does not bump
-    # changeSeq, so without an explicit reset the next charToBytePos lookup
-    # on the mutated line returns a stale bytePos.
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\nbeta\n")
-    # Seed the cache as if a prior lookup had populated it.
-    buf.cursorCache =
-      CursorPosCache(line: 0, charPos: 3, bytePos: 3, changeSeq: buf.changeSeq)
-
-    buf.replaceLineNoUndo(0, "gamma")
-    check buf.cursorCache.line == -1
-
-    buf.cursorCache =
-      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
-    buf.insertLineNoUndo(1, "delta")
-    check buf.cursorCache.line == -1
-
-    buf.cursorCache =
-      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
-    buf.deleteLineNoUndo(1)
-    check buf.cursorCache.line == -1
-
   test "insertLineNoUndo shifts bookmarks":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
@@ -2420,10 +2397,10 @@ suite "Buffer - reload preserves identity across a backend swap":
     check readFile(path) == "abc"
 
 suite "Buffer - reload resets stale content-keyed state":
-  # A reload replaces the content wholesale. State keyed on the OLD content (the
-  # char->byte cursor cache, undo/redo history) is stale and is reset on loadFile's
-  # single reload path, so a reload's result never depends on whether the file size
-  # happened to cross the backend-swap threshold.
+  # A reload replaces the content wholesale. State keyed on the OLD content
+  # (undo/redo history) is stale and is reset on loadFile's single reload path,
+  # so a reload's result never depends on whether the file size happened to
+  # cross the backend-swap threshold.
 
   setup:
     setAutoBackendMode(false)
@@ -2433,31 +2410,24 @@ suite "Buffer - reload resets stale content-keyed state":
     setAutoBackendMode(false)
     setConfiguredBackend(GapBuffer)
 
-  test "same-backend reload invalidates the cursor cache":
-    # charToBytePosCached keys on (line, charPos, changeSeq) and returns the cached
-    # bytePos WITHOUT re-reading the line. loadFile resets changeSeq to 0, so a hit
-    # recorded at changeSeq 0 (the first edit after a load) must not survive a
-    # reload, or it would return a byte offset computed from the OLD content and
-    # corrupt the edit when a multibyte char shifts column.
-    let path = getTempDir() / "moe_test_cursorcache_reload.txt"
+  test "edit after same-backend reload maps char to byte against new content":
+    # A reload changes the byte layout at a given char column (multibyte moves).
+    # The next edit must consult the reloaded content, not any residual state
+    # from before the reload.
+    let path = getTempDir() / "moe_test_reload_edit.txt"
     writeFile(path, "world héllo\n") # multibyte (é) before column 7
     defer:
       removeFile(path)
 
     let buf = newTextBuffer(backend = GapBuffer)
     check buf.loadFile(path).isOk
-    # First post-load edit at column>0 records a cache entry at changeSeq 0.
     discard buf.deleteChar(BufferPosition(line: 0, column: 7))
-    check buf.cursorCache.line != -1 # cache populated
 
     # Reload a DIFFERENT content where char 7 sits at another byte offset.
     writeFile(path, "héllo world\n") # é now before column 7, 'o' at char 7
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # same-backend path, no swap
-    check buf.cursorCache.line == -1 # cache invalidated by the reload
-    check buf.cursorCache.changeSeq == -1
 
-    # A fresh edit must read the NEW content's byte layout, not the stale offset.
     discard buf.deleteChar(BufferPosition(line: 0, column: 7))
     check buf.getLine(0) == "héllo wrld" # char 7 ('o') removed cleanly
 

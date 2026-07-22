@@ -29,17 +29,15 @@ import pkg/results
 import ../[primitives, unicode_utils]
 import core, internal_mutations, undo
 
-# NoUndo procs: skip undo/changeSeq but must invalidate cursorCache and shift
-# semantic overlay / folds / bookmarks. lineMarkers/modifiedLines are held back
-# via includeSideArrays=false so substitute-preview does not mark previewed
-# lines as modified in the sidebar.
+# NoUndo procs: skip undo/changeSeq but must shift semantic overlay / folds /
+# bookmarks. lineMarkers/modifiedLines are held back via includeSideArrays=false
+# so substitute-preview does not mark previewed lines as modified in the sidebar.
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Replace line content without recording undo. Used by substitute preview etc.
   if b.readOnly:
     return
   b.backendReplaceLine(lineNumber, content)
   b.advanceContentVersion()
-  b.resetCursorCache()
   b.emitRowColRemapEvents(
     BufferChange(kind: ckReplaceLine, replaceLineIdx: lineNumber),
     includeSideArrays = false,
@@ -51,7 +49,6 @@ proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
     return
   b.backendDeleteLine(lineNumber)
   b.advanceContentVersion()
-  b.resetCursorCache()
   b.emitRowColRemapEvents(
     BufferChange(kind: ckDeleteLine, deleteLineIdx: lineNumber),
     includeSideArrays = false,
@@ -63,7 +60,6 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
     return
   b.backendInsertLine(lineNumber, content)
   b.advanceContentVersion()
-  b.resetCursorCache()
   b.emitRowColRemapEvents(
     BufferChange(kind: ckInsertLine, insertLineIdx: lineNumber),
     includeSideArrays = false,
@@ -169,8 +165,7 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
       let
         deletedChar = line.runeAtPos(pos.column)
         charSize = len($deletedChar)
-        bytePos =
-          charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
+        bytePos = charToBytePos(line, pos.column)
 
       # Delete character at byte position
       b.backendDeleteAtLineCol(pos.line, bytePos, charSize)

@@ -446,68 +446,6 @@ suite "displayWidthUpTo":
     let text = "Hello"
     check displayWidthUpTo(text, 10) == 5
 
-suite "charToBytePosCached":
-  test "Basic caching":
-    var cache = CursorPosCache()
-    let text = "こんにちは"
-
-    # First call - cache miss
-    let pos1 = charToBytePosCached(text, 2, cache, 0, 1)
-    check pos1 == 6
-    check cache.charPos == 2
-    check cache.bytePos == 6
-    check cache.line == 0
-    check cache.changeSeq == 1
-
-  test "Cache hit - same position":
-    var cache = CursorPosCache()
-    let text = "こんにちは"
-
-    discard charToBytePosCached(text, 2, cache, 0, 1)
-    let pos2 = charToBytePosCached(text, 2, cache, 0, 1)
-    check pos2 == 6
-
-  test "Cache hit - forward movement":
-    var cache = CursorPosCache()
-    let text = "こんにちは"
-
-    discard charToBytePosCached(text, 2, cache, 0, 1)
-    let pos3 = charToBytePosCached(text, 4, cache, 0, 1)
-    check pos3 == 12
-
-  test "Cache hit - backward movement":
-    var cache = CursorPosCache()
-    let text = "こんにちは"
-
-    discard charToBytePosCached(text, 4, cache, 0, 1)
-    let pos1 = charToBytePosCached(text, 1, cache, 0, 1)
-    check pos1 == 3
-
-  test "Cache invalidation on line change":
-    var cache = CursorPosCache()
-    let text = "こんにちは"
-
-    discard charToBytePosCached(text, 2, cache, 0, 1)
-    let pos2 = charToBytePosCached(text, 2, cache, 1, 1) # Different line
-    check pos2 == 6
-    check cache.line == 1
-
-  test "Cache invalidation on changeSeq change":
-    var cache = CursorPosCache()
-    let text = "こんにちは"
-
-    discard charToBytePosCached(text, 2, cache, 0, 1)
-    let pos2 = charToBytePosCached(text, 2, cache, 0, 2) # Different changeSeq
-    check pos2 == 6
-    check cache.changeSeq == 2
-
-  test "Position 0 or negative":
-    var cache = CursorPosCache()
-    let text = "Hello"
-
-    check charToBytePosCached(text, 0, cache, 0, 1) == 0
-    check charToBytePosCached(text, -1, cache, 0, 1) == 0
-
 suite "Parenthesis utilities":
   test "isOpeningParen":
     check isOpeningParen('(') == true
@@ -642,20 +580,6 @@ suite "4-byte Emoji (Surrogate Pairs) Tests":
     let (_, size1) = getCharAtPos(text, 1)
     check size1 == 4
 
-  test "charToBytePosCached with 4-byte emoji":
-    var cache = CursorPosCache()
-    let text = "a🎉b🎊c"
-    # 'a'=1B, '🎉'=4B, 'b'=1B, '🎊'=4B, 'c'=1B = 11 bytes
-
-    let pos1 = charToBytePosCached(text, 1, cache, 0, 1)
-    check pos1 == 1 # '🎉' starts at byte 1
-
-    let pos3 = charToBytePosCached(text, 3, cache, 0, 1) # Forward movement
-    check pos3 == 6 # '🎊' starts at byte 6 (1 + 4 + 1)
-
-    let pos4 = charToBytePosCached(text, 4, cache, 0, 1)
-    check pos4 == 10 # 'c' starts at byte 10
-
 suite "Robustness Tests - Edge Cases and Invalid Input":
   test "charToBytePos with position beyond string length":
     let text = "Hello"
@@ -753,24 +677,6 @@ suite "Robustness Tests - Edge Cases and Invalid Input":
     check text.len == 5 # 'a'=1B + ZWSP=3B + 'b'=1B
     let (_, size) = getCharAtPos(text, 1)
     check size == 3
-
-  test "charToBytePosCached robustness":
-    var cache = CursorPosCache()
-    let text = "Hello"
-
-    # Multiple calls with same parameters should be consistent
-    for i in 0 ..< 10:
-      check charToBytePosCached(text, 3, cache, 0, 1) == 3
-
-    # Rapid line changes
-    for line in 0 ..< 5:
-      check charToBytePosCached(text, 2, cache, line, 1) == 2
-      check cache.line == line
-
-    # Rapid changeSeq changes
-    for seq in 1 .. 5:
-      check charToBytePosCached(text, 2, cache, 0, seq) == 2
-      check cache.changeSeq == seq
 
   test "displayWidthSubstr edge cases":
     # Empty string
