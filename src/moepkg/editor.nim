@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, strutils, sequtils, options, monotimes, times, os]
+import std/[strformat, strutils, sequtils, options, monotimes, times, os, tables]
 
 import pkg/[results, chronos]
 
@@ -46,7 +46,8 @@ import
 
 import
   render_utils, git_conflict, logger, config_loader, search_utils, hover_popup,
-  command_completion, color, message_log, recent_file_mode, registers, persist
+  command_completion, color, message_log, recent_file_mode, registers, persist,
+  command_line, command_config, key_router, config, window_manager, lsp_integration
 
 import command_handlers/handler_manager
 

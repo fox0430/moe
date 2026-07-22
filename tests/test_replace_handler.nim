@@ -23,7 +23,7 @@ import std/[unittest, options, tables]
 
 import
   ../src/moepkg/
-    [buffer, types, key_bindings, modes, motion, command_registry, registers]
+    [buffer, types, key_bindings, modes, motion, command_registry, registers, config]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/command_handlers/replace_handler
 

@@ -22,6 +22,8 @@
 
 import std/[unittest, options, tables, strutils, os, tempfiles]
 
+import pkg/results
+
 import
   ../src/moepkg/[
     buffer, types, config, key_bindings, modes, motion, command_registry, registers,

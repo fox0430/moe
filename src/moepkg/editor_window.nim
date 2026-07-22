@@ -19,7 +19,7 @@
 
 ## Window split and buffer management procedures
 
-import std/[options, os]
+import std/[options, os, tables]
 
 import pkg/results
 
@@ -32,7 +32,9 @@ import
   editor_window_layout,
   editor_lsp,
   git_diff,
-  git_conflict
+  git_conflict,
+  window_manager,
+  buffer
 
 # Window state management procedures
 

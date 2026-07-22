@@ -21,6 +21,8 @@
 
 import std/[options, strutils, tables]
 
+import pkg/results
+
 import
   types/editor_types,
   editor_lsp,

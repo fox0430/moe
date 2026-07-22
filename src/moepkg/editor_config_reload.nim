@@ -23,7 +23,7 @@
 
 import std/[monotimes, times, os]
 
-import pkg/results
+import pkg/[results, celina]
 
 import
   types/editor_types,
@@ -36,7 +36,9 @@ import
   config_loader,
   sidebar,
   logger,
-  registers
+  registers,
+  key_router,
+  lsp_integration
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor.

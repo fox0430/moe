@@ -24,19 +24,21 @@ import std/[options, tables]
 
 import pkg/celina
 
-import
-  ../[
-    buffer, types, commands, command_registry, modes, command_line, command_config,
-    window_manager, lsp_integration, config, quick_run_utils, key_router,
-  ]
+import ../[types, commands, command_registry, modes, quick_run_utils]
 import ../key_bindings except Command
 import ../command_handlers/handler_types
-import background_process_types, persist_types, virtual_text_types
+import ../buffer/core as buffer_core
+import ../command_line/types as command_line_types
+import ../key_router/types as key_router_types
+import
+  background_process_types, persist_types, virtual_text_types, command_config_types,
+  config_types, window_manager_types, lsp_integration_types
 
 export
-  buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, config, handler_types, tables, celina, key_router,
-  background_process_types, persist_types, virtual_text_types
+  types, commands, command_registry, modes, handler_types, background_process_types,
+  persist_types, virtual_text_types, command_line_types, command_config_types,
+  key_router_types, config_types, buffer_core, window_manager_types,
+  lsp_integration_types
 
 type
   ScreenSize* = object
@@ -149,15 +151,13 @@ proc addBuffer*(e: Editor, buf: TextBuffer) =
   e.buffers.add(buf)
   e.bufferIdIndex[buf.id] = buf
 
-proc deleteBufferAt*(e: Editor, idx: int) =
+proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from
-  ## `bufferIdIndex`. Use this instead of `e.buffers.delete`.
-  ## Also sends LSP didClose so a later re-open doesn't collide with stale
-  ## server state (no-op for non-file buffers and untracked paths).
+  ## `bufferIdIndex`. Use `deleteBufferAt` (in editor_buffers) instead, which
+  ## also sends LSP didClose. This raw form is exposed only so the LSP-aware
+  ## wrapper can call it without duplicating index/table bookkeeping.
   let buf = e.buffers[idx]
   let id = buf.id
-  if e.lsp != nil:
-    discard e.lsp.onBufferClose(buf)
   e.buffers.delete(idx)
   e.bufferIdIndex.del(id)
   e.lastLspContentVersions.del(id)

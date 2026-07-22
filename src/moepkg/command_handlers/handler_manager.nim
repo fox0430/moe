@@ -37,7 +37,7 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
-    command_registry, config, lsp_integration, logger,
+    command_registry, config, lsp_integration, logger, key_router,
   ]
 import ../types/editor_types
 # The shared handler-module list lives in handler_modules (single source of
