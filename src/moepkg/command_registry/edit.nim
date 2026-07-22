@@ -112,6 +112,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       return err(txnResult.error)
 
   # Paste count times
+  var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
   for i in 1 .. actualCount:
     if isFullLine:
       # Paste on new line below current line (Vim 'p' behavior for linewise yank)
@@ -142,6 +143,9 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if i == 1 and ctx.cursor.column < lineContent.charLen:
         pastePos.column = ctx.cursor.column + 1
 
+      if firstPastedChar.isNone:
+        firstPastedChar = some(pastePos)
+
       let insertResult = ctx.buffer.insertText(pastePos, pasteText)
       if insertResult.isErr:
         # Rollback transaction on error
@@ -157,9 +161,9 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       ctx.cursor.line = endPos.line
       ctx.cursor.column = endPos.column
 
-  # Adjust cursor to last character of pasted text
-  if not isFullLine and ctx.cursor.column > 0:
-    ctx.cursor.column = ctx.cursor.column - 1
+  # Place cursor on the first character of the pasted text
+  if not isFullLine and firstPastedChar.isSome:
+    ctx.cursor = firstPastedChar.get
 
   # Commit transaction if we started one
   if actualCount > 1:
@@ -235,6 +239,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       return err(txnResult.error)
 
   # Paste count times
+  var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
   for i in 1 .. actualCount:
     if isFullLine:
       # Paste on new line above current line (Vim 'P' behavior for linewise yank)
@@ -258,6 +263,9 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       # Paste at cursor position (Vim 'P' behavior for characterwise yank)
       let pastePos = ctx.cursor
 
+      if firstPastedChar.isNone:
+        firstPastedChar = some(pastePos)
+
       let insertResult = ctx.buffer.insertText(pastePos, pasteText)
       if insertResult.isErr:
         # Rollback transaction on error
@@ -273,9 +281,9 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       ctx.cursor.line = endPos.line
       ctx.cursor.column = endPos.column
 
-  # Adjust cursor to last character of pasted text
-  if not isFullLine and ctx.cursor.column > 0:
-    ctx.cursor.column = ctx.cursor.column - 1
+  # Place cursor on the first character of the pasted text
+  if not isFullLine and firstPastedChar.isSome:
+    ctx.cursor = firstPastedChar.get
 
   # Commit transaction if we started one
   if actualCount > 1:
