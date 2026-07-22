@@ -2891,6 +2891,37 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     check not e.state.insertNormalMode
     check not e.state.isCommandOverlay
 
+suite "handleKeyCombo - frontend-neutral input":
+  proc charKey(c: string): KeyCombo =
+    KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+  test "Normal mode command enters Insert mode":
+    let e = createTestEditorWithBuffer("hello")
+
+    discard e.handleKeyCombo(charKey("i"))
+
+    check e.state.mode == EditorMode.Insert
+
+  test "Command overlay accepts character input":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+
+    discard e.handleKeyCombo(charKey("w"))
+
+    check e.state.isCommandOverlay
+    check e.state.input.commandText == ":w"
+    check e.state.input.commandCursor == 1
+
+  test "Search overlay accepts character input":
+    let e = createTestEditorWithBuffer("hello world")
+    e.state.enterSearchOverlay(Forward)
+
+    discard e.handleKeyCombo(charKey("w"))
+
+    check e.state.isSearchOverlay
+    check e.state.input.search.text == "w"
+    check e.state.input.search.cursor == 1
+
 suite "updateViewportReservedLines - steady reserve":
   test "Multi-line status message keeps the motion reserve steady":
     # Motion scrolling reads viewportReservedLines, which must
