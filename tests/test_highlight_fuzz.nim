@@ -574,6 +574,45 @@ proc tclCorpus(): seq[seq[string]] =
     @["# a comment", "set cont \"a \\", "b\"", "foreach i {1 2 3} {puts $i}"],
   ]
 
+proc commitEditMsgCorpus(): seq[seq[string]] =
+  ## COMMIT_EDITMSG snippets exercising the per-file `commit.subjectSeen`
+  ## flag and the mid-line Conventional Commits / trailer sub-token machines.
+  ## `subjectSeen` only flips on the first non-comment, non-empty line, so
+  ## edits that swap a subject line for a comment (or vice versa) must
+  ## reparse the whole rest of the message — the class of divergence this
+  ## fuzz targets. Snippets cover: full conventional (scope + bang), body +
+  ## trailers, comment/status-marker prelude before the subject, comments and
+  ## empty lines only (subject never appears), non-conventional plain
+  ## subject, and subject immediately followed by a trailer.
+  result = @[
+    @[
+      "feat(auth)!: rework login flow", "",
+      "BREAKING CHANGE: sessions are now stateless.",
+      "Signed-off-by: Dev <dev@example.com>",
+    ],
+    @[
+      "fix(parser): handle empty input", "",
+      "Previously crashed on an empty file; now returns Ok(None).", "Refs: #123",
+      "Reviewed-by: Alice <alice@example.com>",
+    ],
+    @[
+      "# Please enter the commit message for your changes.", "#", "# On branch develop",
+      "# Changes to be committed:", "#\tmodified:   src/main.nim", "#",
+      "docs: update readme",
+    ],
+    @[
+      "#",
+      "# Please enter the commit message. Lines starting with '#' will be ignored.",
+      "#", "# On branch main", "# Untracked files:", "#\tnotes.txt",
+    ],
+    @[
+      "Fix the offset regression", "",
+      "The previous version dropped chars past the newline.",
+      "Signed-off-by: Bob <bob@example.com>",
+    ],
+    @["chore: bump version", "Signed-off-by: Bot <bot@example.com>"],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -894,6 +933,11 @@ suite "Incremental Highlight Fuzz":
 
   test "Tcl: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langTcl, tclCorpus(), iters, baseSeed)
+
+  test "CommitEditMsg: incremental output matches full reparse under random edits":
+    check runFuzz(
+      SourceLanguage.langCommitEditMsg, commitEditMsgCorpus(), iters, baseSeed
+    )
 
 # Deterministic chunk-boundary tests
 #
