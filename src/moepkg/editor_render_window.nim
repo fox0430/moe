@@ -559,7 +559,7 @@ proc renderLineSegmentWithSelection*(
     # Tab expands to N spaces up to the next tab stop. Each expanded cell
     # honors indentation-guide drawing; the spaces themselves use a style
     # that may carry the trailingSpaces override.
-    let spacesToNextTab = e.tabStop - (displayX mod e.tabStop)
+    let spacesToNextTab = tabAdvance(displayX, e.tabStop)
     let tabStyle = style.merge(e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col))
     for i in 0 ..< spacesToNextTab:
       if screenX + displayX < ctx.windowRightEdge:

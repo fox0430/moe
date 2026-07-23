@@ -189,13 +189,28 @@ proc formatRelativeLineNumber*(lineIndex: int, cursorLine: int, width: int): str
       abs(lineIndex - cursorLine)
   align($num, width - LineNumberPadding) & " "
 
+func tabAdvance*(currentWidth, tabStop: int): int {.inline.} =
+  ## Spaces a tab character occupies when placed at column `currentWidth`,
+  ## i.e. the distance to the next tab stop. `tabStop <= 0` is coerced to 1
+  ## to prevent division by zero; the single place encoding that guard.
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+  safeTabStop - (currentWidth mod safeTabStop)
+
+func startsNewWrapSegment*(segmentWidth, runeWidth, maxWidth: int): bool {.inline.} =
+  ## Canonical wrap-boundary rule shared by every wrap walker
+  ## (calculateWrapCount, cursorWrapPosition, displayWidthSubstrFromByte):
+  ## a rune starts a new segment when the current segment is non-empty and
+  ## the rune does not fit. Keeping a single definition guarantees the
+  ## reserved height, the cursor cell and the drawn segments stay on the
+  ## same grid.
+  segmentWidth > 0 and segmentWidth + runeWidth > maxWidth
+
 proc displayWidthSubstrWithTabs*(
     text: string, startChar: int, maxWidth: int, tabStop: int
 ): (int, int) =
   ## Calculate how many characters from startChar fit within maxWidth display columns,
   ## accounting for tab characters expanded relative to the segment start.
   ## Returns (charCount, actualDisplayWidth)
-  let safeTabStop = if tabStop > 0: tabStop else: 1
   var
     currentChar = 0
     currentWidth = 0
@@ -208,7 +223,7 @@ proc displayWidthSubstrWithTabs*(
 
     let w =
       if rune == TAB_CHAR:
-        safeTabStop - (currentWidth mod safeTabStop)
+        tabAdvance(currentWidth, tabStop)
       else:
         runeWidth(rune)
 
@@ -221,15 +236,6 @@ proc displayWidthSubstrWithTabs*(
 
   return (charCount, currentWidth)
 
-func startsNewWrapSegment*(segmentWidth, runeWidth, maxWidth: int): bool {.inline.} =
-  ## Canonical wrap-boundary rule shared by every wrap walker
-  ## (calculateWrapCount, cursorWrapPosition, displayWidthSubstrFromByte):
-  ## a rune starts a new segment when the current segment is non-empty and
-  ## the rune does not fit. Keeping a single definition guarantees the
-  ## reserved height, the cursor cell and the drawn segments stay on the
-  ## same grid.
-  segmentWidth > 0 and segmentWidth + runeWidth > maxWidth
-
 proc displayWidthSubstrFromByte*(
     text: string, startByte: int, maxWidth: int, tabStop: int
 ): (int, int, int) =
@@ -237,7 +243,6 @@ proc displayWidthSubstrFromByte*(
   ## Returns (charCount, actualDisplayWidth, endBytePosition).
   ## Unlike displayWidthSubstrWithTabs, this starts directly from startByte
   ## instead of scanning from the beginning, avoiding O(startChar) skip overhead.
-  let safeTabStop = if tabStop > 0: tabStop else: 1
   var
     bytePos = startByte
     currentWidth = 0
@@ -249,7 +254,7 @@ proc displayWidthSubstrFromByte*(
       runeBytes = runeLenAt(text, bytePos)
       w =
         if rune == TAB_CHAR:
-          safeTabStop - (currentWidth mod safeTabStop)
+          tabAdvance(currentWidth, tabStop)
         else:
           runeWidth(rune)
 
@@ -270,7 +275,6 @@ proc screenXToCharIndex*(
   ## display columns within a wrap segment starting at startChar.
   ## For multi-column characters (tabs, wide chars), clicking anywhere within the
   ## character's display width selects that character.
-  let safeTabStop = if tabStop > 0: tabStop else: 1
   var
     currentChar = 0
     currentWidth = 0
@@ -283,7 +287,7 @@ proc screenXToCharIndex*(
 
     let w =
       if rune == TAB_CHAR:
-        safeTabStop - (currentWidth mod safeTabStop)
+        tabAdvance(currentWidth, tabStop)
       else:
         runeWidth(rune)
 
@@ -303,21 +307,24 @@ proc calculateWrapCount*(text: string, maxWidth: int, tabStop: int): int =
   ## Single-pass O(n) implementation — iterates runes once without re-scanning.
   if text.len == 0:
     return 1
-  let safeTabStop = if tabStop > 0: tabStop else: 1
   result = 1
   var segmentWidth = 0
 
   for rune in text.runes:
     let w =
       if rune == TAB_CHAR:
-        safeTabStop - (segmentWidth mod safeTabStop)
+        tabAdvance(segmentWidth, tabStop)
       else:
         runeWidth(rune)
 
     if startsNewWrapSegment(segmentWidth, w, maxWidth):
       result += 1
       # Recalculate width in new segment context (tab width depends on position)
-      segmentWidth = if rune == TAB_CHAR: safeTabStop else: w
+      segmentWidth =
+        if rune == TAB_CHAR:
+          tabAdvance(0, tabStop)
+        else:
+          w
     else:
       segmentWidth += w
 
@@ -448,8 +455,6 @@ proc displayWidthUpToWithTabs*(text: string, charPos: int, tabStop: int): int =
   if charPos < 0:
     return 0
 
-  let safeTabStop = if tabStop > 0: tabStop else: 1
-
   result = 0
   var currentChar = 0
 
@@ -457,11 +462,8 @@ proc displayWidthUpToWithTabs*(text: string, charPos: int, tabStop: int): int =
     if currentChar >= charPos:
       break
 
-    # Handle tab character specially
     if rune == TAB_CHAR:
-      # Calculate spaces to next tab stop
-      let spacesToNextTab = safeTabStop - (result mod safeTabStop)
-      result += spacesToNextTab
+      result += tabAdvance(result, tabStop)
     else:
       result += runeWidth(rune)
 
@@ -473,13 +475,10 @@ proc displayWidthWithTabs*(text: string, tabStop: int): int =
   ##
   ## Note: If tabStop <= 0, it defaults to 1 to prevent division by zero.
 
-  let safeTabStop = if tabStop > 0: tabStop else: 1
-
   result = 0
   for rune in text.runes:
     if rune == TAB_CHAR:
-      let spacesToNextTab = safeTabStop - (result mod safeTabStop)
-      result += spacesToNextTab
+      result += tabAdvance(result, tabStop)
     else:
       result += runeWidth(rune)
 
@@ -492,7 +491,6 @@ proc cursorWrapPosition*(
   if text.len == 0 or cursorChar <= 0:
     return (0, 0)
 
-  let safeTabStop = if tabStop > 0: tabStop else: 1
   var
     segmentWidth = 0
     wrapLine = 0
@@ -501,13 +499,17 @@ proc cursorWrapPosition*(
   for rune in text.runes:
     let w =
       if rune == TAB_CHAR:
-        safeTabStop - (segmentWidth mod safeTabStop)
+        tabAdvance(segmentWidth, tabStop)
       else:
         runeWidth(rune)
 
     if startsNewWrapSegment(segmentWidth, w, maxWidth):
       wrapLine += 1
-      let newW = if rune == TAB_CHAR: safeTabStop else: w
+      let newW =
+        if rune == TAB_CHAR:
+          tabAdvance(0, tabStop)
+        else:
+          w
 
       # Check if cursor is at (or past) this character
       if charIndex >= cursorChar:
