@@ -1063,6 +1063,90 @@ suite "renderWindow - Visual selection":
 
     e.renderWindow(buffer, window, 0, true, true, 0)
 
+suite "renderWindow - Visual selection over indentation guides":
+  test "Indent guide cell keeps visual selection background":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.cursor = BufferPosition(line: 0, column: 5)
+
+    # 4 leading spaces + "body"; with tabStop=2, indent guides land at
+    # displayX 2 (space at charIdx 2).
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "    body")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 5
+    window.mode = EditorMode.Visual
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visStyle = visualStyle()
+    let guideStyle = indentationLineStyle()
+    var guideCellsChecked = 0
+    for x in 0 ..< 40:
+      if buffer[x, 0].symbol == "│":
+        guideCellsChecked += 1
+        check buffer[x, 0].style.fg == guideStyle.fg
+        check buffer[x, 0].style.bg == visStyle.bg
+    check guideCellsChecked >= 1
+
+  test "Indent guide keeps normal background outside visual selection":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
+    e.state.mode = EditorMode.Normal
+    e.state.visualSelection.active = false
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "    body")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+    window.mode = EditorMode.Normal
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visStyle = visualStyle()
+    var guideCellsChecked = 0
+    for x in 0 ..< 40:
+      if buffer[x, 0].symbol == "│":
+        guideCellsChecked += 1
+        check buffer[x, 0].style.bg != visStyle.bg
+    check guideCellsChecked >= 1
+
 suite "renderWindow - Visual selection on empty line":
   test "Visual mode shows selection at column 0 of empty line (no-wrap)":
     let e = createTestEditor()
