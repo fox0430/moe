@@ -143,6 +143,7 @@ type
     inDisplayMath*: bool
     inFrontmatter*: bool
     firstLine*: bool
+    codeBlockLang*: SourceLanguage
 
   LatexState* = object
     inMathMode*: bool
@@ -261,7 +262,22 @@ proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
     if cmpIgnoreStyle(name, sourceLanguageToStr[i]) == 0:
       return i
-  result = langNone
+  case name.toLowerAscii
+  of "js": langJavaScript
+  of "jsx": langJsx
+  of "ts": langTypeScript
+  of "tsx": langTsx
+  of "py": langPython
+  of "rs": langRust
+  of "sh", "bash": langShell
+  of "yml": langYaml
+  of "docker": langDockerfile
+  of "md": langMarkdown
+  of "cpp", "cxx": langCpp
+  of "cs", "csharp": langCsharp
+  of "hs": langHaskell
+  of "tex", "latex": langLatex
+  else: langNone
 
 proc defaultLangState*(): LangState =
   ## Initial `LangState` for a fresh tokenizer. Callers seeding a tokenizer at

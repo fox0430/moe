@@ -90,9 +90,11 @@ suite "syntax_markdown - triple backtick (code block)":
     check tokens[0] == (gtSpecialVar, "```")
     check tokens[1] == (gtKeyword, "nim")
     check tokens[2][0] == gtWhitespace # newline
-    check tokens[3] == (gtLongStringLit, "echo 1")
-    check tokens[4][0] == gtWhitespace # newline
-    check tokens[5] == (gtSpecialVar, "```")
+    check tokens[3] == (gtBuiltin, "echo")
+    check tokens[4][0] == gtWhitespace
+    check tokens[5] == (gtDecNumber, "1")
+    check tokens[6][0] == gtWhitespace # newline
+    check tokens[7] == (gtSpecialVar, "```")
 
   test "code block without language name":
     let tokens = collectTokens("```\nsome code\n```")
@@ -107,6 +109,51 @@ suite "syntax_markdown - triple backtick (code block)":
     check tokens[0] == (gtSpecialVar, "```")
     check tokens[1][0] == gtWhitespace
     check tokens[2] == (gtLongStringLit, "code")
+
+suite "syntax_markdown - nested code block highlighting":
+  test "nim code block is tokenized":
+    let tokens = collectTokens("```nim\necho 1\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1] == (gtKeyword, "nim")
+    check (gtBuiltin, "echo") in tokens
+    check (gtDecNumber, "1") in tokens
+    check tokens[^1] == (gtSpecialVar, "```")
+
+  test "python code block is tokenized":
+    let tokens = collectTokens("```python\ndef foo():\n    pass\n```")
+    check (gtKeyword, "def") in tokens
+    check (gtIdentifier, "foo") in tokens
+    check (gtKeyword, "pass") in tokens
+    check tokens[^1] == (gtSpecialVar, "```")
+
+  test "rust code block is tokenized":
+    let tokens = collectTokens("```rust\nfn main() {}\n```")
+    check (gtKeyword, "fn") in tokens
+    check (gtIdentifier, "main") in tokens
+    check tokens[^1] == (gtSpecialVar, "```")
+
+  test "unknown language falls back to gtLongStringLit":
+    let tokens = collectTokens("```foo\nbar baz\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1] == (gtKeyword, "foo")
+    check tokens[2][0] == gtWhitespace
+    check tokens[3] == (gtLongStringLit, "bar baz")
+    check tokens[4][0] == gtWhitespace
+    check tokens[5] == (gtSpecialVar, "```")
+
+  test "consecutive code blocks reset language state":
+    let tokens = collectTokens("```nim\nlet x = 1\n```\n```python\ny = 2\n```")
+    check (gtKeyword, "let") in tokens
+    check (gtKeyword, "nim") in tokens
+    check (gtKeyword, "python") in tokens
+    var kinds: set[TokenClass]
+    for (kind, _) in tokens:
+      kinds.incl(kind)
+    check gtDecNumber in kinds
+
+  test "closing fence resets to plain markdown":
+    let tokens = collectTokens("```nim\necho 1\n```\nhello")
+    check tokens[^1] == (gtIdentifier, "hello")
 
 suite "syntax_markdown - hash (headings)":
   test "hash at line start is heading":
@@ -489,13 +536,11 @@ suite "syntax_markdown - code block edge cases":
     check tokens[0] == (gtSpecialVar, "```")
     check tokens[1] == (gtKeyword, "python")
 
-  test "code block language name not detected after whitespace":
-    # ```  nim → whitespace clears the gtSpecialVar state,
-    # so "nim" becomes content, not language name
+  test "code block language name detected after leading whitespace":
     let tokens = collectTokens("```  nim\ncode\n```")
     check tokens[0] == (gtSpecialVar, "```")
-    check tokens[1][0] == gtWhitespace # spaces
-    check tokens[2] == (gtLongStringLit, "nim")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtKeyword, "nim")
 
   test "code block mdInCodeBlock flag cleared after closing":
     let tokens = collectTokens("```\nA\n```\n**bold**")
@@ -888,7 +933,7 @@ suite "syntax_markdown - complete markdown":
     check gtOperator in kinds # list markers
     check gtComment in kinds # blockquote / strikethrough
     check gtSpecialVar in kinds # ``` / link URL
-    check gtLongStringLit in kinds # code block content
+    check gtDecNumber in kinds # code block content (nim: "1")
     check gtIdentifier in kinds # normal text
 
   test "code block between paragraphs preserves state":
@@ -1176,3 +1221,75 @@ suite "Markdown - indented code blocks":
       if t[0] == gtSpecialVar:
         hasSpecialVar = true
     check hasSpecialVar
+
+suite "syntax_markdown - code block regression":
+  test "backticks inside multi-line sub-language state do not close code block":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("```\n\"\"\"")
+    g.lang.markdown.inCodeBlock = true
+    g.lang.markdown.codeBlockLang = langNim
+    g.state = gtLongStringLit
+    g.markdownNextToken()
+    check g.lang.markdown.inCodeBlock
+
+  test "language name token resets state to gtNone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("```nim\necho 1\n```")
+    g.markdownNextToken()
+    check g.kind == gtSpecialVar
+    g.markdownNextToken()
+    check g.kind == gtKeyword
+    check g.state == gtNone
+
+  test "language name with trailing whitespace is recognized":
+    let tokens = collectTokens("```nim \nlet x = 1\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1][0] == gtKeyword
+    var hasNimKeyword = false
+    for (kind, text) in tokens:
+      if kind == gtKeyword and text == "let":
+        hasNimKeyword = true
+    check hasNimKeyword
+
+  test "whitespace-prefixed line inside multi-line sub-language state delegates to sub-language":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("    indented inside docstring\n\"\"\"")
+    g.lang.markdown.inCodeBlock = true
+    g.lang.markdown.codeBlockLang = langPython
+    g.state = gtDocLongComment
+    g.markdownNextToken()
+    check g.kind == gtDocLongComment
+
+  test "whitespace-prefixed line inside rust block comment delegates to sub-language":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("    still commenting\n*/")
+    g.lang.markdown.inCodeBlock = true
+    g.lang.markdown.codeBlockLang = langRust
+    g.state = gtLongComment
+    g.markdownNextToken()
+    check g.kind == gtLongComment
+
+  test "whitespace-prefixed line inside nim long string delegates to sub-language":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("    inside triple quote\n\"\"\"")
+    g.lang.markdown.inCodeBlock = true
+    g.lang.markdown.codeBlockLang = langNim
+    g.state = gtLongStringLit
+    g.markdownNextToken()
+    check g.kind == gtLongStringLit
+
+  test "cpp alias code block is tokenized":
+    let tokens = collectTokens("```cpp\nint x = 0;\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check (gtKeyword, "int") in tokens
+    check tokens[^1] == (gtSpecialVar, "```")
+
+  test "cxx alias code block is tokenized":
+    let tokens = collectTokens("```cxx\nreturn 0;\n```")
+    check (gtKeyword, "return") in tokens
+
+  test "cs alias code block is tokenized":
+    let tokens = collectTokens("```cs\nusing System;\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check (gtKeyword, "using") in tokens
+    check tokens[^1] == (gtSpecialVar, "```")

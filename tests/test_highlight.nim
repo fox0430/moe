@@ -2454,6 +2454,48 @@ suite "Highlight - Markdown Incremental":
     )
     checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
 
+  test "edit inside fenced code block with language keeps nested highlight":
+    var buffer = @["# test", "", "```nim", "import std/io", "", "proc hello() =", "```"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih =
+      IncrementalHighlight(segments: seg0, lineStates: LineStateCache(states: ls0))
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+    buffer[3] = "import std/strutils"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      3,
+      @[],
+      SourceLanguage.langMarkdown,
+    )
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+  test "reparse from multi-line string inside fenced code block with backtick line":
+    var buffer = @["```nim", "let x = \"\"\"", "```", "\"\"\"", "```"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih =
+      IncrementalHighlight(segments: seg0, lineStates: LineStateCache(states: ls0))
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+    buffer[2] = "````"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      2,
+      @[],
+      SourceLanguage.langMarkdown,
+    )
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
 suite "Highlight - updateHighlight cache reuse":
   test "empty-line buffer reuses the incremental cache on re-edit":
     # All-blank buffer: `segments` stays empty but `lineStates` is populated.

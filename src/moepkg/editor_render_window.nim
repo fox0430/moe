@@ -276,6 +276,9 @@ proc baseStyleWithOverlay(
     var style = colorIndexToStyle(colorPair)
     style.modifiers =
       style.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+    let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
+    if segBg.isSome:
+      style = style.merge(bgOnly(segBg.get))
     style.merge(
       e.overlayPatchSyntax(pos, lineCtx, displayCol, cursorDisplayCol, colorPair)
     )
@@ -313,6 +316,9 @@ proc getSelectionStyle*(
       var s = colorIndexToStyle(colorPair)
       s.modifiers =
         s.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+      let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
+      if segBg.isSome:
+        s = s.merge(bgOnly(segBg.get))
       s
     else:
       normalStyle()
