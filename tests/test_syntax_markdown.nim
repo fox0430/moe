@@ -130,6 +130,30 @@ suite "syntax_markdown - hash (headings)":
     g.markdownNextToken() # '#'
     check g.kind == gtPunctuation
 
+  test "heading marker consumes only the leading `#` run":
+    let tokens = collectTokens("## abc")
+    check tokens[0] == (gtBuiltin, "##")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtIdentifier, "abc")
+
+  test "strikethrough on heading line is tokenized":
+    let tokens = collectTokens("## ~~abc~~")
+    check tokens[0] == (gtBuiltin, "##")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtComment, "~~abc~~")
+
+  test "bold on heading line is tokenized":
+    let tokens = collectTokens("# **abc**")
+    check tokens[0] == (gtBuiltin, "#")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtKeyword, "**abc**")
+
+  test "inline code on heading line is tokenized":
+    let tokens = collectTokens("### `abc`")
+    check tokens[0] == (gtBuiltin, "###")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtSpecialVar, "`abc`")
+
 suite "syntax_markdown - dash (frontmatter)":
   test "triple dash frontmatter":
     var g: GeneralTokenizer
@@ -691,13 +715,14 @@ suite "syntax_markdown - heading edge cases":
     g.initGeneralTokenizer("## Level 2")
     g.markdownNextToken()
     check g.kind == gtBuiltin
-    check g.length == 10 # whole line
+    check g.length == 2 # only the `##` markers
 
   test "### level 3 heading":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("### Level 3")
     g.markdownNextToken()
     check g.kind == gtBuiltin
+    check g.length == 3
 
   test "# alone":
     var g: GeneralTokenizer
@@ -708,10 +733,12 @@ suite "syntax_markdown - heading edge cases":
 
   test "multiple headings":
     let tokens = collectTokens("# H1\n## H2")
-    check tokens[0][0] == gtBuiltin
-    check tokens[0][1] == "# H1"
-    check tokens[2][0] == gtBuiltin
-    check tokens[2][1] == "## H2"
+    check tokens[0] == (gtBuiltin, "#")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtIdentifier, "H1")
+    check tokens[4] == (gtBuiltin, "##")
+    check tokens[5][0] == gtWhitespace
+    check tokens[6] == (gtIdentifier, "H2")
 
 suite "syntax_markdown - HTML comment edge cases":
   test "<! not followed by -- is builtin":
@@ -1044,7 +1071,7 @@ suite "Markdown - math mode LaTeX tokens":
     var hasHeading = false
     var hasBold = false
     for t in tokens:
-      if t == (gtBuiltin, "## Heading"):
+      if t == (gtBuiltin, "##"):
         hasHeading = true
       if t == (gtKeyword, "**bold**"):
         hasBold = true
@@ -1074,7 +1101,11 @@ suite "Markdown - math mode does not interfere with other elements":
 
   test "markdown heading after math":
     let tokens = collectTokens("$x$\n# Heading")
-    check tokens[^1][0] == gtBuiltin # heading
+    var hasHeadingMarker = false
+    for t in tokens:
+      if t == (gtBuiltin, "#"):
+        hasHeadingMarker = true
+    check hasHeadingMarker
 
   test "list after display math":
     let tokens = collectTokens("$$x$$\n- item")

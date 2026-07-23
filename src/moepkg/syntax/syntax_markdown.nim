@@ -293,9 +293,12 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           inc position
   of '#':
     if lexer.isLineStart:
+      # Emit only the leading `#` run so inline markers on the heading line
+      # (`~~`, `**`, `` ` ``, ...) are still tokenized.
       lexer.kind = gtBuiltin
       lexer.state = gtBuiltin
-      position = lexer.endLine(position)
+      while lexer.buf[position] == '#':
+        inc position
     else:
       lexer.kind = gtPunctuation
       inc position
