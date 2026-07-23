@@ -21,11 +21,11 @@
 ##
 ## This module provides tree-based file browsing with expandable directories.
 
-import std/[os, options, algorithm, sets, strutils, tables, times, unicode]
+import std/[os, options, sets, strutils, tables, times, unicode]
 
 import pkg/celina
 
-import buffer, highlight, color, filer, logger, unicode_utils
+import buffer, highlight, color, filer, dir_scan, unicode_utils
 
 import types/filetree_types
 export filetree_types
@@ -37,78 +37,23 @@ proc scanDirectory(
 ): seq[FileTreeNode] =
   ## Scan a directory and return sorted child nodes.
   ## Sets `error` if a directory-level OSError occurs.
-  var dirs: seq[FileTreeNode] = @[]
-  var files: seq[FileTreeNode] = @[]
-
-  try:
-    for kind, childPath in walkDir(path):
-      try:
-        let name = extractFilename(childPath)
-        let isHid = name.len > 0 and name[0] == '.'
-
-        if not showHidden and isHid:
-          continue
-
-        var nodeKind: FileEntryKind
-        var tgtKind: FileEntryKind = fekFile
-        var isExec = false
-
-        case kind
-        of pcDir:
-          nodeKind = fekDirectory
-          tgtKind = fekDirectory
-        of pcLinkToDir:
-          nodeKind = fekSymlink
-          tgtKind = fekDirectory
-        of pcLinkToFile:
-          nodeKind = fekSymlink
-          tgtKind = fekFile
-        of pcFile:
-          nodeKind = fekFile
-          tgtKind = fekFile
-          try:
-            let info = getFileInfo(childPath, followSymlink = false)
-            isExec = fpUserExec in info.permissions or fpGroupExec in info.permissions
-          except OSError:
-            discard
-
-        let node = FileTreeNode(
-          name: name,
-          path: normalizedPath(childPath),
-          kind: nodeKind,
-          depth: depth,
-          isHidden: isHid,
-          isExecutable: isExec,
-          targetKind: tgtKind,
-        )
-
-        if nodeKind == fekDirectory or
-            (nodeKind == fekSymlink and tgtKind == fekDirectory):
-          dirs.add(node)
-        else:
-          files.add(node)
-      except OSError as e:
-        logWarn("filetree", "Cannot access: " & childPath & " (" & e.msg & ")")
-  except OSError as e:
-    let msg = "Cannot scan directory: " & path & " (" & e.msg & ")"
-    logWarn("filetree", msg)
-    error = msg
-
-  # Sort: directories first, then files, both alphabetically
-  dirs.sort(
-    proc(a, b: FileTreeNode): int =
-      cmpIgnoreCase(a.name, b.name)
+  let entries = scanDirectory(
+    path, showHidden, skipOnStatError = false, logModule = "filetree", error
   )
-  files.sort(
-    proc(a, b: FileTreeNode): int =
-      cmpIgnoreCase(a.name, b.name)
-  )
-
-  result = dirs & files
+  result = newSeq[FileTreeNode](entries.len)
+  for i, e in entries:
+    result[i] = FileTreeNode(
+      name: e.name,
+      path: normalizedPath(path / e.name),
+      kind: e.kind,
+      depth: depth,
+      isHidden: e.isHidden,
+      isExecutable: e.isExecutable,
+      targetKind: e.targetKind,
+    )
 
 proc isDirectory*(node: FileTreeNode): bool =
-  node.kind == fekDirectory or
-    (node.kind == fekSymlink and node.targetKind == fekDirectory)
+  isDirectoryLike(node.kind, node.targetKind)
 
 proc isFile*(node: FileTreeNode): bool =
   node.kind == fekFile or (node.kind == fekSymlink and node.targetKind == fekFile)
