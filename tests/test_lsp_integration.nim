@@ -1215,6 +1215,62 @@ suite "LspIntegration - Buffer Version Tracking":
     check lsp.onBufferOpen(buffer, serverIsFresh = true).isOk
     check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(1)
 
+suite "LspIntegration - Path canonicalization":
+  # Relative and absolute textual paths for the same file used to occupy
+  # two `lsp.documents` entries with independent version counters, while
+  # pathToUri collapsed both to one URI — later didChange got dropped.
+  privateAccess(LspIntegration)
+
+  var lsp: LspIntegration
+  var origCwd: string
+  setup:
+    lsp = newLspIntegration(tmpDir)
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      true
+    origCwd = getCurrentDir()
+    setCurrentDir(tmpDir)
+  teardown:
+    setCurrentDir(origCwd)
+    lsp.shutdown()
+
+  test "same file via relative and absolute path collapses to one document":
+    let cwd = getCurrentDir()
+    let relBuf = newTextBuffer("hi", some("canonical_rel.nim"))
+    let absBuf = newTextBuffer("hi", some(cwd / "canonical_rel.nim"))
+    check lsp.onBufferOpen(relBuf).isOk
+    check lsp.onBufferOpen(absBuf).isOk
+    check lsp.documents.len == 1
+
+  test "sentDocumentVersion accepts either textual form of the same path":
+    let cwd = getCurrentDir()
+    let buffer = newTextBuffer("hi", some(cwd / "canonical_lookup.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(cwd / "canonical_lookup.nim") == some(1)
+    check lsp.sentDocumentVersion("canonical_lookup.nim") == some(1)
+
+  test "version counter stays consistent across relative/absolute re-open":
+    let cwd = getCurrentDir()
+    let relBuf = newTextBuffer("hi", some("canonical_mono.nim"))
+    check lsp.onBufferOpen(relBuf).isOk
+    check relBuf.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check lsp.onBufferChange(relBuf).isOk
+    check lsp.sentDocumentVersion(cwd / "canonical_mono.nim") == some(2)
+
+    # Re-open via absolute path hits the same entry (didClose + reset to 1).
+    let absBuf = newTextBuffer("hi", some(cwd / "canonical_mono.nim"))
+    check lsp.onBufferOpen(absBuf).isOk
+    check lsp.sentDocumentVersion("canonical_mono.nim") == some(1)
+    check lsp.documents.len == 1
+
+  test "onBufferClose via relative path clears entry opened via absolute":
+    let cwd = getCurrentDir()
+    let openBuf = newTextBuffer("hi", some(cwd / "canonical_close.nim"))
+    check lsp.onBufferOpen(openBuf).isOk
+    check lsp.documents.len == 1
+    let closeBuf = newTextBuffer("hi", some("canonical_close.nim"))
+    check lsp.onBufferClose(closeBuf).isOk
+    check lsp.documents.len == 0
+
 suite "LspIntegration - flushPendingBufferChange":
   privateAccess(LspIntegration)
 
