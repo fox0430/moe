@@ -295,6 +295,16 @@ proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifi
 
   return mods
 
+proc getSegmentBg*(highlight: Highlight, line, col: int): Option[ColorValue] =
+  if highlight.colorSegments.len > 0 and
+      (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
+      (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
+    let idx = highlight.indexOf(line, col)
+    let bg = highlight[idx].style.bg
+    if bg.kind != Default:
+      return some(bg)
+  return none(ColorValue)
+
 template isIntersect(s, t: ColorSegment): bool =
   not (
     (t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or
@@ -1101,6 +1111,7 @@ proc initHighlightIncrementalFromStr*(
     currentColumn: int
     colorSegments: seq[ColorSegment]
     lineStates: seq[TokenizerState]
+    codeBlockSegStyle = defaultStyle
 
   # Template to split tokens by newlines and track line boundaries
   template splitByNewlineWithState(str, c: typed) =
@@ -1112,7 +1123,7 @@ proc initHighlightIncrementalFromStr*(
         lastRow: currentRow,
         lastColumn: currentColumn,
         color: c,
-        style: defaultStyle,
+        style: codeBlockSegStyle,
       )
       empty = true
     for r in runes(str):
@@ -1127,7 +1138,7 @@ proc initHighlightIncrementalFromStr*(
               lastRow: currentRow,
               lastColumn: currentColumn - 1,
               color: color,
-              style: defaultStyle,
+              style: codeBlockSegStyle,
             )
           )
         else:
@@ -1228,6 +1239,14 @@ proc initHighlightIncrementalFromStr*(
               $token.state & " lang=" & $language
 
     let color = getEditorColorPair(token.kind, language)
+
+    codeBlockSegStyle =
+      if language == langMarkdown and token.lang.markdown.inCodeBlock and
+          token.kind notin {gtSpecialVar, gtWhitespace} and
+          not (token.kind == gtKeyword and token.state == gtSpecialVar):
+        Style(bg: getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg)
+      else:
+        defaultStyle
 
     if token.kind == gtComment:
       for r in bufferStr[first .. last].parseReservedWord(reservedWords, color):

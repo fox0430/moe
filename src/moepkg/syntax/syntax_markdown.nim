@@ -17,7 +17,47 @@
 #                                                                              #
 #[############################################################################]#
 
-import tokenizer, syntax_latex
+import
+  tokenizer, syntax_latex, syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp,
+  syntax_csharp, syntax_diff, syntax_dockerfile, syntax_fish, syntax_git_rebase_todo,
+  syntax_gitignore, syntax_haskell, syntax_html, syntax_hyprland, syntax_java,
+  syntax_javascript, syntax_lisp, syntax_log, syntax_nim, syntax_python, syntax_rust,
+  syntax_shell, syntax_tcl, syntax_toml, syntax_yaml, syntax_json, syntax_jsonc,
+  syntax_typescript, syntax_xml, syntax_zsh
+
+proc codeBlockNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
+  case lang
+  of langAstro: g.astroNextToken
+  of langC: g.cNextToken
+  of langCommitEditMsg: g.commitEditMsgNextToken
+  of langCpp: g.cppNextToken
+  of langCsharp: g.csharpNextToken
+  of langDiff: g.diffNextToken
+  of langDockerfile: g.dockerfileNextToken
+  of langFish: g.fishNextToken
+  of langGitRebaseTodo: g.gitRebaseTodoNextToken
+  of langGitignore: g.gitignoreNextToken
+  of langHaskell: g.haskellNextToken
+  of langHtml: g.htmlNextToken
+  of langHyprland: g.hyprlandNextToken
+  of langJava: g.javaNextToken
+  of langJavaScript, langJsx: g.javaScriptNextToken
+  of langLatex: g.latexNextToken
+  of langLisp: g.lispNextToken
+  of langLog: g.logNextToken
+  of langNim: g.nimNextToken
+  of langPython: g.pythonNextToken
+  of langRust: g.rustNextToken
+  of langShell: g.shellNextToken
+  of langTcl: g.tclNextToken
+  of langToml: g.tomlNextToken
+  of langYaml: g.yamlNextToken
+  of langJson: g.jsonNextToken
+  of langJsonc: g.jsoncNextToken
+  of langTypeScript, langTsx: g.typescriptNextToken
+  of langXml: g.xmlNextToken
+  of langZsh: g.zshNextToken
+  of langMarkdown, langNone: discard
 
 template isLineStart(lexer: GeneralTokenizer): bool =
   lexer.state in {gtWhitespace, low(TokenClass)}
@@ -162,14 +202,24 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     of '\0':
       lexer.kind = gtEof
     of ' ', '\t' .. '\r':
+      if lexer.lang.markdown.codeBlockLang != langNone and
+          lexer.state in
+          {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData}:
+        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
+        return
       lexer.kind = gtWhitespace
       while lexer.buf[position] in wsChars:
         if lexer.buf[position] == '\n':
           lexer.state = gtWhitespace
-        else:
+        elif lexer.state != gtSpecialVar:
           lexer.state = gtNone
         inc position
     of '`':
+      if lexer.lang.markdown.codeBlockLang != langNone and
+          lexer.state in
+          {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData}:
+        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
+        return
       if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
         # Closing ```
         lexer.kind = gtSpecialVar
@@ -177,6 +227,10 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         while lexer.buf[position] notin eolChars:
           inc position
         lexer.lang.markdown.inCodeBlock = false
+        lexer.lang.markdown.codeBlockLang = langNone
+      elif lexer.lang.markdown.codeBlockLang != langNone:
+        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
+        return
       else:
         # Regular content
         lexer.kind = gtLongStringLit
@@ -185,10 +239,17 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     else:
       # Check if this is the language name (right after opening ```)
       if lexer.state == gtSpecialVar:
-        # Language name on the same line as opening ```
         lexer.kind = gtKeyword
-        while lexer.buf[position] notin eolChars:
+        var langName = ""
+        while lexer.buf[position] notin wsChars and lexer.buf[position] notin eolChars:
+          langName.add lexer.buf[position]
           inc position
+        let lang = getSourceLanguage(langName)
+        lexer.lang.markdown.codeBlockLang = if lang == langMarkdown: langNone else: lang
+        lexer.state = gtNone
+      elif lexer.lang.markdown.codeBlockLang != langNone:
+        codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
+        return
       else:
         # Code block content
         lexer.kind = gtLongStringLit

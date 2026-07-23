@@ -89,6 +89,26 @@ suite "tokenizer - getSourceLanguage":
     check getSourceLanguage("C#") == langCsharp
     check getSourceLanguage("c#") == langCsharp
 
+  test "getSourceLanguage with common aliases":
+    check getSourceLanguage("cpp") == langCpp
+    check getSourceLanguage("cxx") == langCpp
+    check getSourceLanguage("cs") == langCsharp
+    check getSourceLanguage("csharp") == langCsharp
+    check getSourceLanguage("js") == langJavaScript
+    check getSourceLanguage("jsx") == langJsx
+    check getSourceLanguage("ts") == langTypeScript
+    check getSourceLanguage("tsx") == langTsx
+    check getSourceLanguage("py") == langPython
+    check getSourceLanguage("rs") == langRust
+    check getSourceLanguage("sh") == langShell
+    check getSourceLanguage("bash") == langShell
+    check getSourceLanguage("yml") == langYaml
+    check getSourceLanguage("docker") == langDockerfile
+    check getSourceLanguage("md") == langMarkdown
+    check getSourceLanguage("hs") == langHaskell
+    check getSourceLanguage("tex") == langLatex
+    check getSourceLanguage("latex") == langLatex
+
   test "getSourceLanguage returns langNone for unknown":
     check getSourceLanguage("unknown") == langNone
     check getSourceLanguage("") == langNone
