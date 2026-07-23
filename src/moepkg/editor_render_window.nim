@@ -564,7 +564,8 @@ proc renderLineSegmentWithSelection*(
     for i in 0 ..< spacesToNextTab:
       if screenX + displayX < ctx.windowRightEdge:
         if e.shouldShowIndentationGuide(indentInfo, displayX, col):
-          buffer.setCell(screenX + displayX, screenY, "│", 1, indentationLineStyle())
+          let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
+          buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
         else:
           buffer.setCell(screenX + displayX, screenY, " ", 1, tabStyle)
       displayX += 1
@@ -580,7 +581,8 @@ proc renderLineSegmentWithSelection*(
         foldZeroWidthRune(buffer, screenX + displayX, screenY, rune)
     elif rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
       if screenX + displayX < ctx.windowRightEdge:
-        buffer.setCell(screenX + displayX, screenY, "│", 1, indentationLineStyle())
+        let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
+        buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
       displayX += 1
     else:
       let renderStyle = style.merge(e.charOverridePatch(ctx, lineCtx, rune, col))
