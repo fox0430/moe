@@ -27,7 +27,7 @@ import std/[strutils, unicode, monotimes, times]
 
 import pkg/celina
 
-import color, unicode_utils
+import color, popup_render, unicode_utils
 
 type
   NotificationLevel* = enum
@@ -204,33 +204,35 @@ proc calculateNotificationPositions*(
     let popupWidth = min(maxLineWidth + borderSize + margin, mgr.maxWidth)
     let popupHeight = item.lines.len + borderSize
 
-    # Calculate position based on corner
-    var x, y: int
-    case mgr.position
-    of nppBottomRight:
-      x = termWidth - popupWidth
-      y = termHeight - popupHeight - stackOffset - bottomReserve - 1
-    of nppBottomLeft:
-      x = 0
-      y = termHeight - popupHeight - stackOffset - bottomReserve - 1
-    of nppTopRight:
-      x = termWidth - popupWidth
-      y = stackOffset
-    of nppTopLeft:
-      x = 0
-      y = stackOffset
-
-    # Clamp to screen bounds
-    x = max(0, x)
-    y = max(0, y)
+    let corner =
+      case mgr.position
+      of nppBottomRight: pcBottomRight
+      of nppBottomLeft: pcBottomLeft
+      of nppTopRight: pcTopRight
+      of nppTopLeft: pcTopLeft
+    # Bottom corners want a single-row padding gap above the reserved area;
+    # fold it into bottomReserve so placeCorner can stay generic.
+    let effectiveReserve =
+      case mgr.position
+      of nppBottomRight, nppBottomLeft:
+        bottomReserve + 1
+      of nppTopRight, nppTopLeft:
+        0
+    let rect = placeCorner(
+      corner,
+      popupWidth,
+      popupHeight,
+      initScreen(termWidth, termHeight, effectiveReserve),
+      stackOffset = stackOffset,
+    )
 
     result.add(
       NotificationRect(
         item: item,
-        x: x,
-        y: y,
-        width: popupWidth,
-        height: popupHeight,
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
         showBorder: mgr.showBorder,
       )
     )

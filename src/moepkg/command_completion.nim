@@ -521,18 +521,13 @@ proc calculateCommandPopupPosition*(
       max(MinPopupWidth, min(maxCmdWidth + PopupPadding, MaxPopupWidth))
   let popupWidth = contentWidth + 2 # +2 for border
 
-  # Position: above the reserved bottom area (its top row is at
-  # termHeight - bottomAreaRows)
-  let y = termHeight - bottomAreaRows - popupHeight
-
-  # X position: start from argument position for argument completion, or 0 for command
-  var x = argStartPos
-
-  # Adjust X if popup would extend past right edge
-  if x + popupWidth > termWidth:
-    x = max(0, termWidth - popupWidth)
-
-  CommandPopupPosition(x: x, y: max(0, y), width: popupWidth, height: popupHeight)
+  let rect = placeAboveReserve(
+    argStartPos,
+    popupWidth,
+    popupHeight,
+    initScreen(termWidth, termHeight, bottomAreaRows),
+  )
+  CommandPopupPosition(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
 
 proc renderCommandCompletionPopup*(
     termBuffer: var Buffer,
