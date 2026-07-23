@@ -186,6 +186,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   #     (vim drops the changelist on :e! too), now stale since undo was cleared.
   b.clearUndoRedoState()
   b.diagnostics.setLen(0) # diagnostic line markers go via the lineMarkers reset below
+  b.diagnosticsDirty = true
   b.conflictBlocks.setLen(0) # stale ranges into the old content; reload re-scans
   b.lastChangedLines = 0
   b.changeList.setLen(0)

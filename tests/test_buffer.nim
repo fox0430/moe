@@ -1740,6 +1740,7 @@ suite "Buffer - Diagnostic Highlights":
         message: "test error",
       )
     ]
+    buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
 
@@ -1763,6 +1764,7 @@ suite "Buffer - Diagnostic Highlights":
         message: "test warning",
       )
     ]
+    buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
 
@@ -1779,6 +1781,114 @@ suite "Buffer - Diagnostic Highlights":
     buf.updateHighlight()
 
     check buf.highlight.getSegmentModifiers(0, 0) == {}
+
+  test "updateHighlight applies multi-line diagnostic underlines":
+    # Multi-line diagnostic (startLine=0, startCol=2) .. (endLine=2, endCol=3)
+    # exclusive on endCol. Verifies coverage on start row tail, mid row, and
+    # end row up to endCol-1 — the read boundary any overlay refactor must
+    # preserve.
+    let buf = newTextBuffer("line0\nline1\nline2\nline3")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 2,
+        endLine: 2,
+        endCol: 3,
+        severity: bdsError,
+        message: "multi-line err",
+      )
+    ]
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getSegmentModifiers(0, 1) == {}
+
+    check buf.highlight.getColorPair(0, 2) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getSegmentModifiers(0, 2) == {StyleModifier.Undercurl}
+    check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getColorPair(1, 0) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getColorPair(1, 4) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getColorPair(2, 0) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getColorPair(2, 2) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getSegmentModifiers(2, 3) == {}
+
+  test "overlapping diagnostics: later diagnostic wins in overlap region":
+    # Pins current bake behavior: applyDiagnosticHighlights iterates overlays
+    # in the original seq order when ranges overlap, so the later diagnostic
+    # overwrites the earlier one at overlapping cells. If a future refactor
+    # changes this to severity-based priority, this test must be rewritten
+    # deliberately, not silently.
+    let buf = newTextBuffer("abcdefghij")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "err first",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 2,
+        endLine: 0,
+        endCol: 8,
+        severity: bdsWarning,
+        message: "warn second",
+      ),
+    ]
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getColorPair(0, 1) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getColorPair(0, 2) == EditorColorPairIndex.syntaxCheckWarn
+    check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.syntaxCheckWarn
+
+    check buf.highlight.getColorPair(0, 7) == EditorColorPairIndex.syntaxCheckWarn
+
+    check buf.highlight.getSegmentModifiers(0, 8) == {}
+
+  test "clearing diagnostics removes render-side underlines and colors":
+    # After buf.diagnostics.setLen(0) + updateHighlight, previously highlighted
+    # cells must return to no-underline / non-syntaxCheck* color. Existing
+    # tests only checked marker (sidebar) clearing; this pins the render path.
+    let buf = newTextBuffer("hello world")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "boom",
+      )
+    ]
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+    check buf.highlight.getSegmentModifiers(0, 0) == {StyleModifier.Undercurl}
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.syntaxCheckErr
+
+    buf.diagnostics.setLen(0)
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getSegmentModifiers(0, 0) == {}
+    check buf.highlight.getColorPair(0, 0) notin {
+      EditorColorPairIndex.syntaxCheckErr, EditorColorPairIndex.syntaxCheckWarn,
+      EditorColorPairIndex.syntaxCheckInfo, EditorColorPairIndex.syntaxCheckHint,
+    }
 
 suite "Buffer - CRLF Line Ending Handling":
   test "loadFile CRLF: line ending detected":

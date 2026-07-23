@@ -331,6 +331,10 @@ type
 
     # LSP diagnostics (full detail for hover display)
     diagnostics*: seq[BufferDiagnostic]
+    diagnosticsDirty*: bool
+      ## Set by writers of `diagnostics`; cleared by `updateHighlight` after it
+      ## rebuilds `highlight.diagnosticOverlay`. Lets pure-edit ticks skip the
+      ## overlay rebuild when diagnostics have not changed.
 
     # Per-buffer EditorConfig overrides
     editorConfig*: Option[BufferEditorConfig]
