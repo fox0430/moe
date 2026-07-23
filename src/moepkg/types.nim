@@ -942,6 +942,29 @@ flag2(autoCloseParen, bool, standard, autoCloseParen)
 flag2(autoDeleteParen, bool, standard, autoDeleteParen)
 flag2(bracketSplit, BracketSplitMode, standard, bracketSplit)
 
+# Search flags: write both `config.standard.*` and the `input.search.*` mirror.
+# Skipping the config write lets the next `applyConfigSettings` push undo the toggle.
+proc ignorecase*(s: EditorState): bool =
+  s.input.search.ignorecase
+
+proc `ignorecase=`*(s: EditorState, v: bool) =
+  s.config.standard.ignorecase = v
+  s.input.search.ignorecase = v
+
+proc smartcase*(s: EditorState): bool =
+  s.input.search.smartcase
+
+proc `smartcase=`*(s: EditorState, v: bool) =
+  s.config.standard.smartcase = v
+  s.input.search.smartcase = v
+
+proc incsearch*(s: EditorState): bool =
+  s.input.search.incsearch
+
+proc `incsearch=`*(s: EditorState, v: bool) =
+  s.config.standard.incrementalSearch = v
+  s.input.search.incsearch = v
+
 # Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
 # This eliminates the dual-state sync problem — EditorWindow is the single source of truth.
 
