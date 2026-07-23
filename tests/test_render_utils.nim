@@ -73,6 +73,25 @@ suite "formatRelativeLineNumber":
     # Cursor on line 99, checking line 0 -> distance 99
     check formatRelativeLineNumber(0, 99, 5) == "  99 "
 
+suite "tabAdvance":
+  test "advances to next tab stop from various columns":
+    check tabAdvance(0, 4) == 4
+    check tabAdvance(1, 4) == 3
+    check tabAdvance(2, 4) == 2
+    check tabAdvance(3, 4) == 1
+
+  test "wraps a full tabStop at exact multiples":
+    check tabAdvance(4, 4) == 4
+    check tabAdvance(8, 4) == 4
+    check tabAdvance(80, 8) == 8
+
+  test "coerces non-positive tabStop to 1":
+    check tabAdvance(0, 0) == 1
+    check tabAdvance(0, -3) == 1
+    # With tabStop coerced to 1, every column is a tab stop → advance 1.
+    check tabAdvance(5, 0) == 1
+    check tabAdvance(7, -1) == 1
+
 suite "calculateWrapCount":
   test "empty line":
     check calculateWrapCount("", 80, 4) == 1

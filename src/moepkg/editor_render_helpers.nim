@@ -52,8 +52,8 @@ proc bufferColToDisplayCol*(
     if currentChar >= bufferCol:
       break
     if currentChar >= startCol:
-      if rune == '\t'.Rune:
-        result += tabStop - (result mod tabStop)
+      if rune == TAB_CHAR:
+        result += tabAdvance(result, tabStop)
       else:
         result += runeWidth(rune)
     currentChar.inc
