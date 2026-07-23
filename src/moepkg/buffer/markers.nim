@@ -19,7 +19,7 @@
 
 ## Sidebar markers, git-change navigation, and LSP diagnostic queries.
 
-import std/[options, algorithm]
+import std/[options, tables]
 
 import pkg/celina
 
@@ -95,6 +95,7 @@ proc clearAllMarkers*(b: TextBuffer) =
   ## avoids cloning a shared/frozen array only to overwrite every slot.
   b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.lineMarkers.len)
   b.diagnostics.setLen(0)
+  b.diagnosticsDirty = true
 
 proc clearGitMarkers*(b: TextBuffer) =
   ## Clear only git-diff sidebar markers (added / changed / deleted).
@@ -117,12 +118,12 @@ proc getDiagnosticsAt*(b: TextBuffer, line, col: int): seq[BufferDiagnostic] =
 proc applyDiagnosticHighlights*(
     highlight: var Highlight, diagnostics: seq[BufferDiagnostic]
 ) =
-  ## Overwrite highlight segments in diagnostic ranges with undercurl styles.
+  ## Populate the per-row diagnostic overlay. Read-only from render's
+  ## perspective — `colorSegments` are left alone so incremental highlighting
+  ## cannot cache stale diagnostic styling.
   if diagnostics.len == 0:
     return
-  highlight.hasDiagnostics = true
 
-  var overlays = newSeqOfCap[ColorSegment](diagnostics.len)
   for d in diagnostics:
     let color =
       case d.severity
@@ -130,33 +131,37 @@ proc applyDiagnosticHighlights*(
       of bdsWarning: EditorColorPairIndex.syntaxCheckWarn
       of bdsInformation: EditorColorPairIndex.syntaxCheckInfo
       of bdsHint: EditorColorPairIndex.syntaxCheckHint
+    let style = Style(modifiers: {StyleModifier.Undercurl})
 
-    overlays.add(
-      ColorSegment(
-        firstRow: d.startLine,
-        firstColumn: d.startCol,
-        lastRow: d.endLine,
-        lastColumn: max(d.endCol - 1, d.startCol),
-        color: color,
-        style: Style(modifiers: {StyleModifier.Undercurl}),
-      )
-    )
+    if d.startLine == d.endLine:
+      let last = max(d.endCol - 1, d.startCol)
+      highlight.diagnosticOverlay
+        .mgetOrPut(d.startLine, DiagnosticOverlayLine()).cells
+        .add(
+          DiagnosticOverlayCell(
+            firstColumn: d.startCol, lastColumn: last, color: color, style: style
+          )
+        )
+    else:
+      highlight.diagnosticOverlay
+        .mgetOrPut(d.startLine, DiagnosticOverlayLine()).cells
+        .add(
+          DiagnosticOverlayCell(
+            firstColumn: d.startCol, lastColumn: int.high, color: color, style: style
+          )
+        )
 
-  # Batch-apply in one O(N + M) pass when overlays are disjoint; fall back to
-  # sequential overwrite (in original order) when they overlap.
-  var sorted = overlays
-  sorted.sort do(a, b: ColorSegment) -> int:
-    cmp((a.firstRow, a.firstColumn), (b.firstRow, b.firstColumn))
+      for r in (d.startLine + 1) ..< d.endLine:
+        highlight.diagnosticOverlay.mgetOrPut(r, DiagnosticOverlayLine()).cells.add(
+          DiagnosticOverlayCell(
+            firstColumn: 0, lastColumn: int.high, color: color, style: style
+          )
+        )
 
-  var disjoint = true
-  for i in 1 ..< sorted.len:
-    if (sorted[i].firstRow, sorted[i].firstColumn) <=
-        (sorted[i - 1].lastRow, sorted[i - 1].lastColumn):
-      disjoint = false
-      break
-
-  if disjoint:
-    highlight.overwriteBatch(sorted)
-  else:
-    for ov in overlays:
-      highlight.overwrite(ov)
+      highlight.diagnosticOverlay
+        .mgetOrPut(d.endLine, DiagnosticOverlayLine()).cells
+        .add(
+          DiagnosticOverlayCell(
+            firstColumn: 0, lastColumn: max(d.endCol - 1, 0), color: color, style: style
+          )
+        )

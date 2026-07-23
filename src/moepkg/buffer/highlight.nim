@@ -130,26 +130,6 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   # underlines) rather than rebuilding from incrementalHighlight.segments.
   b.highlight.colorSegments.add(newSegments)
 
-  if b.diagnostics.len > 0:
-    # Diagnostic styling lives only in the display highlight (applied by
-    # `updateHighlight` behind `highlightNeedsUpdate`): the truncation above
-    # drops it for the dropped rows and the plain re-append doesn't restore
-    # it — unlike URI underlines (re-covered via `uriScanParsedUpTo`) and
-    # semantic tokens (invalidated by the caller). Re-apply directly so
-    # undercurls survive the progressive load; this also covers diagnostics
-    # on the freshly parsed rows, which had no segments to style until now.
-    # Only diagnostics touching [startLine, endLine] need it: rows below
-    # startLine kept their styling (the truncation only drops rows >=
-    # startLine), rows past endLine get theirs when a later tick parses them,
-    # and re-applying an already-styled diagnostic rebuilds the whole segment
-    # seq (O(segments) per diagnostic, every tick of a large-file load).
-    var affected: seq[BufferDiagnostic]
-    for d in b.diagnostics:
-      if d.endLine >= startLine and d.startLine <= endLine:
-        affected.add(d)
-    if affected.len > 0:
-      applyDiagnosticHighlights(b.highlight, affected)
-
   return true
 
 proc continueUriScan*(b: TextBuffer): bool =
@@ -284,9 +264,14 @@ proc updateHighlight*(b: TextBuffer) =
       b, uriStart, uriEnd, applyToCache = not highlightRebuilt
     )
 
-    b.highlight.hasDiagnostics = false
-    if b.diagnostics.len > 0:
-      applyDiagnosticHighlights(b.highlight, b.diagnostics)
+    # Diagnostics are only mutated by the LSP publish path / reset/clear paths;
+    # a pure edit keeps them untouched, so the overlay rebuilt on the previous
+    # tick is still current. Skip the O(D + R) clear+rebuild in that case.
+    if b.diagnosticsDirty:
+      b.highlight.diagnosticOverlay.clear()
+      if b.diagnostics.len > 0:
+        applyDiagnosticHighlights(b.highlight, b.diagnostics)
+      b.diagnosticsDirty = false
 
     if highlightRebuilt:
       # Highlight was rebuilt from scratch, so all URI modifiers outside

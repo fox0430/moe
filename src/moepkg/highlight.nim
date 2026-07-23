@@ -53,6 +53,19 @@ type
     ## token whose range would overlap a newly-appended one.
     tokens*: seq[SemanticOverlayToken]
 
+  DiagnosticOverlayCell* = object
+    ## `lastColumn` is inclusive; `int.high` = "extends past this row" for
+    ## multi-line diagnostics' start/mid rows.
+    firstColumn*: int
+    lastColumn*: int
+    color*: EditorColorPairIndex
+    style*: Style
+
+  DiagnosticOverlayLine* = object
+    ## Cells kept in insertion order so a last-wins scan matches the bake
+    ## path's original-order overlap semantics.
+    cells*: seq[DiagnosticOverlayCell]
+
   Highlight* = ref object
     colorSegments*: seq[ColorSegment]
     semantic*: Table[int, SemanticOverlayLine]
@@ -69,8 +82,8 @@ type
       ## later apply arrives with a different legend (dynamic re-registration),
       ## the overlay is wiped BEFORE the new tokens are added so range-scoped
       ## applies do not leave stale-legend colours on the rows they don't touch.
-    hasDiagnostics*: bool = false
-      ## Gates `getColorPair`'s diagnostic-severity priority over the overlay.
+    diagnosticOverlay*: Table[int, DiagnosticOverlayLine]
+      ## Read-time source for diagnostic colour/undercurl.
 
   ReservedWord* = object
     word*: string
@@ -241,17 +254,12 @@ proc findOverlayToken(tokens: openArray[SemanticOverlayToken], col: int): int =
   return -1
 
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
-  ## Color at (line, col). Diagnostic severity in `colorSegments` overrides
-  ## the semantic overlay; otherwise the overlay wins on a hit.
-  if highlight.hasDiagnostics and highlight.colorSegments.len > 0 and
-      (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
-      (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
-    let segColor = highlight[highlight.indexOf(line, col)].color
-    if segColor in {
-      EditorColorPairIndex.syntaxCheckErr, EditorColorPairIndex.syntaxCheckWarn,
-      EditorColorPairIndex.syntaxCheckInfo, EditorColorPairIndex.syntaxCheckHint,
-    }:
-      return segColor
+  ## Priority: diagnostic overlay > semantic overlay > base segment.
+  highlight.diagnosticOverlay.withValue(line, lineOv):
+    for i in countdown(lineOv[].cells.high, 0):
+      let cell = lineOv[].cells[i]
+      if cell.firstColumn <= col and col <= cell.lastColumn:
+        return cell.color
 
   if highlight.semantic.len > 0:
     # `withValue` aliases the stored entry via a pointer, avoiding the seq
@@ -277,11 +285,21 @@ proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
   return highlight[idx].color
 
 proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifier] =
-  ## Modifiers at (line, col). Syntax and overlay modifiers are unioned so
-  ## e.g. URI underline survives a semantic-token colour hit.
+  ## Syntax and semantic-overlay modifiers are unioned (so e.g. URI underline
+  ## survives a semantic hit). A diagnostic overlay hit replaces the syntax
+  ## layer (matching the bake) but still unions with semantic.
   var mods: set[StyleModifier] = {}
+  var diagHit = false
 
-  if highlight.colorSegments.len > 0 and
+  highlight.diagnosticOverlay.withValue(line, lineOv):
+    for i in countdown(lineOv[].cells.high, 0):
+      let cell = lineOv[].cells[i]
+      if cell.firstColumn <= col and col <= cell.lastColumn:
+        mods = cell.style.modifiers
+        diagHit = true
+        break
+
+  if not diagHit and highlight.colorSegments.len > 0 and
       (line, col) >= (highlight[0].firstRow, highlight[0].firstColumn) and
       (line, col) <= (highlight[^1].lastRow, highlight[^1].lastColumn):
     let idx = highlight.indexOf(line, col)
@@ -462,102 +480,6 @@ proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
     newSegments.add(segs[i].overwrite(colorSegment))
   for i in endIdx ..< segs.len:
     newSegments.add(segs[i])
-
-  highlight.colorSegments = newSegments
-
-proc overwriteBatch*(highlight: var Highlight, overlays: openArray[ColorSegment]) =
-  ## Overwrite `highlight` with every segment in `overlays` in a single pass.
-  ## `overlays` MUST be sorted by (firstRow, firstColumn) and be mutually
-  ## non-overlapping. Equivalent to calling `overwrite` once per overlay, but
-  ## rebuilds the segment seq once — O(N + M) instead of O(M*N). Column
-  ## arithmetic mirrors `overwrite(s, t)`, so the result matches the
-  ## sequential loop for disjoint overlays.
-  if overlays.len == 0:
-    return
-
-  let segs = highlight.colorSegments
-  if segs.len == 0:
-    return
-
-  proc prev(pos: Position): Position =
-    if pos.column > 0:
-      (pos.row, pos.column - 1)
-    else:
-      (pos.row - 1, high(int))
-
-  proc next(pos: Position): Position =
-    (pos.row, pos.column + 1)
-
-  var newSegments = newSeqOfCap[ColorSegment](segs.len + overlays.len * 2)
-  var oIdx = 0
-
-  for cs in segs:
-    let csFirst: Position = (cs.firstRow, cs.firstColumn)
-    let csLast: Position = (cs.lastRow, cs.lastColumn)
-    var cur = csFirst # next not-yet-emitted position within cs
-
-    while oIdx < overlays.len and
-        (overlays[oIdx].lastRow, overlays[oIdx].lastColumn) < cur:
-      inc oIdx
-
-    var i = oIdx
-    while i < overlays.len:
-      let ov = overlays[i]
-      let ovFirst: Position = (ov.firstRow, ov.firstColumn)
-      let ovLast: Position = (ov.lastRow, ov.lastColumn)
-      if ovFirst > csLast:
-        break
-
-      # Base part before the overlay keeps the segment's own color/style.
-      if cur < ovFirst:
-        let stop = prev(ovFirst)
-        newSegments.add(
-          ColorSegment(
-            firstRow: cur.row,
-            firstColumn: cur.column,
-            lastRow: stop.row,
-            lastColumn: stop.column,
-            color: cs.color,
-            style: cs.style,
-          )
-        )
-        cur = ovFirst
-
-      # Overlap region (clamped to cs) takes the overlay's color/style.
-      let ovEnd: Position = (if ovLast < csLast: ovLast else: csLast)
-      let start: Position = (if cur > ovFirst: cur else: ovFirst)
-      newSegments.add(
-        ColorSegment(
-          firstRow: start.row,
-          firstColumn: start.column,
-          lastRow: ovEnd.row,
-          lastColumn: ovEnd.column,
-          color: ov.color,
-          style: ov.style,
-        )
-      )
-      cur = next(ovEnd)
-
-      if ovLast <= csLast:
-        inc i
-      else:
-        # Overlay continues into the next base segment; keep it for later.
-        break
-      if cur > csLast:
-        break
-    oIdx = i
-
-    if cur <= csLast:
-      newSegments.add(
-        ColorSegment(
-          firstRow: cur.row,
-          firstColumn: cur.column,
-          lastRow: cs.lastRow,
-          lastColumn: cs.lastColumn,
-          color: cs.color,
-          style: cs.style,
-        )
-      )
 
   highlight.colorSegments = newSegments
 
