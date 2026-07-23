@@ -41,6 +41,11 @@ const MaxProgressTextLen* = 50 ## Maximum display width for progress text
 
 const ProgressCleanupIntervalSeconds* = 1.0 ## Interval between stale progress checks
 
+proc canonicalPath(path: string): string {.inline.} =
+  ## Collapse relative/absolute forms of the same file so `lsp.documents`
+  ## and the notify* wire share one key.
+  normalizedPath(absolutePath(path))
+
 proc lspDegradeReason*(status: LspResponseStatus, detail = ""): string =
   ## Human-readable reason for a failed or timed-out LSP response.
   case status
@@ -316,7 +321,7 @@ proc onBufferOpen*(
   if buffer.filePath.isNone:
     return ok()
 
-  let path = buffer.filePath.get
+  let path = canonicalPath(buffer.filePath.get)
   let text = buffer.getTextString()
 
   if path in lsp.documents and not serverIsFresh:
@@ -334,7 +339,7 @@ proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, strin
   if buffer.filePath.isNone:
     return ok()
 
-  let path = buffer.filePath.get
+  let path = canonicalPath(buffer.filePath.get)
 
   # Remove from tracking
   lsp.documents.del(path)
@@ -630,7 +635,7 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
   if buffer.filePath.isNone:
     return ok()
 
-  let path = buffer.filePath.get
+  let path = canonicalPath(buffer.filePath.get)
   let text = buffer.getTextString()
 
   # Untracked -> didOpen fallback (version 1), seed shadow.
@@ -704,8 +709,9 @@ proc flushPendingBufferChange*(lsp: LspIntegration, buffer: TextBuffer) {.raises
 proc sentDocumentVersion*(lsp: LspIntegration, path: string): Option[int] =
   ## The last didOpen/didChange version sent to the server for `path`,
   ## or `none` if the document is not tracked as open. Exposed for tests.
-  if path in lsp.documents:
-    some(lsp.documents[path].version)
+  let key = canonicalPath(path)
+  if key in lsp.documents:
+    some(lsp.documents[key].version)
   else:
     none(int)
 
@@ -717,7 +723,7 @@ proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string
   if buffer.filePath.isNone:
     return ok()
 
-  let path = buffer.filePath.get
+  let path = canonicalPath(buffer.filePath.get)
   let text = some(buffer.getTextString())
   return lsp.service.notifyDocumentSaved(path, text)
 
