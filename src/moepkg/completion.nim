@@ -983,21 +983,14 @@ proc calculatePopupPosition*(
     max(MinPopupWidth, min(maxWordWidth + detailSpace + PopupPadding, MaxPopupWidth))
   let popupWidth = contentWidth + borderSize
 
-  var x = cursorX
-  var y = cursorY + 1 # Below cursor
-
-  # Adjust X if popup would extend past right edge
-  if x + popupWidth > termWidth:
-    x = max(0, termWidth - popupWidth)
-
-  # Check if popup fits below cursor
-  if y + popupHeight > termHeight - bottomReserve:
-    # Try above cursor
-    y = cursorY - popupHeight
-    if y < 0:
-      y = 0
-
-  PopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
+  let rect = placeBelowCursor(
+    cursorX,
+    cursorY,
+    popupWidth,
+    popupHeight,
+    initScreen(termWidth, termHeight, bottomReserve),
+  )
+  PopupPosition(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
 
 proc renderCompletionPopup*(
     termBuffer: var Buffer,
@@ -1128,27 +1121,20 @@ proc calculateDocPanelPosition*(
   let visibleLines = min(docPanel.lines.len, DocPanelMaxVisibleLines)
   let popupHeight = visibleLines + 2 # +2 for border
 
-  # Try right side of completion popup
-  let rightX = completionPos.x + completionPos.width
-  var x =
-    if rightX + popupWidth <= termWidth:
-      rightX
-    else:
-      # Try left side
-      let leftX = completionPos.x - popupWidth
-      if leftX >= 0:
-        leftX
-      else:
-        # Fall back to right, even if it clips
-        max(0, termWidth - popupWidth)
-
-  # Align the panel's top with the highlighted candidate's row. Clamp upward if
-  # the panel would cross the bottom reserve, and never start above the popup.
-  var y = max(completionPos.y, completionPos.y + selectedRowOffset)
-  if y + popupHeight > termHeight - bottomReserve:
-    y = max(0, termHeight - bottomReserve - popupHeight)
-
-  PopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
+  let anchor = PopupRect(
+    x: completionPos.x,
+    y: completionPos.y,
+    width: completionPos.width,
+    height: completionPos.height,
+  )
+  let rect = placeBesidePopup(
+    anchor,
+    popupWidth,
+    popupHeight,
+    initScreen(termWidth, termHeight, bottomReserve),
+    yOffset = selectedRowOffset,
+  )
+  PopupPosition(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
 
 proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosition) =
   ## Render documentation panel to terminal buffer

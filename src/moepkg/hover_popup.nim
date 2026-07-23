@@ -27,7 +27,7 @@ import std/[strutils, unicode]
 
 import pkg/celina
 
-import unicode_utils, color
+import popup_render, unicode_utils, color
 
 type
   HoverPopupState* = enum
@@ -221,20 +221,14 @@ proc calculateHoverPopupPosition*(
 
   let popupHeight = optimalVisibleLines + 2 # +2 for border
 
-  var x = cursorX
-  var y = cursorY - popupHeight # Above cursor
-
-  # Adjust X if popup would extend past right edge
-  if x + popupWidth > termWidth:
-    x = max(0, termWidth - popupWidth)
-
-  if y < 0:
-    y = cursorY + 1
-
-  if y + popupHeight > termHeight - bottomReserve:
-    y = max(0, termHeight - bottomReserve - popupHeight)
-
-  HoverPopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
+  let rect = placeAboveCursor(
+    cursorX,
+    cursorY,
+    popupWidth,
+    popupHeight,
+    initScreen(termWidth, termHeight, bottomReserve),
+  )
+  HoverPopupPosition(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
 
 proc renderHoverPopup*(
     termBuffer: var Buffer,

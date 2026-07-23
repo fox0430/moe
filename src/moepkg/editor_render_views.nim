@@ -36,7 +36,8 @@ import
   unicode_utils,
   command_completion,
   color,
-  window_manager
+  window_manager,
+  popup_render
 
 type WindowLayout = object
   ## Per-frame layout metrics for a window. A pure, idempotent projection of
@@ -634,14 +635,15 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
   # one padding row, matching completion/notification popup behavior.
   let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
 
-  var
-    popupX = e.state.screenCursor.x
-    popupY = e.state.screenCursor.y + 1
-
-  if popupX + popupWidth > buffer.area.width:
-    popupX = max(0, buffer.area.width - popupWidth)
-  if popupY + popupHeight > buffer.area.height - bottomReserve:
-    popupY = max(0, e.state.screenCursor.y - popupHeight)
+  let popupRect = placeBelowCursor(
+    e.state.screenCursor.x,
+    e.state.screenCursor.y,
+    popupWidth,
+    popupHeight,
+    initScreen(buffer.area.width, buffer.area.height, bottomReserve),
+  )
+  let popupX = popupRect.x
+  let popupY = popupRect.y
 
   # Define styles (derived from the current theme)
   let
