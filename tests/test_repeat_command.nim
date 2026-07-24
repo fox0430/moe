@@ -33,6 +33,7 @@ suite "Repeat Command (.) - Insert Text":
     # Setup
     let buffer = newTextBuffer("hello world")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -64,7 +65,6 @@ suite "Repeat Command (.) - Insert Text":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -80,6 +80,7 @@ suite "Repeat Command (.) - Insert Text":
     # Setup
     let buffer = newTextBuffer("line1")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 5)
     state.mode = EditorMode.Normal
 
@@ -107,7 +108,6 @@ suite "Repeat Command (.) - Insert Text":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -126,6 +126,7 @@ suite "Repeat Command (.) - Delete Operations":
     # Setup
     let buffer = newTextBuffer("hello world")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -148,7 +149,6 @@ suite "Repeat Command (.) - Delete Operations":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -162,6 +162,7 @@ suite "Repeat Command (.) - Delete Operations":
     # Setup
     let buffer = newTextBuffer("line1\nline2\nline3")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 1, column: 0)
     state.mode = EditorMode.Normal
 
@@ -184,7 +185,6 @@ suite "Repeat Command (.) - Delete Operations":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -201,6 +201,7 @@ suite "Repeat Command (.) - Substitute Operations":
     # Setup
     let buffer = newTextBuffer("hello world")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -229,7 +230,6 @@ suite "Repeat Command (.) - Substitute Operations":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -244,6 +244,7 @@ suite "Repeat Command (.) - Substitute Operations":
     # Setup
     let buffer = newTextBuffer("hello world\nfoo bar")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 1, column: 0)
     state.mode = EditorMode.Normal
 
@@ -272,7 +273,6 @@ suite "Repeat Command (.) - Substitute Operations":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -291,6 +291,7 @@ suite "Repeat Command (.) - Replace Char":
     # Setup
     let buffer = newTextBuffer("hello world")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 1)
     state.mode = EditorMode.Normal
 
@@ -313,7 +314,6 @@ suite "Repeat Command (.) - Replace Char":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -329,6 +329,7 @@ suite "Repeat Command (.) - Edge Cases":
     # Setup
     let buffer = newTextBuffer("hello world")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
     state.editState.lastEditCommand = none(LastEditCommand)
@@ -348,7 +349,6 @@ suite "Repeat Command (.) - Edge Cases":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
@@ -362,6 +362,7 @@ suite "Repeat Command (.) - Edge Cases":
     # Setup
     let buffer = newTextBuffer("hello")
     var state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 2)
     state.mode = EditorMode.Normal
 
@@ -389,7 +390,6 @@ suite "Repeat Command (.) - Edge Cases":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 

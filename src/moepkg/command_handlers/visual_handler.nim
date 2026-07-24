@@ -26,8 +26,7 @@ import std/[options, strutils]
 
 import pkg/results
 
-import
-  ../[buffer, config, modes, motion, types, key_bindings, command_registry, key_router]
+import ../[buffer, modes, motion, types, key_bindings, command_registry, key_router]
 import ../types/editor_types
 import handler_types
 export handler_types
@@ -64,14 +63,13 @@ proc newVisualModeHandler*(
     keyBindingRegistry: KeyBindingRegistry,
     commandRegistry: CommandRegistry,
     motionController: MotionController,
-    notificationConfig: NotificationConfig = NotificationConfig(),
 ): VisualModeHandler =
-  ## Create a new Visual mode handler
+  ## Create a new Visual mode handler. NotificationConfig is pulled live from
+  ## `state.config` via CommandContext getter.
   VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,
     commandRegistry: commandRegistry,
     motionController: motionController,
-    notificationConfig: notificationConfig,
   )
 
 proc initSelection*(
@@ -162,7 +160,6 @@ proc executeCommand*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
-    notificationConfig: handler.notificationConfig,
   )
 
   let originalMode = state.mode
@@ -208,7 +205,6 @@ proc handleVisualModeKey*(
           viewport: viewport,
           motionController: handler.motionController,
           keyBindingRegistry: handler.keyBindingRegistry,
-          notificationConfig: handler.notificationConfig,
         )
 
         let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
@@ -295,7 +291,6 @@ proc handleVisualModeKey*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
-    notificationConfig: handler.notificationConfig,
   )
 
   # Execute command through registry

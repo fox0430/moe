@@ -338,19 +338,12 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   )
 
   result.executer = newCommandExecutor(
-    initialBuffer,
-    result.state,
-    initialViewport,
-    result.config.clipboard,
-    result.config.notification,
-    some(cmdRegistry),
-    some(keyRegistry),
+    initialBuffer, result.state, initialViewport, some(cmdRegistry), some(keyRegistry)
   )
 
   result.handlerManager = newHandlerManager(
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
-    cmdRegistry, result.config.clipboard, result.config.smoothScroll,
-    result.config.notification, result.lsp,
+    cmdRegistry, result.lsp,
   )
 
   # Route the initial config push through the reload path so the two lists

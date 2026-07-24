@@ -27,7 +27,7 @@ import pkg/results
 
 import
   ../[
-    types, buffer, modes, motion, key_bindings, command_registry, config, registers,
+    types, buffer, modes, motion, key_bindings, command_registry, registers,
     render_utils, search_utils, uri_utils, key_router,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
@@ -110,19 +110,13 @@ proc newNormalModeHandler*(
     motionController: MotionController,
     keyBindingRegistry: KeyBindingRegistry,
     commandRegistry: CommandRegistry,
-    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
-    smoothScrollConfig: SmoothScrollConfig =
-      SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
-    notificationConfig: NotificationConfig = NotificationConfig(),
 ): NormalModeHandler =
-  ## Create a new Normal mode handler
+  ## Create a new Normal mode handler. Config sections are pulled live from
+  ## `state.config` via CommandContext getters, so no snapshot fields here.
   NormalModeHandler(
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandRegistry: commandRegistry,
-    clipboardConfig: clipboardConfig,
-    smoothScrollConfig: smoothScrollConfig,
-    notificationConfig: notificationConfig,
   )
 
 proc executeCommand*(
@@ -140,9 +134,6 @@ proc executeCommand*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
-    clipboardConfig: handler.clipboardConfig,
-    smoothScrollConfig: handler.smoothScrollConfig,
-    notificationConfig: handler.notificationConfig,
   )
 
   let r = handler.commandRegistry.execute(ctx, commandId, args)
@@ -594,9 +585,6 @@ proc handleNormalModeKey*(
           viewport: viewport,
           motionController: handler.motionController,
           keyBindingRegistry: handler.keyBindingRegistry,
-          clipboardConfig: handler.clipboardConfig,
-          smoothScrollConfig: handler.smoothScrollConfig,
-          notificationConfig: handler.notificationConfig,
         )
 
         let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
@@ -636,9 +624,6 @@ proc handleNormalModeKey*(
       viewport: viewport,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
-      clipboardConfig: handler.clipboardConfig,
-      smoothScrollConfig: handler.smoothScrollConfig,
-      notificationConfig: handler.notificationConfig,
     )
 
     # Execute the motion command directly through CommandRegistry
@@ -850,9 +835,6 @@ proc handleNormalModeKey*(
         viewport: viewport,
         motionController: handler.motionController,
         keyBindingRegistry: handler.keyBindingRegistry,
-        clipboardConfig: handler.clipboardConfig,
-        smoothScrollConfig: handler.smoothScrollConfig,
-        notificationConfig: handler.notificationConfig,
       )
       let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
       if cmdResult.isOk:
@@ -923,9 +905,6 @@ proc handleNormalModeKey*(
         viewport: viewport,
         motionController: handler.motionController,
         keyBindingRegistry: handler.keyBindingRegistry,
-        clipboardConfig: handler.clipboardConfig,
-        smoothScrollConfig: handler.smoothScrollConfig,
-        notificationConfig: handler.notificationConfig,
       )
       let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
       if cmdResult.isOk:
@@ -957,9 +936,6 @@ proc handleNormalModeKey*(
       viewport: viewport,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
-      clipboardConfig: handler.clipboardConfig,
-      smoothScrollConfig: handler.smoothScrollConfig,
-      notificationConfig: handler.notificationConfig,
     )
     # Use executeCommand to handle numeric prefixes properly
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)

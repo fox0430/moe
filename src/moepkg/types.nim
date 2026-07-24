@@ -326,9 +326,7 @@ type
     lrfCallHierarchyIncoming
     lrfCallHierarchyOutgoing
 
-  LspRequestContext* = object
-    ## Snapshot of the world at request-send time. See
-    ## docs/config_runtime_push_removal_design.md §10.
+  LspRequestContext* = object ## Snapshot of the world at request-send time.
     requestId*: int
     feature*: LspRequestFeature
     bufferId*: BufferId
@@ -838,9 +836,7 @@ type
     ## backoff on persistent reject (#2880).
     ##
     ## The per-request stale-guard snapshot (request id, buffer id, content
-    ## version, generation) moved to `LspCacheState.pending` in Phase D of the
-    ## LspRequestContext migration; see
-    ## docs/config_runtime_push_removal_design.md §10.
+    ## version, generation) lives in `LspCacheState.pending`.
     lastUpdate*: MonoTime
     interval*: int64
     rejectStreak*: int
@@ -849,7 +845,7 @@ const MaxLspDebounceBackoffShift* = 6
   ## Max exponent for the reject-streak backoff (interval << 6).
 
 # State-based config pull-type accessors. Editor-based versions live in
-# types/editor_types.nim. See docs/config_runtime_push_removal_design.md.
+# types/editor_types.nim.
 
 template flag2(name: untyped, T: typedesc, s1, f: untyped) =
   proc name*(s: EditorState): T =

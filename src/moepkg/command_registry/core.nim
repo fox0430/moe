@@ -150,16 +150,15 @@ type
     of ckCustom:
       custom*: string
 
-  ## Context needed to execute commands
+  ## Context needed to execute commands.
+  ## Config sections are pulled live from `state.config` via getters below, so
+  ## `applyConfigSettings`' ref swap is picked up on the next command.
   CommandContext* = ref object
     buffer*: buffer.TextBuffer
     state*: EditorState
     viewport*: ViewPort
     motionController*: MotionController
     keyBindingRegistry*: key_bindings.KeyBindingRegistry
-    clipboardConfig*: ClipboardConfig
-    smoothScrollConfig*: SmoothScrollConfig
-    notificationConfig*: NotificationConfig
 
   ## Function signature for command handlers
   CommandHandler* =
@@ -187,6 +186,15 @@ proc cursor*(ctx: CommandContext): var BufferPosition {.inline.} =
 
 proc `cursor=`*(ctx: CommandContext, pos: BufferPosition) {.inline.} =
   ctx.state.cursor = pos
+
+proc clipboardConfig*(ctx: CommandContext): ClipboardConfig =
+  ctx.state.config.clipboard
+
+proc smoothScrollConfig*(ctx: CommandContext): SmoothScrollConfig =
+  ctx.state.config.smoothScroll
+
+proc notificationConfig*(ctx: CommandContext): NotificationConfig =
+  ctx.state.config.notification
 
 proc notify*(ctx: CommandContext, msg: string, level: NotificationLevel = nlInfo) =
   ## Send a notification via popup or status line based on config.

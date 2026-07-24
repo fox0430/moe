@@ -25,7 +25,7 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
     render_utils, lsp_service, lsp_integration, diff_viewer, setting_options,
-    editor_init, command_config,
+    editor_init, command_config, command_registry,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import
@@ -2936,3 +2936,48 @@ suite "Editor - tab/indent setters sync .editorconfig override":
     check e.config.standard.expandTab == true
     check buf.editorConfig.get.expandTab == some(true)
     check e.expandTab == true
+
+suite "Editor - handler CommandContext sees live config after applyConfigSettings":
+  # Regression: handlers used to snapshot Clipboard/SmoothScroll/Notification at
+  # construction, so applyConfigSettings' ref swap never reached them. Now
+  # CommandContext getters pull from state.config directly.
+  test "CommandContext.clipboardConfig reflects post-reload clipboard":
+    let e = createTestEditor()
+
+    let ctx = CommandContext(state: e.state)
+    let originalTool = e.config.clipboard.tool
+    check originalTool != cbtXclip
+
+    var newConfig = newEditorConfig()
+    newConfig.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+    e.applyConfigSettings(newConfig)
+
+    check ctx.clipboardConfig.enable == true
+    check ctx.clipboardConfig.tool == cbtXclip
+
+  test "CommandContext.smoothScrollConfig reflects post-reload smoothScroll":
+    let e = createTestEditor()
+
+    let ctx = CommandContext(state: e.state)
+
+    var newConfig = newEditorConfig()
+    newConfig.smoothScroll =
+      SmoothScrollConfig(enable: false, friction: 42.0, airDrag: 3.0)
+    e.applyConfigSettings(newConfig)
+
+    check ctx.smoothScrollConfig.enable == false
+    check ctx.smoothScrollConfig.friction == 42.0
+    check ctx.smoothScrollConfig.airDrag == 3.0
+
+  test "CommandContext.notificationConfig reflects post-reload notification":
+    let e = createTestEditor()
+
+    let ctx = CommandContext(state: e.state)
+
+    var newConfig = newEditorConfig()
+    newConfig.notification.screenNotifications = false
+    newConfig.notification.yankScreenNotify = false
+    e.applyConfigSettings(newConfig)
+
+    check ctx.notificationConfig.screenNotifications == false
+    check ctx.notificationConfig.yankScreenNotify == false

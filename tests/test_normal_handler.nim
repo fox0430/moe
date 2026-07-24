@@ -76,17 +76,10 @@ proc createTestHandler(buf: TextBuffer): NormalModeHandler =
   let motionController =
     newMotionController(buf, createTestState(), createTestViewport())
 
-  newNormalModeHandler(
-    motionController,
-    keyBindingRegistry,
-    commandRegistry,
-    ClipboardConfig(enable: false, tool: cbtXclip),
-    SmoothScrollConfig(enable: false, friction: 80.0, airDrag: 2.0),
-    NotificationConfig(),
-  )
+  newNormalModeHandler(motionController, keyBindingRegistry, commandRegistry)
 
 suite "NormalModeHandler - Constructor":
-  test "Create NormalModeHandler with default config":
+  test "Create NormalModeHandler":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
 
@@ -94,23 +87,6 @@ suite "NormalModeHandler - Constructor":
     check handler.motionController != nil
     check handler.keyBindingRegistry != nil
     check handler.commandRegistry != nil
-    check handler.clipboardConfig.enable == false
-    check handler.smoothScrollConfig.enable == false
-
-  test "Create NormalModeHandler with custom clipboard config":
-    let buf = newTextBuffer()
-    let keyBindingRegistry = newKeyBindingRegistry()
-    let commandRegistry = newCommandRegistry()
-    let motionController =
-      newMotionController(buf, createTestState(), createTestViewport())
-
-    let clipboardConfig = ClipboardConfig(enable: true, tool: cbtXsel)
-    let handler = newNormalModeHandler(
-      motionController, keyBindingRegistry, commandRegistry, clipboardConfig
-    )
-
-    check handler.clipboardConfig.enable == true
-    check handler.clipboardConfig.tool == cbtXsel
 
 suite "NormalModeHandler - Mode Switching":
   test "Switch to Insert mode":

@@ -37,7 +37,7 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
-    command_registry, config, lsp_integration, logger, key_router,
+    command_registry, lsp_integration, logger, key_router,
   ]
 import ../types/editor_types
 # The shared handler-module list lives in handler_modules (single source of
@@ -55,24 +55,18 @@ proc newHandlerManager*(
     commandLineParser: CommandLineParser,
     commandConfig: CommandConfig,
     commandRegistry: CommandRegistry,
-    clipboardConfig: ClipboardConfig,
-    smoothScrollConfig: SmoothScrollConfig =
-      SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
-    notificationConfig: NotificationConfig = NotificationConfig(),
     lsp: LspIntegration = nil,
 ): HandlerManager =
-  let normalHandler = newNormalModeHandler(
-    motionController, keyBindingRegistry, commandRegistry, clipboardConfig,
-    smoothScrollConfig, notificationConfig,
-  )
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, lsp, notificationConfig
-  )
+  ## Clipboard/SmoothScroll/Notification are read live from `state.config`
+  ## through CommandContext getters, so newEditor no longer plumbs snapshots.
+  let normalHandler =
+    newNormalModeHandler(motionController, keyBindingRegistry, commandRegistry)
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
-  let visualHandler = newVisualModeHandler(
-    keyBindingRegistry, commandRegistry, motionController, notificationConfig
-  )
+  let visualHandler =
+    newVisualModeHandler(keyBindingRegistry, commandRegistry, motionController)
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
   HandlerManager(
