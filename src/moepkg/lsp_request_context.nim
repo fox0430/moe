@@ -17,8 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Shared LSP request-context helpers. See
-## docs/config_runtime_push_removal_design.md §10.
+## Shared LSP request-context helpers.
 
 import std/[options, tables]
 

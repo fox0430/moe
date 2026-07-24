@@ -63,28 +63,6 @@ suite "CommandExecutor - Constructor":
     check exec.commandRegistry != nil
     check exec.keyBindingRegistry != nil
 
-  test "Create CommandExecutor with custom ClipboardConfig":
-    let buf = newTextBuffer()
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    let clipboardConfig = ClipboardConfig(enable: true, tool: cbtXclip)
-    let exec = newCommandExecutor(buf, state, viewport, clipboardConfig)
-
-    check exec.clipboardConfig.enable == true
-    check exec.clipboardConfig.tool == cbtXclip
-
-  test "Create CommandExecutor with custom NotificationConfig":
-    let buf = newTextBuffer()
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    let notificationConfig = NotificationConfig()
-    let exec =
-      newCommandExecutor(buf, state, viewport, notificationConfig = notificationConfig)
-
-    check exec.notificationConfig == notificationConfig
-
   test "Create CommandExecutor with provided CommandRegistry":
     let buf = newTextBuffer()
     let state = createTestState()

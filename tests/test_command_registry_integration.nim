@@ -32,6 +32,9 @@ proc createTestContext(buffer: TextBuffer): CommandContext =
   state.cursor = BufferPosition(line: 0, column: 0)
   state.mode = EditorMode.Normal
   state.registers = initRegisters()
+  # CommandContext reads clipboard/notification live from state.config, so
+  # tests toggle behavior by mutating state.config.clipboard etc.
+  state.config.clipboard = ClipboardConfig(enable: false)
 
   let motionController = MotionController(
     viewportManager: ViewportManager(
@@ -45,7 +48,6 @@ proc createTestContext(buffer: TextBuffer): CommandContext =
     buffer: buffer,
     state: state,
     motionController: motionController,
-    clipboardConfig: ClipboardConfig(enable: false),
     keyBindingRegistry: newKeyBindingRegistry(),
   )
 
@@ -2760,7 +2762,7 @@ suite "Handler - Clipboard operations":
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),
     )
-    ctx.clipboardConfig = ClipboardConfig(enable: false)
+    ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditCopy))
@@ -2771,7 +2773,7 @@ suite "Handler - Clipboard operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.clipboardConfig = ClipboardConfig(enable: false)
+    ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditPaste))
@@ -2788,7 +2790,7 @@ suite "Handler - Clipboard operations":
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),
     )
-    ctx.clipboardConfig = ClipboardConfig(enable: false)
+    ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditCut))
@@ -2801,7 +2803,7 @@ suite "Handler - Clipboard operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
     ctx.state.visualSelection = VisualSelection(active: false)
-    ctx.clipboardConfig = ClipboardConfig(enable: true, tool: cbtXclip)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditCopy))

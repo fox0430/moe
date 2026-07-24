@@ -140,7 +140,7 @@ const
 
   MaxSemanticTokens* = 200_000
     ## Hard cap on tokens per response. Above this, `applySemanticTokens` rejects
-    ## the response before parsing (see design/semantic_tokens_overlay_design.md).
+    ## the response before parsing.
 
   MaxSemanticTokensPerRow* = 1024
     ## Per-row overlay-token cap. Bounds the O(k) slow-path rebuild in

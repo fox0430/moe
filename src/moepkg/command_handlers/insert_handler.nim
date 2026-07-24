@@ -68,8 +68,8 @@ proc newInsertModeHandler*(
     motionController: MotionController,
     commandRegistry: CommandRegistry,
     lsp: LspIntegration = nil,
-    notificationConfig: NotificationConfig = NotificationConfig(),
 ): InsertModeHandler =
+  ## NotificationConfig is pulled live from `state.config` via CommandContext getter.
   InsertModeHandler(
     keyBindingRegistry: keyBindingRegistry,
     motionController: motionController,
@@ -77,7 +77,6 @@ proc newInsertModeHandler*(
     completionManager: newCompletionManager(),
     signatureHelpManager: newSignatureHelpManager(),
     lsp: lsp,
-    notificationConfig: notificationConfig,
   )
 
 proc executeCommand*(
@@ -95,7 +94,6 @@ proc executeCommand*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
-    notificationConfig: handler.notificationConfig,
   )
 
   let cmdResult = handler.commandRegistry.execute(ctx, commandId, args)

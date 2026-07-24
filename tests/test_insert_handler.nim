@@ -87,9 +87,7 @@ proc createTestHandler(buf: TextBuffer): InsertModeHandler =
   let motionController =
     newMotionController(buf, createTestState(), createTestViewport())
 
-  newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, nil, NotificationConfig()
-  )
+  newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
 suite "InsertModeHandler - Constructor":
   test "Create InsertModeHandler with default config":
@@ -3113,9 +3111,8 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
     registerBuiltinCommands(commandRegistry)
     let motionController =
       newMotionController(buf, createTestState(), createTestViewport())
-    let handler = newInsertModeHandler(
-      keyBindingRegistry, motionController, commandRegistry, lsp, NotificationConfig()
-    )
+    let handler =
+      newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
 
     let state = createTestState()
     state.cursor = BufferPosition(line: 1, column: 0)

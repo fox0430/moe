@@ -77,12 +77,10 @@ proc createTestHandler(buf: TextBuffer): VisualModeHandler =
   let motionController =
     newMotionController(buf, createTestState(), createTestViewport())
 
-  newVisualModeHandler(
-    keyBindingRegistry, commandRegistry, motionController, NotificationConfig()
-  )
+  newVisualModeHandler(keyBindingRegistry, commandRegistry, motionController)
 
 suite "VisualModeHandler - Constructor":
-  test "Create VisualModeHandler with default config":
+  test "Create VisualModeHandler":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
 
@@ -90,21 +88,6 @@ suite "VisualModeHandler - Constructor":
     check handler.motionController != nil
     check handler.keyBindingRegistry != nil
     check handler.commandRegistry != nil
-
-  test "Create VisualModeHandler with custom notification config":
-    let buf = newTextBuffer()
-    let keyBindingRegistry = newKeyBindingRegistry()
-    let commandRegistry = newCommandRegistry()
-    let motionController =
-      newMotionController(buf, createTestState(), createTestViewport())
-
-    let notificationConfig = NotificationConfig(screenNotifications: true)
-    let handler = newVisualModeHandler(
-      keyBindingRegistry, commandRegistry, motionController, notificationConfig
-    )
-
-    check handler != nil
-    check handler.notificationConfig.screenNotifications == true
 
 suite "VisualModeHandler - initSelection":
   test "Initialize character selection":

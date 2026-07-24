@@ -21,15 +21,13 @@ import std/options
 
 import pkg/results
 
-import types, buffer, motion, command_registry, key_bindings, config
+import types, buffer, motion, command_registry, key_bindings
 
 type CommandExecutor* = ref object
   motionController*: MotionController
   state*: EditorState
   commandRegistry*: CommandRegistry
   keyBindingRegistry*: KeyBindingRegistry
-  clipboardConfig*: ClipboardConfig
-  notificationConfig*: NotificationConfig
 
 proc buffer*(e: CommandExecutor): buffer.TextBuffer {.inline.} =
   ## Buffer forwarded to the motion controller (single internal source of truth).
@@ -62,11 +60,11 @@ proc newCommandExecutor*(
     buffer: buffer.TextBuffer,
     state: EditorState,
     viewport: ViewPort,
-    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
-    notificationConfig: NotificationConfig = NotificationConfig(),
     commandRegistry: Option[CommandRegistry] = none(CommandRegistry),
     keyBindingRegistry: Option[KeyBindingRegistry] = none(KeyBindingRegistry),
 ): CommandExecutor =
+  ## Clipboard/Notification are read live from `state.config` through
+  ## CommandContext getters, so no per-executor snapshots are needed.
   let cmdReg =
     if commandRegistry.isSome:
       commandRegistry.get
@@ -91,8 +89,6 @@ proc newCommandExecutor*(
     state: state,
     commandRegistry: cmdReg,
     keyBindingRegistry: keyReg,
-    clipboardConfig: clipboardConfig,
-    notificationConfig: notificationConfig,
   )
 
 proc execute*(e: CommandExecutor, command: string): Result[(), string] =
@@ -103,8 +99,6 @@ proc execute*(e: CommandExecutor, command: string): Result[(), string] =
     viewport: e.viewport,
     motionController: e.motionController,
     keyBindingRegistry: nil,
-    clipboardConfig: e.clipboardConfig,
-    notificationConfig: e.notificationConfig,
   )
 
   let r = e.commandRegistry.execute(ctx, command)
@@ -125,8 +119,6 @@ proc executeKeybinding*(
     viewport: e.viewport,
     motionController: e.motionController,
     keyBindingRegistry: nil,
-    clipboardConfig: e.clipboardConfig,
-    notificationConfig: e.notificationConfig,
   )
 
   return e.commandRegistry.executeCommand(ctx, binding)
