@@ -148,9 +148,10 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
     let isLine = state.visualSelection.kind == vskLine
 
     # Store in register system
-    if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
+    if state.pendingInput.pendingRegister.isSome and
+        state.pendingInput.pendingRegister.get != '\0':
       # User specified a register with "
-      let regName = state.pendingRegister.get
+      let regName = state.pendingInput.pendingRegister.get
       if regName.isNamedRegisterName:
         discard state.registers.setNamedRegister(regName, selectedText, isLine)
       elif regName.isClipboardRegisterName:
@@ -158,7 +159,7 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
       else:
         # For other registers (including "), use yank register
         state.registers.setYankedRegister(selectedText, isLine)
-      state.pendingRegister = none(char)
+      state.pendingInput.pendingRegister = none(char)
     else:
       # Default: use yank register (0) and unnamed register
       state.registers.setYankedRegister(selectedText, isLine)
@@ -192,8 +193,9 @@ proc deleteBlockSelection(buffer: TextBuffer, state: EditorState) =
   let deletedText = getBlockText(buffer, state.visualSelection)
 
   # Store in register system
-  if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
-    let regName = state.pendingRegister.get
+  if state.pendingInput.pendingRegister.isSome and
+      state.pendingInput.pendingRegister.get != '\0':
+    let regName = state.pendingInput.pendingRegister.get
     if regName.isNamedRegisterName:
       discard state.registers.setNamedRegister(regName, deletedText, false)
     elif regName.isClipboardRegisterName:
@@ -235,8 +237,9 @@ proc deleteLineSelection(buffer: TextBuffer, state: EditorState) =
   let deletedText = getLineText(buffer, state.visualSelection)
 
   # Store in register system
-  if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
-    let regName = state.pendingRegister.get
+  if state.pendingInput.pendingRegister.isSome and
+      state.pendingInput.pendingRegister.get != '\0':
+    let regName = state.pendingInput.pendingRegister.get
     if regName.isNamedRegisterName:
       discard state.registers.setNamedRegister(regName, deletedText, true)
     elif regName.isClipboardRegisterName:
@@ -284,8 +287,9 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
       let selectedText = buffer.getTextInRange(selStart, selEnd)
 
       # Store in register system
-      if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
-        let regName = state.pendingRegister.get
+      if state.pendingInput.pendingRegister.isSome and
+          state.pendingInput.pendingRegister.get != '\0':
+        let regName = state.pendingInput.pendingRegister.get
         if regName.isNamedRegisterName:
           discard state.registers.setNamedRegister(regName, selectedText, false)
         elif regName.isClipboardRegisterName:
@@ -303,7 +307,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
         state.cursor = selStart
 
     # Clear pending register
-    state.pendingRegister = none(char)
+    state.pendingInput.pendingRegister = none(char)
 
     # Commit transaction
     discard buffer.commitTransaction()
@@ -1019,8 +1023,9 @@ proc visualPaste*(
   if state.visualSelection.active:
     # Get register content
     let regName =
-      if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
-        state.pendingRegister.get
+      if state.pendingInput.pendingRegister.isSome and
+          state.pendingInput.pendingRegister.get != '\0':
+        state.pendingInput.pendingRegister.get
       else:
         '"' # Default unnamed register
 
@@ -1032,7 +1037,7 @@ proc visualPaste*(
     # Clear pending register immediately so downstream delete operations
     # (e.g. deleteBlockSelection) don't overwrite the named/clipboard register
     # that we just read from.
-    state.pendingRegister = none(char)
+    state.pendingInput.pendingRegister = none(char)
 
     # If register is truly empty, try system clipboard (if enabled).
     # A linewise register with a single empty line ([""]) is not empty — it
@@ -1048,7 +1053,7 @@ proc visualPaste*(
     if pasteText.len == 0 and not allowEmptyLinewise:
       # Nothing to paste, just exit visual mode
       state.visualSelection.active = false
-      state.pendingRegister = none(char)
+      state.pendingInput.pendingRegister = none(char)
       state.mode = state.previousMode
       return
 
@@ -1112,7 +1117,7 @@ proc visualPaste*(
       discard buffer.insertText(state.cursor, pasteText)
 
     # Clear pending register
-    state.pendingRegister = none(char)
+    state.pendingInput.pendingRegister = none(char)
 
     # Commit transaction
     discard buffer.commitTransaction()

@@ -241,9 +241,6 @@ type
   EditState* = object ## Edit operation state grouped together
     lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
     lastFindChar*: Option[LastFindChar] # Last f/F/t/T for ; and , repeat
-    pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
-    pendingTextObject*: Option[PendingTextObject]
-      # Text object modifier waiting for object kind
     substituteContext*: Option[SubstituteContext]
       # Context for substitute commands (s/S/cc)
     replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
@@ -762,6 +759,15 @@ type
     PendingNone
     PendingWindowCmd # Ctrl-W prefix: waiting for window subcommand
 
+  PendingInputState* = object
+    ## Pending-input FSMs cleared together on Escape. KeyRouter's built-in
+    ## sequence accumulator stays registry-owned; isActive/cancelAll composes both.
+    macroState*: MacroState
+    pendingOperator*: Option[PendingOperator]
+    pendingTextObject*: Option[PendingTextObject]
+    pendingRegister*: Option[char] # "a-style register selector
+    pendingCommand*: PendingCommand # Ctrl-W etc.
+
   InputState* = object ## Command-line / search input state grouped together.
     commandText*: string # Text being typed in command mode
     commandCursor*: int
@@ -782,9 +788,8 @@ type
     matchingParenPos*: Option[BufferPosition]
       # Position of matching paren (for highlighting)
     currentWord*: string # Word under cursor (for currentWord highlighting)
-    pendingCommand*: PendingCommand
     statusMessageStr: string # Internal - use statusMessage getter/setter
-    editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
+    editState*: EditState # Edit operation state (motions, repeat, etc.)
     visualSelection*: VisualSelection # Visual mode selection state
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
     display*: DisplaySettings
@@ -795,10 +800,7 @@ type
       # Track if last key was Escape (for double-Escape to clear highlight)
     # Full register system (vim-style)
     registers*: Registers # All registers (", 0-9, a-z, -, *, +)
-    pendingRegister*: Option[char]
-      # Register selected with " prefix (e.g., "a for register a)
-    # Macro state (grouped in MacroState)
-    macroState*: MacroState # Macro recording and playback state
+    pendingInput*: PendingInputState # See pending_input.nim for isActive/cancelAll.
     # QuickRun request flag
     requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion

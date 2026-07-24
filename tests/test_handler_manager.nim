@@ -199,16 +199,18 @@ proc createVisualTestState(mode: EditorMode): EditorState =
   result = EditorState(
     activeWindow: window,
     config: newEditorConfig(),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
     visualSelection: VisualSelection(
@@ -359,16 +361,18 @@ proc createBlockVisualTestState(
   result = EditorState(
     activeWindow: window,
     config: newEditorConfig(),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
     visualSelection: VisualSelection(
@@ -1975,8 +1979,8 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # pendingRegister is now set, still waiting for the actual command
     check result2.kind == hrHandled
     check state.insertNormalMode
-    check state.pendingRegister.isSome
-    check state.pendingRegister.get == 'a'
+    check state.pendingInput.pendingRegister.isSome
+    check state.pendingInput.pendingRegister.get == 'a'
 
   test "Macro record (q) sets waitingForRegister and does not return to Insert":
     let buffer = newTextBuffer()
@@ -1996,7 +2000,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     check r.kind == hrHandled
     check state.insertNormalMode # still waiting for register name
-    check state.macroState.waitingForRegister
+    check state.pendingInput.macroState.waitingForRegister
 
   test "VisualLine (V) transition clears insert-normal and commits transaction":
     let manager = createTestManager()

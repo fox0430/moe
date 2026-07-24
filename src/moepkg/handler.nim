@@ -29,7 +29,7 @@ import
   editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
   logger, types, motion, quick_run_utils, command_completion, build, render_utils,
   tab_line, terminal_mode, clipboard, status_line, cursor_util, syntax_checker,
-  background_process, key_router
+  background_process, key_router, pending_input
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -532,14 +532,14 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
     e.state.insertNormalMode = false
     e.state.editState.insertModeStartPos = none(BufferPosition)
 
-  e.state.editState.pendingOperator = none(PendingOperator)
-  e.state.editState.pendingTextObject = none(PendingTextObject)
-  e.state.pendingRegister = none(char)
+  e.state.pendingInput.pendingOperator = none(PendingOperator)
+  e.state.pendingInput.pendingTextObject = none(PendingTextObject)
+  e.state.pendingInput.pendingRegister = none(char)
   discard e.keyRouter.cancel()
-  if e.state.macroState.waitingForRegister:
-    e.state.macroState.waitingForRegister = false
-    e.state.macroState.commandType = ""
-    e.state.macroState.pendingCount = 0
+  if e.state.pendingInput.macroState.waitingForRegister:
+    e.state.pendingInput.macroState.waitingForRegister = false
+    e.state.pendingInput.macroState.commandType = ""
+    e.state.pendingInput.macroState.pendingCount = 0
 
   # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
   # the target window's own saved mode.
@@ -765,8 +765,8 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Handle Ctrl-W window command second key (j/k/c).
   ## Returns some(true) if handled, some(false) if last window closed (quit),
   ## none if not a window command key.
-  if e.state.pendingCommand == PendingWindowCmd:
-    e.state.pendingCommand = PendingNone
+  if e.state.pendingInput.pendingCommand == PendingWindowCmd:
+    e.state.pendingInput.pendingCommand = PendingNone
     if not keyCombo.isSpecial:
       if keyCombo.char == "j":
         e.switchToPrevWindow
@@ -783,7 +783,7 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   # Check for Ctrl-w to enter window command mode
   if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == "w":
-    e.state.pendingCommand = PendingWindowCmd
+    e.state.pendingInput.pendingCommand = PendingWindowCmd
     return some(true)
 
   return none(bool)
@@ -905,9 +905,9 @@ proc recordOverlayKey(e: Editor, keyCombo: KeyCombo) =
   ## Append the overlay key to the active macro register. Overlay handlers
   ## do not record inline, so capture at the dispatcher entry instead.
   ## Suppressed during playback via `withPlaybackGuard` clearing `isRecording`.
-  if not e.state.macroState.isRecording:
+  if not e.state.pendingInput.macroState.isRecording:
     return
-  e.state.macroState.recordedKeys.add(keyComboToString(keyCombo))
+  e.state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
 proc handleOverlayKeyCombo(
     e: Editor, keyCombo: KeyCombo, recordKey = false
@@ -1020,66 +1020,24 @@ proc handlePopupKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
   return none(bool)
 
 proc handleEscapeCancellationKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
-  ## In Normal mode, Escape cancels pending multi-key state (macro register,
-  ## operator, text object, register, key router, window command). Also tracks
-  ## double-Escape to clear search highlight. Returns true when Escape was
-  ## handled; non-Escape keys reset the Escape counter but are not consumed.
+  ## In Normal mode, Escape clears every pending-input FSM via cancelAll and
+  ## otherwise falls through to the double-Escape hlsearch toggle.
   if e.state.mode != EditorMode.Normal:
     return false
 
-  # Handle Escape key to cancel pending multi-key commands
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    # Check if any pending state needs to be cancelled
-    var cancelled = false
-
-    # Cancel macro register waiting (q, @)
-    if e.state.macroState.waitingForRegister:
-      e.state.macroState.waitingForRegister = false
-      e.state.macroState.commandType = ""
-      e.state.macroState.pendingCount = 0
-      cancelled = true
-
-    # Cancel pending operator (d, c, y, etc.)
-    if e.state.editState.pendingOperator.isSome:
-      e.state.editState.pendingOperator = none(PendingOperator)
-      cancelled = true
-
-    # Cancel pending text object (i, a)
-    if e.state.editState.pendingTextObject.isSome:
-      e.state.editState.pendingTextObject = none(PendingTextObject)
-      cancelled = true
-
-    # Cancel pending register (")
-    if e.state.pendingRegister.isSome:
-      e.state.pendingRegister = none(char)
-      cancelled = true
-
-    # Cancel pending key binding sequence (built-in multi-key accumulator).
-    # Runtime mapping accumulator is intentionally not cleared here; the
-    # timeout path handles that. See `KeyRouter.cancel` for details.
-    if e.keyRouter.cancel():
-      cancelled = true
-
-    # Cancel window command mode (Ctrl-w)
-    if e.state.pendingCommand != PendingNone:
-      e.state.pendingCommand = PendingNone
-      cancelled = true
-
-    if cancelled:
+    if e.state.pendingInput.cancelAll(e.keyRouter.registry):
       e.state.statusMessage = ""
       return true
 
     # No pending state - handle double-Escape to clear search highlight
     if e.state.lastKeyWasEscape:
-      # Second Escape press - clear highlight
       e.state.input.search.hlsearchTempDisabled = true
       e.state.lastKeyWasEscape = false
     else:
-      # First Escape press - just mark it
       e.state.lastKeyWasEscape = true
     return true
   else:
-    # Any other key resets the Escape counter
     e.state.lastKeyWasEscape = false
     return false
 
@@ -1095,9 +1053,9 @@ proc handleSpecialModeWindowCommandKeyCombo(
     return none(bool)
 
   # Cancel window command mode on Escape
-  if e.state.pendingCommand == PendingWindowCmd and keyCombo.isSpecial and
+  if e.state.pendingInput.pendingCommand == PendingWindowCmd and keyCombo.isSpecial and
       keyCombo.special == skEscape:
-    e.state.pendingCommand = PendingNone
+    e.state.pendingInput.pendingCommand = PendingNone
     return some(true)
 
   return e.handleWindowCommand(keyCombo)

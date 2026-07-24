@@ -58,16 +58,18 @@ proc createTestState(): EditorState =
       DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
   )
@@ -1048,15 +1050,15 @@ suite "InsertModeHandler - Macro Recording":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.macroState.isRecording = true
-    state.macroState.register = 'a'
-    state.macroState.recordedKeys = @[]
+    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.register = 'a'
+    state.pendingInput.macroState.recordedKeys = @[]
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
     discard handler.handleInsertModeKey(buf, state, keyCombo)
 
-    check state.macroState.recordedKeys.len >= 1
+    check state.pendingInput.macroState.recordedKeys.len >= 1
 
 suite "InsertModeHandler - Execute Command":
   test "Execute command via registry":
