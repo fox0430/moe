@@ -2961,3 +2961,29 @@ suite "Buffer - UTF-16/32 file transcoding":
     check buf.encoding == CharacterEncoding.utf8
     check not buf.hasBom
     check buf.getFileContent == original
+
+suite "Buffer - Markdown fenced code block detection":
+  test "isCodeBlockLine spans the opening fence, interior, and closing fence":
+    let buf = newTextBuffer("intro\n```nim\nlet x = 1\n\necho x\n```\nafter\n")
+    buf.language = SourceLanguage.langMarkdown
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check not buf.isCodeBlockLine(0) # "intro"
+    check buf.isCodeBlockLine(1) # ```nim  (opening fence)
+    check buf.isCodeBlockLine(2) # let x = 1
+    check buf.isCodeBlockLine(3) # blank interior line
+    check buf.isCodeBlockLine(4) # echo x
+    check buf.isCodeBlockLine(5) # ```    (closing fence)
+    check not buf.isCodeBlockLine(6) # "after"
+
+  test "isCodeBlockLine returns false when language is not Markdown":
+    # A ```-fenced snippet in a non-Markdown buffer is just text as far as the
+    # tokenizer is concerned; the helper must not flag those lines.
+    let buf = newTextBuffer("```nim\nlet x = 1\n```\n")
+    buf.language = SourceLanguage.langNone
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    for i in 0 ..< buf.len:
+      check not buf.isCodeBlockLine(i)

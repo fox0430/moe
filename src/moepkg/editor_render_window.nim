@@ -55,8 +55,9 @@ type
     ## - `newLineStyleContext`: full context built once per rendered line. Required
     ##   for `getSelectionStyle` / `renderLineSegmentWithSelection`.
     ## - Manual partial construction: `fillLineBackground` only calls
-    ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`, and
-    ##   `useTwoColor`; the remaining fields can be left at their defaults.
+    ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`,
+    ##   `useTwoColor`, and `lineBg`; the remaining fields can be left at
+    ##   their defaults.
     lineIndex*: int
     isActiveWindow*: bool
     isCursorLine*: bool
@@ -66,6 +67,12 @@ type
     wordRanges*: seq[ColumnRange]
     colorCodeMatches*: seq[ColorCodeMatch]
     trailingSpaceStart*: int
+    lineBg*: Option[ColorValue]
+      ## Line-scoped background overlay (Markdown fenced code block). When set,
+      ## every cell on this line — including trailing empty cells and any cell
+      ## whose syntax segment lacks a bg — inherits this color, so a code block
+      ## reads as a uniform stripe rather than only tinted characters. Ranks
+      ## below cursor line / cursor column / git conflict / visual selection.
 
   LinePrecomputed* = object
     ## Per-logical-line values reused across wrap segments. The wrap path builds
@@ -91,6 +98,26 @@ proc resolveLineConflict(
     textBuffer.lineConflictKind(lineIndex)
   else:
     cmkNone
+
+proc resolveLineBg(
+    e: Editor, textBuffer: TextBuffer, lineIndex: int
+): Option[ColorValue] =
+  ## Single source of truth for the per-line background overlay (Markdown
+  ## fenced code block). Every LineStyleContext construction site funnels
+  ## through this so the "which lines get the block bg?" rule cannot drift
+  ## between the render/fill/virtual-text paths.
+  ##
+  ## Gated on `e.showSyntax`: without it, character cells fall through the
+  ## `hasSyntaxHighlight` branch in `baseStyleWithOverlay` / `syntaxBaseStyle`
+  ## and never pick up `lineBg`, so applying it to the trailing fill would
+  ## paint an unmatched stripe past the text.
+  if not e.showSyntax or textBuffer == nil or not textBuffer.isCodeBlockLine(lineIndex):
+    return none(ColorValue)
+  let bg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+  if bg.kind != Default:
+    some(bg)
+  else:
+    none(ColorValue)
 
 proc effectiveSearchPattern(state: EditorState): string =
   ## Resolve the active hlsearch pattern based on overlay state.
@@ -170,6 +197,7 @@ proc newLineStyleContext*(
     wordRanges: wordRanges,
     colorCodeMatches: colorCodeMatches,
     trailingSpaceStart: trailingSpaceStart,
+    lineBg: resolveLineBg(e, textBuffer, lineIndex),
   )
 
 # Layer predicates
@@ -279,6 +307,12 @@ proc baseStyleWithOverlay(
     let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
     if segBg.isSome:
       style = style.merge(bgOnly(segBg.get))
+    elif lineCtx.lineBg.isSome:
+      # Fence tokens (```) and the language-name keyword carry no segment bg,
+      # so without this the fence line reads as un-tinted islands inside the
+      # block's stripe. Overlays below (cursorLine / gitConflict / …) still
+      # win via `overlayPatchSyntax`.
+      style = style.merge(bgOnly(lineCtx.lineBg.get))
     style.merge(
       e.overlayPatchSyntax(pos, lineCtx, displayCol, cursorDisplayCol, colorPair)
     )
@@ -319,6 +353,8 @@ proc getSelectionStyle*(
       let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
       if segBg.isSome:
         s = s.merge(bgOnly(segBg.get))
+      elif lineCtx.lineBg.isSome:
+        s = s.merge(bgOnly(lineCtx.lineBg.get))
       s
     else:
       normalStyle()
@@ -417,8 +453,8 @@ proc lineFillPatch(
     inVisualSelection: bool,
 ): StylePatch =
   ## Shared priority chain used by both line-fill paths.
-  ## Priority: visualSelection > gitConflict > cursorLine > cursorColumn > none.
-  ## Returns `noPatch` when the cell should keep `normalStyle()`.
+  ## Priority: visualSelection > gitConflict > cursorLine > cursorColumn >
+  ## lineBg > none. Returns `noPatch` when the cell should keep `normalStyle()`.
   if inVisualSelection:
     return full(visualStyle())
   if lineCtx.gitConflictApplies:
@@ -427,6 +463,8 @@ proc lineFillPatch(
     return full(cursorLineHighlightStyle())
   if e.cursorColumnApplies(displayX, cursorDisplayCol):
     return full(cursorColumnHighlightStyle())
+  if lineCtx.lineBg.isSome:
+    return bgOnly(lineCtx.lineBg.get)
   noPatch
 
 proc fillLineBackground*(
@@ -448,13 +486,14 @@ proc fillLineBackground*(
   ## selection covers (lineIndex, 0), column 0 is rendered with the visual
   ## selection background so that Visual mode is visible on empty lines.
   # Partial LineStyleContext: lineFillPatch only reads isCursorLine,
-  # lineConflict, and useTwoColor. The seq/colorcode fields stay at their
-  # defaults — lineIndex is set so any future read of it stays correct.
+  # lineConflict, useTwoColor, and lineBg. The seq/colorcode fields stay at
+  # their defaults — lineIndex is set so any future read of it stays correct.
   let lineCtx = LineStyleContext(
     lineIndex: lineIndex,
     isCursorLine: lineIndex == cursorLine,
     lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
     useTwoColor: e.config.highlight.gitConflictTwoColor,
+    lineBg: resolveLineBg(e, textBuffer, lineIndex),
   )
   let selectionAtStart =
     isEmptyLine and hasSelection and
@@ -728,12 +767,13 @@ proc renderWindowLineWrapped*(
     # Empty lines bypass renderLineSegmentWithSelection, so draw any end-of-line
     # virtual text (inlay hints) here too, over the just-filled background.
     # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
-    # isCursorLine, lineConflict, and useTwoColor.
+    # isCursorLine, lineConflict, useTwoColor, and lineBg.
     let vtLineCtx = LineStyleContext(
       lineIndex: lineIndex,
       isCursorLine: lineIndex == window.cursor.line,
       lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
       useTwoColor: e.config.highlight.gitConflictTwoColor,
+      lineBg: resolveLineBg(e, window.buffer, lineIndex),
     )
     discard e.appendEndOfLineVirtualText(
       buffer, ctx, vtLineCtx, 0, textScreenX, actualScreenY
@@ -922,12 +962,13 @@ proc renderWindowLineNoWrap*(
     let vtStartCol = line.charLen - window.viewport.leftColumn
     if vtStartCol >= 0:
       # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
-      # isCursorLine, lineConflict, and useTwoColor.
+      # isCursorLine, lineConflict, useTwoColor, and lineBg.
       let vtLineCtx = LineStyleContext(
         lineIndex: lineIndex,
         isCursorLine: lineIndex == window.cursor.line,
         lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
         useTwoColor: e.config.highlight.gitConflictTwoColor,
+        lineBg: resolveLineBg(e, window.buffer, lineIndex),
       )
       discard e.appendEndOfLineVirtualText(
         buffer, ctx, vtLineCtx, vtStartCol, textScreenX, actualScreenY

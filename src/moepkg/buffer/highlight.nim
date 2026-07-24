@@ -26,8 +26,24 @@
 import std/tables
 
 import ../[highlight, uri_utils]
-import ./core
-import ./markers
+import ../syntax/tokenizer
+import core, markers
+
+proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
+  ## True if `line` sits inside a Markdown fenced code block or is one of its
+  ## ``` fence lines. Consults the incremental highlight's per-line tokenizer
+  ## state: a line is a code block line when either the state entering it or
+  ## the state exiting it has `markdown.inCodeBlock` set. The exiting state
+  ## covers the opening fence; the entering state covers the closing fence
+  ## and every interior line.
+  if b.language != SourceLanguage.langMarkdown or b.incrementalHighlight == nil:
+    return false
+  let states = b.incrementalHighlight.lineStates.states
+  if line < 0 or line >= states.len:
+    return false
+  let enterInBlock = line >= 1 and states[line - 1].lang.markdown.inCodeBlock
+  let exitInBlock = states[line].lang.markdown.inCodeBlock
+  enterInBlock or exitInBlock
 
 proc scanAndApplyUriUnderlines*(
     b: TextBuffer, startLine, endLine: int, applyToCache = true
