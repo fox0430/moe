@@ -153,12 +153,9 @@ proc runEditor(
 
         let shouldContinue = editor.handleEvent(e)
 
-        if editor.hasPendingAsyncOperations():
-          # Handle pending async operations (shell commands, :bg)
-          try:
-            await editor.handlePendingAsyncOperations()
-          except Exception as e:
-            logError("moe", "handlePendingAsyncOperations failed: " & e.msg)
+        # Drain unconditionally: detached async tasks can set pending fields
+        # after handleEvent returns; a guard here would skip that drain.
+        await editor.handlePendingAsyncOperations()
 
         # Key mapping timeout control — delegated to KeyRouter so policy
         # (enabled/timeoutlen) and accumulator state are queried in one place.
@@ -174,12 +171,14 @@ proc runEditor(
       editorCallback(editor, cmdLineConfig, log):
         let shouldContinue = editor.handleKeyMappingTimeout()
         app.setApplicationTimeout(0) # One-shot: disable until next prefix match
+        await editor.handlePendingAsyncOperations()
         return if shouldContinue: trContinue else: trQuit
 
     app.onTickAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
       editorCallback(editor, cmdLineConfig, log):
         editor.lsp.poll(0)
         editor.lsp.cleanupStaleProgress()
+        await editor.handlePendingAsyncOperations()
       return trContinue
 
     app.onRenderAsync proc(buffer: var Buffer) =
