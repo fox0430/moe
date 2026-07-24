@@ -1267,9 +1267,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       debugConfig.editorView.enable,
     )
     generateMacroInfo(
-      debugLines, e.state.macroState.isRecording, e.state.macroState.register,
-      e.state.macroState.registers.len, e.state.macroState.playbackDepth,
-      debugConfig.macroState.enable,
+      debugLines, e.state.pendingInput.macroState.isRecording,
+      e.state.pendingInput.macroState.register,
+      e.state.pendingInput.macroState.registers.len,
+      e.state.pendingInput.macroState.playbackDepth, debugConfig.macroState.enable,
     )
     generateVisualInfo(
       debugLines,
@@ -1706,18 +1707,18 @@ template withPlaybackGuard(e: Editor, body: untyped): ReplayOutcome =
   ## replay loops. `body` must assign to `outcome`.
   block:
     let state = e.state
-    if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
+    if state.pendingInput.macroState.playbackDepth >= MaxMacroRecursionDepth:
       e.state.statusMessage =
         "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")"
       roAbort
     else:
-      state.macroState.playbackDepth += 1
-      let wasRecording = state.macroState.isRecording
-      state.macroState.isRecording = false
+      state.pendingInput.macroState.playbackDepth += 1
+      let wasRecording = state.pendingInput.macroState.isRecording
+      state.pendingInput.macroState.isRecording = false
       var outcome {.inject.} = roContinue
       body
-      state.macroState.isRecording = wasRecording
-      state.macroState.playbackDepth -= 1
+      state.pendingInput.macroState.isRecording = wasRecording
+      state.pendingInput.macroState.playbackDepth -= 1
       outcome
 
 proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome =

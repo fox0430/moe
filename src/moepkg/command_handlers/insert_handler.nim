@@ -932,8 +932,8 @@ proc handleInsertModeKey*(
   ## Main entry point for handling Insert mode key presses
 
   # Record key for macro if recording is active
-  if state.macroState.isRecording:
-    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
+  if state.pendingInput.macroState.isRecording:
+    state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
   let completionActive = handler.completionManager.isActive()
 

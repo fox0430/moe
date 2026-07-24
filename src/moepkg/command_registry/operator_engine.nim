@@ -38,15 +38,16 @@ proc storeYankedText*(ctx: CommandContext, text: string, isLine: bool) =
   if ctx.state.registers.isNil:
     return
 
-  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingRegister.get
+  if ctx.state.pendingInput.pendingRegister.isSome and
+      ctx.state.pendingInput.pendingRegister.get != '\0':
+    let regName = ctx.state.pendingInput.pendingRegister.get
     if regName.isNamedRegisterName:
       discard ctx.state.registers.setNamedRegister(regName, text, isLine)
     elif regName.isClipboardRegisterName:
       ctx.state.registers.setClipboardRegister(regName, text, isLine)
     else:
       ctx.state.registers.setYankedRegister(text, isLine)
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
   else:
     ctx.state.registers.setYankedRegister(text, isLine)
 
@@ -56,15 +57,16 @@ proc storeDeletedText*(ctx: CommandContext, text: string, isLine: bool) =
   if ctx.state.registers.isNil:
     return
 
-  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingRegister.get
+  if ctx.state.pendingInput.pendingRegister.isSome and
+      ctx.state.pendingInput.pendingRegister.get != '\0':
+    let regName = ctx.state.pendingInput.pendingRegister.get
     if regName.isNamedRegisterName:
       discard ctx.state.registers.setNamedRegister(regName, text, isLine)
     elif regName.isClipboardRegisterName:
       ctx.state.registers.setClipboardRegister(regName, text, isLine)
     else:
       ctx.state.registers.setDeletedRegister(text, isLine)
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
   else:
     ctx.state.registers.setDeletedRegister(text, isLine)
 
@@ -90,7 +92,7 @@ proc executeOperatorOnRange*(
     # delimiters -- so OpChange falls through to its branch below.
     # The operator command still completes, so consume any pending register
     # prefix (e.g. `"ayit`) rather than leaking it into the next command.
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
     return ok(())
 
   case operatorType
@@ -171,7 +173,7 @@ proc executeOperatorOnRange*(
       # Empty change still completes the operator command (it drops into Insert
       # between the delimiters), so consume any pending register prefix rather
       # than leaking it into the next command.
-      ctx.state.pendingRegister = none(char)
+      ctx.state.pendingInput.pendingRegister = none(char)
 
     # Begin transaction for all change operations (delete + insert mode input)
     let transactionResult = ctx.buffer.beginTransaction("Change operation")
@@ -381,7 +383,7 @@ proc setPendingOperator*(
   ## Set pending operator and save viewport position for operator+motion commands
   ctx.state.windowDisplay.savedViewportTopLine =
     ctx.motionController.viewportManager.viewport.topLine
-  ctx.state.editState.pendingOperator = some(
+  ctx.state.pendingInput.pendingOperator = some(
     PendingOperator(
       operatorType: operatorType, operatorCount: count, startPos: ctx.cursor
     )

@@ -46,17 +46,19 @@ proc createTestState(): EditorState =
       DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      recordStartKey: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        recordStartKey: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
   )
@@ -437,8 +439,8 @@ suite "NormalModeHandler - Macro Recording State":
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
-    check state.macroState.waitingForRegister == true
-    check state.macroState.commandType == "record"
+    check state.pendingInput.macroState.waitingForRegister == true
+    check state.pendingInput.macroState.commandType == "record"
     check state.statusMessage == "recording @"
 
   test "Register selection after q":
@@ -448,18 +450,18 @@ suite "NormalModeHandler - Macro Recording State":
     let viewport = createTestViewport()
 
     # Set waiting for register state (as if 'q' was pressed)
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "record"
-    state.macroState.registers = initTable[char, seq[string]]()
+    state.pendingInput.macroState.waitingForRegister = true
+    state.pendingInput.macroState.commandType = "record"
+    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
 
     # Press 'a' to select register
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
-    check state.macroState.isRecording == true
-    check state.macroState.register == 'a'
-    check state.macroState.waitingForRegister == false
+    check state.pendingInput.macroState.isRecording == true
+    check state.pendingInput.macroState.register == 'a'
+    check state.pendingInput.macroState.waitingForRegister == false
     check state.statusMessage == "recording @a"
 
   test "Invalid register shows error":
@@ -468,15 +470,15 @@ suite "NormalModeHandler - Macro Recording State":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "record"
+    state.pendingInput.macroState.waitingForRegister = true
+    state.pendingInput.macroState.commandType = "record"
 
     # Press '1' (invalid register)
     let keyCombo = KeyCombo(isSpecial: false, char: "1", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
-    check state.macroState.waitingForRegister == false
+    check state.pendingInput.macroState.waitingForRegister == false
     check state.statusMessage == "Invalid register (use a-z)"
 
   test "Stop recording (q while recording)":
@@ -485,20 +487,20 @@ suite "NormalModeHandler - Macro Recording State":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.macroState.isRecording = true
-    state.macroState.register = 'a'
-    state.macroState.recordedKeys = @["d", "d"]
-    state.macroState.recordStartKey = "q"
-    state.macroState.registers = initTable[char, seq[string]]()
+    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.register = 'a'
+    state.pendingInput.macroState.recordedKeys = @["d", "d"]
+    state.pendingInput.macroState.recordStartKey = "q"
+    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
 
     # Press 'q' to stop recording (matches recordStartKey)
     let keyCombo = KeyCombo(isSpecial: false, char: "q", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
-    check state.macroState.isRecording == false
-    check state.macroState.registers.hasKey('a')
-    check state.macroState.registers['a'] == @["d", "d"]
+    check state.pendingInput.macroState.isRecording == false
+    check state.pendingInput.macroState.registers.hasKey('a')
+    check state.pendingInput.macroState.registers['a'] == @["d", "d"]
     check state.statusMessage == ""
 
   test "Do not stop recording when q is f's target char":
@@ -507,24 +509,24 @@ suite "NormalModeHandler - Macro Recording State":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.macroState.isRecording = true
-    state.macroState.register = 'a'
-    state.macroState.recordedKeys = @[]
-    state.macroState.recordStartKey = "q"
-    state.macroState.registers = initTable[char, seq[string]]()
+    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.register = 'a'
+    state.pendingInput.macroState.recordedKeys = @[]
+    state.pendingInput.macroState.recordStartKey = "q"
+    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
 
     let fKey = KeyCombo(isSpecial: false, char: "f", modifiers: {})
     discard handler.handleNormalModeKey(buf, state, viewport, fKey)
 
-    check state.macroState.isRecording == true
+    check state.pendingInput.macroState.isRecording == true
     check handler.keyBindingRegistry.isWaitingForChar() == true
 
     let qKey = KeyCombo(isSpecial: false, char: "q", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, qKey)
 
     check r.kind == nmrHandled
-    check state.macroState.isRecording == true
-    check state.macroState.recordedKeys == @["f", "q"]
+    check state.pendingInput.macroState.isRecording == true
+    check state.pendingInput.macroState.recordedKeys == @["f", "q"]
     check handler.keyBindingRegistry.isWaitingForChar() == false
 
 suite "NormalModeHandler - Macro Playback State":
@@ -569,8 +571,8 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, aKey)
 
     check r.kind == nmrHandled
-    check state.pendingRegister.isSome
-    check state.pendingRegister.get == 'a'
+    check state.pendingInput.pendingRegister.isSome
+    check state.pendingInput.pendingRegister.get == 'a'
 
   test "Register selection cancelled on invalid register":
     let buf = newTextBuffer()
@@ -586,7 +588,7 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, bangKey)
 
     check r.kind == nmrHandled
-    check state.pendingRegister.isNone
+    check state.pendingInput.pendingRegister.isNone
 
   test "Register selection cancelled on special key":
     let buf = newTextBuffer()
@@ -602,7 +604,7 @@ suite "NormalModeHandler - Register Selection":
     let r = handler.handleNormalModeKey(buf, state, viewport, escKey)
 
     check r.kind == nmrHandled
-    check state.pendingRegister.isNone
+    check state.pendingInput.pendingRegister.isNone
 
 suite "NormalModeHandler - Special Results":
   test "nmrPassthrough(ptSaveAndQuit) result":
@@ -990,14 +992,14 @@ suite "NormalModeHandler - Text Object Pending State":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
 
     # Press Escape to cancel
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
     discard handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check state.editState.pendingTextObject.isNone
+    check state.pendingInput.pendingTextObject.isNone
 
 suite "NormalModeHandler - LSP Results":
   test "All LSP passthrough kinds":
@@ -1037,17 +1039,17 @@ suite "NormalModeHandler - Macro Key Recording":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.macroState.isRecording = true
-    state.macroState.register = 'a'
-    state.macroState.recordedKeys = @[]
-    state.macroState.registers = initTable[char, seq[string]]()
+    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.register = 'a'
+    state.pendingInput.macroState.recordedKeys = @[]
+    state.pendingInput.macroState.registers = initTable[char, seq[string]]()
 
     # Press 'j' while recording
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
     discard handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     # Key should be recorded
-    check state.macroState.recordedKeys.len >= 1
+    check state.pendingInput.macroState.recordedKeys.len >= 1
 
 suite "NormalModeHandler - Undo/Redo":
   test "Undo command executes":
@@ -1140,9 +1142,9 @@ suite "NormalModeHandler - Text Object Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     # Set up pending text object state
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1163,9 +1165,9 @@ suite "NormalModeHandler - Text Object Handling":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomAround, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpYank,
         operatorCount: 1,
@@ -1186,9 +1188,9 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpChange,
         operatorCount: 1,
@@ -1209,9 +1211,9 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1232,9 +1234,9 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 6)
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1255,9 +1257,9 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomAround, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpYank,
         operatorCount: 1,
@@ -1278,9 +1280,9 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1301,9 +1303,9 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 1)
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpYank,
         operatorCount: 1,
@@ -1324,9 +1326,9 @@ suite "NormalModeHandler - Text Object Handling":
     let viewport = createTestViewport()
     state.cursor = BufferPosition(line: 0, column: 5)
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1346,9 +1348,9 @@ suite "NormalModeHandler - Text Object Handling":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.editState.pendingTextObject =
+    state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
-    state.editState.pendingOperator = some(
+    state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1361,8 +1363,8 @@ suite "NormalModeHandler - Text Object Handling":
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
-    check state.editState.pendingTextObject.isNone
-    check state.editState.pendingOperator.isNone
+    check state.pendingInput.pendingTextObject.isNone
+    check state.pendingInput.pendingOperator.isNone
 
 suite "NormalModeHandler - Jump List Edge Cases":
   test "Jump forward at newest position":
@@ -1437,8 +1439,8 @@ suite "NormalModeHandler - Macro Edge Cases":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "record"
+    state.pendingInput.macroState.waitingForRegister = true
+    state.pendingInput.macroState.commandType = "record"
 
     # Empty char
     let keyCombo = KeyCombo(isSpecial: false, char: "", modifiers: {})
@@ -1453,15 +1455,15 @@ suite "NormalModeHandler - Macro Edge Cases":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "record"
+    state.pendingInput.macroState.waitingForRegister = true
+    state.pendingInput.macroState.commandType = "record"
 
     # Press Escape
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
-    check state.macroState.waitingForRegister == false
+    check state.pendingInput.macroState.waitingForRegister == false
     check state.statusMessage == ""
 
 suite "NormalModeHandler - Command mode command alias dispatch (#2597)":
@@ -1666,9 +1668,9 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let keyCombo = KeyCombo(isSpecial: false, char: "q")
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
     check r.kind == nmrHandled
-    check state.macroState.waitingForRegister == true
-    check state.macroState.commandType == "record"
-    check state.macroState.recordStartKey == "q"
+    check state.pendingInput.macroState.waitingForRegister == true
+    check state.pendingInput.macroState.commandType == "record"
+    check state.pendingInput.macroState.recordStartKey == "q"
 
   test "macro-play (@a) returns nmrPlaybackMacro":
     let buf = newTextBuffer()
@@ -1678,7 +1680,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let viewport = createTestViewport()
 
     # Pre-populate a macro in register 'a'
-    state.macroState.registers['a'] = @["j"]
+    state.pendingInput.macroState.registers['a'] = @["j"]
 
     # Press @
     let atKey = KeyCombo(isSpecial: false, char: "@")
@@ -1706,7 +1708,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let aKey = KeyCombo(isSpecial: false, char: "a")
     let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrHandled
-    check state.pendingRegister == some('a')
+    check state.pendingInput.pendingRegister == some('a')
 
   test "quickrun (\\r) returns ptQuickRun":
     let buf = newTextBuffer()
@@ -1773,26 +1775,26 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let qKey = KeyCombo(isSpecial: false, char: "q")
     let r1 = handler.handleNormalModeKey(buf, state, viewport, qKey)
     check r1.kind == nmrHandled
-    check state.macroState.waitingForRegister == true
+    check state.pendingInput.macroState.waitingForRegister == true
 
     # Select register 'a'
     let aKey = KeyCombo(isSpecial: false, char: "a")
     let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrHandled
-    check state.macroState.isRecording == true
-    check state.macroState.register == 'a'
+    check state.pendingInput.macroState.isRecording == true
+    check state.pendingInput.macroState.register == 'a'
 
     # Press j (recorded)
     let jKey = KeyCombo(isSpecial: false, char: "j")
     discard handler.handleNormalModeKey(buf, state, viewport, jKey)
-    check state.macroState.recordedKeys.len == 1
+    check state.pendingInput.macroState.recordedKeys.len == 1
 
     # Stop recording: press q
     let r3 = handler.handleNormalModeKey(buf, state, viewport, qKey)
     check r3.kind == nmrHandled
-    check state.macroState.isRecording == false
-    check state.macroState.registers.hasKey('a')
-    check state.macroState.registers['a'] == @["j"]
+    check state.pendingInput.macroState.isRecording == false
+    check state.pendingInput.macroState.registers.hasKey('a')
+    check state.pendingInput.macroState.registers['a'] == @["j"]
 
   test "remapped macro-record key stops recording":
     let buf = newTextBuffer()
@@ -1811,28 +1813,28 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let bigQKey = KeyCombo(isSpecial: false, char: "Q")
     let r1 = handler.handleNormalModeKey(buf, state, viewport, bigQKey)
     check r1.kind == nmrHandled
-    check state.macroState.waitingForRegister == true
-    check state.macroState.recordStartKey == "Q"
+    check state.pendingInput.macroState.waitingForRegister == true
+    check state.pendingInput.macroState.recordStartKey == "Q"
 
     # Select register 'b'
     let bKey = KeyCombo(isSpecial: false, char: "b")
     let r2 = handler.handleNormalModeKey(buf, state, viewport, bKey)
     check r2.kind == nmrHandled
-    check state.macroState.isRecording == true
-    check state.macroState.register == 'b'
+    check state.pendingInput.macroState.isRecording == true
+    check state.pendingInput.macroState.register == 'b'
 
     # Press j (recorded)
     let jKey = KeyCombo(isSpecial: false, char: "j")
     discard handler.handleNormalModeKey(buf, state, viewport, jKey)
-    check state.macroState.recordedKeys.len == 1
+    check state.pendingInput.macroState.recordedKeys.len == 1
 
     # Stop recording: press Q (matches recordStartKey "Q")
     let r3 = handler.handleNormalModeKey(buf, state, viewport, bigQKey)
     check r3.kind == nmrHandled
-    check state.macroState.isRecording == false
-    check state.macroState.registers.hasKey('b')
-    check state.macroState.registers['b'] == @["j"]
-    check state.macroState.recordStartKey == ""
+    check state.pendingInput.macroState.isRecording == false
+    check state.pendingInput.macroState.registers.hasKey('b')
+    check state.pendingInput.macroState.registers['b'] == @["j"]
+    check state.pendingInput.macroState.recordStartKey == ""
 
   test "repeat last macro @@ via key binding":
     let buf = newTextBuffer()
@@ -1842,8 +1844,8 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let viewport = createTestViewport()
 
     # Pre-populate a macro and set lastRegister
-    state.macroState.registers['a'] = @["j", "k"]
-    state.macroState.lastRegister = some('a')
+    state.pendingInput.macroState.registers['a'] = @["j", "k"]
+    state.pendingInput.macroState.lastRegister = some('a')
 
     # Press @ (first key - key binding enters waitingForChar)
     let atKey = KeyCombo(isSpecial: false, char: "@")

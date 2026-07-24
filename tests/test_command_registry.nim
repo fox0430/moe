@@ -987,7 +987,7 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     registerBuiltinCommands(registry)
 
     # Set pending operator (simulate 'd')
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1099,7 +1099,7 @@ suite "; / , repeat last find":
     )
     check registry.executeCommand(ctx, findC).isOk
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1160,7 +1160,7 @@ suite "; / , repeat last find":
     check ctx.cursor.column == 1 # parked before the first comma
     # d; must advance past the adjacent comma and delete through to just before
     # the next one (b,cd), not collapse to a single char.
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     check registry.executeCommand(ctx, repeatFind).isOk
@@ -1173,7 +1173,7 @@ suite "; / , repeat last find":
     registerBuiltinCommands(registry)
 
     # 2df, == d2f, : the operator count must fold into the find count.
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
     let findComma = Command(
@@ -1226,7 +1226,7 @@ suite "; / , repeat last find":
     # Cursor at the last column with the operator armed: the missing target
     # must leave the buffer untouched, not delete a spurious range.
     ctx.cursor = BufferPosition(line: 0, column: 2)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,

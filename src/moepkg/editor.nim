@@ -220,32 +220,31 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
           historyIndex: -1,
         ),
       ),
-      # Macro state (grouped in MacroState)
-      macroState: MacroState(
-        isRecording: false,
-        register: '\0',
-        recordedKeys: @[],
-        registers: initTable[char, seq[string]](),
-        lastRegister: none(char),
-        waitingForRegister: false,
-        commandType: "",
-        pendingCount: 1,
-        playbackDepth: 0,
-      ),
-      lastKeyWasEscape: false, # Track double-Escape for clearing highlight
-      # Edit operation state (grouped in EditState)
-      editState: EditState(
-        lastEditCommand: none(LastEditCommand),
+      pendingInput: PendingInputState(
+        macroState: MacroState(
+          isRecording: false,
+          register: '\0',
+          recordedKeys: @[],
+          registers: initTable[char, seq[string]](),
+          lastRegister: none(char),
+          waitingForRegister: false,
+          commandType: "",
+          pendingCount: 1,
+          playbackDepth: 0,
+        ),
         pendingOperator: none(PendingOperator),
         pendingTextObject: none(PendingTextObject),
+        pendingRegister: none(char),
+      ),
+      lastKeyWasEscape: false,
+      editState: EditState(
+        lastEditCommand: none(LastEditCommand),
         substituteContext: none(SubstituteContext),
         replaceHistory: @[],
         insertModeStartPos: none(BufferPosition),
         visualBlockInsertContext: none(VisualBlockInsertContext),
       ),
-      # Full register system
       registers: initRegisters(),
-      pendingRegister: none(char),
       # Jump list (grouped in JumpListState)
       jumpList: JumpListState(
         list: @[], # Empty jump list initially

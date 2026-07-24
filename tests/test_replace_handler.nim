@@ -43,16 +43,18 @@ proc createTestState(): EditorState =
     config: newEditorConfig(),
     editState: EditState(replaceHistory: @[]),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
   )
@@ -569,15 +571,15 @@ suite "ReplaceModeHandler - Macro Recording":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
-    state.macroState.isRecording = true
-    state.macroState.register = 'a'
-    state.macroState.recordedKeys = @[]
+    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.register = 'a'
+    state.pendingInput.macroState.recordedKeys = @[]
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
     discard handler.handleReplaceModeKey(buf, state, keyCombo)
 
-    check state.macroState.recordedKeys.len >= 1
+    check state.pendingInput.macroState.recordedKeys.len >= 1
 
 suite "ReplaceModeHandler - Key Binding Motions":
   test "Handle h key replaces character (not motion in Replace mode)":

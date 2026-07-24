@@ -59,16 +59,18 @@ proc createTestState(): EditorState =
       DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
     overlay: none(OverlayKind),
@@ -3015,10 +3017,10 @@ suite "Macro recording - Command / Search overlay keys":
     result.state.mode = EditorMode.Normal
 
   proc startRecording(e: Editor, register: char) =
-    e.state.macroState.isRecording = true
-    e.state.macroState.register = register
-    e.state.macroState.recordedKeys = @[]
-    e.state.macroState.recordStartKey = "q"
+    e.state.pendingInput.macroState.isRecording = true
+    e.state.pendingInput.macroState.register = register
+    e.state.pendingInput.macroState.recordedKeys = @[]
+    e.state.pendingInput.macroState.recordStartKey = "q"
 
   test "Command overlay: keys after ':' land in recordedKeys":
     let e = createEditorForOverlayRecord("hello foo bar")
@@ -3029,7 +3031,7 @@ suite "Macro recording - Command / Search overlay keys":
       discard e.handleEvent(makeCharEvent($ch))
     discard e.handleEvent(makeEnterEvent())
 
-    check e.state.macroState.recordedKeys ==
+    check e.state.pendingInput.macroState.recordedKeys ==
       @["s", "/", "f", "o", "o", "/", "b", "a", "r", "/", "<Enter>"]
 
   test "Search overlay: pattern and Enter recorded":
@@ -3041,7 +3043,7 @@ suite "Macro recording - Command / Search overlay keys":
       discard e.handleEvent(makeCharEvent($ch))
     discard e.handleEvent(makeEnterEvent())
 
-    check e.state.macroState.recordedKeys == @["w", "o", "r", "<Enter>"]
+    check e.state.pendingInput.macroState.recordedKeys == @["w", "o", "r", "<Enter>"]
 
   test "Command overlay Escape recorded so playback replays cancel":
     let e = createEditorForOverlayRecord("hello")
@@ -3053,7 +3055,7 @@ suite "Macro recording - Command / Search overlay keys":
     discard
       e.handleEvent(Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Escape)))
 
-    check e.state.macroState.recordedKeys == @["a", "b", "<Escape>"]
+    check e.state.pendingInput.macroState.recordedKeys == @["a", "b", "<Escape>"]
     check not e.state.isCommandOverlay
 
   test "Recording paused during playback (withPlaybackGuard)":
@@ -3061,12 +3063,12 @@ suite "Macro recording - Command / Search overlay keys":
     let e = createEditorForOverlayRecord("hello")
     e.startRecording('a')
     e.state.enterCommandOverlay()
-    e.state.macroState.playbackDepth = 1
-    e.state.macroState.isRecording = false # withPlaybackGuard mirror
+    e.state.pendingInput.macroState.playbackDepth = 1
+    e.state.pendingInput.macroState.isRecording = false # withPlaybackGuard mirror
 
     discard e.handleEvent(makeCharEvent("x"))
 
-    check e.state.macroState.recordedKeys.len == 0
+    check e.state.pendingInput.macroState.recordedKeys.len == 0
 
 suite "Macro playback - overlay-aware routing":
   # Regression: nested key replay dispatched by state.mode, so overlay-mode keys
@@ -3199,21 +3201,21 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     e.addSecondWindow(buf2)
 
     e.state.mode = EditorMode.Normal
-    e.state.editState.pendingOperator = some(
+    e.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
         startPos: BufferPosition(line: 2, column: 0),
       )
     )
-    e.state.editState.pendingTextObject = some(PendingTextObject(modifier: tomInner))
+    e.state.pendingInput.pendingTextObject = some(PendingTextObject(modifier: tomInner))
 
     let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
     check handled == true
 
     check e.windowManager.activeWindowIndex == 1
-    check e.state.editState.pendingOperator.isNone
-    check e.state.editState.pendingTextObject.isNone
+    check e.state.pendingInput.pendingOperator.isNone
+    check e.state.pendingInput.pendingTextObject.isNone
 
   test "Ctrl-o (insert-normal) commits Insert transaction on jump":
     # Ctrl-o keeps an open Insert transaction while state.mode is Normal;

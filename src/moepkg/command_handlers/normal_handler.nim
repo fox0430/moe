@@ -260,8 +260,9 @@ proc searchMatchAndOperate(
   let isMultiLine = pos.line != matchEnd.line
 
   # Store in register
-  if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
-    let regName = state.pendingRegister.get
+  if state.pendingInput.pendingRegister.isSome and
+      state.pendingInput.pendingRegister.get != '\0':
+    let regName = state.pendingInput.pendingRegister.get
     if regName.isNamedRegisterName:
       discard state.registers.setNamedRegister(regName, selectedText, false)
     elif regName.isClipboardRegisterName:
@@ -270,7 +271,7 @@ proc searchMatchAndOperate(
       state.registers.setDeletedRegister(selectedText, isMultiLine)
   else:
     state.registers.setDeletedRegister(selectedText, isMultiLine)
-  state.pendingRegister = none(char)
+  state.pendingInput.pendingRegister = none(char)
 
   case op.operatorType
   of OpDelete, OpChange:
@@ -517,7 +518,7 @@ proc handleNormalModeKey*(
   ## Main entry point for handling Normal mode key presses
 
   # Check if we're waiting for a macro register name
-  if state.macroState.waitingForRegister:
+  if state.pendingInput.macroState.waitingForRegister:
     # Expecting a register name (a-z or @)
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
       let registerChar =
@@ -526,54 +527,54 @@ proc handleNormalModeKey*(
         else:
           '\0'
 
-      if state.macroState.commandType == "record":
+      if state.pendingInput.macroState.commandType == "record":
         # Start recording to the specified register
         if registerChar >= 'a' and registerChar <= 'z':
-          state.macroState.isRecording = true
-          state.macroState.register = registerChar
-          state.macroState.recordedKeys = @[]
+          state.pendingInput.macroState.isRecording = true
+          state.pendingInput.macroState.register = registerChar
+          state.pendingInput.macroState.recordedKeys = @[]
           state.statusMessage = "recording @" & $registerChar
-          state.macroState.waitingForRegister = false
-          state.macroState.commandType = ""
+          state.pendingInput.macroState.waitingForRegister = false
+          state.pendingInput.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
           state.statusMessage = "Invalid register (use a-z)"
-          state.macroState.waitingForRegister = false
-          state.macroState.commandType = ""
+          state.pendingInput.macroState.waitingForRegister = false
+          state.pendingInput.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Cancel on any non-char key
       state.statusMessage = ""
-      state.macroState.waitingForRegister = false
-      state.macroState.commandType = ""
+      state.pendingInput.macroState.waitingForRegister = false
+      state.pendingInput.macroState.commandType = ""
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Handle macro recording - check if we're in recording mode
-  if state.macroState.isRecording:
+  if state.pendingInput.macroState.isRecording:
     # Don't treat the key as "stop recording" while the router is holding
     # it as an f/t/r/" operand.
     let currentKeyStr = keyComboToString(keyCombo)
-    if currentKeyStr == state.macroState.recordStartKey and
+    if currentKeyStr == state.pendingInput.macroState.recordStartKey and
         not handler.keyBindingRegistry.isWaitingForChar():
       # Stop recording
-      state.macroState.registers[state.macroState.register] =
-        state.macroState.recordedKeys
-      state.macroState.isRecording = false
-      state.macroState.recordedKeys = @[]
-      state.macroState.recordStartKey = ""
+      state.pendingInput.macroState.registers[state.pendingInput.macroState.register] =
+        state.pendingInput.macroState.recordedKeys
+      state.pendingInput.macroState.isRecording = false
+      state.pendingInput.macroState.recordedKeys = @[]
+      state.pendingInput.macroState.recordStartKey = ""
       state.statusMessage = ""
       handler.keyBindingRegistry.clearSequence()
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Record this key
-      state.macroState.recordedKeys.add(currentKeyStr)
+      state.pendingInput.macroState.recordedKeys.add(currentKeyStr)
       # Continue processing the key normally
 
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)
   # This handles the second part of commands like 'diw', 'da"', 'ci(' etc.
   # IMPORTANT: This must be checked BEFORE the '"' register selection handling below,
   # so that ci" works correctly (the " is the text object, not a register selection)
-  if state.editState.pendingTextObject.isSome:
+  if state.pendingInput.pendingTextObject.isSome:
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
       # Map key to text object kind command (shared with the Visual handler)
       let textObjectCommandId = textObjectCommandIdFor(keyCombo.char)
@@ -595,14 +596,14 @@ proc handleNormalModeKey*(
       else:
         # Not a text object key - cancel pending state with feedback (no silent
         # drop of the pending operator).
-        state.editState.pendingTextObject = none(PendingTextObject)
-        state.editState.pendingOperator = none(PendingOperator)
+        state.pendingInput.pendingTextObject = none(PendingTextObject)
+        state.pendingInput.pendingOperator = none(PendingOperator)
         state.statusMessage = "Not a text object: " & keyCombo.char
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Special key or key with modifiers - cancel pending state
-      state.editState.pendingTextObject = none(PendingTextObject)
-      state.editState.pendingOperator = none(PendingOperator)
+      state.pendingInput.pendingTextObject = none(PendingTextObject)
+      state.pendingInput.pendingOperator = none(PendingOperator)
       state.statusMessage = ""
       # Fall through to process the key normally
 
@@ -700,9 +701,9 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
     of "macro.record":
-      state.macroState.waitingForRegister = true
-      state.macroState.commandType = "record"
-      state.macroState.recordStartKey = keyComboToString(keyCombo)
+      state.pendingInput.macroState.waitingForRegister = true
+      state.pendingInput.macroState.commandType = "record"
+      state.pendingInput.macroState.recordStartKey = keyComboToString(keyCombo)
       state.statusMessage = "recording @"
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     of "changelist.prev":
@@ -816,15 +817,15 @@ proc handleNormalModeKey*(
       # Same buffer - update cursor position
       return handler.updateCursorToJumpPosition(buffer, state, pos)
     of "search.next.select":
-      if state.editState.pendingOperator.isSome:
-        let op = state.editState.pendingOperator.get
-        state.editState.pendingOperator = none(PendingOperator)
+      if state.pendingInput.pendingOperator.isSome:
+        let op = state.pendingInput.pendingOperator.get
+        state.pendingInput.pendingOperator = none(PendingOperator)
         return searchMatchAndOperate(buffer, state, forward = true, op)
       return searchMatchAndSelect(buffer, state, forward = true)
     of "search.prev.select":
-      if state.editState.pendingOperator.isSome:
-        let op = state.editState.pendingOperator.get
-        state.editState.pendingOperator = none(PendingOperator)
+      if state.pendingInput.pendingOperator.isSome:
+        let op = state.pendingInput.pendingOperator.get
+        state.pendingInput.pendingOperator = none(PendingOperator)
         return searchMatchAndOperate(buffer, state, forward = false, op)
       return searchMatchAndSelect(buffer, state, forward = false)
     else:
@@ -852,10 +853,10 @@ proc handleNormalModeKey*(
       let count = if cmd.count > 0: cmd.count else: 1
       if registerChar == '@':
         # @@ - repeat last macro
-        if state.macroState.lastRegister.isSome:
-          let reg = state.macroState.lastRegister.get
-          if state.macroState.registers.hasKey(reg):
-            let keys = state.macroState.registers[reg]
+        if state.pendingInput.macroState.lastRegister.isSome:
+          let reg = state.pendingInput.macroState.lastRegister.get
+          if state.pendingInput.macroState.registers.hasKey(reg):
+            let keys = state.pendingInput.macroState.registers[reg]
             return requestMacroPlayback(keys, count)
           else:
             state.statusMessage = "Register @" & $reg & " is empty"
@@ -874,9 +875,9 @@ proc handleNormalModeKey*(
           state.statusMessage = "No previous Command mode command"
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       elif registerChar >= 'a' and registerChar <= 'z':
-        if state.macroState.registers.hasKey(registerChar):
-          state.macroState.lastRegister = some(registerChar)
-          let keys = state.macroState.registers[registerChar]
+        if state.pendingInput.macroState.registers.hasKey(registerChar):
+          state.pendingInput.macroState.lastRegister = some(registerChar)
+          let keys = state.pendingInput.macroState.registers[registerChar]
           return requestMacroPlayback(keys, count)
         else:
           state.statusMessage = "Register @" & $registerChar & " is empty"
@@ -891,10 +892,10 @@ proc handleNormalModeKey*(
         else:
           '\0'
       if isValidRegisterName(registerChar):
-        state.pendingRegister = some(registerChar)
+        state.pendingInput.pendingRegister = some(registerChar)
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
-        state.pendingRegister = none(char)
+        state.pendingInput.pendingRegister = none(char)
         state.statusMessage = "Invalid register"
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:

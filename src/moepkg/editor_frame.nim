@@ -139,9 +139,10 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   )
 
   generateMacroInfo(
-    debugLines, e.state.macroState.isRecording, e.state.macroState.register,
-    e.state.macroState.registers.len, e.state.macroState.playbackDepth,
-    debugConfig.macroState.enable,
+    debugLines, e.state.pendingInput.macroState.isRecording,
+    e.state.pendingInput.macroState.register,
+    e.state.pendingInput.macroState.registers.len,
+    e.state.pendingInput.macroState.playbackDepth, debugConfig.macroState.enable,
   )
 
   generateVisualInfo(
