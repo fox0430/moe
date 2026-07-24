@@ -2946,14 +2946,14 @@ suite "Editor - handler CommandContext sees live config after applyConfigSetting
 
     let ctx = CommandContext(state: e.state)
     let originalTool = e.config.clipboard.tool
-    check originalTool != cbtXsel
+    check originalTool != cbtXclip
 
     var newConfig = newEditorConfig()
-    newConfig.clipboard = ClipboardConfig(enable: true, tool: cbtXsel)
+    newConfig.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
     e.applyConfigSettings(newConfig)
 
     check ctx.clipboardConfig.enable == true
-    check ctx.clipboardConfig.tool == cbtXsel
+    check ctx.clipboardConfig.tool == cbtXclip
 
   test "CommandContext.smoothScrollConfig reflects post-reload smoothScroll":
     let e = createTestEditor()
