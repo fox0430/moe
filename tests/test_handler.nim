@@ -26,10 +26,10 @@
 import std/[unittest, options, tables, os, osproc, times]
 from std/strutils import contains
 
-import config_test_helper
-
-import pkg/celina
+import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
+
+import config_test_helper
 
 import
   ../src/moepkg/[
@@ -811,11 +811,89 @@ suite "Background Process Management":
     # After cleanup, the list should be empty
     check editor.runningBackgroundProcesses.len == 0
 
-suite "hasPendingAsyncOperations":
-  test "Returns false when no pending operations":
-    # We would need an Editor instance to test this properly
-    # This test is a placeholder to document the expected behavior
-    check true
+proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception]).} =
+  # Simulate the delayed pending set that happens inside
+  # e.codeLensPickerConfirm() -> executeCodeLensItem(), which is asyncSpawn'd
+  # from handler.nim after handleEvent has already returned.
+  e.state.pending.buildOnSave =
+    (path: "/tmp/detached.nim", language: 0, customCmd: "", workspaceRoot: "")
+
+proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception]).} =
+  asyncSpawn detachedPendingWriter(e)
+  # Yield so the detached task runs before the drain.
+  await sleepAsync(10)
+  await e.handlePendingAsyncOperations()
+
+suite "handlePendingAsyncOperations drains fields set from async tasks":
+  test "buildOnSave pending field drains on tick":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.buildOnSave =
+      (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: "")
+
+    waitFor editor.handlePendingAsyncOperations()
+
+    check editor.state.pending.buildOnSave.path.len == 0
+
+  test "quickRun pending field drains on tick":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.quickRun =
+      (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false)
+
+    waitFor editor.handlePendingAsyncOperations()
+
+    check editor.state.pending.quickRun.cmd.len == 0
+
+  test "syntaxCheck pending field drains on tick":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.syntaxCheck = (path: "/tmp/x.nim", language: 0)
+
+    waitFor editor.handlePendingAsyncOperations()
+
+    check editor.state.pending.syntaxCheck.path.len == 0
+
+  test "drain from detached async task (simulates CodeLens confirm)":
+    # Reproduces the visible bug: handler.nim asyncSpawns a task, the task
+    # writes a pending field *after* handleEvent returns. Without the
+    # unconditional drain the field would sit until the next event.
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+
+    waitFor runDetachedScenario(editor)
+
+    check editor.state.pending.buildOnSave.path.len == 0
+
+  test "multiple pending fields drain in one call":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.buildOnSave =
+      (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: "")
+    editor.state.pending.quickRun =
+      (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false)
+    editor.state.pending.syntaxCheck = (path: "/tmp/y.nim", language: 0)
+
+    waitFor editor.handlePendingAsyncOperations()
+
+    check editor.state.pending.buildOnSave.path.len == 0
+    check editor.state.pending.quickRun.cmd.len == 0
+    check editor.state.pending.syntaxCheck.path.len == 0
+
+  test "drain with all pending fields empty is a no-op":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+
+    # Should not raise and should leave state untouched.
+    waitFor editor.handlePendingAsyncOperations()
+
+    check editor.state.pending.buildOnSave.path.len == 0
+    check editor.state.pending.quickRun.cmd.len == 0
+    check editor.state.pending.syntaxCheck.path.len == 0
+    check editor.state.pending.terminalCommand.len == 0
+    check editor.state.pending.shellCommand.len == 0
+    check editor.state.pending.manPage.len == 0
+    check editor.state.pending.background == false
 
 suite "Search Mode - History Navigation":
   test "Search state initialized correctly":

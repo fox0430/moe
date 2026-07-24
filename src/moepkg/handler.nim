@@ -1228,13 +1228,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   return true
 
-proc hasPendingAsyncOperations*(e: Editor): bool =
-  ## Check if there are pending async operations
-  e.state.pending.shellCommand.len > 0 or e.state.pending.terminalCommand.len > 0 or
-    e.state.pending.manPage.len > 0 or e.state.pending.background or
-    e.state.pending.buildOnSave.path.len > 0 or e.state.pending.quickRun.cmd.len > 0 or
-    e.state.pending.syntaxCheck.path.len > 0
-
 type
   BuildInfo =
     tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
@@ -1421,12 +1414,15 @@ proc handlePendingAsyncOperationsImpl(
       e.state.pending.syntaxCheck = (path: "", language: 0)
       asyncSpawn runSyntaxCheckAsync(e, checkInfo)
 
-proc handlePendingAsyncOperations*(
-    e: Editor
-): Future[void] {.async: (raises: [Exception]).} =
-  ## Wrapper for handlePendingAsyncOperationsImpl with gcsafe cast
+proc handlePendingAsyncOperations*(e: Editor): Future[void] {.async: (raises: []).} =
+  ## Wrapper for handlePendingAsyncOperationsImpl. Swallows and logs any
+  ## exception so a pending-op failure does not trip editorCallback's
+  ## emergency-save-and-quit path (drain is called from every tick).
   {.cast(gcsafe).}:
-    await handlePendingAsyncOperationsImpl(e)
+    try:
+      await handlePendingAsyncOperationsImpl(e)
+    except Exception as ex:
+      logError("moe", "handlePendingAsyncOperations failed: " & ex.msg)
 
 proc handleKeyMappingTimeout*(e: Editor): bool =
   ## Called when the key mapping timeout fires.
