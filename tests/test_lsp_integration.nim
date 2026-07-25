@@ -2882,7 +2882,9 @@ suite "LspIntegration - hasStaleServerEditTarget":
     let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
     let noBaseline = initTable[BufferId, int]()
 
-    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), noBaseline)
+    check not lsp.hasStaleServerEditTarget(
+      @[buf], editFor(tmpDir / "a.nim"), noBaseline
+    )
 
     discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
     check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), noBaseline)

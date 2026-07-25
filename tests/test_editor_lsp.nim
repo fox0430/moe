@@ -536,7 +536,8 @@ suite "editor_lsp - applyWorkspaceEditFromServer staleness":
 
     check not res.applied
     check buf.getTextString() == "aaa"
-    check e.state.statusMessage == "Buffer changed since last sync; server edit discarded"
+    check e.state.statusMessage ==
+      "Buffer changed since last sync; server edit discarded"
 
   test "applies an edit when the unsynced buffer still matches disk":
     let tmpDir = getTempDir() / "moe_test_server_edit_saved"
