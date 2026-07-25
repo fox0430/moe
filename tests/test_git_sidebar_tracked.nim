@@ -22,14 +22,13 @@
 ## suppressed so the two don't draw overlapping `~`/`+` markers. The lingering
 ## session marker (history-based) used to look like a stuck git marker after a
 ## buffer was edited back to match HEAD (git diff goes empty, but the line stays
-## flagged). See `status_line.isBufferGitTracked` / `editor_render_window`.
+## flagged). See `git_cache.isBufferGitTracked` / `editor_render_window`.
 
 import std/[os, osproc, options, unittest]
 
 import pkg/results
 
-import ../src/moepkg/[buffer, git_diff, sidebar]
-import ../src/moepkg/status_line {.all.}
+import ../src/moepkg/[buffer, git_cache, sidebar]
 
 proc setupRepo(dir: string) =
   if dirExists(dir):
@@ -39,20 +38,26 @@ proc setupRepo(dir: string) =
   discard execCmdEx("git config user.email 'test@test.com'", workingDir = dir)
   discard execCmdEx("git config user.name 'Test'", workingDir = dir)
 
-proc waitTracked(b: TextBuffer): bool =
-  ## Drive the (status-line) diff scheduler until the async diff finishes and the
-  ## git-tracked flag is populated, or give up after a timeout.
+proc runDiff(gc: var GitCacheState, b: TextBuffer) =
+  ## Drive one full diff cycle the way the editor tick does, then wait for the
+  ## pipeline to finish.
+  gc.requestGitRefresh(b)
+  gc.scheduleGitRefresh(b)
   for _ in 0 ..< 200:
-    discard cachedGitDiffCounts(b)
-    if isBufferGitTracked(b):
-      return true
+    gc.reapGitPipelines()
+    if gc.gitDiffPendingCount() == 0:
+      return
     sleep(10)
-  isBufferGitTracked(b)
+
+proc waitTracked(gc: var GitCacheState, b: TextBuffer): bool =
+  gc.runDiff(b)
+  gc.isBufferGitTracked(b)
 
 suite "Sidebar git-tracked detection":
   test "isBufferGitTracked is false before the cache is populated":
+    var gc: GitCacheState
     let b = newTextBuffer("a\nb\n")
-    check not isBufferGitTracked(b)
+    check not gc.isBufferGitTracked(b)
 
   test "tracked (committed) file -> isBufferGitTracked true":
     let dir = getTempDir() / "moe_track_committed"
@@ -63,10 +68,11 @@ suite "Sidebar git-tracked detection":
     discard execCmdEx("git commit -m init", workingDir = dir)
 
     setConfiguredBackend(GapBuffer)
+    var gc: GitCacheState
     let b = newTextBuffer()
     check b.loadFile(f).isOk
-    check b.waitTracked()
-    evictGitCacheForBuffer(b)
+    check gc.waitTracked(b)
+    gc.evictGitCacheForBuffer(b)
     removeDir(dir)
 
   test "untracked file inside a repo -> isBufferGitTracked false":
@@ -76,12 +82,13 @@ suite "Sidebar git-tracked detection":
     writeFile(f, "line 1\nline 2\n") # never `git add`ed
 
     setConfiguredBackend(GapBuffer)
+    var gc: GitCacheState
     let b = newTextBuffer()
     check b.loadFile(f).isOk
     # err-on-schedule populates immediately, so a single drive is enough.
-    discard cachedGitDiffCounts(b)
-    check not isBufferGitTracked(b)
-    evictGitCacheForBuffer(b)
+    gc.runDiff(b)
+    check not gc.isBufferGitTracked(b)
+    gc.evictGitCacheForBuffer(b)
     removeDir(dir)
 
   test "file outside any git repo -> isBufferGitTracked false":
@@ -93,11 +100,12 @@ suite "Sidebar git-tracked detection":
     writeFile(f, "line 1\n")
 
     setConfiguredBackend(GapBuffer)
+    var gc: GitCacheState
     let b = newTextBuffer()
     check b.loadFile(f).isOk
-    discard cachedGitDiffCounts(b)
-    check not isBufferGitTracked(b)
-    evictGitCacheForBuffer(b)
+    gc.runDiff(b)
+    check not gc.isBufferGitTracked(b)
+    gc.evictGitCacheForBuffer(b)
     removeDir(dir)
 
 suite "Sidebar marker overlap after edit-back-to-original":
@@ -110,9 +118,10 @@ suite "Sidebar marker overlap after edit-back-to-original":
     discard execCmdEx("git commit -m init", workingDir = dir)
 
     setConfiguredBackend(GapBuffer)
+    var gc: GitCacheState
     let b = newTextBuffer()
     check b.loadFile(f).isOk
-    check b.waitTracked()
+    check gc.waitTracked(b)
 
     # Insert a line, then delete it again so the content matches HEAD.
     discard b.insert(1, "inserted")
@@ -120,10 +129,9 @@ suite "Sidebar marker overlap after edit-back-to-original":
     check b.getFileContent() == "line 1\nline 2\nline 3\n"
 
     # git diff is now empty -> git markers all cleared.
-    let diff = getGitDiffFromBuffer(b)
-    check diff.isOk
-    check diff.get.lines.len == 0
-    applyGitDiffToBuffer(b, diff.get)
+    gc.runDiff(b)
+    check gc.gitDiffCounts(b) == (added: 0, modified: 0, deleted: 0)
+    gc.applyPendingGitMarkers(b)
     for ln in 0 ..< b.len:
       check b.getLineMarker(ln).isNone
 
@@ -165,7 +173,7 @@ suite "Sidebar marker overlap after edit-back-to-original":
     check shown
 
     # And the gate the renderer uses is satisfied for this buffer.
-    check isBufferGitTracked(b)
+    check gc.isBufferGitTracked(b)
 
-    evictGitCacheForBuffer(b)
+    gc.evictGitCacheForBuffer(b)
     removeDir(dir)

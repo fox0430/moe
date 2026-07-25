@@ -44,7 +44,7 @@ import
   editor_render
 
 import
-  status_line, render_utils, logger, message_log, debug_viewer, completion,
+  git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration,
   editor_window_layout
 
@@ -298,17 +298,38 @@ proc tickFileAndConfig(e: Editor) =
   e.maybeReloadExternallyModifiedFile()
   e.maybeReloadConfig()
 
-proc tickGitAndDebug(e: Editor) =
-  ## Git and debug updates. The diff subprocess itself is scheduled lazily
-  ## from status_line.cachedGitDiffCounts (called during status-line
-  ## rendering); here we reap in-flight pipelines for all cached buffers
-  ## (so hidden buffers don't leak child/tempfile/fd) and then consume the
-  ## most recent diff result for the sidebar gutter, gated on the user's
-  ## showGitDiff flag.
-  ## Depends on `tickFileAndConfig` having refreshed the conflict scan first.
-  tickGitDiffPipelines()
+proc tickGitCache(e: Editor) =
+  ## Own the whole git-cache lifecycle: reap in-flight pipelines for every
+  ## cached buffer (so hidden buffers don't leak child/tempfile/fd), schedule
+  ## refreshes for the buffers currently on screen, then hand the newest diff
+  ## to the sidebar gutter. Rendering only reads the cache.
+  e.state.git.reapGitPipelines()
+
+  # Refresh only what is actually displayed: a diff spawns a subprocess and a
+  # branch lookup blocks on `git rev-parse`, so neither may run for a readout
+  # the user has turned off.
+  let sl = e.config.statusLine
+  let setup = if e.showStatusLine: sl.setupText else: ""
+  let wantsDiff =
+    e.showGitDiff or (e.showStatusLine and sl.gitChangedLines) or "{gitChanges}" in setup
+  let wantsBranch = (e.showStatusLine and sl.gitBranchName) or "{gitBranch}" in setup
+
+  for i, window in e.windowManager.windows:
+    # Inactive windows show git info only under showGitInactive — except
+    # through setupText placeholders, which that flag does not gate.
+    let isActive = i == e.windowManager.activeWindowIndex
+    if wantsDiff and (isActive or sl.showGitInactive or "{gitChanges}" in setup):
+      e.state.git.scheduleGitRefresh(window.buffer)
+    if wantsBranch and (isActive or sl.showGitInactive or "{gitBranch}" in setup):
+      e.state.git.refreshGitBranch(window.buffer)
+
   if e.showGitDiff:
-    maybeApplyGitMarkers(e.activeBuffer())
+    e.state.git.applyPendingGitMarkers(e.activeBuffer())
+
+proc tickGitAndDebug(e: Editor) =
+  ## Git and debug updates.
+  ## Depends on `tickFileAndConfig` having refreshed the conflict scan first.
+  e.tickGitCache()
   e.maybeUpdateConflicts()
   e.maybeUpdateDebugBuffer()
 

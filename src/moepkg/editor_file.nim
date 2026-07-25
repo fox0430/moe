@@ -26,7 +26,7 @@ import pkg/results
 import
   types/editor_types,
   logger,
-  git_diff,
+  git_cache,
   git_conflict,
   backup,
   search_utils,
@@ -44,19 +44,12 @@ type SaveAllBuffersResult* = object
   skippedExternal*: seq[string] ## Buffers skipped because of external changes
   failures*: seq[tuple[path: string, error: string]]
 
-proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
-  ## Refresh git diff information for the active buffer (synchronous).
-  ## Used on explicit events where we want the gutter to reflect the new
-  ## state immediately: save, external reload, `:e!`, and toggling
-  ## showGitDiff on. The periodic background refresh is handled by the
-  ## async cache in status_line, not by this proc.
-  ##
-  ## Parameters:
-  ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
-  ##              If false, compare disk file with working tree (saved only)
+proc refreshGitDiff*(e: Editor) =
+  ## Mark the active buffer's diff stale so the next tick re-runs the pipeline.
+  ## Used on the events that change the git state without touching the buffer:
+  ## save, external reload and `:e!`.
   if e.showGitDiff:
-    let activeBuffer = e.activeBuffer()
-    discard updateBufferWithGitDiff(activeBuffer, useBuffer)
+    e.state.git.requestGitRefresh(e.activeBuffer())
 
 template isPersistCursorPositionFile(lang: SourceLanguage): bool =
   lang notin {SourceLanguage.langGitRebaseTodo, SourceLanguage.langCommitEditMsg}
@@ -107,14 +100,8 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   e.viewport.resetViewportTop()
   e.viewport.leftColumn = 0
 
-  # Update git diff information if sidebar and git diff are enabled
-  # Use useBuffer=false to compare disk file with working tree (not buffer with HEAD)
   if e.showGitDiff:
-    let diffResult = updateBufferWithGitDiff(e.activeBuffer, useBuffer = false)
-    if diffResult.isErr:
-      # Log error but don't fail the file load
-      # (file might not be in a git repository)
-      logDebug("editor", "Git diff not available for " & path & ": " & diffResult.error)
+    e.state.git.requestGitRefresh(e.activeBuffer)
 
   # Scan for git conflict markers. Run regardless of the highlight config so
   # that `buffer.conflictBlocks` is populated for future navigation commands.
@@ -260,8 +247,7 @@ proc saveFile*(
 
   logInfo("editor", "Successfully saved file: " & savePath)
 
-  # Update git diff information after saving (use disk file for comparison)
-  e.refreshGitDiff(useBuffer = false)
+  e.refreshGitDiff()
 
   # Notify LSP that a document was saved
   if e.lsp.enabled:
@@ -303,9 +289,8 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
     result.savedPaths.add(savePath)
     logInfo("editor", "Saved file: " & savePath)
 
-    # Refresh git diff for the saved buffer (mirrors single-file save)
     if e.showGitDiff:
-      discard updateBufferWithGitDiff(buffer, useBuffer = false)
+      e.state.git.requestGitRefresh(buffer)
 
     if e.lsp.enabled:
       let lspResult = e.lsp.onBufferSave(buffer)
@@ -358,9 +343,8 @@ proc autoSave*(e: Editor) =
         savedCount += 1
         savedPaths.add(savePath)
 
-        # Refresh git diff after saving
         if e.showGitDiff:
-          discard updateBufferWithGitDiff(buffer, useBuffer = false)
+          e.state.git.requestGitRefresh(buffer)
 
         # Notify LSP that a document was saved
         if e.lsp.enabled:

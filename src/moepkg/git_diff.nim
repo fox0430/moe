@@ -123,22 +123,6 @@ proc abandonGitDiffProcess*(diffProc: GitDiffProcess) =
   closeSafely(diffProc.process)
   cleanupTempFiles(diffProc)
 
-proc getGitRoot(filePath: string): Result[string, string] =
-  ## Get git repository root for a given file path
-  ## Returns error if file is not in a git repository
-  let fileDir = filePath.parentDir()
-
-  let (gitRootOutput, gitRootExitCode) =
-    try:
-      execCmdEx("git rev-parse --show-toplevel", workingDir = fileDir)
-    except OSError as e:
-      return err("Failed to find git repository root: " & e.msg)
-
-  if gitRootExitCode != 0:
-    return err("File is not in a git repository")
-
-  return ok(gitRootOutput.strip())
-
 proc calculateRelativePath(filePath, gitRoot: string): string =
   ## Calculate relative path from git root to file
   ## Handles both absolute and relative paths
@@ -154,89 +138,6 @@ proc calculateRelativePath(filePath, gitRoot: string): string =
   else:
     # Already relative path: use as-is
     return filePath
-
-proc getHeadContent(relativePath, gitRoot: string): Result[string, string] =
-  ## Get file content from git HEAD
-  ## Returns error if file is not in git repository or git command fails
-  ##
-  ## Uses startProcess + readAll (not execCmdEx) to preserve the blob's
-  ## exact byte sequence. execCmdEx reads line-by-line and appends "\n"
-  ## per iteration, which fabricates a trailing newline for files that
-  ## were committed without one.
-  var process: Process = nil
-  var headContent = ""
-  var showExitCode: int = -1
-  try:
-    process =
-      try:
-        startProcess(
-          "git",
-          workingDir = gitRoot,
-          args = ["show", "HEAD:" & relativePath],
-          options = {poUsePath, poStdErrToStdOut},
-        )
-      except OSError as e:
-        return err("Failed to execute git show: " & e.msg)
-
-    headContent = process.outputStream.readAll()
-    showExitCode = process.waitForExit()
-  finally:
-    if not process.isNil:
-      try:
-        process.close()
-      except CatchableError:
-        logWarn(
-          "git diff", "Failed to close git show process: " & getCurrentExceptionMsg()
-        )
-
-  if showExitCode != 0:
-    return err("File is not in git repository")
-
-  return ok(headContent)
-
-proc prepareBufferDiffTempFiles(
-    filePath, gitRoot: string, bufferContent: string
-): Result[(string, string), string] =
-  ## Prepare temporary files for buffer diff comparison
-  ## Returns (tempOriginal, tempModified) file paths
-  ## Caller is responsible for cleanup using removeTempFileSafely()
-  let fileDir = filePath.parentDir()
-  let relativePath = calculateRelativePath(filePath, gitRoot)
-
-  # Get HEAD content
-  let headContentResult = getHeadContent(relativePath, gitRoot)
-  if headContentResult.isErr:
-    return err(headContentResult.error)
-  let headContent = headContentResult.get
-
-  # Create temporary files for comparison
-  let tempOriginal =
-    try:
-      genTempPath("moe_original_", ".tmp", fileDir)
-    except OSError as e:
-      return err("Failed to create temp file path: " & e.msg)
-
-  let tempModified =
-    try:
-      genTempPath("moe_modified_", ".tmp", fileDir)
-    except OSError as e:
-      return err("Failed to create temp file path: " & e.msg)
-
-  # Write original content from HEAD
-  try:
-    writeFile(tempOriginal, headContent)
-  except IOError as e:
-    return err("Failed to write original temp file: " & e.msg)
-
-  # Write buffer contents to modified temp file
-  try:
-    writeFile(tempModified, bufferContent)
-  except IOError as e:
-    # Clean up original temp file
-    removeTempFileSafely(tempOriginal)
-    return err("Failed to write modified temp file: " & e.msg)
-
-  return ok((tempOriginal, tempModified))
 
 proc parseDiffHunk(hunkHeader: string): tuple[startLine: int, lineCount: int] =
   ## Parse a diff hunk header like "@@ -10,5 +10,7 @@"
@@ -357,39 +258,6 @@ proc parseDiffOutput(output: string): GitDiffInfo =
   # Convert consecutive delete+add groups to modified
   diffInfo.lines = processDeleteAddPairs(diffInfo.lines)
   return diffInfo
-
-proc getGitDiff*(filePath: string): Result[GitDiffInfo, string] =
-  ## Get git diff information for a file on disk
-  ## Returns error if file is not in a git repository or git command fails
-
-  # Check if file exists
-  if not fileExists(filePath):
-    return err("File does not exist: " & filePath)
-
-  # Get the directory containing the file
-  let fileDir = filePath.parentDir()
-  let fileName = filePath.extractFilename()
-
-  # Run git diff command
-  # Using --unified=0 to get only changed lines without context
-  let gitCmd = "git diff --unified=0 -- " & quoteShell(fileName)
-
-  let (output, exitCode) =
-    try:
-      execCmdEx(gitCmd, workingDir = fileDir)
-    except OSError as e:
-      return err("Failed to execute git command: " & e.msg)
-
-  if exitCode != 0:
-    # Exit code 1 might just mean no changes, check output
-    if output.len == 0:
-      # No changes
-      return ok(GitDiffInfo(lines: @[]))
-    # Git command failed for another reason
-    return err("Git command failed with exit code " & $exitCode)
-
-  # Parse git diff output using shared parser
-  return ok(parseDiffOutput(output))
 
 proc advanceToGitShow(
     diffProc: GitDiffProcess, gitRootOutput: string
@@ -533,58 +401,6 @@ proc checkGitDiffComplete*(
       )
     return some(Result[GitDiffInfo, string].ok(parseDiffOutput(diffOutput)))
 
-proc getGitDiffFromBuffer*(buffer: TextBuffer): Result[GitDiffInfo, string] =
-  ## Get git diff information by comparing buffer contents with HEAD
-  ## This allows real-time diff updates without saving the file
-  ## Returns error if buffer has no file path or git command fails
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no associated file path")
-
-  let filePath = buffer.filePath.get
-
-  # Get git repository root
-  let gitRootResult = getGitRoot(filePath)
-  if gitRootResult.isErr:
-    return err(gitRootResult.error)
-  let gitRoot = gitRootResult.get
-
-  # Prepare temporary files for comparison
-  let bufferContent = buffer.getFileContent()
-  let tempFilesResult = prepareBufferDiffTempFiles(filePath, gitRoot, bufferContent)
-
-  # Handle case where file is not in git yet
-  if tempFilesResult.isErr:
-    if tempFilesResult.error == "File is not in git repository":
-      return ok(GitDiffInfo(lines: @[]))
-    return err(tempFilesResult.error)
-
-  let (tempOriginal, tempModified) = tempFilesResult.get
-
-  # Ensure cleanup of temporary files on function exit
-  defer:
-    removeTempFileSafely(tempOriginal)
-    removeTempFileSafely(tempModified)
-
-  # Run git diff with --no-index to compare the two files
-  let gitCmd =
-    "git diff --no-index --unified=0 " & quoteShell(tempOriginal) & " " &
-    quoteShell(tempModified)
-
-  let (output, exitCode) =
-    try:
-      execCmdEx(gitCmd, workingDir = gitRoot)
-    except OSError as e:
-      return err("Failed to execute git diff: " & e.msg)
-
-  # Exit code 1 from git diff --no-index means differences found (this is normal)
-  # Exit code 0 means no differences
-  if exitCode != 0 and exitCode != 1:
-    return err("Git diff failed with exit code " & $exitCode)
-
-  # Parse git diff output using shared parser
-  return ok(parseDiffOutput(output))
-
 proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, string] =
   ## Start the buffer-vs-HEAD diff pipeline as a background state machine.
   ## Returns a `GitDiffProcess` that must be polled with `checkGitDiffComplete`;
@@ -675,41 +491,3 @@ proc countGitChangedLines*(
     of Added: result.added.inc
     of Modified: result.modified.inc
     of Deleted: result.deleted.inc
-
-proc updateBufferWithGitDiff*(
-    buffer: TextBuffer, useBuffer: bool = true
-): Result[(), string] =
-  ## Convenience function to update buffer with git diff in one call
-  ## Returns error if buffer has no file path or git diff fails
-  ##
-  ## Parameters:
-  ## - buffer: The text buffer to update
-  ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
-  ##              If false, compare disk file with working tree (saved changes only)
-  ##
-  ## This function should be called:
-  ## - When a file is loaded (initial diff)
-  ## - After buffer modifications (for real-time updates)
-  ## - After saving a file (to refresh diff markers)
-  ## - When git diff display is toggled on
-  ## - Manually via editor.refreshGitDiff()
-  ##
-  ## Note: When useBuffer=true, compares in-memory buffer with git HEAD
-  ##       When useBuffer=false, compares disk file with working tree
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no associated file path")
-
-  let diffResult =
-    if useBuffer:
-      # Compare buffer contents with HEAD (real-time, shows unsaved changes)
-      getGitDiffFromBuffer(buffer)
-    else:
-      # Compare disk file with working tree (saved changes only)
-      getGitDiff(buffer.filePath.get)
-
-  if diffResult.isErr:
-    return err(diffResult.error)
-
-  buffer.applyGitDiffToBuffer(diffResult.get)
-  return ok(())

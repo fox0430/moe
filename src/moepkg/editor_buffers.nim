@@ -29,7 +29,7 @@ import
   types/editor_types,
   editor_window,
   editor_window_state,
-  status_line,
+  git_cache,
   editorconfig_helper,
   highlight,
   highlight_config,
@@ -189,7 +189,7 @@ proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
   if bidx >= 0:
     # Mirror removeBufferAt: evict before delete so the buffer's pointer can't
     # alias a future buffer via a leftover cache entry.
-    evictGitCacheForBuffer(e.buffers[bidx])
+    e.state.git.evictGitCacheForBuffer(e.buffers[bidx])
     e.deleteBufferAt(bidx)
 
   let prevActive = e.windowManager.activeWindowIndex
@@ -395,7 +395,7 @@ proc removeBufferAt*(e: Editor, idx: int): TextBuffer =
   result = e.buffers[idx]
   # Evict before removal so any in-flight async `git diff` is terminated and
   # the buffer's pointer can't alias a future buffer via leftover Table entries.
-  evictGitCacheForBuffer(result)
+  e.state.git.evictGitCacheForBuffer(result)
   e.deleteBufferAt(idx)
   e.pruneBufferIdFromAllWindows(result.id)
 

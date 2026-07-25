@@ -46,6 +46,7 @@ import
   primitives,
   types/syntax_checker_types,
   types/recent_file_mode_types,
+  types/git_cache_types,
   terminal_mode,
   config
 
@@ -403,11 +404,8 @@ type
 
   TimingState* = object ## Timing and debounce state grouped together
     gitDiffUpdateInterval*: int64
-      # Minimum milliseconds between git diff
-      # refresh cycles. Consumed by status_line's async cache via
-      # setGitDiffRefreshInterval; the historical debounce timestamps
-      # (lastGitDiffUpdate/ChangeSeq) were removed along with
-      # maybeUpdateGitDiff when the async cache took over.
+      # Minimum milliseconds between git diff refresh cycles. Consumed by
+      # EditorState.git via setGitDiffRefreshInterval.
     lastConflictScan*: MonoTime # Timestamp of last conflict marker scan
     lastConflictScanSeq*: int # Buffer changeSeq at last conflict scan
     conflictScanInterval*: int64 # Minimum milliseconds between conflict scans
@@ -813,6 +811,7 @@ type
     config*: EditorConfig
       ## Aliases `Editor.config`; kept in sync on swap in applyConfigSettings.
     timing*: TimingState
+    git*: GitCacheState # Per-buffer git diff/branch cache (see git_cache.nim)
     lastKeyWasEscape*: bool
       # Track if last key was Escape (for double-Escape to clear highlight)
     # Full register system (vim-style)

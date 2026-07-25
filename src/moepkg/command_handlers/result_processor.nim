@@ -35,7 +35,7 @@ import
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
     config_loader, lsp_service, message_log, uri_utils, primitives, syntax_checker,
-    status_line, cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode,
+    git_cache, cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode,
     log_viewer, git_conflict, registers, setting_options, command_completion,
     key_bindings, key_router, window_manager, lsp_integration,
   ]
@@ -306,7 +306,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let buf = activeWin.buffer
       let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
-        evictGitCacheForBuffer(buf)
+        e.state.git.evictGitCacheForBuffer(buf)
         e.deleteBufferAt(idx)
         e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()
@@ -348,7 +348,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let buf = activeWin.buffer
       let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
-        evictGitCacheForBuffer(buf)
+        e.state.git.evictGitCacheForBuffer(buf)
         e.deleteBufferAt(idx)
         e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()
@@ -575,7 +575,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let buf = activeWin.buffer
       let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
-        evictGitCacheForBuffer(buf)
+        e.state.git.evictGitCacheForBuffer(buf)
         e.deleteBufferAt(idx)
         e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()
@@ -623,7 +623,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let buf = activeWin.buffer
       let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
-        evictGitCacheForBuffer(buf)
+        e.state.git.evictGitCacheForBuffer(buf)
         e.deleteBufferAt(idx)
         e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()

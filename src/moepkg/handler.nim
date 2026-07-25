@@ -28,7 +28,7 @@ from pkg/celina/core/mouse_logic import MouseButton
 import
   editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
   logger, types, motion, quick_run_utils, command_completion, build, render_utils,
-  tab_line, terminal_mode, clipboard, status_line, cursor_util, syntax_checker,
+  tab_line, terminal_mode, clipboard, git_cache, cursor_util, syntax_checker,
   background_process, key_router, pending_input, visible_rows
 import
   command_handlers/[
@@ -73,7 +73,7 @@ proc cleanupQuickRunProcesses*(e: Editor) =
   ## Kill any in-flight QuickRun processes and remove their temporary files
   ## (temp source + build artifacts). Call on editor exit/crash so QuickRun
   ## never orphans a process or leaves temp files behind. Mirrors the git diff
-  ## shutdown cleanup (`cleanupGitDiffCache`).
+  ## shutdown cleanup (`clearGitCache`).
   for p in e.runningQuickRunProcesses:
     abandonQuickRunProcess(p)
   e.runningQuickRunProcesses = @[]
@@ -86,11 +86,11 @@ proc releaseExternalResources*(e: Editor) =
   e.cleanupQuickRunProcesses()
   e.cleanupAllTerminals()
 
-  # Swallow so a git diff cache failure cannot block the rest of the sequence.
+  # Swallow so a git cache failure cannot block the rest of the sequence.
   try:
-    cleanupGitDiffCache()
+    e.state.git.clearGitCache()
   except CatchableError as ex:
-    logError("moe", "cleanupGitDiffCache failed: " & ex.msg)
+    logError("moe", "clearGitCache failed: " & ex.msg)
 
   e.shutdown()
   e.savePersistData()
@@ -155,7 +155,7 @@ proc closeRecentFileWindow(e: Editor, activeWin: EditorWindow) =
   let buf = activeWin.buffer
   let idx = e.bufferIndexById(buf.id)
   if idx >= 0:
-    evictGitCacheForBuffer(buf)
+    e.state.git.evictGitCacheForBuffer(buf)
     e.deleteBufferAt(idx)
     e.pruneBufferIdFromAllWindows(buf.id)
   activeWin.mode = EditorMode.Normal
