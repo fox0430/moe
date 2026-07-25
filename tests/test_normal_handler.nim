@@ -20,7 +20,7 @@
 ## Tests for normal_handler.nim
 ## This module tests the Normal mode command handler functionality.
 
-import std/[unittest, options, tables]
+import std/[unittest, options, strutils, tables]
 
 import pkg/results
 
@@ -2549,3 +2549,229 @@ suite "NormalModeHandler - cgn (change search match forward)":
     check result.modeTransition.isSome
     check result.modeTransition.get == EditorMode.Insert
     check buf.getLine(0) == "hello  hello"
+
+suite "NormalModeHandler - guu / gUU (case operator on lines)":
+  proc pressKeys(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+      keys: seq[string],
+  ): NormalModeResult =
+    for key in keys:
+      result = handler.handleNormalModeKey(
+        buf, state, viewport, KeyCombo(isSpecial: false, char: key)
+      )
+
+  proc setupTwoLines(): (TextBuffer, NormalModeHandler, EditorState, ViewPort) =
+    let buf = newTextBuffer()
+    discard
+      buf.insertText(BufferPosition(line: 0, column: 0), "Hello World\nSecond Line")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    (buf, createTestHandler(buf), state, createTestViewport())
+
+  test "guu lowercases the current line":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    check pressKeys(handler, buf, state, viewport, @["g", "u", "u"]).kind == nmrHandled
+    check buf.getLine(0) == "hello world"
+    check buf.getLine(1) == "Second Line"
+    check state.pendingInput.pendingOperator.isNone
+
+  test "gugu lowercases the current line":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    check pressKeys(handler, buf, state, viewport, @["g", "u", "g", "u"]).kind ==
+      nmrHandled
+    check buf.getLine(0) == "hello world"
+
+  test "gUU uppercases the current line":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    check pressKeys(handler, buf, state, viewport, @["g", "U", "U"]).kind == nmrHandled
+    check buf.getLine(0) == "HELLO WORLD"
+    check buf.getLine(1) == "Second Line"
+
+  test "gUgU uppercases the current line":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    check pressKeys(handler, buf, state, viewport, @["g", "U", "g", "U"]).kind ==
+      nmrHandled
+    check buf.getLine(0) == "HELLO WORLD"
+
+  test "2guu lowercases two lines":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    check pressKeys(handler, buf, state, viewport, @["2", "g", "u", "u"]).kind ==
+      nmrHandled
+    check buf.getLine(0) == "hello world"
+    check buf.getLine(1) == "second line"
+
+  test "gu2u lowercases two lines":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    check pressKeys(handler, buf, state, viewport, @["g", "u", "2", "u"]).kind ==
+      nmrHandled
+    check buf.getLine(0) == "hello world"
+    check buf.getLine(1) == "second line"
+
+  test "guu is repeatable with .":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    discard pressKeys(handler, buf, state, viewport, @["g", "u", "u"])
+    state.cursor = BufferPosition(line: 1, column: 0)
+    check pressKeys(handler, buf, state, viewport, @["."]).kind == nmrHandled
+    check buf.getLine(1) == "second line"
+
+  test "gUU is repeatable with .":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    discard pressKeys(handler, buf, state, viewport, @["g", "U", "U"])
+    state.cursor = BufferPosition(line: 1, column: 0)
+    check pressKeys(handler, buf, state, viewport, @["."]).kind == nmrHandled
+    check buf.getLine(1) == "SECOND LINE"
+
+  test ". repeats the line count of 2guu":
+    let buf = newTextBuffer()
+    discard
+      buf.insertText(BufferPosition(line: 0, column: 0), "One\nTwo\nThree\nFour\nFive")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard pressKeys(handler, buf, state, viewport, @["2", "g", "u", "u"])
+    state.cursor = BufferPosition(line: 2, column: 0)
+    discard pressKeys(handler, buf, state, viewport, @["."])
+    check buf.getLine(0) == "one"
+    check buf.getLine(1) == "two"
+    check buf.getLine(2) == "three"
+    check buf.getLine(3) == "four"
+    check buf.getLine(4) == "Five"
+
+  test ">> is repeatable with .":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    discard pressKeys(handler, buf, state, viewport, @[">", ">"])
+    let indent = buf.getLine(0)[0 ..< buf.getLine(0).len - "Hello World".len]
+    check indent.len > 0
+
+    state.cursor = BufferPosition(line: 1, column: 0)
+    check pressKeys(handler, buf, state, viewport, @["."]).kind == nmrHandled
+    check buf.getLine(1) == indent & "Second Line"
+
+  test "<< is repeatable with .":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\tone\n\ttwo")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard pressKeys(handler, buf, state, viewport, @["<", "<"])
+    check buf.getLine(0) == "one"
+
+    state.cursor = BufferPosition(line: 1, column: 0)
+    discard pressKeys(handler, buf, state, viewport, @["."])
+    check buf.getLine(1) == "two"
+
+  test "du falls through to undo (only gu/gU consume u)":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    discard pressKeys(handler, buf, state, viewport, @["d", "u"])
+    # `u` reached edit.undo, which reverted the insert done by the setup
+    check buf.getLine(0) == ""
+
+  test "gugu does not leave a stale g in the router":
+    # Regression: the intermediate `g` was retained; the next `g` fired `gg`.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "One\nTwo\nThree")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 2, column: 0)
+
+    discard pressKeys(handler, buf, state, viewport, @["g", "u", "g", "u"])
+    discard pressKeys(handler, buf, state, viewport, @["g"])
+    check state.cursor.line == 2
+
+  test "gUgU does not leave a stale g in the router":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "One\nTwo\nThree")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 2, column: 0)
+
+    discard pressKeys(handler, buf, state, viewport, @["g", "U", "g", "U"])
+    discard pressKeys(handler, buf, state, viewport, @["g"])
+    check state.cursor.line == 2
+
+  test ">2> indents two lines (counts multiply)":
+    let (buf, handler, state, viewport) = setupTwoLines()
+
+    discard pressKeys(handler, buf, state, viewport, @[">", "2", ">"])
+    check buf.getLine(0).endsWith("Hello World")
+    check buf.getLine(0).len > "Hello World".len
+    check buf.getLine(1).endsWith("Second Line")
+    check buf.getLine(1).len > "Second Line".len
+
+  test "<2< outdents two lines (counts multiply)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\tone\n\ttwo")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard pressKeys(handler, buf, state, viewport, @["<", "2", "<"])
+    check buf.getLine(0) == "one"
+    check buf.getLine(1) == "two"
+
+  test "guu lands cursor on first non-blank":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  Hello World")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    discard pressKeys(handler, buf, state, viewport, @["g", "u", "u"])
+    check buf.getLine(0) == "  hello world"
+    check state.cursor.column == 2
+
+  test "gUU lands cursor on first non-blank":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\t\thello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    discard pressKeys(handler, buf, state, viewport, @["g", "U", "U"])
+    check buf.getLine(0) == "\t\tHELLO"
+    check state.cursor.column == 2
+
+  test "guu on a blank-only line keeps the cursor inside the line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "   ")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard pressKeys(handler, buf, state, viewport, @["g", "u", "u"])
+    check buf.getLine(0) == "   "
+    check state.cursor.column == 2
+
+  test ">> on a blank-only line keeps the cursor inside the line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), " ")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard pressKeys(handler, buf, state, viewport, @[">", ">"])
+    check state.cursor.column == buf.getLine(0).charLen - 1

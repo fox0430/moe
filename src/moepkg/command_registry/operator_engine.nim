@@ -70,6 +70,23 @@ proc storeDeletedText*(ctx: CommandContext, text: string, isLine: bool) =
   else:
     ctx.state.registers.setDeletedRegister(text, isLine)
 
+proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
+  ## Put the cursor on the first non-blank of `lineNum` (vim's `^`), clamped to
+  ## the last valid column so a blank-only line does not land past the end.
+  if lineNum < 0 or lineNum >= ctx.buffer.len:
+    return
+
+  let line = ctx.buffer.getLine(lineNum)
+  var column = 0
+  for r in line.runes:
+    if $r == " " or $r == "\t":
+      column += 1
+    else:
+      break
+
+  ctx.cursor.line = lineNum
+  ctx.cursor.column = min(column, max(0, line.charLen - 1))
+
 proc executeOperatorOnRange*(
     ctx: CommandContext,
     operatorType: OperatorType,
@@ -245,16 +262,7 @@ proc executeOperatorOnRange*(
 
     discard ctx.buffer.commitTransaction()
 
-    # Move cursor to first non-blank of start line
-    ctx.cursor.line = startLine
-    ctx.cursor.column = 0
-    if startLine < ctx.buffer.len:
-      let line = ctx.buffer.getLine(startLine)
-      for r in line.runes:
-        if $r == " " or $r == "\t":
-          ctx.cursor.column += 1
-        else:
-          break
+    moveToFirstNonBlank(ctx, startLine)
 
     return ok(())
   of OpOutdent:
@@ -286,16 +294,7 @@ proc executeOperatorOnRange*(
 
     discard ctx.buffer.commitTransaction()
 
-    # Move cursor to first non-blank of start line
-    ctx.cursor.line = startLine
-    ctx.cursor.column = 0
-    if startLine < ctx.buffer.len:
-      let outdentLine = ctx.buffer.getLine(startLine)
-      for r in outdentLine.runes:
-        if $r == " " or $r == "\t":
-          ctx.cursor.column += 1
-        else:
-          break
+    moveToFirstNonBlank(ctx, startLine)
 
     return ok(())
   of OpLowerCase:
@@ -324,6 +323,9 @@ proc executeOperatorOnRange*(
     discard ctx.buffer.commitTransaction()
 
     ctx.cursor = range.start
+    if range.isLinewise:
+      # guu/gUU land on the first non-blank (matches >>/<<)
+      moveToFirstNonBlank(ctx, range.start.line)
     return ok(())
   of OpUpperCase:
     # Convert text in range to uppercase
@@ -351,6 +353,8 @@ proc executeOperatorOnRange*(
     discard ctx.buffer.commitTransaction()
 
     ctx.cursor = range.start
+    if range.isLinewise:
+      moveToFirstNonBlank(ctx, range.start.line)
     return ok(())
   of OpSwapCase:
     return err("Operator " & $operatorType & " not yet implemented")
