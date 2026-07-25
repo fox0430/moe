@@ -911,6 +911,33 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
 
     check editor.state.pending.len == 0
 
+suite "Background op failures route through notify":
+  test "syntax check failure raises an error notification":
+    # A bare statusMessage is wiped by prepareForInput on the next keystroke,
+    # so a failure landing mid-typing was unreadable. langNone has no syntax
+    # check command, which fails before any process is spawned.
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.config.notification.popupNotifications = true
+    editor.state.setStatusQuiet("")
+
+    waitFor runSyntaxCheckAsync(editor, (path: "/nonexistent.txt", language: 0))
+
+    check editor.state.notificationPopup.queue.len == 1
+    check editor.state.notificationPopup.queue[0].level == nlError
+    check "Syntax check error" in editor.state.notificationPopup.queue[0].message
+
+  test "syntax check failure still reaches the status line without popups":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.config.notification.popupNotifications = false
+    editor.state.setStatusQuiet("")
+
+    waitFor runSyntaxCheckAsync(editor, (path: "/nonexistent.txt", language: 0))
+
+    check editor.state.notificationPopup.queue.len == 0
+    check "Syntax check error" in editor.state.statusMessage
+
 suite "Search Mode - History Navigation":
   test "Search state initialized correctly":
     let state = createTestState()

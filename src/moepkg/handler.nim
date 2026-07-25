@@ -1197,7 +1197,7 @@ proc runSyntaxCheckAsync(
       let checkResult =
         await startBackgroundSyntaxCheck(info.path, SourceLanguage(info.language))
       if checkResult.isErr:
-        editor.state.statusMessage = "Syntax check error: " & checkResult.error
+        editor.notify("Syntax check error: " & checkResult.error, nlError)
       else:
         let checkProcess = checkResult.get
         editor.addRunningProcess(checkProcess.process)
@@ -1218,7 +1218,7 @@ proc runSyntaxCheckAsync(
         else:
           editor.state.statusMessage = "Syntax check: OK"
     except Exception as ex:
-      editor.state.statusMessage = "Syntax check error: " & ex.msg
+      editor.notify("Syntax check error: " & ex.msg, nlError)
 
 proc runBuildAsync(
     editor: Editor, info: BuildInfo
@@ -1230,7 +1230,7 @@ proc runBuildAsync(
         info.path, SourceLanguage(info.language), info.customCmd, info.workspaceRoot
       )
       if buildResult.isErr:
-        editor.state.statusMessage = "Build error: " & buildResult.error
+        editor.notify("Build error: " & buildResult.error, nlError)
       else:
         let buildProcess = buildResult.get
         editor.addRunningProcess(buildProcess.process)
@@ -1241,14 +1241,13 @@ proc runBuildAsync(
         outputBuffer.readOnly = true
         let splitResult = editor.hsplitWithBuffer(outputBuffer)
         if splitResult.isErr:
-          editor.state.statusMessage =
-            "Failed to open output window: " & splitResult.error
+          editor.notify("Failed to open output window: " & splitResult.error, nlError)
         else:
           if editor.config.notification.screenNotifications and
               editor.config.notification.buildOnSaveScreenNotify:
             editor.notify("Build completed: " & info.path)
     except Exception as ex:
-      editor.state.statusMessage = "Build error: " & ex.msg
+      editor.notify("Build error: " & ex.msg, nlError)
 
 proc runQuickRunAsync(
     editor: Editor, info: QuickRunInfo
@@ -1263,7 +1262,7 @@ proc runQuickRunAsync(
       )
       let quickRunResult = await startBackgroundQuickRun(prepared)
       if quickRunResult.isErr:
-        editor.state.statusMessage = "QuickRun error: " & quickRunResult.error
+        editor.notify("QuickRun error: " & quickRunResult.error, nlError)
       else:
         let qrProcess = quickRunResult.get
         # Track the full QuickRunProcess (not just its BackgroundProcess) so
@@ -1273,7 +1272,7 @@ proc runQuickRunAsync(
         let outputResult = await qrProcess.waitForResultAsync()
         editor.removeRunningQuickRun(qrProcess)
         if outputResult.isErr:
-          editor.state.statusMessage = "QuickRun error: " & outputResult.error
+          editor.notify("QuickRun error: " & outputResult.error, nlError)
         else:
           let output = outputResult.get
           let outputContent = output.join("\n")
@@ -1281,14 +1280,13 @@ proc runQuickRunAsync(
           outputBuffer.readOnly = true
           let splitResult = editor.hsplitWithBuffer(outputBuffer)
           if splitResult.isErr:
-            editor.state.statusMessage =
-              "Failed to open output window: " & splitResult.error
+            editor.notify("Failed to open output window: " & splitResult.error, nlError)
           else:
             if editor.config.notification.screenNotifications and
                 editor.config.notification.quickRunScreenNotify:
               editor.notify("QuickRun completed: " & qrProcess.filePath)
     except Exception as ex:
-      editor.state.statusMessage = "QuickRun error: " & ex.msg
+      editor.notify("QuickRun error: " & ex.msg, nlError)
 
 proc handlePendingAsyncOperationsImpl(
     e: Editor

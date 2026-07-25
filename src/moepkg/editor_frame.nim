@@ -192,8 +192,11 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
 
 proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   ## Send a notification. Routes to popup or status line based on config.
+  ## Both routes record the message, so what the log holds does not depend on
+  ## a display preference (the status line route logs via `statusMessage=`).
   if e.config.notification.popupNotifications:
     e.state.notificationPopup.addNotification(msg, level)
+    addMessageLog(msg)
   else:
     e.state.statusMessage = msg
 
