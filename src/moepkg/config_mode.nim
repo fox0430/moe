@@ -116,30 +116,9 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.theme.path = v,
   )
 
-  # LSP section
-  result.add ConfigItemDescriptor(kind: cvkSection, displayName: "Lsp", section: "Lsp")
-  result.add ConfigItemDescriptor(
-    kind: cvkBool,
-    displayName: "enable",
-    section: "Lsp",
-    boolGet: proc(c: EditorConfig): bool =
-      c.lsp.enable,
-    boolSet: proc(c: EditorConfig, v: bool) =
-      c.lsp.enable = v,
-  )
-  result.add ConfigItemDescriptor(
-    kind: cvkInt,
-    displayName: "timeout",
-    section: "Lsp",
-    intGet: proc(c: EditorConfig): int =
-      c.lsp.timeout,
-    intSet: proc(c: EditorConfig, v: int) =
-      c.lsp.timeout = v,
-    # Only correctness matters: forbid <= 0 (applied live), no upper bound.
-    # Matches the TOML loader, which likewise only rejects non-positive values.
-    intMin: 1,
-    intMax: int.high,
-  )
+  # `[Lsp]` plus one section per feature sub-table. `[Lsp.<languageId>]` server
+  # entries stay out of the UI: a dynamic keyspace, not fields of the type.
+  generateSectionGroupDescriptors(result, lsp, LspConfig)
 
 # Global descriptor table (built once)
 let configDescriptors* = makeDescriptors()

@@ -19,3 +19,15 @@ template withTempHome*(tmpDir, body: untyped) =
       delEnv("XDG_CONFIG_HOME")
     removeDir(tmpDir)
   body
+
+const LspFeatureTableNames* = [
+  "Completion", "Declaration", "Definition", "TypeDefinition", "Implementation",
+  "Diagnostics", "SignatureHelp", "DocumentFormatting", "FoldingRange",
+  "SelectionRange", "DocumentSymbol", "Hover", "InlayHint", "References",
+  "CallHierarchy", "DocumentHighlight", "DocumentLink", "CodeLens", "Rename",
+  "SemanticTokens", "ExecuteCommand",
+]
+  ## Spelled out on purpose: the `[Lsp.<Feature>]` loader, serializer, UI and
+  ## docs are all derived from `LspConfig`, so this is the one independent
+  ## check that the derived TOML names are the ones users actually write.
+  ## Shared so a new feature table cannot be added to one test file only.
