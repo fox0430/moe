@@ -25,7 +25,7 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
     render_utils, lsp_service, lsp_integration, diff_viewer, setting_options,
-    editor_init, command_config, command_registry,
+    editor_init, command_config, command_registry, help_viewer,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import
@@ -3033,3 +3033,53 @@ suite "Editor - handler CommandContext sees live config after applyConfigSetting
 
     check ctx.notificationConfig.screenNotifications == false
     check ctx.notificationConfig.yankScreenNotify == false
+
+suite "processResult - viewer split window teardown":
+  ## hrHelpViewerQuit and its siblings share one teardown path; these cover it
+  ## through processResult rather than re-implementing the sequence.
+
+  test "hrHelpViewerQuit closes the split window and discards its buffer":
+    let e = createTestEditor()
+    let origBuffer = e.activeBuffer
+    let initialBufferCount = e.buffers.len
+
+    let helpState = newHelpViewerState()
+    check e.hsplitWithBuffer(helpState.createHelpTextBuffer()).isOk
+    check e.windowManager.windows.len == 2
+
+    e.setMode(EditorMode.Help)
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Help
+    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
+    let helpBufId = activeWin.buffer.id
+
+    check e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer) == true
+
+    check e.windowManager.windows.len == 1
+    check e.buffers.len == initialBufferCount
+    check e.bufferIndexById(helpBufId) < 0
+    for win in e.windowManager.windows:
+      check helpBufId notin win.bufferIds
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.activeWindow.buffer == origBuffer
+
+  test "hrHelpViewerQuit on a single window keeps that window and its buffer":
+    let e = createTestEditor()
+    let initialBufferCount = e.buffers.len
+
+    let helpState = newHelpViewerState()
+    let activeWin = e.activeWindow
+    e.setMode(EditorMode.Help)
+    activeWin.mode = EditorMode.Help
+    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
+    let onlyBufId = activeWin.buffer.id
+
+    check e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer) == true
+
+    # No window to fall back to, so the buffer must survive the teardown.
+    check e.windowManager.windows.len == 1
+    check e.buffers.len == initialBufferCount
+    check e.bufferIndexById(onlyBufId) >= 0
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.modeState.kind == mskNone
