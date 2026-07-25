@@ -358,9 +358,6 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, deletedText, false)
-
   if charsToDelete > 1:
     let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
       for i in 0 ..< charsToDelete:
@@ -375,6 +372,10 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
     let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
     if delResult.isErr:
       return err(delResult.error)
+
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, deletedText, false)
 
   ctx.state.editState.lastEditCommand = some(
     LastEditCommand(
@@ -452,9 +453,6 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, deletedText, false)
-
   if charsToDelete > 1:
     let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
       for i in 0 ..< charsToDelete:
@@ -470,6 +468,10 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
     let delResult = ctx.buffer.deleteRange(startPos, startPos)
     if delResult.isErr:
       return err(delResult.error)
+
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, deletedText, false)
 
   # Move cursor to the position where deletion started
   ctx.cursor.column = startColumn
@@ -514,9 +516,6 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, deletedText, false)
-
   # Begin transaction for delete + insert mode (all in one undo unit)
   let txnResult =
     ctx.buffer.beginTransaction("substitute " & $charsToDelete & " char(s)")
@@ -530,6 +529,10 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
     if delResult.isErr:
       discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
+
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, deletedText, false)
 
   # Enter Insert mode (transaction remains open for insert mode input)
   ctx.state.mode = EditorMode.Insert
@@ -559,9 +562,6 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
       text.add(lineContent)
       if lineContent.len == 0 or lineContent[^1] != '\n':
         text.add("\n")
-
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, text, true)
 
   # Get indent from first line (for auto-indent)
   let firstLine = ctx.buffer.getLine(startLine)
@@ -606,6 +606,10 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
       if insertResult.isErr:
         discard ctx.buffer.rollbackTransaction()
         return err("Failed to insert indent: " & insertResult.error)
+
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, text, true)
 
   # Move cursor to beginning of line (after indent)
   ctx.cursor.line = startLine
@@ -697,9 +701,6 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
         deletedText.add("\n")
 
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, deletedText, true)
-
   let txr = withTransaction(ctx.buffer, "Delete " & $actualCount & " line(s)"):
     var brokeEarly = false
     for i in 1 .. actualCount:
@@ -722,6 +723,10 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
           return err(clearResult.error)
   if txr.isErr:
     return err("Transaction failed: " & txr.error)
+
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, deletedText, true)
 
   # Adjust cursor position if needed
   if ctx.cursor.line >= ctx.buffer.len:
@@ -908,8 +913,6 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
         if lineContent.len == 0 or lineContent[^1] != '\n':
           text.add("\n")
 
-    storeDeletedText(ctx, text, true)
-
     let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
       var brokeEarly = false
       for i in 0 ..< lineCount:
@@ -932,6 +935,10 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
             return err("Failed to clear last line: " & clearResult.error)
     if txr.isErr:
       return err("Transaction failed: " & txr.error)
+
+    # Store in register only after the buffer change succeeded (registers are not
+    # covered by the buffer transaction, so a rollback would not undo them)
+    storeDeletedText(ctx, text, true)
 
     # Move cursor to start line, preserve column position
     ctx.cursor.line = min(startLine, ctx.buffer.len - 1)

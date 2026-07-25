@@ -6131,3 +6131,125 @@ suite "executeCommand - fold auto-open allowlists stay in sync":
     let ops = registeredOperatorTypes()
     for op in VisualEditOperatorTypes:
       check op in ops
+
+suite "Register/buffer atomicity - failed edits must not touch registers":
+  # deleteRange/deleteLine reject writes on a read-only buffer, so a read-only
+  # buffer is the reproducible failure path. Registers live outside the buffer
+  # transaction, so a rollback cannot undo them: they must only be written after
+  # the buffer change succeeded.
+
+  proc seedRegisters(ctx: CommandContext) =
+    ctx.state.registers.setDeletedRegister("SEED", false)
+    discard ctx.state.registers.setNamedRegister('a', "SEED_A", false)
+
+  proc checkRegistersUntouched(ctx: CommandContext) =
+    check ctx.state.registers.getSmallDeleteRegister().getContent() == "SEED"
+    check ctx.state.registers.getNamedRegister('a').getContent() == "SEED_A"
+
+  test "delete.char on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete.char with count on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char"), @["3"]).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete.char.before on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 5)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete.line on read-only buffer keeps registers":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "substitute.char on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("substitute.char")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "substitute.line on read-only buffer keeps registers":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("substitute.line")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete operator on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    check executeOperatorOnRange(ctx, OpDelete, range, 1).isErr
+    ctx.checkRegistersUntouched()
+
+  test "change operator on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    check executeOperatorOnRange(ctx, OpChange, range, 1).isErr
+    ctx.checkRegistersUntouched()
+
+  test "pending register is preserved when the delete fails":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    ctx.state.pendingInput.pendingRegister = some('a')
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isErr
+    check ctx.state.registers.getNamedRegister('a').getContent() == "SEED_A"

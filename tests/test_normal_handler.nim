@@ -2481,6 +2481,25 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     check result.kind == nmrHandled
     check state.registers.getNoNamedRegister().getContent() == "world"
 
+  test "dgn keeps the registers when the transaction cannot start":
+    # An already-open transaction makes the delete fail. Registers live outside
+    # the buffer transaction, so they must only be written once the delete went
+    # through
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.input.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.registers.setDeletedRegister("SEED", false)
+    check buf.beginTransaction("outer").isOk
+
+    let result = pressDgn(handler, buf, state, viewport)
+    check result.kind == nmrError
+    check state.registers.getSmallDeleteRegister().getContent() == "SEED"
+    check buf.getLine(0) == "hello world hello"
+
   test "dgn stays in Normal mode":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
