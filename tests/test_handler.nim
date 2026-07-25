@@ -805,6 +805,33 @@ suite "Background Process Management":
     # After cleanup, the list should be empty
     check editor.runningBackgroundProcesses.len == 0
 
+suite "releaseExternalResources":
+  # persist off: savePersistData writes to the real user persist directory.
+  proc newQuitPathEditor(): Editor =
+    var config = newEditorConfig()
+    config.persist.search = false
+    config.persist.commandHistory = false
+    config.persist.cursorPosition = false
+    return newEditor(config)
+
+  test "clears the process lists":
+    let editor = newQuitPathEditor()
+
+    editor.releaseExternalResources()
+
+    check editor.runningBackgroundProcesses.len == 0
+    check editor.runningQuickRunProcesses.len == 0
+
+  test "is idempotent":
+    # A crash during quit runs it twice.
+    let editor = newQuitPathEditor()
+
+    editor.releaseExternalResources()
+    editor.releaseExternalResources()
+
+    check editor.runningBackgroundProcesses.len == 0
+    check editor.runningQuickRunProcesses.len == 0
+
 proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception]).} =
   # Simulate the delayed pending set that happens inside
   # e.codeLensPickerConfirm() -> executeCodeLensItem(), which is asyncSpawn'd
