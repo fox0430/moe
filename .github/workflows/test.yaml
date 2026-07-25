@@ -20,6 +20,18 @@
 name: Unit tests
 
 on:
+  push:
+    paths:
+      - '.github/workflows/test.yaml'
+      - 'example/**'
+      - 'moe.nimble'
+      - 'nimble.lock'
+      - 'src/**'
+      - 'tools/**'
+      - 'tests/**'
+    branches:
+      - develop
+      - master
   pull_request:
     paths:
       - '.github/workflows/test.yaml'
@@ -33,27 +45,28 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded PR runs are pointless, but a develop/master run is the
+  # authoritative result for that commit (and warms the cache), so keep it.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  skip:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Skip job"
-
-  before:
-    runs-on: ubuntu-latest
-    if: "! contains(github.event.head_commit.message, '[skip ci]')"
-    steps:
-      - run: echo "Before job"
-
   test:
-    name: build ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    needs: before
+    name: shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
+      # One shard failing says nothing about the others; let them all report.
+      fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
+        shard: [1, 2, 3, 4]
+    env:
+      MOE_TEST_SHARD: ${{ matrix.shard }}
+      MOE_TEST_SHARDS: 4
+      # Runs in the lsp-e2e job instead so the shards never pay for
+      # `nimble install lasm`.
+      MOE_TEST_EXCLUDE: test_lsp_e2e_lasm.nim
     steps:
     - uses: actions/checkout@v7
     - run: |
@@ -70,22 +83,18 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ~/.nimble
-        key: unit-tests-nimble-v2-${{ github.sha }}
+        key: unit-tests-nimble-v3-${{ hashFiles('nimble.lock', 'moe.nimble') }}
         restore-keys: |
-          unit-tests-nimble-v2-
+          unit-tests-nimble-v3-
 
     - uses: jiro4989/setup-nim-action@v2
       with:
         nim-version: 2.2.10
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build moe
+    - name: Install dependencies
       run: |
-        nimble build
-
-    - name: Install lasm
-      run: |
-        nimble install --noLockfile lasm -y
+        nimble install -d -y
 
     - name: Run unit test
       env:
@@ -96,3 +105,57 @@ jobs:
       run: |
         nimble setup
         xvfb-run env XDG_SESSION_TYPE=x11 nim r tools/paralleltest.nim
+
+  lsp-e2e:
+    name: lsp e2e (lasm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v7
+    - run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          x11-xserver-utils \
+          xsel \
+          xclip \
+          libpcre3
+
+    # Separate key from the shards': this cache also holds the lasm binary, and
+    # a shared key would race with the shards over which content wins.
+    # Deliberately no restore-keys — a key change must miss so lasm is rebuilt
+    # rather than restored stale from an older cache.
+    - name: Cache nimble
+      id: cache-nimble
+      uses: actions/cache@v6
+      with:
+        path: ~/.nimble
+        key: unit-tests-lasm-v3-${{ hashFiles('nimble.lock', 'moe.nimble', 'tests/test_lsp_e2e_lasm.nim') }}
+
+    - uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: 2.2.10
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install dependencies
+      run: |
+        nimble install -d -y
+
+    # Building lasm takes ~3 min, so skip it when the cache already has it.
+    - name: Install lasm
+      run: |
+        if command -v lasm > /dev/null; then
+          echo "lasm already present: $(command -v lasm)"
+        else
+          nimble install --noLockfile lasm -y
+        fi
+
+    - name: Run lsp e2e test
+      env:
+        TERM: xterm-256color
+      run: |
+        nimble setup
+        # The suite skips itself when lasm is not on PATH, which would make this
+        # whole job a silent no-op. Fail loudly instead.
+        command -v lasm
+        xvfb-run env XDG_SESSION_TYPE=x11 nim c -r tests/test_lsp_e2e_lasm.nim
