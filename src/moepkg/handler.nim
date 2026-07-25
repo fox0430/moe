@@ -149,6 +149,19 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # Ignore other special keys
   return true
 
+proc closeRecentFileWindow(e: Editor, activeWin: EditorWindow) =
+  ## Close the Recent File split window and discard its scratch buffer.
+  activeWin.clearModeState(EditorMode.RecentFile)
+  let buf = activeWin.buffer
+  let idx = e.bufferIndexById(buf.id)
+  if idx >= 0:
+    evictGitCacheForBuffer(buf)
+    e.deleteBufferAt(idx)
+    e.pruneBufferIdFromAllWindows(buf.id)
+  activeWin.mode = EditorMode.Normal
+  e.setMode(EditorMode.Normal)
+  discard e.closeWindow
+
 proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Recent File mode.
   # Get viewport height for the recent file list
@@ -165,17 +178,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 
   case r.kind
   of hrRecentFileQuit:
-    # Close the split window
-    activeWin.clearModeState(EditorMode.RecentFile)
-    let buf = activeWin.buffer
-    let idx = e.bufferIndexById(buf.id)
-    if idx >= 0:
-      evictGitCacheForBuffer(buf)
-      e.deleteBufferAt(idx)
-      e.pruneBufferIdFromAllWindows(buf.id)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    discard e.closeWindow
+    e.closeRecentFileWindow(activeWin)
     e.state.statusMessage = ""
     return true
   of hrRecentFileOpenFile:
@@ -184,17 +187,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       logError("handler", "File not found: " & filePath)
       e.state.statusMessage = "File not found: " & filePath
       return true
-    # Close the split window first
-    activeWin.clearModeState(EditorMode.RecentFile)
-    let buf = activeWin.buffer
-    let idx = e.bufferIndexById(buf.id)
-    if idx >= 0:
-      evictGitCacheForBuffer(buf)
-      e.deleteBufferAt(idx)
-      e.pruneBufferIdFromAllWindows(buf.id)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    discard e.closeWindow
+    e.closeRecentFileWindow(activeWin)
     # Open the file in the now-active window
     let editResult = e.editFile(filePath)
     if editResult.isErr:

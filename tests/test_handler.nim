@@ -3495,3 +3495,60 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     check bufA.inTransaction
     check e.state.mode == EditorMode.Insert
     check e.state.editState.insertModeStartPos.isSome
+
+proc enterRecentFileWith(e: Editor, paths: seq[string]) =
+  ## Enter Recent File mode in a split window with a fixed entry list.
+  check e.enterRecentFileMode().isOk
+  check e.activeWindow.modeState.kind == mskRecentFile
+  e.activeWindow.modeState.recentFile.items = @[]
+  for p in paths:
+    e.activeWindow.modeState.recentFile.items.add RecentFileEntry(path: p)
+  e.activeWindow.modeState.recentFile.selectedIndex = 0
+  e.state.mode = EditorMode.RecentFile
+  e.activeWindow.mode = EditorMode.RecentFile
+
+suite "handleRecentFileModeKeyCombo - window cleanup":
+  let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+
+  test "Enter opens the selected file and tears down the recent file window":
+    let e = createTestEditorWithBuffer("hello")
+    let winCount = e.windowManager.windows.len
+
+    let testFile = getTempDir() / "moe_recent_open_test.txt"
+    writeFile(testFile, "opened content")
+    defer:
+      removeFile(testFile)
+
+    e.enterRecentFileWith(@[testFile])
+    let recentBufId = e.activeWindow.buffer.id
+    check e.windowManager.windows.len == winCount + 1
+
+    check e.handleRecentFileModeKeyCombo(enterKey) == true
+
+    # The split window and its scratch buffer are gone.
+    check e.windowManager.windows.len == winCount
+    check e.bufferIndexById(recentBufId) < 0
+    for win in e.windowManager.windows:
+      check recentBufId notin win.bufferIds
+
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.state.statusMessage == "Opened: " & testFile
+    check e.activeBuffer.filePath == some(testFile)
+
+  test "Enter on a missing file keeps the recent file window open":
+    let e = createTestEditorWithBuffer("hello")
+    let winCount = e.windowManager.windows.len
+
+    let missing = getTempDir() / "moe_recent_missing_test.txt"
+    removeFile(missing)
+
+    e.enterRecentFileWith(@[missing])
+    let recentBufId = e.activeWindow.buffer.id
+
+    check e.handleRecentFileModeKeyCombo(enterKey) == true
+
+    check e.windowManager.windows.len == winCount + 1
+    check e.bufferIndexById(recentBufId) >= 0
+    check e.state.mode == EditorMode.RecentFile
+    check e.state.statusMessage == "File not found: " & missing
