@@ -26,6 +26,7 @@ import pkg/celina
 import
   types/editor_types,
   editor_window_layout,
+  visible_rows,
   editor_render_helpers,
   render_utils,
   sidebar,
@@ -1031,55 +1032,15 @@ proc renderFoldLine*(
         foldText
     buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())
 
-proc lineDisplayRows(
-    line: int,
-    buffer: TextBuffer,
-    wrapCache: WrapCountCache,
-    lineWrap: bool,
-    maxWidth: int,
-    tabStop: int,
-): int =
-  ## Display rows a single logical line occupies (not counting fold hiding).
-  if lineWrap:
-    if wrapCache != nil:
-      wrapCache.cachedWrapCount(buffer, line)
-    else:
-      calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
-  else:
-    1
-
-proc walkDisplayRows(
-    buffer: TextBuffer,
-    foldState: FoldState,
-    wrapCache: WrapCountCache,
-    lineWrap: bool,
-    maxWidth: int,
-    tabStop: int,
-    stopLine: int,
-): int =
-  ## Sum display rows for logical lines [0, stopLine). Each collapsed fold
-  ## collapses its range to a single marker row; wrap expands a logical line
-  ## to its wrap count. Assumes `foldState.folds` is sorted by startLine.
-  if lineWrap and wrapCache != nil:
-    wrapCache.ensureFresh(buffer, maxWidth, tabStop)
-  let
-    total = min(stopLine, buffer.len)
-    folds = foldState.folds
-  var
-    line = 0
-    foldIdx = 0
-  while line < total:
-    while foldIdx < folds.len and
-        (not folds[foldIdx].collapsed or folds[foldIdx].endLine < line):
-      inc foldIdx
-    if foldIdx < folds.len and folds[foldIdx].startLine <= line:
-      # Fold marker row: whole [startLine, endLine] collapses to 1 row.
-      result += 1
-      line = folds[foldIdx].endLine + 1
-      inc foldIdx
-    else:
-      result += lineDisplayRows(line, buffer, wrapCache, lineWrap, maxWidth, tabStop)
-      inc line
+proc rowLayoutOf(e: Editor, window: EditorWindow, lineNumOffset: int): RowLayout =
+  ## Row walk context for a window, keyed on the width the renderer wraps at.
+  initRowLayout(
+    window.buffer,
+    window.wrapCountCache,
+    e.lineWrap,
+    e.wrapWidth(window, lineNumOffset),
+    e.tabStop,
+  )
 
 proc renderScrollbar*(
     e: Editor,
@@ -1101,21 +1062,16 @@ proc renderScrollbar*(
     return
 
   let
-    maxWidth = e.wrapWidth(window, lineNumOffset)
-    totalRows = walkDisplayRows(
-      window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
-      maxWidth, e.tabStop, window.buffer.len,
-    )
+    rl = e.rowLayoutOf(window, lineNumOffset)
+    totalRows = rl.totalRows(window.buffer.len)
 
   if totalRows <= visibleHeight:
     return
 
   let
     rowsAbove =
-      walkDisplayRows(
-        window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
-        maxWidth, e.tabStop, window.viewport.topLine,
-      ) + (if e.lineWrap: window.viewport.topWrapOffset else: 0)
+      rl.totalRows(window.viewport.topLine) +
+      (if e.lineWrap: window.viewport.topWrapOffset else: 0)
     thumbSize = max(1, (visibleHeight * visibleHeight) div totalRows)
     maxRowsAbove = totalRows - visibleHeight
     thumbPos =
@@ -1228,56 +1184,42 @@ proc renderWindow*(
         @[],
   )
 
-  var
-    screenY = tabLineOffset
-    lineIndex = window.viewport.topLine
-
-  while screenY < visibleHeight + tabLineOffset and lineIndex < lineCount:
+  # Fold skipping and wrap-segment counting come from the shared row walk, so
+  # the painted rows, the screen cursor and the mouse hit-test agree by
+  # construction.
+  let rl = e.rowLayoutOf(window, lineNumOffset)
+  for row in rl.visibleLines(
+    window.viewport.topLine, window.viewport.topWrapOffset, visibleHeight
+  ):
     # sidebarIndex is 0-based index into sidebar buffer (based on logical line, not screen row)
-    let sidebarIndex = lineIndex - window.viewport.topLine
+    let
+      sidebarIndex = row.line - window.viewport.topLine
+      screenY = tabLineOffset + row.startRow
 
-    # Check if this line is inside a collapsed fold (but not the start line)
-    if window.buffer.foldState.isLineInCollapsedFold(lineIndex):
-      # Skip this line (it's hidden inside a fold)
-      inc lineIndex
-      continue
-
-    # Check if this line is the start of a collapsed fold
-    let foldOpt = window.buffer.foldState.getCollapsedFoldAt(lineIndex)
-    if foldOpt.isSome and foldOpt.get.startLine == lineIndex:
-      # Render the fold marker
-      if maybeSidebar.isSome:
-        renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
-      e.renderFoldLine(buffer, window, lineNumOffset, screenY, foldOpt.get)
-      # Skip to the line after the fold
-      lineIndex = foldOpt.get.endLine + 1
-      inc screenY
-      continue
-
-    # Normal line rendering
-    # Render sidebar if enabled
     if maybeSidebar.isSome:
       renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
 
-    if e.lineWrap:
-      # Only the top logical line skips leading wrap segments (sub-line scroll).
-      let skipSegments =
-        if lineIndex == window.viewport.topLine: window.viewport.topWrapOffset else: 0
+    if row.fold.isSome:
+      e.renderFoldLine(buffer, window, lineNumOffset, screenY, row.fold.get)
+    elif e.lineWrap:
+      # `renderWindowLineWrapped` advances its own screenY / lineIndex across the
+      # segments it paints; the walk owns the next row, so the copies are dropped.
+      var
+        segScreenY = screenY
+        segLine = row.line
       e.renderWindowLineWrapped(
         buffer,
         window,
         lineNumOffset,
         ctx,
-        screenY,
-        lineIndex,
+        segScreenY,
+        segLine,
         visibleHeight,
         tabLineOffset,
-        skipSegments = skipSegments,
+        skipSegments = row.skipSegments,
       )
     else:
-      e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, lineIndex)
-      inc screenY
-      inc lineIndex
+      e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, row.line)
 
   # Render scrollbar on the right edge if enabled (file editing modes only)
   if e.calculateScrollbarWidth(window) > 0:

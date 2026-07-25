@@ -27,6 +27,7 @@ import std/[options, unicode, monotimes, times]
 import pkg/results
 
 import buffer, types, unicode_utils, logger, render_utils, config, modes
+import visible_rows
 
 type
   # Motion command with count
@@ -957,36 +958,6 @@ proc clampPosition*(
 proc newViewportManager*(viewport: ViewPort): ViewportManager =
   ViewportManager(viewport: viewport)
 
-proc calculateScreenLine(
-    mgr: ViewportManager,
-    buffer: buffer.TextBuffer,
-    startLine: int,
-    targetLine: int,
-    lineWrap: bool,
-    maxWidth: int,
-    tabStop: int = 4,
-    maxResult: int = int.high,
-): int =
-  ## Calculate screen line position of targetLine starting from startLine.
-  ## Returns the number of screen lines from startLine to targetLine.
-  ## Stops early if result reaches maxResult to avoid O(n) for distant jumps.
-  if lineWrap and mgr.wrapCountCache != nil:
-    mgr.wrapCountCache.ensureFresh(buffer, maxWidth, tabStop)
-  result = 0
-  for lineIdx in startLine ..< targetLine:
-    if result >= maxResult:
-      return
-    if lineIdx >= 0 and lineIdx < buffer.len:
-      if lineWrap:
-        let wrapped =
-          if mgr.wrapCountCache != nil:
-            mgr.wrapCountCache.cachedWrapCount(buffer, lineIdx)
-          else:
-            calculateWrapCount(buffer.getLine(lineIdx), maxWidth, tabStop)
-        result += wrapped
-      else:
-        result += 1
-
 proc updateViewport*(
     mgr: ViewportManager,
     cursorPos: CursorPosition,
@@ -1026,69 +997,25 @@ proc updateViewport*(
       maxWidth = wrapWidthFor(mgr.viewport.width, viewportOffset)
       visibleHeight = mgr.viewport.height - actualReservedLines
 
-    # Calculate cursor's screen line position relative to topLine.
-    # Use visibleHeight as early-exit bound to avoid O(n) for distant jumps.
-    var cursorScreenLine = mgr.calculateScreenLine(
-      buffer,
-      mgr.viewport.topLine,
-      clampedCursorY,
-      lineWrap,
-      maxWidth,
-      tabStop,
-      maxResult = visibleHeight,
-    )
+      rl = initRowLayout(buffer, mgr.wrapCountCache, lineWrap, maxWidth, tabStop)
+      cursorWrapOffset = rl.cursorCell(clampedCursorY, clampedCursorX).wrapSeg
 
-    # Add offset within the cursor's wrapped line
-    if clampedCursorY >= 0 and clampedCursorY < buffer.len:
-      let
-        cursorLine = buffer.getLine(clampedCursorY)
-        (wrapLineIndex, _) =
-          cursorWrapPosition(cursorLine, clampedCursorX, maxWidth, tabStop)
-      cursorScreenLine += wrapLineIndex
+    # Cursor's screen row relative to topLine. The walk stops at visibleHeight
+    # so a distant jump costs O(visibleHeight), not O(lines).
+    let cursorScreenLine =
+      rl.rowOfLine(mgr.viewport.topLine, 0, clampedCursorY, visibleHeight) +
+      cursorWrapOffset
 
     # Scroll up if cursor is above viewport
     if cursorScreenLine < 0 or clampedCursorY < mgr.viewport.topLine:
       mgr.viewport.resetViewportTop(clampedCursorY)
     # Scroll down if cursor is below viewport
     elif cursorScreenLine >= visibleHeight:
-      # Walk backwards from the cursor line to find the topLine that makes the
-      # cursor just visible at the bottom. This is O(viewport_height) instead
-      # of the previous O(n * viewport_height) forward search.
-      let cursorWrapOffset =
-        if clampedCursorY >= 0 and clampedCursorY < buffer.len:
-          let cursorLine = buffer.getLine(clampedCursorY)
-          cursorWrapPosition(cursorLine, clampedCursorX, maxWidth, tabStop)[0]
-        else:
-          0
-
-      # Budget: screen lines available above the cursor's wrap position.
-      # Condition: sum(wrapCount[topLine..cursorY-1]) + cursorWrapOffset < visibleHeight
-      let budget = visibleHeight - cursorWrapOffset
-
-      if mgr.wrapCountCache != nil:
-        mgr.wrapCountCache.ensureFresh(buffer, maxWidth, tabStop)
-      var
-        targetTopLine = clampedCursorY
-        accum = 0
-        line = clampedCursorY - 1
-
-      while line >= 0:
-        let lineHeight =
-          if line < buffer.len:
-            if mgr.wrapCountCache != nil:
-              mgr.wrapCountCache.cachedWrapCount(buffer, line)
-            else:
-              calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
-          else:
-            1
-        if accum + lineHeight < budget:
-          accum += lineHeight
-          targetTopLine = line
-          line -= 1
-        else:
-          break
-
-      mgr.viewport.resetViewportTop(targetTopLine)
+      # Highest top that still shows the cursor on the last row. This viewport
+      # only scrolls whole lines, so a top landing mid-line moves down one.
+      mgr.viewport.resetViewportTop(
+        rl.lineTopFor(clampedCursorY, cursorWrapOffset, max(0, visibleHeight - 1))
+      )
   else:
     # No line wrap: simple logic
     if clampedCursorY < mgr.viewport.topLine:
