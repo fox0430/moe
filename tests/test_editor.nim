@@ -38,6 +38,58 @@ proc createTestEditor(): Editor =
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
+suite "Editor - git cache refresh gating":
+  ## The tick must not run a git lookup for a readout the user turned off:
+  ## a diff spawns a subprocess and a branch lookup blocks on `git rev-parse`.
+  proc editorOnFile(): Editor =
+    result = createTestEditor()
+    result.activeBuffer.filePath = some(getTempDir() / "moe_no_repo" / "a.txt")
+    result.showStatusLine = true
+
+  test "branch is not refreshed when no readout shows it":
+    let e = editorOnFile()
+    e.showGitDiff = true # gutter only: needs the diff, not the branch
+    e.config.statusLine.gitBranchName = false
+    e.config.statusLine.setupText = ""
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 0
+    check e.state.git.diffEntries.len == 1
+
+  test "branch is refreshed when the status line shows it":
+    let e = editorOnFile()
+    e.config.statusLine.gitBranchName = true
+    e.config.statusLine.setupText = ""
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 1
+
+  test "a setupText placeholder is enough to refresh":
+    let e = editorOnFile()
+    e.showGitDiff = false
+    e.config.statusLine.gitBranchName = false
+    e.config.statusLine.gitChangedLines = false
+    e.config.statusLine.setupText = "{filename} {gitBranch}"
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 1
+    check e.state.git.diffEntries.len == 0
+
+  test "no git lookup at all when every readout is off":
+    let e = editorOnFile()
+    e.showGitDiff = false
+    e.config.statusLine.gitBranchName = false
+    e.config.statusLine.gitChangedLines = false
+    e.config.statusLine.setupText = ""
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 0
+    check e.state.git.diffEntries.len == 0
+
 suite "Editor - findBufferByPath":
   test "Find buffer by absolute path":
     let e = createTestEditor()

@@ -20,7 +20,7 @@
 ## Display toggle commands. Config-backed read accessors live in
 ## types/editor_types.nim.
 
-import types/editor_types, status_line, git_diff
+import types/editor_types, status_line, git_cache
 
 proc toggleStatusLine*(e: Editor) =
   e.showStatusLine = not e.showStatusLine
@@ -73,12 +73,12 @@ proc setSidebarVisible*(e: Editor, visible: bool) =
 proc toggleGitDiff*(e: Editor) =
   e.showGitDiff = not e.showGitDiff
   if e.showGitDiff:
-    discard updateBufferWithGitDiff(e.activeBuffer)
+    e.state.git.requestGitRefresh(e.activeBuffer)
 
 proc setGitDiffVisible*(e: Editor, visible: bool) =
   e.showGitDiff = visible
   if visible:
-    discard updateBufferWithGitDiff(e.activeBuffer)
+    e.state.git.requestGitRefresh(e.activeBuffer)
 
 proc toggleSyntaxChecker*(e: Editor) =
   e.showSyntaxChecker = not e.showSyntaxChecker

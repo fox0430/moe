@@ -38,7 +38,7 @@ import
   colorcode,
   git_conflict,
   style_patch,
-  status_line,
+  git_cache,
   editor_codelens,
   virtual_text,
   command_line,
@@ -1129,9 +1129,8 @@ proc renderWindow*(
       # flagged), making it look like a stuck git marker. For non-git / untracked
       # files the git gutter shows nothing, so the session fallback is kept.
       let showSessionMarkers =
-        e.showModifiedLines and not (
-          e.showGitDiff and isBufferGitTracked(window.buffer)
-        )
+        e.showModifiedLines and
+        not (e.showGitDiff and e.state.git.isBufferGitTracked(window.buffer))
       some(
         generateSidebarFromBuffer(
           window.buffer,

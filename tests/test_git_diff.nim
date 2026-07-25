@@ -389,23 +389,6 @@ suite "GitDiff - applyGitDiffToBuffer":
     check buf.diagnostics.len == 1
     check buf.diagnostics[0].message == "oops"
 
-suite "GitDiff - getGitDiff":
-  test "Non-existent file returns error":
-    let result = getGitDiff("/nonexistent/path/file.txt")
-
-    check result.isErr
-    check result.error.contains("does not exist")
-
-suite "GitDiff - getGitDiffFromBuffer":
-  test "Buffer without file path returns error":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "test")
-
-    let result = getGitDiffFromBuffer(buf)
-
-    check result.isErr
-    check result.error == "Buffer has no associated file path"
-
 suite "GitDiff - getGitBranch":
   test "Non-existent file returns error":
     let result = getGitBranch("/nonexistent/path/file.txt")
@@ -449,107 +432,7 @@ suite "GitDiff - Integration tests with git repository":
     check result.isOk
     check result.get.len > 0
 
-  test "getGitDiff with no changes":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "initial content\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    let result = getGitDiff(testFile)
-
-    check result.isOk
-    check result.get.lines.len == 0
-
-  test "getGitDiff with modified file":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\nline 2\nline 3\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    writeFile(testFile, "line 1\nmodified line 2\nline 3\n")
-
-    let result = getGitDiff(testFile)
-
-    check result.isOk
-    check result.get.lines.len > 0
-
-  test "getGitDiff with added lines":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    writeFile(testFile, "line 1\nline 2\nline 3\n")
-
-    let result = getGitDiff(testFile)
-
-    check result.isOk
-    check result.get.lines.len >= 2
-
-  test "getGitDiff with deleted lines":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\nline 2\nline 3\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    writeFile(testFile, "line 1\n")
-
-    let result = getGitDiff(testFile)
-
-    check result.isOk
-    check result.get.lines.len >= 2
-
-  test "getGitDiffFromBuffer with modified buffer":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\nline 2\nline 3\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    let buf = newTextBuffer()
-    let loadResult = buf.loadFile(testFile)
-    check loadResult.isOk
-
-    discard buf.deleteRange(
-      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 5)
-    )
-    discard buf.insertText(BufferPosition(line: 1, column: 0), "modified")
-
-    let result = getGitDiffFromBuffer(buf)
-
-    check result.isOk
-    check result.get.lines.len > 0
-
-  test "updateBufferWithGitDiff":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\nline 2\nline 3\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    writeFile(testFile, "line 1\nmodified\nline 3\nnew line\n")
-
-    let buf = newTextBuffer()
-    discard buf.loadFile(testFile)
-
-    let result = updateBufferWithGitDiff(buf, useBuffer = false)
-
-    check result.isOk
-
-  test "getGitDiffFromBuffer with unchanged buffer (LF, trailing newline) returns no diff":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\nline 2\nline 3\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    let buf = newTextBuffer()
-    let loadResult = buf.loadFile(testFile)
-    check loadResult.isOk
-
-    let result = getGitDiffFromBuffer(buf)
-
-    check result.isOk
-    check result.get.lines.len == 0
-
-  test "getGitDiffFromBuffer with unchanged buffer (LF, no trailing newline) returns no diff":
+  test "startGitDiffFromBufferAsync with unchanged buffer (LF, no trailing newline) returns no diff":
     let testFile = testDir / "test.txt"
     writeFile(testFile, "line 1\nline 2\nline 3")
     discard execCmdEx("git add test.txt", workingDir = testDir)
@@ -559,12 +442,24 @@ suite "GitDiff - Integration tests with git repository":
     let loadResult = buf.loadFile(testFile)
     check loadResult.isOk
 
-    let result = getGitDiffFromBuffer(buf)
+    let startResult = startGitDiffFromBufferAsync(buf)
+    check startResult.isOk
 
-    check result.isOk
-    check result.get.lines.len == 0
+    var completed = false
+    var diffLineCount = -1
+    for _ in 0 ..< 100:
+      let checkResult = checkGitDiffComplete(startResult.get)
+      if checkResult.isSome:
+        completed = true
+        check checkResult.get.isOk
+        diffLineCount = checkResult.get.get.lines.len
+        break
+      sleep(10)
 
-  test "getGitDiffFromBuffer with unchanged buffer (CRLF) returns no diff":
+    check completed
+    check diffLineCount == 0
+
+  test "startGitDiffFromBufferAsync with unchanged buffer (CRLF) returns no diff":
     let testFile = testDir / "test.txt"
     writeFile(testFile, "line 1\r\nline 2\r\nline 3\r\n")
     discard execCmdEx("git add test.txt", workingDir = testDir)
@@ -574,10 +469,22 @@ suite "GitDiff - Integration tests with git repository":
     let loadResult = buf.loadFile(testFile)
     check loadResult.isOk
 
-    let result = getGitDiffFromBuffer(buf)
+    let startResult = startGitDiffFromBufferAsync(buf)
+    check startResult.isOk
 
-    check result.isOk
-    check result.get.lines.len == 0
+    var completed = false
+    var diffLineCount = -1
+    for _ in 0 ..< 100:
+      let checkResult = checkGitDiffComplete(startResult.get)
+      if checkResult.isSome:
+        completed = true
+        check checkResult.get.isOk
+        diffLineCount = checkResult.get.get.lines.len
+        break
+      sleep(10)
+
+    check completed
+    check diffLineCount == 0
 
   test "startGitDiffFromBufferAsync with unchanged buffer (LF, trailing newline) returns no diff":
     let testFile = testDir / "test.txt"
@@ -749,25 +656,3 @@ suite "GitDiff - Integration tests with git repository":
 
     check completed
     check diffLineCount == lineCount
-
-  test "getHeadContent returns committed content":
-    let testFile = testDir / "test.txt"
-    let content = "line 1\nline 2\nline 3\n"
-    writeFile(testFile, content)
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    let result = getHeadContent("test.txt", testDir)
-
-    check result.isOk
-    check result.get == content
-
-  test "getHeadContent returns error for untracked file":
-    discard
-      execCmdEx("git commit --allow-empty -m 'Initial commit'", workingDir = testDir)
-    let testFile = testDir / "untracked.txt"
-    writeFile(testFile, "content\n")
-
-    let result = getHeadContent("untracked.txt", testDir)
-
-    check result.isErr
