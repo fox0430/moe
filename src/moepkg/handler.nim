@@ -457,18 +457,13 @@ proc middleClickPaste(e: Editor) =
     e.state.statusMessage = "Buffer is read-only"
     return
 
-  if e.state.mode == EditorMode.Normal:
-    e.setMode(EditorMode.Insert)
-    let activeBuffer = e.activeBuffer()
-    discard activeBuffer.beginTransaction(
-      "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
-    )
-    e.state.statusMessage = "-- INSERT --"
-  elif e.state.mode != EditorMode.Insert:
+  if e.state.mode != EditorMode.Normal and e.state.mode != EditorMode.Insert:
     return
 
   # Middle-click uses X11 PRIMARY selection (text selected by mouse),
   # not CLIPBOARD selection (Ctrl+C).
+  # Read before any mode / transaction change: a failed or empty read must not
+  # leave the editor stranded in Insert mode with an open transaction.
   let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
   if readResult.isErr:
     return
@@ -480,6 +475,18 @@ proc middleClickPaste(e: Editor) =
     return
 
   let activeBuffer = e.activeBuffer()
+
+  if e.state.mode == EditorMode.Normal:
+    let insertTransaction = activeBuffer.beginTransaction(
+      "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
+    )
+    if insertTransaction.isErr:
+      # Entering Insert mode without its transaction would leave the buffer in
+      # an inconsistent undo state, so stay in Normal mode.
+      e.state.statusMessage = "Paste failed: " & insertTransaction.error
+      return
+    e.setMode(EditorMode.Insert)
+    e.state.statusMessage = "-- INSERT --"
 
   # In Insert mode, a transaction is already active. Use it directly
   # instead of starting a new one.
