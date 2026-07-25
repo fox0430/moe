@@ -38,3 +38,7 @@ type
     process*: AsyncProcessRef
 
   StartProcessResult* = Result[BackgroundProcess, string]
+
+  ProcessOutputResult* = Result[seq[string], string]
+    ## Output of a finished process, or the reason it produced none (start
+    ## failure, timeout). Common return type of the bounded waits.

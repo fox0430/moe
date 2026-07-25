@@ -1218,9 +1218,14 @@ proc runSyntaxCheckAsync(
       else:
         let checkProcess = checkResult.get
         editor.addRunningProcess(checkProcess.process)
-        let output = await checkProcess.waitForAsync()
+        let outputResult = await checkProcess.waitForAsync(
+          timeoutFromSeconds(editor.config.syntaxChecker.timeout)
+        )
         editor.removeRunningProcess(checkProcess.process)
-        let errors = parseNimCheckResult(info.path, output)
+        if outputResult.isErr:
+          editor.notify("Syntax check error: " & outputResult.error, nlError)
+          return
+        let errors = parseNimCheckResult(info.path, outputResult.get)
         # Apply markers to buffer
         let bufIdx = editor.findBufferByPath(info.path)
         if bufIdx >= 0:
@@ -1251,9 +1256,14 @@ proc runBuildAsync(
       else:
         let buildProcess = buildResult.get
         editor.addRunningProcess(buildProcess.process)
-        let output = await buildProcess.waitForAsync()
+        let outputResult = await buildProcess.waitForAsync(
+          timeoutFromSeconds(editor.config.buildOnSave.timeout)
+        )
         editor.removeRunningProcess(buildProcess.process)
-        let outputContent = output.join("\n")
+        if outputResult.isErr:
+          editor.notify("Build error: " & outputResult.error, nlError)
+          return
+        let outputContent = outputResult.get.join("\n")
         let outputBuffer = newTextBuffer(outputContent)
         outputBuffer.readOnly = true
         let splitResult = editor.hsplitWithBuffer(outputBuffer)
@@ -1286,7 +1296,9 @@ proc runQuickRunAsync(
         # editor exit/crash can also remove its temp files, not only kill the
         # process. See cleanupQuickRunProcesses.
         editor.addRunningQuickRun(qrProcess)
-        let outputResult = await qrProcess.waitForResultAsync()
+        let outputResult = await qrProcess.waitForResultAsync(
+          timeoutFromSeconds(editor.config.quickRun.timeout)
+        )
         editor.removeRunningQuickRun(qrProcess)
         if outputResult.isErr:
           editor.notify("QuickRun error: " & outputResult.error, nlError)

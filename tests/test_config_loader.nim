@@ -726,6 +726,25 @@ command = 123
     check vr.hasErrors
     check "BuildOnSave.command" in vr.errors[0].name
 
+  test "timeout is loaded and zero means no timeout":
+    let tomlStr = """
+[BuildOnSave]
+timeout = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.buildOnSave.timeout == 0
+
+  test "Invalid timeout (negative) is detected":
+    let tomlStr = """
+[BuildOnSave]
+timeout = -5
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "BuildOnSave.timeout" in vr.errors[0].name
+    check config.buildOnSave.timeout == 300 # Default value
+
 suite "Config Validation - StatusLine section":
   test "Valid StatusLine config passes validation":
     let tomlStr = """
@@ -808,6 +827,25 @@ enable = "yes"
     let (_, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "SyntaxChecker.enable" in vr.errors[0].name
+
+  test "timeout is loaded and zero means no timeout":
+    let tomlStr = """
+[SyntaxChecker]
+timeout = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.syntaxChecker.timeout == 0
+
+  test "Invalid timeout (negative) is detected":
+    let tomlStr = """
+[SyntaxChecker]
+timeout = -5
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "SyntaxChecker.timeout" in vr.errors[0].name
+    check config.syntaxChecker.timeout == 60 # Default value
 
 suite "Config Validation - Theme section":
   test "Valid Theme config with default kind passes validation":
@@ -988,10 +1026,19 @@ nimAdvancedCommand = "c"
     check config.quickRun.timeout == 60
     check config.quickRun.nimAdvancedCommand == some("c")
 
-  test "Invalid timeout (zero) is detected":
+  test "timeout of zero is accepted and means no timeout":
     let tomlStr = """
 [QuickRun]
 timeout = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.quickRun.timeout == 0
+
+  test "Invalid timeout (negative) is detected":
+    let tomlStr = """
+[QuickRun]
+timeout = -1
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors

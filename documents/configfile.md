@@ -185,6 +185,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | enable | bool | false | Enable build on save |
 | workspaceRoot | string (optional) | none | Project root directory |
 | command | string (optional) | none | Override commands executed at build |
+| timeout | integer | 300 | Build timeout (seconds, 0 = no timeout) |
 <!-- AUTO-GEN:end BuildOnSave -->
 
 
@@ -229,7 +230,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 |:---|:---|:---|:---|
 | saveBufferWhenQuickRun | bool | true | Save buffer when run QuickRun |
 | command | string (optional) | none | Commands to be executed by quick run |
-| timeout | integer | 30 | Command timeout (seconds) |
+| timeout | integer | 30 | Command timeout (seconds, 0 = no timeout) |
 | nimAdvancedCommand | string (optional) | none | Nim compiler advanced args |
 | clangOptions | string (optional) | none | C lang compiler options. The default compiler is gcc |
 | cppOptions | string (optional) | none | C++ compiler options. The default compiler is gcc |
@@ -449,6 +450,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | enable | bool | false | Syntax checker |
+| timeout | integer | 60 | Syntax check timeout (seconds, 0 = no timeout) |
 <!-- AUTO-GEN:end SyntaxChecker -->
 
 

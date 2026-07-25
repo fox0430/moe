@@ -189,6 +189,9 @@ type
     .}: Option[string]
     command* {.cfg, cfgNoUi, cfgDocDescription: "Override commands executed at build".}:
       Option[string]
+    timeout* {.
+      cfg, cfgMin: 0, cfgDocDescription: "Build timeout (seconds, 0 = no timeout)"
+    .}: int
 
   # Tab line settings
   TabLineConfig* {.cfgSection: "TabLine".} = object
@@ -293,7 +296,9 @@ type
       bool
     command* {.cfg, cfgNoUi, cfgDocDescription: "Commands to be executed by quick run".}:
       Option[string]
-    timeout* {.cfg, cfgMin: 1, cfgDocDescription: "Command timeout (seconds)".}: int
+    timeout* {.
+      cfg, cfgMin: 0, cfgDocDescription: "Command timeout (seconds, 0 = no timeout)"
+    .}: int
     nimAdvancedCommand* {.
       cfg, cfgNoUi, cfgDocDescription: "Nim compiler advanced args"
     .}: Option[string]
@@ -468,6 +473,11 @@ type
   # Syntax checker settings
   SyntaxCheckerConfig* {.cfgSection: "SyntaxChecker".} = object
     enable* {.cfg, cfgDocDescription: "Syntax checker".}: bool
+    timeout* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDescription: "Syntax check timeout (seconds, 0 = no timeout)"
+    .}: int
 
   # Smooth scroll settings (physics-based, compatible with vim comfortable-motion)
   SmoothScrollConfig* {.cfgSection: "SmoothScroll".} = object
