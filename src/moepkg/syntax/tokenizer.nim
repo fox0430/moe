@@ -250,12 +250,44 @@ const
   ## All whitespace characters.
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
+  ## Display name per language. Keyed by enum member on purpose: a positional
+  ## literal only compile-checks the length, so inserting a language mid-enum
+  ## would silently shift every later name and misroute `getSourceLanguage`.
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "Dockerfile", "Fish",
-    "git-rebase-todo", "gitignore", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
-    "JavaScriptReact", "LaTeX", "Lisp", "Log", "Markdown", "Nim", "Python", "Rust",
-    "Shell", "Tcl", "Toml", "Yaml", "Json", "Jsonc", "TypeScript", "TypeScriptReact",
-    "XML", "Zsh",
+    langNone: "none",
+    langAstro: "Astro",
+    langC: "C",
+    langCommitEditMsg: "COMMIT_EDITMSG",
+    langCpp: "C++",
+    langCsharp: "C#",
+    langDiff: "Diff",
+    langDockerfile: "Dockerfile",
+    langFish: "Fish",
+    langGitRebaseTodo: "git-rebase-todo",
+    langGitignore: "gitignore",
+    langHaskell: "Haskell",
+    langHtml: "HTML",
+    langHyprland: "Hyprland",
+    langJava: "Java",
+    langJavaScript: "JavaScript",
+    langJsx: "JavaScriptReact",
+    langLatex: "LaTeX",
+    langLisp: "Lisp",
+    langLog: "Log",
+    langMarkdown: "Markdown",
+    langNim: "Nim",
+    langPython: "Python",
+    langRust: "Rust",
+    langShell: "Shell",
+    langTcl: "Tcl",
+    langToml: "Toml",
+    langYaml: "Yaml",
+    langJson: "Json",
+    langJsonc: "Jsonc",
+    langTypeScript: "TypeScript",
+    langTsx: "TypeScriptReact",
+    langXml: "XML",
+    langZsh: "Zsh",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
