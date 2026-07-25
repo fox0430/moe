@@ -308,7 +308,9 @@ proc executeCodeLensItem*(
       )
       if cmdResult.isErr:
         return err(cmdResult.error)
-      e.state.pending.terminalCommand = cmdResult.get
+      e.state.pending.add PendingAsyncOp(
+        kind: paoTerminalCommand, command: cmdResult.get
+      )
       e.state.statusMessage = "Running: " & item.title
       return ok()
 

@@ -966,11 +966,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       logError("handler", "QuickRun prepare failed: " & prepareResult.error)
     else:
       let prepared = prepareResult.get
-      e.state.pending.quickRun = (
-        cmd: prepared.command.cmd,
-        args: prepared.command.args,
-        filePath: prepared.filePath,
-        isTempFile: prepared.isTempFile,
+      e.state.pending.add PendingAsyncOp(
+        kind: paoQuickRun,
+        quickRun: (
+          cmd: prepared.command.cmd,
+          args: prepared.command.args,
+          filePath: prepared.filePath,
+          isTempFile: prepared.isTempFile,
+        ),
       )
       if e.config.notification.screenNotifications and
           e.config.notification.quickRunScreenNotify:
@@ -1181,11 +1184,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     else:
       e.state.statusMessage = "No trailing whitespace found"
   of hrShellCommand:
-    e.state.pending.shellCommand = r.shellCommand
+    e.state.pending.add PendingAsyncOp(kind: paoShellCommand, command: r.shellCommand)
   of hrBackground:
-    e.state.pending.background = true
+    e.state.pending.add PendingAsyncOp(kind: paoBackground)
   of hrMan:
-    e.state.pending.manPage = r.hrManPage
+    e.state.pending.add PendingAsyncOp(kind: paoManPage, command: r.hrManPage)
   of hrSubstitute:
     let count = r.hrSubstituteCount
     e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
@@ -1204,11 +1207,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Build error: File not saved"
       logError("handler", "Build failed: No file path")
     else:
-      e.state.pending.buildOnSave = (
-        path: filePath,
-        language: activeBuffer.language.ord,
-        customCmd: "",
-        workspaceRoot: parentDir(filePath),
+      e.state.pending.add PendingAsyncOp(
+        kind: paoBuild,
+        build: (
+          path: filePath,
+          language: activeBuffer.language.ord,
+          customCmd: "",
+          workspaceRoot: parentDir(filePath),
+        ),
       )
       e.state.statusMessage = "Building: " & filePath
   of hrDebug:
@@ -1876,11 +1882,14 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
     logError("handler", "QuickRun prepare failed: " & prepareResult.error)
   else:
     let prepared = prepareResult.get
-    e.state.pending.quickRun = (
-      cmd: prepared.command.cmd,
-      args: prepared.command.args,
-      filePath: prepared.filePath,
-      isTempFile: prepared.isTempFile,
+    e.state.pending.add PendingAsyncOp(
+      kind: paoQuickRun,
+      quickRun: (
+        cmd: prepared.command.cmd,
+        args: prepared.command.args,
+        filePath: prepared.filePath,
+        isTempFile: prepared.isTempFile,
+      ),
     )
     if e.config.notification.screenNotifications and
         e.config.notification.quickRunScreenNotify:
