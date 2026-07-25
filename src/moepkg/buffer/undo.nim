@@ -242,6 +242,33 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
 
   return ok(())
 
+template withTransaction*(
+    b: TextBuffer, description: string, cursorPos: Option[BufferPosition], body: untyped
+): Result[(), string] =
+  ## Scope-guarded begin/commit. Rolls back if `body` raises or returns from the
+  ## enclosing proc, so `inTransaction` never leaks across edits.
+  ## `body` runs inside a `block`, so a bare `break` escapes the template rather
+  ## than an enclosing loop and leaves the result uninitialized: every `break` in
+  ## `body` must belong to a loop `body` itself owns.
+  block:
+    let beginRes = b.beginTransaction(description, cursorPos)
+    if beginRes.isErr:
+      beginRes
+    else:
+      var completed = false
+      try:
+        body
+        completed = true
+      finally:
+        if not completed:
+          discard b.rollbackTransaction()
+      b.commitTransaction()
+
+template withTransaction*(
+    b: TextBuffer, description: string, body: untyped
+): Result[(), string] =
+  withTransaction(b, description, none(BufferPosition), body)
+
 proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   ## Rollback the current transaction by undoing all changes
   ## Restores changeSeq to its value at transaction start

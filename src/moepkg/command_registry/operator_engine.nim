@@ -250,17 +250,14 @@ proc executeOperatorOnRange*(
       if endLine < ctx.buffer.len and range.endPos.column < 0:
         endLine -= 1
 
-    let transactionResult = ctx.buffer.beginTransaction("Indent lines")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    let indentStr = getIndentString(ctx.state)
-    for lineNum in startLine .. endLine:
-      if lineNum < ctx.buffer.len:
-        let insertPos = BufferPosition(line: lineNum, column: 0)
-        discard ctx.buffer.insertText(insertPos, indentStr)
-
-    discard ctx.buffer.commitTransaction()
+    let txr = withTransaction(ctx.buffer, "Indent lines"):
+      let indentStr = getIndentString(ctx.state)
+      for lineNum in startLine .. endLine:
+        if lineNum < ctx.buffer.len:
+          let insertPos = BufferPosition(line: lineNum, column: 0)
+          discard ctx.buffer.insertText(insertPos, indentStr)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
     moveToFirstNonBlank(ctx, startLine)
 
@@ -277,50 +274,43 @@ proc executeOperatorOnRange*(
       if endLine < ctx.buffer.len and range.endPos.column < 0:
         endLine -= 1
 
-    let transactionResult = ctx.buffer.beginTransaction("Dedent lines")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    let indentWidth = effectiveShiftWidth(ctx.state)
-    for lineNum in startLine .. endLine:
-      if lineNum < ctx.buffer.len:
-        let lineContent = ctx.buffer.getLine(lineNum)
-        let currentIndent = getLineIndent(lineContent)
-        let removeCount = min(indentWidth, currentIndent.len)
-        if removeCount > 0:
-          for i in 1 .. removeCount:
-            let deletePos = BufferPosition(line: lineNum, column: 0)
-            discard ctx.buffer.deleteChar(deletePos)
-
-    discard ctx.buffer.commitTransaction()
+    let txr = withTransaction(ctx.buffer, "Dedent lines"):
+      let indentWidth = effectiveShiftWidth(ctx.state)
+      for lineNum in startLine .. endLine:
+        if lineNum < ctx.buffer.len:
+          let lineContent = ctx.buffer.getLine(lineNum)
+          let currentIndent = getLineIndent(lineContent)
+          let removeCount = min(indentWidth, currentIndent.len)
+          if removeCount > 0:
+            for i in 1 .. removeCount:
+              let deletePos = BufferPosition(line: lineNum, column: 0)
+              discard ctx.buffer.deleteChar(deletePos)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
     moveToFirstNonBlank(ctx, startLine)
 
     return ok(())
   of OpLowerCase:
-    # Convert text in range to lowercase
-    let transactionResult = ctx.buffer.beginTransaction("Lowercase")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    if range.isLinewise:
-      for lineNum in range.start.line .. range.endPos.line:
-        if lineNum < ctx.buffer.len:
-          let lineText = $ctx.buffer.getLine(lineNum)
-          let lineCharLen = lineText.charLen
-          if lineCharLen > 0:
-            let lowerText = lineText.toLowerAscii()
-            let startPos = BufferPosition(line: lineNum, column: 0)
-            let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-            discard ctx.buffer.deleteRange(startPos, endPos)
-            discard ctx.buffer.insertText(startPos, lowerText)
-    else:
-      let text = extractRangeText(ctx.buffer, range)
-      let lowerText = text.toLowerAscii()
-      discard ctx.buffer.deleteRange(range.start, range.endPos)
-      discard ctx.buffer.insertText(range.start, lowerText)
-
-    discard ctx.buffer.commitTransaction()
+    let txr = withTransaction(ctx.buffer, "Lowercase"):
+      if range.isLinewise:
+        for lineNum in range.start.line .. range.endPos.line:
+          if lineNum < ctx.buffer.len:
+            let lineText = $ctx.buffer.getLine(lineNum)
+            let lineCharLen = lineText.charLen
+            if lineCharLen > 0:
+              let lowerText = lineText.toLowerAscii()
+              let startPos = BufferPosition(line: lineNum, column: 0)
+              let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+              discard ctx.buffer.deleteRange(startPos, endPos)
+              discard ctx.buffer.insertText(startPos, lowerText)
+      else:
+        let text = extractRangeText(ctx.buffer, range)
+        let lowerText = text.toLowerAscii()
+        discard ctx.buffer.deleteRange(range.start, range.endPos)
+        discard ctx.buffer.insertText(range.start, lowerText)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
     ctx.cursor = range.start
     if range.isLinewise:
@@ -328,29 +318,25 @@ proc executeOperatorOnRange*(
       moveToFirstNonBlank(ctx, range.start.line)
     return ok(())
   of OpUpperCase:
-    # Convert text in range to uppercase
-    let transactionResult = ctx.buffer.beginTransaction("Uppercase")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    if range.isLinewise:
-      for lineNum in range.start.line .. range.endPos.line:
-        if lineNum < ctx.buffer.len:
-          let lineText = $ctx.buffer.getLine(lineNum)
-          let lineCharLen = lineText.charLen
-          if lineCharLen > 0:
-            let upperText = lineText.toUpperAscii()
-            let startPos = BufferPosition(line: lineNum, column: 0)
-            let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-            discard ctx.buffer.deleteRange(startPos, endPos)
-            discard ctx.buffer.insertText(startPos, upperText)
-    else:
-      let text = extractRangeText(ctx.buffer, range)
-      let upperText = text.toUpperAscii()
-      discard ctx.buffer.deleteRange(range.start, range.endPos)
-      discard ctx.buffer.insertText(range.start, upperText)
-
-    discard ctx.buffer.commitTransaction()
+    let txr = withTransaction(ctx.buffer, "Uppercase"):
+      if range.isLinewise:
+        for lineNum in range.start.line .. range.endPos.line:
+          if lineNum < ctx.buffer.len:
+            let lineText = $ctx.buffer.getLine(lineNum)
+            let lineCharLen = lineText.charLen
+            if lineCharLen > 0:
+              let upperText = lineText.toUpperAscii()
+              let startPos = BufferPosition(line: lineNum, column: 0)
+              let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+              discard ctx.buffer.deleteRange(startPos, endPos)
+              discard ctx.buffer.insertText(startPos, upperText)
+      else:
+        let text = extractRangeText(ctx.buffer, range)
+        let upperText = text.toUpperAscii()
+        discard ctx.buffer.deleteRange(range.start, range.endPos)
+        discard ctx.buffer.insertText(range.start, upperText)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
     ctx.cursor = range.start
     if range.isLinewise:

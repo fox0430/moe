@@ -1236,29 +1236,24 @@ proc applyWorkspaceEdit*(
   for (bufferIdx, edits) in openBuffersToModify:
     let buffer = buffers[bufferIdx]
 
-    # Begin transaction for undo grouping
-    let txResult = buffer.beginTransaction(transactionName)
-    if txResult.isErr:
+    let txr = withTransaction(buffer, transactionName):
+      let applyResult = applyTextEdits(buffer, edits)
+      if applyResult.isErr:
+        if modifiedBufferPaths.len > 0:
+          return err(
+            "Failed to apply edits: " & applyResult.error & " (Warning: " &
+              $modifiedBufferPaths.len & " buffer(s) already modified: " &
+              modifiedBufferPaths.join(", ") & ")"
+          )
+        return err("Failed to apply edits: " & applyResult.error)
+    if txr.isErr:
       if modifiedBufferPaths.len > 0:
         return err(
-          "Failed to begin transaction: " & txResult.error & " (Warning: " &
-            $modifiedBufferPaths.len & " buffer(s) already modified: " &
-            modifiedBufferPaths.join(", ") & ")"
+          "Transaction failed: " & txr.error & " (Warning: " & $modifiedBufferPaths.len &
+            " buffer(s) already modified: " & modifiedBufferPaths.join(", ") & ")"
         )
-      return err("Failed to begin transaction: " & txResult.error)
+      return err("Transaction failed: " & txr.error)
 
-    let applyResult = applyTextEdits(buffer, edits)
-    if applyResult.isErr:
-      discard buffer.rollbackTransaction()
-      if modifiedBufferPaths.len > 0:
-        return err(
-          "Failed to apply edits: " & applyResult.error & " (Warning: " &
-            $modifiedBufferPaths.len & " buffer(s) already modified: " &
-            modifiedBufferPaths.join(", ") & ")"
-        )
-      return err("Failed to apply edits: " & applyResult.error)
-
-    discard buffer.commitTransaction()
     modifiedCount += 1
     modifiedBufferIndexes.add(bufferIdx)
     if buffer.filePath.isSome:
