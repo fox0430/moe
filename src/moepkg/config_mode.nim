@@ -86,44 +86,9 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   ## a specific config field.
   result = @[]
 
-  # Standard section
-  generateConfigDescriptors(result, EditorConfig, standard)
-
-  # BufferBackend section
-  generateConfigDescriptors(result, EditorConfig, bufferBackend)
-
-  # Clipboard section
-  generateConfigDescriptors(result, EditorConfig, clipboard)
-
-  # StatusLine section
-  generateConfigDescriptors(result, EditorConfig, statusLine)
-
-  # Highlight section
-  generateConfigDescriptors(result, EditorConfig, highlight)
-
-  # AutoBackup section
-  generateConfigDescriptors(result, EditorConfig, autoBackup)
-
-  # Notification section
-  generateConfigDescriptors(result, EditorConfig, notification)
-
-  # Filer section
-  generateConfigDescriptors(result, EditorConfig, filer)
-
-  # Autocomplete section
-  generateConfigDescriptors(result, EditorConfig, autocomplete)
-
-  # AutoSave section
-  generateConfigDescriptors(result, EditorConfig, autoSave)
-
-  # Git section
-  generateConfigDescriptors(result, EditorConfig, git)
-
-  # SyntaxChecker section
-  generateConfigDescriptors(result, EditorConfig, syntaxChecker)
-
-  # SmoothScroll section
-  generateConfigDescriptors(result, EditorConfig, smoothScroll)
+  # Every {.cfgSection.} section of EditorConfig, in declaration order. A new
+  # section reaches the UI without touching this proc.
+  generateAllConfigDescriptors(result, EditorConfig)
 
   # Theme section
   result.add ConfigItemDescriptor(
