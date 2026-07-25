@@ -875,6 +875,102 @@ suite "Buffer - Folding":
     check buf.foldState.folds[0].startLine == 0 # outer remains
     check buf.foldState.folds[0].endLine == 5
 
+  test "foldIndexAt returns the outermost fold, unlike foldIndexAtInnermost":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5) # outer
+    discard buf.foldState.addFold(1, 3) # inner
+    let idx = buf.foldState.foldIndexAt(2)
+    check idx.isSome
+    check buf.foldState.folds[idx.get].endLine == 5
+    check buf.foldState.foldIndexAt(6).isNone
+
+  test "foldIndexAtStartLine / getFoldAtStartLine only match the start line":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5) # outer
+    discard buf.foldState.addFold(1, 3) # inner
+    check buf.foldState.getFoldAtStartLine(0).get.endLine == 5
+    check buf.foldState.getFoldAtStartLine(1).get.endLine == 3
+    # A line covered by both folds but starting neither has no match.
+    check buf.foldState.foldIndexAtStartLine(2).isNone
+    check buf.foldState.getFoldAtStartLine(2).isNone
+
+  test "getCollapsedFoldAt picks the collapsed fold, not merely the outermost":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5, collapsed = false) # outer, open
+    discard buf.foldState.addFold(1, 3, collapsed = true) # inner, collapsed
+    # The open outer fold must not shadow the collapsed inner one.
+    check buf.foldState.getCollapsedFoldAt(2).get.endLine == 3
+    # A line inside the open outer fold only has no collapsed fold to render.
+    check buf.foldState.getCollapsedFoldAt(4).isNone
+    # Collapsing the outer fold makes it win: it is hit first and covers the line.
+    check buf.foldState.closeFold(0) == true
+    check buf.foldState.getCollapsedFoldAt(2).get.endLine == 5
+
+  test "getNextVisibleLine skips a collapsed fold and clamps to maxLine":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    let maxLine = buf.len - 1
+    discard buf.foldState.addFold(1, 3, collapsed = true)
+    check buf.foldState.getNextVisibleLine(2, maxLine) == 4
+    check buf.foldState.getNextVisibleLine(1, maxLine) == 4 # start line too
+    check buf.foldState.getNextVisibleLine(0, maxLine) == 0 # outside the fold
+    # An open fold hides nothing, so the line is already visible.
+    check buf.foldState.openFold(2) == true
+    check buf.foldState.getNextVisibleLine(2, maxLine) == 2
+
+  test "getNextVisibleLine clamps a fold reaching the last line":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    let maxLine = buf.len - 1
+    discard buf.foldState.addFold(3, maxLine, collapsed = true)
+    # endLine + 1 is past the buffer; the result must stay in range.
+    check buf.foldState.getNextVisibleLine(4, maxLine) == maxLine
+
+  test "openAllFolds / closeAllFolds hit every fold regardless of nesting":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5, collapsed = true)
+    discard buf.foldState.addFold(1, 3, collapsed = false)
+    buf.foldState.openAllFolds()
+    for fold in buf.foldState.folds:
+      check not fold.collapsed
+    buf.foldState.closeAllFolds()
+    for fold in buf.foldState.folds:
+      check fold.collapsed
+
+  test "fold lookups stay correct after an insert shifts the folds":
+    # Every line-keyed lookup breaks out as soon as a fold starts past the
+    # requested line, so the shift adjusters must keep folds start-line sorted.
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 1, collapsed = true)
+    discard buf.foldState.addFold(3, 4, collapsed = true)
+
+    # Insert two lines above everything: both folds shift down by 2.
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\n")
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[1].startLine == 5
+
+    check buf.foldState.foldIndexAt(3).get == 0
+    check buf.foldState.foldIndexAt(6).get == 1
+    check buf.foldState.foldIndexAtStartLine(5).get == 1
+    check buf.foldState.getCollapsedFoldAt(6).get.startLine == 5
+    check buf.foldState.getNextVisibleLine(6, buf.len - 1) == 7
+    # The gap between the two folds is still fold-free.
+    check buf.foldState.foldIndexAt(4).isNone
+
+  test "fold lookups stay correct after a delete shifts the folds":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 1, collapsed = true)
+    discard buf.foldState.addFold(3, 4, collapsed = true)
+
+    # Drop line 2, the gap between the folds: only the later fold moves up.
+    check buf.deleteLine(2).isOk
+    check buf.foldState.folds[0].startLine == 0
+    check buf.foldState.folds[1].startLine == 2
+
+    check buf.foldState.foldIndexAt(1).get == 0
+    check buf.foldState.foldIndexAt(3).get == 1
+    check buf.foldState.foldIndexAtStartLine(2).get == 1
+    check buf.foldState.getCollapsedFoldAt(3).get.startLine == 2
+    check buf.foldState.getNextVisibleLine(2, buf.len - 1) == 4
+
 suite "Buffer - Sidebar Markers":
   test "setLineMarker and getLineMarker":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
@@ -1018,6 +1114,38 @@ suite "Buffer - Sidebar Markers":
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
     check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "clearGitMarkers drops only the git-diff kinds":
+    # Called on every git diff refresh: anything it wipes beyond the diff kinds
+    # is silently lost until the next LSP/bookmark update repopulates it.
+    let buf = newTextBuffer("L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.GitChanged)
+    buf.setLineMarker(2, LineMarkerKind.GitDeleted)
+    buf.setLineMarker(3, LineMarkerKind.GitChangedAndDeleted)
+    buf.setLineMarker(4, LineMarkerKind.GitConflict)
+    buf.setLineMarker(5, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(6, LineMarkerKind.Bookmark)
+    buf.setLineMarker(7, LineMarkerKind.SessionModified)
+
+    buf.clearGitMarkers()
+
+    for line in 0 .. 3:
+      check buf.getLineMarker(line).isNone
+    # GitConflict is not a diff kind: it marks conflict blocks in the file.
+    check buf.getLineMarker(4).get == LineMarkerKind.GitConflict
+    check buf.getLineMarker(5).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(6).get == LineMarkerKind.Bookmark
+    check buf.getLineMarker(7).get == LineMarkerKind.SessionModified
+
+  test "isGitChangeMarker covers the diff kinds only":
+    for kind in [GitAdded, GitChanged, GitDeleted, GitChangedAndDeleted]:
+      check kind.isGitChangeMarker
+    for kind in [
+      GitConflict, SyntaxError, SyntaxWarning, SessionModified, SessionInserted,
+      Bookmark,
+    ]:
+      check not kind.isGitChangeMarker
 
 suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
   # Guards the refactor's promise that folds, bookmarks, lineMarkers, and
@@ -2987,3 +3115,25 @@ suite "Buffer - Markdown fenced code block detection":
 
     for i in 0 ..< buf.len:
       check not buf.isCodeBlockLine(i)
+
+suite "Buffer - Backend selection":
+  teardown:
+    # These are process-wide, so restore the stock defaults for later suites.
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  test "configured backend wins at any size while auto mode is off":
+    setAutoBackendMode(false)
+    setConfiguredBackend(Rope)
+    check chooseBackendForFile(0) == Rope
+    check chooseBackendForFile(AutoBackendLargeFileThreshold * 2) == Rope
+    check chooseBackend() == Rope
+
+  test "auto mode switches to PieceTable at the large-file threshold":
+    setAutoBackendMode(true)
+    setConfiguredBackend(Rope) # ignored while auto mode is on
+    check chooseBackendForFile(AutoBackendLargeFileThreshold - 1) == GapBuffer
+    check chooseBackendForFile(AutoBackendLargeFileThreshold) == PieceTable
+    check chooseBackendForFile(AutoBackendLargeFileThreshold + 1) == PieceTable
+    # Without size context, assume a small buffer.
+    check chooseBackend() == GapBuffer
