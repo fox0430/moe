@@ -420,12 +420,18 @@ proc screenToBufferPosition(
     if bufferLine >= buffer.len:
       bufferLine = max(0, buffer.len - 1)
 
+    # screenX is a display-column offset, leftColumn a character index, so they
+    # cannot be added directly: tabs and wide characters make the two diverge.
+    # The renderer slices the line at leftColumn and expands tabs from there, so
+    # convert relative to that same slice start.
     var bufferColumn = vp.leftColumn + screenX
 
     # Clamp column to valid range
     if bufferLine >= 0 and bufferLine < buffer.len:
-      let lineLen = buffer[bufferLine].charLen
-      bufferColumn = clamp(bufferColumn, 0, max(0, lineLen - 1))
+      let line = buffer[bufferLine]
+      bufferColumn =
+        vp.leftColumn + screenXToCharIndex(line, vp.leftColumn, screenX, tabStop)
+      bufferColumn = clamp(bufferColumn, 0, max(0, line.charLen - 1))
 
     return some(BufferPosition(line: bufferLine, column: bufferColumn))
 
