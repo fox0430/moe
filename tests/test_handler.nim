@@ -101,7 +101,7 @@ suite "screenToBufferPosition - Basic":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 0, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 0, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -117,7 +117,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at x=5, which is x=1 in text area (5 - 4 = 1)
     let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -132,7 +132,7 @@ suite "screenToBufferPosition - Basic":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 3, 1, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -148,14 +148,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at y=23 is within reserved lines (height=24, reserved=2)
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      0,
-      23,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 0, 23, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isNone
@@ -169,7 +162,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at x=2 is within line number area
     let result = screenToBufferPosition(
-      vp, buffer, 2, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isNone
@@ -186,7 +179,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -201,7 +194,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -219,7 +212,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -236,14 +229,7 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click at x=50, but line only has 2 chars
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      50,
-      0,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -259,14 +245,7 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click on empty line at x=10
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      10,
-      1,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 10, 1, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -282,14 +261,7 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click at x=50, but line only has 3 characters
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      50,
-      0,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -306,14 +278,7 @@ suite "screenToBufferPosition - Line Clamping":
 
     # Click at y=10, but buffer only has 1 line
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      5,
-      10,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 5, 10, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -328,14 +293,7 @@ suite "screenToBufferPosition - Line Clamping":
 
     # Click at y=10, topLine=5, so bufferLine = 15, but only 7 lines
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      0,
-      10,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 0, 10, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -351,14 +309,7 @@ suite "screenToBufferPosition - Viewport Position":
 
     # Click at absolute (12, 6) which is relative (2, 1) to viewport
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      12,
-      6,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 12, 6, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -374,14 +325,7 @@ suite "screenToBufferPosition - Viewport Position":
 
     # Click at y=3, viewport starts at y=5
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      15,
-      3,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 15, 3, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isNone
@@ -396,7 +340,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # With lineWrap=true, leftColumn should be ignored
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      3,
+      0,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -414,7 +365,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on screen row 1 (second wrap segment), col 2 => char 7 ('h')
     let result = screenToBufferPosition(
-      vp, buffer, 2, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      2,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -432,7 +390,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on screen row 1 => line 1
     let result = screenToBufferPosition(
-      vp, buffer, 2, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      2,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -452,7 +417,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click at x=7 on row 1 => screenX = 7-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
-      vp, buffer, 7, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      7,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -473,7 +445,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click at x=9 on row 1 => screenX = 9-2-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
-      vp, buffer, 9, 1, lineNumOffset, sidebarWidth, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      9,
+      1,
+      lineNumOffset + sidebarWidth,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - sidebarWidth - lineNumOffset,
     )
 
     check result.isSome
@@ -491,7 +470,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on row 1, col 0 => first char of segment 1 = char 3 ('え')
     let result = screenToBufferPosition(
-      vp, buffer, 0, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      0,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -515,10 +501,10 @@ suite "screenToBufferPosition - Line Wrap Mode":
       1,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
       tabStop = 4,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -537,7 +523,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on row 2, col 1 => line 1, char 1 ('l')
     let result = screenToBufferPosition(
-      vp, buffer, 1, 2, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      1,
+      2,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -557,7 +550,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Row 0, col 2 lands on seg1 => char 12, not seg0 char 2.
     let onTop = screenToBufferPosition(
-      vp, buffer, 2, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      2,
+      0,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
     check onTop.isSome
     check onTop.get.line == 0
@@ -566,7 +566,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
     # Line 0 shows only 2 visible rows (seg1, seg2), so screen row 2 is line 1 —
     # the over-counted top line must not swallow the click.
     let below = screenToBufferPosition(
-      vp, buffer, 1, 2, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      1,
+      2,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
     check below.isSome
     check below.get.line == 1
@@ -592,10 +599,9 @@ suite "screenToBufferPosition - Scrollbar":
       0,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 1,
+      wrapWidth = vp.width - 1 - lineNumOffset,
     )
 
     check result.isSome
@@ -621,11 +627,10 @@ suite "screenToBufferPosition - Scrollbar":
       buffer,
       8,
       1,
-      lineNumOffset,
-      sidebarWidth,
+      lineNumOffset + sidebarWidth,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 1,
+      wrapWidth = vp.width - sidebarWidth - 1 - lineNumOffset,
     )
 
     check result.isSome
@@ -650,11 +655,10 @@ suite "screenToBufferPosition - Scrollbar":
       buffer,
       8,
       1,
-      lineNumOffset,
-      sidebarWidth,
+      lineNumOffset + sidebarWidth,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 0,
+      wrapWidth = vp.width - sidebarWidth - lineNumOffset,
     )
 
     check result.isSome
@@ -669,15 +673,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      5,
-      0,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
-      scrollbarWidth = 1,
+      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -703,10 +699,9 @@ suite "screenToBufferPosition - Scrollbar":
       1,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 2,
+      wrapWidth = vp.width - 2 - lineNumOffset,
     )
 
     check result.isSome
@@ -730,10 +725,9 @@ suite "screenToBufferPosition - Scrollbar":
       0,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 0,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -758,10 +752,9 @@ suite "screenToBufferPosition - Scrollbar":
       2,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 1,
+      wrapWidth = vp.width - 1 - lineNumOffset,
     )
 
     check result.isSome
@@ -785,11 +778,10 @@ suite "screenToBufferPosition - Scrollbar":
       buffer,
       7,
       1,
-      lineNumOffset,
-      sidebarWidth,
+      lineNumOffset + sidebarWidth,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 2,
+      wrapWidth = vp.width - sidebarWidth - 2 - lineNumOffset,
     )
 
     check result.isSome

@@ -66,18 +66,61 @@ proc calculateTerminalAreaDimensions*(
     rows: max(1, terminalContentRows(window, isBottomWindow, tabLineOffset)),
   )
 
+proc calculateSidebarWidth*(e: Editor, window: EditorWindow): int =
+  ## Calculate the width occupied by the sidebar (0 if disabled).
+  sidebarWidthFor(window, e.showSidebar)
+
+proc calculateScrollbarWidth*(e: Editor, window: EditorWindow): int =
+  ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
+  scrollbarWidthFor(window, e.scrollbar, e.scrollbarWidth)
+
+proc gutterWidth*(e: Editor, window: EditorWindow): int =
+  ## Sidebar + line-number width: the X offset of the text area's first column.
+  e.calculateSidebarWidth(window) +
+    calculateLineNumOffset(window.buffer, e.showLineNumbers)
+
+proc viewportOffsetFor*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
+  ## Everything in the window that is not text: line number + sidebar +
+  ## scrollbar. Takes the line-number width the caller is drawing with.
+  lineNumOffset + e.calculateSidebarWidth(window) + e.calculateScrollbarWidth(window)
+
+proc viewportOffsetFor*(e: Editor, window: EditorWindow): int =
+  ## `viewportOffsetFor` with the window's own line-number width.
+  viewportOffsetFor(
+    window.buffer, window, e.showLineNumbers, e.showSidebar, e.scrollbar,
+    e.scrollbarWidth,
+  )
+
+proc textAreaWidth*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
+  ## Cells the window leaves for text. Single source for the renderer, the
+  ## screen-cursor pass and the mouse hit-test.
+  textAreaWidthFor(window.viewport.width, e.viewportOffsetFor(window, lineNumOffset))
+
+proc textAreaWidth*(e: Editor, window: EditorWindow): int =
+  ## `textAreaWidth` with the window's own line-number width.
+  textAreaWidthFor(window.viewport.width, e.viewportOffsetFor(window))
+
+proc wrapWidth*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
+  ## `textAreaWidth` clamped to at least one cell: the `WrapCountCache` key.
+  wrapWidthFor(window.viewport.width, e.viewportOffsetFor(window, lineNumOffset))
+
+proc wrapWidth*(e: Editor, window: EditorWindow): int =
+  ## `wrapWidth` with the window's own line-number width.
+  wrapWidthFor(window.viewport.width, e.viewportOffsetFor(window))
+
 proc calculateWindowCursor*(
     e: Editor,
     buffer: TextBuffer,
     viewport: ViewPort,
     cursor: BufferPosition,
-    lineNumOffset: int,
+    gutterWidth: int,
     reservedLines: int,
     scrollbarWidth: int = 0,
     wrapCache: WrapCountCache = nil,
 ): CursorPosition =
   ## Calculate screen cursor position for a window
   ## Returns the absolute screen coordinates
+  ## `gutterWidth` is the sidebar + line-number width the text starts after.
 
   # Validate cursor is within buffer bounds
   if cursor.line < 0 or cursor.line >= buffer.len:
@@ -89,7 +132,7 @@ proc calculateWindowCursor*(
 
   if e.lineWrap:
     # WRAP MODE: Calculate cursor position considering line wrapping
-    let maxWidth = max(1, viewport.width - lineNumOffset - scrollbarWidth)
+    let maxWidth = wrapWidthFor(viewport.width, gutterWidth + scrollbarWidth)
 
     if wrapCache != nil:
       wrapCache.ensureFresh(buffer, maxWidth, e.tabStop)
@@ -135,7 +178,7 @@ proc calculateWindowCursor*(
     # Guard the lower bound too: with topWrapOffset > 0 a cursor on a segment
     # above the visible top would compute a negative screenY.
     if screenY >= 0 and screenY < viewport.height - reservedLines:
-      let finalX = viewport.x + lineNumOffset + wrapLineColumn
+      let finalX = viewport.x + gutterWidth + wrapLineColumn
       let finalY = viewport.y + screenY
       return CursorPosition(x: finalX, y: finalY)
   else:
@@ -170,23 +213,9 @@ proc calculateWindowCursor*(
           displayWidthUpToWithTabs(cursorLineText, viewport.leftColumn, e.tabStop)
         screenY = viewport.y + screenRow
         screenX =
-          viewport.x + lineNumOffset +
+          viewport.x + gutterWidth +
           max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
 
       return CursorPosition(x: screenX, y: screenY)
 
   return CursorPosition(x: 0, y: 0)
-
-proc calculateSidebarWidth*(e: Editor, window: EditorWindow): int =
-  ## Calculate the width occupied by the sidebar (0 if disabled).
-  ## Suppressed when the window holds a special mode state (LogViewer, Help,
-  ## Filer, etc.) even if the transient mode is Visual.
-  if window.modeState.kind != mskNone:
-    return 0
-  sidebarWidthFor(window.mode, e.showSidebar)
-
-proc calculateScrollbarWidth*(e: Editor, window: EditorWindow): int =
-  ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
-  if window.modeState.kind != mskNone:
-    return 0
-  scrollbarWidthFor(window.mode, e.scrollbar, e.scrollbarWidth)

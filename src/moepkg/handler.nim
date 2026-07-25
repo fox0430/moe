@@ -330,24 +330,23 @@ proc screenToBufferPosition(
     vp: ViewPort,
     buffer: TextBuffer,
     mouseX, mouseY: int,
-    lineNumOffset, sidebarWidth, reservedLines: int,
+    gutterWidth, reservedLines: int,
     lineWrap: bool,
     tabStop: int = 4,
-    scrollbarWidth: int = 0,
+    wrapWidth: int = 1,
     wrapCache: WrapCountCache = nil,
 ): Option[BufferPosition] =
   ## Convert screen coordinates to buffer position.
   ## Returns none if click is outside the text area.
   ## Handles line wrap mode with display-width-based segment calculation.
   ##
-  ## lineNumOffset: line number area width (from calculateLineNumOffset)
-  ## sidebarWidth: sidebar area width (from calculateSidebarWidth)
-  ## scrollbarWidth: scrollbar area width (from calculateScrollbarWidth)
-  ## These are separate parameters to match the rendering calculation exactly.
+  ## gutterWidth: sidebar + line number width the text starts after
+  ## (`Editor.gutterWidth`); wrapWidth: the width the renderer wrapped at
+  ## (`Editor.wrapWidth`, only consulted when `lineWrap`). Both come from the
+  ## derivation the renderer used, so a click maps to the character drawn there.
   let
-    totalOffset = sidebarWidth + lineNumOffset
     screenY = mouseY - vp.y
-    screenX = mouseX - vp.x - totalOffset
+    screenX = mouseX - vp.x - gutterWidth
 
   # Check if click is within the text area
   if screenY < 0 or screenY >= vp.height - reservedLines:
@@ -356,10 +355,8 @@ proc screenToBufferPosition(
     return none(BufferPosition)
 
   if lineWrap:
-    # Must match renderWindowLineWrapped: maxWidth = viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
-    let maxWidth = max(1, vp.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     if wrapCache != nil:
-      wrapCache.ensureFresh(buffer, maxWidth, tabStop)
+      wrapCache.ensureFresh(buffer, wrapWidth, tabStop)
     # Walk through buffer lines, accumulating screen rows for each wrapped line.
     # Start above the top edge by the leading wrap segments the renderer skips on
     # the first line (topWrapOffset), mirroring calculateWindowCursor: screen row
@@ -373,7 +370,7 @@ proc screenToBufferPosition(
         if wrapCache != nil:
           wrapCache.cachedWrapCount(buffer, bufferLine)
         else:
-          calculateWrapCount(buffer.getLine(bufferLine), maxWidth, tabStop)
+          calculateWrapCount(buffer.getLine(bufferLine), wrapWidth, tabStop)
       if currentScreenY + wrapCount > screenY:
         wrapSegment = screenY - currentScreenY
         break
@@ -387,7 +384,8 @@ proc screenToBufferPosition(
     let line = buffer.getLine(bufferLine)
     var segStart = 0
     for i in 0 ..< wrapSegment:
-      let (charCount, _) = displayWidthSubstrWithTabs(line, segStart, maxWidth, tabStop)
+      let (charCount, _) =
+        displayWidthSubstrWithTabs(line, segStart, wrapWidth, tabStop)
       segStart += max(1, charCount)
 
     # Convert screenX to a character offset within this segment
@@ -413,10 +411,6 @@ proc screenToBufferPosition(
       bufferColumn = clamp(bufferColumn, 0, max(0, lineLen - 1))
 
     return some(BufferPosition(line: bufferLine, column: bufferColumn))
-
-proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
-  ## Calculate line number offset (matching rendering calculation)
-  calculateLineNumOffset(buffer, e.showLineNumbers)
 
 proc middleClickPaste(e: Editor) =
   ## Paste clipboard content at current cursor position for middle-click.
@@ -672,14 +666,18 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
         if mouse.x >= vp.x and mouse.x < vp.x + vp.width and mouse.y >= vp.y and
             mouse.y < vp.y + vp.height:
           let
-            lineNumOffset = e.calculateLineNumOffsetForMouse(window.buffer)
-            sidebarWidth = e.calculateSidebarWidth(window)
-            scrollbarWidth = e.calculateScrollbarWidth(window)
             # Each window has its own status line
             reservedLines = if e.showStatusLine: 1 else: 0
             posOpt = screenToBufferPosition(
-              vp, window.buffer, mouse.x, mouse.y, lineNumOffset, sidebarWidth,
-              reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+              vp,
+              window.buffer,
+              mouse.x,
+              mouse.y,
+              e.gutterWidth(window),
+              reservedLines,
+              e.lineWrap,
+              e.tabStop,
+              e.wrapWidth(window),
               window.wrapCountCache,
             )
 
@@ -720,17 +718,21 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
     let
       activeBuffer = e.activeBuffer()
-      lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
-      sidebarWidth = e.calculateSidebarWidth(e.activeWindow)
-      scrollbarWidth = e.calculateScrollbarWidth(e.activeWindow)
       # Status line + command line (shared row)
       reservedLines = steadyBottomAreaHeight()
       # Account for tab line offset
       tabLineOffset = if e.showTabLine: TabLineHeight else: 0
       adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
-        e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, sidebarWidth,
-        reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+        e.viewport,
+        activeBuffer,
+        mouse.x,
+        adjustedMouseY,
+        e.gutterWidth(e.activeWindow),
+        reservedLines,
+        e.lineWrap,
+        e.tabStop,
+        e.wrapWidth(e.activeWindow),
         e.activeWindow.wrapCountCache,
       )
 

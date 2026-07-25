@@ -98,10 +98,10 @@ proc updateCursorToJumpPosition(
 
   let
     cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-    lineNumOffset = viewportOffsetFor(buffer, state)
+    viewportOffset = viewportOffsetFor(buffer, state)
   handler.motionController.viewportManager.updateViewport(
     cursorPos, buffer.len, state.showStatusLine,
-    state.windowDisplay.viewportReservedLines, state.lineWrap, buffer, lineNumOffset,
+    state.windowDisplay.viewportReservedLines, state.lineWrap, buffer, viewportOffset,
     state.tabStop,
   )
   return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

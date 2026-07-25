@@ -728,9 +728,7 @@ proc renderWindowLineWrapped*(
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window)
-    scrollbarWidth = e.calculateScrollbarWidth(window)
-    maxWidth =
-      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    maxWidth = e.wrapWidth(window, lineNumOffset)
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
@@ -885,7 +883,6 @@ proc renderWindowLineNoWrap*(
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window)
-    scrollbarWidth = e.calculateScrollbarWidth(window)
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
@@ -912,8 +909,7 @@ proc renderWindowLineNoWrap*(
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
 
   if displayLine.len > 0 and textScreenX < buffer.area.width:
-    let cellBudget =
-      window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+    let cellBudget = e.textAreaWidth(window, lineNumOffset)
     if cellBudget > 0:
       # Clip by display width, not byte length: take as many runes as fit
       # cellBudget cells (tabs expanded, CJK = 2 cells), like the wrapped path.
@@ -1105,9 +1101,7 @@ proc renderScrollbar*(
     return
 
   let
-    sidebarWidth = e.calculateSidebarWidth(window)
-    maxWidth =
-      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    maxWidth = e.wrapWidth(window, lineNumOffset)
     totalRows = walkDisplayRows(
       window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
       maxWidth, e.tabStop, window.buffer.len,
@@ -1205,12 +1199,7 @@ proc renderWindow*(
     if window.cursor.line < lineCount:
       let cursorLineText = window.buffer.getLine(window.cursor.line)
       if e.lineWrap:
-        let
-          sidebarWidth = e.calculateSidebarWidth(window)
-          scrollbarWidth = e.calculateScrollbarWidth(window)
-          maxWidth = max(
-            1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
-          )
+        let maxWidth = e.wrapWidth(window, lineNumOffset)
         cursorWrapPosition(cursorLineText, window.cursor.column, maxWidth, e.tabStop)[1]
       else:
         bufferColToDisplayCol(
