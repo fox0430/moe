@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, sets, strutils]
 
 import ../src/moepkg/syntax/tokenizer
 
@@ -65,6 +65,19 @@ suite "tokenizer - sourceLanguageToStr":
     check sourceLanguageToStr[langShell] == "Shell"
     check sourceLanguageToStr[langMarkdown] == "Markdown"
     check sourceLanguageToStr[langAstro] == "Astro"
+
+  test "every language round-trips through getSourceLanguage":
+    # Catches a name/enum drift for the members the spot-checks above miss.
+    for lang in SourceLanguage:
+      check getSourceLanguage(sourceLanguageToStr[lang]) == lang
+
+  test "display names are unique":
+    # A duplicate name would make getSourceLanguage return the earlier member.
+    var seen: HashSet[string]
+    for lang in SourceLanguage:
+      let name = sourceLanguageToStr[lang].toLowerAscii
+      check name notin seen
+      seen.incl name
 
 suite "tokenizer - getSourceLanguage":
   test "getSourceLanguage with exact case":
