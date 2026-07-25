@@ -205,23 +205,12 @@ proc applyWorkspaceEditFromServer*(
       return (applied: false, failureReason: some("LSP is disabled"))
 
     # Reject the edit if any targeted open buffer has local changes the server
-    # has not seen yet: its contentVersion has moved past the value recorded at
-    # the last didChange we sent (lastLspContentVersions). The server positioned
-    # its edit against the text it last received, so applying it onto newer
-    # text would corrupt the buffer. This mirrors the rename flow's staleness
-    # guard, but the baseline is "what the server last saw" rather than a
-    # fresh snapshot, because this request is not one we awaited.
-    for path in collectWorkspaceEditPaths(edit):
-      let absPath = normalizedPath(absolutePath(path))
-      for buf in e.buffers:
-        if buf.filePath.isSome and
-            normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-            buf.contentVersion !=
-            e.lastLspContentVersions.getOrDefault(buf.id, buf.contentVersion):
-          e.state.statusMessage =
-            "Buffer changed since last sync; server edit discarded"
-          return
-            (applied: false, failureReason: some("buffer changed since last didChange"))
+    # has not seen: it positioned its edit against the text it knows, so
+    # applying it onto newer text would corrupt the buffer.
+    if hasStaleServerEditTarget(e.lsp, e.buffers, edit, e.lastLspContentVersions):
+      e.state.statusMessage = "Buffer changed since last sync; server edit discarded"
+      return
+        (applied: false, failureReason: some("buffer changed since last didChange"))
 
     let applyResult = applyWorkspaceEdit(e.buffers, edit, "LSP Edit")
     if applyResult.isErr:

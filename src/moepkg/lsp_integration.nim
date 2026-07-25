@@ -1206,6 +1206,41 @@ proc hasStaleTargetBuffer*(
 
   return false
 
+proc hasStaleServerEditTarget*(
+    lsp: LspIntegration,
+    buffers: seq[TextBuffer],
+    edit: WorkspaceEdit,
+    syncedVersions: Table[BufferId, int],
+): bool =
+  ## True if applying a server-initiated `edit` would corrupt an open buffer,
+  ## i.e. the buffer no longer holds the text the server positioned it against.
+  ##
+  ## Which text that is depends on whether the server holds the document:
+  ##
+  ## * Held (live worker + a recorded sync baseline): it sees what we last
+  ##   sent, so compare contentVersion against `syncedVersions`.
+  ## * Not held (no worker for this file type, or didOpen never succeeded): it
+  ##   read the file from disk, so `isModified` is the test. contentVersion is
+  ##   actively wrong here — maybeUpdateLsp records a baseline even when the
+  ##   notification is dropped for want of a worker, so the versions match
+  ##   while the texts do not.
+  for path in collectWorkspaceEditPaths(edit):
+    let absPath = normalizedPath(absolutePath(path))
+    for buf in buffers:
+      if buf.filePath.isSome and
+          normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+        let serverHolds =
+          syncedVersions.hasKey(buf.id) and
+          lsp.service.hasLiveWorkerForPath(canonicalPath(buf.filePath.get))
+
+        if serverHolds:
+          if buf.contentVersion != syncedVersions[buf.id]:
+            return true
+        elif buf.isModified:
+          return true
+
+  return false
+
 proc applyWorkspaceEdit*(
     buffers: var seq[TextBuffer],
     edit: WorkspaceEdit,
