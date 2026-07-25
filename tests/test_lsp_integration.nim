@@ -2818,3 +2818,81 @@ suite "LspIntegration - hasStaleTargetBuffer":
 
     buffers[1].contentVersion.inc
     check hasStaleTargetBuffer(buffers, editFor(relPath), snapshot)
+
+suite "LspIntegration - hasStaleServerEditTarget":
+  var lsp: LspIntegration
+  setup:
+    lsp = newLspIntegration(tmpDir)
+  teardown:
+    lsp.shutdown()
+
+  proc setLiveWorkers(lsp: LspIntegration, live: bool) =
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      live
+
+  proc editFor(path: string): WorkspaceEdit =
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(path)] = @[TextEdit(range: newRange(0, 0, 0, 3), newText: "xxx")]
+    WorkspaceEdit(changes: some(changes), documentChanges: none(seq[TextDocumentEdit]))
+
+  proc syncedAt(buf: TextBuffer): Table[BufferId, int] =
+    result[buf.id] = buf.contentVersion
+
+  test "server-held buffer in sync is not stale":
+    lsp.setLiveWorkers(true)
+    let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
+
+    check not lsp.hasStaleServerEditTarget(
+      @[buf], editFor(tmpDir / "a.nim"), syncedAt(buf)
+    )
+
+  test "server-held buffer edited since the last sync is stale":
+    lsp.setLiveWorkers(true)
+    let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
+    let synced = syncedAt(buf)
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
+
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), synced)
+
+  test "buffer the server never received is stale when it has unsaved changes":
+    # Regression: maybeUpdateLsp records a sync baseline even when the
+    # notification is dropped for want of a worker (e.g. Cargo.toml in a Rust
+    # project). contentVersion then matches while the buffer diverges from the
+    # disk text the server actually read, so the edit was let through and
+    # applied at the wrong coordinates.
+    lsp.setLiveWorkers(false)
+    let buf = newTextBuffer("aaa", some(tmpDir / "Cargo.toml"))
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
+
+    check lsp.hasStaleServerEditTarget(
+      @[buf], editFor(tmpDir / "Cargo.toml"), syncedAt(buf)
+    )
+
+  test "buffer the server never received is not stale when it matches disk":
+    lsp.setLiveWorkers(false)
+    let buf = newTextBuffer("aaa", some(tmpDir / "Cargo.toml"))
+
+    check not lsp.hasStaleServerEditTarget(
+      @[buf], editFor(tmpDir / "Cargo.toml"), syncedAt(buf)
+    )
+
+  test "live worker but no sync baseline falls back to the disk comparison":
+    # didOpen never succeeded, so the server has no copy of this document.
+    lsp.setLiveWorkers(true)
+    let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
+    let noBaseline = initTable[BufferId, int]()
+
+    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), noBaseline)
+
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), noBaseline)
+
+  test "a buffer outside the edit's targets is ignored":
+    lsp.setLiveWorkers(false)
+    let target = newTextBuffer("aaa", some(tmpDir / "a.nim"))
+    let other = newTextBuffer("bbb", some(tmpDir / "b.nim"))
+    discard other.insertText(BufferPosition(line: 0, column: 3), "!")
+
+    check not lsp.hasStaleServerEditTarget(
+      @[target, other], editFor(tmpDir / "a.nim"), syncedAt(target)
+    )
