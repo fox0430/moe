@@ -827,6 +827,7 @@ suite "editor_navigation - mode-hijack guard":
       cursorLine: -1,
       cursorCol: -1,
       validModes: LocationValidModes,
+      blockedByOverlay: true,
     )
     let cursorBefore = e.cursor
     let bufBefore = e.state.activeWindow.buffer
@@ -844,6 +845,49 @@ suite "editor_navigation - mode-hijack guard":
     e.pollLspLocationRequest()
 
     check e.state.mode == EditorMode.Insert
+    check not e.state.lspCache.pending.hasKey(lrfDefinition)
+    check e.cursor == cursorBefore
+    check e.state.activeWindow.buffer == bufBefore
+
+suite "editor_navigation - overlay guard":
+  test "Location response arriving under a Command overlay does not jump":
+    # goto-* is item-driven (URI-anchored), so the buffer/version guard is
+    # bypassed; only the overlay dimension can stop the jump from tearing down
+    # the prompt.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.enterCommandOverlay()
+    let reqId = 7272
+    let buf = e.activeBuffer
+    e.state.lspCache.pending[lrfDefinition] = LspRequestContext(
+      requestId: reqId,
+      feature: lrfDefinition,
+      bufferId: buf.id,
+      contentVersion: buf.contentVersion,
+      path: "/tmp/x.nim",
+      generation: 1,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: LocationValidModes,
+      isItemDriven: true,
+      blockedByOverlay: true,
+    )
+    let cursorBefore = e.cursor
+    let bufBefore = e.state.activeWindow.buffer
+    privateAccess(LspService)
+    let locJson = %*[
+      {
+        "uri": "file:///tmp/x.nim",
+        "range":
+          {"start": {"line": 3, "character": 0}, "end": {"line": 3, "character": 5}},
+      }
+    ]
+    e.lsp.service.pendingResponses[reqId] =
+      (result: some($locJson), error: none(string))
+
+    e.pollLspLocationRequest()
+
+    check e.state.overlay.isSome
     check not e.state.lspCache.pending.hasKey(lrfDefinition)
     check e.cursor == cursorBefore
     check e.state.activeWindow.buffer == bufBefore

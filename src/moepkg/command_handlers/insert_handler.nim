@@ -769,9 +769,9 @@ proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
   if reqIdOpt.isNone:
     return
 
-  # Poll LSP service for events
-  handler.lsp.poll()
-
+  # Responses were already drained by the single per-frame poll at the top of
+  # tick(); this only reads them.
+  #
   # Check for response. The raw result string is parsed directly into typed
   # CompletionItems with jsony (parseCompletionResponse), avoiding an
   # intermediate JsonNode tree for what can be a very large completion list.
@@ -830,8 +830,8 @@ proc pollLspResolve*(handler: InsertModeHandler, state: EditorState) =
 
   let ctx = state.lspCache.pending[lrfCompletionResolve]
 
-  handler.lsp.poll()
-
+  # Responses were already drained by the single per-frame poll at the top of
+  # tick(); this only reads them.
   let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(ctx.requestId)
 
   case status
@@ -1234,10 +1234,9 @@ proc handleInsertModeKey*(
         # Sync the auto-poll tracker so requestSignatureHelpFromLsp does not
         # fire a redundant follow-up request for the same position/contentVersion
         # once this response arrives.
-        state.lspCache.signatureHelp.cursorLine = cursorLine
-        state.lspCache.signatureHelp.cursorColumn = cursorCol
-        state.lspCache.signatureHelp.contentVersion = buffer.contentVersion
-        state.lspCache.signatureHelp.lastUpdate = getMonoTime()
+        state.lspCache.signatureHelpPoll.markRequestIssued(
+          cursorLine, cursorCol, buffer.contentVersion, getMonoTime()
+        )
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   if keyCombo.isCtrlO:

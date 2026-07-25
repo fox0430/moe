@@ -230,6 +230,7 @@ suite "editor_documentlink - UTF-16 cursor conversion":
       cursorLine: -1,
       cursorCol: -1,
       validModes: DocumentLinkValidModes,
+      blockedByOverlay: true,
     )
     privateAccess(LspService)
     # Link range [3, 4) in UTF-16 — matches only when the cursor is converted.
@@ -268,6 +269,7 @@ suite "editor_documentlink - mode-hijack guard":
       cursorLine: 0,
       cursorCol: 0,
       validModes: DocumentLinkValidModes,
+      blockedByOverlay: true,
     )
     let bufBefore = e.state.activeWindow.buffer
     privateAccess(LspService)
