@@ -1640,6 +1640,67 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
     check handled == false
 
+proc createSplitEditor(multiStatusLine: bool = true): Editor =
+  ## Two windows stacked vertically. The bottom window's viewport includes the
+  ## shared status/command row (window_manager gives the last window the
+  ## remaining height), exactly as equalizeHeightsInGroup lays it out.
+  result = createTestEditorWithBuffer("top0\ntop1\ntop2\ntop3\ntop4\ntop5")
+  result.state.showTabLine = false
+  result.state.multiStatusLine = multiStatusLine
+  result.windowManager.windows[0].viewport =
+    ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+
+  var content = ""
+  for i in 0 ..< 30:
+    if i > 0:
+      content.add("\n")
+    content.add("bottom" & $i)
+  let buf2 = newTextBuffer(content)
+  result.windowManager.windows.add(
+    EditorWindow(
+      buffer: buf2,
+      bufferIds: @[buf2.id],
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+  )
+
+suite "handleMouseEvent - Left Click Multi-Window Bottom Reserve":
+  test "Click on command line row is ignored when the status line is hidden":
+    # Bottom window: y=12..23, and y=23 is the shared status/command row that
+    # the renderer always reserves — independent of showStatusLine.
+    let e = createSplitEditor()
+    e.state.showStatusLine = false
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 23))
+
+    check handled == false
+    check e.windowManager.activeWindowIndex == 0
+    check e.windowManager.windows[1].cursor.line == 0
+
+  test "Click on the last text row still works when the status line is hidden":
+    let e = createSplitEditor()
+    e.state.showStatusLine = false
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 22))
+
+    check handled == true
+    check e.windowManager.activeWindowIndex == 1
+    check e.windowManager.windows[1].cursor.line == 10
+
+  test "Non-bottom window last row is clickable without multiStatusLine":
+    # Non-bottom windows reserve a status row only in multiStatusLine mode;
+    # otherwise the separator sits outside the viewport.
+    let e = createSplitEditor(multiStatusLine = false)
+    e.state.showStatusLine = true
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 11))
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 5
+
 proc makeEnterEvent(): Event =
   Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Enter))
 

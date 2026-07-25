@@ -643,14 +643,16 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
               e.switchToWindowBuffer(tabIdx)
               return true
 
+      let maxBottomY = findMaxBottomY(e.windowManager.windows)
       for i, window in e.windowManager.windows:
         let vp = window.viewport
         # Check if click is within this window's viewport
         if mouse.x >= vp.x and mouse.x < vp.x + vp.width and mouse.y >= vp.y and
             mouse.y < vp.y + vp.height:
           let
-            # Each window has its own status line
-            reservedLines = if e.showStatusLine: 1 else: 0
+            # Same reserve the renderer uses, so the hit test cannot claim the
+            # shared status/command row nor drop a real text row.
+            reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
             posOpt = screenToBufferPosition(
               vp,
               window.buffer,
