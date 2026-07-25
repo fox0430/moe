@@ -170,7 +170,7 @@ suite "Build - BuildProcess isRunning and isFinish":
       let r = await startBackgroundProcess(cmd)
       if r.isOk:
         let bp = BuildProcess(command: cmd, filePath: "test.nim", process: r.get)
-        discard await bp.process.waitForAsync()
+        discard await bp.process.waitForAsync(30.seconds)
         let running = bp.isRunning
         let finish = bp.isFinish
         return (running, finish)
@@ -208,7 +208,7 @@ suite "Build - startBackgroundBuild with custom command":
         await startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
       if r.isOk:
         let bp = r.get
-        let output = await bp.waitForAsync()
+        let output = (await bp.waitForAsync(30.seconds)).get
         return (true, output)
       else:
         return (false, @[])
@@ -233,7 +233,7 @@ suite "Build - startBackgroundBuild with custom command":
       let r = await startBackgroundBuild(customCmd, SourceLanguage.langNim, "/tmp")
       if r.isOk:
         let bp = r.get
-        let output = await bp.waitForAsync()
+        let output = (await bp.waitForAsync(30.seconds)).get
         return (true, output)
       else:
         return (false, @[])
@@ -250,7 +250,7 @@ suite "Build - startBackgroundBuild with custom command":
         await startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
       if r.isOk:
         let bp = r.get
-        discard await bp.waitForAsync()
+        discard await bp.waitForAsync(30.seconds)
         return (bp.command.cmd, bp.command.args)
       else:
         return ("", @[])
@@ -270,7 +270,7 @@ suite "Build - startBackgroundBuildOnSave":
       )
       if r.isOk:
         let bp = r.get
-        let output = await bp.waitForAsync()
+        let output = (await bp.waitForAsync(30.seconds)).get
         return (true, output)
       else:
         return (false, @[])
@@ -313,7 +313,7 @@ suite "Build - waitForAsync":
         await startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
       if r.isOk:
         let bp = r.get
-        let output = await bp.waitForAsync()
+        let output = (await bp.waitForAsync(30.seconds)).get
         return (output, bp.process.process.isNil)
       else:
         return (@[], false)
@@ -331,7 +331,7 @@ suite "Build - waitForAsync":
         await startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
       if r.isOk:
         let bp = r.get
-        return await bp.waitForAsync()
+        return (await bp.waitForAsync(30.seconds)).get
       else:
         return @[]
 

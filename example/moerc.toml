@@ -82,6 +82,9 @@ enable = false                         # Build on save feature
 
 command = "nimble build"               # Custom build command
 
+# A hung build is killed once this elapses (0 = wait forever)
+timeout = 300                          # Timeout in seconds
+
 [TabLine]
 
 enable = true                          # Enable tab line
@@ -175,7 +178,7 @@ saveBufferWhenQuickRun = true          # Save buffer before running
 
 # command = "nimble build"             # Custom command override
 
-# 30 second timeout
+# A program still running after this is killed (0 = wait forever)
 timeout = 30                           # Timeout in seconds
 
 # nimAdvancedCommand = "js"            # Nim advanced command e.g., "js" for JavaScript
@@ -289,6 +292,9 @@ updateInterval = 1000                  # Git diff update interval in millisecond
 [SyntaxChecker]
 
 enable = false                         # Enable syntax checker in sidebar
+
+# A hung check is killed once this elapses (0 = wait forever)
+timeout = 60                           # Timeout in seconds
 
 [SmoothScroll]
 

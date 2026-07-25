@@ -428,7 +428,7 @@ suite "SyntaxChecker - waitForAsync":
       if bp.isOk:
         let checkProc =
           SyntaxCheckProcess(command: cmd, filePath: "test.nim", process: bp.get)
-        let output = await checkProc.waitForAsync()
+        let output = (await checkProc.waitForAsync(60.seconds)).get
         return (output, checkProc.process.process.isNil)
       else:
         return (@[], false)

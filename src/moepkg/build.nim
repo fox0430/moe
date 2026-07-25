@@ -175,6 +175,9 @@ proc startBackgroundBuildOnSave*(
   else:
     return await startBackgroundBuild(path, language, workspaceRoot)
 
-proc waitForAsync*(bp: BuildProcess): Future[seq[string]] {.async: (raises: []).} =
-  ## Wait for build process to complete and return output
-  return await bp.process.waitForAsync()
+proc waitForAsync*(
+    bp: BuildProcess, timeout: Duration
+): Future[ProcessOutputResult] {.async: (raises: []).} =
+  ## Wait for the build to complete and return its output. A build still
+  ## running after `timeout` is killed and reported as an error.
+  return await bp.process.waitForAsync(timeout)
