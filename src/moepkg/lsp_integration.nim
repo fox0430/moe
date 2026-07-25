@@ -1182,6 +1182,30 @@ proc collectWorkspaceEditPaths*(edit: WorkspaceEdit): seq[string] =
     for uri, _ in edit.changes.get:
       result.add(uriToPath(uri))
 
+proc hasStaleTargetBuffer*(
+    buffers: seq[TextBuffer], edit: WorkspaceEdit, baseline: Table[BufferId, int]
+): bool =
+  ## True if any open buffer targeted by `edit` no longer matches the
+  ## contentVersion recorded for it in `baseline`. The server positioned its
+  ## edit against that state, so applying it onto newer text would corrupt the
+  ## buffer.
+  ##
+  ## A buffer with no `baseline` entry counts as stale: nothing pins it to the
+  ## text the server saw, so it cannot be verified.
+  ##
+  ## Keyed by buffer id, not path: two buffers can hold the same file (one
+  ## opened relative, one absolute), and a path-keyed baseline would let one
+  ## buffer's contentVersion shadow the other's.
+  for path in collectWorkspaceEditPaths(edit):
+    let absPath = normalizedPath(absolutePath(path))
+    for buf in buffers:
+      if buf.filePath.isSome and
+          normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+        if not baseline.hasKey(buf.id) or buf.contentVersion != baseline[buf.id]:
+          return true
+
+  return false
+
 proc applyWorkspaceEdit*(
     buffers: var seq[TextBuffer],
     edit: WorkspaceEdit,
