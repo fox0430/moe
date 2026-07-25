@@ -2756,3 +2756,65 @@ suite "LspIntegration - formatDiagnosticsForHover":
 
   test "empty diagnostics returns empty string":
     check formatDiagnosticsForHover(@[]) == ""
+
+suite "LspIntegration - hasStaleTargetBuffer":
+  proc snapshotOf(buffers: seq[TextBuffer]): Table[BufferId, int] =
+    for buf in buffers:
+      result[buf.id] = buf.contentVersion
+
+  proc editFor(paths: varargs[string]): WorkspaceEdit =
+    var changes = initTable[string, seq[TextEdit]]()
+    for path in paths:
+      changes[pathToUri(path)] =
+        @[TextEdit(range: newRange(0, 0, 0, 3), newText: "xxx")]
+    WorkspaceEdit(changes: some(changes), documentChanges: none(seq[TextDocumentEdit]))
+
+  test "unchanged target buffers are not stale":
+    let buffers = @[
+      newTextBuffer("aaa", some(tmpDir / "a.txt")),
+      newTextBuffer("bbb", some(tmpDir / "b.txt")),
+    ]
+    check not hasStaleTargetBuffer(
+      buffers, editFor(tmpDir / "a.txt", tmpDir / "b.txt"), snapshotOf(buffers)
+    )
+
+  test "a target buffer whose contentVersion advanced is stale":
+    let buffers = @[newTextBuffer("aaa", some(tmpDir / "a.txt"))]
+    let snapshot = snapshotOf(buffers)
+    buffers[0].contentVersion.inc
+
+    check hasStaleTargetBuffer(buffers, editFor(tmpDir / "a.txt"), snapshot)
+
+  test "a target buffer missing from the snapshot is stale":
+    # Regression: a buffer opened *while* the rename request was in flight has
+    # no snapshot entry, so nothing pins it to the text the server saw.
+    # Defaulting the lookup to the buffer's own contentVersion compared the
+    # value against itself and let it through unverified.
+    let opened = @[newTextBuffer("aaa", some(tmpDir / "a.txt"))]
+    let snapshot = snapshotOf(opened)
+
+    let buffers = opened & @[newTextBuffer("bbb", some(tmpDir / "b.txt"))]
+    check hasStaleTargetBuffer(buffers, editFor(tmpDir / "b.txt"), snapshot)
+
+  test "a buffer outside the edit's targets is ignored":
+    let opened = @[newTextBuffer("aaa", some(tmpDir / "a.txt"))]
+    let snapshot = snapshotOf(opened)
+
+    # Opened mid-request, but the edit does not touch it.
+    let buffers = opened & @[newTextBuffer("bbb", some(tmpDir / "b.txt"))]
+    check not hasStaleTargetBuffer(buffers, editFor(tmpDir / "a.txt"), snapshot)
+
+  test "two buffers on the same file are tracked by id, not path":
+    # Same file opened twice (relative and absolute). A path-keyed baseline
+    # would let one buffer's version shadow the other's.
+    let relPath = "stale_target.txt"
+    let buffers = @[
+      newTextBuffer("aaa", some(relPath)),
+      newTextBuffer("aaa", some(absolutePath(relPath))),
+    ]
+    let snapshot = snapshotOf(buffers)
+
+    check not hasStaleTargetBuffer(buffers, editFor(relPath), snapshot)
+
+    buffers[1].contentVersion.inc
+    check hasStaleTargetBuffer(buffers, editFor(relPath), snapshot)

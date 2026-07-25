@@ -428,17 +428,11 @@ proc requestLspRename*(
 
       let workspaceEdit = workspaceEditOpt.get
 
-      # Reject the edit if any targeted open buffer changed during the await.
-      # Compare each buffer against its OWN pre-await contentVersion (keyed by id).
-      for path in collectWorkspaceEditPaths(workspaceEdit):
-        let absPath = normalizedPath(absolutePath(path))
-        for buf in e.buffers:
-          if buf.filePath.isSome and
-              normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-              buf.contentVersion !=
-              versionSnapshot.getOrDefault(buf.id, buf.contentVersion):
-            e.state.statusMessage = "Buffer changed during rename; edits discarded"
-            return
+      # Reject the edit if any targeted open buffer changed during the await, or
+      # was opened during it (no snapshot entry, so it is unverifiable).
+      if hasStaleTargetBuffer(e.buffers, workspaceEdit, versionSnapshot):
+        e.state.statusMessage = "Buffer changed during rename; edits discarded"
+        return
 
       # Apply the workspace edits to all affected buffers
       let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
