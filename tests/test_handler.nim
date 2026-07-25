@@ -2718,6 +2718,19 @@ suite "middleClickPaste":
     check e.windowManager.windows[0].cursor.column == 0
     check not e.activeBuffer.inTransaction
 
+  test "Normal mode - failed primary selection read leaves no open transaction":
+    let e = createTestEditorForMiddleClick("hello")
+    # win32yank.exe does not exist here, so the primary selection read fails.
+    e.config.clipboard.tool = cbtWin32yank
+    e.state.mode = EditorMode.Normal
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+
+    e.middleClickPaste()
+
+    check e.state.mode == EditorMode.Normal
+    check not e.activeBuffer.inTransaction
+    check e.activeBuffer.getLine(0) == "hello"
+
   test "Insert mode - paste from clipboard":
     if not isClipboardToolAvailable():
       skip()
