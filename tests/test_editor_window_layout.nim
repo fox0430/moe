@@ -487,6 +487,84 @@ suite "calculateSidebarWidth - modeState gating":
     check pos.x == 9 # gutterWidth + (10 - 5) = 4 + 5 = 9
     check pos.y == 0
 
+  test "cursor after a tab, no wrap":
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("\tabc")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 1)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 8 # gutterWidth + tab expanded to 4 cells
+    check pos.y == 0
+
+  test "cursor with horizontal scroll past a tab restarts tab stops":
+    # The renderer slices the line at leftColumn, so the tab is expanded from the
+    # slice start; subtracting two line-start widths would place the cursor at 6.
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("ab\tcd")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 2, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 3) # 'c'
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 8 # gutterWidth + tab expanded from the slice start = 4 + 4
+    check pos.y == 0
+
+  test "cursor with horizontal scroll and full width characters":
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("あいうえお")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 2, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 3) # え
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 6 # gutterWidth + う takes 2 cells
+    check pos.y == 0
+
+  test "cursor left of leftColumn clamps to the text start":
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("0123456789")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 5, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 2)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 4
+    check pos.y == 0
+
   test "cursor out of buffer bounds returns (0, 0)":
     let e = createTestEditor()
     e.state.lineWrap = false

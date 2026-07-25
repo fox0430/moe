@@ -207,14 +207,14 @@ proc calculateWindowCursor*(
     if screenRow < viewport.height - reservedLines:
       let
         cursorLineText = buffer.getLine(cursor.line)
-        displayWidthUpToCursor =
-          displayWidthUpToWithTabs(cursorLineText, cursor.column, e.tabStop)
-        displayWidthUpToLeftCol =
-          displayWidthUpToWithTabs(cursorLineText, viewport.leftColumn, e.tabStop)
+        # The renderer slices the line at leftColumn, so tab expansion restarts
+        # there. Subtracting two line-start widths would misplace the cursor by
+        # the tab-stop remainder whenever a tab precedes leftColumn.
+        displayWidthFromLeftCol = displayWidthBetweenWithTabs(
+          cursorLineText, viewport.leftColumn, cursor.column, e.tabStop
+        )
         screenY = viewport.y + screenRow
-        screenX =
-          viewport.x + gutterWidth +
-          max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
+        screenX = viewport.x + gutterWidth + displayWidthFromLeftCol
 
       return CursorPosition(x: screenX, y: screenY)
 

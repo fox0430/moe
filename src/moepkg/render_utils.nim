@@ -492,6 +492,34 @@ proc displayWidthUpToWithTabs*(text: string, charPos: int, tabStop: int): int =
 
     currentChar += 1
 
+proc displayWidthBetweenWithTabs*(
+    text: string, startChar, endChar: int, tabStop: int
+): int =
+  ## Calculate the display width from startChar to endChar, with tabs expanded
+  ## relative to startChar. Use this instead of subtracting two
+  ## `displayWidthUpToWithTabs` results whenever the text is rendered as a slice
+  ## starting at startChar: a tab lands on a different stop when counted from the
+  ## slice start than when counted from the line start. Inverse of
+  ## `screenXToCharIndex`.
+  if endChar <= startChar or startChar < 0:
+    return 0
+
+  var currentChar = 0
+
+  for rune in text.runes:
+    if currentChar < startChar:
+      currentChar += 1
+      continue
+    if currentChar >= endChar:
+      break
+
+    if rune == TAB_CHAR:
+      result += tabAdvance(result, tabStop)
+    else:
+      result += runeWidth(rune)
+
+    currentChar += 1
+
 proc displayWidthWithTabs*(text: string, tabStop: int): int =
   ## Calculate the display width of a string, accounting for tab characters
   ## Tab characters expand to the next tab stop position
