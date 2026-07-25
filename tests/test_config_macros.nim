@@ -419,6 +419,166 @@ suite "config_macros: cfgDeprecated":
     check "Invalid value" in vr.toErrorMessages[0]
     check vr.toDeprecationMessages.len == 1
 
+# Exercise section groups: a parent table whose `{.cfgSubSection.}` fields are
+# `[Parent.Child]` sub-tables. Two fields share one type — the case the
+# `{.cfgSection.}` type pragma cannot express.
+type
+  FeatureSub = object
+    on {.cfg.}: bool
+
+  WideSub = object
+    on {.cfg.}: bool
+    extra {.cfg.}: int
+
+  GroupSection {.cfgGroup: "Group".} = object
+    top {.cfg.}: bool
+    limit {.cfg, cfgMin: 1.}: int
+    first {.cfgSubSection: "First".}: FeatureSub
+    second {.cfgSubSection: "Second".}: FeatureSub
+    wide {.cfgSubSection: "Wide".}: WideSub
+
+proc loadGroup(t: TomlTableRef, c: var GroupSection, vr: var ValidationResult) =
+  generateSectionGroupLoader(t, c, vr, GroupSection)
+
+proc saveGroup(lines: var seq[string], cfg: GroupSection) =
+  generateSectionGroupSerializer(lines, cfg, GroupSection)
+
+suite "config_macros: section groups":
+  test "generateSectionGroupKeys lists scalars then sub-table names":
+    const keys = generateSectionGroupKeys(GroupSection)
+    check keys == ["top", "limit", "First", "Second", "Wide"]
+
+  test "loader fills each sub-table independently":
+    let t = tomlTable(
+      """
+top = true
+limit = 3
+
+[First]
+on = true
+
+[Wide]
+on = true
+extra = 7
+"""
+    )
+    var c: GroupSection
+    var vr = newValidationResult()
+    loadGroup(t, c, vr)
+    check not vr.hasErrors
+    check c.top
+    check c.limit == 3
+    check c.first.on
+    check not c.second.on # absent table keeps its value
+    check c.wide.on
+    check c.wide.extra == 7
+
+  test "sub-table issues are reported under the dotted section name":
+    let t = tomlTable("[First]\ntypo = true\n")
+    var c: GroupSection
+    var vr = newValidationResult()
+    loadGroup(t, c, vr)
+    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "Group.First.typo")
+
+  test "constraint pragmas apply to the parent table's own keys":
+    let t = tomlTable("limit = 0\n")
+    var c: GroupSection
+    var vr = newValidationResult()
+    loadGroup(t, c, vr)
+    check vr.hasErrors
+    check "Group.limit" in vr.errors[0].name
+
+  test "unknown keys of the parent table are left to the caller":
+    ## A group's parent table may also carry a dynamic keyspace (`[Lsp.<lang>]`),
+    ## so the macro must not reject leftovers on its own.
+    let t = tomlTable("mystery = true\n")
+    var c: GroupSection
+    var vr = newValidationResult()
+    loadGroup(t, c, vr)
+    check not vr.hasErrors
+
+  test "serializer emits the parent header then one per sub-table":
+    var lines: seq[string]
+    saveGroup(lines, GroupSection(top: true, limit: 5, wide: WideSub(extra: 7)))
+    check lines.find("[Group]") < lines.find("[Group.First]")
+    check lines.find("[Group.First]") < lines.find("[Group.Second]")
+    check "[Group.Wide]" in lines
+    check "extra = 7" in lines
+
+  test "loader and serializer round-trip the whole group":
+    let original = GroupSection(
+      top: true,
+      limit: 5,
+      first: FeatureSub(on: true),
+      wide: WideSub(on: true, extra: 7),
+    )
+    var lines: seq[string]
+    saveGroup(lines, original)
+
+    # The serializer writes absolute `[Group...]` headers; the loader is handed
+    # the parent table's contents, matching how the config entry point calls it.
+    let parsed = tomlTable(lines.join("\n"))["Group"].getTable()
+
+    var loaded: GroupSection
+    var vr = newValidationResult()
+    loadGroup(parsed, loaded, vr)
+    check not vr.hasErrors
+    check loaded == original
+
+  test "a field cannot be both a scalar key and a sub-table":
+    # Driven through generateSectionGroupKeys on purpose: it neither builds a
+    # loader nor a serializer body, so the conflict guard is the only thing
+    # that can reject this type.
+    check not compiles(
+      (
+        block:
+          type Bad {.cfgGroup: "Bad".} = object
+            oops {.cfg, cfgSubSection: "Oops".}: FeatureSub
+
+          const keys = generateSectionGroupKeys(Bad)
+      )
+    )
+
+  test "two sub-tables cannot claim the same name":
+    check not compiles(
+      (
+        block:
+          type Bad {.cfgGroup: "Bad".} = object
+            a {.cfgSubSection: "Dup".}: FeatureSub
+            b {.cfgSubSection: "Dup".}: FeatureSub
+
+          const keys = generateSectionGroupKeys(Bad)
+      )
+    )
+
+  test "a sub-table name cannot collide with a scalar key":
+    check not compiles(
+      (
+        block:
+          type Bad {.cfgGroup: "Bad".} = object
+            Dup {.cfg.}: bool
+            b {.cfgSubSection: "Dup".}: FeatureSub
+
+          const keys = generateSectionGroupKeys(Bad)
+      )
+    )
+
+  test "the guard is reachable from every group macro":
+    ## Each macro must validate the pragmas before building its bodies,
+    ## otherwise an unrelated "unsupported field type" error masks the guard.
+    check not compiles(
+      (
+        block:
+          type Bad {.cfgGroup: "Bad".} = object
+            a {.cfgSubSection: "Dup".}: FeatureSub
+            b {.cfgSubSection: "Dup".}: FeatureSub
+
+          var lines: seq[string]
+          var o: Bad
+          generateSectionGroupSerializer(lines, o, Bad)
+      )
+    )
+
 suite "config_macros: escapeMdCell":
   test "passes through plain text unchanged":
     check escapeMdCell("hello world") == "hello world"

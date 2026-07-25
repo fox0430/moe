@@ -20,6 +20,7 @@
 import std/[unittest, options, os, strutils, sets, tables, importutils]
 import ../src/moepkg/[config, color, theme, types]
 import ../src/moepkg/config_mode {.all.}
+import config_test_helper
 
 proc testEditorState(cfg: EditorConfig): EditorState =
   EditorState(config: cfg)
@@ -2136,6 +2137,56 @@ suite "ConfigMode - descriptor completeness":
       "StartUp.FileOpen", "StartUp.FileTree", "EditorConfig", "Log", "Theme", "Lsp",
     ]:
       check name in sections
+
+  test "Every Lsp feature sub-table has a section descriptor with its fields":
+    ## The `[Lsp.<Feature>]` tables used to be absent from the UI entirely.
+    var sections: HashSet[string]
+    var descriptorFields: HashSet[(string, string)]
+    for desc in configDescriptors:
+      if desc.kind == cvkSection:
+        sections.incl(desc.section)
+      else:
+        descriptorFields.incl((desc.section, desc.displayName))
+
+    for name in LspFeatureTableNames:
+      let section = "Lsp." & name
+      check section in sections
+      check (section, "enable") in descriptorFields
+
+    # And nothing beyond them: a sub-table added to `LspConfig` but not to
+    # `LspFeatureTableNames` would otherwise never be asserted on.
+    var lspSubSections = 0
+    for s in sections:
+      if s.startsWith("Lsp."):
+        inc lspSubSections
+    check lspSubSections == LspFeatureTableNames.len
+
+    # Non-`enable` fields of the wider sub-table shapes are there too.
+    check ("Lsp.Definition", "openWindow") in descriptorFields
+    check ("Lsp.Diagnostics", "autoHover") in descriptorFields
+    check ("Lsp.Diagnostics", "autoHoverDelay") in descriptorFields
+
+  test "Lsp sub-table descriptors address their own field":
+    ## A shared getter or a copy-pasted accessor would make several tables
+    ## move together. Clear them all, then flip exactly one.
+    let cfg = newEditorConfig()
+    proc enableDescriptors(): seq[ConfigItemDescriptor] =
+      for desc in configDescriptors:
+        if desc.kind == cvkBool and desc.section.startsWith("Lsp.") and
+            desc.displayName == "enable":
+          result.add desc
+
+    for desc in enableDescriptors():
+      desc.boolSet(cfg, false)
+    check not cfg.lsp.hover.enable
+    check not cfg.lsp.completion.enable
+
+    for desc in enableDescriptors():
+      if desc.section == "Lsp.Hover":
+        desc.boolSet(cfg, true)
+    check cfg.lsp.hover.enable
+    check not cfg.lsp.completion.enable
+    check not cfg.lsp.codeLens.enable
 
   test "All config fields have descriptors or are explicitly excluded":
     ## If a new field is added to a config struct in a tested section, this

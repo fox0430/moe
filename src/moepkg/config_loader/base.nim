@@ -198,6 +198,28 @@ proc checkUnknownKeys*(
     if key notin validKeys:
       vr.addUnknownKey(fullKey(section, key))
 
+proc expectTable*(
+    table: TomlTableRef, key: string, vr: var ValidationResult, section: string = ""
+): bool =
+  ## True when `key` is present and holds a TOML table. A non-table value is
+  ## reported as a type error rather than dropped: `getTable` yields an empty
+  ## default for a non-table, so such a key would load nothing and, being a
+  ## known key, escape the unknown-key check as well.
+  if not table.hasKey(key):
+    false
+  elif table[key].kind == TomlValueKind.Table:
+    true
+  else:
+    vr.addError(fullKey(section, key), $table[key], "table")
+    false
+
+proc expectTable*(
+    doc: TomlValueRef, key: string, vr: var ValidationResult, section: string = ""
+): bool =
+  ## Overload for the parsed document, which the whole-config section dispatch
+  ## is handed instead of a table.
+  expectTable(doc.getTable(), key, vr, section)
+
 proc loadBool*(
     table: TomlTableRef,
     key: string,
