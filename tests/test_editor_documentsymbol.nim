@@ -107,6 +107,7 @@ suite "editor_documentsymbol - mode-hijack guard":
       cursorLine: -1,
       cursorCol: -1,
       validModes: DocumentSymbolValidModes,
+      blockedByOverlay: true,
     )
     privateAccess(LspService)
     e.lsp.service.pendingResponses[reqId] =
@@ -136,6 +137,7 @@ suite "editor_documentsymbol - stale-guard":
       cursorLine: -1,
       cursorCol: -1,
       validModes: DocumentSymbolValidModes,
+      blockedByOverlay: true,
     )
     privateAccess(LspService)
     e.lsp.service.pendingResponses[reqId] =

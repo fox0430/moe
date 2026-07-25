@@ -272,14 +272,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         ),
         inlayHintPoll: initDebouncedLspPoll(500),
         inlayHintCache: InlayHintCache(isValid: false),
-        signatureHelp: SignatureHelpRequestState(
-          lastUpdate: getMonoTime(),
-          interval: 100, # 100ms debounce for signature help
-          cursorLine: -1,
-          cursorColumn: -1,
-          contentVersion: -1,
-          consecutiveErrors: 0,
-        ),
+        signatureHelpPoll: initDebouncedLspPoll(100),
+        # The interval is refreshed from config on every check.
+        autoHoverPoll: initDebouncedLspPoll(0),
       ),
       notificationPopup: newNotificationPopupManager(),
     ),

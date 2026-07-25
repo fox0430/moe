@@ -67,25 +67,7 @@ proc startLspDocumentSymbols*(e: Editor): bool =
 
 proc pollLspDocumentSymbols*(e: Editor) =
   ## Poll for pending document symbols response
-  if not e.lsp.enabled:
-    return
-  if not e.state.lspCache.pending.hasKey(lrfDocumentSymbol):
-    return
-  let ctx = e.state.lspCache.pending[lrfDocumentSymbol]
-
-  # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-
-  case status
-  of lrsPending:
-    discard # Still waiting
-  of lrsSuccess:
-    e.state.lspCache.pending.del(lrfDocumentSymbol)
-    # Drop stale response: buffer switched, edited, or the user moved into an
-    # input mode where forcing DocumentSymbol would hijack input. Overlay is
-    # outside classifyResponse's remit and checked inline.
-    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
-      return
+  e.pollOneShotLspResponse({lrfDocumentSymbol}, "document symbols"):
     if resultOpt.isSome:
       let activeBuffer = e.activeBuffer()
       if activeBuffer.filePath.isNone:
@@ -119,13 +101,6 @@ proc pollLspDocumentSymbols*(e: Editor) =
       e.state.statusMessage = $symbolCount & " symbols found"
     else:
       e.state.statusMessage = "No symbols found"
-  of lrsError:
-    e.state.lspCache.pending.del(lrfDocumentSymbol)
-    if errorOpt.isSome:
-      e.state.statusMessage = "LSP document symbols failed: " & errorOpt.get
-  of lrsTimeout:
-    e.state.lspCache.pending.del(lrfDocumentSymbol)
-    e.state.statusMessage = "LSP document symbols timed out"
 
 proc requestDocumentSymbols*(e: Editor): bool =
   ## Request document symbols (async)

@@ -44,6 +44,7 @@ proc seedSelectionRangePending(
     cursorLine: -1,
     cursorCol: -1,
     validModes: {},
+    blockedByOverlay: true,
   )
 
 proc createTestEditor(): Editor =
@@ -209,7 +210,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
 
   test "Discards response while a Command overlay is active":
     # Overlay sits on top of the base mode (mode stays Normal), so validModes
-    # can't catch it — the poll must reject it inline.
+    # can't catch it — classifyResponse rejects it via ctx.blockedByOverlay.
     let e = createTestEditor()
     e.lsp.enabled = true
 

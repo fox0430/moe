@@ -22,7 +22,7 @@
 ## cursor — the diagnostics-on-hover behavior is treated as part of the hover
 ## feature, not the diagnostics feature.
 
-import std/[options, monotimes, tables, times]
+import std/[options, monotimes, tables]
 
 import pkg/results
 
@@ -68,26 +68,7 @@ proc startLspHover*(e: Editor): bool =
 proc pollLspHover*(e: Editor) =
   ## Poll for pending LSP hover response
   ## This should be called from the main event loop (tick function)
-  if not e.lsp.enabled:
-    return
-  if not e.state.lspCache.pending.hasKey(lrfHover):
-    return
-  let ctx = e.state.lspCache.pending[lrfHover]
-
-  # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-
-  case status
-  of lrsPending:
-    discard # Still waiting
-  of lrsSuccess:
-    e.state.lspCache.pending.del(lrfHover)
-
-    # Overlay (Command/Search/Rename) leaves e.state.mode intact, so it slips
-    # past validModes; showing the popup here would paint over the overlay.
-    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
-      return
-
+  e.pollOneShotLspResponse({lrfHover}, "hover"):
     var hoverText = ""
     if resultOpt.isSome:
       let hoverOpt = parseHoverResponse(resultOpt.get)
@@ -111,13 +92,6 @@ proc pollLspHover*(e: Editor) =
       e.state.lspCache.hoverPopup.show(combinedText, cursorLine, cursorCol)
     else:
       e.state.statusMessage = "No hover information available"
-  of lrsError:
-    e.state.lspCache.pending.del(lrfHover)
-    if errorOpt.isSome:
-      e.state.statusMessage = "LSP hover failed: " & errorOpt.get
-  of lrsTimeout:
-    e.state.lspCache.pending.del(lrfHover)
-    e.state.statusMessage = "LSP hover timed out"
 
 proc requestLspHover*(e: Editor): bool =
   ## Request LSP hover information at current cursor position (async)
@@ -144,14 +118,15 @@ proc maybeAutoHoverDiagnostic*(e: Editor) =
   let cursorLine = e.activeWindow.cursor.line
   let cursorCol = e.activeWindow.cursor.column
 
-  # Check if cursor position changed since last auto-hover check
-  if cursorLine == e.state.lspCache.autoHoverCursorLine and
-      cursorCol == e.state.lspCache.autoHoverCursorCol:
+  let poll = addr e.state.lspCache.autoHoverPoll
+  # The popup is built from local diagnostics, so contentVersion is not part of
+  # the change detection; -1 keeps it out of the comparison.
+  if not poll[].requestTargetChanged(cursorLine, cursorCol, -1):
     return
 
   # Cursor moved — update tracked position
-  e.state.lspCache.autoHoverCursorLine = cursorLine
-  e.state.lspCache.autoHoverCursorCol = cursorCol
+  poll.cursorLine = cursorLine
+  poll.cursorColumn = cursorCol
 
   let diags = e.activeBuffer().getDiagnosticsAt(cursorLine, cursorCol)
   if diags.len == 0:
@@ -162,13 +137,13 @@ proc maybeAutoHoverDiagnostic*(e: Editor) =
 
   # Debounce — avoid flooding requests on fast cursor movement
   let now = getMonoTime()
-  let elapsed = now - e.state.lspCache.lastAutoHoverUpdate
-  if elapsed < initDuration(milliseconds = e.config.lsp.diagnostics.autoHoverDelay):
+  poll.interval = e.config.lsp.diagnostics.autoHoverDelay
+  if not poll[].debounceElapsed(now):
     # Reset tracked position so next tick retries after debounce expires
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    poll.cursorLine = -1
+    poll.cursorColumn = -1
     return
-  e.state.lspCache.lastAutoHoverUpdate = now
+  poll.lastUpdate = now
 
   # Show diagnostic-only popup (no LSP hover request needed)
   let diagText = formatDiagnosticsForHover(diags)

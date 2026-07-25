@@ -262,22 +262,6 @@ type
     showEncoding*: bool
     showLineEnding*: bool
 
-  SignatureHelpRequestState* = object
-    ## Debounce + change-detection state for auto signature help requests.
-    ## "Debounce" here is a minimum-interval gate measured from the last issued
-    ## request (same shape as documentHighlight/semanticTokens), not a
-    ## reset-on-change timer. Sentinel -1 for the cursor/contentVersion fields
-    ## means "no request issued yet".
-    lastUpdate*: MonoTime # Timestamp of last signature help request
-    interval*: int64 # Base debounce interval (milliseconds)
-    cursorLine*: int # Cursor line of last request
-    cursorColumn*: int # Cursor column of last request
-    contentVersion*: int # Buffer contentVersion of last request
-    consecutiveErrors*: int
-      # Failed/timed-out requests since the last success. Widens the effective
-      # interval (exponential backoff) so a persistently failing server is not
-      # retried every base interval.
-
   PendingSemanticTokensRequest* = object
     ## Semantic-tokens-specific extras (legend, viewport, range) captured at
     ## request-send time. The generic stale-guard snapshot (request-id,
@@ -340,12 +324,17 @@ type
     ignoreContentVersion*: bool
       # Skip the contentVersion drift check; for features whose response
       # stays meaningful across in-flight edits (e.g. signature help).
+    blockedByOverlay*: bool
+      # Applying the response takes over the screen (popup, mode switch, jump),
+      # so an open overlay (Command/Search/Rename) must drop it. False for
+      # background caches, which only feed the buffer painted under the overlay.
 
   LspResponseState* = enum
     lrsFresh # buffer/version/mode all match
     lrsStale # contentVersion drifted since send
     lrsGone # bufferId no longer exists
     lrsHijack # mode outside validModes
+    lrsOverlay # an overlay owns the screen and would be painted over
 
   LspCacheState* = object ## LSP cache and picker state grouped together
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
@@ -367,10 +356,12 @@ type
     inlayHintPoll*: DebouncedLspPoll
       # Debounce / backoff / request-time snapshot for `textDocument/inlayHint`.
     inlayHintCache*: InlayHintCache # Cached inlay hints for current viewport
-    signatureHelp*: SignatureHelpRequestState # Auto signature help request tracking
-    autoHoverCursorLine*: int # Last cursor line for auto-hover debounce
-    autoHoverCursorCol*: int # Last cursor column for auto-hover debounce
-    lastAutoHoverUpdate*: MonoTime # Timestamp of last auto-hover request
+    signatureHelpPoll*: DebouncedLspPoll
+      # Debounce / backoff / request-target snapshot for auto signature help.
+    autoHoverPoll*: DebouncedLspPoll
+      # Debounce / cursor snapshot for the diagnostic auto-hover popup. The
+      # interval is pulled from config on every check (Lsp.Diagnostics
+      # autoHoverDelay) and no request is sent, so the backoff never engages.
     # Selection range expansion chain (innermost -> outermost), rune indexes.
     # Lets repeated Ctrl-s walk the parent chain without re-querying the server.
     selectionRangeChain*: seq[tuple[first, last: BufferPosition]]
@@ -850,15 +841,25 @@ type
 
   DebouncedLspPoll* = object
     ## Debounce + exponential backoff timer for a single LSP poll feature.
-    ## Shared across semantic tokens, inlay hints, code lens, and document
-    ## highlight so every feature gets the same rate-limiting: exponential
-    ## backoff on persistent reject (#2880).
+    ## Shared across semantic tokens, inlay hints, code lens, document
+    ## highlight, signature help and diagnostic auto-hover so every feature
+    ## gets the same rate-limiting: exponential backoff on persistent reject
+    ## (#2880).
+    ##
+    ## "Debounce" is a minimum-interval gate measured from the last issued
+    ## request, not a reset-on-change timer.
     ##
     ## The per-request stale-guard snapshot (request id, buffer id, content
     ## version, generation) lives in `LspCacheState.pending`.
     lastUpdate*: MonoTime
     interval*: int64
     rejectStreak*: int
+    cursorLine*: int
+    cursorColumn*: int
+    contentVersion*: int
+      # Target the last request was issued for, for the features that need
+      # change detection on top of the timer (signature help, auto-hover).
+      # Sentinel -1 means "no request issued yet".
 
 const MaxLspDebounceBackoffShift* = 6
   ## Max exponent for the reject-streak backoff (interval << 6).
@@ -1168,4 +1169,46 @@ proc debounceThreshold*(poll: DebouncedLspPoll): times.Duration =
   initDuration(milliseconds = poll.interval shl shift)
 
 proc initDebouncedLspPoll*(interval: int64): DebouncedLspPoll =
-  DebouncedLspPoll(lastUpdate: getMonoTime(), interval: interval)
+  DebouncedLspPoll(
+    lastUpdate: getMonoTime(),
+    interval: interval,
+    cursorLine: -1,
+    cursorColumn: -1,
+    contentVersion: -1,
+  )
+
+proc debounceElapsed*(poll: DebouncedLspPoll, now: MonoTime): bool =
+  ## True once the (backoff-widened) debounce window since the last request
+  ## has passed.
+  now - poll.lastUpdate >= poll.debounceThreshold()
+
+proc requestTargetChanged*(
+    poll: DebouncedLspPoll, cursorLine, cursorColumn, contentVersion: int
+): bool =
+  ## True when the cursor or buffer content moved away from the target the
+  ## last request was issued for.
+  poll.cursorLine != cursorLine or poll.cursorColumn != cursorColumn or
+    poll.contentVersion != contentVersion
+
+proc shouldFireDebouncedPoll*(
+    poll: DebouncedLspPoll, cursorLine, cursorColumn, contentVersion: int, now: MonoTime
+): bool =
+  ## Decide whether to fire a new request: something must have changed since
+  ## the last one (change detection) and the debounce window must have passed.
+  ## On consecutive rejects the window widens (exponential backoff) so a
+  ## persistently failing server is retried at a slower cadence. Pure so it can
+  ## be unit-tested without driving a live LSP server.
+  poll.requestTargetChanged(cursorLine, cursorColumn, contentVersion) and
+    poll.debounceElapsed(now)
+
+proc markRequestIssued*(
+    poll: var DebouncedLspPoll,
+    cursorLine, cursorColumn, contentVersion: int,
+    now: MonoTime,
+) =
+  ## Record the target and time of a request just sent, so change detection and
+  ## the debounce window measure from it.
+  poll.cursorLine = cursorLine
+  poll.cursorColumn = cursorColumn
+  poll.contentVersion = contentVersion
+  poll.lastUpdate = now

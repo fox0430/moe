@@ -34,6 +34,7 @@ proc makeCtx(
     contentVersion: int,
     validModes: set[EditorMode] = {},
     isItemDriven: bool = false,
+    blockedByOverlay: bool = false,
 ): LspRequestContext =
   LspRequestContext(
     requestId: 1,
@@ -46,6 +47,7 @@ proc makeCtx(
     cursorCol: -1,
     validModes: validModes,
     isItemDriven: isItemDriven,
+    blockedByOverlay: blockedByOverlay,
   )
 
 suite "classifyResponse":
@@ -128,3 +130,32 @@ suite "classifyResponse":
     let ctx = makeCtx(origin.id, origin.contentVersion)
 
     check classifyResponse(e, ctx) == lrsGone
+
+suite "classifyResponse - overlay dimension":
+  test "lrsOverlay when an overlay is active and the ctx is overlay-blocked":
+    # Overlays leave e.state.mode intact, so validModes cannot catch them.
+    let e = createTestEditor()
+    let buf = e.activeBuffer
+    let ctx = makeCtx(buf.id, buf.contentVersion, blockedByOverlay = true)
+    check classifyResponse(e, ctx) == lrsFresh
+
+    e.state.enterCommandOverlay()
+    check classifyResponse(e, ctx) == lrsOverlay
+
+  test "Background-cache ctx (blockedByOverlay=false) still applies under an overlay":
+    # Caches feed the buffer painted beneath the overlay, so they must not drop.
+    let e = createTestEditor()
+    let buf = e.activeBuffer
+    e.state.enterCommandOverlay()
+    let ctx = makeCtx(buf.id, buf.contentVersion, blockedByOverlay = false)
+
+    check classifyResponse(e, ctx) == lrsFresh
+
+  test "Overlay outranks the item-driven bypass":
+    # Item-driven contexts skip the buffer/version guard, but a goto/call
+    # hierarchy response would still hijack the overlay's prompt.
+    let e = createTestEditor()
+    e.state.enterCommandOverlay()
+    let ctx = makeCtx(BufferId(0), -1, isItemDriven = true, blockedByOverlay = true)
+
+    check classifyResponse(e, ctx) == lrsOverlay
