@@ -607,6 +607,41 @@ proc handleNormalModeKey*(
       state.statusMessage = ""
       # Fall through to process the key normally
 
+  # `guu` / `gUU` lowercase/uppercase whole lines. Handled here because the
+  # second key is not the operator key: the router would turn `u` into undo.
+  # (`gugu` / `gUgU` need no special case - they re-enter the operator handler.)
+  let pendingOp = state.pendingInput.pendingOperator
+  if pendingOp.isSome and not keyCombo.isSpecial and keyCombo.modifiers == {} and (
+    (pendingOp.get.operatorType == OpLowerCase and keyCombo.char == "u") or
+    (pendingOp.get.operatorType == OpUpperCase and keyCombo.char == "U")
+  ):
+    let doubledOperatorId =
+      if pendingOp.get.operatorType == OpLowerCase:
+        "operator.lowercase"
+      else:
+        "operator.uppercase"
+
+    # Consume a count typed between the halves (gu3u); the router never sees
+    # the key that would clear it
+    let count = handler.keyBindingRegistry.getNumericPrefix()
+    handler.keyBindingRegistry.clearNumericPrefix()
+    # gugu/gUgU: drop the intermediate `g` the router already stashed.
+    handler.keyBindingRegistry.clearSequence()
+
+    let ctx = CommandContext(
+      buffer: buffer,
+      state: state,
+      viewport: viewport,
+      motionController: handler.motionController,
+      keyBindingRegistry: handler.keyBindingRegistry,
+    )
+
+    let cmdResult = handler.commandRegistry.execute(ctx, doubledOperatorId, @[$count])
+    if cmdResult.isOk:
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    else:
+      return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
+
   # Resolve the key through the router (numeric prefixes, sequences, f/t/r, etc.)
   let route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Normal, keyCombo)
   if route.kind != rrCommand:

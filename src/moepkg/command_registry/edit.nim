@@ -25,7 +25,6 @@ import std/[options, strutils, unicode]
 import pkg/results
 
 import ../[types, buffer, motion, modes, registers, logger, clipboard, unicode_utils]
-import ../command_handlers/insert_commands
 
 import core, operator_engine
 
@@ -128,7 +127,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Move cursor to the first non-whitespace character of pasted line
@@ -151,7 +150,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Advance cursor past the inserted text so the next iteration inserts
@@ -255,7 +254,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Move cursor to the first non-whitespace character of pasted line
@@ -272,7 +271,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Advance cursor past the inserted text so the next iteration inserts
@@ -329,14 +328,19 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
             BufferPosition(line: ctx.cursor.line, column: cursorCol),
           )
           if delResult.isErr:
-            discard ctx.buffer.commitTransaction()
+            discard ctx.buffer.rollbackTransaction()
             return err(delResult.error)
 
         let commitResult = ctx.buffer.commitTransaction()
         if commitResult.isErr:
           return err(commitResult.error)
 
-        storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol), false)
+        # Both chars were deleted, so both go in the register
+        storeDeletedText(
+          ctx,
+          $lineContent.runeAtPos(cursorCol) & $lineContent.runeAtPos(cursorCol + 1),
+          false,
+        )
 
         # Adjust cursor if past end of line
         let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
@@ -379,7 +383,7 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
     let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
     if delResult.isErr:
       if charsToDelete > 1:
-        discard ctx.buffer.commitTransaction()
+        discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
 
   # Commit transaction if we started one
@@ -435,14 +439,19 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
             BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
           )
           if delResult.isErr:
-            discard ctx.buffer.commitTransaction()
+            discard ctx.buffer.rollbackTransaction()
             return err(delResult.error)
 
         let commitResult = ctx.buffer.commitTransaction()
         if commitResult.isErr:
           return err(commitResult.error)
 
-        storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol - 1), false)
+        # Both chars were deleted, so both go in the register
+        storeDeletedText(
+          ctx,
+          $lineContent.runeAtPos(cursorCol - 1) & $lineContent.runeAtPos(cursorCol),
+          false,
+        )
         ctx.cursor.column = cursorCol - 1
 
         return Result[(), string].ok ()
@@ -485,7 +494,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
     let delResult = ctx.buffer.deleteRange(startPos, endPos)
     if delResult.isErr:
       if charsToDelete > 1:
-        discard ctx.buffer.commitTransaction()
+        discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
 
   # Commit transaction if we started one
@@ -690,13 +699,13 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
         # Delete original character
         let delResult = ctx.buffer.deleteRange(pos, pos)
         if delResult.isErr:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
           return err(delResult.error)
 
         # Insert toggled character
         let insResult = ctx.buffer.insertText(pos, toggledChar)
         if insResult.isErr:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
           return err(insResult.error)
 
   # Commit transaction
@@ -1043,6 +1052,37 @@ proc handleOperatorChange*(ctx: CommandContext, count: int = 1): Result[(), stri
     setPendingOperator(ctx, OpChange, count, "c")
     return ok(())
 
+proc handleOperatorOnLines*(
+    ctx: CommandContext, operatorType: OperatorType, count: int = 1
+): Result[(), string] =
+  ## Apply a doubled operator (>>, <<, guu, gUU) to whole lines and record it
+  ## for repeat (.)
+  ## operatorType: OpIndent, OpOutdent, OpLowerCase or OpUpperCase
+  ## count: number of lines (default: 1)
+
+  let
+    lineCount = max(1, count)
+    startLine = ctx.cursor.line
+    endLine = min(startLine + lineCount - 1, ctx.buffer.len - 1)
+    range = OperatorRange(
+      start: BufferPosition(line: startLine, column: 0),
+      endPos: BufferPosition(line: endLine, column: 0),
+      isLinewise: true,
+    )
+
+  let opResult = executeOperatorOnRange(ctx, operatorType, range, 1)
+  if opResult.isErr:
+    return opResult
+
+  # Record this command for repeat (.)
+  ctx.state.editState.lastEditCommand = some(
+    LastEditCommand(
+      kind: lecOperatorLines, linesOperator: operatorType, operatorLineCount: lineCount
+    )
+  )
+
+  return ok(())
+
 proc handleOperatorIndent*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Indent operator - waits for motion (>2w, >$, etc.) or >> for line
   ## count: number of times to apply the operator (default: 1)
@@ -1050,17 +1090,11 @@ proc handleOperatorIndent*(ctx: CommandContext, count: int = 1): Result[(), stri
   # Check if same operator was pressed (>> for indent line)
   if ctx.state.pendingInput.pendingOperator.isSome and
       ctx.state.pendingInput.pendingOperator.get.operatorType == OpIndent:
-    let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
-    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    # Counts on both halves multiply (2>3> == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
     ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-
-    let range = OperatorRange(
-      start: BufferPosition(line: startLine, column: 0),
-      endPos: BufferPosition(line: endLine, column: 0),
-      isLinewise: true,
-    )
-    return executeOperatorOnRange(ctx, OpIndent, range, 1)
+    return handleOperatorOnLines(ctx, OpIndent, lineCount)
   else:
     # Set pending operator for motion
     setPendingOperator(ctx, OpIndent, count, ">")
@@ -1073,37 +1107,49 @@ proc handleOperatorOutdent*(ctx: CommandContext, count: int = 1): Result[(), str
   # Check if same operator was pressed (<< for dedent line)
   if ctx.state.pendingInput.pendingOperator.isSome and
       ctx.state.pendingInput.pendingOperator.get.operatorType == OpOutdent:
-    let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
-    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    # Counts on both halves multiply (2<3< == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
     ctx.state.pendingInput.pendingOperator = none(PendingOperator)
-
-    let range = OperatorRange(
-      start: BufferPosition(line: startLine, column: 0),
-      endPos: BufferPosition(line: endLine, column: 0),
-      isLinewise: true,
-    )
-    return executeOperatorOnRange(ctx, OpOutdent, range, 1)
+    return handleOperatorOnLines(ctx, OpOutdent, lineCount)
   else:
     # Set pending operator for motion
     setPendingOperator(ctx, OpOutdent, count, "<")
     return ok(())
 
 proc handleOperatorLowerCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Lowercase operator - waits for motion (guw, gu$, etc.)
+  ## Lowercase operator - waits for motion (guw, gu$, etc.) or guu/gugu for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Set pending operator for motion
-  setPendingOperator(ctx, OpLowerCase, count, "gu")
-  return ok(())
+  # Check if same operator was pressed (guu / gugu for lowercase line)
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpLowerCase:
+    # Counts on both halves multiply (2gu3u == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+    return handleOperatorOnLines(ctx, OpLowerCase, lineCount)
+  else:
+    # Set pending operator for motion
+    setPendingOperator(ctx, OpLowerCase, count, "gu")
+    return ok(())
 
 proc handleOperatorUpperCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Uppercase operator - waits for motion (gUw, gU$, etc.)
+  ## Uppercase operator - waits for motion (gUw, gU$, etc.) or gUU/gUgU for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Set pending operator for motion
-  setPendingOperator(ctx, OpUpperCase, count, "gU")
-  return ok(())
+  # Check if same operator was pressed (gUU / gUgU for uppercase line)
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpUpperCase:
+    # Counts on both halves multiply (2gU3U == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+    return handleOperatorOnLines(ctx, OpUpperCase, lineCount)
+  else:
+    # Set pending operator for motion
+    setPendingOperator(ctx, OpUpperCase, count, "gU")
+    return ok(())
 
 ## Text object command handlers
 
@@ -1453,12 +1499,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent Line",
     "Indent current line (>> command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      indentLine(ctx.buffer, ctx.state, count)
-      # Record this command for repeat (.)
-      ctx.state.editState.lastEditCommand =
-        some(LastEditCommand(kind: lecIndent, indentCount: count))
-      return Result[(), string].ok (),
+      # Count is a line count, like vim's [count]>>
+      handleOperatorOnLines(ctx, OpIndent, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1468,12 +1510,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Dedent Line",
     "Dedent current line (<< command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      dedentLine(ctx.buffer, ctx.state, count)
-      # Record this command for repeat (.)
-      ctx.state.editState.lastEditCommand =
-        some(LastEditCommand(kind: lecDedent, dedentCount: count))
-      return Result[(), string].ok (),
+      handleOperatorOnLines(ctx, OpOutdent, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1493,31 +1530,30 @@ proc registerEditCommands*(registry: CommandRegistry) =
       if lineContent.len == 0:
         return Result[(), string].ok ()
 
-      # Get previous line indent (count leading spaces)
+      # Get previous line indent (leading spaces and tabs)
       let prevLine = ctx.buffer.getLine(currentLine - 1)
       var prevIndent = 0
       for i in 0 ..< prevLine.len:
-        if prevLine[i] == ' ':
+        if prevLine[i] == ' ' or prevLine[i] == '\t':
           inc prevIndent
         else:
           break
 
-      # Count current line's leading spaces
+      # Count current line's leading whitespace
       var currentIndent = 0
       for i in 0 ..< lineContent.len:
-        if lineContent[i] == ' ':
+        if lineContent[i] == ' ' or lineContent[i] == '\t':
           inc currentIndent
         else:
           break
 
-      # No change needed if indents are equal
-      if prevIndent == currentIndent:
+      # No change needed if the indents are identical (compare the whitespace
+      # itself, so "\t\t" vs "  " counts as a change)
+      if prevLine[0 ..< prevIndent] == lineContent[0 ..< currentIndent]:
         return Result[(), string].ok ()
 
-      # Create new line with correct indent
-      var newContent = ""
-      for i in 0 ..< prevIndent:
-        newContent.add(' ')
+      # Create new line with correct indent (copied verbatim to keep tabs)
+      var newContent = prevLine[0 ..< prevIndent]
 
       # Add non-whitespace content from current line
       for i in currentIndent ..< lineContent.len:
@@ -1941,14 +1977,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecJoinLines:
         # Repeat join lines (J command)
         return handleJoinLines(ctx, lastCmd.joinLinesCount)
-      of lecIndent:
-        # Repeat indent (>>)
-        indentLine(ctx.buffer, ctx.state, lastCmd.indentCount)
-        return ok(())
-      of lecDedent:
-        # Repeat dedent (<<)
-        dedentLine(ctx.buffer, ctx.state, lastCmd.dedentCount)
-        return ok(())
+      of lecOperatorLines:
+        # Repeat a doubled linewise operator (>> / << / guu / gUU)
+        return
+          handleOperatorOnLines(ctx, lastCmd.linesOperator, lastCmd.operatorLineCount)
       of lecChangeLine:
         # Note: This case should not be reached anymore as cc now uses lecSubstitute
         # Kept for backwards compatibility if old state exists

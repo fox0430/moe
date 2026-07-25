@@ -1332,6 +1332,16 @@ suite "Handler - Delete char auto-delete paren (x)":
     check registry.execute(ctx, custom("delete.char")).isOk
     check buffer[0] == "]"
 
+  test "x on adjacent pair stores both chars in the register":
+    let buffer = newTextBuffer("a()b")
+    let ctx = createTestContext(buffer)
+    ctx.state.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "()"
+
   test "x on adjacent quote pair":
     # "" -> x on first " -> empty
     let buffer = newTextBuffer("\"\"")
@@ -1402,6 +1412,16 @@ suite "Handler - Delete char before auto-delete paren (X)":
     check registry.execute(ctx, custom("delete.char.before")).isOk
     check buffer[0] == "ab"
     check ctx.cursor.column == 1
+
+  test "X on adjacent pair stores both chars in the register":
+    let buffer = newTextBuffer("a()b")
+    let ctx = createTestContext(buffer)
+    ctx.state.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "()"
 
   test "X with bracket and spaces does not auto-delete":
     # [   ] with cursor on ] -> X deletes space only
@@ -2059,6 +2079,32 @@ suite "Handler - Indent/Dedent":
 
     check registry.execute(ctx, custom("dedent.line")).isOk
     check buffer[0].len < 9 # Line should be shorter
+
+  test "indent line count is a line count (vim's [count]>>)":
+    let buffer = newTextBuffer("a\nb\nc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("indent.line"), @["2"]).isOk
+    check buffer[0].strip == "a"
+    check buffer[1].strip == "b"
+    check buffer[0][0] in {' ', '\t'}
+    check buffer[1][0] in {' ', '\t'}
+    check buffer[2] == "c"
+    # Cursor lands on the first non-blank, like >>
+    check ctx.cursor == BufferPosition(line: 0, column: buffer[0].len - 1)
+
+  test "dedent line count is a line count (vim's [count]<<)":
+    let buffer = newTextBuffer("    a\n    b\n    c")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("dedent.line"), @["2"]).isOk
+    check buffer[0].len < 5
+    check buffer[1].len < 5
+    check buffer[2] == "    c"
 
 suite "Handler - Fold operations":
   test "fold toggle":
@@ -3426,6 +3472,36 @@ suite "Handler - Other Commands":
     discard registry.execute(ctx, custom("autoindent.line"))
     # Just check it doesn't crash
     check true # Just verify no crash
+
+  test "autoindent line (==) copies space indent from previous line":
+    let buffer = newTextBuffer("    hello\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(1, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("autoindent.line")).isOk
+    check buffer[1] == "    world"
+
+  test "autoindent line (==) copies tab indent from previous line":
+    let buffer = newTextBuffer("\t\thello\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(1, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("autoindent.line")).isOk
+    check buffer[1] == "\t\tworld"
+
+  test "autoindent line (==) replaces space indent with tab indent":
+    let buffer = newTextBuffer("\thello\n  world")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(1, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("autoindent.line")).isOk
+    check buffer[1] == "\tworld"
 
   test "quick run":
     let buffer = newTextBuffer("echo hello")

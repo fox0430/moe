@@ -551,8 +551,7 @@ type
     lecPaste # Paste operation (p/P)
     lecToggleCase # Toggle case with ~
     lecJoinLines # Join lines with J
-    lecIndent # Indent line(s) with >>
-    lecDedent # Dedent line(s) with <<
+    lecOperatorLines # Doubled linewise operator (>>, <<, guu, gUU)
 
   LastEditCommand* = object
     ## Represents the last change command that can be repeated with "."
@@ -588,10 +587,9 @@ type
       toggleCaseCount*: int # Number of characters to toggle
     of lecJoinLines:
       joinLinesCount*: int # Number of lines to join
-    of lecIndent:
-      indentCount*: int # Number of indent levels
-    of lecDedent:
-      dedentCount*: int # Number of dedent levels
+    of lecOperatorLines:
+      linesOperator*: OperatorType # OpIndent, OpOutdent, OpLowerCase, OpUpperCase
+      operatorLineCount*: int # Number of lines the operator was applied to
 
   VisualSelectionKind* = enum
     ## Type of visual selection
