@@ -78,6 +78,23 @@ proc cleanupQuickRunProcesses*(e: Editor) =
     abandonQuickRunProcess(p)
   e.runningQuickRunProcesses = @[]
 
+proc releaseExternalResources*(e: Editor) =
+  ## Tear down every OS resource the editor owns (background/QuickRun processes,
+  ## terminal PTYs, git diff subprocesses, LSP servers), then flush persist data.
+  ## Shared by the normal quit path and the crash path. Idempotent.
+  e.cleanupBackgroundProcesses()
+  e.cleanupQuickRunProcesses()
+  e.cleanupAllTerminals()
+
+  # Swallow so a git diff cache failure cannot block the rest of the sequence.
+  try:
+    cleanupGitDiffCache()
+  except CatchableError as ex:
+    logError("moe", "cleanupGitDiffCache failed: " & ex.msg)
+
+  e.shutdown()
+  e.savePersistData()
+
 proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Rename mode - for LSP rename symbol input
   ##

@@ -24,7 +24,7 @@ import pkg/[celina, results, chronos]
 import
   moepkg/[
     editor, editor_window_layout, editor_window_state, handler, modes, logger, cmdline,
-    filer, lsp_integration, config, config_loader, emergency, status_line, key_router,
+    filer, lsp_integration, config, config_loader, emergency, key_router,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -90,22 +90,7 @@ proc emergencySaveAndQuit(
   try:
     savedPaths = editor.emergencySaveBuffers()
 
-    editor.cleanupBackgroundProcesses()
-    # Kill in-flight QuickRun processes and remove their temp files so a crash
-    # doesn't orphan them or leave temp source/build artifacts behind.
-    editor.cleanupQuickRunProcesses()
-    # Kill + reap terminal shells too, so a crash doesn't orphan them.
-    editor.cleanupAllTerminals()
-    # Terminate any pending async git diff subprocesses and free their
-    # tempfiles. Swallow exceptions so a cache cleanup failure can't block
-    # the rest of the emergency shutdown sequence.
-    try:
-      cleanupGitDiffCache()
-    except CatchableError as e:
-      logError("moe", "cleanupGitDiffCache failed: " & e.msg)
-
-    editor.shutdown()
-    editor.savePersistData()
+    editor.releaseExternalResources()
 
     if cmdLineConfig.debugEnabled:
       logError("moe", "Fatal: " & e.msg)
@@ -223,31 +208,7 @@ proc runEditor(
       let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
       app.setCursorStyle(cursorStyle)
 
-    # Cleanup background processes before exiting
-    editor.cleanupBackgroundProcesses()
-
-    # Kill any in-flight QuickRun processes and remove their temp files (temp
-    # source + build artifacts) so they don't outlive moe.
-    editor.cleanupQuickRunProcesses()
-
-    # Tear down any live terminal PTYs (kill + reap their shells). Terminal
-    # tabs left open at quit never reach closeTerminalBuffer, so without this
-    # their shells would be orphaned instead of cleanly terminated.
-    editor.cleanupAllTerminals()
-
-    # Terminate any pending async git diff subprocesses and free their
-    # tempfiles. Swallow exceptions so a cache cleanup failure can't block
-    # the rest of the shutdown sequence.
-    try:
-      cleanupGitDiffCache()
-    except CatchableError as e:
-      logError("moe", "cleanupGitDiffCache failed: " & e.msg)
-
-    # Shutdown LSP servers before exiting
-    editor.shutdown()
-
-    # Save all persist data
-    editor.savePersistData()
+    editor.releaseExternalResources()
 
     if cmdLineConfig.debugEnabled:
       # Clean up logger
