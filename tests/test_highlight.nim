@@ -1489,6 +1489,7 @@ suite "Highlight - getSegmentModifiers":
         )
       ]
     )
+    check h.getSegmentModifiers(0, 3) == {}
 
 suite "Highlight - addModifier":
   test "Fully contained segment":
