@@ -744,32 +744,13 @@ macro generateSimpleSectionNames*(OuterT: typedesc): untyped =
     error("no {.cfgSection.} fields found on " & OuterT.repr, OuterT)
   result = arr
 
-macro generateConfigDescriptors*(
-    target: typed, OuterT: typedesc, accessor: untyped
-): untyped =
-  ## Emit `target.add ConfigItemDescriptor(...)` entries for the section
-  ## reached via `OuterT.<accessor>`. Produces:
+proc buildDescriptorsBody(target, innerTd, accessor: NimNode): NimNode =
+  ## Emit `target.add ConfigItemDescriptor(...)` entries for the section type
+  ## `innerTd`, reached from an `EditorConfig` via the field `accessor`.
+  ## Produces:
   ##   target.add ConfigItemDescriptor(kind: cvkSection, ...)
   ##   target.add ConfigItemDescriptor(kind: cvkBool, ...)  -- for each field
   ##   ...
-  if accessor.kind notin {nnkIdent, nnkSym}:
-    error("accessor must be an identifier", accessor)
-
-  # Find the inner section type by looking up `accessor` in OuterT's fields.
-  let outerTd = typeDef(OuterT)
-  if outerTd == nil:
-    error("cannot get impl for outer type", OuterT)
-  var innerTypeNode: NimNode = nil
-  for (name, typeNode, _) in sectionFields(outerTd):
-    if name == accessor.strVal:
-      innerTypeNode = typeNode
-      break
-  if innerTypeNode == nil:
-    error("field `" & accessor.strVal & "` not found on outer type", accessor)
-
-  let innerTd = innerTypeNode.getImpl
-  if innerTd == nil or innerTd.kind != nnkTypeDef:
-    error("cannot resolve inner type impl", innerTypeNode)
   let sec = sectionName(innerTd)
   let secLit = newLit(sec)
 
@@ -976,11 +957,27 @@ macro generateConfigDescriptors*(
           )
       else:
         error(
-          "generateConfigDescriptors: unsupported field type `" & fieldType.repr &
+          "generateAllConfigDescriptors: unsupported field type `" & fieldType.repr &
             "` for field `" & fieldName & "`. Hide it from the UI with " &
             "{.cfgNoUi.}, skip it entirely with {.cfgSkip.}, or extend the macro.",
           fieldType,
         )
+
+macro generateAllConfigDescriptors*(target: typed, OuterT: typedesc): untyped =
+  ## Emit the config-mode UI descriptors for every `{.cfgSection.}` field of
+  ## `OuterT`, in field-declaration order. Counterpart of
+  ## `generateSectionLoaders` / `generateSectionSerializers`: a section reaches
+  ## the UI simply by being a `{.cfgSection.}`-typed field, so the UI cannot
+  ## drift from the loader and the serializer.
+  ##
+  ## Nested sections (dotted names such as `StartUp.FileOpen`) are included;
+  ## their header is the dotted name, matching the serialized TOML.
+  let outerTd = typeDef(OuterT)
+  if outerTd == nil:
+    error("cannot get impl for outer type", OuterT)
+  result = newStmtList()
+  for (field, typ, _) in cfgSectionFields(outerTd):
+    result.add buildDescriptorsBody(target, typ.getImpl, ident(field))
 
 proc docTypeLabel(typeNode: NimNode): string =
   ## Map a Nim field type to the human-readable label used by
