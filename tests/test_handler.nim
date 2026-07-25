@@ -809,8 +809,10 @@ proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception
   # Simulate the delayed pending set that happens inside
   # e.codeLensPickerConfirm() -> executeCodeLensItem(), which is asyncSpawn'd
   # from handler.nim after handleEvent has already returned.
-  e.state.pending.buildOnSave =
-    (path: "/tmp/detached.nim", language: 0, customCmd: "", workspaceRoot: "")
+  e.state.pending.add PendingAsyncOp(
+    kind: paoBuild,
+    build: (path: "/tmp/detached.nim", language: 0, customCmd: "", workspaceRoot: ""),
+  )
 
 proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception]).} =
   asyncSpawn detachedPendingWriter(e)
@@ -818,76 +820,96 @@ proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception])
   await sleepAsync(10)
   await e.handlePendingAsyncOperations()
 
-suite "handlePendingAsyncOperations drains fields set from async tasks":
-  test "buildOnSave pending field drains on tick":
+suite "handlePendingAsyncOperations drains ops queued from async tasks":
+  test "build op drains on tick":
     let config = newEditorConfig()
     let editor = newEditor(config)
-    editor.state.pending.buildOnSave =
-      (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: "")
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoBuild,
+      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+    )
 
     waitFor editor.handlePendingAsyncOperations()
 
-    check editor.state.pending.buildOnSave.path.len == 0
+    check editor.state.pending.len == 0
 
-  test "quickRun pending field drains on tick":
+  test "quickRun op drains on tick":
     let config = newEditorConfig()
     let editor = newEditor(config)
-    editor.state.pending.quickRun =
-      (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoQuickRun,
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
+    )
 
     waitFor editor.handlePendingAsyncOperations()
 
-    check editor.state.pending.quickRun.cmd.len == 0
+    check editor.state.pending.len == 0
 
-  test "syntaxCheck pending field drains on tick":
+  test "syntaxCheck op drains on tick":
     let config = newEditorConfig()
     let editor = newEditor(config)
-    editor.state.pending.syntaxCheck = (path: "/tmp/x.nim", language: 0)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/x.nim", language: 0)
+    )
 
     waitFor editor.handlePendingAsyncOperations()
 
-    check editor.state.pending.syntaxCheck.path.len == 0
+    check editor.state.pending.len == 0
 
   test "drain from detached async task (simulates CodeLens confirm)":
     # Reproduces the visible bug: handler.nim asyncSpawns a task, the task
-    # writes a pending field *after* handleEvent returns. Without the
-    # unconditional drain the field would sit until the next event.
+    # queues an op *after* handleEvent returns. Without the unconditional
+    # drain the op would sit until the next event.
     let config = newEditorConfig()
     let editor = newEditor(config)
 
     waitFor runDetachedScenario(editor)
 
-    check editor.state.pending.buildOnSave.path.len == 0
+    check editor.state.pending.len == 0
 
-  test "multiple pending fields drain in one call":
+  test "multiple queued ops drain in one call":
     let config = newEditorConfig()
     let editor = newEditor(config)
-    editor.state.pending.buildOnSave =
-      (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: "")
-    editor.state.pending.quickRun =
-      (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false)
-    editor.state.pending.syntaxCheck = (path: "/tmp/y.nim", language: 0)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoBuild,
+      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+    )
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoQuickRun,
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
+    )
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/y.nim", language: 0)
+    )
 
     waitFor editor.handlePendingAsyncOperations()
 
-    check editor.state.pending.buildOnSave.path.len == 0
-    check editor.state.pending.quickRun.cmd.len == 0
-    check editor.state.pending.syntaxCheck.path.len == 0
+    check editor.state.pending.len == 0
 
-  test "drain with all pending fields empty is a no-op":
+  test "duplicate ops of the same kind are both kept and drained":
+    # The old flat-field layout silently overwrote the first request.
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/a.nim", language: 0)
+    )
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/b.nim", language: 0)
+    )
+    check editor.state.pending.len == 2
+
+    waitFor editor.handlePendingAsyncOperations()
+
+    check editor.state.pending.len == 0
+
+  test "drain with an empty queue is a no-op":
     let config = newEditorConfig()
     let editor = newEditor(config)
 
     # Should not raise and should leave state untouched.
     waitFor editor.handlePendingAsyncOperations()
 
-    check editor.state.pending.buildOnSave.path.len == 0
-    check editor.state.pending.quickRun.cmd.len == 0
-    check editor.state.pending.syntaxCheck.path.len == 0
-    check editor.state.pending.terminalCommand.len == 0
-    check editor.state.pending.shellCommand.len == 0
-    check editor.state.pending.manPage.len == 0
-    check editor.state.pending.background == false
+    check editor.state.pending.len == 0
 
 suite "Search Mode - History Navigation":
   test "Search state initialized correctly":

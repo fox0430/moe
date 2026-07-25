@@ -203,19 +203,24 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
             e.config.buildOnSave.workspaceRoot.get
           else:
             parentDir(savedPath)
-        e.state.pending.buildOnSave = (
-          path: savedPath,
-          language: activeBuffer.language.ord,
-          customCmd: customCmd,
-          workspaceRoot: workspaceRoot,
+        e.state.pending.add PendingAsyncOp(
+          kind: paoBuild,
+          build: (
+            path: savedPath,
+            language: activeBuffer.language.ord,
+            customCmd: customCmd,
+            workspaceRoot: workspaceRoot,
+          ),
         )
         if e.config.notification.screenNotifications and
             e.config.notification.buildOnSaveScreenNotify:
           e.state.statusMessage = "Building: " & savedPath
       if e.config.syntaxChecker.enable and
           syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
-        e.state.pending.syntaxCheck =
-          (path: savedPath, language: activeBuffer.language.ord)
+        e.state.pending.add PendingAsyncOp(
+          kind: paoSyntaxCheck,
+          syntaxCheck: (path: savedPath, language: activeBuffer.language.ord),
+        )
 
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Process hrGotoLine: move cursor to the specified line number.

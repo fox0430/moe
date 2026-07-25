@@ -732,18 +732,37 @@ type
     originalTopLine*: int # Viewport top line when preview started
     originalLeftColumn*: int # Viewport left column when preview started
 
-  PendingAsyncOps* = object
-    ## Pending async operations queued from command/key handlers, drained by
-    ## handler.handlePendingAsyncOperationsImpl in the main event loop.
-    ## Empty-value semantics: `len == 0` / `false` means "no work pending".
-    shellCommand*: string # Shell command to execute after suspend
-    terminalCommand*: string # Command to run in a new embedded terminal tab
-    background*: bool # Whether to suspend for background (:bg)
-    manPage*: string # Man page to show after suspend (:man)
-    buildOnSave*:
-      tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
-    quickRun*: tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
-    syntaxCheck*: tuple[path: string, language: int]
+  BuildInfo* =
+    tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
+  QuickRunInfo* =
+    tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+  SyntaxCheckInfo* = tuple[path: string, language: int]
+
+  PendingAsyncOpKind* = enum
+    paoTerminalCommand
+    paoShellCommand
+    paoManPage
+    paoBackground
+    paoBuild
+    paoQuickRun
+    paoSyntaxCheck
+
+  PendingAsyncOp* = object
+    ## One entry of `EditorState.pending`. Queue an op here when it needs the
+    ## TUI suspended, or when its runner lives above the enqueue site in the
+    ## import graph (handler.nim owns the runners). Fire-and-forget work whose
+    ## runner is importable uses `asyncSpawn` at the call site instead.
+    case kind*: PendingAsyncOpKind
+    of paoTerminalCommand, paoShellCommand, paoManPage:
+      command*: string
+    of paoBackground:
+      discard
+    of paoBuild:
+      build*: BuildInfo
+    of paoQuickRun:
+      quickRun*: QuickRunInfo
+    of paoSyntaxCheck:
+      syntaxCheck*: SyntaxCheckInfo
 
   UiState* = object ## Transient UI display state, refreshed by render/key events.
     substitutePreview*: SubstitutePreview
@@ -824,7 +843,7 @@ type
     # --- Sub-state groups (Phase 4 refactor) ---
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
-    pending*: PendingAsyncOps # Pending async operations queued for the main event loop
+    pending*: seq[PendingAsyncOp] # Async ops drained by the main event loop
     ui*: UiState # Transient UI display state (preview, progress, find char)
     windowDisplay*: WindowDisplayState
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)

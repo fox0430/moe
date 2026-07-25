@@ -1188,13 +1188,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   return true
 
-type
-  BuildInfo =
-    tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
-  QuickRunInfo =
-    tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
-  SyntaxCheckInfo = tuple[path: string, language: int]
-
 proc runSyntaxCheckAsync(
     editor: Editor, info: SyntaxCheckInfo
 ): Future[void] {.async: (raises: []).} =
@@ -1300,79 +1293,57 @@ proc runQuickRunAsync(
 proc handlePendingAsyncOperationsImpl(
     e: Editor
 ): Future[void] {.async: (raises: [Exception]).} =
-  ## Handle pending async operations that require TUI suspend or background processing
-  ## Called from the main event loop after handleEvent returns
+  ## Drain the pending async op queue in FIFO order. Called from the main event
+  ## loop on every tick. Ops queued while draining run on the next tick.
 
   {.cast(gcsafe).}:
-    # Open a queued terminal command (e.g. rust-analyzer run/debug single) as a
-    # new terminal tab in the active window.
-    if e.state.pending.terminalCommand.len > 0:
-      let cmd = e.state.pending.terminalCommand
-      e.state.pending.terminalCommand = ""
-      e.enterTerminalInActiveWindow(cmd)
+    let ops = move(e.state.pending)
+    e.state.pending.setLen(0)
 
-    # Handle shell command
-    if e.state.pending.shellCommand.len > 0:
-      let cmd = e.state.pending.shellCommand
-      e.state.pending.shellCommand = ""
-      # withSuspendAsync wraps the body in try/finally so the TUI always
-      # resumes, even if execShellCmd/readLine raises (a missed resume leaves
-      # the terminal in raw mode and destroys the screen).
-      e.app.withSuspendAsync:
-        stdout.write("\e[H\e[2J") # Clear screen
-        stdout.flushFile()
-        let exitCode = execShellCmd(cmd)
-        stdout.write("\n\nShell returned " & $exitCode & "\n")
-        stdout.write("Press Enter to continue...")
-        stdout.flushFile()
-        discard stdin.readLine()
-
-    # Handle man page display
-    if e.state.pending.manPage.len > 0:
-      let page = e.state.pending.manPage
-      e.state.pending.manPage = ""
-      e.app.withSuspendAsync:
-        stdout.write("\e[H\e[2J") # Clear screen
-        stdout.flushFile()
-        let exitCode = execShellCmd("man " & quoteShell(page))
-        if exitCode != 0:
-          stdout.write("man: " & page & " not found\n")
-        stdout.write("\nPress Enter to continue...")
-        stdout.flushFile()
-        discard stdin.readLine()
-
-    # Handle background suspend: send SIGTSTP to self so the shell registers moe
-    # as a proper stopped job (visible in `jobs`, resumable via `fg`). Falls back
-    # to a blocking readLine on non-POSIX platforms where SIGTSTP is unavailable.
-    if e.state.pending.background:
-      e.state.pending.background = false
-      e.app.withSuspendAsync:
-        when defined(posix):
-          discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
-        else:
-          stdout.write("\e[H\e[2J")
-          stdout.write("moe suspended. Press Enter to return to moe...")
+    for op in ops:
+      case op.kind
+      of paoTerminalCommand:
+        e.enterTerminalInActiveWindow(op.command)
+      of paoShellCommand:
+        # withSuspendAsync wraps the body in try/finally so the TUI always
+        # resumes, even if execShellCmd/readLine raises (a missed resume leaves
+        # the terminal in raw mode and destroys the screen).
+        e.app.withSuspendAsync:
+          stdout.write("\e[H\e[2J") # Clear screen
+          stdout.flushFile()
+          let exitCode = execShellCmd(op.command)
+          stdout.write("\n\nShell returned " & $exitCode & "\n")
+          stdout.write("Press Enter to continue...")
           stdout.flushFile()
           discard stdin.readLine()
-
-    # Handle pending build - spawn as background task
-    if e.state.pending.buildOnSave.path.len > 0:
-      let buildInfo = e.state.pending.buildOnSave
-      e.state.pending.buildOnSave =
-        (path: "", language: 0, customCmd: "", workspaceRoot: "")
-      asyncSpawn runBuildAsync(e, buildInfo)
-
-    # Handle pending QuickRun - spawn as background task
-    if e.state.pending.quickRun.cmd.len > 0:
-      let qrInfo = e.state.pending.quickRun
-      e.state.pending.quickRun = (cmd: "", args: @[], filePath: "", isTempFile: false)
-      asyncSpawn runQuickRunAsync(e, qrInfo)
-
-    # Handle pending syntax check - spawn as background task
-    if e.state.pending.syntaxCheck.path.len > 0:
-      let checkInfo = e.state.pending.syntaxCheck
-      e.state.pending.syntaxCheck = (path: "", language: 0)
-      asyncSpawn runSyntaxCheckAsync(e, checkInfo)
+      of paoManPage:
+        e.app.withSuspendAsync:
+          stdout.write("\e[H\e[2J") # Clear screen
+          stdout.flushFile()
+          let exitCode = execShellCmd("man " & quoteShell(op.command))
+          if exitCode != 0:
+            stdout.write("man: " & op.command & " not found\n")
+          stdout.write("\nPress Enter to continue...")
+          stdout.flushFile()
+          discard stdin.readLine()
+      of paoBackground:
+        # SIGTSTP to self so the shell registers moe as a proper stopped job
+        # (visible in `jobs`, resumable via `fg`). Falls back to a blocking
+        # readLine where SIGTSTP is unavailable.
+        e.app.withSuspendAsync:
+          when defined(posix):
+            discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
+          else:
+            stdout.write("\e[H\e[2J")
+            stdout.write("moe suspended. Press Enter to return to moe...")
+            stdout.flushFile()
+            discard stdin.readLine()
+      of paoBuild:
+        asyncSpawn runBuildAsync(e, op.build)
+      of paoQuickRun:
+        asyncSpawn runQuickRunAsync(e, op.quickRun)
+      of paoSyntaxCheck:
+        asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck)
 
 proc handlePendingAsyncOperations*(e: Editor): Future[void] {.async: (raises: []).} =
   ## Wrapper for handlePendingAsyncOperationsImpl. Swallows and logs any
