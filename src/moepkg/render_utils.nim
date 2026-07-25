@@ -402,30 +402,53 @@ proc scrollbarWidthFor*(
   ## Mode-gated scrollbar width. Scrollbar only renders in file-edit modes.
   if mode.isFileEditMode and scrollbar and scrollbarWidth > 0: scrollbarWidth else: 0
 
-proc calculateViewportOffset*(
-    buffer: TextBuffer,
-    mode: EditorMode,
-    showLineNumbers, showSidebar: bool,
-    scrollbar: bool = false,
-    scrollbarWidth: int = 0,
-): int =
-  ## Total of lineNumber + sidebar + scrollbar widths, mode-gated so the
-  ## wrap-count cache key stays in lockstep with what the renderer actually
-  ## allocates.
-  calculateLineNumOffset(buffer, showLineNumbers) + sidebarWidthFor(mode, showSidebar) +
-    scrollbarWidthFor(mode, scrollbar, scrollbarWidth)
+proc sidebarWidthFor*(window: EditorWindow, showSidebar: bool): int =
+  ## Sidebar width for a window. Suppressed while the window holds a special
+  ## mode state (Filer, Help, ...) even if its transient mode is Visual.
+  if window.modeState.kind != mskNone:
+    0
+  else:
+    sidebarWidthFor(window.mode, showSidebar)
 
-proc viewportOffsetFor*(buffer: TextBuffer, state: EditorState): int {.inline.} =
-  ## Convenience wrapper: pulls every display field calculateViewportOffset
-  ## needs from `state`. `state.mode` forwards to the active window's mode,
-  ## so the cache key stays in lockstep with the renderer's sidebar /
-  ## scrollbar gating.
-  if state.activeWindow.modeState.kind != mskNone:
-    return calculateLineNumOffset(buffer, state.showLineNumbers)
-  calculateViewportOffset(
-    buffer, state.mode, state.showLineNumbers, state.showSidebar, state.scrollbar,
-    state.scrollbarWidth,
+proc scrollbarWidthFor*(
+    window: EditorWindow, scrollbar: bool, scrollbarWidth: int
+): int =
+  ## Scrollbar width for a window, gated like `sidebarWidthFor`.
+  if window.modeState.kind != mskNone:
+    0
+  else:
+    scrollbarWidthFor(window.mode, scrollbar, scrollbarWidth)
+
+proc viewportOffsetFor*(
+    buffer: TextBuffer,
+    window: EditorWindow,
+    showLineNumbers, showSidebar: bool,
+    scrollbar: bool,
+    scrollbarWidth: int,
+): int =
+  ## Single derivation of a window's non-text width: line number + sidebar +
+  ## scrollbar.
+  calculateLineNumOffset(buffer, showLineNumbers) + sidebarWidthFor(window, showSidebar) +
+    scrollbarWidthFor(window, scrollbar, scrollbarWidth)
+
+proc viewportOffsetFor*(buffer: TextBuffer, state: EditorState): int =
+  ## Convenience wrapper: pulls every display field the offset needs from
+  ## `state`, for the active window.
+  viewportOffsetFor(
+    buffer, state.activeWindow, state.showLineNumbers, state.showSidebar,
+    state.scrollbar, state.scrollbarWidth,
   )
+
+proc textAreaWidthFor*(viewportWidth, viewportOffset: int): int =
+  ## Cells a window leaves for text once the gutters are removed.
+  max(0, viewportWidth - viewportOffset)
+
+proc wrapWidthFor*(viewportWidth, viewportOffset: int): int =
+  ## `textAreaWidthFor` clamped to at least one cell. This is the
+  ## `WrapCountCache` key: renderer, screen-cursor, mouse hit-test and viewport
+  ## scroll must all key with the same value or the cache serves counts
+  ## computed for a different width.
+  max(1, textAreaWidthFor(viewportWidth, viewportOffset))
 
 proc findMaxBottomY*(windows: seq[EditorWindow]): int =
   ## Find the maximum bottom Y coordinate among all windows

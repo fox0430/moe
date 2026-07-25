@@ -488,7 +488,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
-      lineNumOffset = 0,
+      viewportOffset = 0,
       tabStop = 4,
     )
 
@@ -512,7 +512,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
-      lineNumOffset = 0,
+      viewportOffset = 0,
       tabStop = 4,
     )
 
@@ -535,7 +535,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
-      lineNumOffset = 0,
+      viewportOffset = 0,
       tabStop = 4,
     )
 
@@ -557,7 +557,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
-      lineNumOffset = 0,
+      viewportOffset = 0,
       tabStop = 4,
     )
 
@@ -592,7 +592,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
-      lineNumOffset = 0,
+      viewportOffset = 0,
       tabStop = 4,
     )
 
@@ -618,7 +618,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
-      lineNumOffset = 0,
+      viewportOffset = 0,
       tabStop = 4,
     )
 

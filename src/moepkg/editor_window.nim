@@ -78,10 +78,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   let
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
-    sidebarWidth = e.calculateSidebarWidth(window)
     scrollbarWidth = e.calculateScrollbarWidth(window)
-    lineNumOffset =
-      calculateLineNumOffset(window.buffer, e.showLineNumbers) + sidebarWidth
     # Steady reserve so the clamp agrees with the scroll (see steadyReservedLines).
     reservedLines = e.steadyReservedLines(isBottomWindow)
 
@@ -89,7 +86,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     window.buffer,
     window.viewport,
     window.cursor,
-    lineNumOffset,
+    e.gutterWidth(window),
     reservedLines + tabLineOffset,
     scrollbarWidth,
     window.wrapCountCache,

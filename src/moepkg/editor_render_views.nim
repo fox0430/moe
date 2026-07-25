@@ -250,10 +250,7 @@ proc computeWindowLayout(
     adjustHeight = max(
       1, window.viewport.height - e.steadyReservedLines(isBottomWindow) - tabLineOffset
     )
-    sidebarWidth = e.calculateSidebarWidth(window)
-    scrollbarWidth = e.calculateScrollbarWidth(window)
-    textAreaWidth =
-      max(0, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    textAreaWidth = e.textAreaWidth(window, lineNumOffset)
     # Utility windows (Filer / Help / BufferManager / ...) render in no-wrap mode
     # regardless of the global lineWrap setting.
     effectiveLineWrap = e.lineWrap and window.mode.isFileEditMode

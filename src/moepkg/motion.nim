@@ -995,10 +995,12 @@ proc updateViewport*(
     reservedLines: int = -1, # -1 means auto-calculate from showStatusLine
     lineWrap: bool = false,
     buffer: buffer.TextBuffer = nil,
-    lineNumOffset: int = 0,
+    viewportOffset: int = 0,
     tabStop: int = 4,
 ) =
-  ## Update viewport to keep cursor visible with 1-line scrolling
+  ## Update viewport to keep cursor visible with 1-line scrolling.
+  ## `viewportOffset` is every non-text cell of the window (line number +
+  ## sidebar + scrollbar), from `viewportOffsetFor`.
 
   # Ensure we have valid data
   if lineCount <= 0:
@@ -1021,7 +1023,7 @@ proc updateViewport*(
   if lineWrap and not buffer.isNil:
     # Line wrap mode: calculate screen positions
     let
-      maxWidth = max(1, mgr.viewport.width - lineNumOffset)
+      maxWidth = wrapWidthFor(mgr.viewport.width, viewportOffset)
       visibleHeight = mgr.viewport.height - actualReservedLines
 
     # Calculate cursor's screen line position relative to topLine.
@@ -1102,8 +1104,8 @@ proc updateViewport*(
 
   # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
   if not lineWrap:
-    # Account for line number offset when calculating visible text width
-    let visibleTextWidth = max(1, mgr.viewport.width - lineNumOffset)
+    # Account for the gutters when calculating visible text width
+    let visibleTextWidth = wrapWidthFor(mgr.viewport.width, viewportOffset)
     if clampedCursorX < mgr.viewport.leftColumn:
       mgr.viewport.leftColumn = clampedCursorX
     elif clampedCursorX >= mgr.viewport.leftColumn + visibleTextWidth:
@@ -1339,13 +1341,13 @@ proc executeMotion*(
   if updateViewport:
     let
       lineCount = controller.executor.buffer.len
-      lineNumOffset =
+      viewportOffset =
         viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
 
     controller.viewportManager.updateViewport(
       newPos, lineCount, controller.cursorManager.state.showStatusLine,
       controller.cursorManager.state.windowDisplay.viewportReservedLines, lineWrap,
-      controller.executor.buffer, lineNumOffset, controller.cursorManager.state.tabStop,
+      controller.executor.buffer, viewportOffset, controller.cursorManager.state.tabStop,
     )
 
   # Disable horizontal scrolling when line wrap is enabled
