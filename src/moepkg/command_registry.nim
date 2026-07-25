@@ -492,32 +492,19 @@ proc executeCommand*(
       let charsAvailable = lineContent.charLen - ctx.cursor.column
       let charsToReplace = min(actualCount, charsAvailable)
 
-      # Begin transaction for all replace operations
-      let txnResult =
-        ctx.buffer.beginTransaction("replace " & $charsToReplace & " char(s)")
-      if txnResult.isErr:
-        return err(txnResult.error)
+      let txr = withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
+        for i in 0 ..< charsToReplace:
+          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
-      # Replace each character
-      for i in 0 ..< charsToReplace:
-        let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+          let delResult = ctx.buffer.deleteRange(pos, pos)
+          if delResult.isErr:
+            return err(delResult.error)
 
-        # Delete original character
-        let delResult = ctx.buffer.deleteRange(pos, pos)
-        if delResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(delResult.error)
-
-        # Insert replacement character
-        let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
-        if insResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(insResult.error)
-
-      # Commit transaction
-      let commitResult = ctx.buffer.commitTransaction()
-      if commitResult.isErr:
-        return err(commitResult.error)
+          let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
+          if insResult.isErr:
+            return err(insResult.error)
+      if txr.isErr:
+        return err(txr.error)
 
       # Record this command for repeat (.)
       ctx.state.editState.lastEditCommand = some(

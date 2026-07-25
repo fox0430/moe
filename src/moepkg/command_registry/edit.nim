@@ -317,23 +317,17 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
 
     try:
       if isAdjacentPair(lineContent, cursorCol):
-        let txnResult = ctx.buffer.beginTransaction("delete paren pair")
-        if txnResult.isErr:
-          return err(txnResult.error)
-
-        # Delete opening char, then closing char (now at same position)
-        for i in 0 ..< 2:
-          let delResult = ctx.buffer.deleteRange(
-            BufferPosition(line: ctx.cursor.line, column: cursorCol),
-            BufferPosition(line: ctx.cursor.line, column: cursorCol),
-          )
-          if delResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err(delResult.error)
-
-        let commitResult = ctx.buffer.commitTransaction()
-        if commitResult.isErr:
-          return err(commitResult.error)
+        let txr = withTransaction(ctx.buffer, "delete paren pair"):
+          # Delete opening char, then closing char (now at same position)
+          for i in 0 ..< 2:
+            let delResult = ctx.buffer.deleteRange(
+              BufferPosition(line: ctx.cursor.line, column: cursorCol),
+              BufferPosition(line: ctx.cursor.line, column: cursorCol),
+            )
+            if delResult.isErr:
+              return err(delResult.error)
+        if txr.isErr:
+          return err(txr.error)
 
         # Both chars were deleted, so both go in the register
         storeDeletedText(
@@ -342,14 +336,12 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
           false,
         )
 
-        # Adjust cursor if past end of line
         let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
         if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
           ctx.cursor.column = updatedLineLen - 1
 
         return Result[(), string].ok ()
     except CatchableError:
-      # If auto-delete fails, fall through to normal delete
       discard
 
   # Normal delete logic
@@ -369,30 +361,21 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
   # Store in register system (respects pendingRegister)
   storeDeletedText(ctx, deletedText, false)
 
-  # Begin transaction if deleting multiple characters
   if charsToDelete > 1:
-    let txnResult = ctx.buffer.beginTransaction("delete " & $charsToDelete & " chars")
-    if txnResult.isErr:
-      return err(txnResult.error)
-
-  # Delete the characters
-  for i in 0 ..< charsToDelete:
-    # deleteRange is inclusive, so endPos should be at the same column as cursor
-    # to delete only one character
+    let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
+      for i in 0 ..< charsToDelete:
+        let endPos = ctx.cursor
+        let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
+        if delResult.isErr:
+          return err(delResult.error)
+    if txr.isErr:
+      return err(txr.error)
+  else:
     let endPos = ctx.cursor
     let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
     if delResult.isErr:
-      if charsToDelete > 1:
-        discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
 
-  # Commit transaction if we started one
-  if charsToDelete > 1:
-    let txnResult = ctx.buffer.commitTransaction()
-    if txnResult.isErr:
-      return err(txnResult.error)
-
-  # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand = some(
     LastEditCommand(
       kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: true
@@ -428,23 +411,17 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
     try:
       # X deletes char before cursor; check if char at cursorCol-1 and cursorCol form a pair
       if isAdjacentPair(lineContent, cursorCol - 1):
-        let txnResult = ctx.buffer.beginTransaction("delete paren pair")
-        if txnResult.isErr:
-          return err(txnResult.error)
-
-        # Delete opening char, then closing char (now at same position)
-        for i in 0 ..< 2:
-          let delResult = ctx.buffer.deleteRange(
-            BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
-            BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
-          )
-          if delResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err(delResult.error)
-
-        let commitResult = ctx.buffer.commitTransaction()
-        if commitResult.isErr:
-          return err(commitResult.error)
+        let txr = withTransaction(ctx.buffer, "delete paren pair"):
+          # Delete opening char, then closing char (now at same position)
+          for i in 0 ..< 2:
+            let delResult = ctx.buffer.deleteRange(
+              BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+              BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+            )
+            if delResult.isErr:
+              return err(delResult.error)
+        if txr.isErr:
+          return err(txr.error)
 
         # Both chars were deleted, so both go in the register
         storeDeletedText(
@@ -456,7 +433,6 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
 
         return Result[(), string].ok ()
     except CatchableError:
-      # If auto-delete fails, fall through to normal delete
       discard
 
   # Normal delete logic
@@ -479,29 +455,21 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
   # Store in register system (respects pendingRegister)
   storeDeletedText(ctx, deletedText, false)
 
-  # Begin transaction if deleting multiple characters
   if charsToDelete > 1:
-    let txnResult = ctx.buffer.beginTransaction("delete " & $charsToDelete & " chars")
-    if txnResult.isErr:
-      return err(txnResult.error)
-
-  # Delete the characters (delete from startColumn multiple times)
-  for i in 0 ..< charsToDelete:
+    let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
+      for i in 0 ..< charsToDelete:
+        let startPos = BufferPosition(line: ctx.cursor.line, column: startColumn)
+        let endPos = startPos
+        let delResult = ctx.buffer.deleteRange(startPos, endPos)
+        if delResult.isErr:
+          return err(delResult.error)
+    if txr.isErr:
+      return err(txr.error)
+  else:
     let startPos = BufferPosition(line: ctx.cursor.line, column: startColumn)
-    # deleteRange is inclusive, so endPos should be the same as startPos
-    # to delete only one character
-    let endPos = startPos
-    let delResult = ctx.buffer.deleteRange(startPos, endPos)
+    let delResult = ctx.buffer.deleteRange(startPos, startPos)
     if delResult.isErr:
-      if charsToDelete > 1:
-        discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
-
-  # Commit transaction if we started one
-  if charsToDelete > 1:
-    let txnResult = ctx.buffer.commitTransaction()
-    if txnResult.isErr:
-      return err(txnResult.error)
 
   # Move cursor to the position where deletion started
   ctx.cursor.column = startColumn
@@ -671,47 +639,31 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
   let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToToggle = min(actualCount, charsAvailable)
 
-  # Begin transaction for all toggle operations (to group as single undo)
-  let txnResult = ctx.buffer.beginTransaction("toggle " & $charsToToggle & " char(s)")
-  if txnResult.isErr:
-    return err(txnResult.error)
+  let txr = withTransaction(ctx.buffer, "toggle " & $charsToToggle & " char(s)"):
+    let runes = lineContent.toRunes()
+    for i in 0 ..< charsToToggle:
+      let runeIdx = ctx.cursor.column + i
+      if runeIdx < runes.len:
+        let originalChar = $runes[runeIdx]
 
-  # Toggle each character
-  let runes = lineContent.toRunes()
-  for i in 0 ..< charsToToggle:
-    let runeIdx = ctx.cursor.column + i
-    if runeIdx < runes.len:
-      let originalChar = $runes[runeIdx]
+        var toggledChar: string
+        if originalChar == originalChar.toUpperAscii():
+          toggledChar = originalChar.toLowerAscii()
+        else:
+          toggledChar = originalChar.toUpperAscii()
 
-      # Toggle case: convert to uppercase if lowercase, lowercase if uppercase
-      var toggledChar: string
-      if originalChar == originalChar.toUpperAscii():
-        # Character is uppercase (or non-alphabetic), convert to lowercase
-        toggledChar = originalChar.toLowerAscii()
-      else:
-        # Character is lowercase, convert to uppercase
-        toggledChar = originalChar.toUpperAscii()
+        if originalChar != toggledChar:
+          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
-      # Only perform replacement if the character actually changed
-      if originalChar != toggledChar:
-        let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+          let delResult = ctx.buffer.deleteRange(pos, pos)
+          if delResult.isErr:
+            return err(delResult.error)
 
-        # Delete original character
-        let delResult = ctx.buffer.deleteRange(pos, pos)
-        if delResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(delResult.error)
-
-        # Insert toggled character
-        let insResult = ctx.buffer.insertText(pos, toggledChar)
-        if insResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(insResult.error)
-
-  # Commit transaction
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err(commitResult.error)
+          let insResult = ctx.buffer.insertText(pos, toggledChar)
+          if insResult.isErr:
+            return err(insResult.error)
+  if txr.isErr:
+    return err(txr.error)
 
   # Move cursor to the right by the number of characters toggled
   ctx.cursor.column += charsToToggle
@@ -748,40 +700,28 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
   # Store in register system (respects pendingRegister)
   storeDeletedText(ctx, deletedText, true)
 
-  # Begin transaction for line deletions
-  let transactionResult =
-    ctx.buffer.beginTransaction("Delete " & $actualCount & " line(s)")
-  if transactionResult.isErr:
-    return err("Failed to begin transaction: " & transactionResult.error)
+  let txr = withTransaction(ctx.buffer, "Delete " & $actualCount & " line(s)"):
+    var brokeEarly = false
+    for i in 1 .. actualCount:
+      if startLine < ctx.buffer.len:
+        if ctx.buffer.len == 1:
+          brokeEarly = true
+          break
+        let delResult = ctx.buffer.deleteLine(startLine)
+        if delResult.isErr:
+          return err(delResult.error)
 
-  # Delete the lines (keep at least one line in the buffer)
-  var brokeEarly = false
-  for i in 1 .. actualCount:
-    if startLine < ctx.buffer.len:
-      if ctx.buffer.len == 1:
-        brokeEarly = true
-        break
-      let delResult = ctx.buffer.deleteLine(startLine)
-      if delResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err(delResult.error)
-
-  # If we stopped because the buffer was down to 1 line, clear its content
-  if brokeEarly:
-    let lastLine = ctx.buffer.getLine(0)
-    if lastLine.len > 0:
-      let clearResult = ctx.buffer.deleteRange(
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 0, column: lastLine.charLen - 1),
-      )
-      if clearResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err(clearResult.error)
-
-  # Commit transaction
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err("Failed to commit transaction: " & commitResult.error)
+    if brokeEarly:
+      let lastLine = ctx.buffer.getLine(0)
+      if lastLine.len > 0:
+        let clearResult = ctx.buffer.deleteRange(
+          BufferPosition(line: 0, column: 0),
+          BufferPosition(line: 0, column: lastLine.charLen - 1),
+        )
+        if clearResult.isErr:
+          return err(clearResult.error)
+  if txr.isErr:
+    return err("Transaction failed: " & txr.error)
 
   # Adjust cursor position if needed
   if ctx.cursor.line >= ctx.buffer.len:
@@ -960,13 +900,6 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
     let lineCount = endLine - startLine + 1
 
-    # Begin transaction for all line deletions
-    let transactionResult =
-      ctx.buffer.beginTransaction("Delete " & $lineCount & " line(s)")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    # Extract lines for yank register
     var text = ""
     for lineIdx in startLine .. endLine:
       if lineIdx < ctx.buffer.len:
@@ -975,37 +908,30 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
         if lineContent.len == 0 or lineContent[^1] != '\n':
           text.add("\n")
 
-    # Store in register system (respects pendingRegister)
     storeDeletedText(ctx, text, true)
 
-    # Delete lines (keep at least one line in the buffer)
-    var brokeEarly = false
-    for i in 0 ..< lineCount:
-      if startLine < ctx.buffer.len:
-        if ctx.buffer.len == 1:
-          brokeEarly = true
-          break
-        let deleteResult = ctx.buffer.deleteLine(startLine)
-        if deleteResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err("Failed to delete line: " & deleteResult.error)
+    let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
+      var brokeEarly = false
+      for i in 0 ..< lineCount:
+        if startLine < ctx.buffer.len:
+          if ctx.buffer.len == 1:
+            brokeEarly = true
+            break
+          let deleteResult = ctx.buffer.deleteLine(startLine)
+          if deleteResult.isErr:
+            return err("Failed to delete line: " & deleteResult.error)
 
-    # If we stopped because the buffer was down to 1 line, clear its content
-    if brokeEarly:
-      let lastLine = ctx.buffer.getLine(0)
-      if lastLine.len > 0:
-        let clearResult = ctx.buffer.deleteRange(
-          BufferPosition(line: 0, column: 0),
-          BufferPosition(line: 0, column: lastLine.charLen - 1),
-        )
-        if clearResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err("Failed to clear last line: " & clearResult.error)
-
-    # Commit transaction
-    let commitResult = ctx.buffer.commitTransaction()
-    if commitResult.isErr:
-      return err("Failed to commit transaction: " & commitResult.error)
+      if brokeEarly:
+        let lastLine = ctx.buffer.getLine(0)
+        if lastLine.len > 0:
+          let clearResult = ctx.buffer.deleteRange(
+            BufferPosition(line: 0, column: 0),
+            BufferPosition(line: 0, column: lastLine.charLen - 1),
+          )
+          if clearResult.isErr:
+            return err("Failed to clear last line: " & clearResult.error)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
     # Move cursor to start line, preserve column position
     ctx.cursor.line = min(startLine, ctx.buffer.len - 1)
@@ -1310,25 +1236,17 @@ proc handleIncrementNumber*(
     line[0 ..< startPos] & newNumStr &
     (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
 
-  # Update the buffer using transaction
-  let txnResult = ctx.buffer.beginTransaction("Increment number")
-  if txnResult.isErr:
-    return err(txnResult.error)
-
   let lineIdx = ctx.cursor.line
-  let delResult = ctx.buffer.deleteLine(lineIdx)
-  if delResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(delResult.error)
+  let txr = withTransaction(ctx.buffer, "Increment number"):
+    let delResult = ctx.buffer.deleteLine(lineIdx)
+    if delResult.isErr:
+      return err(delResult.error)
 
-  let insResult = ctx.buffer.insert(lineIdx, newLine)
-  if insResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(insResult.error)
-
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err(commitResult.error)
+    let insResult = ctx.buffer.insert(lineIdx, newLine)
+    if insResult.isErr:
+      return err(insResult.error)
+  if txr.isErr:
+    return err(txr.error)
 
   # Move cursor to start of the number (convert byte pos to char pos)
   ctx.cursor.column = byteToCharPos(newLine, startPos)
@@ -1364,25 +1282,17 @@ proc handleDecrementNumber*(
     line[0 ..< startPos] & newNumStr &
     (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
 
-  # Update the buffer using transaction
-  let txnResult = ctx.buffer.beginTransaction("Decrement number")
-  if txnResult.isErr:
-    return err(txnResult.error)
-
   let lineIdx = ctx.cursor.line
-  let delResult = ctx.buffer.deleteLine(lineIdx)
-  if delResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(delResult.error)
+  let txr = withTransaction(ctx.buffer, "Decrement number"):
+    let delResult = ctx.buffer.deleteLine(lineIdx)
+    if delResult.isErr:
+      return err(delResult.error)
 
-  let insResult = ctx.buffer.insert(lineIdx, newLine)
-  if insResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(insResult.error)
-
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err(commitResult.error)
+    let insResult = ctx.buffer.insert(lineIdx, newLine)
+    if insResult.isErr:
+      return err(insResult.error)
+  if txr.isErr:
+    return err(txr.error)
 
   # Move cursor to start of the number (convert byte pos to char pos)
   ctx.cursor.column = byteToCharPos(newLine, startPos)
@@ -1559,29 +1469,20 @@ proc registerEditCommands*(registry: CommandRegistry) =
       for i in currentIndent ..< lineContent.len:
         newContent.add(lineContent[i])
 
-      # Begin transaction
-      let txnResult = ctx.buffer.beginTransaction("auto indent line")
-      if txnResult.isErr:
-        return err(txnResult.error)
-
-      # Delete current line content and insert new
       let lineStart = BufferPosition(line: currentLine, column: 0)
       let lineEnd = BufferPosition(line: currentLine, column: lineContent.charLen - 1)
 
-      let delResult = ctx.buffer.deleteRange(lineStart, lineEnd)
-      if delResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err(delResult.error)
+      let txr = withTransaction(ctx.buffer, "auto indent line"):
+        let delResult = ctx.buffer.deleteRange(lineStart, lineEnd)
+        if delResult.isErr:
+          return err(delResult.error)
 
-      if newContent.len > 0:
-        let insResult = ctx.buffer.insertText(lineStart, newContent)
-        if insResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(insResult.error)
-
-      let commitResult = ctx.buffer.commitTransaction()
-      if commitResult.isErr:
-        return err(commitResult.error)
+        if newContent.len > 0:
+          let insResult = ctx.buffer.insertText(lineStart, newContent)
+          if insResult.isErr:
+            return err(insResult.error)
+      if txr.isErr:
+        return err(txr.error)
 
       # Move cursor to first non-blank character
       ctx.cursor.column = prevIndent
@@ -1813,29 +1714,20 @@ proc registerEditCommands*(registry: CommandRegistry) =
             let charsAvailable = lineContent.charLen - ctx.cursor.column
             let charsToDelete = min(lastCmd.substituteCount, charsAvailable)
 
-            # Begin transaction
-            let txnResult =
-              ctx.buffer.beginTransaction("substitute " & $charsToDelete & " char(s)")
-            if txnResult.isErr:
-              return err(txnResult.error)
+            let txr = withTransaction(
+              ctx.buffer, "substitute " & $charsToDelete & " char(s)"
+            ):
+              for i in 0 ..< charsToDelete:
+                let delResult = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
+                if delResult.isErr:
+                  return err(delResult.error)
 
-            # Delete the characters
-            for i in 0 ..< charsToDelete:
-              let delResult = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
-              if delResult.isErr:
-                discard ctx.buffer.rollbackTransaction()
-                return err(delResult.error)
-
-            # Insert the recorded text
-            let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
-            if insertResult.isErr:
-              discard ctx.buffer.rollbackTransaction()
-              return err("Failed to insert text: " & insertResult.error)
-
-            # Commit transaction
-            let commitResult = ctx.buffer.commitTransaction()
-            if commitResult.isErr:
-              return err(commitResult.error)
+              let insertResult =
+                ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
+              if insertResult.isErr:
+                return err("Failed to insert text: " & insertResult.error)
+            if txr.isErr:
+              return err(txr.error)
 
           # Move cursor to last inserted character (Vim behavior)
           let numNewlines = lastCmd.substituteText.count('\n')
@@ -1857,43 +1749,30 @@ proc registerEditCommands*(registry: CommandRegistry) =
           let startLine = ctx.cursor.line
           let endLine = min(startLine + lastCmd.substituteCount - 1, ctx.buffer.len - 1)
 
-          # Begin transaction
-          let transactionResult = ctx.buffer.beginTransaction("Substitute line")
-          if transactionResult.isErr:
-            return err("Failed to begin transaction: " & transactionResult.error)
+          let txr = withTransaction(ctx.buffer, "Substitute line"):
+            for i in 0 ..< (endLine - startLine):
+              if startLine + 1 < ctx.buffer.len:
+                let deleteResult = ctx.buffer.deleteLine(startLine + 1)
+                if deleteResult.isErr:
+                  return err("Failed to delete line: " & deleteResult.error)
 
-          # Delete all but first line
-          for i in 0 ..< (endLine - startLine):
-            if startLine + 1 < ctx.buffer.len:
-              let deleteResult = ctx.buffer.deleteLine(startLine + 1)
-              if deleteResult.isErr:
-                discard ctx.buffer.rollbackTransaction()
-                return err("Failed to delete line: " & deleteResult.error)
+            if startLine < ctx.buffer.len:
+              let line = ctx.buffer.getLine(startLine)
+              for i in 0 ..< line.charLen:
+                let deleteResult = ctx.buffer.deleteRange(
+                  BufferPosition(line: startLine, column: 0),
+                  BufferPosition(line: startLine, column: 0),
+                )
+                if deleteResult.isErr:
+                  return err("Failed to clear line: " & deleteResult.error)
 
-          # Clear the first line
-          if startLine < ctx.buffer.len:
-            let line = ctx.buffer.getLine(startLine)
-            for i in 0 ..< line.charLen:
-              let deleteResult = ctx.buffer.deleteRange(
-                BufferPosition(line: startLine, column: 0),
-                BufferPosition(line: startLine, column: 0),
-              )
-              if deleteResult.isErr:
-                discard ctx.buffer.rollbackTransaction()
-                return err("Failed to clear line: " & deleteResult.error)
-
-          # Insert the recorded text at the beginning of the line
-          let insertResult = ctx.buffer.insertText(
-            BufferPosition(line: startLine, column: 0), lastCmd.substituteText
-          )
-          if insertResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err("Failed to insert text: " & insertResult.error)
-
-          # Commit transaction
-          let commitResult = ctx.buffer.commitTransaction()
-          if commitResult.isErr:
-            return err(commitResult.error)
+            let insertResult = ctx.buffer.insertText(
+              BufferPosition(line: startLine, column: 0), lastCmd.substituteText
+            )
+            if insertResult.isErr:
+              return err("Failed to insert text: " & insertResult.error)
+          if txr.isErr:
+            return err("Transaction failed: " & txr.error)
 
           # Move cursor to last inserted character (Vim behavior)
           let numNewlines = lastCmd.substituteText.count('\n')
@@ -1947,29 +1826,19 @@ proc registerEditCommands*(registry: CommandRegistry) =
         let charsAvailable = lineContent.charLen - ctx.cursor.column
         let charsToReplace = min(lastCmd.replaceCount, charsAvailable)
 
-        # Begin transaction
-        let txnResult =
-          ctx.buffer.beginTransaction("replace " & $charsToReplace & " char(s)")
-        if txnResult.isErr:
-          return err(txnResult.error)
+        let txr = withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
+          for i in 0 ..< charsToReplace:
+            let pos =
+              BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+            let delResult = ctx.buffer.deleteRange(pos, pos)
+            if delResult.isErr:
+              return err(delResult.error)
 
-        # Replace each character
-        for i in 0 ..< charsToReplace:
-          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
-          let delResult = ctx.buffer.deleteRange(pos, pos)
-          if delResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err(delResult.error)
-
-          let insResult = ctx.buffer.insertText(pos, lastCmd.replaceChar)
-          if insResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err(insResult.error)
-
-        # Commit transaction
-        let commitResult = ctx.buffer.commitTransaction()
-        if commitResult.isErr:
-          return err(commitResult.error)
+            let insResult = ctx.buffer.insertText(pos, lastCmd.replaceChar)
+            if insResult.isErr:
+              return err(insResult.error)
+        if txr.isErr:
+          return err(txr.error)
 
         # Move cursor to the last replaced character
         ctx.cursor.column += charsToReplace - 1

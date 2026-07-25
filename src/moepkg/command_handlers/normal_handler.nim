@@ -277,17 +277,14 @@ proc searchMatchAndOperate(
   of OpDelete, OpChange:
     let transactionName =
       if op.operatorType == OpDelete: "Delete search match" else: "Change search match"
-    let transactionResult = buffer.beginTransaction(transactionName)
-    if transactionResult.isErr:
-      return
-        NormalModeResult(kind: nmrError, errorMessage: "Failed to begin transaction")
-
-    let deleteResult = buffer.deleteRange(pos, matchEnd)
-    if deleteResult.isErr:
-      discard buffer.rollbackTransaction()
-      return NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
-
-    discard buffer.commitTransaction()
+    let txr = withTransaction(buffer, transactionName):
+      let deleteResult = buffer.deleteRange(pos, matchEnd)
+      if deleteResult.isErr:
+        return NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
+    if txr.isErr:
+      return NormalModeResult(
+        kind: nmrError, errorMessage: "Transaction failed: " & txr.error
+      )
 
     # Move cursor to start of deleted range and clamp
     state.cursor = pos

@@ -1554,6 +1554,29 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
 
   return text
 
+proc deleteLinesInRange(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
+  ## Delete every line the linewise range covers, keeping the buffer at one line.
+  var brokeEarly = false
+  for i in 0 .. (range.endPos.line - range.start.line):
+    if range.start.line < buffer.len:
+      if buffer.len == 1:
+        brokeEarly = true
+        break
+      let deleteResult = buffer.deleteLine(range.start.line)
+      if deleteResult.isErr:
+        return err(deleteResult.error)
+
+  if brokeEarly:
+    let lastLine = buffer.getLine(0)
+    if lastLine.len > 0:
+      let clearResult = buffer.deleteRange(
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 0, column: lastLine.charLen - 1),
+      )
+      if clearResult.isErr:
+        return err(clearResult.error)
+  ok(())
+
 proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
   ## Delete text in the given range
   ## Used for delete and change operations
@@ -1566,43 +1589,17 @@ proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] 
     # Delete entire lines
     let lineCount = range.endPos.line - range.start.line + 1
 
-    # Use transaction for multiple line deletions
     if lineCount > 1:
-      let txnResult = buffer.beginTransaction("delete " & $lineCount & " lines")
-      if txnResult.isErr:
-        return err(txnResult.error)
-
-    var brokeEarly = false
-    for i in 0 .. (range.endPos.line - range.start.line):
-      if range.start.line < buffer.len:
-        # Keep at least one line in the buffer
-        if buffer.len == 1:
-          brokeEarly = true
-          break
-        let deleteResult = buffer.deleteLine(range.start.line)
-        if deleteResult.isErr:
-          if lineCount > 1:
-            discard buffer.rollbackTransaction()
-          return err(deleteResult.error)
-
-    # If we stopped because the buffer was down to 1 line, clear its content
-    if brokeEarly:
-      let lastLine = buffer.getLine(0)
-      if lastLine.len > 0:
-        let clearResult = buffer.deleteRange(
-          BufferPosition(line: 0, column: 0),
-          BufferPosition(line: 0, column: lastLine.charLen - 1),
-        )
-        if clearResult.isErr:
-          if lineCount > 1:
-            discard buffer.rollbackTransaction()
-          return err(clearResult.error)
-
-    # Commit transaction if we started one
-    if lineCount > 1:
-      let commitResult = buffer.commitTransaction()
-      if commitResult.isErr:
-        return err(commitResult.error)
+      let txr = withTransaction(buffer, "delete " & $lineCount & " lines"):
+        let r = buffer.deleteLinesInRange(range)
+        if r.isErr:
+          return err(r.error)
+      if txr.isErr:
+        return err(txr.error)
+    else:
+      let r = buffer.deleteLinesInRange(range)
+      if r.isErr:
+        return err(r.error)
   else:
     # Delete character range using buffer.deleteRange
     let deleteResult = buffer.deleteRange(range.start, range.endPos)

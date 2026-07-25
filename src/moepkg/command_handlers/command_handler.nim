@@ -286,16 +286,15 @@ proc executeStripWhitespace*(
   if buffer.readOnly:
     return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   var strippedCount = 0
-  discard buffer.beginTransaction("stripwhitespace")
-  for lineIdx in 0 ..< buffer.len:
-    let line = buffer.getLine(lineIdx)
-    let trimmed = line.strip(leading = false, trailing = true)
-    if trimmed != line:
-      # Reveal the line if it is hidden inside a collapsed fold.
-      discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
-      discard buffer.replaceLine(lineIdx, trimmed)
-      strippedCount.inc
-  discard buffer.commitTransaction()
+  discard withTransaction(buffer, "stripwhitespace"):
+    for lineIdx in 0 ..< buffer.len:
+      let line = buffer.getLine(lineIdx)
+      let trimmed = line.strip(leading = false, trailing = true)
+      if trimmed != line:
+        # Reveal the line if it is hidden inside a collapsed fold.
+        discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
+        discard buffer.replaceLine(lineIdx, trimmed)
+        strippedCount.inc
   HandlerResult(kind: hrStripWhitespace, strippedLineCount: strippedCount)
 
 proc executeQuickRun*(handler: CommandModeHandler): HandlerResult =
@@ -351,38 +350,35 @@ proc executeSubstitute*(
     rangeStart = currentLine
     rangeEnd = currentLine
 
-  discard buffer.beginTransaction("substitute")
+  discard withTransaction(buffer, "substitute"):
+    for lineIdx in rangeStart .. rangeEnd:
+      var line = buffer.getLine(lineIdx)
+      var modified = false
+      var newLine = ""
+      var searchPos = 0
 
-  for lineIdx in rangeStart .. rangeEnd:
-    var line = buffer.getLine(lineIdx)
-    var modified = false
-    var newLine = ""
-    var searchPos = 0
+      while searchPos <= line.len:
+        let idx = line.find(pattern, searchPos)
+        if idx < 0:
+          newLine.add(line[searchPos ..^ 1])
+          break
 
-    while searchPos <= line.len:
-      let idx = line.find(pattern, searchPos)
-      if idx < 0:
-        newLine.add(line[searchPos ..^ 1])
-        break
+        if idx > searchPos:
+          newLine.add(line[searchPos ..< idx])
 
-      if idx > searchPos:
-        newLine.add(line[searchPos ..< idx])
+        newLine.add(processedReplacement)
+        replaceCount.inc
+        modified = true
 
-      newLine.add(processedReplacement)
-      replaceCount.inc
-      modified = true
+        searchPos = idx + pattern.len
 
-      searchPos = idx + pattern.len
+        if not isGlobal:
+          newLine.add(line[searchPos ..^ 1])
+          break
 
-      if not isGlobal:
-        newLine.add(line[searchPos ..^ 1])
-        break
-
-    if modified:
-      discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
-      discard buffer.replaceLine(lineIdx, newLine)
-
-  discard buffer.commitTransaction()
+      if modified:
+        discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
+        discard buffer.replaceLine(lineIdx, newLine)
 
   if replaceCount == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
@@ -445,17 +441,14 @@ proc executeDelete*(
 
   discard buffer.foldState.openFoldsInRange(rangeStart, rangeEnd)
 
-  discard buffer.beginTransaction("delete lines")
-
-  if deletingAll:
-    for i in countdown(buffer.len - 1, 1):
-      discard buffer.deleteLine(i)
-    discard buffer.replaceLine(0, "")
-  else:
-    for i in countdown(rangeEnd, rangeStart):
-      discard buffer.deleteLine(i)
-
-  discard buffer.commitTransaction()
+  discard withTransaction(buffer, "delete lines"):
+    if deletingAll:
+      for i in countdown(buffer.len - 1, 1):
+        discard buffer.deleteLine(i)
+      discard buffer.replaceLine(0, "")
+    else:
+      for i in countdown(rangeEnd, rangeStart):
+        discard buffer.deleteLine(i)
 
   HandlerResult(kind: hrDeleteLines, hrDeletedText: text, hrDeletedLineCount: lineCount)
 
