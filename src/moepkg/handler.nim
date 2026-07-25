@@ -29,7 +29,7 @@ import
   editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
   logger, types, motion, quick_run_utils, command_completion, build, render_utils,
   tab_line, terminal_mode, clipboard, status_line, cursor_util, syntax_checker,
-  background_process, key_router, pending_input
+  background_process, key_router, pending_input, visible_rows
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -371,69 +371,22 @@ proc screenToBufferPosition(
   if screenX < 0:
     return none(BufferPosition)
 
-  if lineWrap:
-    if wrapCache != nil:
-      wrapCache.ensureFresh(buffer, wrapWidth, tabStop)
-    # Walk through buffer lines, accumulating screen rows for each wrapped line.
-    # Start above the top edge by the leading wrap segments the renderer skips on
-    # the first line (topWrapOffset), mirroring calculateWindowCursor: screen row
-    # 0 then maps to segment topWrapOffset of topLine, not segment 0.
-    var currentScreenY = -vp.topWrapOffset
-    var bufferLine = vp.topLine
-    var wrapSegment = 0
+  let
+    rl = initRowLayout(buffer, wrapCache, lineWrap, wrapWidth, tabStop)
+    row = rl.rowAt(vp.topLine, vp.topWrapOffset, screenY)
+    # Below the last rendered row (the blank tail): clamp onto the last line.
+    line =
+      if row.isSome:
+        row.get.line
+      else:
+        max(0, buffer.len - 1)
+    wrapSeg = if row.isSome: row.get.wrapSeg else: 0
 
-    while bufferLine < buffer.len:
-      let wrapCount =
-        if wrapCache != nil:
-          wrapCache.cachedWrapCount(buffer, bufferLine)
-        else:
-          calculateWrapCount(buffer.getLine(bufferLine), wrapWidth, tabStop)
-      if currentScreenY + wrapCount > screenY:
-        wrapSegment = screenY - currentScreenY
-        break
-      currentScreenY += wrapCount
-      bufferLine += 1
-
-    if bufferLine >= buffer.len:
-      bufferLine = max(0, buffer.len - 1)
-
-    # Find the start character of the wrapSegment-th segment
-    let line = buffer.getLine(bufferLine)
-    var segStart = 0
-    for i in 0 ..< wrapSegment:
-      let (charCount, _) =
-        displayWidthSubstrWithTabs(line, segStart, wrapWidth, tabStop)
-      segStart += max(1, charCount)
-
-    # Convert screenX to a character offset within this segment
-    var bufferColumn = segStart + screenXToCharIndex(line, segStart, screenX, tabStop)
-
-    # Clamp column to valid range
-    if bufferLine >= 0 and bufferLine < buffer.len:
-      let lineCharLen = buffer.getLine(bufferLine).charLen
-      bufferColumn = clamp(bufferColumn, 0, max(0, lineCharLen - 1))
-
-    return some(BufferPosition(line: bufferLine, column: bufferColumn))
-  else:
-    # No-wrap mode: simple calculation
-    var bufferLine = vp.topLine + screenY
-    if bufferLine >= buffer.len:
-      bufferLine = max(0, buffer.len - 1)
-
-    # screenX is a display-column offset, leftColumn a character index, so they
-    # cannot be added directly: tabs and wide characters make the two diverge.
-    # The renderer slices the line at leftColumn and expands tabs from there, so
-    # convert relative to that same slice start.
-    var bufferColumn = vp.leftColumn + screenX
-
-    # Clamp column to valid range
-    if bufferLine >= 0 and bufferLine < buffer.len:
-      let line = buffer[bufferLine]
-      bufferColumn =
-        vp.leftColumn + screenXToCharIndex(line, vp.leftColumn, screenX, tabStop)
-      bufferColumn = clamp(bufferColumn, 0, max(0, line.charLen - 1))
-
-    return some(BufferPosition(line: bufferLine, column: bufferColumn))
+  some(
+    BufferPosition(
+      line: line, column: rl.cellToColumn(line, wrapSeg, screenX, vp.leftColumn)
+    )
+  )
 
 proc middleClickPaste(e: Editor) =
   ## Paste clipboard content at current cursor position for middle-click.

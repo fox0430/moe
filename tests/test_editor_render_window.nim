@@ -27,7 +27,9 @@ import
     editor, buffer, config, config_loader, render_utils, modes, color, highlight, types
   ]
 import ../src/moepkg/editor_render_window {.all.}
-import ../src/moepkg/[editor_render_helpers, style_patch, colorcode, editor_codelens]
+import
+  ../src/moepkg/
+    [editor_render_helpers, style_patch, colorcode, editor_codelens, visible_rows]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -4111,27 +4113,27 @@ suite "renderScrollbar - fold/wrap-aware display rows":
       lines.add(text)
     newTextBuffer(lines.join("\n"))
 
-  test "walkDisplayRows: plain buffer equals logical line count":
+  test "totalRows: plain buffer equals logical line count":
     let buf = bufOfLines(10)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 10
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(buf.len) == 10
 
-  test "walkDisplayRows: collapsed fold shrinks range to one marker row":
+  test "totalRows: collapsed fold shrinks range to one marker row":
     # 30 lines, fold [5,15] collapsed → 5 lines + 1 marker + 14 remaining = 20.
     let buf = bufOfLines(30)
     check buf.foldState.addFold(5, 15, collapsed = true)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 20
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(buf.len) == 20
 
-  test "walkDisplayRows: non-collapsed fold leaves rows unchanged":
+  test "totalRows: non-collapsed fold leaves rows unchanged":
     let buf = bufOfLines(30)
     check buf.foldState.addFold(5, 15, collapsed = false)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 30
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(buf.len) == 30
 
-  test "walkDisplayRows: wrap expands long lines to their segment count":
+  test "totalRows: wrap expands long lines to their segment count":
     # 5 lines; line 1 is 25 chars → 3 wrap segments at maxWidth 10. Others = 1.
     let buf = newTextBuffer(@["x", "x".repeat(25), "x", "x", "x"].join("\n"))
-    check walkDisplayRows(buf, buf.foldState, nil, true, 10, 4, buf.len) == 7
+    check initRowLayout(buf, nil, true, 10, 4).totalRows(buf.len) == 7
 
-  test "walkDisplayRows: fold marker counts once regardless of inner wrap":
+  test "totalRows: fold marker counts once regardless of inner wrap":
     # 5 wrapping lines (each 25 chars → 3 segments at maxWidth 10). Fold [1,3]
     # collapses three of them to one marker, so total = 3 + 1 + 3 = 7.
     var lines: seq[string]
@@ -4139,20 +4141,20 @@ suite "renderScrollbar - fold/wrap-aware display rows":
       lines.add("x".repeat(25))
     let buf = newTextBuffer(lines.join("\n"))
     check buf.foldState.addFold(1, 3, collapsed = true)
-    check walkDisplayRows(buf, buf.foldState, nil, true, 10, 4, buf.len) == 7
+    check initRowLayout(buf, nil, true, 10, 4).totalRows(buf.len) == 7
 
-  test "walkDisplayRows: stopLine exclusive; counts lines strictly before it":
+  test "totalRows: stopLine exclusive; counts lines strictly before it":
     let buf = bufOfLines(20)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 0) == 0
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 5) == 5
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 20) == 20
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(0) == 0
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(5) == 5
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(20) == 20
 
-  test "walkDisplayRows: stopLine inside collapsed fold counts the marker once":
+  test "totalRows: stopLine inside collapsed fold counts the marker once":
     # fold [5,15] collapsed, stopLine=10 (inside the fold). Loop hits the fold
     # at line=5, adds 1 for the marker, jumps line to 16 → loop exits.
     let buf = bufOfLines(30)
     check buf.foldState.addFold(5, 15, collapsed = true)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 10) == 6
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(10) == 6
 
   proc scrollbarEditor(): Editor =
     ## Editor tuned for direct renderScrollbar cell inspection: no sidebar, no
