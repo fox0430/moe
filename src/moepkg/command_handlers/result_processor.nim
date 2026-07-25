@@ -114,6 +114,19 @@ proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
     # is defensive only.
     oxaExitAndResync
 
+proc closeViewerSplitWindow(e: Editor, activeWin: EditorWindow) =
+  ## Discard a viewer's scratch buffer and close its split window. A no-op when
+  ## the viewer is the only window, so the editor is never left windowless.
+  if e.windowManager.windows.len <= 1:
+    return
+  let buf = activeWin.buffer
+  let idx = e.bufferIndexById(buf.id)
+  if idx >= 0:
+    e.state.git.evictGitCacheForBuffer(buf)
+    e.deleteBufferAt(idx)
+    e.pruneBufferIdFromAllWindows(buf.id)
+  discard e.closeWindow()
+
 proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Apply the editor-level side effects implied by `r`. Returns true to
   ## continue the main loop, false to quit.
@@ -301,15 +314,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.LogViewer)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        e.state.git.evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrLogViewerRefresh:
     # Refresh log viewer content by creating new buffer with updated content
@@ -343,15 +348,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.Help)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        e.state.git.evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrReferencesQuit:
     # Close references viewer and return to Normal mode, restoring the
@@ -570,15 +567,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.BackupManager)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        e.state.git.evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrDiffViewerQuit:
     # Close the diff viewer overlay and resume the mode it was opened from.
@@ -618,15 +607,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.Config)
     activeWin.mode = e.state.previousMode
     e.setMode(e.state.previousMode)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        e.state.git.evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrConfigSaveConfig:
     # Save configuration to TOML file
