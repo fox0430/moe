@@ -45,7 +45,8 @@ import
 
 import
   status_line, render_utils, logger, message_log, debug_viewer, completion,
-  signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration
+  signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration,
+  editor_window_layout
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
@@ -450,17 +451,24 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
 
     let sigHelpMgr = e.handlerManager.insertHandler.signatureHelpManager
     if sigHelpMgr.isActive():
-      let cursor = e.activeWindow.cursor
-      let lineText = e.activeBuffer.getLine(cursor.line)
-      let anchorX = calculateSignatureHelpAnchorX(
-        e.state.screenCursor.x,
-        sigHelpMgr.triggerLine,
-        sigHelpMgr.triggerCol,
-        cursor.line,
-        cursor.column,
-        displayWidthUpToWithTabs(lineText, sigHelpMgr.triggerCol, e.tabStop),
-        displayWidthUpToWithTabs(lineText, cursor.column, e.tabStop),
-      )
+      let
+        window = e.activeWindow
+        cursor = window.cursor
+        lineText = e.activeBuffer.getLine(cursor.line)
+        # Measure both columns against the origin the renderer sliced at, so the
+        # gap between them survives tabs and horizontal scrolling.
+        trigger = e.renderedCellPos(window, lineText, sigHelpMgr.triggerCol)
+        caret = e.renderedCellPos(window, lineText, cursor.column)
+      let anchorX =
+        if trigger.row != caret.row:
+          # Wrapped onto different rows: the horizontal gap says nothing about
+          # where the trigger is drawn, so pin to the caret.
+          e.state.screenCursor.x
+        else:
+          calculateSignatureHelpAnchorX(
+            e.state.screenCursor.x, sigHelpMgr.triggerLine, sigHelpMgr.triggerCol,
+            cursor.line, cursor.column, trigger.cellX, caret.cellX,
+          )
       let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
       let popupPos = calculateSignatureHelpPosition(
         anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,

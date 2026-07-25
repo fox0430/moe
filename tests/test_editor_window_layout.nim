@@ -878,6 +878,73 @@ suite "calculateWindowCursor - wrap mode edge cases":
     check pos.x == 0
     check pos.y == 0
 
+suite "renderedCellPos":
+  proc plainEditor(): Editor =
+    result = createTestEditor()
+    result.state.showLineNumbers = false
+    result.state.showSidebar = false
+    result.state.scrollbar = false
+    result.tabStop = 4
+
+  test "no wrap, no horizontal scroll":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 0
+
+    let pos = e.renderedCellPos(win, "ab\tcd", 3) # 'c'
+    check pos.row == 0
+    check pos.cellX == 4 # "ab" + tab filling the stop
+
+  test "no wrap, horizontal scroll restarts tab stops":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 2
+
+    let pos = e.renderedCellPos(win, "ab\tcd", 3) # 'c'
+    check pos.row == 0
+    check pos.cellX == 4 # the tab is expanded from the slice start
+
+  test "no wrap, horizontal scroll with full width characters":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 2
+
+    let pos = e.renderedCellPos(win, "あいうえお", 3) # え
+    check pos.row == 0
+    check pos.cellX == 2 # う takes 2 cells
+
+  test "no wrap, column before leftColumn clamps to zero":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 5
+
+    let pos = e.renderedCellPos(win, "0123456789", 2)
+    check pos.row == 0
+    check pos.cellX == 0
+
+  test "wrap mode reports the segment row and column":
+    let e = plainEditor()
+    e.state.lineWrap = true
+    let win = e.activeWindow
+    win.viewport.width = 4 # no gutter, so wrapWidth == 4
+
+    check e.wrapWidth(win) == 4
+    check e.renderedCellPos(win, "ab\tcd", 1) == (row: 0, cellX: 1) # 'b'
+    check e.renderedCellPos(win, "ab\tcd", 3) == (row: 1, cellX: 0) # 'c' wrapped
+
+  test "wrap mode ignores leftColumn":
+    let e = plainEditor()
+    e.state.lineWrap = true
+    let win = e.activeWindow
+    win.viewport.width = 4
+    win.viewport.leftColumn = 2
+
+    check e.renderedCellPos(win, "ab\tcd", 1) == (row: 0, cellX: 1)
+
 suite "textAreaWidth / wrapWidth - single derivation":
   proc gutterEditor(): Editor =
     result = createTestEditor()

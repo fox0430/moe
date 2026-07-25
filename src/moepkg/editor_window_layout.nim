@@ -108,6 +108,25 @@ proc wrapWidth*(e: Editor, window: EditorWindow): int =
   ## `wrapWidth` with the window's own line-number width.
   wrapWidthFor(window.viewport.width, e.viewportOffsetFor(window))
 
+proc renderedCellPos*(
+    e: Editor, window: EditorWindow, lineText: string, column: int
+): tuple[row, cellX: int] =
+  ## Row and display column where `column` of `lineText` is drawn, relative to
+  ## the text area start. `row` is the wrap segment index (always 0 without
+  ## `lineWrap`). Tabs are expanded from the origin the renderer sliced at, so
+  ## two columns' `cellX` are only comparable when their `row` matches.
+  if e.lineWrap:
+    let (wrapRow, wrapCol) =
+      cursorWrapPosition(lineText, column, e.wrapWidth(window), e.tabStop)
+    (row: wrapRow, cellX: wrapCol)
+  else:
+    (
+      row: 0,
+      cellX: displayWidthBetweenWithTabs(
+        lineText, window.viewport.leftColumn, column, e.tabStop
+      ),
+    )
+
 proc calculateWindowCursor*(
     e: Editor,
     buffer: TextBuffer,
