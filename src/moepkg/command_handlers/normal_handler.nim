@@ -259,19 +259,21 @@ proc searchMatchAndOperate(
   let selectedText = buffer.getTextInRange(pos, matchEnd)
   let isMultiLine = pos.line != matchEnd.line
 
-  # Store in register
-  if state.pendingInput.pendingRegister.isSome and
-      state.pendingInput.pendingRegister.get != '\0':
-    let regName = state.pendingInput.pendingRegister.get
-    if regName.isNamedRegisterName:
-      discard state.registers.setNamedRegister(regName, selectedText, false)
-    elif regName.isClipboardRegisterName:
-      state.registers.setClipboardRegister(regName, selectedText, false)
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  proc storeMatchText() =
+    if state.pendingInput.pendingRegister.isSome and
+        state.pendingInput.pendingRegister.get != '\0':
+      let regName = state.pendingInput.pendingRegister.get
+      if regName.isNamedRegisterName:
+        discard state.registers.setNamedRegister(regName, selectedText, false)
+      elif regName.isClipboardRegisterName:
+        state.registers.setClipboardRegister(regName, selectedText, false)
+      else:
+        state.registers.setDeletedRegister(selectedText, isMultiLine)
     else:
       state.registers.setDeletedRegister(selectedText, isMultiLine)
-  else:
-    state.registers.setDeletedRegister(selectedText, isMultiLine)
-  state.pendingInput.pendingRegister = none(char)
+    state.pendingInput.pendingRegister = none(char)
 
   case op.operatorType
   of OpDelete, OpChange:
@@ -285,6 +287,8 @@ proc searchMatchAndOperate(
       return NormalModeResult(
         kind: nmrError, errorMessage: "Transaction failed: " & txr.error
       )
+
+    storeMatchText()
 
     # Move cursor to start of deleted range and clamp
     state.cursor = pos
@@ -302,6 +306,7 @@ proc searchMatchAndOperate(
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   of OpYank:
     # Yank only - no deletion, move cursor to match start
+    storeMatchText()
     state.cursor = pos
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   else:

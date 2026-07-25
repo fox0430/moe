@@ -137,13 +137,14 @@ proc executeOperatorOnRange*(
     # Delete the range (and yank it)
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system (respects pendingRegister)
-    storeDeletedText(ctx, text, range.isLinewise)
-
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
     if delResult.isErr:
       return err(delResult.error)
+
+    # Store in register only after the buffer change succeeded (registers are not
+    # covered by the buffer transaction, so a rollback would not undo them)
+    storeDeletedText(ctx, text, range.isLinewise)
 
     # Move cursor to start of deletion
     ctx.cursor = range.start
@@ -182,11 +183,7 @@ proc executeOperatorOnRange*(
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
 
-    if not range.isEmpty:
-      # Store in register system (respects pendingRegister). An empty object
-      # (e.g. cit on <a></a>) removes nothing, so leave the registers untouched.
-      storeDeletedText(ctx, text, range.isLinewise)
-    else:
+    if range.isEmpty:
       # Empty change still completes the operator command (it drops into Insert
       # between the delimiters), so consume any pending register prefix rather
       # than leaking it into the next command.
@@ -200,8 +197,14 @@ proc executeOperatorOnRange*(
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
     if delResult.isErr:
-      discard ctx.buffer.commitTransaction()
+      discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
+
+    if not range.isEmpty:
+      # Store in register only after the buffer change succeeded (registers are
+      # not covered by the transaction). An empty object (e.g. cit on <a></a>)
+      # removes nothing, so leave the registers untouched.
+      storeDeletedText(ctx, text, range.isLinewise)
 
     # Move cursor to start of change
     ctx.cursor = range.start
