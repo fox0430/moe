@@ -219,6 +219,98 @@ suite "screenToBufferPosition - Scrolled Viewport":
     check result.get.line == 5
     check result.get.column == 15 # leftColumn + screenX = 10 + 5
 
+suite "screenToBufferPosition - No Wrap Display Width":
+  # screenX is a display-column offset while the column is a character index, so
+  # tabs and wide characters must be converted, not added.
+  test "Click past a leading tab":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("\tabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # tabStop=4: the tab covers columns 0..3, so 'a' is drawn at column 4
+    let result = screenToBufferPosition(
+      vp, buffer, 4, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 1
+
+  test "Click inside a tab selects the tab":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("\tabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    let result = screenToBufferPosition(
+      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 0
+
+  test "Click past full width characters":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("あいうabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # Each wide rune takes 2 cells, so 'a' is drawn at column 6
+    let result = screenToBufferPosition(
+      vp, buffer, 6, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 3
+
+  test "Click on the second cell of a full width character":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("あいうabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    let result = screenToBufferPosition(
+      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 1
+
+  test "Click with horizontal scroll and full width characters":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftColumn = 2
+      buffer = newTextBuffer("あいうえお")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # The renderer slices from character 2, so う takes cells 0..1 and え cell 2
+    let result = screenToBufferPosition(
+      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 3
+
+  test "Click with horizontal scroll onto a tab boundary":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftColumn = 2
+      buffer = newTextBuffer("ab\tcd")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # Slicing at character 2 restarts tab expansion, so 'c' is drawn at column 4
+    let result = screenToBufferPosition(
+      vp, buffer, 4, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 3
+
 suite "screenToBufferPosition - Column Clamping":
   test "Column clamped to line length":
     let
