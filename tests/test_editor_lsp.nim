@@ -389,6 +389,35 @@ suite "editor_lsp - pollLspCompletion":
     e.pollLspCompletion()
     # No crash means success
 
+suite "editor_lsp - renotifyOpenBuffers":
+  # onBufferOpen short-circuits to ok() while LSP is disabled, so the success
+  # branch is reachable without a live server. That branch used to leave
+  # lastLspContentVersions on the pre-restart baseline, which made the
+  # applyWorkspaceEdit staleness guard reject every server-initiated edit.
+  test "Records the version the re-open just sent":
+    let e = createTestEditor()
+    e.lsp.enabled = false
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_renotify.nim")
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    # Stale baseline from before the server died.
+    e.lastLspContentVersions[buf.id] = buf.contentVersion - 1
+
+    check e.renotifyOpenBuffers("nim") == 0
+    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+
+  test "Leaves buffers of other languages untouched":
+    let e = createTestEditor()
+    e.lsp.enabled = false
+
+    let other = newTextBuffer("other", some(getTempDir() / "moe_test_renotify.rs"))
+    e.addBuffer(other)
+    e.lastLspContentVersions[other.id] = 999
+
+    check e.renotifyOpenBuffers("nim") == 0
+    check e.lastLspContentVersions[other.id] == 999
+
 suite "editor_lsp - restartLspServer":
   test "Returns false when LSP is disabled":
     let e = createTestEditorWithLspDisabled()

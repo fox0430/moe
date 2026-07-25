@@ -471,7 +471,13 @@ proc renotifyOpenBuffers(e: Editor, langId: string): int =
       let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
       if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
         let openResult = e.lsp.onBufferOpen(buf, serverIsFresh = true)
-        if openResult.isErr:
+        if openResult.isOk:
+          # Record what the didOpen just sent. A leftover pre-restart baseline
+          # would make the applyWorkspaceEdit staleness guard reject every
+          # server-initiated edit — forever for non-active buffers, which
+          # maybeUpdateLsp never repairs.
+          e.lastLspContentVersions[buf.id] = buf.contentVersion
+        else:
           inc result
           logLspDegraded("re-open " & buf.filePath.get, openResult.error)
 
