@@ -938,7 +938,7 @@ suite "Buffer - Sidebar Markers":
       BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
     )
 
-    # Line3 dropped, Line4 joined onto Line2's tail — 3 lines total.
+    # Line2 and Line3 fully consumed, Line4 moves up into row 1 — 3 lines total.
     # Marker on startLine survives; markers below shift up by 2.
     check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
     check buf.getLineMarker(2).get == LineMarkerKind.GitAdded
@@ -984,7 +984,8 @@ suite "Buffer - Sidebar Markers":
     buf.setLineMarker(1, LineMarkerKind.SyntaxError)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
 
-    # Delete from end of Line1 through Line2's endOfLine → joins Line2 up.
+    # Zero-width delete at end of Line1: endPos.column >= lineLen triggers
+    # a join with the next line as a side effect.
     let line1Len = buf[0].len
     discard buf.deleteRange(
       BufferPosition(line: 0, column: line1Len),
