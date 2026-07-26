@@ -23,7 +23,7 @@ import std/[unittest, options, tables, strutils, os, osproc]
 
 import pkg/celina
 
-import ../src/moepkg/[types, modes, registers, buffer, config]
+import ../src/moepkg/[types, modes, registers, buffer, config, git_cache]
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
 
@@ -43,16 +43,18 @@ proc createTestState(): EditorState =
       DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: cfg,
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
     overlay: none(OverlayKind),
@@ -1191,7 +1193,8 @@ suite "StatusLine - buildGitInfo":
     config.gitChangedLines = false
     config.gitBranchName = false
 
-    let result = buildGitInfo(textBuffer, EditorMode.Normal, config, true)
+    let result =
+      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, true)
 
     check result == ""
 
@@ -1201,7 +1204,8 @@ suite "StatusLine - buildGitInfo":
     config.gitChangedLines = true
     config.gitBranchName = true
 
-    let result = buildGitInfo(textBuffer, EditorMode.Normal, config, true)
+    let result =
+      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, true)
 
     check result == ""
 
@@ -1215,163 +1219,9 @@ suite "StatusLine - buildGitInfo":
     # Even with a file path, inactive window should not show git info
     # (unless showGitInactive is true)
     # This test verifies the condition check
-    let result = buildGitInfo(textBuffer, EditorMode.Normal, config, false)
+    let result =
+      buildGitInfo(GitCacheState(), textBuffer, EditorMode.Normal, config, false)
       # isActiveWindow = false
 
     # Result should be empty because showGitInactive is false
     check result == ""
-
-suite "StatusLine - git cache":
-  # These tests drive the private cache machinery directly. Buffers are
-  # created without a filePath so `startGitDiffFromBufferAsync` returns Err
-  # and no real `git diff` subprocess is spawned — but the cache entry is
-  # still populated, which is what we need to verify eviction/cleanup.
-
-  test "cachedGitDiffCounts creates a cache entry":
-    cleanupGitDiffCache()
-    let buf = createTestTextBuffer("", false, "line")
-
-    discard cachedGitDiffCounts(buf)
-
-    check diffCacheStore.len == 1
-
-  test "evictGitCacheForBuffer removes both diff and branch entries":
-    cleanupGitDiffCache()
-    let buf = createTestTextBuffer("", false, "line")
-
-    discard cachedGitDiffCounts(buf)
-    discard cachedGitBranchName(buf, "/nonexistent/path")
-    check diffCacheStore.len == 1
-    check branchCacheStore.len == 1
-
-    evictGitCacheForBuffer(buf)
-
-    check diffCacheStore.len == 0
-    check branchCacheStore.len == 0
-
-  test "evictGitCacheForBuffer is safe when entry is absent":
-    cleanupGitDiffCache()
-    let buf = createTestTextBuffer("", false, "line")
-
-    # Should not raise when called on a buffer never seen by the cache.
-    evictGitCacheForBuffer(buf)
-
-    check diffCacheStore.len == 0
-    check branchCacheStore.len == 0
-
-  test "evictGitCacheForBuffer only drops the targeted buffer":
-    cleanupGitDiffCache()
-    let buf1 = createTestTextBuffer("", false, "a")
-    let buf2 = createTestTextBuffer("", false, "b")
-
-    discard cachedGitDiffCounts(buf1)
-    discard cachedGitDiffCounts(buf2)
-    check diffCacheStore.len == 2
-
-    evictGitCacheForBuffer(buf1)
-
-    check diffCacheStore.len == 1
-
-  test "cleanupGitDiffCache clears all entries":
-    cleanupGitDiffCache()
-    let buf1 = createTestTextBuffer("", false, "a")
-    let buf2 = createTestTextBuffer("", false, "b")
-
-    discard cachedGitDiffCounts(buf1)
-    discard cachedGitDiffCounts(buf2)
-    discard cachedGitBranchName(buf1, "/x")
-    discard cachedGitBranchName(buf2, "/y")
-
-    cleanupGitDiffCache()
-
-    check diffCacheStore.len == 0
-    check branchCacheStore.len == 0
-
-  test "cleanupGitDiffCache is idempotent on empty cache":
-    cleanupGitDiffCache()
-    cleanupGitDiffCache()
-
-    check diffCacheStore.len == 0
-    check branchCacheStore.len == 0
-
-  test "setGitDiffRefreshInterval accepts positive values":
-    let original = gitDiffRefreshIntervalMs
-
-    setGitDiffRefreshInterval(777)
-    check gitDiffRefreshIntervalMs == 777
-
-    setGitDiffRefreshInterval(original)
-
-  test "setGitDiffRefreshInterval ignores zero and negative values":
-    setGitDiffRefreshInterval(500)
-    check gitDiffRefreshIntervalMs == 500
-
-    setGitDiffRefreshInterval(0)
-    check gitDiffRefreshIntervalMs == 500
-
-    setGitDiffRefreshInterval(-1)
-    check gitDiffRefreshIntervalMs == 500
-
-    setGitDiffRefreshInterval(DefaultGitDiffRefreshIntervalMs)
-
-suite "StatusLine - tickGitDiffPipelines":
-  # Real git repo so `startGitDiffFromBufferAsync` actually spawns a
-  # subprocess. Once scheduled we must never call `cachedGitDiffCounts`
-  # again — the whole point is that hidden buffers (whose status line is
-  # not being rendered) still get their pipelines reaped.
-  setup:
-    let testDir = getTempDir() / "moe_status_line_tick_test"
-    if dirExists(testDir):
-      removeDir(testDir)
-    createDir(testDir)
-    discard execCmdEx("git init", workingDir = testDir)
-    discard execCmdEx("git config user.email 'test@test.com'", workingDir = testDir)
-    discard execCmdEx("git config user.name 'Test'", workingDir = testDir)
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "line 1\nline 2\nline 3\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m init", workingDir = testDir)
-
-  teardown:
-    cleanupGitDiffCache()
-    if dirExists(testDir):
-      removeDir(testDir)
-
-  test "tickGitDiffPipelines reaps a hidden buffer's pending pipeline":
-    cleanupGitDiffCache()
-    let buf = newTextBuffer()
-    check buf.loadFile(testFile).isOk
-
-    # Schedule the pipeline once (the render path), then simulate the
-    # buffer going hidden by never touching cachedGitDiffCounts again.
-    discard cachedGitDiffCounts(buf)
-    check gitDiffPendingCount() == 1
-
-    # Drive the pipeline to completion purely through the tick path.
-    var reaped = false
-    for _ in 0 ..< 200:
-      tickGitDiffPipelines()
-      if gitDiffPendingCount() == 0:
-        reaped = true
-        break
-      sleep(50)
-
-    check reaped
-    let counts = gitDiffCacheCounts(buf)
-    check counts.isSome
-    # File is unchanged from HEAD so counts must be zero.
-    check counts.get == (added: 0, modified: 0, deleted: 0)
-
-  test "tickGitDiffPipelines is a no-op when no pipeline is pending":
-    cleanupGitDiffCache()
-    tickGitDiffPipelines()
-    check diffCacheStore.len == 0
-
-    # A path-less buffer yields a populated entry with no pending pipeline.
-    let buf = createTestTextBuffer("", false, "x")
-    discard cachedGitDiffCounts(buf)
-    check gitDiffPendingCount() == 0
-    let before = gitDiffCacheCounts(buf)
-    tickGitDiffPipelines()
-    check gitDiffPendingCount() == 0
-    check gitDiffCacheCounts(buf) == before

@@ -79,6 +79,8 @@ macro defineSections(specs: untyped): untyped =
   ##
   ## Adding a section is one new tuple — the names list and the dispatch
   ## case stay in lockstep automatically.
+  ##
+  ## Section groups are declared separately with `defineGroupSections`.
   expectKind(specs, nnkStmtList)
   # `quote do` applies hygiene by default — bare idents inside the
   # template become fresh `gensym` symbols, hiding the declarations from
@@ -94,21 +96,21 @@ macro defineSections(specs: untyped): untyped =
   let stringIdent = ident"string"
   var namesArr = nnkBracket.newTree()
   let caseStmt = nnkCaseStmt.newTree(nameParam)
+
+  proc addSection(nameLit, accessor, typeIdent: NimNode) =
+    if nameLit.kind != nnkStrLit:
+      error("first element must be a string literal", nameLit)
+    if accessor.kind != nnkDotExpr:
+      error("second element must be a dotted access starting at `cfg`", accessor)
+    namesArr.add nameLit
+    let call =
+      newCall(ident"generateSectionMarkdown", accessor[0], accessor[1], typeIdent)
+    caseStmt.add nnkOfBranch.newTree(nameLit, newStmtList(call))
+
   for entry in specs:
     if entry.kind notin {nnkTupleConstr, nnkPar} or entry.len != 3:
       error("expected `(\"MarkerName\", cfg.<path>, SectionType)` tuple", entry)
-    let nameLit = entry[0]
-    let accessor = entry[1]
-    let typeIdent = entry[2]
-    if nameLit.kind != nnkStrLit:
-      error("first tuple element must be a string literal", nameLit)
-    if accessor.kind != nnkDotExpr:
-      error("second element must be a dotted access starting at `cfg`", accessor)
-    let parent = accessor[0]
-    let leaf = accessor[1]
-    namesArr.add nameLit
-    let call = newCall(ident"generateSectionMarkdown", parent, leaf, typeIdent)
-    caseStmt.add nnkOfBranch.newTree(nameLit, newStmtList(call))
+    addSection(entry[0], entry[1], entry[2])
   caseStmt.add nnkElse.newTree(
     newStmtList(
       nnkRaiseStmt.newTree(
@@ -161,6 +163,73 @@ defineSections:
   ("Debug.Visual", cfg.debug.visual, DebugVisualConfig)
   ("Debug.JumpList", cfg.debug.jumpList, DebugJumpListConfig)
   ("Debug.Lsp", cfg.debug.lsp, DebugLspConfig)
+
+macro defineGroupSections(ownerField: untyped, GroupT: typedesc): untyped =
+  ## Counterpart of `defineSections` for a section group: the parent table
+  ## plus one `Marker.Sub` section per `{.cfgSubSection.}` field of `GroupT`.
+  ## Both the marker name and the sub-table list come from the type, so adding
+  ## a feature table needs no edit here — only its AUTO-GEN marker pair in the
+  ## markdown.
+  ##
+  ## Emits `<Marker>SectionNames*` and `<marker>BodyFor`, mirroring the
+  ## `SectionNames` / `bodyFor` pair.
+  let marker = groupTomlName(GroupT)
+  let nameParam = ident"name"
+  let cfgParam = ident"cfg"
+  let namesIdent = ident(marker & "SectionNames")
+  let bodyForIdent = ident(toLowerAscii(marker[0]) & marker[1 ..^ 1] & "BodyFor")
+  let editorConfigIdent = ident"EditorConfig"
+  let stringIdent = ident"string"
+
+  var namesArr = nnkBracket.newTree(newLit(marker))
+  let caseStmt = nnkCaseStmt.newTree(nameParam)
+  caseStmt.add nnkOfBranch.newTree(
+    newLit(marker),
+    newStmtList(newCall(ident"generateSectionMarkdown", cfgParam, ownerField, GroupT)),
+  )
+  let ownerAccess = newDotExpr(cfgParam, ownerField)
+  for (field, typ, subName, subject) in subSectionSpecs(GroupT):
+    let subMarker = newLit(marker & "." & subName)
+    namesArr.add subMarker
+    # Interpolate the type symbol the walk already resolved rather than
+    # rebuilding an ident from its name: a sub-table whose type this module
+    # does not import would otherwise fail with a bare "undeclared
+    # identifier", or bind to an unrelated same-named type in scope here.
+    let subType = nnkBracketExpr.newTree(ident"typedesc", typ)
+    caseStmt.add nnkOfBranch.newTree(
+      subMarker,
+      newStmtList(
+        newCall(
+          ident"generateSectionMarkdown",
+          ownerAccess,
+          ident(field),
+          subType,
+          newLit(subject),
+        )
+      ),
+    )
+  caseStmt.add nnkElse.newTree(
+    newStmtList(
+      nnkRaiseStmt.newTree(
+        newCall(
+          ident"newException",
+          ident"ValueError",
+          infix(newLit("unknown section: "), "&", nameParam),
+        )
+      )
+    )
+  )
+
+  let seqExpr = prefix(namesArr, "@")
+  result = quote:
+    const `namesIdent`* = `seqExpr`
+
+    proc `bodyForIdent`(
+        `nameParam`: `stringIdent`, `cfgParam`: `editorConfigIdent`
+    ): `stringIdent` =
+      `caseStmt`
+
+defineGroupSections(lsp, LspConfig)
 
 proc replaceMarkers(text: string, name, body: string): string =
   ## Replace the content between `<!-- AUTO-GEN:start name -->` and
@@ -224,6 +293,8 @@ proc regenerateConfigDocs*(input: string): string =
   result = input
   for name in SectionNames:
     result = replaceMarkers(result, name, bodyFor(name, cfg))
+  for name in LspSectionNames:
+    result = replaceMarkers(result, name, lspBodyFor(name, cfg))
   for name in ExtraSectionNames:
     result = replaceMarkers(result, name, bodyForExtra(name))
 
@@ -234,7 +305,7 @@ proc main() {.used.} =
 
   let original = readFile(DocsPath)
   let regenerated = regenerateConfigDocs(original)
-  let totalSections = SectionNames.len + ExtraSectionNames.len
+  let totalSections = SectionNames.len + LspSectionNames.len + ExtraSectionNames.len
   if regenerated != original:
     writeFile(DocsPath, regenerated)
     echo "regenerated ", totalSections, " section(s) in ", DocsPath

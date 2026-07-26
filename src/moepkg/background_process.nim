@@ -22,8 +22,30 @@ import std/strformat
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
+when defined(posix):
+  import std/posix
+
 import types/background_process_types
 export background_process_types
+
+const KillGrace = 2.seconds
+  ## Upper bound on waiting for a killed child to close its stdout. Only used
+  ## after the process was already killed, so it merely bounds the cleanup.
+
+proc timeoutFromSeconds*(seconds: int): Duration =
+  ## Convert a config timeout to the value `waitForAsync` expects.
+  ## Non-positive means the user opted out of the bound.
+  if seconds <= 0: InfiniteDuration else: seconds.seconds
+
+proc killProcessGroup(pid: int) =
+  ## SIGKILL the whole process group. Processes are spawned as group leaders
+  ## (AsyncProcessOption.ProcessGroup), so the negative-pid kill also reaps
+  ## grandchildren - `nim c` spawning a C compiler, or the `sh -c "build && run"`
+  ## of QuickRun. Harmless if the group is already gone (ESRCH is ignored).
+  if pid <= 0:
+    return
+  when defined(posix):
+    discard posix.kill(posix.Pid(-pid), posix.SIGKILL)
 
 proc isRunning*(bp: BackgroundProcess): bool =
   if bp.process.isNil:
@@ -41,8 +63,13 @@ proc cancel*(bp: BackgroundProcess) =
     discard bp.process.terminate()
 
 proc kill*(bp: BackgroundProcess) =
-  if not bp.process.isNil:
-    discard bp.process.kill()
+  ## SIGKILL the process and everything it spawned. Killing only the direct
+  ## child would leave the real workers (compiler, linker, the program a
+  ## `sh -c` wrapper launched) running with the pipe still open.
+  if bp.process.isNil:
+    return
+  killProcessGroup(bp.process.pid)
+  discard bp.process.kill()
 
 proc closeAsync*(bp: BackgroundProcess): Future[void] {.async: (raises: []).} =
   if not bp.process.isNil:
@@ -54,7 +81,12 @@ proc startBackgroundProcess*(
 ): Future[StartProcessResult] {.async: (raises: []).} =
   ## Start the passed command in a new process and return BackgroundProcess.
   ## Use AsyncProcess.Pipe for stdout to capture output, StdErrToStdOut to also capture stderr
-  const Options = {AsyncProcessOption.UsePath, AsyncProcessOption.StdErrToStdOut}
+  # ProcessGroup makes the child its own process-group leader so `kill` can
+  # take out the grandchildren it spawns too (see killProcessGroup).
+  const Options = {
+    AsyncProcessOption.UsePath, AsyncProcessOption.StdErrToStdOut,
+    AsyncProcessOption.ProcessGroup,
+  }
 
   try:
     let process = await startProcess(
@@ -105,10 +137,57 @@ proc waitForExitAsync*(bp: BackgroundProcess): Future[int] {.async: (raises: [])
   except CancelledError:
     return -1
 
-proc waitForAsync*(bp: BackgroundProcess): Future[seq[string]] {.async: (raises: []).} =
-  ## Wait for process to complete and return all output lines
-  ## Read output first (blocks until EOF), then wait for exit
-  let output = await bp.readAllOutput()
+proc reapAsync(bp: BackgroundProcess): Future[void] {.async: (raises: []).} =
   discard await bp.waitForExitAsync()
   await bp.closeAsync()
+
+proc waitForAsync(bp: BackgroundProcess): Future[seq[string]] {.async: (raises: []).} =
+  ## Wait for process to complete and return all output lines.
+  ## Read output first (blocks until EOF), then wait for exit.
+  ##
+  ## Unbounded, and deliberately not exported: a command that never exits never
+  ## resolves this future. Callers go through the `timeout` overload, which
+  ## reaches this only for an explicit `InfiniteDuration`.
+  let output = await bp.readAllOutput()
+  await bp.reapAsync()
   return output
+
+proc waitForAsync*(
+    bp: BackgroundProcess, timeout: Duration
+): Future[ProcessOutputResult] {.async: (raises: []).} =
+  ## Wait for the process and return its output, killing it once `timeout`
+  ## elapses. `InfiniteDuration` waits without a bound.
+  ##
+  ## This is the bounded form every external command should use: a command that
+  ## never exits (a hung compiler, a program reading stdin) is turned into an
+  ## error instead of a Future and a child process that live until the editor
+  ## quits. A timeout is always reported as an error, never as empty output.
+  if timeout == InfiniteDuration:
+    return ProcessOutputResult.ok(await bp.waitForAsync())
+
+  let
+    reader = bp.readAllOutput()
+    timer = sleepAsync(timeout)
+  try:
+    discard await race(reader, timer)
+  except CancelledError:
+    discard
+
+  if reader.finished:
+    await timer.cancelAndWait()
+    let output = await reader
+    await bp.reapAsync()
+    return ProcessOutputResult.ok(output)
+
+  # Timed out. Kill first so the child's stdout reaches EOF and the reader can
+  # finish; `race` deliberately leaves it running, and closing the handle out
+  # from under a live read would be a use-after-free.
+  bp.kill()
+  try:
+    discard await reader.withTimeout(KillGrace)
+  except CancelledError:
+    discard
+  await bp.reapAsync()
+  # `$Duration` keeps sub-second timeouts honest; `timeout.seconds` would
+  # report "0" for anything shorter than a second.
+  return ProcessOutputResult.err fmt"Timed out after {timeout}"

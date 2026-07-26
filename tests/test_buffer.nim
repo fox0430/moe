@@ -875,6 +875,102 @@ suite "Buffer - Folding":
     check buf.foldState.folds[0].startLine == 0 # outer remains
     check buf.foldState.folds[0].endLine == 5
 
+  test "foldIndexAt returns the outermost fold, unlike foldIndexAtInnermost":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5) # outer
+    discard buf.foldState.addFold(1, 3) # inner
+    let idx = buf.foldState.foldIndexAt(2)
+    check idx.isSome
+    check buf.foldState.folds[idx.get].endLine == 5
+    check buf.foldState.foldIndexAt(6).isNone
+
+  test "foldIndexAtStartLine / getFoldAtStartLine only match the start line":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5) # outer
+    discard buf.foldState.addFold(1, 3) # inner
+    check buf.foldState.getFoldAtStartLine(0).get.endLine == 5
+    check buf.foldState.getFoldAtStartLine(1).get.endLine == 3
+    # A line covered by both folds but starting neither has no match.
+    check buf.foldState.foldIndexAtStartLine(2).isNone
+    check buf.foldState.getFoldAtStartLine(2).isNone
+
+  test "getCollapsedFoldAt picks the collapsed fold, not merely the outermost":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5, collapsed = false) # outer, open
+    discard buf.foldState.addFold(1, 3, collapsed = true) # inner, collapsed
+    # The open outer fold must not shadow the collapsed inner one.
+    check buf.foldState.getCollapsedFoldAt(2).get.endLine == 3
+    # A line inside the open outer fold only has no collapsed fold to render.
+    check buf.foldState.getCollapsedFoldAt(4).isNone
+    # Collapsing the outer fold makes it win: it is hit first and covers the line.
+    check buf.foldState.closeFold(0) == true
+    check buf.foldState.getCollapsedFoldAt(2).get.endLine == 5
+
+  test "getNextVisibleLine skips a collapsed fold and clamps to maxLine":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    let maxLine = buf.len - 1
+    discard buf.foldState.addFold(1, 3, collapsed = true)
+    check buf.foldState.getNextVisibleLine(2, maxLine) == 4
+    check buf.foldState.getNextVisibleLine(1, maxLine) == 4 # start line too
+    check buf.foldState.getNextVisibleLine(0, maxLine) == 0 # outside the fold
+    # An open fold hides nothing, so the line is already visible.
+    check buf.foldState.openFold(2) == true
+    check buf.foldState.getNextVisibleLine(2, maxLine) == 2
+
+  test "getNextVisibleLine clamps a fold reaching the last line":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    let maxLine = buf.len - 1
+    discard buf.foldState.addFold(3, maxLine, collapsed = true)
+    # endLine + 1 is past the buffer; the result must stay in range.
+    check buf.foldState.getNextVisibleLine(4, maxLine) == maxLine
+
+  test "openAllFolds / closeAllFolds hit every fold regardless of nesting":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5, collapsed = true)
+    discard buf.foldState.addFold(1, 3, collapsed = false)
+    buf.foldState.openAllFolds()
+    for fold in buf.foldState.folds:
+      check not fold.collapsed
+    buf.foldState.closeAllFolds()
+    for fold in buf.foldState.folds:
+      check fold.collapsed
+
+  test "fold lookups stay correct after an insert shifts the folds":
+    # Every line-keyed lookup breaks out as soon as a fold starts past the
+    # requested line, so the shift adjusters must keep folds start-line sorted.
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 1, collapsed = true)
+    discard buf.foldState.addFold(3, 4, collapsed = true)
+
+    # Insert two lines above everything: both folds shift down by 2.
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\n")
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[1].startLine == 5
+
+    check buf.foldState.foldIndexAt(3).get == 0
+    check buf.foldState.foldIndexAt(6).get == 1
+    check buf.foldState.foldIndexAtStartLine(5).get == 1
+    check buf.foldState.getCollapsedFoldAt(6).get.startLine == 5
+    check buf.foldState.getNextVisibleLine(6, buf.len - 1) == 7
+    # The gap between the two folds is still fold-free.
+    check buf.foldState.foldIndexAt(4).isNone
+
+  test "fold lookups stay correct after a delete shifts the folds":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 1, collapsed = true)
+    discard buf.foldState.addFold(3, 4, collapsed = true)
+
+    # Drop line 2, the gap between the folds: only the later fold moves up.
+    check buf.deleteLine(2).isOk
+    check buf.foldState.folds[0].startLine == 0
+    check buf.foldState.folds[1].startLine == 2
+
+    check buf.foldState.foldIndexAt(1).get == 0
+    check buf.foldState.foldIndexAt(3).get == 1
+    check buf.foldState.foldIndexAtStartLine(2).get == 1
+    check buf.foldState.getCollapsedFoldAt(3).get.startLine == 2
+    check buf.foldState.getNextVisibleLine(2, buf.len - 1) == 4
+
 suite "Buffer - Sidebar Markers":
   test "setLineMarker and getLineMarker":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
@@ -938,7 +1034,7 @@ suite "Buffer - Sidebar Markers":
       BufferPosition(line: 1, column: 0), BufferPosition(line: 2, column: line2Len)
     )
 
-    # Line3 dropped, Line4 joined onto Line2's tail — 3 lines total.
+    # Line2 and Line3 fully consumed, Line4 moves up into row 1 — 3 lines total.
     # Marker on startLine survives; markers below shift up by 2.
     check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
     check buf.getLineMarker(2).get == LineMarkerKind.GitAdded
@@ -984,7 +1080,8 @@ suite "Buffer - Sidebar Markers":
     buf.setLineMarker(1, LineMarkerKind.SyntaxError)
     buf.setLineMarker(2, LineMarkerKind.GitDeleted)
 
-    # Delete from end of Line1 through Line2's endOfLine → joins Line2 up.
+    # Zero-width delete at end of Line1: endPos.column >= lineLen triggers
+    # a join with the next line as a side effect.
     let line1Len = buf[0].len
     discard buf.deleteRange(
       BufferPosition(line: 0, column: line1Len),
@@ -1018,6 +1115,38 @@ suite "Buffer - Sidebar Markers":
     check buf.getLineMarker(0).get == LineMarkerKind.GitAdded
     check buf.getLineMarker(1).get == LineMarkerKind.SyntaxError
     check buf.getLineMarker(2).get == LineMarkerKind.GitDeleted
+
+  test "clearGitMarkers drops only the git-diff kinds":
+    # Called on every git diff refresh: anything it wipes beyond the diff kinds
+    # is silently lost until the next LSP/bookmark update repopulates it.
+    let buf = newTextBuffer("L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7")
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.GitChanged)
+    buf.setLineMarker(2, LineMarkerKind.GitDeleted)
+    buf.setLineMarker(3, LineMarkerKind.GitChangedAndDeleted)
+    buf.setLineMarker(4, LineMarkerKind.GitConflict)
+    buf.setLineMarker(5, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(6, LineMarkerKind.Bookmark)
+    buf.setLineMarker(7, LineMarkerKind.SessionModified)
+
+    buf.clearGitMarkers()
+
+    for line in 0 .. 3:
+      check buf.getLineMarker(line).isNone
+    # GitConflict is not a diff kind: it marks conflict blocks in the file.
+    check buf.getLineMarker(4).get == LineMarkerKind.GitConflict
+    check buf.getLineMarker(5).get == LineMarkerKind.SyntaxError
+    check buf.getLineMarker(6).get == LineMarkerKind.Bookmark
+    check buf.getLineMarker(7).get == LineMarkerKind.SessionModified
+
+  test "isGitChangeMarker covers the diff kinds only":
+    for kind in [GitAdded, GitChanged, GitDeleted, GitChangedAndDeleted]:
+      check kind.isGitChangeMarker
+    for kind in [
+      GitConflict, SyntaxError, SyntaxWarning, SessionModified, SessionInserted,
+      Bookmark,
+    ]:
+      check not kind.isGitChangeMarker
 
 suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
   # Guards the refactor's promise that folds, bookmarks, lineMarkers, and
@@ -1740,6 +1869,7 @@ suite "Buffer - Diagnostic Highlights":
         message: "test error",
       )
     ]
+    buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
 
@@ -1763,6 +1893,7 @@ suite "Buffer - Diagnostic Highlights":
         message: "test warning",
       )
     ]
+    buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
 
@@ -1779,6 +1910,114 @@ suite "Buffer - Diagnostic Highlights":
     buf.updateHighlight()
 
     check buf.highlight.getSegmentModifiers(0, 0) == {}
+
+  test "updateHighlight applies multi-line diagnostic underlines":
+    # Multi-line diagnostic (startLine=0, startCol=2) .. (endLine=2, endCol=3)
+    # exclusive on endCol. Verifies coverage on start row tail, mid row, and
+    # end row up to endCol-1 — the read boundary any overlay refactor must
+    # preserve.
+    let buf = newTextBuffer("line0\nline1\nline2\nline3")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 2,
+        endLine: 2,
+        endCol: 3,
+        severity: bdsError,
+        message: "multi-line err",
+      )
+    ]
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getSegmentModifiers(0, 1) == {}
+
+    check buf.highlight.getColorPair(0, 2) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getSegmentModifiers(0, 2) == {StyleModifier.Undercurl}
+    check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getColorPair(1, 0) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getColorPair(1, 4) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getColorPair(2, 0) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getColorPair(2, 2) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getSegmentModifiers(2, 3) == {}
+
+  test "overlapping diagnostics: later diagnostic wins in overlap region":
+    # Pins current bake behavior: applyDiagnosticHighlights iterates overlays
+    # in the original seq order when ranges overlap, so the later diagnostic
+    # overwrites the earlier one at overlapping cells. If a future refactor
+    # changes this to severity-based priority, this test must be rewritten
+    # deliberately, not silently.
+    let buf = newTextBuffer("abcdefghij")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "err first",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 2,
+        endLine: 0,
+        endCol: 8,
+        severity: bdsWarning,
+        message: "warn second",
+      ),
+    ]
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.syntaxCheckErr
+    check buf.highlight.getColorPair(0, 1) == EditorColorPairIndex.syntaxCheckErr
+
+    check buf.highlight.getColorPair(0, 2) == EditorColorPairIndex.syntaxCheckWarn
+    check buf.highlight.getColorPair(0, 4) == EditorColorPairIndex.syntaxCheckWarn
+
+    check buf.highlight.getColorPair(0, 7) == EditorColorPairIndex.syntaxCheckWarn
+
+    check buf.highlight.getSegmentModifiers(0, 8) == {}
+
+  test "clearing diagnostics removes render-side underlines and colors":
+    # After buf.diagnostics.setLen(0) + updateHighlight, previously highlighted
+    # cells must return to no-underline / non-syntaxCheck* color. Existing
+    # tests only checked marker (sidebar) clearing; this pins the render path.
+    let buf = newTextBuffer("hello world")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "boom",
+      )
+    ]
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+    check buf.highlight.getSegmentModifiers(0, 0) == {StyleModifier.Undercurl}
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.syntaxCheckErr
+
+    buf.diagnostics.setLen(0)
+    buf.diagnosticsDirty = true
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getSegmentModifiers(0, 0) == {}
+    check buf.highlight.getColorPair(0, 0) notin {
+      EditorColorPairIndex.syntaxCheckErr, EditorColorPairIndex.syntaxCheckWarn,
+      EditorColorPairIndex.syntaxCheckInfo, EditorColorPairIndex.syntaxCheckHint,
+    }
 
 suite "Buffer - CRLF Line Ending Handling":
   test "loadFile CRLF: line ending detected":
@@ -2137,29 +2376,6 @@ suite "Buffer - contentVersion monotonicity":
     check buf.changeSeq == cs
     check buf.contentVersion > cv
 
-  test "NoUndo mutators invalidate cursorCache":
-    # cursorCache is keyed on (line, changeSeq); NoUndo does not bump
-    # changeSeq, so without an explicit reset the next charToBytePos lookup
-    # on the mutated line returns a stale bytePos.
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha\nbeta\n")
-    # Seed the cache as if a prior lookup had populated it.
-    buf.cursorCache =
-      CursorPosCache(line: 0, charPos: 3, bytePos: 3, changeSeq: buf.changeSeq)
-
-    buf.replaceLineNoUndo(0, "gamma")
-    check buf.cursorCache.line == -1
-
-    buf.cursorCache =
-      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
-    buf.insertLineNoUndo(1, "delta")
-    check buf.cursorCache.line == -1
-
-    buf.cursorCache =
-      CursorPosCache(line: 1, charPos: 2, bytePos: 2, changeSeq: buf.changeSeq)
-    buf.deleteLineNoUndo(1)
-    check buf.cursorCache.line == -1
-
   test "insertLineNoUndo shifts bookmarks":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
@@ -2420,10 +2636,10 @@ suite "Buffer - reload preserves identity across a backend swap":
     check readFile(path) == "abc"
 
 suite "Buffer - reload resets stale content-keyed state":
-  # A reload replaces the content wholesale. State keyed on the OLD content (the
-  # char->byte cursor cache, undo/redo history) is stale and is reset on loadFile's
-  # single reload path, so a reload's result never depends on whether the file size
-  # happened to cross the backend-swap threshold.
+  # A reload replaces the content wholesale. State keyed on the OLD content
+  # (undo/redo history) is stale and is reset on loadFile's single reload path,
+  # so a reload's result never depends on whether the file size happened to
+  # cross the backend-swap threshold.
 
   setup:
     setAutoBackendMode(false)
@@ -2433,31 +2649,24 @@ suite "Buffer - reload resets stale content-keyed state":
     setAutoBackendMode(false)
     setConfiguredBackend(GapBuffer)
 
-  test "same-backend reload invalidates the cursor cache":
-    # charToBytePosCached keys on (line, charPos, changeSeq) and returns the cached
-    # bytePos WITHOUT re-reading the line. loadFile resets changeSeq to 0, so a hit
-    # recorded at changeSeq 0 (the first edit after a load) must not survive a
-    # reload, or it would return a byte offset computed from the OLD content and
-    # corrupt the edit when a multibyte char shifts column.
-    let path = getTempDir() / "moe_test_cursorcache_reload.txt"
+  test "edit after same-backend reload maps char to byte against new content":
+    # A reload changes the byte layout at a given char column (multibyte moves).
+    # The next edit must consult the reloaded content, not any residual state
+    # from before the reload.
+    let path = getTempDir() / "moe_test_reload_edit.txt"
     writeFile(path, "world héllo\n") # multibyte (é) before column 7
     defer:
       removeFile(path)
 
     let buf = newTextBuffer(backend = GapBuffer)
     check buf.loadFile(path).isOk
-    # First post-load edit at column>0 records a cache entry at changeSeq 0.
     discard buf.deleteChar(BufferPosition(line: 0, column: 7))
-    check buf.cursorCache.line != -1 # cache populated
 
     # Reload a DIFFERENT content where char 7 sits at another byte offset.
     writeFile(path, "héllo world\n") # é now before column 7, 'o' at char 7
     check buf.loadFile(path).isOk
     check buf.backendKind == GapBuffer # same-backend path, no swap
-    check buf.cursorCache.line == -1 # cache invalidated by the reload
-    check buf.cursorCache.changeSeq == -1
 
-    # A fresh edit must read the NEW content's byte layout, not the stale offset.
     discard buf.deleteChar(BufferPosition(line: 0, column: 7))
     check buf.getLine(0) == "héllo wrld" # char 7 ('o') removed cleanly
 
@@ -2881,3 +3090,51 @@ suite "Buffer - UTF-16/32 file transcoding":
     check buf.encoding == CharacterEncoding.utf8
     check not buf.hasBom
     check buf.getFileContent == original
+
+suite "Buffer - Markdown fenced code block detection":
+  test "isCodeBlockLine spans the opening fence, interior, and closing fence":
+    let buf = newTextBuffer("intro\n```nim\nlet x = 1\n\necho x\n```\nafter\n")
+    buf.language = SourceLanguage.langMarkdown
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check not buf.isCodeBlockLine(0) # "intro"
+    check buf.isCodeBlockLine(1) # ```nim  (opening fence)
+    check buf.isCodeBlockLine(2) # let x = 1
+    check buf.isCodeBlockLine(3) # blank interior line
+    check buf.isCodeBlockLine(4) # echo x
+    check buf.isCodeBlockLine(5) # ```    (closing fence)
+    check not buf.isCodeBlockLine(6) # "after"
+
+  test "isCodeBlockLine returns false when language is not Markdown":
+    # A ```-fenced snippet in a non-Markdown buffer is just text as far as the
+    # tokenizer is concerned; the helper must not flag those lines.
+    let buf = newTextBuffer("```nim\nlet x = 1\n```\n")
+    buf.language = SourceLanguage.langNone
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    for i in 0 ..< buf.len:
+      check not buf.isCodeBlockLine(i)
+
+suite "Buffer - Backend selection":
+  teardown:
+    # These are process-wide, so restore the stock defaults for later suites.
+    setAutoBackendMode(false)
+    setConfiguredBackend(GapBuffer)
+
+  test "configured backend wins at any size while auto mode is off":
+    setAutoBackendMode(false)
+    setConfiguredBackend(Rope)
+    check chooseBackendForFile(0) == Rope
+    check chooseBackendForFile(AutoBackendLargeFileThreshold * 2) == Rope
+    check chooseBackend() == Rope
+
+  test "auto mode switches to PieceTable at the large-file threshold":
+    setAutoBackendMode(true)
+    setConfiguredBackend(Rope) # ignored while auto mode is on
+    check chooseBackendForFile(AutoBackendLargeFileThreshold - 1) == GapBuffer
+    check chooseBackendForFile(AutoBackendLargeFileThreshold) == PieceTable
+    check chooseBackendForFile(AutoBackendLargeFileThreshold + 1) == PieceTable
+    # Without size context, assume a small buffer.
+    check chooseBackend() == GapBuffer

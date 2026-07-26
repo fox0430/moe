@@ -26,6 +26,7 @@ import pkg/celina
 import
   types/editor_types,
   editor_window_layout,
+  visible_rows,
   editor_render_helpers,
   render_utils,
   sidebar,
@@ -37,7 +38,7 @@ import
   colorcode,
   git_conflict,
   style_patch,
-  status_line,
+  git_cache,
   editor_codelens,
   virtual_text,
   command_line,
@@ -55,8 +56,9 @@ type
     ## - `newLineStyleContext`: full context built once per rendered line. Required
     ##   for `getSelectionStyle` / `renderLineSegmentWithSelection`.
     ## - Manual partial construction: `fillLineBackground` only calls
-    ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`, and
-    ##   `useTwoColor`; the remaining fields can be left at their defaults.
+    ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`,
+    ##   `useTwoColor`, and `lineBg`; the remaining fields can be left at
+    ##   their defaults.
     lineIndex*: int
     isActiveWindow*: bool
     isCursorLine*: bool
@@ -66,6 +68,12 @@ type
     wordRanges*: seq[ColumnRange]
     colorCodeMatches*: seq[ColorCodeMatch]
     trailingSpaceStart*: int
+    lineBg*: Option[ColorValue]
+      ## Line-scoped background overlay (Markdown fenced code block). When set,
+      ## every cell on this line — including trailing empty cells and any cell
+      ## whose syntax segment lacks a bg — inherits this color, so a code block
+      ## reads as a uniform stripe rather than only tinted characters. Ranks
+      ## below cursor line / cursor column / git conflict / visual selection.
 
   LinePrecomputed* = object
     ## Per-logical-line values reused across wrap segments. The wrap path builds
@@ -91,6 +99,26 @@ proc resolveLineConflict(
     textBuffer.lineConflictKind(lineIndex)
   else:
     cmkNone
+
+proc resolveLineBg(
+    e: Editor, textBuffer: TextBuffer, lineIndex: int
+): Option[ColorValue] =
+  ## Single source of truth for the per-line background overlay (Markdown
+  ## fenced code block). Every LineStyleContext construction site funnels
+  ## through this so the "which lines get the block bg?" rule cannot drift
+  ## between the render/fill/virtual-text paths.
+  ##
+  ## Gated on `e.showSyntax`: without it, character cells fall through the
+  ## `hasSyntaxHighlight` branch in `baseStyleWithOverlay` / `syntaxBaseStyle`
+  ## and never pick up `lineBg`, so applying it to the trailing fill would
+  ## paint an unmatched stripe past the text.
+  if not e.showSyntax or textBuffer == nil or not textBuffer.isCodeBlockLine(lineIndex):
+    return none(ColorValue)
+  let bg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+  if bg.kind != Default:
+    some(bg)
+  else:
+    none(ColorValue)
 
 proc effectiveSearchPattern(state: EditorState): string =
   ## Resolve the active hlsearch pattern based on overlay state.
@@ -170,6 +198,7 @@ proc newLineStyleContext*(
     wordRanges: wordRanges,
     colorCodeMatches: colorCodeMatches,
     trailingSpaceStart: trailingSpaceStart,
+    lineBg: resolveLineBg(e, textBuffer, lineIndex),
   )
 
 # Layer predicates
@@ -276,6 +305,15 @@ proc baseStyleWithOverlay(
     var style = colorIndexToStyle(colorPair)
     style.modifiers =
       style.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+    let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
+    if segBg.isSome:
+      style = style.merge(bgOnly(segBg.get))
+    elif lineCtx.lineBg.isSome:
+      # Fence tokens (```) and the language-name keyword carry no segment bg,
+      # so without this the fence line reads as un-tinted islands inside the
+      # block's stripe. Overlays below (cursorLine / gitConflict / …) still
+      # win via `overlayPatchSyntax`.
+      style = style.merge(bgOnly(lineCtx.lineBg.get))
     style.merge(
       e.overlayPatchSyntax(pos, lineCtx, displayCol, cursorDisplayCol, colorPair)
     )
@@ -313,6 +351,11 @@ proc getSelectionStyle*(
       var s = colorIndexToStyle(colorPair)
       s.modifiers =
         s.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+      let segBg = buffer.highlight.getSegmentBg(pos.line, pos.column)
+      if segBg.isSome:
+        s = s.merge(bgOnly(segBg.get))
+      elif lineCtx.lineBg.isSome:
+        s = s.merge(bgOnly(lineCtx.lineBg.get))
       s
     else:
       normalStyle()
@@ -411,8 +454,8 @@ proc lineFillPatch(
     inVisualSelection: bool,
 ): StylePatch =
   ## Shared priority chain used by both line-fill paths.
-  ## Priority: visualSelection > gitConflict > cursorLine > cursorColumn > none.
-  ## Returns `noPatch` when the cell should keep `normalStyle()`.
+  ## Priority: visualSelection > gitConflict > cursorLine > cursorColumn >
+  ## lineBg > none. Returns `noPatch` when the cell should keep `normalStyle()`.
   if inVisualSelection:
     return full(visualStyle())
   if lineCtx.gitConflictApplies:
@@ -421,6 +464,8 @@ proc lineFillPatch(
     return full(cursorLineHighlightStyle())
   if e.cursorColumnApplies(displayX, cursorDisplayCol):
     return full(cursorColumnHighlightStyle())
+  if lineCtx.lineBg.isSome:
+    return bgOnly(lineCtx.lineBg.get)
   noPatch
 
 proc fillLineBackground*(
@@ -442,13 +487,14 @@ proc fillLineBackground*(
   ## selection covers (lineIndex, 0), column 0 is rendered with the visual
   ## selection background so that Visual mode is visible on empty lines.
   # Partial LineStyleContext: lineFillPatch only reads isCursorLine,
-  # lineConflict, and useTwoColor. The seq/colorcode fields stay at their
-  # defaults — lineIndex is set so any future read of it stays correct.
+  # lineConflict, useTwoColor, and lineBg. The seq/colorcode fields stay at
+  # their defaults — lineIndex is set so any future read of it stays correct.
   let lineCtx = LineStyleContext(
     lineIndex: lineIndex,
     isCursorLine: lineIndex == cursorLine,
     lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
     useTwoColor: e.config.highlight.gitConflictTwoColor,
+    lineBg: resolveLineBg(e, textBuffer, lineIndex),
   )
   let selectionAtStart =
     isEmptyLine and hasSelection and
@@ -559,12 +605,13 @@ proc renderLineSegmentWithSelection*(
     # Tab expands to N spaces up to the next tab stop. Each expanded cell
     # honors indentation-guide drawing; the spaces themselves use a style
     # that may carry the trailingSpaces override.
-    let spacesToNextTab = e.tabStop - (displayX mod e.tabStop)
+    let spacesToNextTab = tabAdvance(displayX, e.tabStop)
     let tabStyle = style.merge(e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col))
     for i in 0 ..< spacesToNextTab:
       if screenX + displayX < ctx.windowRightEdge:
         if e.shouldShowIndentationGuide(indentInfo, displayX, col):
-          buffer.setCell(screenX + displayX, screenY, "│", 1, indentationLineStyle())
+          let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
+          buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
         else:
           buffer.setCell(screenX + displayX, screenY, " ", 1, tabStyle)
       displayX += 1
@@ -580,7 +627,8 @@ proc renderLineSegmentWithSelection*(
         foldZeroWidthRune(buffer, screenX + displayX, screenY, rune)
     elif rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
       if screenX + displayX < ctx.windowRightEdge:
-        buffer.setCell(screenX + displayX, screenY, "│", 1, indentationLineStyle())
+        let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
+        buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
       displayX += 1
     else:
       let renderStyle = style.merge(e.charOverridePatch(ctx, lineCtx, rune, col))
@@ -680,10 +728,8 @@ proc renderWindowLineWrapped*(
     maxScreenY = visibleHeight + tabLineOffset
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
-    maxWidth =
-      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    sidebarWidth = e.calculateSidebarWidth(window)
+    maxWidth = e.wrapWidth(window, lineNumOffset)
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
@@ -720,12 +766,13 @@ proc renderWindowLineWrapped*(
     # Empty lines bypass renderLineSegmentWithSelection, so draw any end-of-line
     # virtual text (inlay hints) here too, over the just-filled background.
     # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
-    # isCursorLine, lineConflict, and useTwoColor.
+    # isCursorLine, lineConflict, useTwoColor, and lineBg.
     let vtLineCtx = LineStyleContext(
       lineIndex: lineIndex,
       isCursorLine: lineIndex == window.cursor.line,
       lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
       useTwoColor: e.config.highlight.gitConflictTwoColor,
+      lineBg: resolveLineBg(e, window.buffer, lineIndex),
     )
     discard e.appendEndOfLineVirtualText(
       buffer, ctx, vtLineCtx, 0, textScreenX, actualScreenY
@@ -836,8 +883,7 @@ proc renderWindowLineNoWrap*(
   let
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    sidebarWidth = e.calculateSidebarWidth(window)
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
@@ -864,8 +910,7 @@ proc renderWindowLineNoWrap*(
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
 
   if displayLine.len > 0 and textScreenX < buffer.area.width:
-    let cellBudget =
-      window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+    let cellBudget = e.textAreaWidth(window, lineNumOffset)
     if cellBudget > 0:
       # Clip by display width, not byte length: take as many runes as fit
       # cellBudget cells (tabs expanded, CJK = 2 cells), like the wrapped path.
@@ -914,12 +959,13 @@ proc renderWindowLineNoWrap*(
     let vtStartCol = line.charLen - window.viewport.leftColumn
     if vtStartCol >= 0:
       # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
-      # isCursorLine, lineConflict, and useTwoColor.
+      # isCursorLine, lineConflict, useTwoColor, and lineBg.
       let vtLineCtx = LineStyleContext(
         lineIndex: lineIndex,
         isCursorLine: lineIndex == window.cursor.line,
         lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
         useTwoColor: e.config.highlight.gitConflictTwoColor,
+        lineBg: resolveLineBg(e, window.buffer, lineIndex),
       )
       discard e.appendEndOfLineVirtualText(
         buffer, ctx, vtLineCtx, vtStartCol, textScreenX, actualScreenY
@@ -957,8 +1003,8 @@ proc renderFoldLine*(
   ## Render a collapsed fold marker line (vim-style)
   let
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    sidebarWidth = e.calculateSidebarWidth(window)
+    scrollbarWidth = e.calculateScrollbarWidth(window)
     lineNumScreenX = window.viewport.x + sidebarWidth
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
     foldText = window.buffer.formatFoldText(fold)
@@ -986,55 +1032,15 @@ proc renderFoldLine*(
         foldText
     buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())
 
-proc lineDisplayRows(
-    line: int,
-    buffer: TextBuffer,
-    wrapCache: WrapCountCache,
-    lineWrap: bool,
-    maxWidth: int,
-    tabStop: int,
-): int =
-  ## Display rows a single logical line occupies (not counting fold hiding).
-  if lineWrap:
-    if wrapCache != nil:
-      wrapCache.cachedWrapCount(buffer, line)
-    else:
-      calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
-  else:
-    1
-
-proc walkDisplayRows(
-    buffer: TextBuffer,
-    foldState: FoldState,
-    wrapCache: WrapCountCache,
-    lineWrap: bool,
-    maxWidth: int,
-    tabStop: int,
-    stopLine: int,
-): int =
-  ## Sum display rows for logical lines [0, stopLine). Each collapsed fold
-  ## collapses its range to a single marker row; wrap expands a logical line
-  ## to its wrap count. Assumes `foldState.folds` is sorted by startLine.
-  if lineWrap and wrapCache != nil:
-    wrapCache.ensureFresh(buffer, maxWidth, tabStop)
-  let
-    total = min(stopLine, buffer.len)
-    folds = foldState.folds
-  var
-    line = 0
-    foldIdx = 0
-  while line < total:
-    while foldIdx < folds.len and
-        (not folds[foldIdx].collapsed or folds[foldIdx].endLine < line):
-      inc foldIdx
-    if foldIdx < folds.len and folds[foldIdx].startLine <= line:
-      # Fold marker row: whole [startLine, endLine] collapses to 1 row.
-      result += 1
-      line = folds[foldIdx].endLine + 1
-      inc foldIdx
-    else:
-      result += lineDisplayRows(line, buffer, wrapCache, lineWrap, maxWidth, tabStop)
-      inc line
+proc rowLayoutOf(e: Editor, window: EditorWindow, lineNumOffset: int): RowLayout =
+  ## Row walk context for a window, keyed on the width the renderer wraps at.
+  initRowLayout(
+    window.buffer,
+    window.wrapCountCache,
+    e.lineWrap,
+    e.wrapWidth(window, lineNumOffset),
+    e.tabStop,
+  )
 
 proc renderScrollbar*(
     e: Editor,
@@ -1049,30 +1055,23 @@ proc renderScrollbar*(
   ## one marker row and wrapped logical lines count as their wrap segments,
   ## so the thumb tracks what the viewport actually shows.
   let
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    scrollbarWidth = e.calculateScrollbarWidth(window)
     scrollbarStartX = window.viewport.x + window.viewport.width - scrollbarWidth
 
   if visibleHeight <= 0 or scrollbarWidth <= 0:
     return
 
   let
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    maxWidth =
-      max(1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
-    totalRows = walkDisplayRows(
-      window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
-      maxWidth, e.tabStop, window.buffer.len,
-    )
+    rl = e.rowLayoutOf(window, lineNumOffset)
+    totalRows = rl.totalRows(window.buffer.len)
 
   if totalRows <= visibleHeight:
     return
 
   let
     rowsAbove =
-      walkDisplayRows(
-        window.buffer, window.buffer.foldState, window.wrapCountCache, e.lineWrap,
-        maxWidth, e.tabStop, window.viewport.topLine,
-      ) + (if e.lineWrap: window.viewport.topWrapOffset else: 0)
+      rl.totalRows(window.viewport.topLine) +
+      (if e.lineWrap: window.viewport.topWrapOffset else: 0)
     thumbSize = max(1, (visibleHeight * visibleHeight) div totalRows)
     maxRowsAbove = totalRows - visibleHeight
     thumbPos =
@@ -1130,9 +1129,8 @@ proc renderWindow*(
       # flagged), making it look like a stuck git marker. For non-git / untracked
       # files the git gutter shows nothing, so the session fallback is kept.
       let showSessionMarkers =
-        e.showModifiedLines and not (
-          e.showGitDiff and isBufferGitTracked(window.buffer)
-        )
+        e.showModifiedLines and
+        not (e.showGitDiff and e.state.git.isBufferGitTracked(window.buffer))
       some(
         generateSidebarFromBuffer(
           window.buffer,
@@ -1156,12 +1154,7 @@ proc renderWindow*(
     if window.cursor.line < lineCount:
       let cursorLineText = window.buffer.getLine(window.cursor.line)
       if e.lineWrap:
-        let
-          sidebarWidth = e.calculateSidebarWidth(window.mode)
-          scrollbarWidth = e.calculateScrollbarWidth(window.mode)
-          maxWidth = max(
-            1, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
-          )
+        let maxWidth = e.wrapWidth(window, lineNumOffset)
         cursorWrapPosition(cursorLineText, window.cursor.column, maxWidth, e.tabStop)[1]
       else:
         bufferColToDisplayCol(
@@ -1190,59 +1183,45 @@ proc renderWindow*(
         @[],
   )
 
-  var
-    screenY = tabLineOffset
-    lineIndex = window.viewport.topLine
-
-  while screenY < visibleHeight + tabLineOffset and lineIndex < lineCount:
+  # Fold skipping and wrap-segment counting come from the shared row walk, so
+  # the painted rows, the screen cursor and the mouse hit-test agree by
+  # construction.
+  let rl = e.rowLayoutOf(window, lineNumOffset)
+  for row in rl.visibleLines(
+    window.viewport.topLine, window.viewport.topWrapOffset, visibleHeight
+  ):
     # sidebarIndex is 0-based index into sidebar buffer (based on logical line, not screen row)
-    let sidebarIndex = lineIndex - window.viewport.topLine
+    let
+      sidebarIndex = row.line - window.viewport.topLine
+      screenY = tabLineOffset + row.startRow
 
-    # Check if this line is inside a collapsed fold (but not the start line)
-    if window.buffer.foldState.isLineInCollapsedFold(lineIndex):
-      # Skip this line (it's hidden inside a fold)
-      inc lineIndex
-      continue
-
-    # Check if this line is the start of a collapsed fold
-    let foldOpt = window.buffer.foldState.getCollapsedFoldAt(lineIndex)
-    if foldOpt.isSome and foldOpt.get.startLine == lineIndex:
-      # Render the fold marker
-      if maybeSidebar.isSome:
-        renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
-      e.renderFoldLine(buffer, window, lineNumOffset, screenY, foldOpt.get)
-      # Skip to the line after the fold
-      lineIndex = foldOpt.get.endLine + 1
-      inc screenY
-      continue
-
-    # Normal line rendering
-    # Render sidebar if enabled
     if maybeSidebar.isSome:
       renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
 
-    if e.lineWrap:
-      # Only the top logical line skips leading wrap segments (sub-line scroll).
-      let skipSegments =
-        if lineIndex == window.viewport.topLine: window.viewport.topWrapOffset else: 0
+    if row.fold.isSome:
+      e.renderFoldLine(buffer, window, lineNumOffset, screenY, row.fold.get)
+    elif e.lineWrap:
+      # `renderWindowLineWrapped` advances its own screenY / lineIndex across the
+      # segments it paints; the walk owns the next row, so the copies are dropped.
+      var
+        segScreenY = screenY
+        segLine = row.line
       e.renderWindowLineWrapped(
         buffer,
         window,
         lineNumOffset,
         ctx,
-        screenY,
-        lineIndex,
+        segScreenY,
+        segLine,
         visibleHeight,
         tabLineOffset,
-        skipSegments = skipSegments,
+        skipSegments = row.skipSegments,
       )
     else:
-      e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, lineIndex)
-      inc screenY
-      inc lineIndex
+      e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, row.line)
 
   # Render scrollbar on the right edge if enabled (file editing modes only)
-  if e.calculateScrollbarWidth(window.mode) > 0:
+  if e.calculateScrollbarWidth(window) > 0:
     e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset, lineNumOffset)
 
 proc renderWindowSeparator*(

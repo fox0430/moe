@@ -926,8 +926,9 @@ suite "CodeLens Execution":
     e.lsp.enabled = true
     let res = waitFor e.executeCodeLensItem(runnableItem("Run test"))
     check res.isOk
-    check e.state.pending.terminalCommand ==
-      "cd /home/user/proj && cargo test --package foo"
+    check e.state.pending.len == 1
+    check e.state.pending[0].kind == paoTerminalCommand
+    check e.state.pending[0].command == "cd /home/user/proj && cargo test --package foo"
     check e.state.statusMessage == "Running: Run test"
 
   test "executeCodeLensItem - runnable with no arguments":
@@ -970,7 +971,8 @@ suite "CodeLens Execution":
     e.cursor = BufferPosition(line: 0, column: 0)
 
     waitFor e.executeCurrentLineCodeLens()
-    check e.state.pending.terminalCommand.len > 0
+    check e.state.pending.len == 1
+    check e.state.pending[0].kind == paoTerminalCommand
     check not e.state.lspCache.codeLensPicker.isActive
 
   test "executeCurrentLineCodeLens - multiple items show the picker":
@@ -998,7 +1000,8 @@ suite "CodeLens Execution":
 
     waitFor e.codeLensPickerConfirm()
     check not e.state.lspCache.codeLensPicker.isActive
-    check e.state.pending.terminalCommand.len > 0
+    check e.state.pending.len == 1
+    check e.state.pending[0].kind == paoTerminalCommand
 
   test "codeLensPickerSelectByNumber executes the numbered item":
     let e = createTestEditor()
@@ -1008,7 +1011,8 @@ suite "CodeLens Execution":
 
     waitFor e.codeLensPickerSelectByNumber(2)
     check not e.state.lspCache.codeLensPicker.isActive
-    check e.state.pending.terminalCommand.len > 0
+    check e.state.pending.len == 1
+    check e.state.pending[0].kind == paoTerminalCommand
 
   test "codeLensPickerSelectByNumber ignores out-of-range numbers":
     let e = createTestEditor()
@@ -1018,4 +1022,4 @@ suite "CodeLens Execution":
 
     waitFor e.codeLensPickerSelectByNumber(5)
     check e.state.lspCache.codeLensPicker.isActive
-    check e.state.pending.terminalCommand.len == 0
+    check e.state.pending.len == 0

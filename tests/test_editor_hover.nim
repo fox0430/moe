@@ -40,6 +40,7 @@ proc seedHoverPending(e: Editor, reqId: int, bufId: BufferId, contentVersion: in
     cursorLine: 0,
     cursorCol: 0,
     validModes: HoverValidModes,
+    blockedByOverlay: true,
   )
 
 proc createTestEditor(): Editor =
@@ -62,8 +63,9 @@ proc createTestEditorForAutoHover(): Editor =
   let vr = newValidationResult()
   result = newEditor(config, vr)
   result.lsp.enabled = true
-  # Force lastAutoHoverUpdate to the past so debounce doesn't block
-  result.state.lspCache.lastAutoHoverUpdate = getMonoTime() - initDuration(seconds = 10)
+  # Force the last auto-hover time into the past so debounce doesn't block
+  result.state.lspCache.autoHoverPoll.lastUpdate =
+    getMonoTime() - initDuration(seconds = 10)
 
 suite "editor_hover - startLspHover":
   test "Returns false when LSP is disabled":
@@ -113,6 +115,23 @@ suite "editor_hover - pollLspHover":
 
     check not e.state.lspCache.pending.hasKey(lrfHover)
     check e.state.lspCache.hoverPopup.isActive
+
+  test "Discards response while a Command overlay is active":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.enterCommandOverlay()
+
+    const reqId = 44
+    e.lsp.service.pendingResponses[reqId] = (
+      result: some($(%*{"contents": {"kind": "plaintext", "value": "hover text"}})),
+      error: none(string),
+    )
+    e.seedHoverPending(reqId, e.activeBuffer().id, e.activeBuffer().contentVersion)
+
+    e.pollLspHover()
+
+    check not e.state.lspCache.pending.hasKey(lrfHover)
+    check not e.state.lspCache.hoverPopup.isActive
 
   test "Discards response when the active buffer changed while waiting":
     let e = createTestEditor()
@@ -210,8 +229,8 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
   test "Does nothing when cursor has not moved":
     let e = createTestEditorForAutoHover()
     # Set tracked position to match current cursor
-    e.state.lspCache.autoHoverCursorLine = 0
-    e.state.lspCache.autoHoverCursorCol = 0
+    e.state.lspCache.autoHoverPoll.cursorLine = 0
+    e.state.lspCache.autoHoverPoll.cursorColumn = 0
 
     e.maybeAutoHoverDiagnostic()
 
@@ -230,8 +249,8 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
       )
     ]
     # Force cursor position change detection
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
 
     e.maybeAutoHoverDiagnostic()
@@ -256,8 +275,8 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
     check e.state.lspCache.hoverPopup.isActive
 
     # Move cursor to line 1 (outside diagnostic range)
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 1, column: 0)
 
     e.maybeAutoHoverDiagnostic()
@@ -284,8 +303,8 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
         message: "warning msg",
       ),
     ]
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
 
     e.maybeAutoHoverDiagnostic()
@@ -308,10 +327,10 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
         message: "test error",
       )
     ]
-    # Set lastAutoHoverUpdate to now (within debounce window)
-    e.state.lspCache.lastAutoHoverUpdate = getMonoTime()
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    # Set the last auto-hover time to now (within debounce window)
+    e.state.lspCache.autoHoverPoll.lastUpdate = getMonoTime()
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
 
     e.maybeAutoHoverDiagnostic()
@@ -332,8 +351,8 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
         message: "visual warning",
       )
     ]
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
 
     e.maybeAutoHoverDiagnostic()
@@ -352,8 +371,8 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
         message: "test error",
       )
     ]
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
 
     e.maybeAutoHoverDiagnostic()
@@ -372,6 +391,27 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
     e.state.lspCache.hoverPopup.show("hover text", 0, 0)
     check not e.state.lspCache.hoverPopup.isAutoHover
 
+  test "Does nothing while a Command overlay is active":
+    let e = createTestEditorForAutoHover()
+    e.state.enterCommandOverlay()
+    e.activeBuffer().diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 10,
+        severity: bdsError,
+        message: "test error",
+      )
+    ]
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
+    e.cursor = BufferPosition(line: 0, column: 3)
+
+    e.maybeAutoHoverDiagnostic()
+
+    check not e.state.lspCache.hoverPopup.isActive
+
   test "Debounce resets tracked position for retry":
     let e = createTestEditorForAutoHover()
     e.config.lsp.diagnostics.autoHoverDelay = 999_999
@@ -385,17 +425,17 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
         message: "test error",
       )
     ]
-    e.state.lspCache.lastAutoHoverUpdate = getMonoTime()
-    e.state.lspCache.autoHoverCursorLine = -1
-    e.state.lspCache.autoHoverCursorCol = -1
+    e.state.lspCache.autoHoverPoll.lastUpdate = getMonoTime()
+    e.state.lspCache.autoHoverPoll.cursorLine = -1
+    e.state.lspCache.autoHoverPoll.cursorColumn = -1
     e.cursor = BufferPosition(line: 0, column: 3)
 
     e.maybeAutoHoverDiagnostic()
 
     # Debounce blocked, but tracked position should be reset for retry
     check not e.state.lspCache.hoverPopup.isActive
-    check e.state.lspCache.autoHoverCursorLine == -1
-    check e.state.lspCache.autoHoverCursorCol == -1
+    check e.state.lspCache.autoHoverPoll.cursorLine == -1
+    check e.state.lspCache.autoHoverPoll.cursorColumn == -1
 
 suite "editor_hover - config gate":
   test "startLspHover returns false when hover is disabled in config":

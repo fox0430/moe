@@ -73,6 +73,25 @@ suite "formatRelativeLineNumber":
     # Cursor on line 99, checking line 0 -> distance 99
     check formatRelativeLineNumber(0, 99, 5) == "  99 "
 
+suite "tabAdvance":
+  test "advances to next tab stop from various columns":
+    check tabAdvance(0, 4) == 4
+    check tabAdvance(1, 4) == 3
+    check tabAdvance(2, 4) == 2
+    check tabAdvance(3, 4) == 1
+
+  test "wraps a full tabStop at exact multiples":
+    check tabAdvance(4, 4) == 4
+    check tabAdvance(8, 4) == 4
+    check tabAdvance(80, 8) == 8
+
+  test "coerces non-positive tabStop to 1":
+    check tabAdvance(0, 0) == 1
+    check tabAdvance(0, -3) == 1
+    # With tabStop coerced to 1, every column is a tab stop → advance 1.
+    check tabAdvance(5, 0) == 1
+    check tabAdvance(7, -1) == 1
+
 suite "calculateWrapCount":
   test "empty line":
     check calculateWrapCount("", 80, 4) == 1
@@ -332,6 +351,42 @@ suite "displayWidthUpToWithTabs":
   test "tab stop edge cases":
     check displayWidthUpToWithTabs("\t", 1, 0) == 1
     check displayWidthUpToWithTabs("\t", 1, -1) == 1
+
+suite "displayWidthBetweenWithTabs":
+  test "empty string":
+    check displayWidthBetweenWithTabs("", 0, 0, 4) == 0
+
+  test "ascii slice":
+    check displayWidthBetweenWithTabs("hello", 1, 4, 4) == 3 # "ell"
+    check displayWidthBetweenWithTabs("hello", 0, 5, 4) == 5
+
+  test "tab stops restart at startChar":
+    # From the line start the tab would end at column 4, so subtracting widths
+    # gives 2; expanded from the slice start it fills a whole tab stop.
+    check displayWidthBetweenWithTabs("ab\tc", 2, 3, 4) == 4
+    check displayWidthUpToWithTabs("ab\tc", 3, 4) -
+      displayWidthUpToWithTabs("ab\tc", 2, 4) == 2
+
+  test "tab at the slice start":
+    check displayWidthBetweenWithTabs("\thello", 0, 1, 4) == 4
+    check displayWidthBetweenWithTabs("\thello", 0, 2, 4) == 5
+
+  test "unicode characters":
+    check displayWidthBetweenWithTabs("日本語", 1, 3, 4) == 4 # "本語"
+
+  test "endChar beyond string length":
+    check displayWidthBetweenWithTabs("abc", 1, 10, 4) == 2
+
+  test "endChar at or before startChar":
+    check displayWidthBetweenWithTabs("abc", 2, 2, 4) == 0
+    check displayWidthBetweenWithTabs("abc", 2, 1, 4) == 0
+
+  test "negative startChar":
+    check displayWidthBetweenWithTabs("abc", -1, 2, 4) == 0
+
+  test "tab stop edge cases":
+    check displayWidthBetweenWithTabs("\t", 0, 1, 0) == 1
+    check displayWidthBetweenWithTabs("\t", 0, 1, -1) == 1
 
 suite "findTrailingSpaceStart":
   test "empty string":

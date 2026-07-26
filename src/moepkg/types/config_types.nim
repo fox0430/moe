@@ -189,6 +189,9 @@ type
     .}: Option[string]
     command* {.cfg, cfgNoUi, cfgDocDescription: "Override commands executed at build".}:
       Option[string]
+    timeout* {.
+      cfg, cfgMin: 0, cfgDocDescription: "Build timeout (seconds, 0 = no timeout)"
+    .}: int
 
   # Tab line settings
   TabLineConfig* {.cfgSection: "TabLine".} = object
@@ -293,7 +296,9 @@ type
       bool
     command* {.cfg, cfgNoUi, cfgDocDescription: "Commands to be executed by quick run".}:
       Option[string]
-    timeout* {.cfg, cfgMin: 1, cfgDocDescription: "Command timeout (seconds)".}: int
+    timeout* {.
+      cfg, cfgMin: 0, cfgDocDescription: "Command timeout (seconds, 0 = no timeout)"
+    .}: int
     nimAdvancedCommand* {.
       cfg, cfgNoUi, cfgDocDescription: "Nim compiler advanced args"
     .}: Option[string]
@@ -468,6 +473,11 @@ type
   # Syntax checker settings
   SyntaxCheckerConfig* {.cfgSection: "SyntaxChecker".} = object
     enable* {.cfg, cfgDocDescription: "Syntax checker".}: bool
+    timeout* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDescription: "Syntax check timeout (seconds, 0 = no timeout)"
+    .}: int
 
   # Smooth scroll settings (physics-based, compatible with vim comfortable-motion)
   SmoothScrollConfig* {.cfgSection: "SmoothScroll".} = object
@@ -607,54 +617,106 @@ type
 
   # LSP feature config (enable only)
   LspFeatureConfig* = object
-    enable*: bool
+    enable* {.cfg, cfgDocDescription: "Enable {}".}: bool
 
   # LSP diagnostics config
   LspDiagnosticsConfig* = object
-    enable*: bool
-    autoHover*: bool
-    autoHoverDelay*: int # Debounce delay in milliseconds
+    enable* {.cfg, cfgDocDescription: "Enable {}".}: bool
+    autoHover* {.
+      cfg,
+      cfgDocDescription:
+        "Automatically show diagnostic messages in hover popup when cursor is on a diagnostic"
+    .}: bool
+    autoHoverDelay* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDescription: "Delay in milliseconds before auto hover shows (0 = no delay)"
+    .}: int
 
   # LSP feature with openWindow option
   LspOpenWindowConfig* = object
-    enable*: bool
-    openWindow*: bool
+    enable* {.cfg, cfgDocDescription: "Enable {}".}: bool
+    openWindow* {.cfg, cfgDocDescription: "Open a new window and jump".}: bool
 
   # LSP language server config
   LspServerConfig* = object
     extensions*: seq[string]
     command*: string
     trace*: LspTraceLevel
+    settings*: string
+      ## Serialized JSON for workspace/didChangeConfiguration and
+      ## workspace/configuration responses ("" = none).
     # Rust-analyzer specific options
     rustAnalyzerRunSingle*: bool
     rustAnalyzerDebugSingle*: bool
 
-  # LSP settings
-  LspConfig* = object
-    enable*: bool
-    timeout*: int
+  # LSP settings. A section group: loader, known-key list, serializer, UI and
+  # docs are all derived from this declaration; `servers` absorbs the dynamic
+  # [Lsp.<languageId>] space and is the only hand-written part.
+  LspConfig* {.cfgGroup: "Lsp".} = object
+    enable* {.cfg, cfgDocDescription: "LSP (Language Server Protocol) Client".}: bool
+    timeout* {.
+      cfg, cfgMin: 1, cfgDocDescription: "Timeout in milliseconds for LSP requests"
+    .}: int
+      ## Deliberately unbounded above: only correctness matters, so a
+      ## non-positive value is rejected and a long wait is the user's call.
     # Feature configs
-    completion*: LspFeatureConfig
-    declaration*: LspOpenWindowConfig
-    definition*: LspOpenWindowConfig
-    typeDefinition*: LspOpenWindowConfig
-    implementation*: LspOpenWindowConfig
-    diagnostics*: LspDiagnosticsConfig
-    signatureHelp*: LspFeatureConfig
-    documentFormatting*: LspFeatureConfig
-    foldingRange*: LspFeatureConfig
-    selectionRange*: LspFeatureConfig
-    documentSymbol*: LspFeatureConfig
-    hover*: LspFeatureConfig
-    inlayHint*: LspFeatureConfig
-    references*: LspFeatureConfig
-    callHierarchy*: LspFeatureConfig
-    documentHighlight*: LspFeatureConfig
-    documentLink*: LspFeatureConfig
-    codeLens*: LspFeatureConfig
-    rename*: LspFeatureConfig
-    semanticTokens*: LspFeatureConfig
-    executeCommand*: LspFeatureConfig
+    completion* {.cfgSubSection: "Completion", cfgDocDescription: "LSP Completion".}:
+      LspFeatureConfig
+    declaration* {.
+      cfgSubSection: "Declaration", cfgDocDescription: "LSP Goto Declaration"
+    .}: LspOpenWindowConfig
+    definition* {.
+      cfgSubSection: "Definition", cfgDocDescription: "LSP Goto Definition"
+    .}: LspOpenWindowConfig
+    typeDefinition* {.
+      cfgSubSection: "TypeDefinition", cfgDocDescription: "LSP Type Definition"
+    .}: LspOpenWindowConfig
+    implementation* {.
+      cfgSubSection: "Implementation", cfgDocDescription: "LSP Implementation"
+    .}: LspOpenWindowConfig
+    diagnostics* {.cfgSubSection: "Diagnostics", cfgDocDescription: "LSP Diagnostics".}:
+      LspDiagnosticsConfig
+    signatureHelp* {.
+      cfgSubSection: "SignatureHelp", cfgDocDescription: "LSP Signature Help"
+    .}: LspFeatureConfig
+    documentFormatting* {.
+      cfgSubSection: "DocumentFormatting", cfgDocDescription: "LSP Document Formatting"
+    .}: LspFeatureConfig
+    foldingRange* {.
+      cfgSubSection: "FoldingRange", cfgDocDescription: "LSP Folding Range"
+    .}: LspFeatureConfig
+    selectionRange* {.
+      cfgSubSection: "SelectionRange", cfgDocDescription: "LSP Selection Range"
+    .}: LspFeatureConfig
+    documentSymbol* {.
+      cfgSubSection: "DocumentSymbol", cfgDocDescription: "LSP Document Symbol"
+    .}: LspFeatureConfig
+    hover* {.cfgSubSection: "Hover", cfgDocDescription: "LSP Hover".}: LspFeatureConfig
+    inlayHint* {.cfgSubSection: "InlayHint", cfgDocDescription: "LSP Inlay Hint".}:
+      LspFeatureConfig
+    references* {.
+      cfgSubSection: "References", cfgDocDescription: "LSP Find References"
+    .}: LspFeatureConfig
+    callHierarchy* {.
+      cfgSubSection: "CallHierarchy", cfgDocDescription: "LSP Call Hierarchy"
+    .}: LspFeatureConfig
+    documentHighlight* {.
+      cfgSubSection: "DocumentHighlight", cfgDocDescription: "LSP Document Highlight"
+    .}: LspFeatureConfig
+    documentLink* {.
+      cfgSubSection: "DocumentLink", cfgDocDescription: "LSP Document Link"
+    .}: LspFeatureConfig
+    codeLens* {.cfgSubSection: "CodeLens", cfgDocDescription: "LSP Code Lens".}:
+      LspFeatureConfig
+    rename* {.cfgSubSection: "Rename", cfgDocDescription: "LSP Rename".}:
+      LspFeatureConfig
+    semanticTokens* {.
+      cfgSubSection: "SemanticTokens", cfgDocDescription: "LSP Semantic Tokens"
+    .}: LspFeatureConfig
+    executeCommand* {.
+      cfgSubSection: "ExecuteCommand", cfgDocDescription: "LSP Execute Command"
+    .}: LspFeatureConfig
     # Language server configs (language name -> config)
     servers*: Table[string, LspServerConfig]
 

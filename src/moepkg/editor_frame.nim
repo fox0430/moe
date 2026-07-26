@@ -44,8 +44,9 @@ import
   editor_render
 
 import
-  status_line, render_utils, logger, message_log, debug_viewer, completion,
-  signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration
+  git_cache, render_utils, logger, message_log, debug_viewer, completion,
+  signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration,
+  editor_window_layout
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
@@ -139,9 +140,10 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   )
 
   generateMacroInfo(
-    debugLines, e.state.macroState.isRecording, e.state.macroState.register,
-    e.state.macroState.registers.len, e.state.macroState.playbackDepth,
-    debugConfig.macroState.enable,
+    debugLines, e.state.pendingInput.macroState.isRecording,
+    e.state.pendingInput.macroState.register,
+    e.state.pendingInput.macroState.registers.len,
+    e.state.pendingInput.macroState.playbackDepth, debugConfig.macroState.enable,
   )
 
   generateVisualInfo(
@@ -191,8 +193,11 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
 
 proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   ## Send a notification. Routes to popup or status line based on config.
+  ## Both routes record the message, so what the log holds does not depend on
+  ## a display preference (the status line route logs via `statusMessage=`).
   if e.config.notification.popupNotifications:
     e.state.notificationPopup.addNotification(msg, level)
+    addMessageLog(msg)
   else:
     e.state.statusMessage = msg
 
@@ -293,17 +298,38 @@ proc tickFileAndConfig(e: Editor) =
   e.maybeReloadExternallyModifiedFile()
   e.maybeReloadConfig()
 
-proc tickGitAndDebug(e: Editor) =
-  ## Git and debug updates. The diff subprocess itself is scheduled lazily
-  ## from status_line.cachedGitDiffCounts (called during status-line
-  ## rendering); here we reap in-flight pipelines for all cached buffers
-  ## (so hidden buffers don't leak child/tempfile/fd) and then consume the
-  ## most recent diff result for the sidebar gutter, gated on the user's
-  ## showGitDiff flag.
-  ## Depends on `tickFileAndConfig` having refreshed the conflict scan first.
-  tickGitDiffPipelines()
+proc tickGitCache(e: Editor) =
+  ## Own the whole git-cache lifecycle: reap in-flight pipelines for every
+  ## cached buffer (so hidden buffers don't leak child/tempfile/fd), schedule
+  ## refreshes for the buffers currently on screen, then hand the newest diff
+  ## to the sidebar gutter. Rendering only reads the cache.
+  e.state.git.reapGitPipelines()
+
+  # Refresh only what is actually displayed: a diff spawns a subprocess and a
+  # branch lookup blocks on `git rev-parse`, so neither may run for a readout
+  # the user has turned off.
+  let sl = e.config.statusLine
+  let setup = if e.showStatusLine: sl.setupText else: ""
+  let wantsDiff =
+    e.showGitDiff or (e.showStatusLine and sl.gitChangedLines) or "{gitChanges}" in setup
+  let wantsBranch = (e.showStatusLine and sl.gitBranchName) or "{gitBranch}" in setup
+
+  for i, window in e.windowManager.windows:
+    # Inactive windows show git info only under showGitInactive — except
+    # through setupText placeholders, which that flag does not gate.
+    let isActive = i == e.windowManager.activeWindowIndex
+    if wantsDiff and (isActive or sl.showGitInactive or "{gitChanges}" in setup):
+      e.state.git.scheduleGitRefresh(window.buffer)
+    if wantsBranch and (isActive or sl.showGitInactive or "{gitBranch}" in setup):
+      e.state.git.refreshGitBranch(window.buffer)
+
   if e.showGitDiff:
-    maybeApplyGitMarkers(e.activeBuffer())
+    e.state.git.applyPendingGitMarkers(e.activeBuffer())
+
+proc tickGitAndDebug(e: Editor) =
+  ## Git and debug updates.
+  ## Depends on `tickFileAndConfig` having refreshed the conflict scan first.
+  e.tickGitCache()
   e.maybeUpdateConflicts()
   e.maybeUpdateDebugBuffer()
 
@@ -446,17 +472,24 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
 
     let sigHelpMgr = e.handlerManager.insertHandler.signatureHelpManager
     if sigHelpMgr.isActive():
-      let cursor = e.activeWindow.cursor
-      let lineText = e.activeBuffer.getLine(cursor.line)
-      let anchorX = calculateSignatureHelpAnchorX(
-        e.state.screenCursor.x,
-        sigHelpMgr.triggerLine,
-        sigHelpMgr.triggerCol,
-        cursor.line,
-        cursor.column,
-        displayWidthUpToWithTabs(lineText, sigHelpMgr.triggerCol, e.tabStop),
-        displayWidthUpToWithTabs(lineText, cursor.column, e.tabStop),
-      )
+      let
+        window = e.activeWindow
+        cursor = window.cursor
+        lineText = e.activeBuffer.getLine(cursor.line)
+        # Measure both columns against the origin the renderer sliced at, so the
+        # gap between them survives tabs and horizontal scrolling.
+        trigger = e.renderedCellPos(window, lineText, sigHelpMgr.triggerCol)
+        caret = e.renderedCellPos(window, lineText, cursor.column)
+      let anchorX =
+        if trigger.row != caret.row:
+          # Wrapped onto different rows: the horizontal gap says nothing about
+          # where the trigger is drawn, so pin to the caret.
+          e.state.screenCursor.x
+        else:
+          calculateSignatureHelpAnchorX(
+            e.state.screenCursor.x, sigHelpMgr.triggerLine, sigHelpMgr.triggerCol,
+            cursor.line, cursor.column, trigger.cellX, caret.cellX,
+          )
       let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
       let popupPos = calculateSignatureHelpPosition(
         anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,

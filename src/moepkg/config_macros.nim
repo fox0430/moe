@@ -51,6 +51,9 @@
 ## Pragma summary:
 ##   On the type:      cfgSection: "TomlSectionName"
 ##   On a field:       cfg, cfgSkip, cfgNoUi
+##                     cfgSubSection: "Child"             (the field's type is the
+##                                                         [Parent.Child] sub-table
+##                                                         of a section group)
 ##                     cfgMin: v, cfgMax: v, cfgStep: v  (numerics)
 ##                     cfgKey: "TomlKey"                  (TOML/Nim name diverges)
 ##                     cfgUiName: "Label"                 (UI display name)
@@ -75,11 +78,14 @@
 ##   loader + descriptor: bool, int, float, string, enum
 ##   loader only:         Option[string], seq[string]  (mark field with cfgNoUi)
 ##
+## `LspConfig` is a *section group* (see the `generateSectionGroup*` macros);
+## only its dynamic `[Lsp.<languageId>]` entries stay hand-written.
+##
 ## Sections intentionally not migrated (hand-written): ThemeConfig (conditional
-## file/string handling), LspConfig (dynamic server Table), KeyMappingConfig
-## (OrderedTable + parsing), CommandAliases/ShellCommands (nested objects).
+## file/string handling), KeyMappingConfig (OrderedTable + parsing),
+## CommandAliases/ShellCommands (nested objects).
 
-import std/[macros, strutils]
+import std/[macros, sets, strutils]
 
 import help_description
 
@@ -89,6 +95,20 @@ template cfgSection*(name: string) {.pragma.}
 
 ## Marker: this field is loaded/described automatically.
 template cfg*() {.pragma.}
+
+## Mark a field as the `[Parent.Name]` sub-table of a section group:
+##   completion* {.cfgSubSection: "Completion".}: LspFeatureConfig
+##
+## Unlike `{.cfgSection.}` (a *type* pragma) the name lives on the field, so
+## several fields may share one type. Must not be combined with `{.cfg.}`.
+template cfgSubSection*(name: string) {.pragma.}
+
+## Mark a type as a *section group* and name its parent TOML table:
+##   LspConfig* {.cfgGroup: "Lsp".} = object
+##
+## Every `generateSectionGroup*` macro reads the name from here, so loader,
+## serializer, UI and docs cannot disagree about what the user must type.
+template cfgGroup*(name: string) {.pragma.}
 
 ## Apply to a field or section type to opt out of macro generation.
 template cfgSkip*() {.pragma.}
@@ -388,6 +408,14 @@ iterator serializableFields(
         fieldName
     yield (fieldName, typeNode, pragmas, key)
 
+proc scalarKeys(td: NimNode): seq[string] =
+  ## The TOML keys of a section's `{.cfg.}` fields, in declaration order.
+  ## Single producer for the loader's unknown-key check, the sub-section name
+  ## collision guard and `generateSectionGroupKeys`, so those cannot disagree
+  ## about what counts as a key of the section.
+  for (_, _, _, key) in serializableFields(td):
+    result.add key
+
 proc validateEnumStringValues(typeNode: NimNode) =
   ## Compile-time guard for enum-typed config fields: every member must declare
   ## an explicit string value (e.g. `seA = "a"`). The serializer emits enum
@@ -454,22 +482,23 @@ proc classifyConfigFieldType(typeNode: NimNode): CfgFieldKind =
     else:
       cfkUnsupported
 
-proc buildLoaderBody(td, t, cfgVar, vr: NimNode): NimNode =
+proc buildLoaderBody(
+    td, t, cfgVar, vr: NimNode, sec: string, checkUnknown = true
+): NimNode =
   ## Build the loader statements for the section TypeDef `td`, reading from the
   ## TOML table expression `t` into the config accessor `cfgVar`, recording
-  ## issues in `vr`. Shared by `generateConfigLoader` (single section) and
-  ## `generateSectionLoaders` (whole-config dispatch) so the per-field type
-  ## handling lives in exactly one place.
-  let sec = sectionName(td)
+  ## issues in `vr`. Shared by `generateConfigLoader` (single section),
+  ## `generateSectionLoaders` (whole-config dispatch) and the section-group
+  ## macros so the per-field type handling lives in exactly one place.
+  ##
+  ## `sec` is the TOML section name to report issues under. `checkUnknown` is
+  ## false for section groups, whose parent table also holds sub-tables and
+  ## caller-defined dynamic keys.
   result = newStmtList()
 
-  # Collect field names + emit per-field load calls.
-  var validKeys: seq[string] = @[]
   var loadCalls = newStmtList()
 
   for (fieldName, typeNode, pragmas, key) in serializableFields(td):
-    validKeys.add key
-
     let fieldAcc = newDotExpr(cfgVar, ident(fieldName))
     let secLit = newLit(sec)
     let keyLit = newLit(key)
@@ -558,17 +587,18 @@ proc buildLoaderBody(td, t, cfgVar, vr: NimNode): NimNode =
   # Build `const validKeys = [...]`. Use gensym'd names so the const block
   # the macro injects into the caller's proc scope cannot be referenced by
   # surrounding code (preventing implicit dependencies on internal symbols).
-  var arrLit = newNimNode(nnkBracket)
-  for k in validKeys:
-    arrLit.add newLit(k)
-  let validKeysIdent = genSym(nskConst, "validKeys")
-  let sectionIdent = genSym(nskConst, "section")
-  let secLit = newLit(sec)
+  if checkUnknown:
+    var arrLit = newNimNode(nnkBracket)
+    for k in scalarKeys(td):
+      arrLit.add newLit(k)
+    let validKeysIdent = genSym(nskConst, "validKeys")
+    let sectionIdent = genSym(nskConst, "section")
+    let secLit = newLit(sec)
 
-  result.add quote do:
-    const `sectionIdent` = `secLit`
-    const `validKeysIdent` = `arrLit`
-    checkUnknownKeys(`t`, `validKeysIdent`, `sectionIdent`, `vr`)
+    result.add quote do:
+      const `sectionIdent` = `secLit`
+      const `validKeysIdent` = `arrLit`
+      checkUnknownKeys(`t`, `validKeysIdent`, `sectionIdent`, `vr`)
   result.add loadCalls
 
 macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
@@ -585,9 +615,9 @@ macro generateConfigLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
   let td = typeDef(T)
   if td == nil:
     error("cannot get impl for type", T)
-  buildLoaderBody(td, t, cfgVar, vr)
+  buildLoaderBody(td, t, cfgVar, vr, sectionName(td))
 
-proc buildSerializerBody(td, lines, cfgVar: NimNode): NimNode =
+proc buildSerializerBody(td, lines, cfgVar: NimNode, sec: string): NimNode =
   ## Build the serializer statements for the section TypeDef `td`, appending
   ## TOML lines to `lines` from the config accessor `cfgVar`. The inverse of
   ## `buildLoaderBody`; field order follows the struct declaration so saved
@@ -598,8 +628,7 @@ proc buildSerializerBody(td, lines, cfgVar: NimNode): NimNode =
   ## Normalization note: `seq[string]` fields are emitted unconditionally (even
   ## when empty -> `key = []`); the loader reads an empty array back to an empty
   ## seq, so the round-trip is value-stable. `Option[string]` fields are emitted
-  ## only when `isSome`.
-  let sec = sectionName(td)
+  ## only when `isSome`. `sec` is the TOML header name to emit.
   result = newStmtList()
 
   let headerLit = newLit("[" & sec & "]")
@@ -692,7 +721,7 @@ macro generateSectionLoaders*(toml, cfg, vr: typed, OuterT: typedesc): untyped =
   ## field of `OuterT` (excluding nested sections — those whose section name
   ## contains a dot, which are loaded by hand under their parent table).
   ## Produces, for each section:
-  ##   if toml.hasKey("Section"):
+  ##   if expectTable(toml, "Section", vr):
   ##     generateConfigLoader(toml["Section"].getTable(), cfg.field, vr, FieldType)
   let outerTd = typeDef(OuterT)
   if outerTd == nil:
@@ -706,9 +735,9 @@ macro generateSectionLoaders*(toml, cfg, vr: typed, OuterT: typedesc): untyped =
     let fieldAcc = newDotExpr(cfg, ident(field))
     let tbl = genSym(nskLet, "tbl")
     let innerTd = typ.getImpl
-    let loadBody = buildLoaderBody(innerTd, tbl, fieldAcc, vr)
+    let loadBody = buildLoaderBody(innerTd, tbl, fieldAcc, vr, sec)
     result.add quote do:
-      if `toml`.hasKey(`secLit`):
+      if expectTable(`toml`, `secLit`, `vr`):
         let `tbl` = `toml`[`secLit`].getTable()
         `loadBody`
 
@@ -725,7 +754,7 @@ macro generateSectionSerializers*(lines, cfg: typed, OuterT: typedesc): untyped 
   for (field, typ, sec) in cfgSectionFields(outerTd):
     let fieldAcc = newDotExpr(cfg, ident(field))
     let innerTd = typ.getImpl
-    result.add buildSerializerBody(innerTd, lines, fieldAcc)
+    result.add buildSerializerBody(innerTd, lines, fieldAcc, sec)
 
 macro generateSimpleSectionNames*(OuterT: typedesc): untyped =
   ## Return an array literal of the top-level TOML section names produced from
@@ -744,33 +773,14 @@ macro generateSimpleSectionNames*(OuterT: typedesc): untyped =
     error("no {.cfgSection.} fields found on " & OuterT.repr, OuterT)
   result = arr
 
-macro generateConfigDescriptors*(
-    target: typed, OuterT: typedesc, accessor: untyped
-): untyped =
-  ## Emit `target.add ConfigItemDescriptor(...)` entries for the section
-  ## reached via `OuterT.<accessor>`. Produces:
+proc buildDescriptorsBody(target, innerTd, base: NimNode, sec: string): NimNode =
+  ## Emit `target.add ConfigItemDescriptor(...)` entries for the section type
+  ## `innerTd`, whose value is reached from an `EditorConfig` named `c` via the
+  ## accessor expression `base` (e.g. `c.standard`, or `c.lsp.completion` for a
+  ## sub-section). Produces:
   ##   target.add ConfigItemDescriptor(kind: cvkSection, ...)
   ##   target.add ConfigItemDescriptor(kind: cvkBool, ...)  -- for each field
   ##   ...
-  if accessor.kind notin {nnkIdent, nnkSym}:
-    error("accessor must be an identifier", accessor)
-
-  # Find the inner section type by looking up `accessor` in OuterT's fields.
-  let outerTd = typeDef(OuterT)
-  if outerTd == nil:
-    error("cannot get impl for outer type", OuterT)
-  var innerTypeNode: NimNode = nil
-  for (name, typeNode, _) in sectionFields(outerTd):
-    if name == accessor.strVal:
-      innerTypeNode = typeNode
-      break
-  if innerTypeNode == nil:
-    error("field `" & accessor.strVal & "` not found on outer type", accessor)
-
-  let innerTd = innerTypeNode.getImpl
-  if innerTd == nil or innerTd.kind != nnkTypeDef:
-    error("cannot resolve inner type impl", innerTypeNode)
-  let sec = sectionName(innerTd)
   let secLit = newLit(sec)
 
   result = newStmtList()
@@ -807,8 +817,7 @@ macro generateConfigDescriptors*(
         fieldName
     let dispLit = newLit(displayName)
 
-    # Accessor: c.<accessor>.<field>
-    let path = newDotExpr(newDotExpr(cIdent, accessor), ident(fieldName))
+    let path = newDotExpr(base, ident(fieldName))
 
     # cfgVisible: pred -> wrap as `proc(c: EditorConfig): bool = pred(c)`.
     # pred is invoked with the EditorConfig and must return bool. Using a
@@ -976,11 +985,192 @@ macro generateConfigDescriptors*(
           )
       else:
         error(
-          "generateConfigDescriptors: unsupported field type `" & fieldType.repr &
+          "generateAllConfigDescriptors: unsupported field type `" & fieldType.repr &
             "` for field `" & fieldName & "`. Hide it from the UI with " &
             "{.cfgNoUi.}, skip it entirely with {.cfgSkip.}, or extend the macro.",
           fieldType,
         )
+
+macro generateAllConfigDescriptors*(target: typed, OuterT: typedesc): untyped =
+  ## Emit the config-mode UI descriptors for every `{.cfgSection.}` field of
+  ## `OuterT`, in field-declaration order. Counterpart of
+  ## `generateSectionLoaders` / `generateSectionSerializers`: a section reaches
+  ## the UI simply by being a `{.cfgSection.}`-typed field, so the UI cannot
+  ## drift from the loader and the serializer.
+  ##
+  ## Nested sections (dotted names such as `StartUp.FileOpen`) are included;
+  ## their header is the dotted name, matching the serialized TOML.
+  let outerTd = typeDef(OuterT)
+  if outerTd == nil:
+    error("cannot get impl for outer type", OuterT)
+  result = newStmtList()
+  for (field, typ, sec) in cfgSectionFields(outerTd):
+    let base = newDotExpr(ident("c"), ident(field))
+    result.add buildDescriptorsBody(target, typ.getImpl, base, sec)
+
+## Section groups
+##
+## A *section group* owns both scalar keys of its own parent table and a set
+## of `{.cfgSubSection.}` sub-tables. The four macros below all derive from
+## one walk of the group type, so loader, key list, serializer and UI cannot
+## drift apart.
+##
+## Groups are deliberately NOT `{.cfgSection.}` types: the whole-config walk
+## would then emit a strict unknown-key check on the parent table, which is
+## wrong when the parent also accepts caller-defined keys (`[Lsp.<languageId>]`).
+## The owner module calls the macros and owns that policy instead.
+
+proc subSectionFields(
+    ownerTd: NimNode
+): seq[tuple[field: string, typ: NimNode, name: string, pragmas: NimNode]] =
+  ## Walk `ownerTd`'s fields and return those carrying `{.cfgSubSection.}`,
+  ## paired with the sub-table name from the pragma. Sub-table names must be
+  ## unique and distinct from the group's own scalar keys: a duplicate would
+  ## emit two TOML entries of the same name and load one table into two
+  ## fields, which no later stage can detect.
+  result = @[]
+  var ownKeys = toHashSet(scalarKeys(ownerTd))
+  var seenNames = initHashSet[string]()
+  for (fieldName, typeNode, pragmas) in sectionFields(ownerTd):
+    let p = findPragma(pragmas, "cfgSubSection")
+    if p == nil:
+      continue
+    if hasPragma(pragmas, "cfg"):
+      error(
+        "field `" & fieldName &
+          "` carries both {.cfg.} and {.cfgSubSection.}: a sub-table is not a scalar key",
+        typeNode,
+      )
+    let arg = pragmaArg(p)
+    if arg == nil or arg.kind != nnkStrLit:
+      error("cfgSubSection requires a string literal", p)
+    if typeNode.kind notin {nnkIdent, nnkSym} or typeNode.getImpl == nil:
+      error("cfgSubSection requires a named object type", typeNode)
+    let name = arg.strVal
+    if name in seenNames:
+      error(
+        "duplicate {.cfgSubSection: \"" & name & "\".} on field `" & fieldName &
+          "`: another field already claims that sub-table name",
+        p,
+      )
+    if name in ownKeys:
+      error(
+        "{.cfgSubSection: \"" & name & "\".} on field `" & fieldName &
+          "` collides with a scalar {.cfg.} key of the same name",
+        p,
+      )
+    seenNames.incl name
+    result.add (fieldName, typeNode, name, pragmas)
+  if result.len == 0:
+    error("no {.cfgSubSection.} fields found on " & ownerTd.repr, ownerTd)
+
+proc groupOwner(T: NimNode): NimNode =
+  let td = typeDef(T)
+  if td == nil:
+    error("cannot get impl for section group type", T)
+  td
+
+proc groupName(td: NimNode): string =
+  ## Read the `cfgGroup: "Name"` pragma from a section group's TypeDef.
+  let p = findPragma(typePragmas(td), "cfgGroup")
+  if p == nil:
+    error("type has no {.cfgGroup: \"...\".} pragma", td)
+  let arg = pragmaArg(p)
+  if arg == nil or arg.kind != nnkStrLit:
+    error("cfgGroup requires a string literal", p)
+  arg.strVal
+
+macro cfgGroupName*(T: typedesc): untyped =
+  ## The parent TOML table name of a section group, as a string literal.
+  newLit(groupName(groupOwner(T)))
+
+macro generateSectionGroupLoader*(t, cfgVar, vr: typed, T: typedesc): untyped =
+  ## Emit the loader for a section group: the parent table's own `{.cfg.}`
+  ## fields, then one `if expectTable(t, "Child", ...): <sub-table loader>` per
+  ## sub-section. No unknown-key check — see `generateSectionGroupKeys`.
+  let ownerTd = groupOwner(T)
+  let section = groupName(ownerTd)
+  # Validate the sub-section pragmas before building the owner's body: the
+  # scalar-key builders reject an object-typed field first and would mask a
+  # {.cfg.} / {.cfgSubSection.} conflict with a bare "unsupported field type".
+  let subs = subSectionFields(ownerTd)
+  result = buildLoaderBody(ownerTd, t, cfgVar, vr, section, checkUnknown = false)
+  for (field, typ, name, _) in subs:
+    let nameLit = newLit(name)
+    let fieldAcc = newDotExpr(cfgVar, ident(field))
+    let tbl = genSym(nskLet, "tbl")
+    let body = buildLoaderBody(typ.getImpl, tbl, fieldAcc, vr, section & "." & name)
+    let secLit = newLit(section)
+    result.add quote do:
+      if expectTable(`t`, `nameLit`, `vr`, `secLit`):
+        let `tbl` = `t`[`nameLit`].getTable()
+        `body`
+
+macro generateSectionGroupKeys*(T: typedesc): untyped =
+  ## Return an array literal of every key the group owns in its parent table
+  ## (scalar `{.cfg.}` keys, then sub-table names). The owner uses it to tell
+  ## its dynamic keys from typos.
+  let ownerTd = groupOwner(T)
+  var arr = newNimNode(nnkBracket)
+  for key in scalarKeys(ownerTd):
+    arr.add newLit(key)
+  for (_, _, name, _) in subSectionFields(ownerTd):
+    arr.add newLit(name)
+  result = arr
+
+macro generateSectionGroupSerializer*(lines, cfgVar: typed, T: typedesc): untyped =
+  ## Emit the serializer for a section group: the `[Parent]` header and its
+  ## scalar keys, then one `[Parent.Child]` block per sub-section. Dynamic
+  ## entries are appended by the owner afterwards.
+  let ownerTd = groupOwner(T)
+  let section = groupName(ownerTd)
+  let subs = subSectionFields(ownerTd)
+  result = buildSerializerBody(ownerTd, lines, cfgVar, section)
+  for (field, typ, name, _) in subs:
+    let fieldAcc = newDotExpr(cfgVar, ident(field))
+    result.add buildSerializerBody(typ.getImpl, lines, fieldAcc, section & "." & name)
+
+macro generateSectionGroupDescriptors*(
+    target: typed, ownerField: untyped, T: typedesc
+): untyped =
+  ## Emit the config-mode UI descriptors for a section group reached from an
+  ## `EditorConfig` named `c` via `ownerField` (e.g. `lsp`): the parent section
+  ## plus one per sub-section.
+  let ownerTd = groupOwner(T)
+  let section = groupName(ownerTd)
+  let subs = subSectionFields(ownerTd)
+  let ownerBase = newDotExpr(ident("c"), ident(ownerField.strVal))
+  result = buildDescriptorsBody(target, ownerTd, ownerBase, section)
+  for (field, typ, name, _) in subs:
+    let base = newDotExpr(ownerBase, ident(field))
+    result.add buildDescriptorsBody(target, typ.getImpl, base, section & "." & name)
+
+proc groupTomlName*(T: NimNode): string {.compileTime.} =
+  ## Compile-time accessor for a section group's parent table name, for macros
+  ## that need it outside `generateSectionGroup*`. `T` is a typedesc node.
+  groupName(groupOwner(T))
+
+proc subSectionSpecs*(
+    T: NimNode
+): seq[tuple[field: string, typ: NimNode, name: string, subject: string]] {.
+    compileTime
+.} =
+  ## Compile-time accessor for a section group's sub-tables, for macros that
+  ## emit one declaration per sub-table. `T` is a typedesc node; returns
+  ## (field, type symbol, sub-table name, subject) in declaration order, where
+  ## the subject is the sub-table's `{.cfgDocDescription.}` (see
+  ## `DocSubjectPlaceholder`). The type is returned as a symbol so callers
+  ## interpolate it directly instead of re-resolving it by name.
+  result = @[]
+  for (field, typ, name, pragmas) in subSectionFields(groupOwner(T)):
+    var subject = ""
+    let p = findPragma(pragmas, "cfgDocDescription")
+    if p != nil:
+      let arg = pragmaArg(p)
+      if arg == nil or arg.kind != nnkStrLit:
+        error("cfgDocDescription requires a string literal", p)
+      subject = arg.strVal
+    result.add (field, typ, name, subject)
 
 proc docTypeLabel(typeNode: NimNode): string =
   ## Map a Nim field type to the human-readable label used by
@@ -1032,8 +1222,17 @@ proc docTypeLabel(typeNode: NimNode): string =
       discard
   typeNode.repr
 
+const DocSubjectPlaceholder* = "{}"
+  ## Placeholder in a `{.cfgDocDescription.}`, replaced with the sub-table's
+  ## own subject: `"Enable {}"` on the shared `LspFeatureConfig` renders as
+  ## "Enable LSP Completion" under `[Lsp.Completion]`. Outside a sub-table
+  ## there is nothing to substitute, so leaving it in is a compile-time error.
+
 macro generateSectionMarkdown*(
-    cfg: typed, sectionField: untyped, sectionType: typedesc
+    cfg: typed,
+    sectionField: untyped,
+    sectionType: typedesc,
+    subject: static string = "",
 ): untyped =
   ## Render the markdown table for one EditorConfig section. The call:
   ##   generateSectionMarkdown(cfg, standard, StandardConfig)
@@ -1042,6 +1241,9 @@ macro generateSectionMarkdown*(
   ## `{.cfgDocDescription.}`). The default-value column uses
   ## `formatDocDefault(cfg.<section>.<field>)`, expecting overloaded
   ## `formatDocDefault` helpers to be in scope at the call site.
+  ##
+  ## `subject` fills the `DocSubjectPlaceholder` in field descriptions; the
+  ## sub-table entries of a section group pass their own name for it.
   let sectionAccess = newDotExpr(cfg, sectionField)
   let td = typeDef(sectionType)
   if td == nil:
@@ -1090,12 +1292,21 @@ macro generateSectionMarkdown*(
     let descArg = pragmaArg(docDescP)
     if descArg == nil or descArg.kind != nnkStrLit:
       error("cfgDocDescription requires a string literal", docDescP)
+    if DocSubjectPlaceholder in descArg.strVal and subject.len == 0:
+      error(
+        "field `" & fieldName & "`: `" & DocSubjectPlaceholder &
+          "` in {.cfgDocDescription.} has nothing to expand to. Only a section " &
+          "group's sub-tables supply a subject; give the sub-table a " &
+          "{.cfgDocDescription.} of its own, or drop the placeholder.",
+        docDescP,
+      )
+    let desc = descArg.strVal.replace(DocSubjectPlaceholder, subject)
 
     # Static cells (name / type / description) are known at macro-expansion
     # time, so escape them now and emit literals — no runtime cost.
     let nameLit = newLit(escapeMdCell(fieldName))
     let typeLit = newLit(escapeMdCell(docTypeLabel(typeNode)))
-    let descLit = newLit(escapeMdCell(descArg.strVal))
+    let descLit = newLit(escapeMdCell(desc))
 
     # Default value: prefer cfgDocDefault override if present (for fields
     # whose runtime default varies by environment), otherwise read the

@@ -21,70 +21,23 @@
 ##
 ## This module provides the data structures and operations for the file explorer mode.
 
-import std/[os, options, algorithm, times, strutils]
+import std/[os, options, times, strutils]
 
 import pkg/celina
 
-import buffer, highlight, color
+import buffer, highlight, color, dir_scan
 import syntax/tokenizer
 
 import types/filer_types
 export filer_types
 
-proc isHiddenFile(name: string): bool =
-  ## Check if a file is hidden (starts with .)
-  name.len > 0 and name[0] == '.'
-
 proc isDirectory*(entry: FileEntry): bool =
   ## Check if entry is effectively a directory (including symlinks to directories)
-  entry.kind == fekDirectory or
-    (entry.kind == fekSymlink and entry.targetKind == fekDirectory)
+  isDirectoryLike(entry.kind, entry.targetKind)
 
 proc isFile*(entry: FileEntry): bool =
   ## Check if entry is effectively a file (including symlinks to files)
   entry.kind == fekFile or (entry.kind == fekSymlink and entry.targetKind == fekFile)
-
-proc newFileEntry(path: string, info: FileInfo): FileEntry =
-  ## Create a FileEntry from a path and FileInfo
-  let name = extractFilename(path)
-  var kind: FileEntryKind
-  var targetKind: FileEntryKind = fekFile # Default for non-symlinks
-  var isExec = false
-
-  case info.kind
-  of pcDir:
-    kind = fekDirectory
-    targetKind = fekDirectory
-  of pcLinkToDir:
-    kind = fekSymlink
-    targetKind = fekDirectory
-  of pcLinkToFile:
-    kind = fekSymlink
-    targetKind = fekFile
-  of pcFile:
-    kind = fekFile
-    targetKind = fekFile
-    # Check if file is executable
-    isExec = fpUserExec in info.permissions or fpGroupExec in info.permissions
-
-  FileEntry(
-    name: name,
-    kind: kind,
-    size: info.size,
-    modified: info.lastWriteTime,
-    isHidden: isHiddenFile(name),
-    isExecutable: isExec,
-    targetKind: targetKind,
-  )
-
-proc compareEntries(a, b: FileEntry): int =
-  ## Compare entries for sorting: directories first, then alphabetically
-  if a.kind == fekDirectory and b.kind != fekDirectory:
-    return -1
-  elif a.kind != fekDirectory and b.kind == fekDirectory:
-    return 1
-  else:
-    return cmpIgnoreCase(a.name, b.name)
 
 proc refresh*(state: FilerState) =
   ## Refresh the file list from the current directory
@@ -104,29 +57,9 @@ proc refresh*(state: FilerState) =
       )
     )
 
-  # Read directory contents
-  try:
-    for kind, path in walkDir(state.currentPath):
-      try:
-        let info = getFileInfo(path, followSymlink = false)
-        let entry = newFileEntry(path, info)
-
-        # Filter hidden files if showHidden is false
-        if state.showHidden or not entry.isHidden:
-          state.entries.add(entry)
-      except OSError:
-        # Skip files we can't access
-        discard
-  except OSError:
-    # Directory not accessible
-    discard
-
-  # Sort entries (directories first, then alphabetically)
-  # Keep ".." at the top
-  if state.entries.len > 1:
-    var entriesToSort = state.entries[1 ..^ 1]
-    entriesToSort.sort(compareEntries)
-    state.entries = @[state.entries[0]] & entriesToSort
+  state.entries.add(
+    scanDirectory(state.currentPath, state.showHidden, skipOnStatError = true)
+  )
 
   # Ensure selectedIndex is valid
   if state.selectedIndex >= state.entries.len:

@@ -27,8 +27,8 @@
 
 import
   ../[
-    motion, key_bindings, command_registry, command_line, command_config, config,
-    completion, signature_help, lsp_integration,
+    motion, key_bindings, command_registry, command_line, command_config, completion,
+    signature_help, lsp_integration,
   ]
 
 proc textObjectCommandIdFor*(ch: string): string =
@@ -55,9 +55,6 @@ type
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandRegistry*: CommandRegistry
-    clipboardConfig*: ClipboardConfig
-    smoothScrollConfig*: SmoothScrollConfig
-    notificationConfig*: NotificationConfig
 
   InsertModeHandler* = ref object
     keyBindingRegistry*: KeyBindingRegistry
@@ -66,7 +63,6 @@ type
     completionManager*: CompletionManager
     signatureHelpManager*: SignatureHelpManager
     lsp*: LspIntegration
-    notificationConfig*: NotificationConfig
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
     parser*: CommandLineParser
@@ -77,7 +73,6 @@ type
     keyBindingRegistry*: KeyBindingRegistry
     commandRegistry*: CommandRegistry
     motionController*: MotionController
-    notificationConfig*: NotificationConfig
 
   ReplaceModeHandler* = ref object ## Handler for Replace mode specific commands
     keyBindingRegistry*: KeyBindingRegistry

@@ -129,6 +129,7 @@ type
       args*: seq[string]
       workspaceRoot*: string
       initializationOptions*: string # Serialized JSON ("" = none)
+      settings*: string # Serialized JSON ("" = none)
     of lcmdStop, lcmdShutdown:
       discard
     of lcmdDidOpen:
@@ -443,7 +444,12 @@ proc buildClientCapabilities(): JsonNode =
         "multilineTokenSupport": true,
       },
     },
-    "workspace": {"applyEdit": true, "workspaceFolders": true, "configuration": false},
+    "workspace": {
+      "applyEdit": true,
+      "workspaceFolders": true,
+      "configuration": true,
+      "didChangeConfiguration": {"dynamicRegistration": true},
+    },
     "window": {"workDoneProgress": true},
     # rust-analyzer only emits its run/debug CodeLenses when the client declares
     # it can execute the corresponding client-side commands. Advertise the ones
@@ -471,6 +477,32 @@ proc buildApplyEditResponse*(
   if not applied and failureReason.len > 0:
     resultObj["failureReason"] = %failureReason
   %*{"jsonrpc": "2.0", "id": idNode, "result": resultObj}
+
+proc lookupSettingsSection*(settings: JsonNode, section: string): JsonNode =
+  if section.len == 0:
+    return settings
+  if not settings.isNil and settings.kind == JObject and settings.hasKey(section):
+    return settings[section]
+  let keys = section.split('.')
+  var current = settings
+  for key in keys:
+    if current.isNil or current.kind != JObject or not current.hasKey(key):
+      return newJNull()
+    current = current[key]
+  return current
+
+proc buildWorkspaceConfigurationResponse*(
+    params: JsonNode, settings: JsonNode
+): JsonNode =
+  result = newJArray()
+  let reqItems = params{"items"}
+  if not reqItems.isNil and reqItems.kind == JArray:
+    for item in reqItems:
+      let section = item{"section"}
+      if not section.isNil and section.kind == JString:
+        result.add(lookupSettingsSection(settings, section.getStr))
+      else:
+        result.add(settings)
 
 proc dropPendingDidOpen*(pending: var seq[LspCommand], uri: string) =
   ## Remove any queued lcmdDidOpen for `uri` from `pending`. Used when a
@@ -654,6 +686,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     pendingDidOpen: seq[LspCommand] = @[]
     # Map LSP request ID to (our request ID, timestamp) for response tracking
     pendingRequests: Table[int, tuple[requestId: int, timestamp: Time]]
+    # Parsed server settings for workspace/configuration responses
+    currentSettings: JsonNode = newJNull()
 
   proc sendEvent(kind: LspEventKind) =
     var evt = LspEvent(kind: kind)
@@ -817,6 +851,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           msg = msg & " [actions: " & titles.join(", ") & "]"
       sendShowMessage(msgType, msg)
       return some(%*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()})
+    of "workspace/configuration":
+      return some(
+        %*{
+          "jsonrpc": "2.0",
+          "id": reqId,
+          "result": buildWorkspaceConfigurationResponse(params, currentSettings),
+        }
+      )
     else:
       # Unknown server request - respond with method not found error
       sendLogMessage(mtInfo, "Unknown server request: " & meth)
@@ -1066,6 +1108,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       except JsonParsingError:
         discard
 
+    if cmd.settings.len > 0:
+      try:
+        currentSettings = parseJson(cmd.settings)
+      except JsonParsingError:
+        currentSettings = newJNull()
+    else:
+      currentSettings = newJNull()
+
     let reqResult = await sendRequest("initialize", $initParams)
     if reqResult.isErr:
       ctx.sharedState.storeState(lwsCrashed)
@@ -1174,8 +1224,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       await cleanupProcess()
       return
 
-    # Send workspace/didChangeConfiguration (some servers need this)
-    await sendNotificationLog("workspace/didChangeConfiguration", """{"settings":{}}""")
+    if currentSettings.kind != JNull:
+      await sendNotificationLog(
+        "workspace/didChangeConfiguration", "{\"settings\":" & $currentSettings & "}"
+      )
 
     ctx.sharedState.storeState(lwsRunning)
     sendEvent(levInitialized)
@@ -1618,6 +1670,7 @@ proc startServer*(
     args: seq[string],
     workspaceRoot: string,
     initializationOptions: string = "",
+    settings: string = "",
 ) =
   let cmd = LspCommand(
     kind: lcmdStart,
@@ -1626,6 +1679,7 @@ proc startServer*(
     args: args,
     workspaceRoot: workspaceRoot,
     initializationOptions: initializationOptions,
+    settings: settings,
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 

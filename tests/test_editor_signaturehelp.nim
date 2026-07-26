@@ -92,9 +92,9 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
       bufferId: e.activeBuffer.id,
       contentVersion: e.activeBuffer.contentVersion,
     )
-    e.state.lspCache.signatureHelp.cursorLine = 3
-    e.state.lspCache.signatureHelp.cursorColumn = 5
-    e.state.lspCache.signatureHelp.contentVersion = 7
+    e.state.lspCache.signatureHelpPoll.cursorLine = 3
+    e.state.lspCache.signatureHelpPoll.cursorColumn = 5
+    e.state.lspCache.signatureHelpPoll.contentVersion = 7
 
     # Inject an already-expired in-flight request so checkResponse -> lrsTimeout
     e.lsp.service.activeRequests[reqId] = LspPendingRequest(
@@ -108,9 +108,9 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     e.requestSignatureHelpFromLsp()
 
     check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
-    check e.state.lspCache.signatureHelp.contentVersion == -1
+    check e.state.lspCache.signatureHelpPoll.contentVersion == -1
     # The failure must bump the backoff counter so retries slow down.
-    check e.state.lspCache.signatureHelp.consecutiveErrors == 1
+    check e.state.lspCache.signatureHelpPoll.rejectStreak == 1
 
   test "Successful response shows popup, clears pending and resets backoff":
     # Guards the post-success fall-through: the response is still applied (popup
@@ -132,10 +132,10 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
       contentVersion: e.activeBuffer.contentVersion,
       validModes: {EditorMode.Insert},
     )
-    e.state.lspCache.signatureHelp.consecutiveErrors = 3
-    e.state.lspCache.signatureHelp.cursorLine = e.activeWindow.cursor.line
-    e.state.lspCache.signatureHelp.cursorColumn = e.activeWindow.cursor.column
-    e.state.lspCache.signatureHelp.contentVersion = e.activeBuffer.contentVersion
+    e.state.lspCache.signatureHelpPoll.rejectStreak = 3
+    e.state.lspCache.signatureHelpPoll.cursorLine = e.activeWindow.cursor.line
+    e.state.lspCache.signatureHelpPoll.cursorColumn = e.activeWindow.cursor.column
+    e.state.lspCache.signatureHelpPoll.contentVersion = e.activeBuffer.contentVersion
 
     e.lsp.service.pendingResponses[reqId] = (
       result: some(
@@ -154,87 +154,87 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     check not e.state.lspCache.pending.hasKey(lrfSignatureHelp)
     check mgr.isActive()
-    check e.state.lspCache.signatureHelp.consecutiveErrors == 0
+    check e.state.lspCache.signatureHelpPoll.rejectStreak == 0
 
-suite "editor_signaturehelp - shouldRequestSignatureHelp":
+suite "editor_signaturehelp - shouldFireDebouncedPoll":
   # Decision logic for the auto request path: change detection + debounce.
   let t0 = getMonoTime()
-  let tracked = SignatureHelpRequestState(
+  let tracked = DebouncedLspPoll(
     lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, contentVersion: 3
   )
 
   test "Skips when cursor and contentVersion are unchanged (even past debounce)":
-    check not shouldRequestSignatureHelp(
+    check not shouldFireDebouncedPoll(
       tracked, 5, 10, 3, t0 + initDuration(seconds = 10)
     )
 
   test "Requests when cursor line changed and debounce elapsed":
-    check shouldRequestSignatureHelp(
+    check shouldFireDebouncedPoll(
       tracked, 6, 10, 3, t0 + initDuration(milliseconds = 150)
     )
 
   test "Requests when cursor column changed and debounce elapsed":
-    check shouldRequestSignatureHelp(
+    check shouldFireDebouncedPoll(
       tracked, 5, 11, 3, t0 + initDuration(milliseconds = 150)
     )
 
   test "Requests when contentVersion changed and debounce elapsed":
-    check shouldRequestSignatureHelp(
+    check shouldFireDebouncedPoll(
       tracked, 5, 10, 4, t0 + initDuration(milliseconds = 150)
     )
 
   test "Suppresses changed position while inside the debounce window":
-    check not shouldRequestSignatureHelp(
+    check not shouldFireDebouncedPoll(
       tracked, 6, 10, 3, t0 + initDuration(milliseconds = 50)
     )
 
   test "Fires exactly at the debounce boundary (elapsed == interval)":
-    check shouldRequestSignatureHelp(
+    check shouldFireDebouncedPoll(
       tracked, 6, 10, 3, t0 + initDuration(milliseconds = 100)
     )
 
   test "Invalidated tracking (contentVersion -1) re-requests once debounce elapses":
-    let invalidated = SignatureHelpRequestState(
+    let invalidated = DebouncedLspPoll(
       lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, contentVersion: -1
     )
-    check shouldRequestSignatureHelp(
+    check shouldFireDebouncedPoll(
       invalidated, 5, 10, 3, t0 + initDuration(milliseconds = 150)
     )
 
   test "Backoff: one prior error doubles the debounce window":
-    let onceFailed = SignatureHelpRequestState(
+    let onceFailed = DebouncedLspPoll(
       lastUpdate: t0,
       interval: 100,
       cursorLine: 5,
       cursorColumn: 10,
       contentVersion: 3,
-      consecutiveErrors: 1,
+      rejectStreak: 1,
     )
     # 150ms would fire at the base interval, but the doubled window suppresses it.
-    check not shouldRequestSignatureHelp(
+    check not shouldFireDebouncedPoll(
       onceFailed, 6, 10, 3, t0 + initDuration(milliseconds = 150)
     )
     # Fires once the doubled (200ms) window elapses.
-    check shouldRequestSignatureHelp(
+    check shouldFireDebouncedPoll(
       onceFailed, 6, 10, 3, t0 + initDuration(milliseconds = 200)
     )
 
-  test "Backoff is capped at 16x the base interval":
-    let manyFailed = SignatureHelpRequestState(
+  test "Backoff is capped at 64x the base interval":
+    let manyFailed = DebouncedLspPoll(
       lastUpdate: t0,
       interval: 100,
       cursorLine: 5,
       cursorColumn: 10,
       contentVersion: 3,
-      consecutiveErrors: 99,
+      rejectStreak: 99,
     )
-    # Still suppressed just before the 16x (1600ms) cap ...
-    check not shouldRequestSignatureHelp(
-      manyFailed, 6, 10, 3, t0 + initDuration(milliseconds = 1599)
+    # Still suppressed just before the 64x (6400ms) cap ...
+    check not shouldFireDebouncedPoll(
+      manyFailed, 6, 10, 3, t0 + initDuration(milliseconds = 6399)
     )
     # ... and fires at the cap rather than growing further.
-    check shouldRequestSignatureHelp(
-      manyFailed, 6, 10, 3, t0 + initDuration(milliseconds = 1600)
+    check shouldFireDebouncedPoll(
+      manyFailed, 6, 10, 3, t0 + initDuration(milliseconds = 6400)
     )
 
   test "Undo-collision on changeSeq: contentVersion advance still fires":
@@ -246,7 +246,7 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
     let cursorLine = 5
     let cursorColumn = 10
     let cachedContentVersion = 42
-    let debounced = SignatureHelpRequestState(
+    let debounced = DebouncedLspPoll(
       lastUpdate: t0,
       interval: 100,
       cursorLine: cursorLine,
@@ -255,7 +255,7 @@ suite "editor_signaturehelp - shouldRequestSignatureHelp":
     )
     # A new contentVersion (post undo+edit) at the same cursor position must
     # not be suppressed by change detection.
-    check shouldRequestSignatureHelp(
+    check shouldFireDebouncedPoll(
       debounced,
       cursorLine,
       cursorColumn,

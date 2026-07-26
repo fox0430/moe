@@ -42,16 +42,18 @@ proc createTestState(): EditorState =
       DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
     visualSelection: VisualSelection(
@@ -77,12 +79,10 @@ proc createTestHandler(buf: TextBuffer): VisualModeHandler =
   let motionController =
     newMotionController(buf, createTestState(), createTestViewport())
 
-  newVisualModeHandler(
-    keyBindingRegistry, commandRegistry, motionController, NotificationConfig()
-  )
+  newVisualModeHandler(keyBindingRegistry, commandRegistry, motionController)
 
 suite "VisualModeHandler - Constructor":
-  test "Create VisualModeHandler with default config":
+  test "Create VisualModeHandler":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
 
@@ -90,21 +90,6 @@ suite "VisualModeHandler - Constructor":
     check handler.motionController != nil
     check handler.keyBindingRegistry != nil
     check handler.commandRegistry != nil
-
-  test "Create VisualModeHandler with custom notification config":
-    let buf = newTextBuffer()
-    let keyBindingRegistry = newKeyBindingRegistry()
-    let commandRegistry = newCommandRegistry()
-    let motionController =
-      newMotionController(buf, createTestState(), createTestViewport())
-
-    let notificationConfig = NotificationConfig(screenNotifications: true)
-    let handler = newVisualModeHandler(
-      keyBindingRegistry, commandRegistry, motionController, notificationConfig
-    )
-
-    check handler != nil
-    check handler.notificationConfig.screenNotifications == true
 
 suite "VisualModeHandler - initSelection":
   test "Initialize character selection":
@@ -426,15 +411,15 @@ suite "VisualModeHandler - handleVisualModeKey":
     let state = createTestState()
     state.mode = EditorMode.Visual
     initSelection(state, buf, vskChar)
-    state.macroState.isRecording = true
-    state.macroState.register = 'a'
-    state.macroState.recordedKeys = @[]
+    state.pendingInput.macroState.isRecording = true
+    state.pendingInput.macroState.register = 'a'
+    state.pendingInput.macroState.recordedKeys = @[]
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
     discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
-    check state.macroState.recordedKeys.len >= 1
+    check state.pendingInput.macroState.recordedKeys.len >= 1
 
 suite "VisualModeHandler - sequence dispatch (M7 regression)":
   # `gg`/`ge`/`zf` are bound as multi-key sequences to all three Visual modes.
@@ -523,7 +508,7 @@ suite "VisualModeHandler - sequence dispatch (M7 regression)":
     # The fallback found and dispatched the command (it armed a pending text
     # object), so the key is not reported unhandled.
     check r.kind == vmrHandled
-    check state.editState.pendingTextObject.isSome
+    check state.pendingInput.pendingTextObject.isSome
 
   test "r waits for its operand, then the operand char replaces the selection":
     # rrWaiting via waitingForChar (operand wait), then rrCommand on the operand.
@@ -788,3 +773,120 @@ suite "VisualModeHandler - Command mode command alias bridge":
 
     check r.kind == vmrExecCommand
     check r.execCommandText == "bd"
+
+suite "VisualModeHandler - Escape returns to previousMode":
+  test "Escape from Visual returns to Normal when previousMode is Normal":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.Normal
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == vmrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.Normal
+    check state.mode == EditorMode.Normal
+    check not state.visualSelection.active
+
+  test "Escape from Visual returns to LogViewer when previousMode is LogViewer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "log line 1\nlog line 2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.LogViewer
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == vmrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.LogViewer
+    check state.mode == EditorMode.LogViewer
+    check not state.visualSelection.active
+
+  test "C-c from Visual returns to previousMode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.LogViewer
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "c", modifiers: {kmCtrl})
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == vmrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.LogViewer
+    check state.mode == EditorMode.LogViewer
+    check not state.visualSelection.active
+
+  test "Escape from Visual clears pendingRegister (\"a<Esc> leak)":
+    # `"a` in Normal sets pendingRegister=some('a'); entering Visual without
+    # consuming it leaves the register selection armed. Escape from Visual must
+    # clear it, otherwise the next yank/delete in the returned mode silently
+    # targets register a.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.Normal
+    state.pendingInput.pendingRegister = some('a')
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
+    let r = handler.handleVisualModeKey(buf, state, viewport, esc)
+
+    check r.kind == vmrHandled
+    check state.mode == EditorMode.Normal
+    check state.pendingInput.pendingRegister.isNone
+
+  test "Escape from Visual clears pending macro register wait (q<Esc> leak)":
+    # `q` in Normal arms macroState.waitingForRegister for the register name.
+    # Entering Visual and Escaping must not leave the FSM waiting; otherwise
+    # the next `q` in Normal is interpreted as the register name instead of
+    # re-arming.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.Normal
+    state.pendingInput.macroState.waitingForRegister = true
+    state.pendingInput.macroState.commandType = "record"
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
+    discard handler.handleVisualModeKey(buf, state, viewport, esc)
+
+    check not state.pendingInput.macroState.waitingForRegister
+    check state.pendingInput.macroState.commandType == ""

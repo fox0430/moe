@@ -99,7 +99,7 @@ proc newEditorConfig*(): EditorConfig =
     bufferBackend: BufferBackendConfig(kind: bbcAuto),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(
-      enable: false, workspaceRoot: none(string), command: none(string)
+      enable: false, workspaceRoot: none(string), command: none(string), timeout: 300
     ),
     tabLine: TabLineConfig(enable: true),
     statusLine: StatusLineConfig(
@@ -195,7 +195,7 @@ proc newEditorConfig*(): EditorConfig =
       bookmarks: true,
     ),
     git: GitConfig(showChangedLine: true, updateInterval: 1000),
-    syntaxChecker: SyntaxCheckerConfig(enable: false),
+    syntaxChecker: SyntaxCheckerConfig(enable: false, timeout: 60),
     smoothScroll: SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     startUpFileOpen: StartUpFileOpenConfig(autoSplit: true, splitType: stVertical),
     startUpFileTree: StartUpFileTreeConfig(enable: false),

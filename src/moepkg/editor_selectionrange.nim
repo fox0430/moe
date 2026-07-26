@@ -157,6 +157,10 @@ proc startLspSelectionRange*(e: Editor): bool =
   e.state.lspCache.selectionRangeIndex = 0
 
   let activeBuffer = e.activeBuffer()
+  if not e.lsp.hasSelectionRangeSupport(activeBuffer):
+    e.state.statusMessage = "LSP selection range is not supported"
+    return false
+
   let line = e.activeWindow.cursor.line
   let col = e.activeWindow.cursor.column
   let ctxRes = e.startContextualRequest(
@@ -172,26 +176,7 @@ proc startLspSelectionRange*(e: Editor): bool =
 
 proc pollLspSelectionRange*(e: Editor) =
   ## Poll for a pending selection range response and seed the expansion chain.
-  if not e.lsp.enabled:
-    return
-  if not e.state.lspCache.pending.hasKey(lrfSelectionRange):
-    return
-  let ctx = e.state.lspCache.pending[lrfSelectionRange]
-
-  # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-
-  case status
-  of lrsPending:
-    discard # Still waiting
-  of lrsSuccess:
-    e.state.lspCache.pending.del(lrfSelectionRange)
-
-    # Overlay (Command/Search/Rename) leaves e.state.mode intact, so it slips
-    # past validModes; applying here would force Visual and drop the overlay.
-    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
-      return
-
+  e.pollOneShotLspResponse({lrfSelectionRange}, "selection range"):
     var applied = false
     if resultOpt.isSome:
       let ranges = parseSelectionRangeResponse(resultOpt.get)
@@ -206,13 +191,6 @@ proc pollLspSelectionRange*(e: Editor) =
           applied = true
     if not applied:
       e.state.statusMessage = "No selection range available"
-  of lrsError:
-    e.state.lspCache.pending.del(lrfSelectionRange)
-    if errorOpt.isSome:
-      e.state.statusMessage = "LSP selection range failed: " & errorOpt.get
-  of lrsTimeout:
-    e.state.lspCache.pending.del(lrfSelectionRange)
-    e.state.statusMessage = "LSP selection range timed out"
 
 proc requestLspSelectionRange*(e: Editor): bool =
   ## Request LSP selection range (or expand) at the current cursor position.

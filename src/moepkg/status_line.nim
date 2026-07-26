@@ -17,63 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, options, strutils, os, unicode, tables, monotimes, times]
+import std/[strformat, options, strutils, os, unicode]
 
-import pkg/[celina, results]
+import pkg/celina
 
-import types, buffer, modes, color, config, git_diff, unicode_utils, highlight
+import types, buffer, modes, color, config, git_cache, unicode_utils, highlight
 import syntax/tokenizer
-
-type
-  GitDiffCacheEntry = object
-    counts: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh: int
-    lastRefresh: MonoTime
-    pending: Option[GitDiffProcess]
-    populated: bool
-    gitTracked: bool
-      ## Whether the buffer's file is tracked by git (exists in HEAD). Set from the
-      ## result of `startGitDiffFromBufferAsync`, which errors for files not under
-      ## git. When true, the git-diff gutter is the authoritative change indicator,
-      ## so the session "modified lines" sidebar fallback is suppressed (it would
-      ## otherwise draw the same `~`/`+` glyphs and linger after the buffer is
-      ## edited back to match HEAD, since it is history- rather than content-based).
-    pendingDiffInfo: Option[GitDiffInfo]
-      ## Holds the most recent completed diff so the sidebar gutter can be
-      ## refreshed independently of the status-line `counts` readout. The
-      ## editor tick consumes this via `maybeApplyGitMarkers`, gated on the
-      ## user's `showGitDiff` flag — we don't touch `lineMarkers` from the
-      ## render path anymore.
-
-  GitBranchCacheEntry = object
-    path: string
-    name: string
-    lastRefresh: MonoTime
-    populated: bool
-
-# Per-buffer git status cache for the status line. Without caching, every
-# frame spawns `git diff --no-index` (dumping the whole buffer to a tempfile
-# — ~30ms on a 40k-line JSON) and `git rev-parse --abbrev-ref HEAD`, pegging
-# idle j/k at ~30 FPS. The buffer reference (ref object) is used as the
-# key; entries for closed buffers linger but are small.
-#
-# Diff refresh strategy: non-blocking. We spawn `git diff` in the background
-# via startGitDiffFromBufferAsync and keep showing the previous counts until
-# the process completes. A refresh is kicked off when changeSeq changes OR
-# the last refresh is older than GitDiffRefreshIntervalMs — the TTL path is
-# what picks up external commits / checkouts without an edit.
-#
-# Branch refresh strategy: synchronous TTL. `git rev-parse` is cheap
-# (~5ms) and re-running it on every keystroke is unnecessary but also not
-# catastrophic. A short TTL keeps branch switches in sync.
-const
-  DefaultGitDiffRefreshIntervalMs: int64 = 2000
-  GitBranchTtlMs = 5000
-
-var
-  diffCacheStore: Table[pointer, GitDiffCacheEntry]
-  branchCacheStore: Table[pointer, GitBranchCacheEntry]
-  gitDiffRefreshIntervalMs: int64 = DefaultGitDiffRefreshIntervalMs
 
 proc toggleStatusLine*(state: var EditorState) =
   state.showStatusLine = not state.showStatusLine
@@ -240,160 +189,8 @@ proc buildFileDisplay(
 
   return displayText
 
-proc setGitDiffRefreshInterval*(ms: int64) =
-  ## Override the async diff refresh cadence (ms). Called from
-  ## `applyConfigSettings` so the existing `[git] updateInterval` toml
-  ## setting still controls how often the status-line counts (and sidebar
-  ## gutter, via `maybeApplyGitMarkers`) re-check against HEAD.
-  if ms > 0:
-    gitDiffRefreshIntervalMs = ms
-
-proc bufferKey(b: TextBuffer): pointer {.inline.} =
-  cast[pointer](b)
-
-proc reapPendingDiff(entry: var GitDiffCacheEntry) =
-  ## Advance a pending diff pipeline; on completion release its child,
-  ## tempfiles, and fds. On error/timeout keep the last known counts.
-  if entry.pending.isNone:
-    return
-  let completion = checkGitDiffComplete(entry.pending.get)
-  if completion.isNone:
-    return
-  if completion.get.isOk:
-    let diffInfo = completion.get.get
-    entry.counts = countGitChangedLines(diffInfo)
-    entry.pendingDiffInfo = some(diffInfo)
-  entry.pending = none(GitDiffProcess)
-  entry.lastRefresh = getMonoTime()
-  entry.populated = true
-
-proc cachedGitDiffCounts(b: TextBuffer): tuple[added, modified, deleted: int] =
-  let key = bufferKey(b)
-  var entry = diffCacheStore.getOrDefault(key)
-
-  reapPendingDiff(entry)
-
-  # Decide whether to kick off a new refresh.
-  let now = getMonoTime()
-  let needsRefresh =
-    entry.pending.isNone and (
-      not entry.populated or entry.changeSeqAtRefresh != b.changeSeq or
-      (now - entry.lastRefresh).inMilliseconds >= gitDiffRefreshIntervalMs
-    )
-
-  if needsRefresh:
-    entry.changeSeqAtRefresh = b.changeSeq
-    let startResult = startGitDiffFromBufferAsync(b)
-    # `startGitDiffFromBufferAsync` errors when the file is not in git / not in
-    # HEAD, so its success doubles as a "git-tracked" probe for the sidebar.
-    entry.gitTracked = startResult.isOk
-    if startResult.isOk:
-      entry.pending = some(startResult.get)
-    else:
-      # Couldn't start the subprocess — treat this as a refresh attempt so
-      # we don't keep retrying every frame.
-      entry.lastRefresh = now
-      entry.populated = true
-
-  diffCacheStore[key] = entry
-  result = entry.counts
-
-proc cachedGitBranchName(b: TextBuffer, filePath: string): string =
-  let key = bufferKey(b)
-  var entry = branchCacheStore.getOrDefault(key)
-
-  let now = getMonoTime()
-  let expired =
-    not entry.populated or entry.path != filePath or
-    (now - entry.lastRefresh).inMilliseconds >= GitBranchTtlMs
-
-  if expired:
-    let branchResult = getGitBranch(filePath)
-    entry.path = filePath
-    entry.lastRefresh = now
-    entry.populated = true
-    entry.name =
-      if branchResult.isErr:
-        ""
-      else:
-        branchResult.get()
-    branchCacheStore[key] = entry
-
-  result = entry.name
-
-proc cleanupGitDiffCache*() =
-  ## Terminate any pending async git diff subprocesses and discard all
-  ## cached entries. Intended to be called once from the editor shutdown
-  ## path so that child processes and their tempfiles do not outlive moe.
-  for entry in diffCacheStore.mvalues:
-    if entry.pending.isSome:
-      abandonGitDiffProcess(entry.pending.get)
-      entry.pending = none(GitDiffProcess)
-  diffCacheStore.clear()
-  branchCacheStore.clear()
-
-proc gitDiffPendingCount*(): int =
-  ## Test hook: number of cache entries currently holding an in-flight diff.
-  for entry in diffCacheStore.values:
-    if entry.pending.isSome:
-      inc result
-
-proc gitDiffCacheCounts*(b: TextBuffer): Option[tuple[added, modified, deleted: int]] =
-  ## Test hook: the reaped `counts` for `b`, or `none` if the entry has not
-  ## been populated yet.
-  let key = bufferKey(b)
-  let entry = diffCacheStore.getOrDefault(key)
-  if entry.populated:
-    some(entry.counts)
-  else:
-    none(tuple[added, modified, deleted: int])
-
-proc tickGitDiffPipelines*() =
-  ## Reap every buffer's pending git-diff pipeline, not just the one whose
-  ## status line is being drawn. Without this a buffer that becomes hidden
-  ## while its pipeline is in flight would leak the subprocess (zombied on
-  ## exit), the three tempfiles, and the pipe fds. Never kicks off new
-  ## refreshes — hidden buffers do not respawn `git diff` on TTL.
-  for entry in diffCacheStore.mvalues:
-    reapPendingDiff(entry)
-
-proc maybeApplyGitMarkers*(b: TextBuffer) =
-  ## Consume the most recent async git diff result (if any) and apply it
-  ## to the sidebar gutter. Safe to call on every editor tick; no-op if
-  ## no new diff has arrived since the last call. Intended to be invoked
-  ## from `editor.tick` under the `showGitDiff` flag so markers are only
-  ## written when the user has the gutter turned on.
-  let key = bufferKey(b)
-  diffCacheStore.withValue(key, entry):
-    if entry[].pendingDiffInfo.isSome:
-      let diffInfo = entry[].pendingDiffInfo.get
-      applyGitDiffToBuffer(b, diffInfo)
-      entry[].pendingDiffInfo = none(GitDiffInfo)
-
-proc isBufferGitTracked*(b: TextBuffer): bool =
-  ## Whether `b`'s file is tracked by git (present in HEAD), per the most recent
-  ## diff scheduling attempt. Returns false until the git-diff cache has been
-  ## populated for this buffer. Used by the renderer to decide whether the
-  ## git-diff gutter should take over from the session "modified lines"
-  ## fallback, so the two don't draw overlapping `~`/`+` markers.
-  let key = bufferKey(b)
-  let entry = diffCacheStore.getOrDefault(key)
-  entry.populated and entry.gitTracked
-
-proc evictGitCacheForBuffer*(b: TextBuffer) =
-  ## Drop the cache entries associated with `b`. Call before a buffer is
-  ## removed so that its pending git diff (if any) gets terminated and its
-  ## address does not alias a future buffer that happens to land at the
-  ## same pointer.
-  let key = bufferKey(b)
-  diffCacheStore.withValue(key, entry):
-    if entry[].pending.isSome:
-      abandonGitDiffProcess(entry[].pending.get)
-      entry[].pending = none(GitDiffProcess)
-  diffCacheStore.del(key)
-  branchCacheStore.del(key)
-
 proc buildGitInfo(
+    gc: GitCacheState,
     textBuffer: TextBuffer,
     mode: EditorMode,
     config: StatusLineConfig,
@@ -409,14 +206,14 @@ proc buildGitInfo(
   # Git changed lines count (if enabled and active window or showGitInactive)
   if config.gitChangedLines and (isActiveWindow or config.showGitInactive):
     if textBuffer.filePath.isSome:
-      let counts = cachedGitDiffCounts(textBuffer)
+      let counts = gc.gitDiffCounts(textBuffer)
       # Always show +N ~N -N format
       parts.add(" +" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted)
 
   # Git branch name (if enabled and active window or showGitInactive)
   if config.gitBranchName and (isActiveWindow or config.showGitInactive):
     if textBuffer.filePath.isSome:
-      let branch = cachedGitBranchName(textBuffer, textBuffer.filePath.get())
+      let branch = gc.gitBranchName(textBuffer)
       if branch.len > 0:
         parts.add("ᚠ " & branch)
 
@@ -489,8 +286,8 @@ proc parseSetupText(
   var gitBranch = ""
   var gitChanges = ""
   if textBuffer.filePath.isSome:
-    gitBranch = cachedGitBranchName(textBuffer, textBuffer.filePath.get())
-    let counts = cachedGitDiffCounts(textBuffer)
+    gitBranch = state.git.gitBranchName(textBuffer)
+    let counts = state.git.gitDiffCounts(textBuffer)
     gitChanges = "+" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted
 
   result = setupText
@@ -604,7 +401,7 @@ proc renderStatusLine*(
       (labelStyle, lineStyle, labelText)
 
   # Build git info (displayed before filename)
-  let gitInfoText = buildGitInfo(textBuffer, state.mode, config, true)
+  let gitInfoText = buildGitInfo(state.git, textBuffer, state.mode, config, true)
 
   # Build file display text
   let filePathText = buildFileDisplay(textBuffer, state.mode, config)
@@ -702,7 +499,8 @@ proc renderWindowStatusLine*(
       (labelStyle, lineStyle, labelText)
 
   # Build git info (displayed before filename)
-  let gitInfoText = buildGitInfo(textBuffer, windowMode, config, isActiveWindow)
+  let gitInfoText =
+    buildGitInfo(state.git, textBuffer, windowMode, config, isActiveWindow)
 
   # Build file display text
   let filePathText = buildFileDisplay(textBuffer, windowMode, config)

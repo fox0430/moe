@@ -28,8 +28,8 @@ from pkg/celina/core/mouse_logic import MouseButton
 import
   editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
   logger, types, motion, quick_run_utils, command_completion, build, render_utils,
-  tab_line, terminal_mode, clipboard, status_line, cursor_util, syntax_checker,
-  background_process, key_router
+  tab_line, terminal_mode, clipboard, git_cache, cursor_util, syntax_checker,
+  background_process, key_router, pending_input, visible_rows
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -73,10 +73,27 @@ proc cleanupQuickRunProcesses*(e: Editor) =
   ## Kill any in-flight QuickRun processes and remove their temporary files
   ## (temp source + build artifacts). Call on editor exit/crash so QuickRun
   ## never orphans a process or leaves temp files behind. Mirrors the git diff
-  ## shutdown cleanup (`cleanupGitDiffCache`).
+  ## shutdown cleanup (`clearGitCache`).
   for p in e.runningQuickRunProcesses:
     abandonQuickRunProcess(p)
   e.runningQuickRunProcesses = @[]
+
+proc releaseExternalResources*(e: Editor) =
+  ## Tear down every OS resource the editor owns (background/QuickRun processes,
+  ## terminal PTYs, git diff subprocesses, LSP servers), then flush persist data.
+  ## Shared by the normal quit path and the crash path. Idempotent.
+  e.cleanupBackgroundProcesses()
+  e.cleanupQuickRunProcesses()
+  e.cleanupAllTerminals()
+
+  # Swallow so a git cache failure cannot block the rest of the sequence.
+  try:
+    e.state.git.clearGitCache()
+  except CatchableError as ex:
+    logError("moe", "clearGitCache failed: " & ex.msg)
+
+  e.shutdown()
+  e.savePersistData()
 
 proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Rename mode - for LSP rename symbol input
@@ -132,6 +149,19 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # Ignore other special keys
   return true
 
+proc closeRecentFileWindow(e: Editor, activeWin: EditorWindow) =
+  ## Close the Recent File split window and discard its scratch buffer.
+  activeWin.clearModeState(EditorMode.RecentFile)
+  let buf = activeWin.buffer
+  let idx = e.bufferIndexById(buf.id)
+  if idx >= 0:
+    e.state.git.evictGitCacheForBuffer(buf)
+    e.deleteBufferAt(idx)
+    e.pruneBufferIdFromAllWindows(buf.id)
+  activeWin.mode = EditorMode.Normal
+  e.setMode(EditorMode.Normal)
+  discard e.closeWindow
+
 proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Recent File mode.
   # Get viewport height for the recent file list
@@ -148,17 +178,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 
   case r.kind
   of hrRecentFileQuit:
-    # Close the split window
-    activeWin.clearModeState(EditorMode.RecentFile)
-    let buf = activeWin.buffer
-    let idx = e.bufferIndexById(buf.id)
-    if idx >= 0:
-      evictGitCacheForBuffer(buf)
-      e.deleteBufferAt(idx)
-      e.pruneBufferIdFromAllWindows(buf.id)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    discard e.closeWindow
+    e.closeRecentFileWindow(activeWin)
     e.state.statusMessage = ""
     return true
   of hrRecentFileOpenFile:
@@ -167,17 +187,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       logError("handler", "File not found: " & filePath)
       e.state.statusMessage = "File not found: " & filePath
       return true
-    # Close the split window first
-    activeWin.clearModeState(EditorMode.RecentFile)
-    let buf = activeWin.buffer
-    let idx = e.bufferIndexById(buf.id)
-    if idx >= 0:
-      evictGitCacheForBuffer(buf)
-      e.deleteBufferAt(idx)
-      e.pruneBufferIdFromAllWindows(buf.id)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    discard e.closeWindow
+    e.closeRecentFileWindow(activeWin)
     # Open the file in the now-active window
     let editResult = e.editFile(filePath)
     if editResult.isErr:
@@ -330,24 +340,23 @@ proc screenToBufferPosition(
     vp: ViewPort,
     buffer: TextBuffer,
     mouseX, mouseY: int,
-    lineNumOffset, sidebarWidth, reservedLines: int,
+    gutterWidth, reservedLines: int,
     lineWrap: bool,
     tabStop: int = 4,
-    scrollbarWidth: int = 0,
+    wrapWidth: int = 1,
     wrapCache: WrapCountCache = nil,
 ): Option[BufferPosition] =
   ## Convert screen coordinates to buffer position.
   ## Returns none if click is outside the text area.
   ## Handles line wrap mode with display-width-based segment calculation.
   ##
-  ## lineNumOffset: line number area width (from calculateLineNumOffset)
-  ## sidebarWidth: sidebar area width (from calculateSidebarWidth)
-  ## scrollbarWidth: scrollbar area width (from calculateScrollbarWidth)
-  ## These are separate parameters to match the rendering calculation exactly.
+  ## gutterWidth: sidebar + line number width the text starts after
+  ## (`Editor.gutterWidth`); wrapWidth: the width the renderer wrapped at
+  ## (`Editor.wrapWidth`, only consulted when `lineWrap`). Both come from the
+  ## derivation the renderer used, so a click maps to the character drawn there.
   let
-    totalOffset = sidebarWidth + lineNumOffset
     screenY = mouseY - vp.y
-    screenX = mouseX - vp.x - totalOffset
+    screenX = mouseX - vp.x - gutterWidth
 
   # Check if click is within the text area
   if screenY < 0 or screenY >= vp.height - reservedLines:
@@ -355,68 +364,22 @@ proc screenToBufferPosition(
   if screenX < 0:
     return none(BufferPosition)
 
-  if lineWrap:
-    # Must match renderWindowLineWrapped: maxWidth = viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
-    let maxWidth = max(1, vp.width - sidebarWidth - scrollbarWidth - lineNumOffset)
-    if wrapCache != nil:
-      wrapCache.ensureFresh(buffer, maxWidth, tabStop)
-    # Walk through buffer lines, accumulating screen rows for each wrapped line.
-    # Start above the top edge by the leading wrap segments the renderer skips on
-    # the first line (topWrapOffset), mirroring calculateWindowCursor: screen row
-    # 0 then maps to segment topWrapOffset of topLine, not segment 0.
-    var currentScreenY = -vp.topWrapOffset
-    var bufferLine = vp.topLine
-    var wrapSegment = 0
+  let
+    rl = initRowLayout(buffer, wrapCache, lineWrap, wrapWidth, tabStop)
+    row = rl.rowAt(vp.topLine, vp.topWrapOffset, screenY)
+    # Below the last rendered row (the blank tail): clamp onto the last line.
+    line =
+      if row.isSome:
+        row.get.line
+      else:
+        max(0, buffer.len - 1)
+    wrapSeg = if row.isSome: row.get.wrapSeg else: 0
 
-    while bufferLine < buffer.len:
-      let wrapCount =
-        if wrapCache != nil:
-          wrapCache.cachedWrapCount(buffer, bufferLine)
-        else:
-          calculateWrapCount(buffer.getLine(bufferLine), maxWidth, tabStop)
-      if currentScreenY + wrapCount > screenY:
-        wrapSegment = screenY - currentScreenY
-        break
-      currentScreenY += wrapCount
-      bufferLine += 1
-
-    if bufferLine >= buffer.len:
-      bufferLine = max(0, buffer.len - 1)
-
-    # Find the start character of the wrapSegment-th segment
-    let line = buffer.getLine(bufferLine)
-    var segStart = 0
-    for i in 0 ..< wrapSegment:
-      let (charCount, _) = displayWidthSubstrWithTabs(line, segStart, maxWidth, tabStop)
-      segStart += max(1, charCount)
-
-    # Convert screenX to a character offset within this segment
-    var bufferColumn = segStart + screenXToCharIndex(line, segStart, screenX, tabStop)
-
-    # Clamp column to valid range
-    if bufferLine >= 0 and bufferLine < buffer.len:
-      let lineCharLen = buffer.getLine(bufferLine).charLen
-      bufferColumn = clamp(bufferColumn, 0, max(0, lineCharLen - 1))
-
-    return some(BufferPosition(line: bufferLine, column: bufferColumn))
-  else:
-    # No-wrap mode: simple calculation
-    var bufferLine = vp.topLine + screenY
-    if bufferLine >= buffer.len:
-      bufferLine = max(0, buffer.len - 1)
-
-    var bufferColumn = vp.leftColumn + screenX
-
-    # Clamp column to valid range
-    if bufferLine >= 0 and bufferLine < buffer.len:
-      let lineLen = buffer[bufferLine].charLen
-      bufferColumn = clamp(bufferColumn, 0, max(0, lineLen - 1))
-
-    return some(BufferPosition(line: bufferLine, column: bufferColumn))
-
-proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
-  ## Calculate line number offset (matching rendering calculation)
-  calculateLineNumOffset(buffer, e.showLineNumbers)
+  some(
+    BufferPosition(
+      line: line, column: rl.cellToColumn(line, wrapSeg, screenX, vp.leftColumn)
+    )
+  )
 
 proc middleClickPaste(e: Editor) =
   ## Paste clipboard content at current cursor position for middle-click.
@@ -446,18 +409,13 @@ proc middleClickPaste(e: Editor) =
     e.state.statusMessage = "Buffer is read-only"
     return
 
-  if e.state.mode == EditorMode.Normal:
-    e.setMode(EditorMode.Insert)
-    let activeBuffer = e.activeBuffer()
-    discard activeBuffer.beginTransaction(
-      "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
-    )
-    e.state.statusMessage = "-- INSERT --"
-  elif e.state.mode != EditorMode.Insert:
+  if e.state.mode != EditorMode.Normal and e.state.mode != EditorMode.Insert:
     return
 
   # Middle-click uses X11 PRIMARY selection (text selected by mouse),
   # not CLIPBOARD selection (Ctrl+C).
+  # Read before any mode / transaction change: a failed or empty read must not
+  # leave the editor stranded in Insert mode with an open transaction.
   let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
   if readResult.isErr:
     return
@@ -469,6 +427,18 @@ proc middleClickPaste(e: Editor) =
     return
 
   let activeBuffer = e.activeBuffer()
+
+  if e.state.mode == EditorMode.Normal:
+    let insertTransaction = activeBuffer.beginTransaction(
+      "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
+    )
+    if insertTransaction.isErr:
+      # Entering Insert mode without its transaction would leave the buffer in
+      # an inconsistent undo state, so stay in Normal mode.
+      e.state.statusMessage = "Paste failed: " & insertTransaction.error
+      return
+    e.setMode(EditorMode.Insert)
+    e.state.statusMessage = "-- INSERT --"
 
   # In Insert mode, a transaction is already active. Use it directly
   # instead of starting a new one.
@@ -532,14 +502,14 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
     e.state.insertNormalMode = false
     e.state.editState.insertModeStartPos = none(BufferPosition)
 
-  e.state.editState.pendingOperator = none(PendingOperator)
-  e.state.editState.pendingTextObject = none(PendingTextObject)
-  e.state.pendingRegister = none(char)
+  e.state.pendingInput.pendingOperator = none(PendingOperator)
+  e.state.pendingInput.pendingTextObject = none(PendingTextObject)
+  e.state.pendingInput.pendingRegister = none(char)
   discard e.keyRouter.cancel()
-  if e.state.macroState.waitingForRegister:
-    e.state.macroState.waitingForRegister = false
-    e.state.macroState.commandType = ""
-    e.state.macroState.pendingCount = 0
+  if e.state.pendingInput.macroState.waitingForRegister:
+    e.state.pendingInput.macroState.waitingForRegister = false
+    e.state.pendingInput.macroState.commandType = ""
+    e.state.pendingInput.macroState.pendingCount = 0
 
   # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
   # the target window's own saved mode.
@@ -666,20 +636,26 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
               e.switchToWindowBuffer(tabIdx)
               return true
 
+      let maxBottomY = findMaxBottomY(e.windowManager.windows)
       for i, window in e.windowManager.windows:
         let vp = window.viewport
         # Check if click is within this window's viewport
         if mouse.x >= vp.x and mouse.x < vp.x + vp.width and mouse.y >= vp.y and
             mouse.y < vp.y + vp.height:
           let
-            lineNumOffset = e.calculateLineNumOffsetForMouse(window.buffer)
-            sidebarWidth = e.calculateSidebarWidth(window.mode)
-            scrollbarWidth = e.calculateScrollbarWidth(window.mode)
-            # Each window has its own status line
-            reservedLines = if e.showStatusLine: 1 else: 0
+            # Same reserve the renderer uses, so the hit test cannot claim the
+            # shared status/command row nor drop a real text row.
+            reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
             posOpt = screenToBufferPosition(
-              vp, window.buffer, mouse.x, mouse.y, lineNumOffset, sidebarWidth,
-              reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+              vp,
+              window.buffer,
+              mouse.x,
+              mouse.y,
+              e.gutterWidth(window),
+              reservedLines,
+              e.lineWrap,
+              e.tabStop,
+              e.wrapWidth(window),
               window.wrapCountCache,
             )
 
@@ -720,17 +696,21 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
     let
       activeBuffer = e.activeBuffer()
-      lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
-      sidebarWidth = e.calculateSidebarWidth(e.activeWindow.mode)
-      scrollbarWidth = e.calculateScrollbarWidth(e.activeWindow.mode)
       # Status line + command line (shared row)
       reservedLines = steadyBottomAreaHeight()
       # Account for tab line offset
       tabLineOffset = if e.showTabLine: TabLineHeight else: 0
       adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
-        e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, sidebarWidth,
-        reservedLines, e.lineWrap, e.tabStop, scrollbarWidth,
+        e.viewport,
+        activeBuffer,
+        mouse.x,
+        adjustedMouseY,
+        e.gutterWidth(e.activeWindow),
+        reservedLines,
+        e.lineWrap,
+        e.tabStop,
+        e.wrapWidth(e.activeWindow),
         e.activeWindow.wrapCountCache,
       )
 
@@ -765,8 +745,8 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Handle Ctrl-W window command second key (j/k/c).
   ## Returns some(true) if handled, some(false) if last window closed (quit),
   ## none if not a window command key.
-  if e.state.pendingCommand == PendingWindowCmd:
-    e.state.pendingCommand = PendingNone
+  if e.state.pendingInput.pendingCommand == PendingWindowCmd:
+    e.state.pendingInput.pendingCommand = PendingNone
     if not keyCombo.isSpecial:
       if keyCombo.char == "j":
         e.switchToPrevWindow
@@ -783,7 +763,7 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   # Check for Ctrl-w to enter window command mode
   if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == "w":
-    e.state.pendingCommand = PendingWindowCmd
+    e.state.pendingInput.pendingCommand = PendingWindowCmd
     return some(true)
 
   return none(bool)
@@ -905,9 +885,9 @@ proc recordOverlayKey(e: Editor, keyCombo: KeyCombo) =
   ## Append the overlay key to the active macro register. Overlay handlers
   ## do not record inline, so capture at the dispatcher entry instead.
   ## Suppressed during playback via `withPlaybackGuard` clearing `isRecording`.
-  if not e.state.macroState.isRecording:
+  if not e.state.pendingInput.macroState.isRecording:
     return
-  e.state.macroState.recordedKeys.add(keyComboToString(keyCombo))
+  e.state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
 proc handleOverlayKeyCombo(
     e: Editor, keyCombo: KeyCombo, recordKey = false
@@ -1020,66 +1000,24 @@ proc handlePopupKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
   return none(bool)
 
 proc handleEscapeCancellationKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
-  ## In Normal mode, Escape cancels pending multi-key state (macro register,
-  ## operator, text object, register, key router, window command). Also tracks
-  ## double-Escape to clear search highlight. Returns true when Escape was
-  ## handled; non-Escape keys reset the Escape counter but are not consumed.
+  ## In Normal mode, Escape clears every pending-input FSM via cancelAll and
+  ## otherwise falls through to the double-Escape hlsearch toggle.
   if e.state.mode != EditorMode.Normal:
     return false
 
-  # Handle Escape key to cancel pending multi-key commands
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    # Check if any pending state needs to be cancelled
-    var cancelled = false
-
-    # Cancel macro register waiting (q, @)
-    if e.state.macroState.waitingForRegister:
-      e.state.macroState.waitingForRegister = false
-      e.state.macroState.commandType = ""
-      e.state.macroState.pendingCount = 0
-      cancelled = true
-
-    # Cancel pending operator (d, c, y, etc.)
-    if e.state.editState.pendingOperator.isSome:
-      e.state.editState.pendingOperator = none(PendingOperator)
-      cancelled = true
-
-    # Cancel pending text object (i, a)
-    if e.state.editState.pendingTextObject.isSome:
-      e.state.editState.pendingTextObject = none(PendingTextObject)
-      cancelled = true
-
-    # Cancel pending register (")
-    if e.state.pendingRegister.isSome:
-      e.state.pendingRegister = none(char)
-      cancelled = true
-
-    # Cancel pending key binding sequence (built-in multi-key accumulator).
-    # Runtime mapping accumulator is intentionally not cleared here; the
-    # timeout path handles that. See `KeyRouter.cancel` for details.
-    if e.keyRouter.cancel():
-      cancelled = true
-
-    # Cancel window command mode (Ctrl-w)
-    if e.state.pendingCommand != PendingNone:
-      e.state.pendingCommand = PendingNone
-      cancelled = true
-
-    if cancelled:
+    if e.state.pendingInput.cancelAll(e.keyRouter.registry):
       e.state.statusMessage = ""
       return true
 
     # No pending state - handle double-Escape to clear search highlight
     if e.state.lastKeyWasEscape:
-      # Second Escape press - clear highlight
       e.state.input.search.hlsearchTempDisabled = true
       e.state.lastKeyWasEscape = false
     else:
-      # First Escape press - just mark it
       e.state.lastKeyWasEscape = true
     return true
   else:
-    # Any other key resets the Escape counter
     e.state.lastKeyWasEscape = false
     return false
 
@@ -1095,9 +1033,9 @@ proc handleSpecialModeWindowCommandKeyCombo(
     return none(bool)
 
   # Cancel window command mode on Escape
-  if e.state.pendingCommand == PendingWindowCmd and keyCombo.isSpecial and
+  if e.state.pendingInput.pendingCommand == PendingWindowCmd and keyCombo.isSpecial and
       keyCombo.special == skEscape:
-    e.state.pendingCommand = PendingNone
+    e.state.pendingInput.pendingCommand = PendingNone
     return some(true)
 
   return e.handleWindowCommand(keyCombo)
@@ -1228,25 +1166,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   return true
 
-proc hasPendingAsyncOperations*(e: Editor): bool =
-  ## Check if there are pending async operations
-  e.state.pending.shellCommand.len > 0 or e.state.pending.terminalCommand.len > 0 or
-    e.state.pending.manPage.len > 0 or e.state.pending.background or
-    e.state.pending.buildOnSave.path.len > 0 or e.state.pending.quickRun.cmd.len > 0 or
-    e.state.pending.syntaxCheck.path.len > 0
-
 type
   FrontendSuspendHook* = proc(): Future[void]
   FrontendHooks* = object
     ## Optional frontend callbacks for operations that need the host UI.
     suspend*: FrontendSuspendHook
     resume*: FrontendSuspendHook
-
-  BuildInfo =
-    tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
-  QuickRunInfo =
-    tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
-  SyntaxCheckInfo = tuple[path: string, language: int]
 
 template withFrontendSuspend(frontend: FrontendHooks, e: Editor, body: untyped) =
   ## Suspend the owning frontend around synchronous terminal interaction.
@@ -1268,13 +1193,18 @@ proc runSyntaxCheckAsync(
       let checkResult =
         await startBackgroundSyntaxCheck(info.path, SourceLanguage(info.language))
       if checkResult.isErr:
-        editor.state.statusMessage = "Syntax check error: " & checkResult.error
+        editor.notify("Syntax check error: " & checkResult.error, nlError)
       else:
         let checkProcess = checkResult.get
         editor.addRunningProcess(checkProcess.process)
-        let output = await checkProcess.waitForAsync()
+        let outputResult = await checkProcess.waitForAsync(
+          timeoutFromSeconds(editor.config.syntaxChecker.timeout)
+        )
         editor.removeRunningProcess(checkProcess.process)
-        let errors = parseNimCheckResult(info.path, output)
+        if outputResult.isErr:
+          editor.notify("Syntax check error: " & outputResult.error, nlError)
+          return
+        let errors = parseNimCheckResult(info.path, outputResult.get)
         # Apply markers to buffer
         let bufIdx = editor.findBufferByPath(info.path)
         if bufIdx >= 0:
@@ -1289,7 +1219,7 @@ proc runSyntaxCheckAsync(
         else:
           editor.state.statusMessage = "Syntax check: OK"
     except Exception as ex:
-      editor.state.statusMessage = "Syntax check error: " & ex.msg
+      editor.notify("Syntax check error: " & ex.msg, nlError)
 
 proc runBuildAsync(
     editor: Editor, info: BuildInfo
@@ -1301,25 +1231,29 @@ proc runBuildAsync(
         info.path, SourceLanguage(info.language), info.customCmd, info.workspaceRoot
       )
       if buildResult.isErr:
-        editor.state.statusMessage = "Build error: " & buildResult.error
+        editor.notify("Build error: " & buildResult.error, nlError)
       else:
         let buildProcess = buildResult.get
         editor.addRunningProcess(buildProcess.process)
-        let output = await buildProcess.waitForAsync()
+        let outputResult = await buildProcess.waitForAsync(
+          timeoutFromSeconds(editor.config.buildOnSave.timeout)
+        )
         editor.removeRunningProcess(buildProcess.process)
-        let outputContent = output.join("\n")
+        if outputResult.isErr:
+          editor.notify("Build error: " & outputResult.error, nlError)
+          return
+        let outputContent = outputResult.get.join("\n")
         let outputBuffer = newTextBuffer(outputContent)
         outputBuffer.readOnly = true
         let splitResult = editor.hsplitWithBuffer(outputBuffer)
         if splitResult.isErr:
-          editor.state.statusMessage =
-            "Failed to open output window: " & splitResult.error
+          editor.notify("Failed to open output window: " & splitResult.error, nlError)
         else:
           if editor.config.notification.screenNotifications and
               editor.config.notification.buildOnSaveScreenNotify:
             editor.notify("Build completed: " & info.path)
     except Exception as ex:
-      editor.state.statusMessage = "Build error: " & ex.msg
+      editor.notify("Build error: " & ex.msg, nlError)
 
 proc runQuickRunAsync(
     editor: Editor, info: QuickRunInfo
@@ -1334,17 +1268,19 @@ proc runQuickRunAsync(
       )
       let quickRunResult = await startBackgroundQuickRun(prepared)
       if quickRunResult.isErr:
-        editor.state.statusMessage = "QuickRun error: " & quickRunResult.error
+        editor.notify("QuickRun error: " & quickRunResult.error, nlError)
       else:
         let qrProcess = quickRunResult.get
         # Track the full QuickRunProcess (not just its BackgroundProcess) so
         # editor exit/crash can also remove its temp files, not only kill the
         # process. See cleanupQuickRunProcesses.
         editor.addRunningQuickRun(qrProcess)
-        let outputResult = await qrProcess.waitForResultAsync()
+        let outputResult = await qrProcess.waitForResultAsync(
+          timeoutFromSeconds(editor.config.quickRun.timeout)
+        )
         editor.removeRunningQuickRun(qrProcess)
         if outputResult.isErr:
-          editor.state.statusMessage = "QuickRun error: " & outputResult.error
+          editor.notify("QuickRun error: " & outputResult.error, nlError)
         else:
           let output = outputResult.get
           let outputContent = output.join("\n")
@@ -1352,98 +1288,80 @@ proc runQuickRunAsync(
           outputBuffer.readOnly = true
           let splitResult = editor.hsplitWithBuffer(outputBuffer)
           if splitResult.isErr:
-            editor.state.statusMessage =
-              "Failed to open output window: " & splitResult.error
+            editor.notify("Failed to open output window: " & splitResult.error, nlError)
           else:
             if editor.config.notification.screenNotifications and
                 editor.config.notification.quickRunScreenNotify:
               editor.notify("QuickRun completed: " & qrProcess.filePath)
     except Exception as ex:
-      editor.state.statusMessage = "QuickRun error: " & ex.msg
+      editor.notify("QuickRun error: " & ex.msg, nlError)
 
 proc handlePendingAsyncOperationsImpl(
     e: Editor, frontend: FrontendHooks
 ): Future[void] {.async: (raises: [Exception]).} =
-  ## Handle pending async operations that require TUI suspend or background processing
-  ## Called from the main event loop after handleEvent returns
+  ## Drain the pending async op queue in FIFO order. Called from the main event
+  ## loop on every tick. Ops queued while draining run on the next tick.
 
   {.cast(gcsafe).}:
-    # Open a queued terminal command (e.g. rust-analyzer run/debug single) as a
-    # new terminal tab in the active window.
-    if e.state.pending.terminalCommand.len > 0:
-      let cmd = e.state.pending.terminalCommand
-      e.state.pending.terminalCommand = ""
-      e.enterTerminalInActiveWindow(cmd)
+    let ops = move(e.state.pending)
+    e.state.pending.setLen(0)
 
-    # Handle shell command
-    if e.state.pending.shellCommand.len > 0:
-      let cmd = e.state.pending.shellCommand
-      e.state.pending.shellCommand = ""
-      # withFrontendSuspend wraps the body in try/finally so the TUI
-      # resumes, even if execShellCmd/readLine raises (a missed resume leaves
-      # the terminal in raw mode and destroys the screen).
-      withFrontendSuspend(frontend, e):
-        stdout.write("\e[H\e[2J") # Clear screen
-        stdout.flushFile()
-        let exitCode = execShellCmd(cmd)
-        stdout.write("\n\nShell returned " & $exitCode & "\n")
-        stdout.write("Press Enter to continue...")
-        stdout.flushFile()
-        discard stdin.readLine()
-
-    # Handle man page display
-    if e.state.pending.manPage.len > 0:
-      let page = e.state.pending.manPage
-      e.state.pending.manPage = ""
-      withFrontendSuspend(frontend, e):
-        stdout.write("\e[H\e[2J") # Clear screen
-        stdout.flushFile()
-        let exitCode = execShellCmd("man " & quoteShell(page))
-        if exitCode != 0:
-          stdout.write("man: " & page & " not found\n")
-        stdout.write("\nPress Enter to continue...")
-        stdout.flushFile()
-        discard stdin.readLine()
-
-    # Handle background suspend: send SIGTSTP to self so the shell registers moe
-    # as a proper stopped job (visible in `jobs`, resumable via `fg`). Falls back
-    # to a blocking readLine on non-POSIX platforms where SIGTSTP is unavailable.
-    if e.state.pending.background:
-      e.state.pending.background = false
-      withFrontendSuspend(frontend, e):
-        when defined(posix):
-          discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
-        else:
-          stdout.write("\e[H\e[2J")
-          stdout.write("moe suspended. Press Enter to return to moe...")
+    for op in ops:
+      case op.kind
+      of paoTerminalCommand:
+        e.enterTerminalInActiveWindow(op.command)
+      of paoShellCommand:
+        # withFrontendSuspend wraps the body in try/finally so the TUI always
+        # resumes, even if execShellCmd/readLine raises (a missed resume leaves
+        # the terminal in raw mode and destroys the screen).
+        withFrontendSuspend(frontend, e):
+          stdout.write("\e[H\e[2J") # Clear screen
+          stdout.flushFile()
+          let exitCode = execShellCmd(op.command)
+          stdout.write("\n\nShell returned " & $exitCode & "\n")
+          stdout.write("Press Enter to continue...")
           stdout.flushFile()
           discard stdin.readLine()
-
-    # Handle pending build - spawn as background task
-    if e.state.pending.buildOnSave.path.len > 0:
-      let buildInfo = e.state.pending.buildOnSave
-      e.state.pending.buildOnSave =
-        (path: "", language: 0, customCmd: "", workspaceRoot: "")
-      asyncSpawn runBuildAsync(e, buildInfo)
-
-    # Handle pending QuickRun - spawn as background task
-    if e.state.pending.quickRun.cmd.len > 0:
-      let qrInfo = e.state.pending.quickRun
-      e.state.pending.quickRun = (cmd: "", args: @[], filePath: "", isTempFile: false)
-      asyncSpawn runQuickRunAsync(e, qrInfo)
-
-    # Handle pending syntax check - spawn as background task
-    if e.state.pending.syntaxCheck.path.len > 0:
-      let checkInfo = e.state.pending.syntaxCheck
-      e.state.pending.syntaxCheck = (path: "", language: 0)
-      asyncSpawn runSyntaxCheckAsync(e, checkInfo)
+      of paoManPage:
+        withFrontendSuspend(frontend, e):
+          stdout.write("\e[H\e[2J") # Clear screen
+          stdout.flushFile()
+          let exitCode = execShellCmd("man " & quoteShell(op.command))
+          if exitCode != 0:
+            stdout.write("man: " & op.command & " not found\n")
+          stdout.write("\nPress Enter to continue...")
+          stdout.flushFile()
+          discard stdin.readLine()
+      of paoBackground:
+        # SIGTSTP to self so the shell registers moe as a proper stopped job
+        # (visible in `jobs`, resumable via `fg`). Falls back to a blocking
+        # readLine where SIGTSTP is unavailable.
+        withFrontendSuspend(frontend, e):
+          when defined(posix):
+            discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
+          else:
+            stdout.write("\e[H\e[2J")
+            stdout.write("moe suspended. Press Enter to return to moe...")
+            stdout.flushFile()
+            discard stdin.readLine()
+      of paoBuild:
+        asyncSpawn runBuildAsync(e, op.build)
+      of paoQuickRun:
+        asyncSpawn runQuickRunAsync(e, op.quickRun)
+      of paoSyntaxCheck:
+        asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck)
 
 proc handlePendingAsyncOperations*(
     e: Editor, frontend: FrontendHooks
-): Future[void] {.async: (raises: [Exception]).} =
-  ## Wrapper for handlePendingAsyncOperationsImpl with gcsafe cast
+): Future[void] {.async: (raises: []).} =
+  ## Wrapper for handlePendingAsyncOperationsImpl. Swallows and logs any
+  ## exception so a pending-op failure does not trip editorCallback's
+  ## emergency-save-and-quit path (drain is called from every tick).
   {.cast(gcsafe).}:
-    await handlePendingAsyncOperationsImpl(e, frontend)
+    try:
+      await handlePendingAsyncOperationsImpl(e, frontend)
+    except Exception as ex:
+      logError("moe", "handlePendingAsyncOperations failed: " & ex.msg)
 
 proc handleKeyMappingTimeout*(e: Editor): bool =
   ## Called when the key mapping timeout fires.

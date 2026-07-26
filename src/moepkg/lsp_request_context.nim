@@ -17,10 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-## Shared LSP request-context helpers. See
-## docs/config_runtime_push_removal_design.md §10.
+## Shared LSP request-context helpers.
 
-import std/[options, tables]
+import std/[monotimes, options, tables]
 
 import pkg/results
 
@@ -43,6 +42,10 @@ proc cancelIfPending*(e: Editor, feature: LspRequestFeature) =
 proc classifyResponse*(e: Editor, ctx: LspRequestContext): LspResponseState =
   ## Route the response according to whether the world we sent it against
   ## still matches:
+  ## - lrsOverlay: an overlay (Command/Search/Rename) owns the screen. Overlays
+  ##   leave `e.state.mode` intact, so they slip past validModes; a response
+  ##   that pops up, switches mode or jumps would paint over the prompt.
+  ##   Checked first so it also covers item-driven contexts.
   ## - lrsGone: origin buffer was closed, OR the active buffer switched away
   ##   (response for buffer A would be applied to now-active buffer B). Every
   ##   response handler down-stream reads `e.activeBuffer`, so a mid-flight
@@ -53,6 +56,8 @@ proc classifyResponse*(e: Editor, ctx: LspRequestContext): LspResponseState =
   ## guard entirely — they target an LSP item, not the active buffer — and
   ## report lrsFresh unless a mode-hijack applies. Their callers own the
   ## semantic guard.
+  if ctx.blockedByOverlay and e.state.overlay.isSome:
+    return lrsOverlay
   if ctx.isItemDriven:
     if ctx.validModes.card > 0 and e.state.mode notin ctx.validModes:
       return lrsHijack
@@ -77,6 +82,7 @@ proc storeContextualRequest*(
     cursor: Option[BufferPosition] = none(BufferPosition),
     isItemDriven: bool = false,
     ignoreContentVersion: bool = false,
+    blockedByOverlay: bool = true,
 ): LspRequestContext {.discardable.} =
   ## Cache-scoped ctx builder for call sites without an Editor (insert handler,
   ## item-driven flows). The request must already be in flight; the caller is
@@ -105,9 +111,103 @@ proc storeContextualRequest*(
     validModes: validModes,
     isItemDriven: isItemDriven,
     ignoreContentVersion: ignoreContentVersion,
+    blockedByOverlay: blockedByOverlay,
   )
   cache.pending[feature] = ctx
   ctx
+
+template pollOneShotLspResponse*(
+    e: Editor, features: set[LspRequestFeature], label: string, onFresh: untyped
+) =
+  ## Shared skeleton for the one-shot (request -> single response -> apply)
+  ## pollers driven from tickLsp: pick the pending feature, read its response,
+  ## drop it from the pending table and route it through `classifyResponse`.
+  ##
+  ## `onFresh` runs only for a response that survives the guard and sees the
+  ## injected `ctx`, `feature` and `resultOpt`. `features` may hold several
+  ## entries for multi-stage flows (goto-*, call hierarchy); the lowest pending
+  ## one wins, matching the enum order.
+  ##
+  ## Errors and timeouts surface as "LSP <label> failed/timed out". Features
+  ## needing a different reaction keep their own poller.
+  block lspPoll:
+    if not e.lsp.enabled:
+      break lspPoll
+
+    var feature {.inject.} = low(LspRequestFeature)
+    var found = false
+    for f in features:
+      if e.state.lspCache.pending.hasKey(f):
+        feature = f
+        found = true
+        break
+    if not found:
+      break lspPoll
+
+    let ctx {.inject.} = e.state.lspCache.pending[feature]
+
+    # Responses were already polled at the top of tick(); this only reads them.
+    let response = e.lsp.checkResponse(ctx.requestId)
+    let resultOpt {.inject.} = response.result
+
+    case response.status
+    of lrsPending:
+      discard # Still waiting
+    of lrsSuccess:
+      e.state.lspCache.pending.del(feature)
+      if classifyResponse(e, ctx) != lrsFresh:
+        break lspPoll
+      onFresh
+    of lrsError:
+      e.state.lspCache.pending.del(feature)
+      if response.error.isSome:
+        e.state.statusMessage = "LSP " & label & " failed: " & response.error.get
+    of lrsTimeout:
+      e.state.lspCache.pending.del(feature)
+      e.state.statusMessage = "LSP " & label & " timed out"
+
+template pollDebouncedLspResponse*(
+    e: Editor,
+    feature: LspRequestFeature,
+    poll: ptr DebouncedLspPoll,
+    label: string,
+    onFresh: untyped,
+    onReject: untyped,
+) =
+  ## Shared skeleton for the debounced cache pollers (code lens, document
+  ## highlight, inlay hints): drain a pending response, then fall through to
+  ## the caller's own cache-validity check and debounce gate.
+  ##
+  ## `onFresh` sees the injected `ctx` and `resultOpt` and runs only for a
+  ## response that survives `classifyResponse`; `onReject` runs on error or
+  ## timeout, after the reject streak and the debounce timer are advanced.
+  ##
+  ## A still-pending request, or one the guard drops, returns from the calling
+  ## proc: no new request may start while one is in flight, and a dropped
+  ## response advances the debounce timer so churn (edit, buffer switch) does
+  ## not immediately re-fire on the next tick.
+  if e.state.lspCache.pending.hasKey(feature):
+    let ctx {.inject.} = e.state.lspCache.pending[feature]
+
+    # Responses were already polled at the top of tick(); this only reads them.
+    let response = e.lsp.checkResponse(ctx.requestId)
+    let resultOpt {.inject.} = response.result
+
+    case response.status
+    of lrsPending:
+      return # Still waiting; don't start a new request
+    of lrsSuccess:
+      e.state.lspCache.pending.del(feature)
+      if classifyResponse(e, ctx) != lrsFresh:
+        poll.lastUpdate = getMonoTime()
+        return
+      onFresh
+    of lrsError, lrsTimeout:
+      logLspDegraded(label, response.status, response.error.get(""))
+      e.state.lspCache.pending.del(feature)
+      inc poll.rejectStreak
+      poll.lastUpdate = getMonoTime()
+      onReject
 
 proc startContextualRequestOnCache*(
     lsp: LspIntegration,
@@ -119,6 +219,7 @@ proc startContextualRequestOnCache*(
     cursor: Option[BufferPosition] = none(BufferPosition),
     ignoreContentVersion: bool = false,
     isItemDriven: bool = false,
+    blockedByOverlay: bool = true,
 ): Result[LspRequestContext, string] =
   ## Cache-scoped counterpart of `startContextualRequest` for call sites
   ## without an `Editor` (e.g. insert handler). Preserves the prior pending
@@ -142,6 +243,7 @@ proc startContextualRequestOnCache*(
       cursor,
       isItemDriven = isItemDriven,
       ignoreContentVersion = ignoreContentVersion,
+      blockedByOverlay = blockedByOverlay,
     )
   )
 
@@ -153,6 +255,7 @@ proc startContextualRequest*(
     cursor: Option[BufferPosition] = none(BufferPosition),
     ignoreContentVersion: bool = false,
     isItemDriven: bool = false,
+    blockedByOverlay: bool = true,
 ): Result[LspRequestContext, string] =
   ## Fire the LSP request via `startImpl` and, on success, cancel any prior
   ## pending entry and record the new ctx. On failure the prior in-flight is
@@ -171,4 +274,5 @@ proc startContextualRequest*(
     cursor,
     ignoreContentVersion = ignoreContentVersion,
     isItemDriven = isItemDriven,
+    blockedByOverlay = blockedByOverlay,
   )

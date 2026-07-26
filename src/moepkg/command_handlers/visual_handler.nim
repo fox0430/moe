@@ -27,7 +27,10 @@ import std/[options, strutils]
 import pkg/results
 
 import
-  ../[buffer, config, modes, motion, types, key_bindings, command_registry, key_router]
+  ../[
+    buffer, modes, motion, types, key_bindings, command_registry, key_router,
+    pending_input,
+  ]
 import ../types/editor_types
 import handler_types
 export handler_types
@@ -64,14 +67,13 @@ proc newVisualModeHandler*(
     keyBindingRegistry: KeyBindingRegistry,
     commandRegistry: CommandRegistry,
     motionController: MotionController,
-    notificationConfig: NotificationConfig = NotificationConfig(),
 ): VisualModeHandler =
-  ## Create a new Visual mode handler
+  ## Create a new Visual mode handler. NotificationConfig is pulled live from
+  ## `state.config` via CommandContext getter.
   VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,
     commandRegistry: commandRegistry,
     motionController: motionController,
-    notificationConfig: notificationConfig,
   )
 
 proc initSelection*(
@@ -162,7 +164,6 @@ proc executeCommand*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
-    notificationConfig: handler.notificationConfig,
   )
 
   let originalMode = state.mode
@@ -189,19 +190,14 @@ proc handleVisualModeKey*(
   ## Works for Visual, VisualBlock, and VisualLine modes
 
   # Record key for macro if recording is active
-  if state.macroState.isRecording:
-    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
-
-  # Special handling for ESC to clear selection
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    state.editState.pendingTextObject = none(PendingTextObject)
-    state.clearSelection()
+  if state.pendingInput.macroState.isRecording:
+    state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
   let originalMode = state.mode
 
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)
   # This handles viw, va", vi( etc. in Visual mode
-  if state.editState.pendingTextObject.isSome:
+  if state.pendingInput.pendingTextObject.isSome:
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
       # Map key to text object kind command (shared with the Normal handler)
       let textObjectCommandId = textObjectCommandIdFor(keyCombo.char)
@@ -213,7 +209,6 @@ proc handleVisualModeKey*(
           viewport: viewport,
           motionController: handler.motionController,
           keyBindingRegistry: handler.keyBindingRegistry,
-          notificationConfig: handler.notificationConfig,
         )
 
         let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
@@ -226,13 +221,13 @@ proc handleVisualModeKey*(
         # Not a text object key - cancel pending state with feedback. Clear the
         # pending operator too (matching the Normal handler) so no stale operator
         # is left armed.
-        state.editState.pendingTextObject = none(PendingTextObject)
-        state.editState.pendingOperator = none(PendingOperator)
+        state.pendingInput.pendingTextObject = none(PendingTextObject)
+        state.pendingInput.pendingOperator = none(PendingOperator)
         state.statusMessage = "Not a text object: " & keyCombo.char
         return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
     else:
       # Special key or key with modifiers - cancel pending state
-      state.editState.pendingTextObject = none(PendingTextObject)
+      state.pendingInput.pendingTextObject = none(PendingTextObject)
       # Fall through to process the key normally
 
   # Resolve the key through the shared built-in decode entry (`resolveBuiltin`)
@@ -252,8 +247,21 @@ proc handleVisualModeKey*(
     return VisualModeResult(kind: vmrWaitingForInput)
   of rrCommand:
     discard # Fall through to dispatch below.
+  of rrCancelled:
+    # Escape cleared a pending sequence; stay in visual mode.
+    return VisualModeResult(kind: vmrUnhandled)
   else:
-    # rrCancelled (Escape cleared a pending sequence) or rrUnhandled.
+    # rrUnhandled: no user mapping found.
+    # ESC/C-c with no user mapping returns to previousMode.
+    if (keyCombo.isSpecial and keyCombo.special == skEscape) or (
+      not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == "c"
+    ):
+      if handler.keyBindingRegistry != nil:
+        discard state.pendingInput.cancelAll(handler.keyBindingRegistry)
+      state.clearSelection()
+      let returnMode = state.previousMode
+      state.mode = returnMode
+      return VisualModeResult(kind: vmrHandled, modeTransition: some(returnMode))
     return VisualModeResult(kind: vmrUnhandled)
 
   let cmd = route.command
@@ -286,7 +294,6 @@ proc handleVisualModeKey*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
-    notificationConfig: handler.notificationConfig,
   )
 
   # Execute command through registry

@@ -37,7 +37,7 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
-    command_registry, config, lsp_integration, logger, key_router,
+    command_registry, lsp_integration, logger, key_router, pending_input,
   ]
 import ../types/editor_types
 # The shared handler-module list lives in handler_modules (single source of
@@ -55,24 +55,18 @@ proc newHandlerManager*(
     commandLineParser: CommandLineParser,
     commandConfig: CommandConfig,
     commandRegistry: CommandRegistry,
-    clipboardConfig: ClipboardConfig,
-    smoothScrollConfig: SmoothScrollConfig =
-      SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
-    notificationConfig: NotificationConfig = NotificationConfig(),
     lsp: LspIntegration = nil,
 ): HandlerManager =
-  let normalHandler = newNormalModeHandler(
-    motionController, keyBindingRegistry, commandRegistry, clipboardConfig,
-    smoothScrollConfig, notificationConfig,
-  )
-  let insertHandler = newInsertModeHandler(
-    keyBindingRegistry, motionController, commandRegistry, lsp, notificationConfig
-  )
+  ## Clipboard/SmoothScroll/Notification are read live from `state.config`
+  ## through CommandContext getters, so newEditor no longer plumbs snapshots.
+  let normalHandler =
+    newNormalModeHandler(motionController, keyBindingRegistry, commandRegistry)
+  let insertHandler =
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
-  let visualHandler = newVisualModeHandler(
-    keyBindingRegistry, commandRegistry, motionController, notificationConfig
-  )
+  let visualHandler =
+    newVisualModeHandler(keyBindingRegistry, commandRegistry, motionController)
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
   HandlerManager(
@@ -160,15 +154,9 @@ proc executeCommandDirect*(
     return none(HandlerResult)
 
 proc hasPendingBuiltinInput*(editor: Editor): bool =
-  ## True while any built-in multi-step input is still building: an operator or
-  ## text-object waiting for its target, a numeric/register prefix in progress,
-  ## a macro register-select pending, or the key-router's builtin sequence FSM
-  ## mid-sequence (multi-key, count, f/t/r operand wait). Callers use this to
-  ## decide whether it's safe to finalize Ctrl-o insert-normal or defer.
-  let state = editor.state
-  state.editState.pendingOperator.isSome or state.editState.pendingTextObject.isSome or
-    state.pendingCommand != PendingNone or state.pendingRegister.isSome or
-    state.macroState.waitingForRegister or editor.keyRouter.hasActiveBuiltinSequence()
+  ## True while any built-in multi-step input is still building. Callers use
+  ## this to decide whether Ctrl-o insert-normal is safe to finalize.
+  editor.state.pendingInput.isActive(editor.keyRouter.registry)
 
 proc endInsertNormalSession(buffer: TextBuffer, state: EditorState) =
   ## Commit the pending Insert transaction (if any) and reset all insert-session

@@ -35,7 +35,7 @@ import
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
     config_loader, lsp_service, message_log, uri_utils, primitives, syntax_checker,
-    status_line, cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode,
+    git_cache, cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode,
     log_viewer, git_conflict, registers, setting_options, command_completion,
     key_bindings, key_router, window_manager, lsp_integration,
   ]
@@ -113,6 +113,19 @@ proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
     # hrMap* are folded to hrHandled/hrError in handleCommandMode so this arm
     # is defensive only.
     oxaExitAndResync
+
+proc closeViewerSplitWindow(e: Editor, activeWin: EditorWindow) =
+  ## Discard a viewer's scratch buffer and close its split window. A no-op when
+  ## the viewer is the only window, so the editor is never left windowless.
+  if e.windowManager.windows.len <= 1:
+    return
+  let buf = activeWin.buffer
+  let idx = e.bufferIndexById(buf.id)
+  if idx >= 0:
+    e.state.git.evictGitCacheForBuffer(buf)
+    e.deleteBufferAt(idx)
+    e.pruneBufferIdFromAllWindows(buf.id)
+  discard e.closeWindow()
 
 proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Apply the editor-level side effects implied by `r`. Returns true to
@@ -301,15 +314,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.LogViewer)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrLogViewerRefresh:
     # Refresh log viewer content by creating new buffer with updated content
@@ -343,15 +348,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.Help)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrReferencesQuit:
     # Close references viewer and return to Normal mode, restoring the
@@ -570,15 +567,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.BackupManager)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrDiffViewerQuit:
     # Close the diff viewer overlay and resume the mode it was opened from.
@@ -618,15 +607,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.clearModeState(EditorMode.Config)
     activeWin.mode = e.state.previousMode
     e.setMode(e.state.previousMode)
-    # Remove the split buffer from the buffer list and close the window
-    if e.windowManager.windows.len > 1:
-      let buf = activeWin.buffer
-      let idx = e.bufferIndexById(buf.id)
-      if idx >= 0:
-        evictGitCacheForBuffer(buf)
-        e.deleteBufferAt(idx)
-        e.pruneBufferIdFromAllWindows(buf.id)
-      discard e.closeWindow()
+    e.closeViewerSplitWindow(activeWin)
     return true
   of hrConfigSaveConfig:
     # Save configuration to TOML file
@@ -966,11 +947,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       logError("handler", "QuickRun prepare failed: " & prepareResult.error)
     else:
       let prepared = prepareResult.get
-      e.state.pending.quickRun = (
-        cmd: prepared.command.cmd,
-        args: prepared.command.args,
-        filePath: prepared.filePath,
-        isTempFile: prepared.isTempFile,
+      e.state.pending.add PendingAsyncOp(
+        kind: paoQuickRun,
+        quickRun: (
+          cmd: prepared.command.cmd,
+          args: prepared.command.args,
+          filePath: prepared.filePath,
+          isTempFile: prepared.isTempFile,
+        ),
       )
       if e.config.notification.screenNotifications and
           e.config.notification.quickRunScreenNotify:
@@ -1120,16 +1104,13 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.config.statusLine.multipleStatusLine = val
       e.state.statusMessage = "multiplestatusline = " & $val
     of bsoIgnoreCase:
-      e.config.standard.ignorecase = val
-      e.state.input.search.ignorecase = val
+      e.state.ignorecase = val
       e.state.statusMessage = "ignorecase = " & $val
     of bsoSmartCase:
-      e.config.standard.smartcase = val
-      e.state.input.search.smartcase = val
+      e.state.smartcase = val
       e.state.statusMessage = "smartcase = " & $val
     of bsoIncSearch:
-      e.config.standard.incrementalSearch = val
-      e.state.input.search.incsearch = val
+      e.state.incsearch = val
       e.state.statusMessage = "incsearch = " & $val
     of bsoHlSearch:
       e.state.input.search.hlsearch = val
@@ -1184,11 +1165,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     else:
       e.state.statusMessage = "No trailing whitespace found"
   of hrShellCommand:
-    e.state.pending.shellCommand = r.shellCommand
+    e.state.pending.add PendingAsyncOp(kind: paoShellCommand, command: r.shellCommand)
   of hrBackground:
-    e.state.pending.background = true
+    e.state.pending.add PendingAsyncOp(kind: paoBackground)
   of hrMan:
-    e.state.pending.manPage = r.hrManPage
+    e.state.pending.add PendingAsyncOp(kind: paoManPage, command: r.hrManPage)
   of hrSubstitute:
     let count = r.hrSubstituteCount
     e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
@@ -1207,11 +1188,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Build error: File not saved"
       logError("handler", "Build failed: No file path")
     else:
-      e.state.pending.buildOnSave = (
-        path: filePath,
-        language: activeBuffer.language.ord,
-        customCmd: "",
-        workspaceRoot: parentDir(filePath),
+      e.state.pending.add PendingAsyncOp(
+        kind: paoBuild,
+        build: (
+          path: filePath,
+          language: activeBuffer.language.ord,
+          customCmd: "",
+          workspaceRoot: parentDir(filePath),
+        ),
       )
       e.state.statusMessage = "Building: " & filePath
   of hrDebug:
@@ -1270,9 +1254,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       debugConfig.editorView.enable,
     )
     generateMacroInfo(
-      debugLines, e.state.macroState.isRecording, e.state.macroState.register,
-      e.state.macroState.registers.len, e.state.macroState.playbackDepth,
-      debugConfig.macroState.enable,
+      debugLines, e.state.pendingInput.macroState.isRecording,
+      e.state.pendingInput.macroState.register,
+      e.state.pendingInput.macroState.registers.len,
+      e.state.pendingInput.macroState.playbackDepth, debugConfig.macroState.enable,
     )
     generateVisualInfo(
       debugLines,
@@ -1709,18 +1694,18 @@ template withPlaybackGuard(e: Editor, body: untyped): ReplayOutcome =
   ## replay loops. `body` must assign to `outcome`.
   block:
     let state = e.state
-    if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
+    if state.pendingInput.macroState.playbackDepth >= MaxMacroRecursionDepth:
       e.state.statusMessage =
         "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")"
       roAbort
     else:
-      state.macroState.playbackDepth += 1
-      let wasRecording = state.macroState.isRecording
-      state.macroState.isRecording = false
+      state.pendingInput.macroState.playbackDepth += 1
+      let wasRecording = state.pendingInput.macroState.isRecording
+      state.pendingInput.macroState.isRecording = false
       var outcome {.inject.} = roContinue
       body
-      state.macroState.isRecording = wasRecording
-      state.macroState.playbackDepth -= 1
+      state.pendingInput.macroState.isRecording = wasRecording
+      state.pendingInput.macroState.playbackDepth -= 1
       outcome
 
 proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome =
@@ -1878,11 +1863,14 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
     logError("handler", "QuickRun prepare failed: " & prepareResult.error)
   else:
     let prepared = prepareResult.get
-    e.state.pending.quickRun = (
-      cmd: prepared.command.cmd,
-      args: prepared.command.args,
-      filePath: prepared.filePath,
-      isTempFile: prepared.isTempFile,
+    e.state.pending.add PendingAsyncOp(
+      kind: paoQuickRun,
+      quickRun: (
+        cmd: prepared.command.cmd,
+        args: prepared.command.args,
+        filePath: prepared.filePath,
+        isTempFile: prepared.isTempFile,
+      ),
     )
     if e.config.notification.screenNotifications and
         e.config.notification.quickRunScreenNotify:

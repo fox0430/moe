@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, tables, options, sequtils]
+import std/[unittest, os, strutils, tables, options, sequtils, json]
 
 import pkg/results
 
@@ -616,6 +616,68 @@ trace = "invalid"
     check "Lsp.nim.trace" in vr.errors[0].name
     check config.lsp.servers["nim"].trace == ltOff # Default value
 
+  test "Every feature sub-table is loaded":
+    ## Every table must be accepted and must drive its own `enable`. Both
+    ## values are exercised: one feature defaults to false, so a single pass
+    ## cannot tell "loaded" from "left at its default".
+    for want in [false, true]:
+      var tomlStr = "[Lsp]\nenable = true\n"
+      for name in LspFeatureTableNames:
+        tomlStr &= "\n[Lsp." & name & "]\nenable = " & $want & "\n"
+
+      let (config, vr) = loadFromTomlString(tomlStr)
+      check not vr.hasErrors
+      for name, value in fieldPairs(config.lsp):
+        when value is LspFeatureConfig or value is LspOpenWindowConfig or
+            value is LspDiagnosticsConfig:
+          if value.enable != want:
+            echo "Lsp feature table not loaded: " & name
+          check value.enable == want
+
+  test "Scalar value where a feature sub-table is expected is reported":
+    ## `getTable` returns an empty default for a non-table and the name is a
+    ## known key, so without a kind check the line would vanish with no notice.
+    let tomlStr = """
+[Lsp]
+Hover = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(
+      it.kind == iikInvalidValue and it.name == "Lsp.Hover" and it.expected == "table"
+    )
+    check config.lsp.hover.enable # Default kept
+
+  test "Unknown key inside a feature sub-table is reported under that table":
+    let tomlStr = """
+[Lsp.Hover]
+enabel = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "Lsp.Hover.enabel")
+
+  test "Misspelled feature table is not absorbed as a language server":
+    ## `[Lsp.Completin]` has no language-server key, so it must surface as an
+    ## unknown key rather than silently becoming a server entry.
+    let tomlStr = """
+[Lsp.Completin]
+enable = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "Lsp.Completin")
+    check not config.lsp.servers.hasKey("Completin")
+
+  test "Negative Lsp.Diagnostics.autoHoverDelay is rejected":
+    let tomlStr = """
+[Lsp.Diagnostics]
+autoHoverDelay = -1
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "Lsp.Diagnostics.autoHoverDelay" in vr.errors[0].name
+    check config.lsp.diagnostics.autoHoverDelay == 300 # Default value
+
 suite "Config Validation - Multiple errors":
   test "Multiple errors are collected":
     let tomlStr = """
@@ -726,6 +788,25 @@ command = 123
     check vr.hasErrors
     check "BuildOnSave.command" in vr.errors[0].name
 
+  test "timeout is loaded and zero means no timeout":
+    let tomlStr = """
+[BuildOnSave]
+timeout = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.buildOnSave.timeout == 0
+
+  test "Invalid timeout (negative) is detected":
+    let tomlStr = """
+[BuildOnSave]
+timeout = -5
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "BuildOnSave.timeout" in vr.errors[0].name
+    check config.buildOnSave.timeout == 300 # Default value
+
 suite "Config Validation - StatusLine section":
   test "Valid StatusLine config passes validation":
     let tomlStr = """
@@ -808,6 +889,25 @@ enable = "yes"
     let (_, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "SyntaxChecker.enable" in vr.errors[0].name
+
+  test "timeout is loaded and zero means no timeout":
+    let tomlStr = """
+[SyntaxChecker]
+timeout = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.syntaxChecker.timeout == 0
+
+  test "Invalid timeout (negative) is detected":
+    let tomlStr = """
+[SyntaxChecker]
+timeout = -5
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "SyntaxChecker.timeout" in vr.errors[0].name
+    check config.syntaxChecker.timeout == 60 # Default value
 
 suite "Config Validation - Theme section":
   test "Valid Theme config with default kind passes validation":
@@ -988,10 +1088,19 @@ nimAdvancedCommand = "c"
     check config.quickRun.timeout == 60
     check config.quickRun.nimAdvancedCommand == some("c")
 
-  test "Invalid timeout (zero) is detected":
+  test "timeout of zero is accepted and means no timeout":
     let tomlStr = """
 [QuickRun]
 timeout = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.quickRun.timeout == 0
+
+  test "Invalid timeout (negative) is detected":
+    let tomlStr = """
+[QuickRun]
+timeout = -1
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
@@ -2104,6 +2213,18 @@ number = false
       if e.kind == iikUnknownKey and e.name == "Standrd":
         found = true
     check found
+
+  test "Scalar value where a top-level section is expected is reported":
+    ## A known section name bound to a scalar passes the unknown-key check, so
+    ## the section dispatch has to reject the kind itself.
+    let tomlStr = """
+Standard = 5
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.errors.anyIt(
+      it.kind == iikInvalidValue and it.name == "Standard" and it.expected == "table"
+    )
+    check config.standard.tabStop == 2 # Default kept
 
   test "Unknown key in Standard section is detected":
     let tomlStr = """
@@ -3680,3 +3801,86 @@ suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
     check "CommandAliases" notin content
     check "ShellCommands" notin content
     check "DisabledCommandAliases" notin content
+
+suite "Config - Lsp feature tables round-trip":
+  test "Every feature sub-table is written and reloads unchanged":
+    inc testFileCounter
+    let testFile = getTempDir() / "moe_test_lsp_features_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    # Flip every feature away from its default so a table dropped by the
+    # serializer shows up as a value reverting on reload.
+    for name, value in fieldPairs(config.lsp):
+      when value is LspFeatureConfig or value is LspOpenWindowConfig or
+          value is LspDiagnosticsConfig:
+        value.enable = not value.enable
+    config.lsp.definition.openWindow = true
+    config.lsp.diagnostics.autoHoverDelay = 42
+
+    check saveConfigToToml(config, testFile).isOk
+
+    let content = readFile(testFile)
+    for name in LspFeatureTableNames:
+      check "[Lsp." & name & "]" in content
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    for name, saved, reloaded in fieldPairs(config.lsp, loaded.lsp):
+      when saved is LspFeatureConfig or saved is LspOpenWindowConfig or
+          saved is LspDiagnosticsConfig:
+        if saved != reloaded:
+          echo "Lsp feature table did not round-trip: " & name
+        check saved == reloaded
+
+suite "Config - Lsp server settings round-trip":
+  proc roundTripSettings(settingsJson: string): string =
+    inc testFileCounter
+    let testFile = getTempDir() / "moe_test_lsp_settings_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.lsp.servers["nim"] = LspServerConfig(
+      extensions: @[".nim"],
+      command: "nimlsp",
+      trace: ltOff,
+      settings: settingsJson,
+      rustAnalyzerRunSingle: false,
+      rustAnalyzerDebugSingle: false,
+    )
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.lsp.servers.hasKey("nim")
+    return loaded.lsp.servers["nim"].settings
+
+  test "Bare keys round-trip unchanged":
+    let result = roundTripSettings("""{"rust": {"analyzer": true}}""")
+    check parseJson(result) == parseJson("""{"rust": {"analyzer": true}}""")
+
+  test "Keys with spaces are quoted and preserved":
+    let result = roundTripSettings("""{"foo bar": 1}""")
+    check parseJson(result) == parseJson("""{"foo bar": 1}""")
+
+  test "Keys with dots stay flat instead of becoming nested tables":
+    let result = roundTripSettings("""{"foo.bar": 1}""")
+    check parseJson(result) == parseJson("""{"foo.bar": 1}""")
+
+  test "Null-valued keys are omitted on save":
+    let result = roundTripSettings("""{"keep": 1, "drop": null}""")
+    let parsed = parseJson(result)
+    check parsed{"keep"} == newJInt(1)
+    check parsed{"drop"} == nil

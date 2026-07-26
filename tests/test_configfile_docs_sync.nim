@@ -23,9 +23,10 @@
 ## with the checked-in file; any diff means a config field was added or
 ## modified without running `nimble gendocs`.
 
-import std/unittest
+import std/[unittest, algorithm, strutils]
 
 import ../tools/gen_config_docs
+import ../src/moepkg/config_loader/lsp {.all.}
 
 suite "configfile.md auto-gen sync":
   test "regenerating produces no diff":
@@ -49,3 +50,27 @@ suite "configfile.md auto-gen sync":
         echo "documents/configfile.md is out of sync with config.nim."
         echo "Run `nimble gendocs` and commit the result."
       check original == regenerated
+
+suite "configfile.md hand-written [Lsp.{languageId}] table":
+  ## The dynamic language-server table has no `{.cfgSection.}` type to derive
+  ## from, so it sits between two AUTO-GEN regions unprotected. Pin at least
+  ## its key list against the loader.
+  test "documents exactly the keys the loader accepts":
+    let doc = readFile(DocsPath)
+    let startIdx = doc.find("### Lsp.{languageId} table")
+    check startIdx >= 0
+
+    let rest = doc[startIdx ..^ 1]
+    let endIdx = rest.find("\n### ")
+    let blockText =
+      if endIdx >= 0:
+        rest[0 ..< endIdx]
+      else:
+        rest
+
+    var documented: seq[string]
+    for line in blockText.splitLines:
+      if line.startsWith("| ") and not line.startsWith("| Name |"):
+        documented.add line.split('|')[1].strip
+
+    check documented.sorted == @LspServerConfigKeys.sorted

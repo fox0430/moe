@@ -197,44 +197,16 @@ proc handleCallsResponse(
 proc pollLspCallHierarchy*(e: Editor) =
   ## Poll for pending call hierarchy request response
   ## Handles 2-stage request: prepare -> incoming/outgoing
-  if not e.lsp.enabled:
-    return
-
-  var feature: LspRequestFeature
-  var found = false
-  for f in CallHierarchyFeatures:
-    if e.state.lspCache.pending.hasKey(f):
-      feature = f
-      found = true
-      break
-  if not found:
-    return
-
-  let ctx = e.state.lspCache.pending[feature]
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-
-  case status
-  of lrsPending:
-    discard # Still waiting
-  of lrsSuccess:
-    e.state.lspCache.pending.del(feature)
-    # classifyResponse honours ctx.isItemDriven: for item-driven requests it
-    # skips the buffer/version guard (the viewer's synthetic buffer would
-    # otherwise trigger lrsGone) and the inline mode-hijack check in
-    # handleCallsResponse remains the sole gate.
-    if classifyResponse(e, ctx) != lrsFresh:
-      return
+  ##
+  ## classifyResponse honours ctx.isItemDriven: for item-driven requests it
+  ## skips the buffer/version guard (the viewer's synthetic buffer would
+  ## otherwise trigger lrsGone) and the inline mode-hijack check in
+  ## handleCallsResponse remains the sole gate.
+  e.pollOneShotLspResponse(CallHierarchyFeatures, "call hierarchy"):
     if feature in {lrfCallHierarchyPrepareIncoming, lrfCallHierarchyPrepareOutgoing}:
       handlePrepareResponse(e, feature, resultOpt)
     else:
       handleCallsResponse(e, feature, resultOpt)
-  of lrsError:
-    e.state.lspCache.pending.del(feature)
-    if errorOpt.isSome:
-      e.state.statusMessage = "LSP call hierarchy failed: " & errorOpt.get
-  of lrsTimeout:
-    e.state.lspCache.pending.del(feature)
-    e.state.statusMessage = "LSP call hierarchy timed out"
 
 proc requestLspCallHierarchyIncoming*(e: Editor): bool =
   ## Request LSP incoming calls at current cursor position (async)

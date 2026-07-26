@@ -39,22 +39,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  skip:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Skip job"
-
-  before:
-    runs-on: ubuntu-latest
-    if: "! contains(github.event.head_commit.message, '[skip ci]')"
-    steps:
-      - run: echo "Before job"
-
   test:
     name: build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    needs: before
     strategy:
       matrix:
         os:

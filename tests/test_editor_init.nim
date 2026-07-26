@@ -400,3 +400,21 @@ suite "config_loader: dedicated keymap file":
         foundNormalC1 = true
     check foundBogus # unknown top-level section
     check foundNormalC1 # bad LHS reported at its real path
+
+  test "every EditorMode member is accepted as a [KeyMapping.<mode>] section":
+    # Guards against the pre-refactor drift where the section allowlist was
+    # a hand-written array parallel to EditorMode: a new enum member had to be
+    # mirrored into the allowlist or its section would be silently rejected as
+    # an unknown key.
+    var lines: seq[string]
+    for m in EditorMode:
+      lines.add "[" & $m & "]"
+      lines.add "\"j\" = \"down\""
+    let toml = parseString(lines.join("\n"))
+    var km = newEditorConfig().keyMapping
+    var vr = newValidationResult()
+    loadKeyMappingConfig(toml.getTable(), km, vr, section = "")
+
+    check not vr.hasErrors
+    for m in EditorMode:
+      check km.perMode[m].getOrDefault("j").rhs == "down"

@@ -21,7 +21,7 @@
 
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
-import ../[encoding, highlight, logger, primitives, unicode_utils]
+import ../[encoding, highlight, logger, primitives]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta
 
@@ -319,9 +319,6 @@ type
       # Per-line tokenization cap in runes (synmaxcol). 0 = unlimited.
     uriScanParsedUpTo*: int # Last line scanned for URIs during progressive init
 
-    # Performance optimization
-    cursorCache*: CursorPosCache # Cache for character-to-byte position conversions
-
     # Change list (tracks positions where changes were made, like Vim's changelist)
     changeList*: seq[BufferPosition]
     changeListIndex*: int
@@ -334,6 +331,10 @@ type
 
     # LSP diagnostics (full detail for hover display)
     diagnostics*: seq[BufferDiagnostic]
+    diagnosticsDirty*: bool
+      ## Set by writers of `diagnostics`; cleared by `updateHighlight` after it
+      ## rebuilds `highlight.diagnosticOverlay`. Lets pure-edit ticks skip the
+      ## overlay rebuild when diagnostics have not changed.
 
     # Per-buffer EditorConfig overrides
     editorConfig*: Option[BufferEditorConfig]
@@ -342,17 +343,13 @@ type
     # (see BufferStorage); read the active kind via the `backendKind` accessor.
     storage*: BufferStorage
 
-const
-  AutoBackendLargeFileThreshold* = 10 * 1024 * 1024
-    # 10 MB
-    ## In auto-backend mode, a file at or above this size loads into PieceTable
-    ## instead of GapBuffer (`chooseBackendForFile`). Crossing it is the only thing
-    ## that makes a reload change the backend; the swap reassigns only
-    ## `TextBuffer.storage` (see `BufferStorage`), leaving every other field
-    ## untouched, so a reload's result never depends on whether the size crossed it.
-  InvalidCursorPosCache =
-    CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1)
-  ## Sentinel for "no cached position"; line=-1 forces a recompute on first lookup.
+const AutoBackendLargeFileThreshold* = 10 * 1024 * 1024
+  # 10 MB
+  ## In auto-backend mode, a file at or above this size loads into PieceTable
+  ## instead of GapBuffer (`chooseBackendForFile`). Crossing it is the only thing
+  ## that makes a reload change the backend; the swap reassigns only
+  ## `TextBuffer.storage` (see `BufferStorage`), leaving every other field
+  ## untouched, so a reload's result never depends on whether the size crossed it.
 
 var nextBufferId = 1
   ## Starts at 1 so `BufferId(0)` is reserved as a sentinel for the
@@ -642,7 +639,6 @@ proc newTextBuffer*(
   result.modifiedLines = newSeq[LineModificationKind](lineCount)
   result.language = SourceLanguage.langNone
   result.maxHighlightLineLength = DefaultMaxHighlightLineLength
-  result.cursorCache = InvalidCursorPosCache
   result.foldState = initFoldState()
   result.editorConfig = none(BufferEditorConfig)
 
@@ -854,6 +850,10 @@ template shiftPerLineArray(arr: untyped, freshValue: untyped, event: RowColRemap
       else:
         event.firstAffectedRow
     if idx < 0 or idx > arr.len:
+      logDebug(
+        "buffer",
+        "shiftPerLineArray clamp: " & astToStr(arr) & " idx=" & $idx & " len=" & $arr.len,
+      )
       return
     if delta > 0:
       for _ in 0 ..< delta:
@@ -1139,13 +1139,6 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   b.pendingModifiedLinesSnapshot.setLen(0)
   b.hasPendingLineMarkersSnapshot = false
   b.pendingLineMarkersSnapshot.clear()
-
-proc resetCursorCache*(b: TextBuffer) {.inline.} =
-  ## Invalidate the char->byte position cache (line=-1 forces a recompute on the
-  ## next lookup). A reload replaces the content, so any cached
-  ## (line, charPos)->bytePos mapping is stale; loadFile calls this on its single
-  ## reload path regardless of whether the backend swapped.
-  b.cursorCache = InvalidCursorPosCache
 
 proc clearUndoRedoState*(b: TextBuffer) =
   ## Drop all undo/redo history, the in-flight transaction and any pending

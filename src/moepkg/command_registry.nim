@@ -145,8 +145,8 @@ proc executeFindCharMotion(
     reverse = motion in {Motion.FindCharBackward, Motion.TillCharBackward}
     motionCmd = MotionCommand(motion: motion, targetChar: targetChar, count: count)
 
-  if ctx.state.editState.pendingOperator.isSome:
-    let op = ctx.state.editState.pendingOperator.get
+  if ctx.state.pendingInput.pendingOperator.isSome:
+    let op = ctx.state.pendingInput.pendingOperator.get
     # Fold the operator count into the motion count (2df{c} == d2f{c}); the
     # charwise delete ignores operatorCount, so the multiplication must happen
     # here as it does on the generic operator+motion path.
@@ -160,7 +160,7 @@ proc executeFindCharMotion(
         tillRepeatSkipDest(ctx, reverse, targetChar, motionCount, op.startPos)
       if skipDest.isNone:
         # No further target - delete nothing.
-        ctx.state.editState.pendingOperator = none(PendingOperator)
+        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
         return ok(())
       endPos = skipDest.get
     else:
@@ -168,7 +168,7 @@ proc executeFindCharMotion(
         findTillOperatorEndPos(ctx, motion, targetChar, motionCount, op.startPos)
       if endOpt.isNone:
         # Character not found - clear operator and do nothing.
-        ctx.state.editState.pendingOperator = none(PendingOperator)
+        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
         return ok(())
       endPos = endOpt.get
 
@@ -177,7 +177,7 @@ proc executeFindCharMotion(
     let opResult = applyOperatorOverMotion(
       ctx, op.operatorType, op.operatorCount, op.startPos, endPos, motion
     )
-    ctx.state.editState.pendingOperator = none(PendingOperator)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     if opResult.isErr:
       return err(opResult.error)
 
@@ -231,8 +231,8 @@ proc executeCommand*(
   # command, so the user never edits text hidden behind a fold marker.
   let isEditCommand =
     (
-      ctx.state.editState.pendingOperator.isSome and
-      ctx.state.editState.pendingOperator.get.operatorType != OpYank
+      ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType != OpYank
     ) or (cmd.kind == ctOperatorPending and cmd.operatorType in EditOperatorTypes) or (
       cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
       cmd.commandId in EditCommandIds
@@ -266,7 +266,7 @@ proc executeCommand*(
     if isVisualEditCommand:
       ctx.state.visualSelection.active = false
       ctx.state.mode = ctx.state.previousMode
-    ctx.state.editState.pendingOperator = none(PendingOperator)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     ctx.state.statusMessage = "Buffer is read-only"
     return ok(())
   case cmd.kind
@@ -288,8 +288,8 @@ proc executeCommand*(
       )
 
     # Check if we have a pending operator
-    if ctx.state.editState.pendingOperator.isSome:
-      let op = ctx.state.editState.pendingOperator.get
+    if ctx.state.pendingInput.pendingOperator.isSome:
+      let op = ctx.state.pendingInput.pendingOperator.get
 
       # Multiply motion count by operator count for correct Vim behavior
       # e.g., 3dw = d3w (delete 3 words), 2d3w = 6 words
@@ -306,14 +306,14 @@ proc executeCommand*(
         motionCmd, op.startPos, updateViewport = false
       )
       if r.isErr:
-        ctx.state.editState.pendingOperator = none(PendingOperator)
+        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
         return err(r.error)
 
       # Boundary-clamped no-move motion (dh at col 0, dk on first line, dj on
       # last line): vim treats as no-op. Without this, calculateOperatorRange
       # returns a zero-move inclusive range and the operator eats one char/line.
       if r.value == op.startPos and cmd.motion in NoMoveNoOpMotions:
-        ctx.state.editState.pendingOperator = none(PendingOperator)
+        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
         return ok(())
 
       block:
@@ -322,7 +322,7 @@ proc executeCommand*(
         let r = applyOperatorOverMotion(
           ctx, op.operatorType, op.operatorCount, op.startPos, r.value, cmd.motion
         )
-        ctx.state.editState.pendingOperator = none(PendingOperator)
+        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
         if r.isErr:
           return err(r.error)
 
@@ -492,32 +492,19 @@ proc executeCommand*(
       let charsAvailable = lineContent.charLen - ctx.cursor.column
       let charsToReplace = min(actualCount, charsAvailable)
 
-      # Begin transaction for all replace operations
-      let txnResult =
-        ctx.buffer.beginTransaction("replace " & $charsToReplace & " char(s)")
-      if txnResult.isErr:
-        return err(txnResult.error)
+      let txr = withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
+        for i in 0 ..< charsToReplace:
+          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
-      # Replace each character
-      for i in 0 ..< charsToReplace:
-        let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+          let delResult = ctx.buffer.deleteRange(pos, pos)
+          if delResult.isErr:
+            return err(delResult.error)
 
-        # Delete original character
-        let delResult = ctx.buffer.deleteRange(pos, pos)
-        if delResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(delResult.error)
-
-        # Insert replacement character
-        let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
-        if insResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(insResult.error)
-
-      # Commit transaction
-      let commitResult = ctx.buffer.commitTransaction()
-      if commitResult.isErr:
-        return err(commitResult.error)
+          let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
+          if insResult.isErr:
+            return err(insResult.error)
+      if txr.isErr:
+        return err(txr.error)
 
       # Record this command for repeat (.)
       ctx.state.editState.lastEditCommand = some(

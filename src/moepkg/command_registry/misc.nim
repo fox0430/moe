@@ -100,7 +100,7 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
   ## hunks, conflict blocks).
   recordJump(ctx.state)
   ctx.cursor = BufferPosition(line: line, column: 0)
-  let lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
+  let viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
   ctx.motionController.viewportManager.updateViewport(
     CursorPosition(x: 0, y: line),
     ctx.buffer.len,
@@ -108,7 +108,7 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
     ctx.state.windowDisplay.viewportReservedLines,
     ctx.state.lineWrap,
     ctx.buffer,
-    lineNumOffset,
+    viewportOffset,
     ctx.state.tabStop,
   )
 
@@ -270,12 +270,12 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       let
         lineCount = ctx.buffer.len
         cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-        lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
+        viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
       ctx.motionController.viewportManager.updateViewport(
         cursorPos, lineCount, ctx.state.showStatusLine,
         ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap, ctx.buffer,
-        lineNumOffset, ctx.state.tabStop,
+        viewportOffset, ctx.state.tabStop,
       )
 
       ctx.state.statusMessage = "Found: " & searchText
@@ -610,12 +610,12 @@ proc registerMiscCommands*(registry: CommandRegistry) =
           let
             lineCount = ctx.buffer.len
             cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-            lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
+            viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.showStatusLine,
             ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap,
-            ctx.buffer, lineNumOffset, ctx.state.tabStop,
+            ctx.buffer, viewportOffset, ctx.state.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word
@@ -690,12 +690,12 @@ proc registerMiscCommands*(registry: CommandRegistry) =
           let
             lineCount = ctx.buffer.len
             cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-            lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
+            viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.showStatusLine,
             ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap,
-            ctx.buffer, lineNumOffset, ctx.state.tabStop,
+            ctx.buffer, viewportOffset, ctx.state.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word

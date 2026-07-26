@@ -32,6 +32,9 @@ proc createTestContext(buffer: TextBuffer): CommandContext =
   state.cursor = BufferPosition(line: 0, column: 0)
   state.mode = EditorMode.Normal
   state.registers = initRegisters()
+  # CommandContext reads clipboard/notification live from state.config, so
+  # tests toggle behavior by mutating state.config.clipboard etc.
+  state.config.clipboard = ClipboardConfig(enable: false)
 
   let motionController = MotionController(
     viewportManager: ViewportManager(
@@ -45,7 +48,6 @@ proc createTestContext(buffer: TextBuffer): CommandContext =
     buffer: buffer,
     state: state,
     motionController: motionController,
-    clipboardConfig: ClipboardConfig(enable: false),
     keyBindingRegistry: newKeyBindingRegistry(),
   )
 
@@ -345,7 +347,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -366,7 +368,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -385,7 +387,7 @@ suite "executeCommand - Operator + Motion":
     ctx.cursor = BufferPosition(line: 1, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -402,7 +404,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -419,7 +421,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (y)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -437,7 +439,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (c)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -455,7 +457,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -472,7 +474,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -490,7 +492,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -507,7 +509,7 @@ suite "executeCommand - Operator + Motion":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -530,7 +532,7 @@ suite "executeCommand - Operator + Motion":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -555,7 +557,7 @@ suite "executeCommand - Operator + Motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -572,7 +574,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.Left, count: 1)
@@ -581,7 +583,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     check buffer.len == 2
     check buffer[0] == "abc"
     check buffer[1] == "def"
-    check ctx.state.editState.pendingOperator.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
 
   test "dk on line 0 is a no-op":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -590,7 +592,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     ctx.state.preferredColumn = -1
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.Up, count: 1)
@@ -600,7 +602,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     check buffer[0] == "line1"
     check buffer[1] == "line2"
     check buffer[2] == "line3"
-    check ctx.state.editState.pendingOperator.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
 
   test "dj on last line is a no-op":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -608,7 +610,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     ctx.cursor = BufferPosition(line: 2, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
@@ -618,7 +620,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     check buffer[0] == "line1"
     check buffer[1] == "line2"
     check buffer[2] == "line3"
-    check ctx.state.editState.pendingOperator.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
 
   test "dh at column 0 does not clobber the unnamed register":
     let buffer = newTextBuffer("abc")
@@ -629,7 +631,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     # Prime the unnamed register with a previous yank ("xyz").
     ctx.state.registers.setNoNamedRegister("xyz", false)
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.Left, count: 1)
@@ -644,7 +646,7 @@ suite "executeCommand - Delete no-move guard (dh/dj/dk at boundary)":
     ctx.cursor = BufferPosition(line: 0, column: 2)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.Right, count: 1)
@@ -660,7 +662,7 @@ suite "executeCommand - Delete with find motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -683,7 +685,7 @@ suite "executeCommand - Delete with find motion":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -706,7 +708,7 @@ suite "executeCommand - Delete with find motion":
     let registry = createTestRegistry()
 
     # Set pending operator (c)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -761,7 +763,7 @@ suite "executeCommand - Repeat command (.)":
     let registry = createTestRegistry()
 
     # First delete word (dw)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let dwCmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
@@ -782,7 +784,7 @@ suite "executeCommand - Repeat command (.)":
     let registry = createTestRegistry()
 
     # dfx: delete from col 0 through the first 'x' (inclusive) -> "bxc"
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let findCmd = Command(
@@ -808,7 +810,7 @@ suite "executeCommand - Repeat command (.)":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let findCmd = Command(
@@ -835,7 +837,7 @@ suite "executeCommand - Record last edit":
     let registry = createTestRegistry()
 
     # Delete word (dw)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
@@ -855,7 +857,7 @@ suite "executeCommand - Record last edit":
     let registry = createTestRegistry()
 
     # Yank word (yw)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
@@ -914,7 +916,7 @@ suite "executeCommand - Edge cases":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -932,7 +934,7 @@ suite "executeCommand - Edge cases":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -948,7 +950,7 @@ suite "executeCommand - Edge cases":
     let result = registry.executeCommand(ctx, cmd)
     check result.isOk # No error, just cancelled
     check buffer[0] == "hello" # Buffer unchanged
-    check ctx.state.editState.pendingOperator.isNone # Operator cleared
+    check ctx.state.pendingInput.pendingOperator.isNone # Operator cleared
 
   test "mode switch clears key sequence":
     let buffer = newTextBuffer("hello")
@@ -1102,8 +1104,8 @@ suite "Handler - Paste operations":
 
     check registry.execute(ctx, custom("paste.after")).isOk
     check buffer[0] == "helloあいう world"
-    # Cursor should be at column 4 + 3 chars = 7
-    check ctx.cursor.column == 7
+    # Cursor lands on the first pasted char (column 4 + 1)
+    check ctx.cursor.column == 5
 
   test "paste before cursor (P) - multibyte characterwise":
     let buffer = newTextBuffer("hello world")
@@ -1114,8 +1116,8 @@ suite "Handler - Paste operations":
 
     check registry.execute(ctx, custom("paste.before")).isOk
     check buffer[0] == "helloあいう world"
-    # Cursor should be at column 4 + 3 chars = 7
-    check ctx.cursor.column == 7
+    # Cursor lands on the first pasted char (column 5)
+    check ctx.cursor.column == 5
 
   test "paste after cursor (p) - charwise multi-line":
     let buffer = newTextBuffer("hello")
@@ -1128,8 +1130,8 @@ suite "Handler - Paste operations":
     check buffer.len == 2
     check buffer[0] == "hxy"
     check buffer[1] == "abello"
-    # Cursor lands on last char of pasted text ('b') on the new line
-    check ctx.cursor.line == 1
+    # Cursor lands on the first pasted char ('x')
+    check ctx.cursor.line == 0
     check ctx.cursor.column == 1
 
   test "paste after cursor (p) - charwise multi-line count=2":
@@ -1146,7 +1148,8 @@ suite "Handler - Paste operations":
     check buffer[0] == "hxy"
     check buffer[1] == "abxy"
     check buffer[2] == "abello"
-    check ctx.cursor.line == 2
+    # Cursor lands on the first pasted char ('x')
+    check ctx.cursor.line == 0
     check ctx.cursor.column == 1
 
   test "paste before cursor (P) - charwise multi-line":
@@ -1160,9 +1163,9 @@ suite "Handler - Paste operations":
     check buffer.len == 2
     check buffer[0] == "hexy"
     check buffer[1] == "abllo"
-    # Cursor lands on last char of pasted text ('b') on the new line
-    check ctx.cursor.line == 1
-    check ctx.cursor.column == 1
+    # Cursor lands on the first pasted char ('x')
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 2
 
   test "paste after cursor (p) - charwise multi-line multibyte":
     let buffer = newTextBuffer("hello")
@@ -1175,9 +1178,9 @@ suite "Handler - Paste operations":
     check buffer.len == 2
     check buffer[0] == "hあい"
     check buffer[1] == "うえおello"
-    # Cursor at last rune of paste 'お' = column 2 on the new line
-    check ctx.cursor.line == 1
-    check ctx.cursor.column == 2
+    # Cursor lands on the first pasted rune ('あ')
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 1
 
 suite "Handler - Delete char operations":
   test "delete char at cursor (x)":
@@ -1329,6 +1332,16 @@ suite "Handler - Delete char auto-delete paren (x)":
     check registry.execute(ctx, custom("delete.char")).isOk
     check buffer[0] == "]"
 
+  test "x on adjacent pair stores both chars in the register":
+    let buffer = newTextBuffer("a()b")
+    let ctx = createTestContext(buffer)
+    ctx.state.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "()"
+
   test "x on adjacent quote pair":
     # "" -> x on first " -> empty
     let buffer = newTextBuffer("\"\"")
@@ -1399,6 +1412,16 @@ suite "Handler - Delete char before auto-delete paren (X)":
     check registry.execute(ctx, custom("delete.char.before")).isOk
     check buffer[0] == "ab"
     check ctx.cursor.column == 1
+
+  test "X on adjacent pair stores both chars in the register":
+    let buffer = newTextBuffer("a()b")
+    let ctx = createTestContext(buffer)
+    ctx.state.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "()"
 
   test "X with bracket and spaces does not auto-delete":
     # [   ] with cursor on ] -> X deletes space only
@@ -2057,6 +2080,32 @@ suite "Handler - Indent/Dedent":
     check registry.execute(ctx, custom("dedent.line")).isOk
     check buffer[0].len < 9 # Line should be shorter
 
+  test "indent line count is a line count (vim's [count]>>)":
+    let buffer = newTextBuffer("a\nb\nc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("indent.line"), @["2"]).isOk
+    check buffer[0].strip == "a"
+    check buffer[1].strip == "b"
+    check buffer[0][0] in {' ', '\t'}
+    check buffer[1][0] in {' ', '\t'}
+    check buffer[2] == "c"
+    # Cursor lands on the first non-blank, like >>
+    check ctx.cursor == BufferPosition(line: 0, column: buffer[0].len - 1)
+
+  test "dedent line count is a line count (vim's [count]<<)":
+    let buffer = newTextBuffer("    a\n    b\n    c")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("dedent.line"), @["2"]).isOk
+    check buffer[0].len < 5
+    check buffer[1].len < 5
+    check buffer[2] == "    c"
+
 suite "Handler - Fold operations":
   test "fold toggle":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -2152,14 +2201,14 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
     # Call textobject.inner
     check registry.execute(ctx, custom("textobject.inner")).isOk
-    check ctx.state.editState.pendingTextObject.isSome
-    check ctx.state.editState.pendingTextObject.get.modifier == tomInner
+    check ctx.state.pendingInput.pendingTextObject.isSome
+    check ctx.state.pendingInput.pendingTextObject.get.modifier == tomInner
 
   test "textobject.around with pending operator sets text object modifier":
     let buffer = newTextBuffer("hello world")
@@ -2169,14 +2218,14 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # Set pending operator (c)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
     # Call textobject.around
     check registry.execute(ctx, custom("textobject.around")).isOk
-    check ctx.state.editState.pendingTextObject.isSome
-    check ctx.state.editState.pendingTextObject.get.modifier == tomAround
+    check ctx.state.pendingInput.pendingTextObject.isSome
+    check ctx.state.pendingInput.pendingTextObject.get.modifier == tomAround
 
   test "textobject word (diw) deletes inner word":
     let buffer = newTextBuffer("hello world test")
@@ -2186,7 +2235,7 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -2206,7 +2255,7 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # Set pending operator (d)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -2225,7 +2274,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2239,7 +2288,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.around"))
@@ -2253,7 +2302,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2270,7 +2319,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2288,7 +2337,7 @@ suite "Handler - Text Object operations":
     # Seed the unnamed register; an empty yank must not clobber it.
     ctx.state.registers.setYankedRegister("PREV", false)
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2305,7 +2354,7 @@ suite "Handler - Text Object operations":
     # An empty delete removes nothing, so a previously yanked value survives.
     ctx.state.registers.setYankedRegister("PREV", false)
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2322,13 +2371,13 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('a')
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingRegister = some('a')
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
-    check ctx.state.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingRegister.isNone
 
   test "textobject tag (\"adit) on empty tag consumes the pending register":
     let buffer = newTextBuffer("<a></a>")
@@ -2337,13 +2386,13 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('a')
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingRegister = some('a')
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
-    check ctx.state.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingRegister.isNone
 
   test "textobject tag (\"acit) on empty tag consumes the pending register":
     let buffer = newTextBuffer("<a></a>")
@@ -2352,14 +2401,14 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('a')
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingRegister = some('a')
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
     check ctx.state.mode == EditorMode.Insert
-    check ctx.state.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingRegister.isNone
 
   test "textobject tag (gUit) on empty tag is a no-op, not a corruption":
     # Regression: case operators must honor the empty range. Previously this
@@ -2370,7 +2419,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2384,7 +2433,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2400,7 +2449,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2414,7 +2463,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2428,7 +2477,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2464,7 +2513,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2479,7 +2528,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2497,7 +2546,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2512,7 +2561,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2533,7 +2582,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2552,7 +2601,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2570,7 +2619,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2589,7 +2638,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2606,7 +2655,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.around"))
@@ -2622,7 +2671,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2637,7 +2686,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.around"))
@@ -2653,7 +2702,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2668,7 +2717,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
@@ -2685,7 +2734,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 3, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.around"))
@@ -2702,7 +2751,7 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.around"))
@@ -2717,13 +2766,13 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     # dit on plain text errors; the operator must not survive armed.
     check registry.execute(ctx, custom("textobject.tag")).isErr
-    check ctx.state.editState.pendingOperator.isNone
+    check ctx.state.pendingInput.pendingOperator.isNone
     # A following motion must therefore be a plain move, not a stray delete.
     check registry.executeCommand(
       ctx, Command(kind: ctMotion, motion: Motion.Down, count: 1)
@@ -2740,13 +2789,13 @@ suite "Handler - Text Object operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('a')
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingRegister = some('a')
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isErr
-    check ctx.state.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingRegister.isNone
 
 suite "Handler - Clipboard operations":
   test "clipboard copy when disabled returns error":
@@ -2759,7 +2808,7 @@ suite "Handler - Clipboard operations":
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),
     )
-    ctx.clipboardConfig = ClipboardConfig(enable: false)
+    ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditCopy))
@@ -2770,7 +2819,7 @@ suite "Handler - Clipboard operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.clipboardConfig = ClipboardConfig(enable: false)
+    ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditPaste))
@@ -2787,7 +2836,7 @@ suite "Handler - Clipboard operations":
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),
     )
-    ctx.clipboardConfig = ClipboardConfig(enable: false)
+    ctx.state.config.clipboard = ClipboardConfig(enable: false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditCut))
@@ -2800,7 +2849,7 @@ suite "Handler - Clipboard operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     ctx.state.mode = EditorMode.Normal
     ctx.state.visualSelection = VisualSelection(active: false)
-    ctx.clipboardConfig = ClipboardConfig(enable: true, tool: cbtXclip)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, builtin(bcEditCopy))
@@ -2847,8 +2896,8 @@ suite "Handler - Operator commands":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("operator.delete")).isOk
-    check ctx.state.editState.pendingOperator.isSome
-    check ctx.state.editState.pendingOperator.get.operatorType == OpDelete
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.operatorType == OpDelete
 
   test "operator.change sets pending operator":
     let buffer = newTextBuffer("hello world")
@@ -2858,8 +2907,8 @@ suite "Handler - Operator commands":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("operator.change")).isOk
-    check ctx.state.editState.pendingOperator.isSome
-    check ctx.state.editState.pendingOperator.get.operatorType == OpChange
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.operatorType == OpChange
 
   test "operator.yank sets pending operator":
     let buffer = newTextBuffer("hello world")
@@ -2869,8 +2918,8 @@ suite "Handler - Operator commands":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("operator.yank")).isOk
-    check ctx.state.editState.pendingOperator.isSome
-    check ctx.state.editState.pendingOperator.get.operatorType == OpYank
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.operatorType == OpYank
 
   test "double operator (dd) deletes line":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -2881,7 +2930,7 @@ suite "Handler - Operator commands":
 
     # First d - sets pending operator
     discard registry.execute(ctx, custom("operator.delete"))
-    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.isSome
 
     # Second d - completes dd (delete line)
     check registry.execute(ctx, custom("operator.delete")).isOk
@@ -2983,7 +3032,7 @@ suite "Handler - Operator commands":
 
     # First y - sets pending operator
     discard registry.execute(ctx, custom("operator.yank"))
-    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.isSome
 
     # Second y - completes yy (yank line)
     check registry.execute(ctx, custom("operator.yank")).isOk
@@ -3024,7 +3073,7 @@ suite "Handler - Operator commands":
 
     # First c - sets pending operator
     discard registry.execute(ctx, custom("operator.change"))
-    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.isSome
 
     # Second c - completes cc (change line)
     check registry.execute(ctx, custom("operator.change")).isOk
@@ -3423,6 +3472,36 @@ suite "Handler - Other Commands":
     discard registry.execute(ctx, custom("autoindent.line"))
     # Just check it doesn't crash
     check true # Just verify no crash
+
+  test "autoindent line (==) copies space indent from previous line":
+    let buffer = newTextBuffer("    hello\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(1, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("autoindent.line")).isOk
+    check buffer[1] == "    world"
+
+  test "autoindent line (==) copies tab indent from previous line":
+    let buffer = newTextBuffer("\t\thello\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(1, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("autoindent.line")).isOk
+    check buffer[1] == "\t\tworld"
+
+  test "autoindent line (==) replaces space indent with tab indent":
+    let buffer = newTextBuffer("\thello\n  world")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(1, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("autoindent.line")).isOk
+    check buffer[1] == "\tworld"
 
   test "quick run":
     let buffer = newTextBuffer("echo hello")
@@ -3916,7 +3995,7 @@ suite "Cursor clamping - OpChange":
     ctx.setCursor(0, 6) # On 'w'
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.End, count: 1)
@@ -3932,7 +4011,7 @@ suite "Cursor clamping - OpChange":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
@@ -4096,8 +4175,8 @@ suite "Handler - Indent/Outdent operator with text objects":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("operator.indent")).isOk
-    check ctx.state.editState.pendingOperator.isSome
-    check ctx.state.editState.pendingOperator.get.operatorType == OpIndent
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.operatorType == OpIndent
 
   test "operator.outdent sets pending operator":
     let buffer = newTextBuffer("  hello world")
@@ -4107,8 +4186,8 @@ suite "Handler - Indent/Outdent operator with text objects":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("operator.outdent")).isOk
-    check ctx.state.editState.pendingOperator.isSome
-    check ctx.state.editState.pendingOperator.get.operatorType == OpOutdent
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.operatorType == OpOutdent
 
   test "double indent (>>) indents current line":
     let buffer = newTextBuffer("hello\nworld\ntest")
@@ -4122,7 +4201,7 @@ suite "Handler - Indent/Outdent operator with text objects":
 
     # First > sets pending operator
     discard registry.execute(ctx, custom("operator.indent"))
-    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.isSome
 
     # Second > completes >> (indent line)
     check registry.execute(ctx, custom("operator.indent")).isOk
@@ -4142,7 +4221,7 @@ suite "Handler - Indent/Outdent operator with text objects":
 
     # First < sets pending operator
     discard registry.execute(ctx, custom("operator.outdent"))
-    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.isSome
 
     # Second < completes << (dedent line)
     check registry.execute(ctx, custom("operator.outdent")).isOk
@@ -4161,7 +4240,7 @@ suite "Handler - Indent/Outdent operator with text objects":
     let registry = createTestRegistry()
 
     # Set pending operator (>)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4184,7 +4263,7 @@ suite "Handler - Indent/Outdent operator with text objects":
     let registry = createTestRegistry()
 
     # Set pending operator (<)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpOutdent, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4206,8 +4285,8 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("operator.lowercase")).isOk
-    check ctx.state.editState.pendingOperator.isSome
-    check ctx.state.editState.pendingOperator.get.operatorType == OpLowerCase
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.operatorType == OpLowerCase
 
   test "operator.uppercase sets pending operator":
     let buffer = newTextBuffer("hello world")
@@ -4217,8 +4296,8 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("operator.uppercase")).isOk
-    check ctx.state.editState.pendingOperator.isSome
-    check ctx.state.editState.pendingOperator.get.operatorType == OpUpperCase
+    check ctx.state.pendingInput.pendingOperator.isSome
+    check ctx.state.pendingInput.pendingOperator.get.operatorType == OpUpperCase
 
   test "lowercase with text object (guiw) lowercases inner word":
     let buffer = newTextBuffer("hello WORLD test")
@@ -4228,7 +4307,7 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let registry = createTestRegistry()
 
     # Set pending operator (gu)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4248,7 +4327,7 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let registry = createTestRegistry()
 
     # Set pending operator (gU)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4269,7 +4348,7 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let registry = createTestRegistry()
 
     # Set pending operator (gu)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4288,7 +4367,7 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let registry = createTestRegistry()
 
     # Set pending operator (gU)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4312,7 +4391,7 @@ suite "Handler - Lowercase/Uppercase operator with text objects":
     let registry = createTestRegistry()
 
     # Set pending operator (>)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4341,8 +4420,8 @@ suite "Handler - Visual mode text object selection":
 
     # i - sets pending text object modifier in Visual mode
     check registry.execute(ctx, custom("textobject.inner")).isOk
-    check ctx.state.editState.pendingTextObject.isSome
-    check ctx.state.editState.pendingTextObject.get.modifier == tomInner
+    check ctx.state.pendingInput.pendingTextObject.isSome
+    check ctx.state.pendingInput.pendingTextObject.get.modifier == tomInner
     check ctx.state.mode == EditorMode.Visual # Stays in visual mode
 
     # w - selects word
@@ -4366,8 +4445,8 @@ suite "Handler - Visual mode text object selection":
 
     # a - sets around text object modifier
     check registry.execute(ctx, custom("textobject.around")).isOk
-    check ctx.state.editState.pendingTextObject.isSome
-    check ctx.state.editState.pendingTextObject.get.modifier == tomAround
+    check ctx.state.pendingInput.pendingTextObject.isSome
+    check ctx.state.pendingInput.pendingTextObject.get.modifier == tomAround
 
     # w - selects around word
     check registry.execute(ctx, custom("textobject.word")).isOk
@@ -4439,7 +4518,7 @@ suite "Handler - Visual mode text object selection":
 
     check registry.execute(ctx, custom("textobject.inner")).isOk
     check ctx.state.mode == EditorMode.Visual # Must stay in Visual mode
-    check ctx.state.editState.pendingTextObject.isSome
+    check ctx.state.pendingInput.pendingTextObject.isSome
 
   test "textobject.around in Visual mode does not enter Insert mode":
     let buffer = newTextBuffer("hello world")
@@ -4455,7 +4534,7 @@ suite "Handler - Visual mode text object selection":
 
     check registry.execute(ctx, custom("textobject.around")).isOk
     check ctx.state.mode == EditorMode.Visual # Must stay in Visual mode
-    check ctx.state.editState.pendingTextObject.isSome
+    check ctx.state.pendingInput.pendingTextObject.isSome
 
 suite "Multibyte character support":
   test "lowercase operator with mixed ASCII and multibyte (guiw)":
@@ -4467,7 +4546,7 @@ suite "Multibyte character support":
     let registry = createTestRegistry()
 
     # Set pending operator (gu)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4489,7 +4568,7 @@ suite "Multibyte character support":
     let registry = createTestRegistry()
 
     # Set pending operator (gU)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4613,7 +4692,7 @@ suite "Multibyte character support":
     let registry = createTestRegistry()
 
     # Set pending operator (>)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4634,7 +4713,7 @@ suite "Multibyte character support":
     let registry = createTestRegistry()
 
     # Set pending operator (gu)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4660,7 +4739,7 @@ suite "Multibyte character support":
 
     # i - sets pending text object modifier in Visual mode
     check registry.execute(ctx, custom("textobject.inner")).isOk
-    check ctx.state.editState.pendingTextObject.isSome
+    check ctx.state.pendingInput.pendingTextObject.isSome
 
     # w - selects word
     check registry.execute(ctx, custom("textobject.word")).isOk
@@ -4700,7 +4779,7 @@ suite "Handler - Text Object Count (d2iw, d2aw)":
     let registry = createTestRegistry()
 
     # Set pending operator d with count 2
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
 
@@ -4720,7 +4799,7 @@ suite "Handler - Text Object Count (d2iw, d2aw)":
     let registry = createTestRegistry()
 
     # Set pending operator d with count 1
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4740,7 +4819,7 @@ suite "Handler - Text Object Count (d2iw, d2aw)":
     let registry = createTestRegistry()
 
     # Set pending operator d with count 2
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
 
@@ -4760,7 +4839,7 @@ suite "Handler - Text Object Count (d2iw, d2aw)":
     let registry = createTestRegistry()
 
     # Set pending operator d with count 2
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
 
@@ -4779,7 +4858,7 @@ suite "pendingRegister dispatch for clipboard registers":
     let registry = createTestRegistry()
 
     # Set pending register to '*'
-    ctx.state.pendingRegister = some('*')
+    ctx.state.pendingInput.pendingRegister = some('*')
 
     # Execute yy (yank line)
     check registry.execute(ctx, custom("yank.line")).isOk
@@ -4798,7 +4877,7 @@ suite "pendingRegister dispatch for clipboard registers":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('+')
+    ctx.state.pendingInput.pendingRegister = some('+')
 
     check registry.execute(ctx, custom("yank.line")).isOk
 
@@ -4814,7 +4893,7 @@ suite "pendingRegister dispatch for clipboard registers":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('*')
+    ctx.state.pendingInput.pendingRegister = some('*')
 
     check registry.execute(ctx, custom("delete.line")).isOk
 
@@ -4830,7 +4909,7 @@ suite "pendingRegister dispatch for clipboard registers":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('+')
+    ctx.state.pendingInput.pendingRegister = some('+')
 
     check registry.execute(ctx, custom("delete.char")).isOk
 
@@ -4862,18 +4941,18 @@ suite "pendingRegister dispatch for clipboard registers":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('*')
+    ctx.state.pendingInput.pendingRegister = some('*')
     check registry.execute(ctx, custom("yank.line")).isOk
 
     # pendingRegister should be cleared
-    check ctx.state.pendingRegister.isNone
+    check ctx.state.pendingInput.pendingRegister.isNone
 
   test "yy with pendingRegister named register 'a' stores in named register":
     let buffer = newTextBuffer("named content")
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('a')
+    ctx.state.pendingInput.pendingRegister = some('a')
     check registry.execute(ctx, custom("yank.line")).isOk
 
     let namedReg = ctx.state.registers.getNamedRegister('a')
@@ -4888,7 +4967,7 @@ suite "pendingRegister dispatch for clipboard registers":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('*')
+    ctx.state.pendingInput.pendingRegister = some('*')
 
     # First y sets pending operator
     check registry.execute(ctx, custom("operator.yank")).isOk
@@ -4905,7 +4984,7 @@ suite "pendingRegister dispatch for clipboard registers":
     let ctx = createTestContext(buffer)
     let registry = createTestRegistry()
 
-    ctx.state.pendingRegister = some('+')
+    ctx.state.pendingInput.pendingRegister = some('+')
 
     # First d sets pending operator
     check registry.execute(ctx, custom("operator.delete")).isOk
@@ -4924,7 +5003,7 @@ suite "Operator + Find/Till - yank and change till":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4946,7 +5025,7 @@ suite "Operator + Find/Till - yank and change till":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4968,7 +5047,7 @@ suite "Operator + Find/Till - yank and change till":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -4991,7 +5070,7 @@ suite "Operator + Backward Find/Till":
     ctx.setCursor(0, 9) # on 'l' in "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5012,7 +5091,7 @@ suite "Operator + Backward Find/Till":
     ctx.setCursor(0, 9) # on 'l' in "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5033,7 +5112,7 @@ suite "Operator + Backward Find/Till":
     ctx.setCursor(0, 9) # on 'l' in "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5055,7 +5134,7 @@ suite "Operator + Backward Find/Till":
     ctx.setCursor(0, 9) # on 'l' in "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5077,7 +5156,7 @@ suite "Operator + Backward Find/Till":
     ctx.setCursor(0, 9) # on 'l' in "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5099,7 +5178,7 @@ suite "Operator + Backward Find/Till":
     ctx.setCursor(0, 9) # on 'l' in "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5122,7 +5201,7 @@ suite "Operator + Word End/Backward motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5137,7 +5216,7 @@ suite "Operator + Word End/Backward motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5153,7 +5232,7 @@ suite "Operator + Word End/Backward motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5169,7 +5248,7 @@ suite "Operator + Word End/Backward motions":
     ctx.setCursor(0, 2) # on 'l' of "hello"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5184,7 +5263,7 @@ suite "Operator + Word End/Backward motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5199,7 +5278,7 @@ suite "Operator + Word End/Backward motions":
     ctx.setCursor(0, 2) # on 'l' of "hello"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5215,7 +5294,7 @@ suite "Operator + Word End/Backward motions":
     ctx.setCursor(0, 3) # on second 'l' of "hello"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5232,7 +5311,7 @@ suite "Operator + Word End/Backward motions":
     ctx.setCursor(0, 3) # on second 'l' of "hello"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5249,7 +5328,7 @@ suite "Operator + Word End/Backward motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5264,7 +5343,7 @@ suite "Operator + Word End/Backward motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5280,7 +5359,7 @@ suite "Operator + Word End/Backward motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5330,7 +5409,7 @@ suite "Operator + Word End Backward (ge) motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5346,7 +5425,7 @@ suite "Operator + Word End Backward (ge) motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5463,7 +5542,7 @@ suite "Operator + Word End Backward (ge) motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5479,7 +5558,7 @@ suite "Operator + Word End Backward (ge) motions":
     ctx.setCursor(1, 0) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5496,7 +5575,7 @@ suite "Operator + Line start/end motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5511,7 +5590,7 @@ suite "Operator + Line start/end motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5527,7 +5606,7 @@ suite "Operator + Line start/end motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5543,7 +5622,7 @@ suite "Operator + Line start/end motions":
     ctx.setCursor(0, 9) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5558,7 +5637,7 @@ suite "Operator + Line start/end motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5575,7 +5654,7 @@ suite "Operator + Paragraph/File motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5592,7 +5671,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(4, 0) # on "line5"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5609,7 +5688,7 @@ suite "Operator + Paragraph/File motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5625,7 +5704,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(2, 0) # on "line3"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5641,7 +5720,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(1, 0) # on "line2"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5657,7 +5736,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(2, 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5673,7 +5752,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(3, 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let dG = Command(kind: ctMotion, motion: Motion.LastLine, count: 1)
@@ -5691,7 +5770,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(2, 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let d1G = Command(kind: ctMotion, motion: Motion.LastLine, count: 1, hasCount: true)
@@ -5710,7 +5789,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(2, 0) # on "line3"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5727,7 +5806,7 @@ suite "Operator + Paragraph/File motions":
     ctx.setCursor(0, 0) # on "line1"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5745,7 +5824,7 @@ suite "Operator + Case operators with motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5760,7 +5839,7 @@ suite "Operator + Case operators with motions":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5775,7 +5854,7 @@ suite "Operator + Case operators with motions":
     ctx.setCursor(0, 6) # on 'W' of "WORLD"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5790,7 +5869,7 @@ suite "Operator + Case operators with motions":
     ctx.setCursor(0, 6) # on 'w' of "world"
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5806,7 +5885,7 @@ suite "Operator + Matching bracket":
     ctx.setCursor(0, 3) # on '('
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5821,7 +5900,7 @@ suite "Operator + Matching bracket":
     ctx.setCursor(0, 3) # on '('
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5837,7 +5916,7 @@ suite "Operator + Matching bracket":
     ctx.setCursor(0, 3) # on '('
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
 
@@ -5854,7 +5933,7 @@ suite "Operator with compound counts":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
 
@@ -5869,7 +5948,7 @@ suite "Operator with compound counts":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
 
@@ -5897,7 +5976,7 @@ suite "executeCommand - auto-open folds on edit":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
@@ -5911,7 +5990,7 @@ suite "executeCommand - auto-open folds on edit":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
     )
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
@@ -5938,7 +6017,7 @@ suite "executeCommand - auto-open folds on edit":
     ctx.cursor = BufferPosition(line: 0, column: 0) # outside the fold
     let registry = createTestRegistry()
 
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
     )
     # >j indents lines 0-1; the range touches the collapsed fold at lines 1-3.
@@ -6052,3 +6131,125 @@ suite "executeCommand - fold auto-open allowlists stay in sync":
     let ops = registeredOperatorTypes()
     for op in VisualEditOperatorTypes:
       check op in ops
+
+suite "Register/buffer atomicity - failed edits must not touch registers":
+  # deleteRange/deleteLine reject writes on a read-only buffer, so a read-only
+  # buffer is the reproducible failure path. Registers live outside the buffer
+  # transaction, so a rollback cannot undo them: they must only be written after
+  # the buffer change succeeded.
+
+  proc seedRegisters(ctx: CommandContext) =
+    ctx.state.registers.setDeletedRegister("SEED", false)
+    discard ctx.state.registers.setNamedRegister('a', "SEED_A", false)
+
+  proc checkRegistersUntouched(ctx: CommandContext) =
+    check ctx.state.registers.getSmallDeleteRegister().getContent() == "SEED"
+    check ctx.state.registers.getNamedRegister('a').getContent() == "SEED_A"
+
+  test "delete.char on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete.char with count on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char"), @["3"]).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete.char.before on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 5)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete.line on read-only buffer keeps registers":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "substitute.char on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("substitute.char")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "substitute.line on read-only buffer keeps registers":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("substitute.line")).isErr
+    ctx.checkRegistersUntouched()
+
+  test "delete operator on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    check executeOperatorOnRange(ctx, OpDelete, range, 1).isErr
+    ctx.checkRegistersUntouched()
+
+  test "change operator on read-only buffer keeps registers":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    check executeOperatorOnRange(ctx, OpChange, range, 1).isErr
+    ctx.checkRegistersUntouched()
+
+  test "pending register is preserved when the delete fails":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    ctx.seedRegisters()
+    ctx.state.pendingInput.pendingRegister = some('a')
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isErr
+    check ctx.state.registers.getNamedRegister('a').getContent() == "SEED_A"

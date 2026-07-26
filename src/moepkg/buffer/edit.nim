@@ -29,17 +29,15 @@ import pkg/results
 import ../[primitives, unicode_utils]
 import core, internal_mutations, undo
 
-# NoUndo procs: skip undo/changeSeq but must invalidate cursorCache and shift
-# semantic overlay / folds / bookmarks. lineMarkers/modifiedLines are held back
-# via includeSideArrays=false so substitute-preview does not mark previewed
-# lines as modified in the sidebar.
+# NoUndo procs: skip undo/changeSeq but must shift semantic overlay / folds /
+# bookmarks. lineMarkers/modifiedLines are held back via includeSideArrays=false
+# so substitute-preview does not mark previewed lines as modified in the sidebar.
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Replace line content without recording undo. Used by substitute preview etc.
   if b.readOnly:
     return
   b.backendReplaceLine(lineNumber, content)
   b.advanceContentVersion()
-  b.resetCursorCache()
   b.emitRowColRemapEvents(
     BufferChange(kind: ckReplaceLine, replaceLineIdx: lineNumber),
     includeSideArrays = false,
@@ -51,7 +49,6 @@ proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
     return
   b.backendDeleteLine(lineNumber)
   b.advanceContentVersion()
-  b.resetCursorCache()
   b.emitRowColRemapEvents(
     BufferChange(kind: ckDeleteLine, deleteLineIdx: lineNumber),
     includeSideArrays = false,
@@ -63,7 +60,6 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
     return
   b.backendInsertLine(lineNumber, content)
   b.advanceContentVersion()
-  b.resetCursorCache()
   b.emitRowColRemapEvents(
     BufferChange(kind: ckInsertLine, insertLineIdx: lineNumber),
     includeSideArrays = false,
@@ -169,8 +165,7 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
       let
         deletedChar = line.runeAtPos(pos.column)
         charSize = len($deletedChar)
-        bytePos =
-          charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
+        bytePos = charToBytePos(line, pos.column)
 
       # Delete character at byte position
       b.backendDeleteAtLineCol(pos.line, bytePos, charSize)
@@ -372,52 +367,34 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
   if linesToJoin < 2:
     return err("Not enough lines to join")
 
-  # Begin transaction for multiple operations
-  let txnResult = b.beginTransaction("join " & $linesToJoin & " lines")
-  if txnResult.isErr:
-    return err(txnResult.error)
+  let txr = withTransaction(b, "join " & $linesToJoin & " lines"):
+    for i in 1 ..< linesToJoin:
+      let currentLine = b.getLine(startLine)
+      let nextLine = b.getLine(startLine + 1)
 
-  # Join lines one by one
-  for i in 1 ..< linesToJoin:
-    # Always join with the line at startLine (since we delete lines as we go)
-    let currentLine = b.getLine(startLine)
-    let nextLine = b.getLine(startLine + 1)
+      var trimmedCurrent = currentLine.strip(leading = false, trailing = true)
+      let trimmedNext = nextLine.strip(leading = true, trailing = false)
 
-    # Trim trailing whitespace from current line
-    var trimmedCurrent = currentLine.strip(leading = false, trailing = true)
+      # Vim J: separate joined lines with a space, but not when the next line
+      # begins with ')'.
+      if trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')':
+        trimmedCurrent.add(' ')
 
-    # Trim leading whitespace from next line
-    let trimmedNext = nextLine.strip(leading = true, trailing = false)
+      let joinedLine = trimmedCurrent & trimmedNext
 
-    # Vim J: separate joined lines with a space, but not when the next line
-    # begins with ')'.
-    if trimmedCurrent.len > 0 and trimmedNext.len > 0 and trimmedNext[0] != ')':
-      trimmedCurrent.add(' ')
+      let deleteResult = b.deleteLine(startLine)
+      if deleteResult.isErr:
+        return err(deleteResult.error)
 
-    # Build the joined line
-    let joinedLine = trimmedCurrent & trimmedNext
+      let deleteNextResult = b.deleteLine(startLine)
+      if deleteNextResult.isErr:
+        return err(deleteNextResult.error)
 
-    # Delete the current line and insert the joined line
-    let deleteResult = b.deleteLine(startLine)
-    if deleteResult.isErr:
-      discard b.rollbackTransaction()
-      return err(deleteResult.error)
+      let insertResult = b.insert(startLine, joinedLine)
+      if insertResult.isErr:
+        return err(insertResult.error)
 
-    # Delete the next line (which is now at startLine position)
-    let deleteNextResult = b.deleteLine(startLine)
-    if deleteNextResult.isErr:
-      discard b.rollbackTransaction()
-      return err(deleteNextResult.error)
-
-    # Insert the joined line
-    let insertResult = b.insert(startLine, joinedLine)
-    if insertResult.isErr:
-      discard b.rollbackTransaction()
-      return err(insertResult.error)
-
-  # Commit transaction
-  let commitResult = b.commitTransaction()
-  if commitResult.isErr:
-    return err(commitResult.error)
+  if txr.isErr:
+    return err(txr.error)
 
   return ok(())

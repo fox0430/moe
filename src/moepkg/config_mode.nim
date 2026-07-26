@@ -86,44 +86,9 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   ## a specific config field.
   result = @[]
 
-  # Standard section
-  generateConfigDescriptors(result, EditorConfig, standard)
-
-  # BufferBackend section
-  generateConfigDescriptors(result, EditorConfig, bufferBackend)
-
-  # Clipboard section
-  generateConfigDescriptors(result, EditorConfig, clipboard)
-
-  # StatusLine section
-  generateConfigDescriptors(result, EditorConfig, statusLine)
-
-  # Highlight section
-  generateConfigDescriptors(result, EditorConfig, highlight)
-
-  # AutoBackup section
-  generateConfigDescriptors(result, EditorConfig, autoBackup)
-
-  # Notification section
-  generateConfigDescriptors(result, EditorConfig, notification)
-
-  # Filer section
-  generateConfigDescriptors(result, EditorConfig, filer)
-
-  # Autocomplete section
-  generateConfigDescriptors(result, EditorConfig, autocomplete)
-
-  # AutoSave section
-  generateConfigDescriptors(result, EditorConfig, autoSave)
-
-  # Git section
-  generateConfigDescriptors(result, EditorConfig, git)
-
-  # SyntaxChecker section
-  generateConfigDescriptors(result, EditorConfig, syntaxChecker)
-
-  # SmoothScroll section
-  generateConfigDescriptors(result, EditorConfig, smoothScroll)
+  # Every {.cfgSection.} section of EditorConfig, in declaration order. A new
+  # section reaches the UI without touching this proc.
+  generateAllConfigDescriptors(result, EditorConfig)
 
   # Theme section
   result.add ConfigItemDescriptor(
@@ -151,30 +116,9 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.theme.path = v,
   )
 
-  # LSP section
-  result.add ConfigItemDescriptor(kind: cvkSection, displayName: "Lsp", section: "Lsp")
-  result.add ConfigItemDescriptor(
-    kind: cvkBool,
-    displayName: "enable",
-    section: "Lsp",
-    boolGet: proc(c: EditorConfig): bool =
-      c.lsp.enable,
-    boolSet: proc(c: EditorConfig, v: bool) =
-      c.lsp.enable = v,
-  )
-  result.add ConfigItemDescriptor(
-    kind: cvkInt,
-    displayName: "timeout",
-    section: "Lsp",
-    intGet: proc(c: EditorConfig): int =
-      c.lsp.timeout,
-    intSet: proc(c: EditorConfig, v: int) =
-      c.lsp.timeout = v,
-    # Only correctness matters: forbid <= 0 (applied live), no upper bound.
-    # Matches the TOML loader, which likewise only rejects non-positive values.
-    intMin: 1,
-    intMax: int.high,
-  )
+  # `[Lsp]` plus one section per feature sub-table. `[Lsp.<languageId>]` server
+  # entries stay out of the UI: a dynamic keyspace, not fields of the type.
+  generateSectionGroupDescriptors(result, lsp, LspConfig)
 
 # Global descriptor table (built once)
 let configDescriptors* = makeDescriptors()

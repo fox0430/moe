@@ -284,6 +284,77 @@ suite "Buffer - Transaction Support":
     check r.isErr
     check r.error.contains("No transaction in progress")
 
+suite "Buffer - withTransaction scope guard":
+  test "normal completion commits and creates a single undo entry":
+    let b = newTextBuffer("test")
+    let r = withTransaction(b, "scoped commit"):
+      discard b.insertText(BufferPosition(line: 0, column: 4), " 1")
+      discard b.insertText(BufferPosition(line: 0, column: 6), " 2")
+    check r.isOk
+    check not b.inTransaction
+    check b.getLine(0) == "test 1 2"
+
+    let u = b.undo()
+    check u.isOk
+    check b.getLine(0) == "test"
+
+  test "exception in body triggers rollback":
+    let b = newTextBuffer("test")
+    var raised = false
+    try:
+      discard withTransaction(b, "scoped rollback"):
+        discard b.insertText(BufferPosition(line: 0, column: 4), " x")
+        raise newException(ValueError, "boom")
+    except ValueError:
+      raised = true
+    check raised
+    check not b.inTransaction
+    check b.getLine(0) == "test"
+    check b.undo().isErr
+
+  test "begin failure returns beginTransaction error, does not run body":
+    let b = newTextBuffer("test")
+    discard b.beginTransaction("outer")
+
+    var bodyRan = false
+    let r = withTransaction(b, "inner"):
+      bodyRan = true
+      discard b.insertText(BufferPosition(line: 0, column: 4), " y")
+    check r.isErr
+    check r.error.contains("Transaction already in progress")
+    check not bodyRan
+    check b.inTransaction
+
+    discard b.rollbackTransaction()
+
+  test "early return via helper proc rolls back":
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      let r = withTransaction(b, "early return"):
+        discard b.insertText(BufferPosition(line: 0, column: 4), " z")
+        return err("early")
+      r
+
+    let outcome = runIt(b)
+    check outcome.isErr
+    check outcome.error == "early"
+    check not b.inTransaction
+    check b.getLine(0) == "test"
+    check b.undo().isErr
+
+  test "cursorPos overload records the anchor for undo":
+    let b = newTextBuffer("hello")
+    let anchor = BufferPosition(line: 0, column: 2)
+    let r = withTransaction(b, "with anchor", some(anchor)):
+      discard b.insertText(BufferPosition(line: 0, column: 5), "!!")
+    check r.isOk
+    check b.getLine(0) == "hello!!"
+
+    let u = b.undo()
+    check u.isOk
+    check u.value == anchor
+
 suite "Buffer - Transaction lastChangedLines":
   test "commitTransaction updates lastChangedLines to minimum line":
     # Regression test: commitTransaction must set lastChangedLines to the

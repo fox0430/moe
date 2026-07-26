@@ -22,7 +22,7 @@ import std/[unittest, strutils]
 import
   ../src/moepkg/[
     editor, editor_window, editor_window_layout, config, types, buffer, modes,
-    render_utils,
+    render_utils, log_viewer, help_viewer,
   ]
 
 # Helper to create a minimal Editor for testing
@@ -189,20 +189,26 @@ suite "calculateSidebarWidth":
   test "sidebar enabled in file edit mode":
     let e = createTestEditor()
     e.state.showSidebar = true
-    let width = e.calculateSidebarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateSidebarWidth(win)
     # DefaultSidebarWidth = 2
     check width == 2
 
   test "sidebar disabled":
     let e = createTestEditor()
     e.state.showSidebar = false
-    let width = e.calculateSidebarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateSidebarWidth(win)
     check width == 0
 
   test "sidebar disabled for non-file-edit mode":
     let e = createTestEditor()
     e.state.showSidebar = true
-    let width = e.calculateSidebarWidth(EditorMode.RecentFile)
+    let win = e.activeWindow
+    win.mode = EditorMode.RecentFile
+    let width = e.calculateSidebarWidth(win)
     check width == 0
 
 suite "calculateScrollbarWidth":
@@ -210,173 +216,109 @@ suite "calculateScrollbarWidth":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 1
 
   test "scrollbar width 2 in file edit mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 2
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 2
 
   test "scrollbar disabled (width 0)":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 0
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar bool disabled":
     let e = createTestEditor()
     e.state.scrollbar = false
     e.state.scrollbarWidth = 2
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar disabled for non-file-edit mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.RecentFile)
+    let win = e.activeWindow
+    win.mode = EditorMode.RecentFile
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar disabled for Filer mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Filer)
+    let win = e.activeWindow
+    win.mode = EditorMode.Filer
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar enabled in Insert mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Insert)
+    let win = e.activeWindow
+    win.mode = EditorMode.Insert
+    let width = e.calculateScrollbarWidth(win)
     check width == 1
 
   test "scrollbar enabled in Visual mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Visual)
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    let width = e.calculateScrollbarWidth(win)
     check width == 1
 
   test "scrollbar width 3 in Normal mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 3
-    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    let width = e.calculateScrollbarWidth(win)
     check width == 3
 
   test "scrollbar disabled for Help mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.Help)
+    let win = e.activeWindow
+    win.mode = EditorMode.Help
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar disabled for BufferManager mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 1
-    let width = e.calculateScrollbarWidth(EditorMode.BufferManager)
+    let win = e.activeWindow
+    win.mode = EditorMode.BufferManager
+    let width = e.calculateScrollbarWidth(win)
     check width == 0
 
   test "scrollbar enabled in Replace mode":
     let e = createTestEditor()
     e.state.scrollbar = true
     e.state.scrollbarWidth = 2
-    let width = e.calculateScrollbarWidth(EditorMode.Replace)
+    let win = e.activeWindow
+    win.mode = EditorMode.Replace
+    let width = e.calculateScrollbarWidth(win)
     check width == 2
-
-suite "calculateViewportOffset":
-  test "with sidebar and scrollbar width 1":
-    let buffer = newTextBuffer("Hello")
-    let offset = calculateViewportOffset(
-      buffer,
-      EditorMode.Normal,
-      showLineNumbers = true,
-      showSidebar = true,
-      scrollbar = true,
-      scrollbarWidth = 1,
-    )
-    check offset == 2 + 2 + 1 # lineNum + sidebar + scrollbar
-
-  test "with sidebar and scrollbar width 2":
-    let buffer = newTextBuffer("Hello")
-    let offset = calculateViewportOffset(
-      buffer,
-      EditorMode.Normal,
-      showLineNumbers = true,
-      showSidebar = true,
-      scrollbar = true,
-      scrollbarWidth = 2,
-    )
-    check offset == 2 + 2 + 2 # lineNum + sidebar + scrollbar
-
-  test "without scrollbar (scrollbar=false)":
-    let buffer = newTextBuffer("Hello")
-    let offset = calculateViewportOffset(
-      buffer,
-      EditorMode.Normal,
-      showLineNumbers = true,
-      showSidebar = true,
-      scrollbar = false,
-      scrollbarWidth = 2,
-    )
-    check offset == 2 + 2 # lineNum + sidebar only
-
-  test "scrollbar width 0":
-    let buffer = newTextBuffer("Hello")
-    let offset = calculateViewportOffset(
-      buffer,
-      EditorMode.Normal,
-      showLineNumbers = true,
-      showSidebar = true,
-      scrollbar = true,
-      scrollbarWidth = 0,
-    )
-    check offset == 2 + 2 # lineNum + sidebar only
-
-  test "scrollbar only":
-    let buffer = newTextBuffer("Hello")
-    let offset = calculateViewportOffset(
-      buffer,
-      EditorMode.Normal,
-      showLineNumbers = false,
-      showSidebar = false,
-      scrollbar = true,
-      scrollbarWidth = 1,
-    )
-    check offset == 0 + 0 + 1 # scrollbar only
-
-  test "non-edit mode drops sidebar and scrollbar":
-    # Mirrors calculateSidebarWidth / calculateScrollbarWidth: only file-edit
-    # modes get sidebar / scrollbar width. Keeps the wrap-count cache key
-    # consistent with the renderer in modes like Filer / Help / BufferManager.
-    let buffer = newTextBuffer("Hello")
-    let offset = calculateViewportOffset(
-      buffer,
-      EditorMode.Filer,
-      showLineNumbers = true,
-      showSidebar = true,
-      scrollbar = true,
-      scrollbarWidth = 2,
-    )
-    check offset == 2 # lineNum only — sidebar/scrollbar zeroed
-
-  test "edit mode keeps sidebar and scrollbar":
-    let buffer = newTextBuffer("Hello")
-    let offset = calculateViewportOffset(
-      buffer,
-      EditorMode.Insert,
-      showLineNumbers = true,
-      showSidebar = true,
-      scrollbar = true,
-      scrollbarWidth = 2,
-    )
-    check offset == 2 + 2 + 2
 
 suite "calculateWindowCursor":
   test "cursor at buffer start, no wrap":
@@ -391,11 +333,45 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
-    check pos.x == 4 # lineNumOffset
+    check pos.x == 4 # gutterWidth
     check pos.y == 0
+
+suite "calculateSidebarWidth - modeState gating":
+  test "sidebar width is non-zero in Normal mode with mskNone":
+    let e = createTestEditor()
+    e.state.showSidebar = true
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    win.modeState = ModeState(kind: mskNone)
+    check e.calculateSidebarWidth(win) > 0
+
+  test "sidebar width is 0 in Visual mode with mskLogViewer":
+    let e = createTestEditor()
+    e.state.showSidebar = true
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskLogViewer, logViewer: newLogViewerState())
+    check e.calculateSidebarWidth(win) == 0
+
+  test "sidebar width is 0 in Visual mode with mskHelp":
+    let e = createTestEditor()
+    e.state.showSidebar = true
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskHelp, help: newHelpViewerState())
+    check e.calculateSidebarWidth(win) == 0
+
+  test "scrollbar width is 0 in Visual mode with mskLogViewer":
+    let e = createTestEditor()
+    e.state.scrollbar = true
+    e.state.scrollbarWidth = 1
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskLogViewer, logViewer: newLogViewerState())
+    check e.calculateScrollbarWidth(win) == 0
 
   test "cursor in middle of line, no wrap":
     let e = createTestEditor()
@@ -409,10 +385,10 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
-    check pos.x == 9 # lineNumOffset + 5
+    check pos.x == 9 # gutterWidth + 5
     check pos.y == 0
 
   test "cursor on second line, no wrap":
@@ -427,10 +403,10 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
-    check pos.x == 4 # lineNumOffset
+    check pos.x == 4 # gutterWidth
     check pos.y == 1 # second line
 
   test "cursor below a collapsed fold uses visible-row offset, no wrap":
@@ -447,7 +423,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     # Visible rows above the cursor are lines 0, 1 (marker) and 6 -> y == 3,
@@ -468,7 +444,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     # Each short line is one wrapped row; the folded interior contributes 0 and
@@ -487,7 +463,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
@@ -505,10 +481,88 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
-    check pos.x == 9 # lineNumOffset + (10 - 5) = 4 + 5 = 9
+    check pos.x == 9 # gutterWidth + (10 - 5) = 4 + 5 = 9
+    check pos.y == 0
+
+  test "cursor after a tab, no wrap":
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("\tabc")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 1)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 8 # gutterWidth + tab expanded to 4 cells
+    check pos.y == 0
+
+  test "cursor with horizontal scroll past a tab restarts tab stops":
+    # The renderer slices the line at leftColumn, so the tab is expanded from the
+    # slice start; subtracting two line-start widths would place the cursor at 6.
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("ab\tcd")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 2, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 3) # 'c'
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 8 # gutterWidth + tab expanded from the slice start = 4 + 4
+    check pos.y == 0
+
+  test "cursor with horizontal scroll and full width characters":
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("あいうえお")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 2, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 3) # え
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 6 # gutterWidth + う takes 2 cells
+    check pos.y == 0
+
+  test "cursor left of leftColumn clamps to the text start":
+    let e = createTestEditor()
+    e.state.lineWrap = false
+    e.tabStop = 4
+    let buffer = newTextBuffer("0123456789")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 5, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 2)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      gutterWidth = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    check pos.x == 4
     check pos.y == 0
 
   test "cursor out of buffer bounds returns (0, 0)":
@@ -523,7 +577,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
@@ -541,7 +595,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4
@@ -561,7 +615,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 0,
+      gutterWidth = 0,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
@@ -584,11 +638,11 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
-    check pos.x == 9 # lineNumOffset + 5
+    check pos.x == 9 # gutterWidth + 5
     check pos.y == 0
 
   test "cursor with scrollbar width 2, wrap mode":
@@ -605,7 +659,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 0,
+      gutterWidth = 0,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 2,
     )
@@ -628,14 +682,14 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 0,
+      gutterWidth = 0,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 0,
     )
     check pos.x == 0
     check pos.y == 1
 
-  test "cursor with scrollbar and lineNumOffset, wrap mode":
+  test "cursor with scrollbar and gutterWidth, wrap mode":
     let e = createTestEditor()
     e.state.lineWrap = true
     # maxWidth = 20 - 4 - 1 = 15
@@ -649,11 +703,11 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
-    # segment 1, display col = 1, x = viewport.x + lineNumOffset + 1 = 0 + 4 + 1
+    # segment 1, display col = 1, x = viewport.x + gutterWidth + 1 = 0 + 4 + 1
     check pos.x == 5
     check pos.y == 1
 
@@ -673,7 +727,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 0,
+      gutterWidth = 0,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
@@ -696,7 +750,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 0,
+      gutterWidth = 0,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
@@ -718,7 +772,7 @@ suite "calculateWindowCursor":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 0,
+      gutterWidth = 0,
       reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
@@ -738,7 +792,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4
@@ -750,7 +804,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     # Create a line that will wrap (wider than viewport)
     let longLine = "A".repeat(100)
     let buffer = newTextBuffer(longLine & "\nLine 2")
-    # Viewport width 20, minus lineNumOffset 4 = 16 chars per wrapped line
+    # Viewport width 20, minus gutterWidth 4 = 16 chars per wrapped line
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 20, height: 24, x: 0, y: 0)
     let cursor = BufferPosition(line: 1, column: 0)
@@ -759,7 +813,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4
@@ -771,7 +825,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
     e.state.lineWrap = true
     let longLine = "ABCDEFGHIJ" & "KLMNOPQRST" # 20 chars
     let buffer = newTextBuffer(longLine)
-    # Viewport width 14, minus lineNumOffset 4 = 10 chars per wrapped line
+    # Viewport width 14, minus gutterWidth 4 = 10 chars per wrapped line
     let viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 14, height: 24, x: 0, y: 0)
     # Cursor at column 15 (in the wrapped portion)
@@ -781,12 +835,12 @@ suite "calculateWindowCursor - wrap mode edge cases":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     # Should be on wrapped line (y=1) at column 5 (15 - 10 = 5)
     check pos.y == 1
-    check pos.x == 4 + 5 # lineNumOffset + column within wrapped line
+    check pos.x == 4 + 5 # gutterWidth + column within wrapped line
 
   test "negative line returns (0, 0)":
     let e = createTestEditor()
@@ -800,7 +854,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
@@ -818,8 +872,144 @@ suite "calculateWindowCursor - wrap mode edge cases":
       buffer,
       viewport,
       cursor,
-      lineNumOffset = 4,
+      gutterWidth = 4,
       reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
     check pos.y == 0
+
+suite "renderedCellPos":
+  proc plainEditor(): Editor =
+    result = createTestEditor()
+    result.state.showLineNumbers = false
+    result.state.showSidebar = false
+    result.state.scrollbar = false
+    result.tabStop = 4
+
+  test "no wrap, no horizontal scroll":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 0
+
+    let pos = e.renderedCellPos(win, "ab\tcd", 3) # 'c'
+    check pos.row == 0
+    check pos.cellX == 4 # "ab" + tab filling the stop
+
+  test "no wrap, horizontal scroll restarts tab stops":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 2
+
+    let pos = e.renderedCellPos(win, "ab\tcd", 3) # 'c'
+    check pos.row == 0
+    check pos.cellX == 4 # the tab is expanded from the slice start
+
+  test "no wrap, horizontal scroll with full width characters":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 2
+
+    let pos = e.renderedCellPos(win, "あいうえお", 3) # え
+    check pos.row == 0
+    check pos.cellX == 2 # う takes 2 cells
+
+  test "no wrap, column before leftColumn clamps to zero":
+    let e = plainEditor()
+    e.state.lineWrap = false
+    let win = e.activeWindow
+    win.viewport.leftColumn = 5
+
+    let pos = e.renderedCellPos(win, "0123456789", 2)
+    check pos.row == 0
+    check pos.cellX == 0
+
+  test "wrap mode reports the segment row and column":
+    let e = plainEditor()
+    e.state.lineWrap = true
+    let win = e.activeWindow
+    win.viewport.width = 4 # no gutter, so wrapWidth == 4
+
+    check e.wrapWidth(win) == 4
+    check e.renderedCellPos(win, "ab\tcd", 1) == (row: 0, cellX: 1) # 'b'
+    check e.renderedCellPos(win, "ab\tcd", 3) == (row: 1, cellX: 0) # 'c' wrapped
+
+  test "wrap mode ignores leftColumn":
+    let e = plainEditor()
+    e.state.lineWrap = true
+    let win = e.activeWindow
+    win.viewport.width = 4
+    win.viewport.leftColumn = 2
+
+    check e.renderedCellPos(win, "ab\tcd", 1) == (row: 0, cellX: 1)
+
+suite "textAreaWidth / wrapWidth - single derivation":
+  proc gutterEditor(): Editor =
+    result = createTestEditor()
+    result.state.showLineNumbers = true
+    result.state.showSidebar = true
+    result.state.scrollbar = true
+    result.state.scrollbarWidth = 1
+
+  test "text area is the viewport minus line number, sidebar and scrollbar":
+    let e = gutterEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    win.viewport.width = 40
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
+
+    # 1 line -> 1 digit + LineNumberSpacer(1) = 2, sidebar 2, scrollbar 1.
+    check e.viewportOffsetFor(win) == 5
+    check e.textAreaWidth(win) == 35
+    check e.wrapWidth(win) == 35
+
+  test "gutter plus text area plus scrollbar covers the whole viewport":
+    let e = gutterEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    win.viewport.width = 40
+    check e.gutterWidth(win) + e.textAreaWidth(win) + e.calculateScrollbarWidth(win) ==
+      win.viewport.width
+
+  test "explicit lineNumOffset overrides the window's own gutter":
+    # The render pass threads the offset it draws with; the width must follow it
+    # rather than re-deriving a different one.
+    let e = gutterEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    win.viewport.width = 40
+    check e.textAreaWidth(win, 0) == 37 # sidebar 2 + scrollbar 1 only
+    check e.wrapWidth(win, 10) == 27
+
+  test "wrap width clamps to one cell when the gutters exceed the viewport":
+    let e = gutterEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.Normal
+    win.viewport.width = 3
+    check e.textAreaWidth(win) == 0
+    check e.wrapWidth(win) == 1
+
+  test "a window holding a mode state drops sidebar and scrollbar":
+    let e = gutterEditor()
+    let win = e.activeWindow
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskLogViewer, logViewer: newLogViewerState())
+    win.viewport.width = 40
+    check e.viewportOffsetFor(win) == 2 # line numbers only
+    check e.textAreaWidth(win) == 38
+
+  test "state-based and window-based offsets agree for the active window":
+    # The motion / mouse paths pull the offset from EditorState, the render pass
+    # from the window. A disagreement mis-keys the wrap-count cache.
+    let e = gutterEditor()
+    let win = e.activeWindow
+    win.viewport.width = 40
+    for mode in [EditorMode.Normal, EditorMode.Insert, EditorMode.Visual]:
+      win.mode = mode
+      check viewportOffsetFor(e.activeBuffer, e.state) == e.viewportOffsetFor(win)
+
+    win.mode = EditorMode.Visual
+    win.modeState = ModeState(kind: mskHelp, help: newHelpViewerState())
+    check viewportOffsetFor(e.activeBuffer, e.state) == e.viewportOffsetFor(win)

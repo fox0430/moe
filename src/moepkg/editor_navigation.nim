@@ -409,33 +409,9 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
 proc pollLspLocationRequest*(e: Editor) =
   ## Poll for pending LSP location request response
   ## This should be called from the main event loop (tick function)
-  if not e.lsp.enabled:
-    return
-
-  var feature: LspRequestFeature
-  var found = false
-  for f in LocationFeatures:
-    if e.state.lspCache.pending.hasKey(f):
-      feature = f
-      found = true
-      break
-  if not found:
-    return
-
-  let ctx = e.state.lspCache.pending[feature]
-  let kind = locationKindOfFeature(feature)
-
-  # Check for response (events were already polled at the top of tick())
-  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-
-  case status
-  of lrsPending:
-    discard # Still waiting
-  of lrsSuccess:
-    e.state.lspCache.pending.del(feature)
-    if classifyResponse(e, ctx) != lrsFresh or e.state.overlay.isSome:
-      return
+  e.pollOneShotLspResponse(LocationFeatures, "request"):
     if resultOpt.isSome:
+      let kind = locationKindOfFeature(feature)
       let locations = parseLocationsResponse(resultOpt.get)
       let (pluralName, singularName) =
         case kind
@@ -461,13 +437,6 @@ proc pollLspLocationRequest*(e: Editor) =
       discard e.handleLspLocations(locations, pluralName, singularName, openWindow)
     else:
       e.state.statusMessage = "No results found"
-  of lrsError:
-    e.state.lspCache.pending.del(feature)
-    if errorOpt.isSome:
-      e.state.statusMessage = "LSP request failed: " & errorOpt.get
-  of lrsTimeout:
-    e.state.lspCache.pending.del(feature)
-    e.state.statusMessage = "LSP request timed out"
 
 proc requestLspGotoDefinition*(e: Editor): bool =
   ## Request LSP goto definition at current cursor position (async)

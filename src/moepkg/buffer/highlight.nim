@@ -26,8 +26,24 @@
 import std/tables
 
 import ../[highlight, uri_utils]
-import ./core
-import ./markers
+import ../syntax/tokenizer
+import core, markers
+
+proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
+  ## True if `line` sits inside a Markdown fenced code block or is one of its
+  ## ``` fence lines. Consults the incremental highlight's per-line tokenizer
+  ## state: a line is a code block line when either the state entering it or
+  ## the state exiting it has `markdown.inCodeBlock` set. The exiting state
+  ## covers the opening fence; the entering state covers the closing fence
+  ## and every interior line.
+  if b.language != SourceLanguage.langMarkdown or b.incrementalHighlight == nil:
+    return false
+  let states = b.incrementalHighlight.lineStates.states
+  if line < 0 or line >= states.len:
+    return false
+  let enterInBlock = line >= 1 and states[line - 1].lang.markdown.inCodeBlock
+  let exitInBlock = states[line].lang.markdown.inCodeBlock
+  enterInBlock or exitInBlock
 
 proc scanAndApplyUriUnderlines*(
     b: TextBuffer, startLine, endLine: int, applyToCache = true
@@ -129,26 +145,6 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   # Append new segments to the existing highlight (preserving earlier URI
   # underlines) rather than rebuilding from incrementalHighlight.segments.
   b.highlight.colorSegments.add(newSegments)
-
-  if b.diagnostics.len > 0:
-    # Diagnostic styling lives only in the display highlight (applied by
-    # `updateHighlight` behind `highlightNeedsUpdate`): the truncation above
-    # drops it for the dropped rows and the plain re-append doesn't restore
-    # it — unlike URI underlines (re-covered via `uriScanParsedUpTo`) and
-    # semantic tokens (invalidated by the caller). Re-apply directly so
-    # undercurls survive the progressive load; this also covers diagnostics
-    # on the freshly parsed rows, which had no segments to style until now.
-    # Only diagnostics touching [startLine, endLine] need it: rows below
-    # startLine kept their styling (the truncation only drops rows >=
-    # startLine), rows past endLine get theirs when a later tick parses them,
-    # and re-applying an already-styled diagnostic rebuilds the whole segment
-    # seq (O(segments) per diagnostic, every tick of a large-file load).
-    var affected: seq[BufferDiagnostic]
-    for d in b.diagnostics:
-      if d.endLine >= startLine and d.startLine <= endLine:
-        affected.add(d)
-    if affected.len > 0:
-      applyDiagnosticHighlights(b.highlight, affected)
 
   return true
 
@@ -284,9 +280,14 @@ proc updateHighlight*(b: TextBuffer) =
       b, uriStart, uriEnd, applyToCache = not highlightRebuilt
     )
 
-    b.highlight.hasDiagnostics = false
-    if b.diagnostics.len > 0:
-      applyDiagnosticHighlights(b.highlight, b.diagnostics)
+    # Diagnostics are only mutated by the LSP publish path / reset/clear paths;
+    # a pure edit keeps them untouched, so the overlay rebuilt on the previous
+    # tick is still current. Skip the O(D + R) clear+rebuild in that case.
+    if b.diagnosticsDirty:
+      b.highlight.diagnosticOverlay.clear()
+      if b.diagnostics.len > 0:
+        applyDiagnosticHighlights(b.highlight, b.diagnostics)
+      b.diagnosticsDirty = false
 
     if highlightRebuilt:
       # Highlight was rebuilt from scratch, so all URI modifiers outside

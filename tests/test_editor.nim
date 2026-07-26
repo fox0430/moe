@@ -25,7 +25,7 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
     render_utils, lsp_service, lsp_integration, diff_viewer, setting_options,
-    editor_init, command_config,
+    editor_init, command_config, command_registry, help_viewer,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import
@@ -37,6 +37,58 @@ proc createTestEditor(): Editor =
   let config = newEditorConfig()
   let vr = newValidationResult()
   result = newEditor(config, vr)
+
+suite "Editor - git cache refresh gating":
+  ## The tick must not run a git lookup for a readout the user turned off:
+  ## a diff spawns a subprocess and a branch lookup blocks on `git rev-parse`.
+  proc editorOnFile(): Editor =
+    result = createTestEditor()
+    result.activeBuffer.filePath = some(getTempDir() / "moe_no_repo" / "a.txt")
+    result.showStatusLine = true
+
+  test "branch is not refreshed when no readout shows it":
+    let e = editorOnFile()
+    e.showGitDiff = true # gutter only: needs the diff, not the branch
+    e.config.statusLine.gitBranchName = false
+    e.config.statusLine.setupText = ""
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 0
+    check e.state.git.diffEntries.len == 1
+
+  test "branch is refreshed when the status line shows it":
+    let e = editorOnFile()
+    e.config.statusLine.gitBranchName = true
+    e.config.statusLine.setupText = ""
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 1
+
+  test "a setupText placeholder is enough to refresh":
+    let e = editorOnFile()
+    e.showGitDiff = false
+    e.config.statusLine.gitBranchName = false
+    e.config.statusLine.gitChangedLines = false
+    e.config.statusLine.setupText = "{filename} {gitBranch}"
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 1
+    check e.state.git.diffEntries.len == 0
+
+  test "no git lookup at all when every readout is off":
+    let e = editorOnFile()
+    e.showGitDiff = false
+    e.config.statusLine.gitBranchName = false
+    e.config.statusLine.gitChangedLines = false
+    e.config.statusLine.setupText = ""
+
+    e.tick()
+
+    check e.state.git.branchEntries.len == 0
+    check e.state.git.diffEntries.len == 0
 
 suite "Editor - findBufferByPath":
   test "Find buffer by absolute path":
@@ -2936,3 +2988,98 @@ suite "Editor - tab/indent setters sync .editorconfig override":
     check e.config.standard.expandTab == true
     check buf.editorConfig.get.expandTab == some(true)
     check e.expandTab == true
+
+suite "Editor - handler CommandContext sees live config after applyConfigSettings":
+  # Regression: handlers used to snapshot Clipboard/SmoothScroll/Notification at
+  # construction, so applyConfigSettings' ref swap never reached them. Now
+  # CommandContext getters pull from state.config directly.
+  test "CommandContext.clipboardConfig reflects post-reload clipboard":
+    let e = createTestEditor()
+
+    let ctx = CommandContext(state: e.state)
+    let originalTool = e.config.clipboard.tool
+    check originalTool != cbtXclip
+
+    var newConfig = newEditorConfig()
+    newConfig.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+    e.applyConfigSettings(newConfig)
+
+    check ctx.clipboardConfig.enable == true
+    check ctx.clipboardConfig.tool == cbtXclip
+
+  test "CommandContext.smoothScrollConfig reflects post-reload smoothScroll":
+    let e = createTestEditor()
+
+    let ctx = CommandContext(state: e.state)
+
+    var newConfig = newEditorConfig()
+    newConfig.smoothScroll =
+      SmoothScrollConfig(enable: false, friction: 42.0, airDrag: 3.0)
+    e.applyConfigSettings(newConfig)
+
+    check ctx.smoothScrollConfig.enable == false
+    check ctx.smoothScrollConfig.friction == 42.0
+    check ctx.smoothScrollConfig.airDrag == 3.0
+
+  test "CommandContext.notificationConfig reflects post-reload notification":
+    let e = createTestEditor()
+
+    let ctx = CommandContext(state: e.state)
+
+    var newConfig = newEditorConfig()
+    newConfig.notification.screenNotifications = false
+    newConfig.notification.yankScreenNotify = false
+    e.applyConfigSettings(newConfig)
+
+    check ctx.notificationConfig.screenNotifications == false
+    check ctx.notificationConfig.yankScreenNotify == false
+
+suite "processResult - viewer split window teardown":
+  ## hrHelpViewerQuit and its siblings share one teardown path; these cover it
+  ## through processResult rather than re-implementing the sequence.
+
+  test "hrHelpViewerQuit closes the split window and discards its buffer":
+    let e = createTestEditor()
+    let origBuffer = e.activeBuffer
+    let initialBufferCount = e.buffers.len
+
+    let helpState = newHelpViewerState()
+    check e.hsplitWithBuffer(helpState.createHelpTextBuffer()).isOk
+    check e.windowManager.windows.len == 2
+
+    e.setMode(EditorMode.Help)
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Help
+    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
+    let helpBufId = activeWin.buffer.id
+
+    check e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer) == true
+
+    check e.windowManager.windows.len == 1
+    check e.buffers.len == initialBufferCount
+    check e.bufferIndexById(helpBufId) < 0
+    for win in e.windowManager.windows:
+      check helpBufId notin win.bufferIds
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.activeWindow.buffer == origBuffer
+
+  test "hrHelpViewerQuit on a single window keeps that window and its buffer":
+    let e = createTestEditor()
+    let initialBufferCount = e.buffers.len
+
+    let helpState = newHelpViewerState()
+    let activeWin = e.activeWindow
+    e.setMode(EditorMode.Help)
+    activeWin.mode = EditorMode.Help
+    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
+    let onlyBufId = activeWin.buffer.id
+
+    check e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer) == true
+
+    # No window to fall back to, so the buffer must survive the teardown.
+    check e.windowManager.windows.len == 1
+    check e.buffers.len == initialBufferCount
+    check e.bufferIndexById(onlyBufId) >= 0
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.modeState.kind == mskNone

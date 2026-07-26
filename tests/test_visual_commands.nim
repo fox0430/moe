@@ -41,16 +41,18 @@ proc createTestState(): EditorState =
       DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: 2),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
     visualSelection: VisualSelection(
@@ -355,12 +357,12 @@ suite "Visual Commands - visualYank":
       active: true,
       kind: vskChar,
     )
-    state.pendingRegister = some('a')
+    state.pendingInput.pendingRegister = some('a')
 
     visualYank(buf, state)
 
     check state.registers.getRegisterContent('a') == "hello"
-    check state.pendingRegister.isNone
+    check state.pendingInput.pendingRegister.isNone
 
   test "Yank multiline clamps cursor column to line length":
     # When selection starts on a long line and extends downward to a shorter line,
@@ -1111,7 +1113,7 @@ suite "Visual Commands - visualPaste":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     discard state.registers.setNamedRegister('a', "NAMED", false)
-    state.pendingRegister = some('a')
+    state.pendingInput.pendingRegister = some('a')
     state.visualSelection = VisualSelection(
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 0, column: 4),
@@ -1122,7 +1124,7 @@ suite "Visual Commands - visualPaste":
     visualPaste(buf, state)
 
     check buf.getLine(0) == "NAMED world"
-    check state.pendingRegister.isNone
+    check state.pendingInput.pendingRegister.isNone
 
   test "Paste block selection from named register preserves register content":
     let buf = newTextBuffer()
@@ -1132,7 +1134,7 @@ suite "Visual Commands - visualPaste":
     let state = createTestState()
     state.mode = EditorMode.VisualBlock
     discard state.registers.setNamedRegister('a', "REG_A_CONTENT", false)
-    state.pendingRegister = some('a')
+    state.pendingInput.pendingRegister = some('a')
     state.visualSelection = VisualSelection(
       start: BufferPosition(line: 0, column: 0),
       current: BufferPosition(line: 2, column: 2),
@@ -1145,7 +1147,7 @@ suite "Visual Commands - visualPaste":
     # Bug: deleteBlockSelection must NOT overwrite named register 'a'
     # with the deleted block text.
     check state.registers.getNamedRegister('a').getContent() == "REG_A_CONTENT"
-    check state.pendingRegister.isNone
+    check state.pendingInput.pendingRegister.isNone
     check state.visualSelection.active == false
 
   test "V-mode paste of linewise empty register replaces line with blank line":
@@ -2263,3 +2265,113 @@ suite "Visual Commands - fold-aware movement":
     state.visualSelection.current = state.cursor
     visualMoveDown(buf, state)
     check state.cursor.line == 2
+
+suite "Visual delete - register/buffer atomicity":
+  # A read-only buffer rejects the delete, so nothing was removed: the registers
+  # must keep their previous content (they are outside the buffer transaction
+  # and a rollback would not restore them).
+
+  proc newReadOnlyState(): (TextBuffer, EditorState) =
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    # Linewise / multiline deletes land in number register 1, single-line
+    # charwise deletes in the small delete register
+    state.registers.setDeletedRegister("SEED_LINE\n", true)
+    state.registers.setDeletedRegister("SEED", false)
+    discard state.registers.setNamedRegister('a', "SEED_A", false)
+    buf.readOnly = true
+    (buf, state)
+
+  test "charwise visual delete keeps registers when the delete fails":
+    let (buf, state) = newReadOnlyState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check state.registers.getSmallDeleteRegister().getContent() == "SEED"
+    check buf.getLine(0) == "hello world"
+
+  test "linewise visual delete keeps registers when the delete fails":
+    let (buf, state) = newReadOnlyState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualDelete(buf, state)
+
+    check state.registers.getNumberRegister(1).getContent() == "SEED_LINE\n"
+    check buf.len == 2
+
+  test "blockwise visual delete keeps registers when the delete fails":
+    let (buf, state) = newReadOnlyState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualDelete(buf, state)
+
+    check state.registers.getNumberRegister(1).getContent() == "SEED_LINE\n"
+    check buf.getLine(0) == "hello world"
+
+  test "named pending register survives a failed visual delete":
+    let (buf, state) = newReadOnlyState()
+    state.mode = EditorMode.Visual
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check state.registers.getNamedRegister('a').getContent() == "SEED_A"
+
+  test "charwise visual paste keeps registers when the delete fails":
+    let (buf, state) = newReadOnlyState()
+    state.mode = EditorMode.Visual
+    state.registers.setYankedRegister("XYZ", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualPaste(buf, state)
+
+    check state.registers.getSmallDeleteRegister().getContent() == "SEED"
+    check buf.getLine(0) == "hello world"
+
+  test "linewise visual paste keeps registers when the delete fails":
+    let (buf, state) = newReadOnlyState()
+    state.mode = EditorMode.VisualLine
+    state.registers.setYankedRegister("XYZ\n", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check state.registers.getNumberRegister(1).getContent() == "SEED_LINE\n"
+    check buf.getLine(0) == "hello world"

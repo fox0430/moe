@@ -37,7 +37,14 @@ const HelpSentences* =
   renderBackupModeSection() & "\n# Diff mode\n\n" & renderDiffModeSection() &
   "\n# References mode\n\n" & renderReferencesModeSection() &
   "\n# Call hierarchy viewer mode\n\n" & renderCallHierarchyModeSection() &
-  "\n# Filer mode\n\n" & renderFilerModeSection() & """
+  "\n# Filer mode\n\n" & renderFilerModeSection() & "\n# FileTree mode\n\n" &
+  renderFileTreeModeSection() & "\n# Buffer manager mode\n\n" &
+  renderBufferManagerModeSection() & "\n# Bookmark manager mode\n\n" &
+  renderBookmarkManagerModeSection() & "\n# Document symbol viewer mode\n\n" &
+  renderDocumentSymbolModeSection() & "\n# Log viewer mode\n\n" &
+  renderLogViewerModeSection() & "\n# Recent file mode\n\n" &
+  renderRecentFileModeSection() & "\n# Configuration mode\n\n" &
+  renderConfigModeSection() & "\n# Debug mode\n\n" & renderDebugModeSection() & """
 
 # Command mode
 

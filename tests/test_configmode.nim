@@ -20,6 +20,7 @@
 import std/[unittest, options, os, strutils, sets, tables, importutils]
 import ../src/moepkg/[config, color, theme, types]
 import ../src/moepkg/config_mode {.all.}
+import config_test_helper
 
 proc testEditorState(cfg: EditorConfig): EditorState =
   EditorState(config: cfg)
@@ -2105,14 +2106,13 @@ suite "ConfigMode - descriptor completeness":
     ## If a new section is added to EditorConfig, this test fails until it is
     ## added to either `tested` or `excluded`.
     let tested = [
-      "standard", "bufferBackend", "clipboard", "statusLine", "highlight", "autoBackup",
-      "notification", "filer", "autocomplete", "autoSave", "git", "syntaxChecker",
-      "smoothScroll", "theme", "lsp",
+      "standard", "bufferBackend", "clipboard", "buildOnSave", "tabLine", "statusLine",
+      "highlight", "autoBackup", "quickRun", "notification", "filer", "fileTree",
+      "autocomplete", "autoSave", "persist", "git", "syntaxChecker", "smoothScroll",
+      "startUpFileOpen", "startUpFileTree", "editorConfig", "log", "theme", "lsp",
     ].toHashSet
     let excluded = [
-      "buildOnSave", "tabLine", "quickRun", "persist", "startUpFileOpen",
-      "startUpFileTree", "editorConfig", "log", "debug", "keyMapping", "shellCommands",
-      "commandAliases", "disabledCommandAliases", "fileTree",
+      "debug", "keyMapping", "shellCommands", "commandAliases", "disabledCommandAliases"
     ].toHashSet
 
     var cfg = newEditorConfig()
@@ -2120,6 +2120,73 @@ suite "ConfigMode - descriptor completeness":
       if name notin tested and name notin excluded:
         echo "EditorConfig section not accounted for: " & name
       check name in tested or name in excluded
+
+  test "Every {.cfgSection.} section has a section descriptor":
+    ## The descriptors are generated from EditorConfig's section fields, so
+    ## sections that were previously forgotten by hand (BuildOnSave, TabLine,
+    ## QuickRun, FileTree, Persist, StartUp.*, EditorConfig, Log) must be there.
+    var sections: HashSet[string]
+    for desc in configDescriptors:
+      if desc.kind == cvkSection:
+        sections.incl(desc.section)
+
+    for name in [
+      "Standard", "BufferBackend", "Clipboard", "BuildOnSave", "TabLine", "StatusLine",
+      "Highlight", "AutoBackup", "QuickRun", "Notification", "Filer", "FileTree",
+      "Autocomplete", "AutoSave", "Persist", "Git", "SyntaxChecker", "SmoothScroll",
+      "StartUp.FileOpen", "StartUp.FileTree", "EditorConfig", "Log", "Theme", "Lsp",
+    ]:
+      check name in sections
+
+  test "Every Lsp feature sub-table has a section descriptor with its fields":
+    ## The `[Lsp.<Feature>]` tables used to be absent from the UI entirely.
+    var sections: HashSet[string]
+    var descriptorFields: HashSet[(string, string)]
+    for desc in configDescriptors:
+      if desc.kind == cvkSection:
+        sections.incl(desc.section)
+      else:
+        descriptorFields.incl((desc.section, desc.displayName))
+
+    for name in LspFeatureTableNames:
+      let section = "Lsp." & name
+      check section in sections
+      check (section, "enable") in descriptorFields
+
+    # And nothing beyond them: a sub-table added to `LspConfig` but not to
+    # `LspFeatureTableNames` would otherwise never be asserted on.
+    var lspSubSections = 0
+    for s in sections:
+      if s.startsWith("Lsp."):
+        inc lspSubSections
+    check lspSubSections == LspFeatureTableNames.len
+
+    # Non-`enable` fields of the wider sub-table shapes are there too.
+    check ("Lsp.Definition", "openWindow") in descriptorFields
+    check ("Lsp.Diagnostics", "autoHover") in descriptorFields
+    check ("Lsp.Diagnostics", "autoHoverDelay") in descriptorFields
+
+  test "Lsp sub-table descriptors address their own field":
+    ## A shared getter or a copy-pasted accessor would make several tables
+    ## move together. Clear them all, then flip exactly one.
+    let cfg = newEditorConfig()
+    proc enableDescriptors(): seq[ConfigItemDescriptor] =
+      for desc in configDescriptors:
+        if desc.kind == cvkBool and desc.section.startsWith("Lsp.") and
+            desc.displayName == "enable":
+          result.add desc
+
+    for desc in enableDescriptors():
+      desc.boolSet(cfg, false)
+    check not cfg.lsp.hover.enable
+    check not cfg.lsp.completion.enable
+
+    for desc in enableDescriptors():
+      if desc.section == "Lsp.Hover":
+        desc.boolSet(cfg, true)
+    check cfg.lsp.hover.enable
+    check not cfg.lsp.completion.enable
+    check not cfg.lsp.codeLens.enable
 
   test "All config fields have descriptors or are explicitly excluded":
     ## If a new field is added to a config struct in a tested section, this
@@ -2132,16 +2199,25 @@ suite "ConfigMode - descriptor completeness":
     collectFieldNames(cfg.standard, "Standard", allFields)
     collectFieldNames(cfg.bufferBackend, "BufferBackend", allFields)
     collectFieldNames(cfg.clipboard, "Clipboard", allFields)
+    collectFieldNames(cfg.buildOnSave, "BuildOnSave", allFields)
+    collectFieldNames(cfg.tabLine, "TabLine", allFields)
     collectFieldNames(cfg.statusLine, "StatusLine", allFields)
     collectFieldNames(cfg.highlight, "Highlight", allFields)
     collectFieldNames(cfg.autoBackup, "AutoBackup", allFields)
+    collectFieldNames(cfg.quickRun, "QuickRun", allFields)
     collectFieldNames(cfg.notification, "Notification", allFields)
     collectFieldNames(cfg.filer, "Filer", allFields)
+    collectFieldNames(cfg.fileTree, "FileTree", allFields)
     collectFieldNames(cfg.autocomplete, "Autocomplete", allFields)
     collectFieldNames(cfg.autoSave, "AutoSave", allFields)
+    collectFieldNames(cfg.persist, "Persist", allFields)
     collectFieldNames(cfg.git, "Git", allFields)
     collectFieldNames(cfg.syntaxChecker, "SyntaxChecker", allFields)
     collectFieldNames(cfg.smoothScroll, "SmoothScroll", allFields)
+    collectFieldNames(cfg.startUpFileOpen, "StartUp.FileOpen", allFields)
+    collectFieldNames(cfg.startUpFileTree, "StartUp.FileTree", allFields)
+    collectFieldNames(cfg.editorConfig, "EditorConfig", allFields)
+    collectFieldNames(cfg.log, "Log", allFields)
     collectFieldNames(cfg.theme, "Theme", allFields)
     collectFieldNames(cfg.lsp, "Lsp", allFields)
 
@@ -2158,6 +2234,15 @@ suite "ConfigMode - descriptor completeness":
       ("Highlight", "reservedWord"),
       ("AutoBackup", "backupDir"),
       ("AutoBackup", "dirToExclude"),
+      ("BuildOnSave", "workspaceRoot"),
+      ("BuildOnSave", "command"),
+      ("QuickRun", "command"),
+      ("QuickRun", "nimAdvancedCommand"),
+      ("QuickRun", "clangOptions"),
+      ("QuickRun", "cppOptions"),
+      ("QuickRun", "nimOptions"),
+      ("QuickRun", "shOptions"),
+      ("QuickRun", "bashOptions"),
     ].toHashSet
 
     let missing = allFields - descriptorFields - excluded

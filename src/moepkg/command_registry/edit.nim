@@ -25,7 +25,6 @@ import std/[options, strutils, unicode]
 import pkg/results
 
 import ../[types, buffer, motion, modes, registers, logger, clipboard, unicode_utils]
-import ../command_handlers/insert_commands
 
 import core, operator_engine
 
@@ -63,14 +62,15 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
   var isFullLine: bool
   var registerEmpty: bool
 
-  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+  if ctx.state.pendingInput.pendingRegister.isSome and
+      ctx.state.pendingInput.pendingRegister.get != '\0':
     # User specified a register with "
-    let regName = ctx.state.pendingRegister.get
+    let regName = ctx.state.pendingInput.pendingRegister.get
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
     registerEmpty = reg.isEmpty
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
     ctx.state.statusMessage = ""
     logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
   else:
@@ -112,6 +112,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       return err(txnResult.error)
 
   # Paste count times
+  var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
   for i in 1 .. actualCount:
     if isFullLine:
       # Paste on new line below current line (Vim 'p' behavior for linewise yank)
@@ -126,7 +127,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Move cursor to the first non-whitespace character of pasted line
@@ -142,11 +143,14 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if i == 1 and ctx.cursor.column < lineContent.charLen:
         pastePos.column = ctx.cursor.column + 1
 
+      if firstPastedChar.isNone:
+        firstPastedChar = some(pastePos)
+
       let insertResult = ctx.buffer.insertText(pastePos, pasteText)
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Advance cursor past the inserted text so the next iteration inserts
@@ -157,9 +161,9 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       ctx.cursor.line = endPos.line
       ctx.cursor.column = endPos.column
 
-  # Adjust cursor to last character of pasted text
-  if not isFullLine and ctx.cursor.column > 0:
-    ctx.cursor.column = ctx.cursor.column - 1
+  # Place cursor on the first character of the pasted text
+  if not isFullLine and firstPastedChar.isSome:
+    ctx.cursor = firstPastedChar.get
 
   # Commit transaction if we started one
   if actualCount > 1:
@@ -186,14 +190,15 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
   var isFullLine: bool
   var registerEmpty: bool
 
-  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+  if ctx.state.pendingInput.pendingRegister.isSome and
+      ctx.state.pendingInput.pendingRegister.get != '\0':
     # User specified a register with "
-    let regName = ctx.state.pendingRegister.get
+    let regName = ctx.state.pendingInput.pendingRegister.get
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
     registerEmpty = reg.isEmpty
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
     ctx.state.statusMessage = ""
     logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
   else:
@@ -235,6 +240,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       return err(txnResult.error)
 
   # Paste count times
+  var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
   for i in 1 .. actualCount:
     if isFullLine:
       # Paste on new line above current line (Vim 'P' behavior for linewise yank)
@@ -248,7 +254,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Move cursor to the first non-whitespace character of pasted line
@@ -258,11 +264,14 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       # Paste at cursor position (Vim 'P' behavior for characterwise yank)
       let pastePos = ctx.cursor
 
+      if firstPastedChar.isNone:
+        firstPastedChar = some(pastePos)
+
       let insertResult = ctx.buffer.insertText(pastePos, pasteText)
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.commitTransaction()
+          discard ctx.buffer.rollbackTransaction()
         return err(insertResult.error)
 
       # Advance cursor past the inserted text so the next iteration inserts
@@ -273,9 +282,9 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       ctx.cursor.line = endPos.line
       ctx.cursor.column = endPos.column
 
-  # Adjust cursor to last character of pasted text
-  if not isFullLine and ctx.cursor.column > 0:
-    ctx.cursor.column = ctx.cursor.column - 1
+  # Place cursor on the first character of the pasted text
+  if not isFullLine and firstPastedChar.isSome:
+    ctx.cursor = firstPastedChar.get
 
   # Commit transaction if we started one
   if actualCount > 1:
@@ -308,34 +317,31 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
 
     try:
       if isAdjacentPair(lineContent, cursorCol):
-        let txnResult = ctx.buffer.beginTransaction("delete paren pair")
-        if txnResult.isErr:
-          return err(txnResult.error)
+        let txr = withTransaction(ctx.buffer, "delete paren pair"):
+          # Delete opening char, then closing char (now at same position)
+          for i in 0 ..< 2:
+            let delResult = ctx.buffer.deleteRange(
+              BufferPosition(line: ctx.cursor.line, column: cursorCol),
+              BufferPosition(line: ctx.cursor.line, column: cursorCol),
+            )
+            if delResult.isErr:
+              return err(delResult.error)
+        if txr.isErr:
+          return err(txr.error)
 
-        # Delete opening char, then closing char (now at same position)
-        for i in 0 ..< 2:
-          let delResult = ctx.buffer.deleteRange(
-            BufferPosition(line: ctx.cursor.line, column: cursorCol),
-            BufferPosition(line: ctx.cursor.line, column: cursorCol),
-          )
-          if delResult.isErr:
-            discard ctx.buffer.commitTransaction()
-            return err(delResult.error)
+        # Both chars were deleted, so both go in the register
+        storeDeletedText(
+          ctx,
+          $lineContent.runeAtPos(cursorCol) & $lineContent.runeAtPos(cursorCol + 1),
+          false,
+        )
 
-        let commitResult = ctx.buffer.commitTransaction()
-        if commitResult.isErr:
-          return err(commitResult.error)
-
-        storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol), false)
-
-        # Adjust cursor if past end of line
         let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
         if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
           ctx.cursor.column = updatedLineLen - 1
 
         return Result[(), string].ok ()
     except CatchableError:
-      # If auto-delete fails, fall through to normal delete
       discard
 
   # Normal delete logic
@@ -352,33 +358,25 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, deletedText, false)
-
-  # Begin transaction if deleting multiple characters
   if charsToDelete > 1:
-    let txnResult = ctx.buffer.beginTransaction("delete " & $charsToDelete & " chars")
-    if txnResult.isErr:
-      return err(txnResult.error)
-
-  # Delete the characters
-  for i in 0 ..< charsToDelete:
-    # deleteRange is inclusive, so endPos should be at the same column as cursor
-    # to delete only one character
+    let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
+      for i in 0 ..< charsToDelete:
+        let endPos = ctx.cursor
+        let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
+        if delResult.isErr:
+          return err(delResult.error)
+    if txr.isErr:
+      return err(txr.error)
+  else:
     let endPos = ctx.cursor
     let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
     if delResult.isErr:
-      if charsToDelete > 1:
-        discard ctx.buffer.commitTransaction()
       return err(delResult.error)
 
-  # Commit transaction if we started one
-  if charsToDelete > 1:
-    let txnResult = ctx.buffer.commitTransaction()
-    if txnResult.isErr:
-      return err(txnResult.error)
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, deletedText, false)
 
-  # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand = some(
     LastEditCommand(
       kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: true
@@ -414,30 +412,28 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
     try:
       # X deletes char before cursor; check if char at cursorCol-1 and cursorCol form a pair
       if isAdjacentPair(lineContent, cursorCol - 1):
-        let txnResult = ctx.buffer.beginTransaction("delete paren pair")
-        if txnResult.isErr:
-          return err(txnResult.error)
+        let txr = withTransaction(ctx.buffer, "delete paren pair"):
+          # Delete opening char, then closing char (now at same position)
+          for i in 0 ..< 2:
+            let delResult = ctx.buffer.deleteRange(
+              BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+              BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+            )
+            if delResult.isErr:
+              return err(delResult.error)
+        if txr.isErr:
+          return err(txr.error)
 
-        # Delete opening char, then closing char (now at same position)
-        for i in 0 ..< 2:
-          let delResult = ctx.buffer.deleteRange(
-            BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
-            BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
-          )
-          if delResult.isErr:
-            discard ctx.buffer.commitTransaction()
-            return err(delResult.error)
-
-        let commitResult = ctx.buffer.commitTransaction()
-        if commitResult.isErr:
-          return err(commitResult.error)
-
-        storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol - 1), false)
+        # Both chars were deleted, so both go in the register
+        storeDeletedText(
+          ctx,
+          $lineContent.runeAtPos(cursorCol - 1) & $lineContent.runeAtPos(cursorCol),
+          false,
+        )
         ctx.cursor.column = cursorCol - 1
 
         return Result[(), string].ok ()
     except CatchableError:
-      # If auto-delete fails, fall through to normal delete
       discard
 
   # Normal delete logic
@@ -457,32 +453,25 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, deletedText, false)
-
-  # Begin transaction if deleting multiple characters
   if charsToDelete > 1:
-    let txnResult = ctx.buffer.beginTransaction("delete " & $charsToDelete & " chars")
-    if txnResult.isErr:
-      return err(txnResult.error)
-
-  # Delete the characters (delete from startColumn multiple times)
-  for i in 0 ..< charsToDelete:
+    let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
+      for i in 0 ..< charsToDelete:
+        let startPos = BufferPosition(line: ctx.cursor.line, column: startColumn)
+        let endPos = startPos
+        let delResult = ctx.buffer.deleteRange(startPos, endPos)
+        if delResult.isErr:
+          return err(delResult.error)
+    if txr.isErr:
+      return err(txr.error)
+  else:
     let startPos = BufferPosition(line: ctx.cursor.line, column: startColumn)
-    # deleteRange is inclusive, so endPos should be the same as startPos
-    # to delete only one character
-    let endPos = startPos
-    let delResult = ctx.buffer.deleteRange(startPos, endPos)
+    let delResult = ctx.buffer.deleteRange(startPos, startPos)
     if delResult.isErr:
-      if charsToDelete > 1:
-        discard ctx.buffer.commitTransaction()
       return err(delResult.error)
 
-  # Commit transaction if we started one
-  if charsToDelete > 1:
-    let txnResult = ctx.buffer.commitTransaction()
-    if txnResult.isErr:
-      return err(txnResult.error)
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, deletedText, false)
 
   # Move cursor to the position where deletion started
   ctx.cursor.column = startColumn
@@ -527,9 +516,6 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, deletedText, false)
-
   # Begin transaction for delete + insert mode (all in one undo unit)
   let txnResult =
     ctx.buffer.beginTransaction("substitute " & $charsToDelete & " char(s)")
@@ -543,6 +529,10 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
     if delResult.isErr:
       discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
+
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, deletedText, false)
 
   # Enter Insert mode (transaction remains open for insert mode input)
   ctx.state.mode = EditorMode.Insert
@@ -572,9 +562,6 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
       text.add(lineContent)
       if lineContent.len == 0 or lineContent[^1] != '\n':
         text.add("\n")
-
-  # Store in register system (respects pendingRegister)
-  storeDeletedText(ctx, text, true)
 
   # Get indent from first line (for auto-indent)
   let firstLine = ctx.buffer.getLine(startLine)
@@ -620,6 +607,10 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
         discard ctx.buffer.rollbackTransaction()
         return err("Failed to insert indent: " & insertResult.error)
 
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
+  storeDeletedText(ctx, text, true)
+
   # Move cursor to beginning of line (after indent)
   ctx.cursor.line = startLine
   ctx.cursor.column = indent.len
@@ -652,47 +643,31 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
   let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToToggle = min(actualCount, charsAvailable)
 
-  # Begin transaction for all toggle operations (to group as single undo)
-  let txnResult = ctx.buffer.beginTransaction("toggle " & $charsToToggle & " char(s)")
-  if txnResult.isErr:
-    return err(txnResult.error)
+  let txr = withTransaction(ctx.buffer, "toggle " & $charsToToggle & " char(s)"):
+    let runes = lineContent.toRunes()
+    for i in 0 ..< charsToToggle:
+      let runeIdx = ctx.cursor.column + i
+      if runeIdx < runes.len:
+        let originalChar = $runes[runeIdx]
 
-  # Toggle each character
-  let runes = lineContent.toRunes()
-  for i in 0 ..< charsToToggle:
-    let runeIdx = ctx.cursor.column + i
-    if runeIdx < runes.len:
-      let originalChar = $runes[runeIdx]
+        var toggledChar: string
+        if originalChar == originalChar.toUpperAscii():
+          toggledChar = originalChar.toLowerAscii()
+        else:
+          toggledChar = originalChar.toUpperAscii()
 
-      # Toggle case: convert to uppercase if lowercase, lowercase if uppercase
-      var toggledChar: string
-      if originalChar == originalChar.toUpperAscii():
-        # Character is uppercase (or non-alphabetic), convert to lowercase
-        toggledChar = originalChar.toLowerAscii()
-      else:
-        # Character is lowercase, convert to uppercase
-        toggledChar = originalChar.toUpperAscii()
+        if originalChar != toggledChar:
+          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
-      # Only perform replacement if the character actually changed
-      if originalChar != toggledChar:
-        let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+          let delResult = ctx.buffer.deleteRange(pos, pos)
+          if delResult.isErr:
+            return err(delResult.error)
 
-        # Delete original character
-        let delResult = ctx.buffer.deleteRange(pos, pos)
-        if delResult.isErr:
-          discard ctx.buffer.commitTransaction()
-          return err(delResult.error)
-
-        # Insert toggled character
-        let insResult = ctx.buffer.insertText(pos, toggledChar)
-        if insResult.isErr:
-          discard ctx.buffer.commitTransaction()
-          return err(insResult.error)
-
-  # Commit transaction
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err(commitResult.error)
+          let insResult = ctx.buffer.insertText(pos, toggledChar)
+          if insResult.isErr:
+            return err(insResult.error)
+  if txr.isErr:
+    return err(txr.error)
 
   # Move cursor to the right by the number of characters toggled
   ctx.cursor.column += charsToToggle
@@ -726,43 +701,32 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
         deletedText.add("\n")
 
-  # Store in register system (respects pendingRegister)
+  let txr = withTransaction(ctx.buffer, "Delete " & $actualCount & " line(s)"):
+    var brokeEarly = false
+    for i in 1 .. actualCount:
+      if startLine < ctx.buffer.len:
+        if ctx.buffer.len == 1:
+          brokeEarly = true
+          break
+        let delResult = ctx.buffer.deleteLine(startLine)
+        if delResult.isErr:
+          return err(delResult.error)
+
+    if brokeEarly:
+      let lastLine = ctx.buffer.getLine(0)
+      if lastLine.len > 0:
+        let clearResult = ctx.buffer.deleteRange(
+          BufferPosition(line: 0, column: 0),
+          BufferPosition(line: 0, column: lastLine.charLen - 1),
+        )
+        if clearResult.isErr:
+          return err(clearResult.error)
+  if txr.isErr:
+    return err("Transaction failed: " & txr.error)
+
+  # Store in register only after the buffer change succeeded (registers are not
+  # covered by the buffer transaction, so a rollback would not undo them)
   storeDeletedText(ctx, deletedText, true)
-
-  # Begin transaction for line deletions
-  let transactionResult =
-    ctx.buffer.beginTransaction("Delete " & $actualCount & " line(s)")
-  if transactionResult.isErr:
-    return err("Failed to begin transaction: " & transactionResult.error)
-
-  # Delete the lines (keep at least one line in the buffer)
-  var brokeEarly = false
-  for i in 1 .. actualCount:
-    if startLine < ctx.buffer.len:
-      if ctx.buffer.len == 1:
-        brokeEarly = true
-        break
-      let delResult = ctx.buffer.deleteLine(startLine)
-      if delResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err(delResult.error)
-
-  # If we stopped because the buffer was down to 1 line, clear its content
-  if brokeEarly:
-    let lastLine = ctx.buffer.getLine(0)
-    if lastLine.len > 0:
-      let clearResult = ctx.buffer.deleteRange(
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 0, column: lastLine.charLen - 1),
-      )
-      if clearResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err(clearResult.error)
-
-  # Commit transaction
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err("Failed to commit transaction: " & commitResult.error)
 
   # Adjust cursor position if needed
   if ctx.cursor.line >= ctx.buffer.len:
@@ -893,11 +857,11 @@ proc handleOperatorYank*(ctx: CommandContext, count: int = 1): Result[(), string
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (yy for yank line)
-  if ctx.state.editState.pendingOperator.isSome and
-      ctx.state.editState.pendingOperator.get.operatorType == OpYank:
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpYank:
     # Execute line yank
     let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
+    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
 
     # Extract lines for yank register
@@ -913,7 +877,7 @@ proc handleOperatorYank*(ctx: CommandContext, count: int = 1): Result[(), string
     storeYankedText(ctx, text, true)
 
     # Clear operator state
-    ctx.state.editState.pendingOperator = none(PendingOperator)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     let lineCount = endLine - startLine + 1
     # Yank screen notification (controlled by config)
     if ctx.notificationConfig.screenNotifications and
@@ -933,21 +897,14 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (dd for delete line)
-  if ctx.state.editState.pendingOperator.isSome and
-      ctx.state.editState.pendingOperator.get.operatorType == OpDelete:
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpDelete:
     # Execute line deletion
     let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
+    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
     let lineCount = endLine - startLine + 1
 
-    # Begin transaction for all line deletions
-    let transactionResult =
-      ctx.buffer.beginTransaction("Delete " & $lineCount & " line(s)")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    # Extract lines for yank register
     var text = ""
     for lineIdx in startLine .. endLine:
       if lineIdx < ctx.buffer.len:
@@ -956,37 +913,32 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
         if lineContent.len == 0 or lineContent[^1] != '\n':
           text.add("\n")
 
-    # Store in register system (respects pendingRegister)
+    let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
+      var brokeEarly = false
+      for i in 0 ..< lineCount:
+        if startLine < ctx.buffer.len:
+          if ctx.buffer.len == 1:
+            brokeEarly = true
+            break
+          let deleteResult = ctx.buffer.deleteLine(startLine)
+          if deleteResult.isErr:
+            return err("Failed to delete line: " & deleteResult.error)
+
+      if brokeEarly:
+        let lastLine = ctx.buffer.getLine(0)
+        if lastLine.len > 0:
+          let clearResult = ctx.buffer.deleteRange(
+            BufferPosition(line: 0, column: 0),
+            BufferPosition(line: 0, column: lastLine.charLen - 1),
+          )
+          if clearResult.isErr:
+            return err("Failed to clear last line: " & clearResult.error)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
+
+    # Store in register only after the buffer change succeeded (registers are not
+    # covered by the buffer transaction, so a rollback would not undo them)
     storeDeletedText(ctx, text, true)
-
-    # Delete lines (keep at least one line in the buffer)
-    var brokeEarly = false
-    for i in 0 ..< lineCount:
-      if startLine < ctx.buffer.len:
-        if ctx.buffer.len == 1:
-          brokeEarly = true
-          break
-        let deleteResult = ctx.buffer.deleteLine(startLine)
-        if deleteResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err("Failed to delete line: " & deleteResult.error)
-
-    # If we stopped because the buffer was down to 1 line, clear its content
-    if brokeEarly:
-      let lastLine = ctx.buffer.getLine(0)
-      if lastLine.len > 0:
-        let clearResult = ctx.buffer.deleteRange(
-          BufferPosition(line: 0, column: 0),
-          BufferPosition(line: 0, column: lastLine.charLen - 1),
-        )
-        if clearResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err("Failed to clear last line: " & clearResult.error)
-
-    # Commit transaction
-    let commitResult = ctx.buffer.commitTransaction()
-    if commitResult.isErr:
-      return err("Failed to commit transaction: " & commitResult.error)
 
     # Move cursor to start line, preserve column position
     ctx.cursor.line = min(startLine, ctx.buffer.len - 1)
@@ -1002,7 +954,7 @@ proc handleOperatorDelete*(ctx: CommandContext, count: int = 1): Result[(), stri
       some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: lineCount))
 
     # Clear operator state
-    ctx.state.editState.pendingOperator = none(PendingOperator)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     # Delete screen notification (controlled by config)
     if ctx.notificationConfig.screenNotifications and
         ctx.notificationConfig.deleteScreenNotify:
@@ -1021,36 +973,61 @@ proc handleOperatorChange*(ctx: CommandContext, count: int = 1): Result[(), stri
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (cc for change line)
-  if ctx.state.editState.pendingOperator.isSome and
-      ctx.state.editState.pendingOperator.get.operatorType == OpChange:
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpChange:
     # Execute line change using handleSubstituteLine (same as S command)
-    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
+    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
     # Clear operator state before calling handleSubstituteLine
-    ctx.state.editState.pendingOperator = none(PendingOperator)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     return handleSubstituteLine(ctx, operatorCount)
   else:
     # Set pending operator for motion
     setPendingOperator(ctx, OpChange, count, "c")
     return ok(())
 
+proc handleOperatorOnLines*(
+    ctx: CommandContext, operatorType: OperatorType, count: int = 1
+): Result[(), string] =
+  ## Apply a doubled operator (>>, <<, guu, gUU) to whole lines and record it
+  ## for repeat (.)
+  ## operatorType: OpIndent, OpOutdent, OpLowerCase or OpUpperCase
+  ## count: number of lines (default: 1)
+
+  let
+    lineCount = max(1, count)
+    startLine = ctx.cursor.line
+    endLine = min(startLine + lineCount - 1, ctx.buffer.len - 1)
+    range = OperatorRange(
+      start: BufferPosition(line: startLine, column: 0),
+      endPos: BufferPosition(line: endLine, column: 0),
+      isLinewise: true,
+    )
+
+  let opResult = executeOperatorOnRange(ctx, operatorType, range, 1)
+  if opResult.isErr:
+    return opResult
+
+  # Record this command for repeat (.)
+  ctx.state.editState.lastEditCommand = some(
+    LastEditCommand(
+      kind: lecOperatorLines, linesOperator: operatorType, operatorLineCount: lineCount
+    )
+  )
+
+  return ok(())
+
 proc handleOperatorIndent*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Indent operator - waits for motion (>2w, >$, etc.) or >> for line
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (>> for indent line)
-  if ctx.state.editState.pendingOperator.isSome and
-      ctx.state.editState.pendingOperator.get.operatorType == OpIndent:
-    let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
-    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
-    ctx.state.editState.pendingOperator = none(PendingOperator)
-
-    let range = OperatorRange(
-      start: BufferPosition(line: startLine, column: 0),
-      endPos: BufferPosition(line: endLine, column: 0),
-      isLinewise: true,
-    )
-    return executeOperatorOnRange(ctx, OpIndent, range, 1)
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpIndent:
+    # Counts on both halves multiply (2>3> == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+    return handleOperatorOnLines(ctx, OpIndent, lineCount)
   else:
     # Set pending operator for motion
     setPendingOperator(ctx, OpIndent, count, ">")
@@ -1061,39 +1038,51 @@ proc handleOperatorOutdent*(ctx: CommandContext, count: int = 1): Result[(), str
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (<< for dedent line)
-  if ctx.state.editState.pendingOperator.isSome and
-      ctx.state.editState.pendingOperator.get.operatorType == OpOutdent:
-    let startLine = ctx.cursor.line
-    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
-    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
-    ctx.state.editState.pendingOperator = none(PendingOperator)
-
-    let range = OperatorRange(
-      start: BufferPosition(line: startLine, column: 0),
-      endPos: BufferPosition(line: endLine, column: 0),
-      isLinewise: true,
-    )
-    return executeOperatorOnRange(ctx, OpOutdent, range, 1)
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpOutdent:
+    # Counts on both halves multiply (2<3< == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+    return handleOperatorOnLines(ctx, OpOutdent, lineCount)
   else:
     # Set pending operator for motion
     setPendingOperator(ctx, OpOutdent, count, "<")
     return ok(())
 
 proc handleOperatorLowerCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Lowercase operator - waits for motion (guw, gu$, etc.)
+  ## Lowercase operator - waits for motion (guw, gu$, etc.) or guu/gugu for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Set pending operator for motion
-  setPendingOperator(ctx, OpLowerCase, count, "gu")
-  return ok(())
+  # Check if same operator was pressed (guu / gugu for lowercase line)
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpLowerCase:
+    # Counts on both halves multiply (2gu3u == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+    return handleOperatorOnLines(ctx, OpLowerCase, lineCount)
+  else:
+    # Set pending operator for motion
+    setPendingOperator(ctx, OpLowerCase, count, "gu")
+    return ok(())
 
 proc handleOperatorUpperCase*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Uppercase operator - waits for motion (gUw, gU$, etc.)
+  ## Uppercase operator - waits for motion (gUw, gU$, etc.) or gUU/gUgU for line
   ## count: number of times to apply the operator (default: 1)
 
-  # Set pending operator for motion
-  setPendingOperator(ctx, OpUpperCase, count, "gU")
-  return ok(())
+  # Check if same operator was pressed (gUU / gUgU for uppercase line)
+  if ctx.state.pendingInput.pendingOperator.isSome and
+      ctx.state.pendingInput.pendingOperator.get.operatorType == OpUpperCase:
+    # Counts on both halves multiply (2gU3U == 6 lines)
+    let lineCount =
+      ctx.state.pendingInput.pendingOperator.get.operatorCount * max(1, count)
+    ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+    return handleOperatorOnLines(ctx, OpUpperCase, lineCount)
+  else:
+    # Set pending operator for motion
+    setPendingOperator(ctx, OpUpperCase, count, "gU")
+    return ok(())
 
 ## Text object command handlers
 
@@ -1103,17 +1092,17 @@ proc handleTextObjectInner*(ctx: CommandContext, count: int = 1): Result[(), str
   ## the typed text be replayed (count - 1) more times on Insert-mode exit.
 
   # Check if we have a pending operator
-  if ctx.state.editState.pendingOperator.isSome:
+  if ctx.state.pendingInput.pendingOperator.isSome:
     # We have a pending operator - set text object modifier
-    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
-    ctx.state.editState.pendingTextObject =
+    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
+    ctx.state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: operatorCount))
     ctx.state.statusMessage =
-      $ctx.state.editState.pendingOperator.get.operatorType & "i"
+      $ctx.state.pendingInput.pendingOperator.get.operatorType & "i"
     return ok(())
   elif isVisualAllMode(ctx.state.mode):
     # In Visual mode - set text object modifier for visual selection
-    ctx.state.editState.pendingTextObject =
+    ctx.state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: 1))
     return ok(())
   else:
@@ -1141,17 +1130,17 @@ proc handleTextObjectAround*(ctx: CommandContext, count: int = 1): Result[(), st
   ## the typed text be replayed (count - 1) more times on Insert-mode exit.
 
   # Check if we have a pending operator
-  if ctx.state.editState.pendingOperator.isSome:
+  if ctx.state.pendingInput.pendingOperator.isSome:
     # We have a pending operator - set text object modifier
-    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
-    ctx.state.editState.pendingTextObject =
+    let operatorCount = ctx.state.pendingInput.pendingOperator.get.operatorCount
+    ctx.state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomAround, operatorCount: operatorCount))
     ctx.state.statusMessage =
-      $ctx.state.editState.pendingOperator.get.operatorType & "a"
+      $ctx.state.pendingInput.pendingOperator.get.operatorType & "a"
     return ok(())
   elif isVisualAllMode(ctx.state.mode):
     # In Visual mode - set text object modifier for visual selection
-    ctx.state.editState.pendingTextObject =
+    ctx.state.pendingInput.pendingTextObject =
       some(PendingTextObject(modifier: tomAround, operatorCount: 1))
     return ok(())
   else:
@@ -1254,25 +1243,17 @@ proc handleIncrementNumber*(
     line[0 ..< startPos] & newNumStr &
     (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
 
-  # Update the buffer using transaction
-  let txnResult = ctx.buffer.beginTransaction("Increment number")
-  if txnResult.isErr:
-    return err(txnResult.error)
-
   let lineIdx = ctx.cursor.line
-  let delResult = ctx.buffer.deleteLine(lineIdx)
-  if delResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(delResult.error)
+  let txr = withTransaction(ctx.buffer, "Increment number"):
+    let delResult = ctx.buffer.deleteLine(lineIdx)
+    if delResult.isErr:
+      return err(delResult.error)
 
-  let insResult = ctx.buffer.insert(lineIdx, newLine)
-  if insResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(insResult.error)
-
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err(commitResult.error)
+    let insResult = ctx.buffer.insert(lineIdx, newLine)
+    if insResult.isErr:
+      return err(insResult.error)
+  if txr.isErr:
+    return err(txr.error)
 
   # Move cursor to start of the number (convert byte pos to char pos)
   ctx.cursor.column = byteToCharPos(newLine, startPos)
@@ -1308,25 +1289,17 @@ proc handleDecrementNumber*(
     line[0 ..< startPos] & newNumStr &
     (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
 
-  # Update the buffer using transaction
-  let txnResult = ctx.buffer.beginTransaction("Decrement number")
-  if txnResult.isErr:
-    return err(txnResult.error)
-
   let lineIdx = ctx.cursor.line
-  let delResult = ctx.buffer.deleteLine(lineIdx)
-  if delResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(delResult.error)
+  let txr = withTransaction(ctx.buffer, "Decrement number"):
+    let delResult = ctx.buffer.deleteLine(lineIdx)
+    if delResult.isErr:
+      return err(delResult.error)
 
-  let insResult = ctx.buffer.insert(lineIdx, newLine)
-  if insResult.isErr:
-    discard ctx.buffer.rollbackTransaction()
-    return err(insResult.error)
-
-  let commitResult = ctx.buffer.commitTransaction()
-  if commitResult.isErr:
-    return err(commitResult.error)
+    let insResult = ctx.buffer.insert(lineIdx, newLine)
+    if insResult.isErr:
+      return err(insResult.error)
+  if txr.isErr:
+    return err(txr.error)
 
   # Move cursor to start of the number (convert byte pos to char pos)
   ctx.cursor.column = byteToCharPos(newLine, startPos)
@@ -1443,12 +1416,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Indent Line",
     "Indent current line (>> command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      indentLine(ctx.buffer, ctx.state, count)
-      # Record this command for repeat (.)
-      ctx.state.editState.lastEditCommand =
-        some(LastEditCommand(kind: lecIndent, indentCount: count))
-      return Result[(), string].ok (),
+      # Count is a line count, like vim's [count]>>
+      handleOperatorOnLines(ctx, OpIndent, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1458,12 +1427,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
     "Dedent Line",
     "Dedent current line (<< command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let count = parseCount(args, default = 1)
-      dedentLine(ctx.buffer, ctx.state, count)
-      # Record this command for repeat (.)
-      ctx.state.editState.lastEditCommand =
-        some(LastEditCommand(kind: lecDedent, dedentCount: count))
-      return Result[(), string].ok (),
+      handleOperatorOnLines(ctx, OpOutdent, parseCount(args, default = 1)),
     0,
     1, # Accept optional count argument
   )
@@ -1483,59 +1447,49 @@ proc registerEditCommands*(registry: CommandRegistry) =
       if lineContent.len == 0:
         return Result[(), string].ok ()
 
-      # Get previous line indent (count leading spaces)
+      # Get previous line indent (leading spaces and tabs)
       let prevLine = ctx.buffer.getLine(currentLine - 1)
       var prevIndent = 0
       for i in 0 ..< prevLine.len:
-        if prevLine[i] == ' ':
+        if prevLine[i] == ' ' or prevLine[i] == '\t':
           inc prevIndent
         else:
           break
 
-      # Count current line's leading spaces
+      # Count current line's leading whitespace
       var currentIndent = 0
       for i in 0 ..< lineContent.len:
-        if lineContent[i] == ' ':
+        if lineContent[i] == ' ' or lineContent[i] == '\t':
           inc currentIndent
         else:
           break
 
-      # No change needed if indents are equal
-      if prevIndent == currentIndent:
+      # No change needed if the indents are identical (compare the whitespace
+      # itself, so "\t\t" vs "  " counts as a change)
+      if prevLine[0 ..< prevIndent] == lineContent[0 ..< currentIndent]:
         return Result[(), string].ok ()
 
-      # Create new line with correct indent
-      var newContent = ""
-      for i in 0 ..< prevIndent:
-        newContent.add(' ')
+      # Create new line with correct indent (copied verbatim to keep tabs)
+      var newContent = prevLine[0 ..< prevIndent]
 
       # Add non-whitespace content from current line
       for i in currentIndent ..< lineContent.len:
         newContent.add(lineContent[i])
 
-      # Begin transaction
-      let txnResult = ctx.buffer.beginTransaction("auto indent line")
-      if txnResult.isErr:
-        return err(txnResult.error)
-
-      # Delete current line content and insert new
       let lineStart = BufferPosition(line: currentLine, column: 0)
       let lineEnd = BufferPosition(line: currentLine, column: lineContent.charLen - 1)
 
-      let delResult = ctx.buffer.deleteRange(lineStart, lineEnd)
-      if delResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err(delResult.error)
+      let txr = withTransaction(ctx.buffer, "auto indent line"):
+        let delResult = ctx.buffer.deleteRange(lineStart, lineEnd)
+        if delResult.isErr:
+          return err(delResult.error)
 
-      if newContent.len > 0:
-        let insResult = ctx.buffer.insertText(lineStart, newContent)
-        if insResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err(insResult.error)
-
-      let commitResult = ctx.buffer.commitTransaction()
-      if commitResult.isErr:
-        return err(commitResult.error)
+        if newContent.len > 0:
+          let insResult = ctx.buffer.insertText(lineStart, newContent)
+          if insResult.isErr:
+            return err(insResult.error)
+      if txr.isErr:
+        return err(txr.error)
 
       # Move cursor to first non-blank character
       ctx.cursor.column = prevIndent
@@ -1663,7 +1617,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecOperatorMotion:
         # Repeat operator+motion command (e.g., dw, c2w, y$)
         # Create a pending operator
-        ctx.state.editState.pendingOperator = some(
+        ctx.state.pendingInput.pendingOperator = some(
           PendingOperator(
             operatorType: lastCmd.operator,
             operatorCount: lastCmd.operatorCount,
@@ -1688,7 +1642,7 @@ proc registerEditCommands*(registry: CommandRegistry) =
           Motion.FindChar, Motion.FindCharBackward, Motion.TillChar,
           Motion.TillCharBackward,
         }:
-          ctx.state.editState.pendingOperator = none(PendingOperator)
+          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
           let endOpt = findTillOperatorEndPos(
             ctx, lastCmd.motion, lastCmd.targetChar, effectiveCount, ctx.cursor
           )
@@ -1707,17 +1661,17 @@ proc registerEditCommands*(registry: CommandRegistry) =
           motionCmd, ctx.cursor, updateViewport = false
         )
         if r.isErr:
-          ctx.state.editState.pendingOperator = none(PendingOperator)
+          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
           return err(r.error)
 
         # Mirrors the live operator+motion no-move guard (dh/dj/dk at boundary).
         if r.value == ctx.cursor and lastCmd.motion in NoMoveNoOpMotions:
-          ctx.state.editState.pendingOperator = none(PendingOperator)
+          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
           return ok(())
 
         # Apply the operator over the motion span (shared pipeline).
-        let op = ctx.state.editState.pendingOperator.get
-        ctx.state.editState.pendingOperator = none(PendingOperator)
+        let op = ctx.state.pendingInput.pendingOperator.get
+        ctx.state.pendingInput.pendingOperator = none(PendingOperator)
         let execResult = applyOperatorOverMotion(
           ctx, op.operatorType, op.operatorCount, ctx.cursor, r.value, lastCmd.motion
         )
@@ -1767,29 +1721,20 @@ proc registerEditCommands*(registry: CommandRegistry) =
             let charsAvailable = lineContent.charLen - ctx.cursor.column
             let charsToDelete = min(lastCmd.substituteCount, charsAvailable)
 
-            # Begin transaction
-            let txnResult =
-              ctx.buffer.beginTransaction("substitute " & $charsToDelete & " char(s)")
-            if txnResult.isErr:
-              return err(txnResult.error)
+            let txr = withTransaction(
+              ctx.buffer, "substitute " & $charsToDelete & " char(s)"
+            ):
+              for i in 0 ..< charsToDelete:
+                let delResult = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
+                if delResult.isErr:
+                  return err(delResult.error)
 
-            # Delete the characters
-            for i in 0 ..< charsToDelete:
-              let delResult = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
-              if delResult.isErr:
-                discard ctx.buffer.rollbackTransaction()
-                return err(delResult.error)
-
-            # Insert the recorded text
-            let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
-            if insertResult.isErr:
-              discard ctx.buffer.rollbackTransaction()
-              return err("Failed to insert text: " & insertResult.error)
-
-            # Commit transaction
-            let commitResult = ctx.buffer.commitTransaction()
-            if commitResult.isErr:
-              return err(commitResult.error)
+              let insertResult =
+                ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
+              if insertResult.isErr:
+                return err("Failed to insert text: " & insertResult.error)
+            if txr.isErr:
+              return err(txr.error)
 
           # Move cursor to last inserted character (Vim behavior)
           let numNewlines = lastCmd.substituteText.count('\n')
@@ -1811,43 +1756,30 @@ proc registerEditCommands*(registry: CommandRegistry) =
           let startLine = ctx.cursor.line
           let endLine = min(startLine + lastCmd.substituteCount - 1, ctx.buffer.len - 1)
 
-          # Begin transaction
-          let transactionResult = ctx.buffer.beginTransaction("Substitute line")
-          if transactionResult.isErr:
-            return err("Failed to begin transaction: " & transactionResult.error)
+          let txr = withTransaction(ctx.buffer, "Substitute line"):
+            for i in 0 ..< (endLine - startLine):
+              if startLine + 1 < ctx.buffer.len:
+                let deleteResult = ctx.buffer.deleteLine(startLine + 1)
+                if deleteResult.isErr:
+                  return err("Failed to delete line: " & deleteResult.error)
 
-          # Delete all but first line
-          for i in 0 ..< (endLine - startLine):
-            if startLine + 1 < ctx.buffer.len:
-              let deleteResult = ctx.buffer.deleteLine(startLine + 1)
-              if deleteResult.isErr:
-                discard ctx.buffer.rollbackTransaction()
-                return err("Failed to delete line: " & deleteResult.error)
+            if startLine < ctx.buffer.len:
+              let line = ctx.buffer.getLine(startLine)
+              for i in 0 ..< line.charLen:
+                let deleteResult = ctx.buffer.deleteRange(
+                  BufferPosition(line: startLine, column: 0),
+                  BufferPosition(line: startLine, column: 0),
+                )
+                if deleteResult.isErr:
+                  return err("Failed to clear line: " & deleteResult.error)
 
-          # Clear the first line
-          if startLine < ctx.buffer.len:
-            let line = ctx.buffer.getLine(startLine)
-            for i in 0 ..< line.charLen:
-              let deleteResult = ctx.buffer.deleteRange(
-                BufferPosition(line: startLine, column: 0),
-                BufferPosition(line: startLine, column: 0),
-              )
-              if deleteResult.isErr:
-                discard ctx.buffer.rollbackTransaction()
-                return err("Failed to clear line: " & deleteResult.error)
-
-          # Insert the recorded text at the beginning of the line
-          let insertResult = ctx.buffer.insertText(
-            BufferPosition(line: startLine, column: 0), lastCmd.substituteText
-          )
-          if insertResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err("Failed to insert text: " & insertResult.error)
-
-          # Commit transaction
-          let commitResult = ctx.buffer.commitTransaction()
-          if commitResult.isErr:
-            return err(commitResult.error)
+            let insertResult = ctx.buffer.insertText(
+              BufferPosition(line: startLine, column: 0), lastCmd.substituteText
+            )
+            if insertResult.isErr:
+              return err("Failed to insert text: " & insertResult.error)
+          if txr.isErr:
+            return err("Transaction failed: " & txr.error)
 
           # Move cursor to last inserted character (Vim behavior)
           let numNewlines = lastCmd.substituteText.count('\n')
@@ -1901,29 +1833,19 @@ proc registerEditCommands*(registry: CommandRegistry) =
         let charsAvailable = lineContent.charLen - ctx.cursor.column
         let charsToReplace = min(lastCmd.replaceCount, charsAvailable)
 
-        # Begin transaction
-        let txnResult =
-          ctx.buffer.beginTransaction("replace " & $charsToReplace & " char(s)")
-        if txnResult.isErr:
-          return err(txnResult.error)
+        let txr = withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
+          for i in 0 ..< charsToReplace:
+            let pos =
+              BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+            let delResult = ctx.buffer.deleteRange(pos, pos)
+            if delResult.isErr:
+              return err(delResult.error)
 
-        # Replace each character
-        for i in 0 ..< charsToReplace:
-          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
-          let delResult = ctx.buffer.deleteRange(pos, pos)
-          if delResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err(delResult.error)
-
-          let insResult = ctx.buffer.insertText(pos, lastCmd.replaceChar)
-          if insResult.isErr:
-            discard ctx.buffer.rollbackTransaction()
-            return err(insResult.error)
-
-        # Commit transaction
-        let commitResult = ctx.buffer.commitTransaction()
-        if commitResult.isErr:
-          return err(commitResult.error)
+            let insResult = ctx.buffer.insertText(pos, lastCmd.replaceChar)
+            if insResult.isErr:
+              return err(insResult.error)
+        if txr.isErr:
+          return err(txr.error)
 
         # Move cursor to the last replaced character
         ctx.cursor.column += charsToReplace - 1
@@ -1931,14 +1853,10 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecJoinLines:
         # Repeat join lines (J command)
         return handleJoinLines(ctx, lastCmd.joinLinesCount)
-      of lecIndent:
-        # Repeat indent (>>)
-        indentLine(ctx.buffer, ctx.state, lastCmd.indentCount)
-        return ok(())
-      of lecDedent:
-        # Repeat dedent (<<)
-        dedentLine(ctx.buffer, ctx.state, lastCmd.dedentCount)
-        return ok(())
+      of lecOperatorLines:
+        # Repeat a doubled linewise operator (>> / << / guu / gUU)
+        return
+          handleOperatorOnLines(ctx, lastCmd.linesOperator, lastCmd.operatorLineCount)
       of lecChangeLine:
         # Note: This case should not be reached anymore as cc now uses lecSubstitute
         # Kept for backwards compatibility if old state exists
@@ -2135,13 +2053,13 @@ proc registerEditCommands*(registry: CommandRegistry) =
       desc,
       proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
         # Check if we have a pending text object modifier
-        if ctx.state.editState.pendingTextObject.isNone:
+        if ctx.state.pendingInput.pendingTextObject.isNone:
           # No text object modifier - ignore this key press
           # (In the future, we should fallback to the key's normal function)
           return ok(())
 
-        let textObj = ctx.state.editState.pendingTextObject.get
-        ctx.state.editState.pendingTextObject = none(PendingTextObject)
+        let textObj = ctx.state.pendingInput.pendingTextObject.get
+        ctx.state.pendingInput.pendingTextObject = none(PendingTextObject)
 
         # Calculate the text object range, extended over the operator count
         # (d2iw, 2dap, d3is, 2dat). textObj.operatorCount already holds the
@@ -2156,8 +2074,8 @@ proc registerEditCommands*(registry: CommandRegistry) =
           # is not silently consumed by a still-armed operator (a stray delete).
           # Also drop any pending register prefix (e.g. `"adit`) rather than
           # leaking it into the next command.
-          ctx.state.editState.pendingOperator = none(PendingOperator)
-          ctx.state.pendingRegister = none(char)
+          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+          ctx.state.pendingInput.pendingRegister = none(char)
           return err(rangeResult.error)
 
         let toRange = rangeResult.value
@@ -2171,9 +2089,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
         )
 
         # Check if we have a pending operator
-        if ctx.state.editState.pendingOperator.isSome:
-          let op = ctx.state.editState.pendingOperator.get
-          ctx.state.editState.pendingOperator = none(PendingOperator)
+        if ctx.state.pendingInput.pendingOperator.isSome:
+          let op = ctx.state.pendingInput.pendingOperator.get
+          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
 
           # Execute operator on text object
           return executeOperatorOnRange(ctx, op.operatorType, opRange, op.operatorCount)

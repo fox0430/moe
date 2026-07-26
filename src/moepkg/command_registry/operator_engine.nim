@@ -38,15 +38,16 @@ proc storeYankedText*(ctx: CommandContext, text: string, isLine: bool) =
   if ctx.state.registers.isNil:
     return
 
-  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingRegister.get
+  if ctx.state.pendingInput.pendingRegister.isSome and
+      ctx.state.pendingInput.pendingRegister.get != '\0':
+    let regName = ctx.state.pendingInput.pendingRegister.get
     if regName.isNamedRegisterName:
       discard ctx.state.registers.setNamedRegister(regName, text, isLine)
     elif regName.isClipboardRegisterName:
       ctx.state.registers.setClipboardRegister(regName, text, isLine)
     else:
       ctx.state.registers.setYankedRegister(text, isLine)
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
   else:
     ctx.state.registers.setYankedRegister(text, isLine)
 
@@ -56,17 +57,35 @@ proc storeDeletedText*(ctx: CommandContext, text: string, isLine: bool) =
   if ctx.state.registers.isNil:
     return
 
-  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
-    let regName = ctx.state.pendingRegister.get
+  if ctx.state.pendingInput.pendingRegister.isSome and
+      ctx.state.pendingInput.pendingRegister.get != '\0':
+    let regName = ctx.state.pendingInput.pendingRegister.get
     if regName.isNamedRegisterName:
       discard ctx.state.registers.setNamedRegister(regName, text, isLine)
     elif regName.isClipboardRegisterName:
       ctx.state.registers.setClipboardRegister(regName, text, isLine)
     else:
       ctx.state.registers.setDeletedRegister(text, isLine)
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
   else:
     ctx.state.registers.setDeletedRegister(text, isLine)
+
+proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
+  ## Put the cursor on the first non-blank of `lineNum` (vim's `^`), clamped to
+  ## the last valid column so a blank-only line does not land past the end.
+  if lineNum < 0 or lineNum >= ctx.buffer.len:
+    return
+
+  let line = ctx.buffer.getLine(lineNum)
+  var column = 0
+  for r in line.runes:
+    if $r == " " or $r == "\t":
+      column += 1
+    else:
+      break
+
+  ctx.cursor.line = lineNum
+  ctx.cursor.column = min(column, max(0, line.charLen - 1))
 
 proc executeOperatorOnRange*(
     ctx: CommandContext,
@@ -90,7 +109,7 @@ proc executeOperatorOnRange*(
     # delimiters -- so OpChange falls through to its branch below.
     # The operator command still completes, so consume any pending register
     # prefix (e.g. `"ayit`) rather than leaking it into the next command.
-    ctx.state.pendingRegister = none(char)
+    ctx.state.pendingInput.pendingRegister = none(char)
     return ok(())
 
   case operatorType
@@ -118,13 +137,14 @@ proc executeOperatorOnRange*(
     # Delete the range (and yank it)
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system (respects pendingRegister)
-    storeDeletedText(ctx, text, range.isLinewise)
-
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
     if delResult.isErr:
       return err(delResult.error)
+
+    # Store in register only after the buffer change succeeded (registers are not
+    # covered by the buffer transaction, so a rollback would not undo them)
+    storeDeletedText(ctx, text, range.isLinewise)
 
     # Move cursor to start of deletion
     ctx.cursor = range.start
@@ -163,15 +183,11 @@ proc executeOperatorOnRange*(
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
 
-    if not range.isEmpty:
-      # Store in register system (respects pendingRegister). An empty object
-      # (e.g. cit on <a></a>) removes nothing, so leave the registers untouched.
-      storeDeletedText(ctx, text, range.isLinewise)
-    else:
+    if range.isEmpty:
       # Empty change still completes the operator command (it drops into Insert
       # between the delimiters), so consume any pending register prefix rather
       # than leaking it into the next command.
-      ctx.state.pendingRegister = none(char)
+      ctx.state.pendingInput.pendingRegister = none(char)
 
     # Begin transaction for all change operations (delete + insert mode input)
     let transactionResult = ctx.buffer.beginTransaction("Change operation")
@@ -181,8 +197,14 @@ proc executeOperatorOnRange*(
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
     if delResult.isErr:
-      discard ctx.buffer.commitTransaction()
+      discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
+
+    if not range.isEmpty:
+      # Store in register only after the buffer change succeeded (registers are
+      # not covered by the transaction). An empty object (e.g. cit on <a></a>)
+      # removes nothing, so leave the registers untouched.
+      storeDeletedText(ctx, text, range.isLinewise)
 
     # Move cursor to start of change
     ctx.cursor = range.start
@@ -231,28 +253,16 @@ proc executeOperatorOnRange*(
       if endLine < ctx.buffer.len and range.endPos.column < 0:
         endLine -= 1
 
-    let transactionResult = ctx.buffer.beginTransaction("Indent lines")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
+    let txr = withTransaction(ctx.buffer, "Indent lines"):
+      let indentStr = getIndentString(ctx.state)
+      for lineNum in startLine .. endLine:
+        if lineNum < ctx.buffer.len:
+          let insertPos = BufferPosition(line: lineNum, column: 0)
+          discard ctx.buffer.insertText(insertPos, indentStr)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
-    let indentStr = getIndentString(ctx.state)
-    for lineNum in startLine .. endLine:
-      if lineNum < ctx.buffer.len:
-        let insertPos = BufferPosition(line: lineNum, column: 0)
-        discard ctx.buffer.insertText(insertPos, indentStr)
-
-    discard ctx.buffer.commitTransaction()
-
-    # Move cursor to first non-blank of start line
-    ctx.cursor.line = startLine
-    ctx.cursor.column = 0
-    if startLine < ctx.buffer.len:
-      let line = ctx.buffer.getLine(startLine)
-      for r in line.runes:
-        if $r == " " or $r == "\t":
-          ctx.cursor.column += 1
-        else:
-          break
+    moveToFirstNonBlank(ctx, startLine)
 
     return ok(())
   of OpOutdent:
@@ -267,88 +277,73 @@ proc executeOperatorOnRange*(
       if endLine < ctx.buffer.len and range.endPos.column < 0:
         endLine -= 1
 
-    let transactionResult = ctx.buffer.beginTransaction("Dedent lines")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
+    let txr = withTransaction(ctx.buffer, "Dedent lines"):
+      let indentWidth = effectiveShiftWidth(ctx.state)
+      for lineNum in startLine .. endLine:
+        if lineNum < ctx.buffer.len:
+          let lineContent = ctx.buffer.getLine(lineNum)
+          let currentIndent = getLineIndent(lineContent)
+          let removeCount = min(indentWidth, currentIndent.len)
+          if removeCount > 0:
+            for i in 1 .. removeCount:
+              let deletePos = BufferPosition(line: lineNum, column: 0)
+              discard ctx.buffer.deleteChar(deletePos)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
-    let indentWidth = effectiveShiftWidth(ctx.state)
-    for lineNum in startLine .. endLine:
-      if lineNum < ctx.buffer.len:
-        let lineContent = ctx.buffer.getLine(lineNum)
-        let currentIndent = getLineIndent(lineContent)
-        let removeCount = min(indentWidth, currentIndent.len)
-        if removeCount > 0:
-          for i in 1 .. removeCount:
-            let deletePos = BufferPosition(line: lineNum, column: 0)
-            discard ctx.buffer.deleteChar(deletePos)
-
-    discard ctx.buffer.commitTransaction()
-
-    # Move cursor to first non-blank of start line
-    ctx.cursor.line = startLine
-    ctx.cursor.column = 0
-    if startLine < ctx.buffer.len:
-      let outdentLine = ctx.buffer.getLine(startLine)
-      for r in outdentLine.runes:
-        if $r == " " or $r == "\t":
-          ctx.cursor.column += 1
-        else:
-          break
+    moveToFirstNonBlank(ctx, startLine)
 
     return ok(())
   of OpLowerCase:
-    # Convert text in range to lowercase
-    let transactionResult = ctx.buffer.beginTransaction("Lowercase")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    if range.isLinewise:
-      for lineNum in range.start.line .. range.endPos.line:
-        if lineNum < ctx.buffer.len:
-          let lineText = $ctx.buffer.getLine(lineNum)
-          let lineCharLen = lineText.charLen
-          if lineCharLen > 0:
-            let lowerText = lineText.toLowerAscii()
-            let startPos = BufferPosition(line: lineNum, column: 0)
-            let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-            discard ctx.buffer.deleteRange(startPos, endPos)
-            discard ctx.buffer.insertText(startPos, lowerText)
-    else:
-      let text = extractRangeText(ctx.buffer, range)
-      let lowerText = text.toLowerAscii()
-      discard ctx.buffer.deleteRange(range.start, range.endPos)
-      discard ctx.buffer.insertText(range.start, lowerText)
-
-    discard ctx.buffer.commitTransaction()
+    let txr = withTransaction(ctx.buffer, "Lowercase"):
+      if range.isLinewise:
+        for lineNum in range.start.line .. range.endPos.line:
+          if lineNum < ctx.buffer.len:
+            let lineText = $ctx.buffer.getLine(lineNum)
+            let lineCharLen = lineText.charLen
+            if lineCharLen > 0:
+              let lowerText = lineText.toLowerAscii()
+              let startPos = BufferPosition(line: lineNum, column: 0)
+              let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+              discard ctx.buffer.deleteRange(startPos, endPos)
+              discard ctx.buffer.insertText(startPos, lowerText)
+      else:
+        let text = extractRangeText(ctx.buffer, range)
+        let lowerText = text.toLowerAscii()
+        discard ctx.buffer.deleteRange(range.start, range.endPos)
+        discard ctx.buffer.insertText(range.start, lowerText)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
     ctx.cursor = range.start
+    if range.isLinewise:
+      # guu/gUU land on the first non-blank (matches >>/<<)
+      moveToFirstNonBlank(ctx, range.start.line)
     return ok(())
   of OpUpperCase:
-    # Convert text in range to uppercase
-    let transactionResult = ctx.buffer.beginTransaction("Uppercase")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    if range.isLinewise:
-      for lineNum in range.start.line .. range.endPos.line:
-        if lineNum < ctx.buffer.len:
-          let lineText = $ctx.buffer.getLine(lineNum)
-          let lineCharLen = lineText.charLen
-          if lineCharLen > 0:
-            let upperText = lineText.toUpperAscii()
-            let startPos = BufferPosition(line: lineNum, column: 0)
-            let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-            discard ctx.buffer.deleteRange(startPos, endPos)
-            discard ctx.buffer.insertText(startPos, upperText)
-    else:
-      let text = extractRangeText(ctx.buffer, range)
-      let upperText = text.toUpperAscii()
-      discard ctx.buffer.deleteRange(range.start, range.endPos)
-      discard ctx.buffer.insertText(range.start, upperText)
-
-    discard ctx.buffer.commitTransaction()
+    let txr = withTransaction(ctx.buffer, "Uppercase"):
+      if range.isLinewise:
+        for lineNum in range.start.line .. range.endPos.line:
+          if lineNum < ctx.buffer.len:
+            let lineText = $ctx.buffer.getLine(lineNum)
+            let lineCharLen = lineText.charLen
+            if lineCharLen > 0:
+              let upperText = lineText.toUpperAscii()
+              let startPos = BufferPosition(line: lineNum, column: 0)
+              let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+              discard ctx.buffer.deleteRange(startPos, endPos)
+              discard ctx.buffer.insertText(startPos, upperText)
+      else:
+        let text = extractRangeText(ctx.buffer, range)
+        let upperText = text.toUpperAscii()
+        discard ctx.buffer.deleteRange(range.start, range.endPos)
+        discard ctx.buffer.insertText(range.start, upperText)
+    if txr.isErr:
+      return err("Transaction failed: " & txr.error)
 
     ctx.cursor = range.start
+    if range.isLinewise:
+      moveToFirstNonBlank(ctx, range.start.line)
     return ok(())
   of OpSwapCase:
     return err("Operator " & $operatorType & " not yet implemented")
@@ -381,7 +376,7 @@ proc setPendingOperator*(
   ## Set pending operator and save viewport position for operator+motion commands
   ctx.state.windowDisplay.savedViewportTopLine =
     ctx.motionController.viewportManager.viewport.topLine
-  ctx.state.editState.pendingOperator = some(
+  ctx.state.pendingInput.pendingOperator = some(
     PendingOperator(
       operatorType: operatorType, operatorCount: count, startPos: ctx.cursor
     )

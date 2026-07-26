@@ -48,16 +48,18 @@ proc newTestState(mode = EditorMode.Normal): EditorState =
       mode: mode,
       previousMode: EditorMode.Normal,
     ),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
   )
@@ -181,7 +183,7 @@ suite "playbackMacro - runtime `:noremap` mid-count invariants":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    state.macroState.registers['a'] = @[]
+    state.pendingInput.macroState.registers['a'] = @[]
 
     let err =
       manager.keyBindingRegistry.addRuntimeMapping(Normal, "j", "@ a", noremap = true)
@@ -199,8 +201,8 @@ suite "playbackMacro - runtime `:noremap` mid-count invariants":
     # via applyCountToCommand — numericPrefix is now empty (not because the
     # entry-clear ran, but because the count was legitimately used).
     check manager.keyBindingRegistry.sequenceState.numericPrefix == ""
-    check state.macroState.lastRegister == some('a')
-    check state.macroState.playbackDepth == 0
+    check state.pendingInput.macroState.lastRegister == some('a')
+    check state.pendingInput.macroState.playbackDepth == 0
     check not manager.keyBindingRegistry.hasActiveSequence()
 
 suite "playbackMacro - depth and recursion guards":
@@ -212,9 +214,9 @@ suite "playbackMacro - depth and recursion guards":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    check state.macroState.playbackDepth == 0
+    check state.pendingInput.macroState.playbackDepth == 0
     discard playbackMacro(editor, @[])
-    check state.macroState.playbackDepth == 0
+    check state.pendingInput.macroState.playbackDepth == 0
 
   test "playbackDepth returns to 0 after an invalid-key error":
     let manager = newTestManager()
@@ -226,7 +228,7 @@ suite "playbackMacro - depth and recursion guards":
 
     let r = playbackMacro(editor, @["<not-a-real-key>"])
     check r.kind == hrError
-    check state.macroState.playbackDepth == 0
+    check state.pendingInput.macroState.playbackDepth == 0
 
   test "MaxMacroRecursionDepth guard refuses playback at the limit":
     let manager = newTestManager()
@@ -237,11 +239,11 @@ suite "playbackMacro - depth and recursion guards":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
     # MaxMacroRecursionDepth = 100.
-    state.macroState.playbackDepth = 100
+    state.pendingInput.macroState.playbackDepth = 100
     let r = playbackMacro(editor, @[])
     check r.kind == hrError
     # Guard rejects without touching the counter — caller retains its depth.
-    check state.macroState.playbackDepth == 100
+    check state.pendingInput.macroState.playbackDepth == 100
 
 suite "playbackMacro - nested `@X` recursion":
   test "nested @a inside @b sets lastRegister to the inner register":
@@ -258,8 +260,8 @@ suite "playbackMacro - nested `@X` recursion":
 
     # qa = empty (dispatches macro-play, sets lastRegister, no side effects).
     # qb = @a (recorded as the two keystrokes `@`, `a`).
-    state.macroState.registers['a'] = @[]
-    state.macroState.registers['b'] = @["@", "a"]
+    state.pendingInput.macroState.registers['a'] = @[]
+    state.pendingInput.macroState.registers['b'] = @["@", "a"]
 
     let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
     let b = KeyCombo(isSpecial: false, char: "b", modifiers: {})
@@ -267,8 +269,8 @@ suite "playbackMacro - nested `@X` recursion":
     discard manager.runKeyCombo(editor, b)
 
     # Outer @b sets lastRegister='b', inner @a overwrites it to 'a'.
-    check state.macroState.lastRegister == some('a')
-    check state.macroState.playbackDepth == 0
+    check state.pendingInput.macroState.lastRegister == some('a')
+    check state.pendingInput.macroState.playbackDepth == 0
     check not manager.keyBindingRegistry.hasActiveSequence()
 
   test "`2@b` consumes the count via `@b`'s completion before recursing":
@@ -284,8 +286,8 @@ suite "playbackMacro - nested `@X` recursion":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    state.macroState.registers['a'] = @[]
-    state.macroState.registers['b'] = @["@", "a"]
+    state.pendingInput.macroState.registers['a'] = @[]
+    state.pendingInput.macroState.registers['b'] = @["@", "a"]
 
     let two = KeyCombo(isSpecial: false, char: "2", modifiers: {})
     let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
@@ -298,8 +300,8 @@ suite "playbackMacro - nested `@X` recursion":
 
     check manager.keyBindingRegistry.sequenceState.numericPrefix == ""
     check not manager.keyBindingRegistry.hasActiveSequence()
-    check state.macroState.playbackDepth == 0
-    check state.macroState.lastRegister == some('a')
+    check state.pendingInput.macroState.playbackDepth == 0
+    check state.pendingInput.macroState.lastRegister == some('a')
 
 suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
   test "empty macro in insert-normal returns to Insert mode":
@@ -314,7 +316,7 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    state.macroState.registers['a'] = @[]
+    state.pendingInput.macroState.registers['a'] = @[]
 
     let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
     let a = KeyCombo(isSpecial: false, char: "a", modifiers: {})
@@ -337,7 +339,7 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    state.macroState.registers['a'] = @["f"]
+    state.pendingInput.macroState.registers['a'] = @["f"]
 
     let at = KeyCombo(isSpecial: false, char: "@", modifiers: {})
     let a = KeyCombo(isSpecial: false, char: "a", modifiers: {})

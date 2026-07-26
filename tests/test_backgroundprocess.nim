@@ -521,3 +521,79 @@ suite "BackgroundProcess - edge cases":
     check results[0] == "1"
     check results[1] == "2"
     check results[2] == "3"
+
+suite "BackgroundProcess - waitForAsync with timeout":
+  test "Return the output when the process finishes in time":
+    proc runTest(): Future[ProcessOutputResult] {.async.} =
+      let cmd = BackgroundProcessCommand(
+        cmd: "echo", args: @["fast"], workingDir: getCurrentDir()
+      )
+
+      let r = await startBackgroundProcess(cmd)
+      if r.isErr:
+        return ProcessOutputResult.err "start failed"
+      return await r.get.waitForAsync(5.seconds)
+
+    let r = waitFor runTest()
+    check r.isOk
+    check r.get.len >= 1
+    check r.get[0] == "fast"
+
+  test "Kill and report an error when the timeout elapses":
+    proc runTest(): Future[tuple[r: ProcessOutputResult, closed: bool]] {.async.} =
+      let cmd = BackgroundProcessCommand(
+        cmd: "sleep", args: @["30"], workingDir: getCurrentDir()
+      )
+
+      let r = await startBackgroundProcess(cmd)
+      if r.isErr:
+        return (ProcessOutputResult.err "start failed", false)
+      let bp = r.get
+      let waitResult = await bp.waitForAsync(200.milliseconds)
+      return (waitResult, bp.process.isNil)
+
+    let r = waitFor runTest()
+    check r.r.isErr
+    check "Timed out" in r.r.error
+    # The handle is released even on the timeout path.
+    check r.closed
+
+  test "Kill the whole process group on timeout":
+    # `sh` exits immediately but its child keeps the pipe open, so killing only
+    # the direct child would leave the reader waiting forever.
+    proc runTest(): Future[ProcessOutputResult] {.async.} =
+      let cmd = BackgroundProcessCommand(
+        cmd: "sh", args: @["-c", "sleep 30 & wait"], workingDir: getCurrentDir()
+      )
+
+      let r = await startBackgroundProcess(cmd)
+      if r.isErr:
+        return ProcessOutputResult.err "start failed"
+      return await r.get.waitForAsync(200.milliseconds)
+
+    let r = waitFor runTest()
+    check r.isErr
+    check "Timed out" in r.error
+
+  test "InfiniteDuration waits without a bound":
+    proc runTest(): Future[ProcessOutputResult] {.async.} =
+      let cmd = BackgroundProcessCommand(
+        cmd: "sh", args: @["-c", "sleep 0.2; echo slow"], workingDir: getCurrentDir()
+      )
+
+      let r = await startBackgroundProcess(cmd)
+      if r.isErr:
+        return ProcessOutputResult.err "start failed"
+      return await r.get.waitForAsync(InfiniteDuration)
+
+    let r = waitFor runTest()
+    check r.isOk
+    check r.get[0] == "slow"
+
+suite "BackgroundProcess - timeoutFromSeconds":
+  test "Positive seconds become a bounded duration":
+    check timeoutFromSeconds(30) == 30.seconds
+
+  test "Zero and negative mean no timeout":
+    check timeoutFromSeconds(0) == InfiniteDuration
+    check timeoutFromSeconds(-1) == InfiniteDuration

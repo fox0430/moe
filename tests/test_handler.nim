@@ -26,11 +26,10 @@
 import std/[unittest, options, tables, os, osproc, times]
 from std/strutils import contains
 
-import config_test_helper
-
-import pkg/celina
+import pkg/[celina, chronos]
 import pkg/celina/core/mouse_logic
-import pkg/chronos
+
+import config_test_helper
 
 import
   ../src/moepkg/[
@@ -61,16 +60,18 @@ proc createTestState(): EditorState =
       DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
     config: newEditorConfig(),
     windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
-    macroState: MacroState(
-      isRecording: false,
-      register: '\0',
-      recordedKeys: @[],
-      registers: initTable[char, seq[string]](),
-      lastRegister: none(char),
-      waitingForRegister: false,
-      commandType: "",
-      pendingCount: 0,
-      playbackDepth: 0,
+    pendingInput: PendingInputState(
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 0,
+        playbackDepth: 0,
+      )
     ),
     registers: initRegisters(),
     overlay: none(OverlayKind),
@@ -113,7 +114,7 @@ suite "screenToBufferPosition - Basic":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 0, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 0, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -129,7 +130,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at x=5, which is x=1 in text area (5 - 4 = 1)
     let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -144,7 +145,7 @@ suite "screenToBufferPosition - Basic":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 3, 1, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -160,14 +161,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at y=23 is within reserved lines (height=24, reserved=2)
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      0,
-      23,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 0, 23, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isNone
@@ -181,7 +175,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at x=2 is within line number area
     let result = screenToBufferPosition(
-      vp, buffer, 2, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isNone
@@ -198,7 +192,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -213,7 +207,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -231,12 +225,104 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
+      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
     check result.get.line == 5
     check result.get.column == 15 # leftColumn + screenX = 10 + 5
+
+suite "screenToBufferPosition - No Wrap Display Width":
+  # screenX is a display-column offset while the column is a character index, so
+  # tabs and wide characters must be converted, not added.
+  test "Click past a leading tab":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("\tabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # tabStop=4: the tab covers columns 0..3, so 'a' is drawn at column 4
+    let result = screenToBufferPosition(
+      vp, buffer, 4, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 1
+
+  test "Click inside a tab selects the tab":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("\tabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    let result = screenToBufferPosition(
+      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 0
+
+  test "Click past full width characters":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("あいうabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # Each wide rune takes 2 cells, so 'a' is drawn at column 6
+    let result = screenToBufferPosition(
+      vp, buffer, 6, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 3
+
+  test "Click on the second cell of a full width character":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("あいうabc")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    let result = screenToBufferPosition(
+      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 1
+
+  test "Click with horizontal scroll and full width characters":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftColumn = 2
+      buffer = newTextBuffer("あいうえお")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # The renderer slices from character 2, so う takes cells 0..1 and え cell 2
+    let result = screenToBufferPosition(
+      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 3
+
+  test "Click with horizontal scroll onto a tab boundary":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 2) # leftColumn = 2
+      buffer = newTextBuffer("ab\tcd")
+      lineNumOffset = 0
+      reservedLines = steadyBottomAreaHeight()
+
+    # Slicing at character 2 restarts tab expansion, so 'c' is drawn at column 4
+    let result = screenToBufferPosition(
+      vp, buffer, 4, 0, lineNumOffset, reservedLines, lineWrap = false, tabStop = 4
+    )
+
+    check result.isSome
+    check result.get.column == 3
 
 suite "screenToBufferPosition - Column Clamping":
   test "Column clamped to line length":
@@ -248,14 +334,7 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click at x=50, but line only has 2 chars
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      50,
-      0,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -271,14 +350,7 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click on empty line at x=10
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      10,
-      1,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 10, 1, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -294,14 +366,7 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click at x=50, but line only has 3 characters
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      50,
-      0,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -318,14 +383,7 @@ suite "screenToBufferPosition - Line Clamping":
 
     # Click at y=10, but buffer only has 1 line
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      5,
-      10,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 5, 10, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -340,14 +398,7 @@ suite "screenToBufferPosition - Line Clamping":
 
     # Click at y=10, topLine=5, so bufferLine = 15, but only 7 lines
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      0,
-      10,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 0, 10, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -363,14 +414,7 @@ suite "screenToBufferPosition - Viewport Position":
 
     # Click at absolute (12, 6) which is relative (2, 1) to viewport
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      12,
-      6,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 12, 6, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -386,14 +430,7 @@ suite "screenToBufferPosition - Viewport Position":
 
     # Click at y=3, viewport starts at y=5
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      15,
-      3,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
+      vp, buffer, 15, 3, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isNone
@@ -408,7 +445,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # With lineWrap=true, leftColumn should be ignored
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      3,
+      0,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -426,7 +470,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on screen row 1 (second wrap segment), col 2 => char 7 ('h')
     let result = screenToBufferPosition(
-      vp, buffer, 2, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      2,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -444,7 +495,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on screen row 1 => line 1
     let result = screenToBufferPosition(
-      vp, buffer, 2, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      2,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -464,7 +522,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click at x=7 on row 1 => screenX = 7-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
-      vp, buffer, 7, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      7,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -485,7 +550,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click at x=9 on row 1 => screenX = 9-2-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
-      vp, buffer, 9, 1, lineNumOffset, sidebarWidth, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      9,
+      1,
+      lineNumOffset + sidebarWidth,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - sidebarWidth - lineNumOffset,
     )
 
     check result.isSome
@@ -503,7 +575,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on row 1, col 0 => first char of segment 1 = char 3 ('え')
     let result = screenToBufferPosition(
-      vp, buffer, 0, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      0,
+      1,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -527,10 +606,10 @@ suite "screenToBufferPosition - Line Wrap Mode":
       1,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
       tabStop = 4,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -549,7 +628,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Click on row 2, col 1 => line 1, char 1 ('l')
     let result = screenToBufferPosition(
-      vp, buffer, 1, 2, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      1,
+      2,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -569,7 +655,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # Row 0, col 2 lands on seg1 => char 12, not seg0 char 2.
     let onTop = screenToBufferPosition(
-      vp, buffer, 2, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      2,
+      0,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
     check onTop.isSome
     check onTop.get.line == 0
@@ -578,7 +671,14 @@ suite "screenToBufferPosition - Line Wrap Mode":
     # Line 0 shows only 2 visible rows (seg1, seg2), so screen row 2 is line 1 —
     # the over-counted top line must not swallow the click.
     let below = screenToBufferPosition(
-      vp, buffer, 1, 2, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+      vp,
+      buffer,
+      1,
+      2,
+      lineNumOffset,
+      reservedLines,
+      lineWrap = true,
+      wrapWidth = vp.width - lineNumOffset,
     )
     check below.isSome
     check below.get.line == 1
@@ -604,10 +704,9 @@ suite "screenToBufferPosition - Scrollbar":
       0,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 1,
+      wrapWidth = vp.width - 1 - lineNumOffset,
     )
 
     check result.isSome
@@ -633,11 +732,10 @@ suite "screenToBufferPosition - Scrollbar":
       buffer,
       8,
       1,
-      lineNumOffset,
-      sidebarWidth,
+      lineNumOffset + sidebarWidth,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 1,
+      wrapWidth = vp.width - sidebarWidth - 1 - lineNumOffset,
     )
 
     check result.isSome
@@ -662,11 +760,10 @@ suite "screenToBufferPosition - Scrollbar":
       buffer,
       8,
       1,
-      lineNumOffset,
-      sidebarWidth,
+      lineNumOffset + sidebarWidth,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 0,
+      wrapWidth = vp.width - sidebarWidth - lineNumOffset,
     )
 
     check result.isSome
@@ -681,15 +778,7 @@ suite "screenToBufferPosition - Scrollbar":
       reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
-      vp,
-      buffer,
-      5,
-      0,
-      lineNumOffset,
-      sidebarWidth = 0,
-      reservedLines,
-      lineWrap = false,
-      scrollbarWidth = 1,
+      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -715,10 +804,9 @@ suite "screenToBufferPosition - Scrollbar":
       1,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 2,
+      wrapWidth = vp.width - 2 - lineNumOffset,
     )
 
     check result.isSome
@@ -742,10 +830,9 @@ suite "screenToBufferPosition - Scrollbar":
       0,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 0,
+      wrapWidth = vp.width - lineNumOffset,
     )
 
     check result.isSome
@@ -770,10 +857,9 @@ suite "screenToBufferPosition - Scrollbar":
       2,
       1,
       lineNumOffset,
-      sidebarWidth = 0,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 1,
+      wrapWidth = vp.width - 1 - lineNumOffset,
     )
 
     check result.isSome
@@ -797,11 +883,10 @@ suite "screenToBufferPosition - Scrollbar":
       buffer,
       7,
       1,
-      lineNumOffset,
-      sidebarWidth,
+      lineNumOffset + sidebarWidth,
       reservedLines,
       lineWrap = true,
-      scrollbarWidth = 2,
+      wrapWidth = vp.width - sidebarWidth - 2 - lineNumOffset,
     )
 
     check result.isSome
@@ -829,15 +914,17 @@ suite "Pending async operations":
   test "Returns false when no pending operations":
     let editor = newEditor(newEditorConfig())
 
-    check not editor.hasPendingAsyncOperations()
+    check editor.state.pending.len == 0
 
   test "Terminal command is skipped when frontend hooks are unavailable":
     let editor = newEditor(newEditorConfig())
-    editor.state.pending.shellCommand = "command must not run"
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoShellCommand, command: "command must not run"
+    )
 
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
-    check editor.state.pending.shellCommand.len == 0
+    check editor.state.pending.len == 0
     check editor.state.statusMessage ==
       "This frontend does not support terminal commands"
 
@@ -854,6 +941,166 @@ suite "Pending async operations":
     let frontend = FrontendHooks(suspend: noOpFrontendHook, resume: noOpFrontendHook)
     let bodyRan = waitFor frontendSuspendBodyRuns(frontend, editor)
     check bodyRan
+
+suite "releaseExternalResources":
+  # persist off: savePersistData writes to the real user persist directory.
+  proc newQuitPathEditor(): Editor =
+    var config = newEditorConfig()
+    config.persist.search = false
+    config.persist.commandHistory = false
+    config.persist.cursorPosition = false
+    return newEditor(config)
+
+  test "clears the process lists":
+    let editor = newQuitPathEditor()
+
+    editor.releaseExternalResources()
+
+    check editor.runningBackgroundProcesses.len == 0
+    check editor.runningQuickRunProcesses.len == 0
+
+  test "is idempotent":
+    # A crash during quit runs it twice.
+    let editor = newQuitPathEditor()
+
+    editor.releaseExternalResources()
+    editor.releaseExternalResources()
+
+    check editor.runningBackgroundProcesses.len == 0
+    check editor.runningQuickRunProcesses.len == 0
+
+proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception]).} =
+  # Simulate the delayed pending set that happens inside
+  # e.codeLensPickerConfirm() -> executeCodeLensItem(), which is asyncSpawn'd
+  # from handler.nim after handleEvent has already returned.
+  e.state.pending.add PendingAsyncOp(
+    kind: paoBuild,
+    build: (path: "/tmp/detached.nim", language: 0, customCmd: "", workspaceRoot: ""),
+  )
+
+proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception]).} =
+  asyncSpawn detachedPendingWriter(e)
+  # Yield so the detached task runs before the drain.
+  await sleepAsync(10)
+  await e.handlePendingAsyncOperations(FrontendHooks())
+
+suite "handlePendingAsyncOperations drains ops queued from async tasks":
+  test "build op drains on tick":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoBuild,
+      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+    )
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+
+  test "quickRun op drains on tick":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoQuickRun,
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
+    )
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+
+  test "syntaxCheck op drains on tick":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/x.nim", language: 0)
+    )
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+
+  test "drain from detached async task (simulates CodeLens confirm)":
+    # Reproduces the visible bug: handler.nim asyncSpawns a task, the task
+    # queues an op *after* handleEvent returns. Without the unconditional
+    # drain the op would sit until the next event.
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+
+    waitFor runDetachedScenario(editor)
+
+    check editor.state.pending.len == 0
+
+  test "multiple queued ops drain in one call":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoBuild,
+      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+    )
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoQuickRun,
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
+    )
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/y.nim", language: 0)
+    )
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+
+  test "duplicate ops of the same kind are both kept and drained":
+    # The old flat-field layout silently overwrote the first request.
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/a.nim", language: 0)
+    )
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/b.nim", language: 0)
+    )
+    check editor.state.pending.len == 2
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+
+  test "drain with an empty queue is a no-op":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+
+    # Should not raise and should leave state untouched.
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+
+suite "Background op failures route through notify":
+  test "syntax check failure raises an error notification":
+    # A bare statusMessage is wiped by prepareForInput on the next keystroke,
+    # so a failure landing mid-typing was unreadable. langNone has no syntax
+    # check command, which fails before any process is spawned.
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.config.notification.popupNotifications = true
+    editor.state.setStatusQuiet("")
+
+    waitFor runSyntaxCheckAsync(editor, (path: "/nonexistent.txt", language: 0))
+
+    check editor.state.notificationPopup.queue.len == 1
+    check editor.state.notificationPopup.queue[0].level == nlError
+    check "Syntax check error" in editor.state.notificationPopup.queue[0].message
+
+  test "syntax check failure still reaches the status line without popups":
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.config.notification.popupNotifications = false
+    editor.state.setStatusQuiet("")
+
+    waitFor runSyntaxCheckAsync(editor, (path: "/nonexistent.txt", language: 0))
+
+    check editor.state.notificationPopup.queue.len == 0
+    check "Syntax check error" in editor.state.statusMessage
 
 suite "Search Mode - History Navigation":
   test "Search state initialized correctly":
@@ -1437,6 +1684,67 @@ suite "handleMouseEvent - Left Click Filer Mode":
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 5))
 
     check handled == false
+
+proc createSplitEditor(multiStatusLine: bool = true): Editor =
+  ## Two windows stacked vertically. The bottom window's viewport includes the
+  ## shared status/command row (window_manager gives the last window the
+  ## remaining height), exactly as equalizeHeightsInGroup lays it out.
+  result = createTestEditorWithBuffer("top0\ntop1\ntop2\ntop3\ntop4\ntop5")
+  result.state.showTabLine = false
+  result.state.multiStatusLine = multiStatusLine
+  result.windowManager.windows[0].viewport =
+    ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+
+  var content = ""
+  for i in 0 ..< 30:
+    if i > 0:
+      content.add("\n")
+    content.add("bottom" & $i)
+  let buf2 = newTextBuffer(content)
+  result.windowManager.windows.add(
+    EditorWindow(
+      buffer: buf2,
+      bufferIds: @[buf2.id],
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+  )
+
+suite "handleMouseEvent - Left Click Multi-Window Bottom Reserve":
+  test "Click on command line row is ignored when the status line is hidden":
+    # Bottom window: y=12..23, and y=23 is the shared status/command row that
+    # the renderer always reserves — independent of showStatusLine.
+    let e = createSplitEditor()
+    e.state.showStatusLine = false
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 23))
+
+    check handled == false
+    check e.windowManager.activeWindowIndex == 0
+    check e.windowManager.windows[1].cursor.line == 0
+
+  test "Click on the last text row still works when the status line is hidden":
+    let e = createSplitEditor()
+    e.state.showStatusLine = false
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 22))
+
+    check handled == true
+    check e.windowManager.activeWindowIndex == 1
+    check e.windowManager.windows[1].cursor.line == 10
+
+  test "Non-bottom window last row is clickable without multiStatusLine":
+    # Non-bottom windows reserve a status row only in multiStatusLine mode;
+    # otherwise the separator sits outside the viewport.
+    let e = createSplitEditor(multiStatusLine = false)
+    e.state.showStatusLine = true
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 11))
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 5
 
 proc makeEnterEvent(): Event =
   Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Enter))
@@ -2516,6 +2824,19 @@ suite "middleClickPaste":
     check e.windowManager.windows[0].cursor.column == 0
     check not e.activeBuffer.inTransaction
 
+  test "Normal mode - failed primary selection read leaves no open transaction":
+    let e = createTestEditorForMiddleClick("hello")
+    # win32yank.exe does not exist here, so the primary selection read fails.
+    e.config.clipboard.tool = cbtWin32yank
+    e.state.mode = EditorMode.Normal
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+
+    e.middleClickPaste()
+
+    check e.state.mode == EditorMode.Normal
+    check not e.activeBuffer.inTransaction
+    check e.activeBuffer.getLine(0) == "hello"
+
   test "Insert mode - paste from clipboard":
     if not isClipboardToolAvailable():
       skip()
@@ -2975,10 +3296,10 @@ suite "Macro recording - Command / Search overlay keys":
     result.state.mode = EditorMode.Normal
 
   proc startRecording(e: Editor, register: char) =
-    e.state.macroState.isRecording = true
-    e.state.macroState.register = register
-    e.state.macroState.recordedKeys = @[]
-    e.state.macroState.recordStartKey = "q"
+    e.state.pendingInput.macroState.isRecording = true
+    e.state.pendingInput.macroState.register = register
+    e.state.pendingInput.macroState.recordedKeys = @[]
+    e.state.pendingInput.macroState.recordStartKey = "q"
 
   test "Command overlay: keys after ':' land in recordedKeys":
     let e = createEditorForOverlayRecord("hello foo bar")
@@ -2989,7 +3310,7 @@ suite "Macro recording - Command / Search overlay keys":
       discard e.handleEvent(makeCharEvent($ch))
     discard e.handleEvent(makeEnterEvent())
 
-    check e.state.macroState.recordedKeys ==
+    check e.state.pendingInput.macroState.recordedKeys ==
       @["s", "/", "f", "o", "o", "/", "b", "a", "r", "/", "<Enter>"]
 
   test "Search overlay: pattern and Enter recorded":
@@ -3001,7 +3322,7 @@ suite "Macro recording - Command / Search overlay keys":
       discard e.handleEvent(makeCharEvent($ch))
     discard e.handleEvent(makeEnterEvent())
 
-    check e.state.macroState.recordedKeys == @["w", "o", "r", "<Enter>"]
+    check e.state.pendingInput.macroState.recordedKeys == @["w", "o", "r", "<Enter>"]
 
   test "Command overlay Escape recorded so playback replays cancel":
     let e = createEditorForOverlayRecord("hello")
@@ -3013,7 +3334,7 @@ suite "Macro recording - Command / Search overlay keys":
     discard
       e.handleEvent(Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Escape)))
 
-    check e.state.macroState.recordedKeys == @["a", "b", "<Escape>"]
+    check e.state.pendingInput.macroState.recordedKeys == @["a", "b", "<Escape>"]
     check not e.state.isCommandOverlay
 
   test "Recording paused during playback (withPlaybackGuard)":
@@ -3021,12 +3342,12 @@ suite "Macro recording - Command / Search overlay keys":
     let e = createEditorForOverlayRecord("hello")
     e.startRecording('a')
     e.state.enterCommandOverlay()
-    e.state.macroState.playbackDepth = 1
-    e.state.macroState.isRecording = false # withPlaybackGuard mirror
+    e.state.pendingInput.macroState.playbackDepth = 1
+    e.state.pendingInput.macroState.isRecording = false # withPlaybackGuard mirror
 
     discard e.handleEvent(makeCharEvent("x"))
 
-    check e.state.macroState.recordedKeys.len == 0
+    check e.state.pendingInput.macroState.recordedKeys.len == 0
 
 suite "Macro playback - overlay-aware routing":
   # Regression: nested key replay dispatched by state.mode, so overlay-mode keys
@@ -3159,21 +3480,21 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     e.addSecondWindow(buf2)
 
     e.state.mode = EditorMode.Normal
-    e.state.editState.pendingOperator = some(
+    e.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
         startPos: BufferPosition(line: 2, column: 0),
       )
     )
-    e.state.editState.pendingTextObject = some(PendingTextObject(modifier: tomInner))
+    e.state.pendingInput.pendingTextObject = some(PendingTextObject(modifier: tomInner))
 
     let handled = e.handleMouseEvent(makeLeftClickEvent(50, 0))
     check handled == true
 
     check e.windowManager.activeWindowIndex == 1
-    check e.state.editState.pendingOperator.isNone
-    check e.state.editState.pendingTextObject.isNone
+    check e.state.pendingInput.pendingOperator.isNone
+    check e.state.pendingInput.pendingTextObject.isNone
 
   test "Ctrl-o (insert-normal) commits Insert transaction on jump":
     # Ctrl-o keeps an open Insert transaction while state.mode is Normal;
@@ -3219,3 +3540,60 @@ suite "handleMouseEvent - Cross-window jump finalizes stale state":
     check bufA.inTransaction
     check e.state.mode == EditorMode.Insert
     check e.state.editState.insertModeStartPos.isSome
+
+proc enterRecentFileWith(e: Editor, paths: seq[string]) =
+  ## Enter Recent File mode in a split window with a fixed entry list.
+  check e.enterRecentFileMode().isOk
+  check e.activeWindow.modeState.kind == mskRecentFile
+  e.activeWindow.modeState.recentFile.items = @[]
+  for p in paths:
+    e.activeWindow.modeState.recentFile.items.add RecentFileEntry(path: p)
+  e.activeWindow.modeState.recentFile.selectedIndex = 0
+  e.state.mode = EditorMode.RecentFile
+  e.activeWindow.mode = EditorMode.RecentFile
+
+suite "handleRecentFileModeKeyCombo - window cleanup":
+  let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+
+  test "Enter opens the selected file and tears down the recent file window":
+    let e = createTestEditorWithBuffer("hello")
+    let winCount = e.windowManager.windows.len
+
+    let testFile = getTempDir() / "moe_recent_open_test.txt"
+    writeFile(testFile, "opened content")
+    defer:
+      removeFile(testFile)
+
+    e.enterRecentFileWith(@[testFile])
+    let recentBufId = e.activeWindow.buffer.id
+    check e.windowManager.windows.len == winCount + 1
+
+    check e.handleRecentFileModeKeyCombo(enterKey) == true
+
+    # The split window and its scratch buffer are gone.
+    check e.windowManager.windows.len == winCount
+    check e.bufferIndexById(recentBufId) < 0
+    for win in e.windowManager.windows:
+      check recentBufId notin win.bufferIds
+
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.state.statusMessage == "Opened: " & testFile
+    check e.activeBuffer.filePath == some(testFile)
+
+  test "Enter on a missing file keeps the recent file window open":
+    let e = createTestEditorWithBuffer("hello")
+    let winCount = e.windowManager.windows.len
+
+    let missing = getTempDir() / "moe_recent_missing_test.txt"
+    removeFile(missing)
+
+    e.enterRecentFileWith(@[missing])
+    let recentBufId = e.activeWindow.buffer.id
+
+    check e.handleRecentFileModeKeyCombo(enterKey) == true
+
+    check e.windowManager.windows.len == winCount + 1
+    check e.bufferIndexById(recentBufId) >= 0
+    check e.state.mode == EditorMode.RecentFile
+    check e.state.statusMessage == "File not found: " & missing

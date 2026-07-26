@@ -31,7 +31,7 @@ import
   highlight_config,
   editor_window_layout,
   editor_lsp,
-  git_diff,
+  git_cache,
   git_conflict,
   window_manager,
   buffer
@@ -78,10 +78,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   let
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
-    sidebarWidth = e.calculateSidebarWidth(window.mode)
-    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
-    lineNumOffset =
-      calculateLineNumOffset(window.buffer, e.showLineNumbers) + sidebarWidth
+    scrollbarWidth = e.calculateScrollbarWidth(window)
     # Steady reserve so the clamp agrees with the scroll (see steadyReservedLines).
     reservedLines = e.steadyReservedLines(isBottomWindow)
 
@@ -89,7 +86,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     window.buffer,
     window.viewport,
     window.cursor,
-    lineNumOffset,
+    e.gutterWidth(window),
     reservedLines + tabLineOffset,
     scrollbarWidth,
     window.wrapCountCache,
@@ -138,7 +135,7 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
     if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
       buf.bookmarks = e.savedBookmarks[absPath]
     if e.showGitDiff:
-      discard updateBufferWithGitDiff(buf, useBuffer = false)
+      e.state.git.requestGitRefresh(buf)
   # Scan conflict markers regardless of the highlight config (like loadFile) so
   # conflict-navigation works as soon as this buffer becomes active.
   buf.refreshConflicts()

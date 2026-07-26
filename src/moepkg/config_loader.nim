@@ -26,7 +26,9 @@
 ## type. Sections without a `{.cfgSection.}` (Theme, Lsp, Debug, KeyMapping,
 ## CommandAliases, ShellCommands, DisabledCommandAliases) and the nested
 ## `[StartUp.*]` tables are dispatched by hand here, using the helpers from
-## `config_loader/<section>.nim`.
+## `config_loader/<section>.nim`. `[Lsp]` is dispatched by hand because its
+## parent table also holds the dynamic `[Lsp.<languageId>]` keyspace, but its
+## body is derived from `LspConfig` all the same (see `config_loader/lsp`).
 ## Those sub-modules are re-exported so external callers (`editor.nim`,
 ## `command_handlers/*`, etc.) can keep `import config_loader` unchanged.
 

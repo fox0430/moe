@@ -176,7 +176,6 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   # A reload replaces the content, so state keyed on the OLD content is stale and
   # must be dropped here on loadFile's single reload path, or it would point into
   # content that no longer exists:
-  #   - the char->byte cursor cache would return wrong byte offsets,
   #   - undo/redo history would replay changes against mismatched content,
   #   - LSP diagnostics would render at stale line positions (reload sends no
   #     didChange, so the server never re-publishes against the new content),
@@ -185,9 +184,9 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   #     line that no longer maps to the same content, and
   #   - the changelist would point g;/g, at positions in the replaced content
   #     (vim drops the changelist on :e! too), now stale since undo was cleared.
-  b.resetCursorCache()
   b.clearUndoRedoState()
   b.diagnostics.setLen(0) # diagnostic line markers go via the lineMarkers reset below
+  b.diagnosticsDirty = true
   b.conflictBlocks.setLen(0) # stale ranges into the old content; reload re-scans
   b.lastChangedLines = 0
   b.changeList.setLen(0)

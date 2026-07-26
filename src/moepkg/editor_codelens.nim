@@ -174,6 +174,9 @@ proc doUpdateCodeLensCache(e: Editor) =
     lrfCodeLens,
     proc(): Result[int, string] =
       e.lsp.startCodeLensRequest(activeBuffer),
+    # Background cache: it feeds the buffer painted under an overlay, so an
+    # open overlay must not drop the response.
+    blockedByOverlay = false,
   )
   if ctxRes.isErr:
     e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
@@ -192,42 +195,24 @@ proc updateCodeLensCache*(e: Editor) =
   let filePath = activeBuffer.filePath.get
   var poll = addr e.state.lspCache.codeLensPoll
 
-  # Check if there's a pending request - try to get response
-  if e.state.lspCache.pending.hasKey(lrfCodeLens):
-    let ctx = e.state.lspCache.pending[lrfCodeLens]
-    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-    case status
-    of lrsPending:
-      # Still waiting for response, don't start a new request
-      return
-    of lrsSuccess:
-      # Got response, process it
-      e.state.lspCache.pending.del(lrfCodeLens)
-      # Drop cross-buffer / stale-edit responses before spawning the async
-      # resolver — otherwise lenses computed against buffer A would get
-      # stamped into buffer B's cache after a mid-flight `:b B`.
-      if classifyResponse(e, ctx) != lrsFresh:
-        # Advance the debounce timer on drop so churn does not re-fire on
-        # every tick until the response settles.
-        poll.lastUpdate = getMonoTime()
-        return
-      if resultOpt.isSome:
-        let lenses = parseCodeLensResponse(resultOpt.get)
-        # Bump generation so a slower async spawn is dropped if superseded.
-        e.state.lspCache.featureGeneration[lrfCodeLens].inc
-        let gen = e.state.lspCache.featureGeneration[lrfCodeLens]
-        asyncSpawn e.processCodeLensResponse(lenses, gen, ctx.contentVersion)
-      # Continue to check if we need to start a new request (buffer might have changed)
-    of lrsError, lrsTimeout:
-      # Request failed or timed out, mark cache as valid but empty to prevent retry loop
-      logLspDegraded("CodeLens", status, errorOpt.get(""))
-      e.state.lspCache.pending.del(lrfCodeLens)
-      inc poll.rejectStreak
-      poll.lastUpdate = getMonoTime()
-      e.state.lspCache.codeLensCache = CodeLensCache(
-        isValid: true, filePath: filePath, contentVersion: activeBuffer.contentVersion
-      )
-      return
+  # The guard drops cross-buffer / stale-edit responses before the async
+  # resolver is spawned — otherwise lenses computed against buffer A would get
+  # stamped into buffer B's cache after a mid-flight `:b B`.
+  e.pollDebouncedLspResponse(lrfCodeLens, poll, "CodeLens"):
+    if resultOpt.isSome:
+      let lenses = parseCodeLensResponse(resultOpt.get)
+      # Bump generation so a slower async spawn is dropped if superseded.
+      e.state.lspCache.featureGeneration[lrfCodeLens].inc
+      let gen = e.state.lspCache.featureGeneration[lrfCodeLens]
+      asyncSpawn e.processCodeLensResponse(lenses, gen, ctx.contentVersion)
+    # Fall through to check whether a new request is needed (the buffer may
+    # have changed while this one was in flight).
+  do:
+    # Mark the cache valid but empty to prevent a retry loop.
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true, filePath: filePath, contentVersion: activeBuffer.contentVersion
+    )
+    return
 
   # Check if cache is still valid (no changes needed)
   if e.state.lspCache.codeLensCache.isValid and
@@ -308,7 +293,9 @@ proc executeCodeLensItem*(
       )
       if cmdResult.isErr:
         return err(cmdResult.error)
-      e.state.pending.terminalCommand = cmdResult.get
+      e.state.pending.add PendingAsyncOp(
+        kind: paoTerminalCommand, command: cmdResult.get
+      )
       e.state.statusMessage = "Running: " & item.title
       return ok()
 
@@ -446,6 +433,7 @@ proc doUpdateDocumentHighlightCache(e: Editor) =
     proc(): Result[int, string] =
       e.lsp.startDocumentHighlightRequest(activeBuffer, cursorLine, cursorCol),
     validModes = DocumentHighlightValidModes,
+    blockedByOverlay = false,
   )
   if ctxRes.isErr:
     invalidateDocumentHighlightCache(e.lsp, e.state.lspCache)
@@ -471,35 +459,14 @@ proc updateDocumentHighlightCache*(e: Editor) =
 
   var poll = addr e.state.lspCache.documentHighlightPoll
 
-  # Check if there's a pending request - try to get response
-  if e.state.lspCache.pending.hasKey(lrfDocumentHighlight):
-    let ctx = e.state.lspCache.pending[lrfDocumentHighlight]
-    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-    case status
-    of lrsPending:
-      # Still waiting for response, don't start a new request
-      return
-    of lrsSuccess:
-      # Got response, process it
-      e.state.lspCache.pending.del(lrfDocumentHighlight)
-      if classifyResponse(e, ctx) != lrsFresh:
-        # Advance the debounce timer even on a drop so a rapid contentVersion /
-        # buffer-switch churn does not immediately re-fire in the next tick.
-        # processDocumentHighlightResponse stamps lastUpdate on the accept
-        # path; we mirror it here.
-        poll.lastUpdate = getMonoTime()
-        return
-
-      if resultOpt.isSome:
-        let highlights = parseDocumentHighlightResponse(resultOpt.get)
-        e.processDocumentHighlightResponse(highlights)
-      # Continue to check if we need to start a new request (cursor might have moved)
-    of lrsError, lrsTimeout:
-      # Request failed or timed out, clear and continue
-      logLspDegraded("Document highlight", status, errorOpt.get(""))
-      e.state.lspCache.pending.del(lrfDocumentHighlight)
-      inc poll.rejectStreak
-      poll.lastUpdate = getMonoTime()
+  e.pollDebouncedLspResponse(lrfDocumentHighlight, poll, "Document highlight"):
+    if resultOpt.isSome:
+      let highlights = parseDocumentHighlightResponse(resultOpt.get)
+      e.processDocumentHighlightResponse(highlights)
+    # Fall through to check whether a new request is needed (the cursor may
+    # have moved while this one was in flight).
+  do:
+    discard # Failure only advances the backoff; the cache stays as it was
 
   # Check if cursor position changed
   # (same line and column means no need to update)
@@ -679,6 +646,7 @@ proc doUpdateSemanticTokensCache(e: Editor) =
     lrfSemanticTokens,
     proc(): Result[int, string] =
       e.lsp.startSemanticTokensRequest(activeBuffer, topLine, bottomLine),
+    blockedByOverlay = false,
   )
   if ctxRes.isOk:
     # Refresh the semantic-tokens-specific extras alongside the pending ctx.
@@ -878,6 +846,7 @@ proc doUpdateInlayHintCache(e: Editor) =
     lrfInlayHint,
     proc(): Result[int, string] =
       e.lsp.startInlayHintRequest(activeBuffer, topLine, bottomLine),
+    blockedByOverlay = false,
   )
   if ctxRes.isErr:
     invalidateInlayHintCache(e.lsp, e.state.lspCache)
@@ -902,28 +871,11 @@ proc updateInlayHintCache*(e: Editor) =
 
   var poll = addr e.state.lspCache.inlayHintPoll
 
-  # Check if there's a pending request - try to get response
-  if e.state.lspCache.pending.hasKey(lrfInlayHint):
-    let ctx = e.state.lspCache.pending[lrfInlayHint]
-    let (status, resultOpt, errorOpt) = e.lsp.checkResponse(ctx.requestId)
-    case status
-    of lrsPending:
-      return
-    of lrsSuccess:
-      e.state.lspCache.pending.del(lrfInlayHint)
-      if classifyResponse(e, ctx) != lrsFresh:
-        # Advance the debounce timer on drop so a churn (edit / buffer switch)
-        # does not immediately re-fire. processInlayHintResponse stamps
-        # lastUpdate on the accept path.
-        poll.lastUpdate = getMonoTime()
-        return
-      if resultOpt.isSome and resultOpt.get.kind != JNull:
-        e.processInlayHintResponse(parseInlayHintResponse(resultOpt.get))
-    of lrsError, lrsTimeout:
-      logLspDegraded("Inlay hint", status, errorOpt.get(""))
-      e.state.lspCache.pending.del(lrfInlayHint)
-      inc poll.rejectStreak
-      poll.lastUpdate = getMonoTime()
+  e.pollDebouncedLspResponse(lrfInlayHint, poll, "Inlay hint"):
+    if resultOpt.isSome and resultOpt.get.kind != JNull:
+      e.processInlayHintResponse(parseInlayHintResponse(resultOpt.get))
+  do:
+    discard # Failure only advances the backoff; the cache stays as it was
 
   # Check if cache is still valid and covers the current viewport
   let cache = e.state.lspCache.inlayHintCache

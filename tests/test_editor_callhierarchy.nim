@@ -82,6 +82,7 @@ proc injectPending(e: Editor, feature: LspRequestFeature, requestId: int) =
     cursorLine: -1,
     cursorCol: -1,
     validModes: {}, # any mode; callhierarchy has its own inline guard
+    blockedByOverlay: true,
   )
 
 proc createTestEditorWithLspDisabled(): Editor =
@@ -189,6 +190,25 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
     check e.state.statusMessage == "No callable symbol at cursor"
     check not e.state.lspCache.pending.hasKey(lrfCallHierarchyPrepareIncoming)
     check e.state.mode != EditorMode.CallHierarchy
+
+suite "editor_callhierarchy - overlay guard":
+  test "Response arriving while a Command overlay is active is dropped":
+    # An overlay keeps the base mode, so validModes cannot catch it; entering
+    # CallHierarchy mode here would tear down the overlay's prompt.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.enterCommandOverlay()
+    let startMode = e.state.mode
+    let reqId = 4545
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == startMode
+    check e.state.mode != EditorMode.CallHierarchy
+    check not e.state.lspCache.pending.hasKey(lrfCallHierarchyIncoming)
 
 suite "editor_callhierarchy - enterCallHierarchyMode":
   test "Fresh entry saves originalBuffer and previousMode":

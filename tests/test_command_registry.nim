@@ -554,6 +554,7 @@ suite "CommandRegistry - registerBuiltinCommands":
 suite "CommandRegistry - Command execution with context":
   proc createTestContext(buffer: TextBuffer): CommandContext =
     let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -568,7 +569,6 @@ suite "CommandRegistry - Command execution with context":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: newKeyBindingRegistry(),
     )
 
@@ -737,6 +737,7 @@ suite "CommandRegistry - Edge cases":
 suite "CommandRegistry - readOnly buffer guard":
   proc createReadOnlyTestContext(buffer: TextBuffer): CommandContext =
     let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
     state.previousMode = EditorMode.LogViewer
@@ -749,7 +750,6 @@ suite "CommandRegistry - readOnly buffer guard":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: newKeyBindingRegistry(),
     )
 
@@ -860,6 +860,7 @@ suite "findAllCharPositions":
 suite "f/F/t/T highlight - executeCommand sets findCharMatches":
   proc createFindTestContext(buffer: TextBuffer): CommandContext =
     let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -871,7 +872,6 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: newKeyBindingRegistry(),
     )
 
@@ -987,7 +987,7 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     registerBuiltinCommands(registry)
 
     # Set pending operator (simulate 'd')
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1012,6 +1012,7 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
 suite "; / , repeat last find":
   proc createFindTestContext(buffer: TextBuffer): CommandContext =
     let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
     state.registers = initRegisters()
@@ -1024,7 +1025,6 @@ suite "; / , repeat last find":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: newKeyBindingRegistry(),
     )
 
@@ -1099,7 +1099,7 @@ suite "; / , repeat last find":
     )
     check registry.executeCommand(ctx, findC).isOk
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1160,7 +1160,7 @@ suite "; / , repeat last find":
     check ctx.cursor.column == 1 # parked before the first comma
     # d; must advance past the adjacent comma and delete through to just before
     # the next one (b,cd), not collapse to a single char.
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
     check registry.executeCommand(ctx, repeatFind).isOk
@@ -1173,7 +1173,7 @@ suite "; / , repeat last find":
     registerBuiltinCommands(registry)
 
     # 2df, == d2f, : the operator count must fold into the find count.
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
     )
     let findComma = Command(
@@ -1226,7 +1226,7 @@ suite "; / , repeat last find":
     # Cursor at the last column with the operator armed: the missing target
     # must leave the buffer untouched, not delete a spurious range.
     ctx.cursor = BufferPosition(line: 0, column: 2)
-    ctx.state.editState.pendingOperator = some(
+    ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(
         operatorType: OpDelete,
         operatorCount: 1,
@@ -1245,6 +1245,7 @@ suite "CommandRegistry - Git conflict navigation (]x / [x)":
 
   proc createConflictTestContext(buffer: TextBuffer): CommandContext =
     let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
+    state.config.clipboard = ClipboardConfig(enable: false)
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -1256,7 +1257,6 @@ suite "CommandRegistry - Git conflict navigation (]x / [x)":
       buffer: buffer,
       state: state,
       motionController: motionController,
-      clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: newKeyBindingRegistry(),
     )
 

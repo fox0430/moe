@@ -46,6 +46,7 @@ import
   primitives,
   types/syntax_checker_types,
   types/recent_file_mode_types,
+  types/git_cache_types,
   terminal_mode,
   config
 
@@ -241,9 +242,6 @@ type
   EditState* = object ## Edit operation state grouped together
     lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
     lastFindChar*: Option[LastFindChar] # Last f/F/t/T for ; and , repeat
-    pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
-    pendingTextObject*: Option[PendingTextObject]
-      # Text object modifier waiting for object kind
     substituteContext*: Option[SubstituteContext]
       # Context for substitute commands (s/S/cc)
     replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
@@ -264,22 +262,6 @@ type
     showLinePercentage*: bool
     showEncoding*: bool
     showLineEnding*: bool
-
-  SignatureHelpRequestState* = object
-    ## Debounce + change-detection state for auto signature help requests.
-    ## "Debounce" here is a minimum-interval gate measured from the last issued
-    ## request (same shape as documentHighlight/semanticTokens), not a
-    ## reset-on-change timer. Sentinel -1 for the cursor/contentVersion fields
-    ## means "no request issued yet".
-    lastUpdate*: MonoTime # Timestamp of last signature help request
-    interval*: int64 # Base debounce interval (milliseconds)
-    cursorLine*: int # Cursor line of last request
-    cursorColumn*: int # Cursor column of last request
-    contentVersion*: int # Buffer contentVersion of last request
-    consecutiveErrors*: int
-      # Failed/timed-out requests since the last success. Widens the effective
-      # interval (exponential backoff) so a persistently failing server is not
-      # retried every base interval.
 
   PendingSemanticTokensRequest* = object
     ## Semantic-tokens-specific extras (legend, viewport, range) captured at
@@ -326,9 +308,7 @@ type
     lrfCallHierarchyIncoming
     lrfCallHierarchyOutgoing
 
-  LspRequestContext* = object
-    ## Snapshot of the world at request-send time. See
-    ## docs/config_runtime_push_removal_design.md §10.
+  LspRequestContext* = object ## Snapshot of the world at request-send time.
     requestId*: int
     feature*: LspRequestFeature
     bufferId*: BufferId
@@ -345,12 +325,17 @@ type
     ignoreContentVersion*: bool
       # Skip the contentVersion drift check; for features whose response
       # stays meaningful across in-flight edits (e.g. signature help).
+    blockedByOverlay*: bool
+      # Applying the response takes over the screen (popup, mode switch, jump),
+      # so an open overlay (Command/Search/Rename) must drop it. False for
+      # background caches, which only feed the buffer painted under the overlay.
 
   LspResponseState* = enum
     lrsFresh # buffer/version/mode all match
     lrsStale # contentVersion drifted since send
     lrsGone # bufferId no longer exists
     lrsHijack # mode outside validModes
+    lrsOverlay # an overlay owns the screen and would be painted over
 
   LspCacheState* = object ## LSP cache and picker state grouped together
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
@@ -372,10 +357,12 @@ type
     inlayHintPoll*: DebouncedLspPoll
       # Debounce / backoff / request-time snapshot for `textDocument/inlayHint`.
     inlayHintCache*: InlayHintCache # Cached inlay hints for current viewport
-    signatureHelp*: SignatureHelpRequestState # Auto signature help request tracking
-    autoHoverCursorLine*: int # Last cursor line for auto-hover debounce
-    autoHoverCursorCol*: int # Last cursor column for auto-hover debounce
-    lastAutoHoverUpdate*: MonoTime # Timestamp of last auto-hover request
+    signatureHelpPoll*: DebouncedLspPoll
+      # Debounce / backoff / request-target snapshot for auto signature help.
+    autoHoverPoll*: DebouncedLspPoll
+      # Debounce / cursor snapshot for the diagnostic auto-hover popup. The
+      # interval is pulled from config on every check (Lsp.Diagnostics
+      # autoHoverDelay) and no request is sent, so the backoff never engages.
     # Selection range expansion chain (innermost -> outermost), rune indexes.
     # Lets repeated Ctrl-s walk the parent chain without re-querying the server.
     selectionRangeChain*: seq[tuple[first, last: BufferPosition]]
@@ -408,11 +395,8 @@ type
 
   TimingState* = object ## Timing and debounce state grouped together
     gitDiffUpdateInterval*: int64
-      # Minimum milliseconds between git diff
-      # refresh cycles. Consumed by status_line's async cache via
-      # setGitDiffRefreshInterval; the historical debounce timestamps
-      # (lastGitDiffUpdate/ChangeSeq) were removed along with
-      # maybeUpdateGitDiff when the async cache took over.
+      # Minimum milliseconds between git diff refresh cycles. Consumed by
+      # EditorState.git via setGitDiffRefreshInterval.
     lastConflictScan*: MonoTime # Timestamp of last conflict marker scan
     lastConflictScanSeq*: int # Buffer changeSeq at last conflict scan
     conflictScanInterval*: int64 # Minimum milliseconds between conflict scans
@@ -556,8 +540,7 @@ type
     lecPaste # Paste operation (p/P)
     lecToggleCase # Toggle case with ~
     lecJoinLines # Join lines with J
-    lecIndent # Indent line(s) with >>
-    lecDedent # Dedent line(s) with <<
+    lecOperatorLines # Doubled linewise operator (>>, <<, guu, gUU)
 
   LastEditCommand* = object
     ## Represents the last change command that can be repeated with "."
@@ -593,10 +576,9 @@ type
       toggleCaseCount*: int # Number of characters to toggle
     of lecJoinLines:
       joinLinesCount*: int # Number of lines to join
-    of lecIndent:
-      indentCount*: int # Number of indent levels
-    of lecDedent:
-      dedentCount*: int # Number of dedent levels
+    of lecOperatorLines:
+      linesOperator*: OperatorType # OpIndent, OpOutdent, OpLowerCase, OpUpperCase
+      operatorLineCount*: int # Number of lines the operator was applied to
 
   VisualSelectionKind* = enum
     ## Type of visual selection
@@ -739,18 +721,37 @@ type
     originalTopLine*: int # Viewport top line when preview started
     originalLeftColumn*: int # Viewport left column when preview started
 
-  PendingAsyncOps* = object
-    ## Pending async operations queued from command/key handlers, drained by
-    ## handler.handlePendingAsyncOperationsImpl in the main event loop.
-    ## Empty-value semantics: `len == 0` / `false` means "no work pending".
-    shellCommand*: string # Shell command to execute after suspend
-    terminalCommand*: string # Command to run in a new embedded terminal tab
-    background*: bool # Whether to suspend for background (:bg)
-    manPage*: string # Man page to show after suspend (:man)
-    buildOnSave*:
-      tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
-    quickRun*: tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
-    syntaxCheck*: tuple[path: string, language: int]
+  BuildInfo* =
+    tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
+  QuickRunInfo* =
+    tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+  SyntaxCheckInfo* = tuple[path: string, language: int]
+
+  PendingAsyncOpKind* = enum
+    paoTerminalCommand
+    paoShellCommand
+    paoManPage
+    paoBackground
+    paoBuild
+    paoQuickRun
+    paoSyntaxCheck
+
+  PendingAsyncOp* = object
+    ## One entry of `EditorState.pending`. Queue an op here when it needs the
+    ## TUI suspended, or when its runner lives above the enqueue site in the
+    ## import graph (handler.nim owns the runners). Fire-and-forget work whose
+    ## runner is importable uses `asyncSpawn` at the call site instead.
+    case kind*: PendingAsyncOpKind
+    of paoTerminalCommand, paoShellCommand, paoManPage:
+      command*: string
+    of paoBackground:
+      discard
+    of paoBuild:
+      build*: BuildInfo
+    of paoQuickRun:
+      quickRun*: QuickRunInfo
+    of paoSyntaxCheck:
+      syntaxCheck*: SyntaxCheckInfo
 
   FrontendRequests* = object
     ## Frontend-side effects requested by editor-core state changes.
@@ -768,6 +769,15 @@ type
   PendingCommand* = enum
     PendingNone
     PendingWindowCmd # Ctrl-W prefix: waiting for window subcommand
+
+  PendingInputState* = object
+    ## Pending-input FSMs cleared together on Escape. KeyRouter's built-in
+    ## sequence accumulator stays registry-owned; isActive/cancelAll composes both.
+    macroState*: MacroState
+    pendingOperator*: Option[PendingOperator]
+    pendingTextObject*: Option[PendingTextObject]
+    pendingRegister*: Option[char] # "a-style register selector
+    pendingCommand*: PendingCommand # Ctrl-W etc.
 
   InputState* = object ## Command-line / search input state grouped together.
     commandText*: string # Text being typed in command mode
@@ -789,23 +799,20 @@ type
     matchingParenPos*: Option[BufferPosition]
       # Position of matching paren (for highlighting)
     currentWord*: string # Word under cursor (for currentWord highlighting)
-    pendingCommand*: PendingCommand
     statusMessageStr: string # Internal - use statusMessage getter/setter
-    editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
+    editState*: EditState # Edit operation state (motions, repeat, etc.)
     visualSelection*: VisualSelection # Visual mode selection state
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
     display*: DisplaySettings
     config*: EditorConfig
       ## Aliases `Editor.config`; kept in sync on swap in applyConfigSettings.
     timing*: TimingState
+    git*: GitCacheState # Per-buffer git diff/branch cache (see git_cache.nim)
     lastKeyWasEscape*: bool
       # Track if last key was Escape (for double-Escape to clear highlight)
     # Full register system (vim-style)
     registers*: Registers # All registers (", 0-9, a-z, -, *, +)
-    pendingRegister*: Option[char]
-      # Register selected with " prefix (e.g., "a for register a)
-    # Macro state (grouped in MacroState)
-    macroState*: MacroState # Macro recording and playback state
+    pendingInput*: PendingInputState # See pending_input.nim for isActive/cancelAll.
     # QuickRun request flag
     requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion
@@ -831,7 +838,7 @@ type
     # --- Sub-state groups (Phase 4 refactor) ---
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
-    pending*: PendingAsyncOps # Pending async operations queued for the main event loop
+    pending*: seq[PendingAsyncOp] # Async ops drained by the main event loop
     frontend*: FrontendRequests # Frontend-side effect requests
     ui*: UiState # Transient UI display state (preview, progress, find char)
     windowDisplay*: WindowDisplayState
@@ -839,23 +846,31 @@ type
 
   DebouncedLspPoll* = object
     ## Debounce + exponential backoff timer for a single LSP poll feature.
-    ## Shared across semantic tokens, inlay hints, code lens, and document
-    ## highlight so every feature gets the same rate-limiting: exponential
-    ## backoff on persistent reject (#2880).
+    ## Shared across semantic tokens, inlay hints, code lens, document
+    ## highlight, signature help and diagnostic auto-hover so every feature
+    ## gets the same rate-limiting: exponential backoff on persistent reject
+    ## (#2880).
+    ##
+    ## "Debounce" is a minimum-interval gate measured from the last issued
+    ## request, not a reset-on-change timer.
     ##
     ## The per-request stale-guard snapshot (request id, buffer id, content
-    ## version, generation) moved to `LspCacheState.pending` in Phase D of the
-    ## LspRequestContext migration; see
-    ## docs/config_runtime_push_removal_design.md §10.
+    ## version, generation) lives in `LspCacheState.pending`.
     lastUpdate*: MonoTime
     interval*: int64
     rejectStreak*: int
+    cursorLine*: int
+    cursorColumn*: int
+    contentVersion*: int
+      # Target the last request was issued for, for the features that need
+      # change detection on top of the timer (signature help, auto-hover).
+      # Sentinel -1 means "no request issued yet".
 
 const MaxLspDebounceBackoffShift* = 6
   ## Max exponent for the reject-streak backoff (interval << 6).
 
 # State-based config pull-type accessors. Editor-based versions live in
-# types/editor_types.nim. See docs/config_runtime_push_removal_design.md.
+# types/editor_types.nim.
 
 template flag2(name: untyped, T: typedesc, s1, f: untyped) =
   proc name*(s: EditorState): T =
@@ -947,6 +962,29 @@ flag2(smartIndent, bool, standard, smartIndent)
 flag2(autoCloseParen, bool, standard, autoCloseParen)
 flag2(autoDeleteParen, bool, standard, autoDeleteParen)
 flag2(bracketSplit, BracketSplitMode, standard, bracketSplit)
+
+# Search flags: write both `config.standard.*` and the `input.search.*` mirror.
+# Skipping the config write lets the next `applyConfigSettings` push undo the toggle.
+proc ignorecase*(s: EditorState): bool =
+  s.input.search.ignorecase
+
+proc `ignorecase=`*(s: EditorState, v: bool) =
+  s.config.standard.ignorecase = v
+  s.input.search.ignorecase = v
+
+proc smartcase*(s: EditorState): bool =
+  s.input.search.smartcase
+
+proc `smartcase=`*(s: EditorState, v: bool) =
+  s.config.standard.smartcase = v
+  s.input.search.smartcase = v
+
+proc incsearch*(s: EditorState): bool =
+  s.input.search.incsearch
+
+proc `incsearch=`*(s: EditorState, v: bool) =
+  s.config.standard.incrementalSearch = v
+  s.input.search.incsearch = v
 
 # Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
 # This eliminates the dual-state sync problem — EditorWindow is the single source of truth.
@@ -1145,4 +1183,46 @@ proc debounceThreshold*(poll: DebouncedLspPoll): times.Duration =
   initDuration(milliseconds = poll.interval shl shift)
 
 proc initDebouncedLspPoll*(interval: int64): DebouncedLspPoll =
-  DebouncedLspPoll(lastUpdate: getMonoTime(), interval: interval)
+  DebouncedLspPoll(
+    lastUpdate: getMonoTime(),
+    interval: interval,
+    cursorLine: -1,
+    cursorColumn: -1,
+    contentVersion: -1,
+  )
+
+proc debounceElapsed*(poll: DebouncedLspPoll, now: MonoTime): bool =
+  ## True once the (backoff-widened) debounce window since the last request
+  ## has passed.
+  now - poll.lastUpdate >= poll.debounceThreshold()
+
+proc requestTargetChanged*(
+    poll: DebouncedLspPoll, cursorLine, cursorColumn, contentVersion: int
+): bool =
+  ## True when the cursor or buffer content moved away from the target the
+  ## last request was issued for.
+  poll.cursorLine != cursorLine or poll.cursorColumn != cursorColumn or
+    poll.contentVersion != contentVersion
+
+proc shouldFireDebouncedPoll*(
+    poll: DebouncedLspPoll, cursorLine, cursorColumn, contentVersion: int, now: MonoTime
+): bool =
+  ## Decide whether to fire a new request: something must have changed since
+  ## the last one (change detection) and the debounce window must have passed.
+  ## On consecutive rejects the window widens (exponential backoff) so a
+  ## persistently failing server is retried at a slower cadence. Pure so it can
+  ## be unit-tested without driving a live LSP server.
+  poll.requestTargetChanged(cursorLine, cursorColumn, contentVersion) and
+    poll.debounceElapsed(now)
+
+proc markRequestIssued*(
+    poll: var DebouncedLspPoll,
+    cursorLine, cursorColumn, contentVersion: int,
+    now: MonoTime,
+) =
+  ## Record the target and time of a request just sent, so change detection and
+  ## the debounce window measure from it.
+  poll.cursorLine = cursorLine
+  poll.cursorColumn = cursorColumn
+  poll.contentVersion = contentVersion
+  poll.lastUpdate = now

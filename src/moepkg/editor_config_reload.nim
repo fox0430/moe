@@ -29,7 +29,7 @@ import
   types/editor_types,
   editor_lsp,
   editor_init,
-  status_line,
+  git_cache,
   color,
   highlight,
   highlight_config,
@@ -58,7 +58,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
 
   # Update timing intervals
   e.state.timing.gitDiffUpdateInterval = newConfig.git.updateInterval
-  setGitDiffRefreshInterval(newConfig.git.updateInterval.int64)
+  e.state.git.setGitDiffRefreshInterval(newConfig.git.updateInterval.int64)
 
   # Update color mode with fallback
   let requestedColorMode =

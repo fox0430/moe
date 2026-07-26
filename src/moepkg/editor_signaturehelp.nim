@@ -22,30 +22,13 @@
 ## The UI side (popup rendering, manager state) lives in signature_help.nim.
 ## This module owns the editor-side request lifecycle that drives it.
 
-import std/[options, monotimes, tables, times]
+import std/[options, monotimes, tables]
 
 import pkg/results
 
 import types/editor_types, editor_lsp, lsp_integration, signature_help
 
 const SignatureHelpValidModes* = {EditorMode.Insert}
-
-proc shouldRequestSignatureHelp*(
-    sigHelp: SignatureHelpRequestState,
-    cursorLine, cursorColumn, contentVersion: int,
-    now: MonoTime,
-): bool =
-  ## Decide whether to fire a new auto signature help request.
-  ## Returns false when nothing changed since the last request (change detection)
-  ## or when still inside the debounce window. On consecutive failures the window
-  ## widens (exponential backoff, capped at 16x) so a persistently failing server
-  ## is retried at a slower cadence instead of every base interval. Pure so it
-  ## can be unit-tested without driving a live LSP server.
-  if sigHelp.cursorLine == cursorLine and sigHelp.cursorColumn == cursorColumn and
-      sigHelp.contentVersion == contentVersion:
-    return false
-  let backoff = 1'i64 shl min(sigHelp.consecutiveErrors, 4) # 1, 2, 4, 8, 16
-  now - sigHelp.lastUpdate >= initDuration(milliseconds = sigHelp.interval * backoff)
 
 proc requestSignatureHelpFromLsp*(e: Editor) =
   ## Request signature help from LSP if in insert mode with paren depth > 0
@@ -76,7 +59,7 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
     of lrsSuccess:
       # Got response, process it
       e.state.lspCache.pending.del(lrfSignatureHelp)
-      e.state.lspCache.signatureHelp.consecutiveErrors = 0
+      e.state.lspCache.signatureHelpPoll.rejectStreak = 0
       # Drop stale reply (buffer switched / edited / left Insert). The debounce
       # fields still record the tried position so change detection stays honest.
       if classifyResponse(e, ctx) != lrsFresh:
@@ -94,23 +77,23 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
     of lrsError, lrsTimeout:
       # Request failed or timed out. Invalidate tracking so the next eligible
       # frame retries instead of being suppressed by change detection, and bump
-      # the failure counter so the retry cadence backs off (see
-      # shouldRequestSignatureHelp). Log only the first failure of a streak so a
+      # the reject streak so the retry cadence backs off (see
+      # shouldFireDebouncedPoll). Log only the first failure of a streak so a
       # persistently failing server does not flood the LSP log on every retry.
-      if e.state.lspCache.signatureHelp.consecutiveErrors == 0:
+      if e.state.lspCache.signatureHelpPoll.rejectStreak == 0:
         logLspDegraded("Signature help", status, errorOpt.get(""))
       e.state.lspCache.pending.del(lrfSignatureHelp)
-      e.state.lspCache.signatureHelp.contentVersion = -1
-      inc e.state.lspCache.signatureHelp.consecutiveErrors
+      e.state.lspCache.signatureHelpPoll.contentVersion = -1
+      inc e.state.lspCache.signatureHelpPoll.rejectStreak
       return
 
   # Skip re-requesting when nothing changed (change detection) or while still
   # inside the debounce window. Without this the success branch above would
   # re-request every poll cycle while the cursor sits inside parens.
   let now = getMonoTime()
-  if not shouldRequestSignatureHelp(
-    e.state.lspCache.signatureHelp, e.activeWindow.cursor.line,
-    e.activeWindow.cursor.column, activeBuffer.contentVersion, now,
+  if not e.state.lspCache.signatureHelpPoll.shouldFireDebouncedPoll(
+    e.activeWindow.cursor.line, e.activeWindow.cursor.column,
+    activeBuffer.contentVersion, now,
   ):
     return
 
@@ -132,7 +115,6 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
     ignoreContentVersion = true,
   )
   if ctxRes.isOk:
-    e.state.lspCache.signatureHelp.cursorLine = line
-    e.state.lspCache.signatureHelp.cursorColumn = col
-    e.state.lspCache.signatureHelp.contentVersion = activeBuffer.contentVersion
-    e.state.lspCache.signatureHelp.lastUpdate = now
+    e.state.lspCache.signatureHelpPoll.markRequestIssued(
+      line, col, activeBuffer.contentVersion, now
+    )

@@ -64,6 +64,7 @@ proc applyLspServerConfigs*(e: Editor) =
       if serverCfg.extensions.len > 0:
         c.extensions = serverCfg.extensions
       c.traceLevel = toWorkerTrace(serverCfg.trace)
+      c.settings = serverCfg.settings
       if langId == "rust":
         c.initializationOptions =
           "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
@@ -78,6 +79,7 @@ proc applyLspServerConfigs*(e: Editor) =
           extensions: serverCfg.extensions,
           enabled: true,
           traceLevel: toWorkerTrace(serverCfg.trace),
+          settings: serverCfg.settings,
         ),
       )
 
@@ -203,23 +205,12 @@ proc applyWorkspaceEditFromServer*(
       return (applied: false, failureReason: some("LSP is disabled"))
 
     # Reject the edit if any targeted open buffer has local changes the server
-    # has not seen yet: its contentVersion has moved past the value recorded at
-    # the last didChange we sent (lastLspContentVersions). The server positioned
-    # its edit against the text it last received, so applying it onto newer
-    # text would corrupt the buffer. This mirrors the rename flow's staleness
-    # guard, but the baseline is "what the server last saw" rather than a
-    # fresh snapshot, because this request is not one we awaited.
-    for path in collectWorkspaceEditPaths(edit):
-      let absPath = normalizedPath(absolutePath(path))
-      for buf in e.buffers:
-        if buf.filePath.isSome and
-            normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-            buf.contentVersion !=
-            e.lastLspContentVersions.getOrDefault(buf.id, buf.contentVersion):
-          e.state.statusMessage =
-            "Buffer changed since last sync; server edit discarded"
-          return
-            (applied: false, failureReason: some("buffer changed since last didChange"))
+    # has not seen: it positioned its edit against the text it knows, so
+    # applying it onto newer text would corrupt the buffer.
+    if hasStaleServerEditTarget(e.lsp, e.buffers, edit, e.lastLspContentVersions):
+      e.state.statusMessage = "Buffer changed since last sync; server edit discarded"
+      return
+        (applied: false, failureReason: some("buffer changed since last didChange"))
 
     let applyResult = applyWorkspaceEdit(e.buffers, edit, "LSP Edit")
     if applyResult.isErr:
@@ -299,6 +290,10 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         return false
 
       let activeBuffer = e.activeBuffer()
+      if not e.lsp.hasFormattingSupport(activeBuffer):
+        e.state.statusMessage = "LSP document formatting is not supported"
+        return false
+
       # Snapshot the buffer state before awaiting: the server's edits are
       # positioned against this state and must not be applied if the user
       # typed while the request was in flight
@@ -422,17 +417,11 @@ proc requestLspRename*(
 
       let workspaceEdit = workspaceEditOpt.get
 
-      # Reject the edit if any targeted open buffer changed during the await.
-      # Compare each buffer against its OWN pre-await contentVersion (keyed by id).
-      for path in collectWorkspaceEditPaths(workspaceEdit):
-        let absPath = normalizedPath(absolutePath(path))
-        for buf in e.buffers:
-          if buf.filePath.isSome and
-              normalizedPath(absolutePath(buf.filePath.get)) == absPath and
-              buf.contentVersion !=
-              versionSnapshot.getOrDefault(buf.id, buf.contentVersion):
-            e.state.statusMessage = "Buffer changed during rename; edits discarded"
-            return
+      # Reject the edit if any targeted open buffer changed during the await, or
+      # was opened during it (no snapshot entry, so it is unverifiable).
+      if hasStaleTargetBuffer(e.buffers, workspaceEdit, versionSnapshot):
+        e.state.statusMessage = "Buffer changed during rename; edits discarded"
+        return
 
       # Apply the workspace edits to all affected buffers
       let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
@@ -465,7 +454,13 @@ proc renotifyOpenBuffers(e: Editor, langId: string): int =
       let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
       if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
         let openResult = e.lsp.onBufferOpen(buf, serverIsFresh = true)
-        if openResult.isErr:
+        if openResult.isOk:
+          # Record what the didOpen just sent. A leftover pre-restart baseline
+          # would make the applyWorkspaceEdit staleness guard reject every
+          # server-initiated edit — forever for non-active buffers, which
+          # maybeUpdateLsp never repairs.
+          e.lastLspContentVersions[buf.id] = buf.contentVersion
+        else:
           inc result
           logLspDegraded("re-open " & buf.filePath.get, openResult.error)
 

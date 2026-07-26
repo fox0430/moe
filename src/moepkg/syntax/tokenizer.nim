@@ -143,6 +143,7 @@ type
     inDisplayMath*: bool
     inFrontmatter*: bool
     firstLine*: bool
+    codeBlockLang*: SourceLanguage
 
   LatexState* = object
     inMathMode*: bool
@@ -249,19 +250,66 @@ const
   ## All whitespace characters.
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
+  ## Display name per language. Keyed by enum member on purpose: a positional
+  ## literal only compile-checks the length, so inserting a language mid-enum
+  ## would silently shift every later name and misroute `getSourceLanguage`.
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "Dockerfile", "Fish",
-    "git-rebase-todo", "gitignore", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
-    "JavaScriptReact", "LaTeX", "Lisp", "Log", "Markdown", "Nim", "Python", "Rust",
-    "Shell", "Tcl", "Toml", "Yaml", "Json", "Jsonc", "TypeScript", "TypeScriptReact",
-    "XML", "Zsh",
+    langNone: "none",
+    langAstro: "Astro",
+    langC: "C",
+    langCommitEditMsg: "COMMIT_EDITMSG",
+    langCpp: "C++",
+    langCsharp: "C#",
+    langDiff: "Diff",
+    langDockerfile: "Dockerfile",
+    langFish: "Fish",
+    langGitRebaseTodo: "git-rebase-todo",
+    langGitignore: "gitignore",
+    langHaskell: "Haskell",
+    langHtml: "HTML",
+    langHyprland: "Hyprland",
+    langJava: "Java",
+    langJavaScript: "JavaScript",
+    langJsx: "JavaScriptReact",
+    langLatex: "LaTeX",
+    langLisp: "Lisp",
+    langLog: "Log",
+    langMarkdown: "Markdown",
+    langNim: "Nim",
+    langPython: "Python",
+    langRust: "Rust",
+    langShell: "Shell",
+    langTcl: "Tcl",
+    langToml: "Toml",
+    langYaml: "Yaml",
+    langJson: "Json",
+    langJsonc: "Jsonc",
+    langTypeScript: "TypeScript",
+    langTsx: "TypeScriptReact",
+    langXml: "XML",
+    langZsh: "Zsh",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
     if cmpIgnoreStyle(name, sourceLanguageToStr[i]) == 0:
       return i
-  result = langNone
+  case name.toLowerAscii
+  of "js": langJavaScript
+  of "jsx": langJsx
+  of "ts": langTypeScript
+  of "tsx": langTsx
+  of "py": langPython
+  of "rs": langRust
+  of "sh", "bash": langShell
+  of "yml": langYaml
+  of "docker": langDockerfile
+  of "md": langMarkdown
+  of "cpp", "cxx": langCpp
+  of "cs", "csharp": langCsharp
+  of "hs": langHaskell
+  of "tex", "latex": langLatex
+  else: langNone
 
 proc defaultLangState*(): LangState =
   ## Initial `LangState` for a fresh tokenizer. Callers seeding a tokenizer at
@@ -488,7 +536,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langTypeScript, langTsx: g.typescriptNextToken
   of langXml: g.xmlNextToken
   of langZsh: g.zshNextToken
-  else: discard
+  of langNone: discard
 
   if g.kind != gtEof and g.pos <= startPos and g.state == startState:
     # Monotonic-advance guard: a non-EOF token must make progress, by consuming

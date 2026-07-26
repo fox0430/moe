@@ -13,6 +13,12 @@
 - [Call Hierarchy Mode](#call-hierarchy-mode)
 - [Filer Mode](#filer-mode)
 - [FileTree Mode](#filetree-mode)
+- [Buffer Manager Mode](#buffer-manager-mode)
+- [Bookmark Manager Mode](#bookmark-manager-mode)
+- [Document Symbol Mode](#document-symbol-mode)
+- [Log Viewer Mode](#log-viewer-mode)
+- [Recent File Mode](#recent-file-mode)
+- [Debug Mode](#debug-mode)
 - [Terminal Mode](#terminal-mode)
 - [Configuration Mode](#configuration-mode)
 - [Command Mode](#command-mode)
@@ -410,46 +416,204 @@
 
 Open the fileTree sidebar with `:filetree` command. If already open, it will close and reopen.
 
-### Navigation
-
+<!-- AUTO-GEN:start FileTreeMode -->
 | Keys | Description |
 |:---|:---|
-| <kbd>**j**</kbd> OR <kbd>**Down**</kbd><br> | Move selection down |
-| <kbd>**k**</kbd> OR <kbd>**Up**</kbd><br> | Move selection up |
-| <kbd>**g**</kbd> <kbd>**g**</kbd><br> | Move to first item |
-| <kbd>**G**</kbd><br> | Move to last item |
-| <kbd>**p**</kbd><br> | Move to parent node |
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Move selection down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Move selection up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Move to first item |
+| <kbd>**G**</kbd> | Move to last item |
+| <kbd>**p**</kbd> | Move to parent node |
+| <kbd>**Enter**</kbd> | Open file, or toggle expand/collapse directory |
+| <kbd>**o**</kbd> | Open file, or expand directory |
+| <kbd>**l**</kbd> | Open file, or expand directory |
+| <kbd>**x**</kbd> | Collapse directory (or move to parent) |
+| <kbd>**h**</kbd> | Collapse directory (or move to parent) |
+| <kbd>**C**</kbd> | Change root to selected directory |
+| <kbd>**u**</kbd> | Move root up one level |
+| <kbd>**/**</kbd> | Start incremental search |
+| <kbd>**n**</kbd> | Jump to next search match |
+| <kbd>**N**</kbd> | Jump to previous search match |
+| <kbd>**.**</kbd> | Toggle hidden files |
+| <kbd>**R**</kbd> | Refresh tree |
+| <kbd>**:**</kbd> | Enter command mode |
+| <kbd>**Esc**</kbd> | Clear search highlight (press twice) |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**w**</kbd> | Move to next window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**p**</kbd> | Move to previous window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**>**</kbd> | Increase window width |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**<**</kbd> | Decrease window width |
+<!-- AUTO-GEN:end FileTreeMode -->
 
-### Open / Expand / Collapse
+</details>
 
+
+## Buffer manager mode
+
+<details open>
+  <summary>Buffer Manager</summary>
+
+Open the buffer manager with `:ls` command. Lists every open buffer and lets you
+switch, close, or delete them.
+
+<!-- AUTO-GEN:start BufferManagerMode -->
 | Keys | Description |
 |:---|:---|
-| <kbd>**Enter**</kbd><br> | Open file, or toggle expand/collapse directory |
-| <kbd>**o**</kbd> OR <kbd>**l**</kbd><br> | Open file, or expand directory |
-| <kbd>**x**</kbd> OR <kbd>**h**</kbd><br> | Collapse directory (or move to parent) |
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Go down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Go up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first buffer |
+| <kbd>**G**</kbd> | Go to the last buffer |
+| <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half page down |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half page up |
+| <kbd>**Enter**</kbd> OR <kbd>**o**</kbd> | Open the selected buffer |
+| <kbd>**D**</kbd> | Delete the selected buffer |
+| <kbd>**:**</kbd> | Enter command mode |
+| <kbd>**q**</kbd> OR <kbd>**Esc**</kbd> | Close Buffer Manager |
+<!-- AUTO-GEN:end BufferManagerMode -->
 
-### Root Navigation
+</details>
 
+
+## Bookmark manager mode
+
+<details open>
+  <summary>Bookmark Manager</summary>
+
+Open the bookmark manager with `:bookmarks` command. Lists every bookmark
+across all open buffers.
+
+<!-- AUTO-GEN:start BookmarkManagerMode -->
 | Keys | Description |
 |:---|:---|
-| <kbd>**C**</kbd><br> | Change root to selected directory |
-| <kbd>**u**</kbd><br> | Move root up one level |
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Go down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Go up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first bookmark |
+| <kbd>**G**</kbd> | Go to the last bookmark |
+| <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half page down |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half page up |
+| <kbd>**Enter**</kbd> | Jump to the selected bookmark |
+| <kbd>**D**</kbd> | Delete the selected bookmark |
+| <kbd>**:**</kbd> | Enter command mode |
+| <kbd>**q**</kbd> OR <kbd>**Esc**</kbd> | Close Bookmark Manager |
+<!-- AUTO-GEN:end BookmarkManagerMode -->
 
-### Search
+</details>
 
+
+## Document symbol mode
+
+<details open>
+  <summary>Document Symbol Viewer</summary>
+
+Open the document symbol viewer with <kbd>**Space**</kbd> <kbd>**o**</kbd> in
+Normal mode. Lists the symbols (functions, classes, variables, ...) reported
+by the active LSP server for the current buffer.
+
+<!-- AUTO-GEN:start DocumentSymbolMode -->
 | Keys | Description |
 |:---|:---|
-| <kbd>**/**</kbd><br> | Start incremental search |
-| <kbd>**n**</kbd><br> | Jump to next search match |
-| <kbd>**N**</kbd><br> | Jump to previous search match |
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Go down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Go up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first symbol |
+| <kbd>**G**</kbd> | Go to the last symbol |
+| <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half page down |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half page up |
+| <kbd>**Enter**</kbd> | Jump to the selected symbol |
+| <kbd>**:**</kbd> | Enter command mode |
+| <kbd>**q**</kbd> OR <kbd>**Esc**</kbd> | Close Document Symbol viewer |
+<!-- AUTO-GEN:end DocumentSymbolMode -->
 
-### Misc
+</details>
 
+
+## Log viewer mode
+
+<details open>
+  <summary>Log Viewer</summary>
+
+Open the log viewer with `:log` (editor log) or `:lsplog` (LSP log). The
+viewer renders the log as a read-only buffer and supports the usual Vim-style
+motions and searches.
+
+<!-- AUTO-GEN:start LogViewerMode -->
 | Keys | Description |
 |:---|:---|
-| <kbd>**.**</kbd><br> | Toggle hidden files visibility |
-| <kbd>**R**</kbd><br> | Refresh tree |
-| <kbd>**:**</kbd><br> | Enter command mode |
+| <kbd>**h**</kbd> OR <kbd>**Left**</kbd> | Go left |
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Go down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Go up |
+| <kbd>**l**</kbd> OR <kbd>**Right**</kbd> | Go right |
+| <kbd>**0**</kbd> OR <kbd>**Home**</kbd> | Go to the first character of the line |
+| <kbd>**$**</kbd> OR <kbd>**End**</kbd> | Go to the end of the line |
+| <kbd>**w**</kbd> | Go forwards to the start of a word |
+| <kbd>**b**</kbd> | Go backwards to the start of a word |
+| <kbd>**e**</kbd> | Go forwards to the end of a word |
+| <kbd>**{**</kbd> | Go to the previous blank line |
+| <kbd>**}**</kbd> | Go to the next blank line |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first line |
+| <kbd>**G**</kbd> | Go to the last line |
+| <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half page down |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half page up |
+| <kbd>**Ctrl**</kbd> <kbd>**f**</kbd> | Page down |
+| <kbd>**Ctrl**</kbd> <kbd>**b**</kbd> | Page up |
+| <kbd>**/**</kbd> | Search forwards |
+| <kbd>**?**</kbd> | Search backwards |
+| <kbd>**n**</kbd> | Repeat last search forwards |
+| <kbd>**N**</kbd> | Repeat last search backwards |
+| <kbd>*****</kbd> | Search forwards for the word under cursor |
+| <kbd>**#**</kbd> | Search backwards for the word under cursor |
+| <kbd>**v**</kbd> | Start character-wise Visual selection |
+| <kbd>**V**</kbd> | Start line-wise Visual selection |
+| <kbd>**Ctrl**</kbd> <kbd>**v**</kbd> | Start block-wise Visual selection |
+| <kbd>**r**</kbd> | Refresh log content |
+| <kbd>**:**</kbd> | Enter command mode |
+| <kbd>**q**</kbd> | Close Log Viewer |
+<!-- AUTO-GEN:end LogViewerMode -->
+
+</details>
+
+
+## Recent file mode
+
+<details open>
+  <summary>Recent File Selector</summary>
+
+Open the recent file selector with `:recent` (Linux only). Lists the files
+recorded by the desktop `recently-used.xbel` database.
+
+<!-- AUTO-GEN:start RecentFileMode -->
+| Keys | Description |
+|:---|:---|
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Move selection down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Move selection up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Move to the first file |
+| <kbd>**G**</kbd> | Move to the last file |
+| <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half page down |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half page up |
+| <kbd>**Enter**</kbd> | Open the selected file |
+| <kbd>**:**</kbd> | Enter command mode |
+<!-- AUTO-GEN:end RecentFileMode -->
+
+</details>
+
+
+## Debug mode
+
+<details open>
+  <summary>Debug Viewer</summary>
+
+Open the debug viewer with `:debug`. Shows internal editor state for
+troubleshooting; the viewer is read-only.
+
+<!-- AUTO-GEN:start DebugMode -->
+| Keys | Description |
+|:---|:---|
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Scroll down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Scroll up |
+| <kbd>**g**</kbd> OR <kbd>**Home**</kbd> | Go to top |
+| <kbd>**G**</kbd> OR <kbd>**End**</kbd> | Go to bottom |
+| <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> OR <kbd>**Page Down**</kbd> | Page down |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> OR <kbd>**Page Up**</kbd> | Page up |
+| <kbd>**:**</kbd> | Enter command mode |
+<!-- AUTO-GEN:end DebugMode -->
 
 </details>
 
@@ -482,12 +646,36 @@ All keystrokes are forwarded to the running shell/command.
 </details>
 
 ## Configuration mode
+
 <details open>
   <summary>Configuration mode</summary>
 
+Open the configuration viewer with `:config`. Lets you browse and edit the
+current settings interactively; press <kbd>**Enter**</kbd> (or
+<kbd>**l**</kbd> / <kbd>**Space**</kbd>) on the selected row to toggle a
+bool, open the enum popup, or start editing an int/float/string/color.
+
+<!-- AUTO-GEN:start ConfigMode -->
 | Keys | Description |
 |:---|:---|
-| <kbd>**w**</kbd><br> | Save the current configs to the configuration file |
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd> | Move selection down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd> | Move selection up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first item |
+| <kbd>**G**</kbd> | Go to the last item |
+| <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half page down |
+| <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half page up |
+| <kbd>**Enter**</kbd> | Toggle bool, open enum popup, or start editing int/float/string/color |
+| <kbd>**l**</kbd> OR <kbd>**Space**</kbd> | Same as Enter |
+| <kbd>**Right**</kbd> | Cycle enum forward, increment int/float, or toggle bool |
+| <kbd>**Left**</kbd> | Cycle enum backward, or decrement int/float |
+| <kbd>**h**</kbd> | Cycle enum backward, or decrement int/float |
+| <kbd>**/**</kbd> | Search forwards |
+| <kbd>**?**</kbd> | Search backwards |
+| <kbd>**n**</kbd> | Jump to next search match |
+| <kbd>**N**</kbd> | Jump to previous search match |
+| <kbd>**:**</kbd> | Enter command mode |
+| <kbd>**Esc**</kbd> | Clear search highlight (press twice) |
+<!-- AUTO-GEN:end ConfigMode -->
 
 </details>
 

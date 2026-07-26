@@ -389,6 +389,35 @@ suite "editor_lsp - pollLspCompletion":
     e.pollLspCompletion()
     # No crash means success
 
+suite "editor_lsp - renotifyOpenBuffers":
+  # onBufferOpen short-circuits to ok() while LSP is disabled, so the success
+  # branch is reachable without a live server. That branch used to leave
+  # lastLspContentVersions on the pre-restart baseline, which made the
+  # applyWorkspaceEdit staleness guard reject every server-initiated edit.
+  test "Records the version the re-open just sent":
+    let e = createTestEditor()
+    e.lsp.enabled = false
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_renotify.nim")
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    # Stale baseline from before the server died.
+    e.lastLspContentVersions[buf.id] = buf.contentVersion - 1
+
+    check e.renotifyOpenBuffers("nim") == 0
+    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+
+  test "Leaves buffers of other languages untouched":
+    let e = createTestEditor()
+    e.lsp.enabled = false
+
+    let other = newTextBuffer("other", some(getTempDir() / "moe_test_renotify.rs"))
+    e.addBuffer(other)
+    e.lastLspContentVersions[other.id] = 999
+
+    check e.renotifyOpenBuffers("nim") == 0
+    check e.lastLspContentVersions[other.id] == 999
+
 suite "editor_lsp - restartLspServer":
   test "Returns false when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
@@ -460,3 +489,96 @@ suite "editor_lsp - per-feature config gates":
 
     waitFor e.requestLspExecuteCommand("test.command")
     check e.state.statusMessage == "LSP execute command is disabled"
+
+  test "requestLspFormat returns false when server lacks formatting capability":
+    # Config is on and LSP is enabled, but the server never advertised
+    # textDocument/formatting. Without the capability gate we would fire a
+    # request that only fails after the response timeout.
+    let config = newEditorConfig()
+    let e = createEditorWithLsp(config)
+
+    check not waitFor e.requestLspFormat()
+    check e.state.statusMessage == "LSP document formatting is not supported"
+
+suite "editor_lsp - applyWorkspaceEditFromServer staleness":
+  proc replaceFirstThree(path: string): lspTypes.WorkspaceEdit =
+    var changes = initTable[string, seq[lspTypes.TextEdit]]()
+    changes[pathToUri(path)] =
+      @[lspTypes.TextEdit(`range`: lspTypes.newRange(0, 0, 0, 3), newText: "xxx")]
+    lspTypes.WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[lspTypes.TextDocumentEdit])
+    )
+
+  test "rejects an edit to an unsynced buffer the server never received":
+    # Regression: "Cargo.toml in a Rust project". The file has no LSP config,
+    # so didChange is dropped for want of a worker — but maybeUpdateLsp records
+    # a sync baseline anyway. The versions then matched while the buffer held
+    # unsaved text the server never saw, so the disk-based coordinates were
+    # applied to it.
+    let tmpDir = getTempDir() / "moe_test_server_edit_unsynced"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    let path = tmpDir / "Cargo.toml"
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "aaa").isOk
+    e.maybeUpdateLsp()
+
+    # The baseline is recorded even though nothing reached a server.
+    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+
+    let res = e.applyWorkspaceEditFromServer(replaceFirstThree(path))
+
+    check not res.applied
+    check buf.getTextString() == "aaa"
+    check e.state.statusMessage ==
+      "Buffer changed since last sync; server edit discarded"
+
+  test "applies an edit when the unsynced buffer still matches disk":
+    let tmpDir = getTempDir() / "moe_test_server_edit_saved"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    let path = tmpDir / "Cargo.toml"
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "aaa").isOk
+    buf.markSaved()
+    e.maybeUpdateLsp()
+
+    let res = e.applyWorkspaceEditFromServer(replaceFirstThree(path))
+
+    check res.applied
+    check buf.getTextString() == "xxx"
+
+  test "applies an edit to a server-held buffer that is in sync":
+    let tmpDir = getTempDir() / "moe_test_server_edit_synced"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    let path = tmpDir / "synced.nim"
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.lsp.service.liveWorkerOverride = proc(p: string): bool =
+      true
+
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "aaa").isOk
+    e.openBufferWithLsp(buf)
+    e.maybeUpdateLsp()
+
+    let res = e.applyWorkspaceEditFromServer(replaceFirstThree(path))
+
+    check res.applied
+    check buf.getTextString() == "xxx"

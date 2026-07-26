@@ -31,7 +31,7 @@ import
   editor_lsp,
   editor_codelens,
   editorconfig_helper,
-  git_diff,
+  git_cache,
   git_conflict,
   motion,
   logger,
@@ -59,7 +59,7 @@ proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
   applyEditorConfigToBuffer(buf, e.config)
   e.clampCursorAfterReload(buf)
   e.state.statusMessage = "File reloaded: " & filePath
-  e.refreshGitDiff(useBuffer = false)
+  e.refreshGitDiff()
   buf.refreshConflicts()
   e.state.timing.lastConflictScan = getMonoTime()
   e.state.timing.lastConflictScanSeq = buf.changeSeq
@@ -132,7 +132,7 @@ proc refreshBufferGitAndConflicts*(e: Editor, buf: TextBuffer) =
   ## on-disk content was replaced out-of-band (e.g. a backup restore). Operates
   ## on an arbitrary, possibly non-active buffer, so it deliberately leaves the
   ## active-buffer conflict-scan throttle (`lastConflictScan*`) untouched.
-  discard updateBufferWithGitDiff(buf, useBuffer = false)
+  e.state.git.requestGitRefresh(buf)
   buf.refreshConflicts()
 
 proc maybeUpdateConflicts*(e: Editor) =

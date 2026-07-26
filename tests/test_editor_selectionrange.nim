@@ -44,6 +44,7 @@ proc seedSelectionRangePending(
     cursorLine: -1,
     cursorCol: -1,
     validModes: {},
+    blockedByOverlay: true,
   )
 
 proc createTestEditor(): Editor =
@@ -209,7 +210,7 @@ suite "editor_selectionrange - pollLspSelectionRange":
 
   test "Discards response while a Command overlay is active":
     # Overlay sits on top of the base mode (mode stays Normal), so validModes
-    # can't catch it — the poll must reject it inline.
+    # can't catch it — classifyResponse rejects it via ctx.blockedByOverlay.
     let e = createTestEditor()
     e.lsp.enabled = true
 
@@ -254,6 +255,18 @@ suite "editor_selectionrange - config gate":
 
     check not e.startLspSelectionRange()
     check e.state.statusMessage == "LSP selection range is disabled"
+
+  test "startLspSelectionRange returns false when server lacks capability":
+    # Config is on and LSP is enabled, but the server never advertised
+    # textDocument/selectionRange. Without the capability gate we would fire a
+    # request that only fails after the response timeout.
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    check not e.startLspSelectionRange()
+    check e.state.statusMessage == "LSP selection range is not supported"
 
 suite "editor_selectionrange - chain expansion":
   proc seedResponse(e: Editor, requestId: int, responseJson: JsonNode) =

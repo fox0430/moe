@@ -40,28 +40,17 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string]
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
   ## Returns error if the operation fails
-  # Invalidate the char->byte cache before every inverse edit. Undo/redo holds
-  # changeSeq constant across a transaction's inner edits (so the whole group
-  # collapses to one seq step), but those edits still shift bytes and line
-  # numbers. A cache keyed on (line, changeSeq) would survive stale and hand
-  # back a mid-rune byte offset on multibyte lines. Recursion re-invalidates per
-  # inner change, so this also covers ckTransaction members.
-  b.cursorCache.line = -1
   try:
     case change.kind
     of ckInsertText:
       # Undo insert by deleting the inserted text (all bytes at once)
       let line = b.getLine(change.insertPos.line)
-      let bytePos = charToBytePosCached(
-        line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
-      )
+      let bytePos = charToBytePos(line, change.insertPos.column)
       b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
     of ckDeleteText:
       # Undo delete by inserting the deleted text
       let line = b.getLine(change.deletePos.line)
-      let bytePos = charToBytePosCached(
-        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
-      )
+      let bytePos = charToBytePos(line, change.deletePos.column)
       b.backendInsertIntoLine(change.deletePos.line, bytePos, change.deletedText)
     of ckInsertLine:
       # Undo insert line by deleting it
@@ -253,6 +242,33 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
 
   return ok(())
 
+template withTransaction*(
+    b: TextBuffer, description: string, cursorPos: Option[BufferPosition], body: untyped
+): Result[(), string] =
+  ## Scope-guarded begin/commit. Rolls back if `body` raises or returns from the
+  ## enclosing proc, so `inTransaction` never leaks across edits.
+  ## `body` runs inside a `block`, so a bare `break` escapes the template rather
+  ## than an enclosing loop and leaves the result uninitialized: every `break` in
+  ## `body` must belong to a loop `body` itself owns.
+  block:
+    let beginRes = b.beginTransaction(description, cursorPos)
+    if beginRes.isErr:
+      beginRes
+    else:
+      var completed = false
+      try:
+        body
+        completed = true
+      finally:
+        if not completed:
+          discard b.rollbackTransaction()
+      b.commitTransaction()
+
+template withTransaction*(
+    b: TextBuffer, description: string, body: untyped
+): Result[(), string] =
+  withTransaction(b, description, none(BufferPosition), body)
+
 proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   ## Rollback the current transaction by undoing all changes
   ## Restores changeSeq to its value at transaction start
@@ -390,9 +406,6 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Re-apply a single change (internal helper)
   ## Returns error if the operation fails
-  # See undoChange: invalidate the char->byte cache before every replayed edit
-  # so a stale (line, changeSeq) hit cannot return a mid-rune byte offset.
-  b.cursorCache.line = -1
   try:
     case change.kind
     of ckInsertText:
@@ -400,9 +413,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       b.insertTextWithNewlines(change.insertPos, change.insertText)
     of ckDeleteText:
       let line = b.getLine(change.deletePos.line)
-      let bytePos = charToBytePosCached(
-        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
-      )
+      let bytePos = charToBytePos(line, change.deletePos.column)
       b.backendDeleteAtLineCol(change.deletePos.line, bytePos, change.deletedText.len)
     of ckInsertLine:
       b.backendInsertLine(change.insertLineIdx, change.insertLineText)

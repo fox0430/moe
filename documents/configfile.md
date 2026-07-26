@@ -185,6 +185,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | enable | bool | false | Enable build on save |
 | workspaceRoot | string (optional) | none | Project root directory |
 | command | string (optional) | none | Override commands executed at build |
+| timeout | integer | 300 | Build timeout (seconds, 0 = no timeout) |
 <!-- AUTO-GEN:end BuildOnSave -->
 
 
@@ -229,7 +230,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 |:---|:---|:---|:---|
 | saveBufferWhenQuickRun | bool | true | Save buffer when run QuickRun |
 | command | string (optional) | none | Commands to be executed by quick run |
-| timeout | integer | 30 | Command timeout (seconds) |
+| timeout | integer | 30 | Command timeout (seconds, 0 = no timeout) |
 | nimAdvancedCommand | string (optional) | none | Nim compiler advanced args |
 | clangOptions | string (optional) | none | C lang compiler options. The default compiler is gcc |
 | cppOptions | string (optional) | none | C++ compiler options. The default compiler is gcc |
@@ -449,6 +450,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | enable | bool | false | Syntax checker |
+| timeout | integer | 60 | Syntax check timeout (seconds, 0 = no timeout) |
 <!-- AUTO-GEN:end SyntaxChecker -->
 
 
@@ -953,163 +955,207 @@ The same commands as `[KeyMapping]` are available. See [Available commands](#ava
 
 ### Lsp table
 
+<!-- AUTO-GEN:start Lsp -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | false | LSP (Language Server Protocol) Client |
-| timeout | integer | 5000 | Timeout in milliseconds for LSP requests (0 = no timeout) |
+| timeout | integer | 30000 | Timeout in milliseconds for LSP requests |
+<!-- AUTO-GEN:end Lsp -->
 
 
 ### Lsp.Completion table
 
+<!-- AUTO-GEN:start Lsp.Completion -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Completion |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Completion |
+<!-- AUTO-GEN:end Lsp.Completion -->
 
 
 ### Lsp.Declaration table
 
+<!-- AUTO-GEN:start Lsp.Declaration -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Goto Declaration |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Goto Declaration |
 | openWindow | bool | false | Open a new window and jump |
+<!-- AUTO-GEN:end Lsp.Declaration -->
 
 
 ### Lsp.Definition table
 
+<!-- AUTO-GEN:start Lsp.Definition -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Goto Definition |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Goto Definition |
 | openWindow | bool | false | Open a new window and jump |
+<!-- AUTO-GEN:end Lsp.Definition -->
 
 
 ### Lsp.TypeDefinition table
 
+<!-- AUTO-GEN:start Lsp.TypeDefinition -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Type Definition |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Type Definition |
 | openWindow | bool | false | Open a new window and jump |
+<!-- AUTO-GEN:end Lsp.TypeDefinition -->
 
 
 ### Lsp.Implementation table
 
+<!-- AUTO-GEN:start Lsp.Implementation -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Implementation |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Implementation |
 | openWindow | bool | false | Open a new window and jump |
+<!-- AUTO-GEN:end Lsp.Implementation -->
 
 
 ### Lsp.Diagnostics table
 
+<!-- AUTO-GEN:start Lsp.Diagnostics -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Diagnostics |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Diagnostics |
 | autoHover | bool | true | Automatically show diagnostic messages in hover popup when cursor is on a diagnostic |
 | autoHoverDelay | integer | 300 | Delay in milliseconds before auto hover shows (0 = no delay) |
+<!-- AUTO-GEN:end Lsp.Diagnostics -->
 
 
 ### Lsp.SignatureHelp table
 
+<!-- AUTO-GEN:start Lsp.SignatureHelp -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Signature Help |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Signature Help |
+<!-- AUTO-GEN:end Lsp.SignatureHelp -->
 
 
 ### Lsp.DocumentFormatting table
 
+<!-- AUTO-GEN:start Lsp.DocumentFormatting -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Document Formatting |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Document Formatting |
+<!-- AUTO-GEN:end Lsp.DocumentFormatting -->
 
 
 ### Lsp.FoldingRange table
 
+<!-- AUTO-GEN:start Lsp.FoldingRange -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Folding Range |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Folding Range |
+<!-- AUTO-GEN:end Lsp.FoldingRange -->
 
 
 ### Lsp.SelectionRange table
 
+<!-- AUTO-GEN:start Lsp.SelectionRange -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Selection Range |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Selection Range |
+<!-- AUTO-GEN:end Lsp.SelectionRange -->
 
 
 ### Lsp.DocumentSymbol table
 
+<!-- AUTO-GEN:start Lsp.DocumentSymbol -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Document Symbol |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Document Symbol |
+<!-- AUTO-GEN:end Lsp.DocumentSymbol -->
 
 
 ### Lsp.Hover table
 
+<!-- AUTO-GEN:start Lsp.Hover -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Hover |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Hover |
+<!-- AUTO-GEN:end Lsp.Hover -->
 
 
 ### Lsp.InlayHint table
 
+<!-- AUTO-GEN:start Lsp.InlayHint -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP InlayHint |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Inlay Hint |
+<!-- AUTO-GEN:end Lsp.InlayHint -->
 
 
 ### Lsp.References table
 
+<!-- AUTO-GEN:start Lsp.References -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Find References |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Find References |
+<!-- AUTO-GEN:end Lsp.References -->
 
 
 ### Lsp.CallHierarchy table
 
+<!-- AUTO-GEN:start Lsp.CallHierarchy -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Call Hierarchy |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Call Hierarchy |
+<!-- AUTO-GEN:end Lsp.CallHierarchy -->
 
 
 ### Lsp.DocumentHighlight table
 
+<!-- AUTO-GEN:start Lsp.DocumentHighlight -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Document Highlight |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Document Highlight |
+<!-- AUTO-GEN:end Lsp.DocumentHighlight -->
 
 
 ### Lsp.DocumentLink table
 
+<!-- AUTO-GEN:start Lsp.DocumentLink -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Document Link |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Document Link |
+<!-- AUTO-GEN:end Lsp.DocumentLink -->
 
 
 ### Lsp.CodeLens table
 
+<!-- AUTO-GEN:start Lsp.CodeLens -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | false | LSP Code Lens |
+|:---|:---|:---|:---|
+| enable | bool | false | Enable LSP Code Lens |
+<!-- AUTO-GEN:end Lsp.CodeLens -->
 
 
 ### Lsp.Rename table
 
+<!-- AUTO-GEN:start Lsp.Rename -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Rename |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Rename |
+<!-- AUTO-GEN:end Lsp.Rename -->
 
 
 ### Lsp.SemanticTokens table
 
+<!-- AUTO-GEN:start Lsp.SemanticTokens -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Semantic Tokens |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Semantic Tokens |
+<!-- AUTO-GEN:end Lsp.SemanticTokens -->
 
 
 ### Lsp.ExecuteCommand table
 
+<!-- AUTO-GEN:start Lsp.ExecuteCommand -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Execute Command |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable LSP Execute Command |
+<!-- AUTO-GEN:end Lsp.ExecuteCommand -->
 
 
 ### LspTraceLevel
@@ -1130,8 +1176,9 @@ The same commands as `[KeyMapping]` are available. See [Available commands](#ava
 | extensions | Array of string | | File extensions |
 | command | string | | LSP server command |
 | trace | LspTraceLevel | off | LSP trace level for debugging |
-| rustAnalyzerRunSingle | bool | true | `rust-analyzer.runSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
-| rustAnalyzerDebugSingle | bool | true | `rust-analyzer.debugSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
+| settings | table | | Server-specific settings, sent as `workspace/didChangeConfiguration` and used to answer `workspace/configuration` |
+| rustAnalyzerRunSingle | bool | false | `rust-analyzer.runSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
+| rustAnalyzerDebugSingle | bool | false | `rust-analyzer.debugSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
 
 
 Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)

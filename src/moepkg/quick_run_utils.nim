@@ -343,11 +343,14 @@ proc abandonQuickRunProcess*(p: QuickRunProcess) =
   p.cleanupTempFiles()
 
 proc waitForResultAsync*(
-    p: QuickRunProcess
-): Future[Result[seq[string], string]] {.async: (raises: []).} =
-  ## Wait for the process to finish and return the output.
+    p: QuickRunProcess, timeout: Duration
+): Future[ProcessOutputResult] {.async: (raises: []).} =
+  ## Wait for the process to finish and return the output. A program still
+  ## running after `timeout` (an infinite loop, or one waiting on stdin, which
+  ## QuickRun never provides) is killed and reported as an error. Temporary
+  ## files are removed either way.
 
-  let output = await p.process.waitForAsync()
+  let output = await p.process.waitForAsync(timeout)
   p.cleanupTempFiles()
 
-  return Result[seq[string], string].ok output
+  return output

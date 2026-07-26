@@ -27,7 +27,9 @@ import
     editor, buffer, config, config_loader, render_utils, modes, color, highlight, types
   ]
 import ../src/moepkg/editor_render_window {.all.}
-import ../src/moepkg/[editor_render_helpers, style_patch, colorcode, editor_codelens]
+import
+  ../src/moepkg/
+    [editor_render_helpers, style_patch, colorcode, editor_codelens, visible_rows]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -1063,6 +1065,90 @@ suite "renderWindow - Visual selection":
 
     e.renderWindow(buffer, window, 0, true, true, 0)
 
+suite "renderWindow - Visual selection over indentation guides":
+  test "Indent guide cell keeps visual selection background":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.cursor = BufferPosition(line: 0, column: 5)
+
+    # 4 leading spaces + "body"; with tabStop=2, indent guides land at
+    # displayX 2 (space at charIdx 2).
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "    body")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 5
+    window.mode = EditorMode.Visual
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visStyle = visualStyle()
+    let guideStyle = indentationLineStyle()
+    var guideCellsChecked = 0
+    for x in 0 ..< 40:
+      if buffer[x, 0].symbol == "│":
+        guideCellsChecked += 1
+        check buffer[x, 0].style.fg == guideStyle.fg
+        check buffer[x, 0].style.bg == visStyle.bg
+    check guideCellsChecked >= 1
+
+  test "Indent guide keeps normal background outside visual selection":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.lineWrap = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.showIndentationLines = true
+    e.state.tabStop = 2
+    e.state.mode = EditorMode.Normal
+    e.state.visualSelection.active = false
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "    body")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+    window.mode = EditorMode.Normal
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visStyle = visualStyle()
+    var guideCellsChecked = 0
+    for x in 0 ..< 40:
+      if buffer[x, 0].symbol == "│":
+        guideCellsChecked += 1
+        check buffer[x, 0].style.bg != visStyle.bg
+    check guideCellsChecked >= 1
+
 suite "renderWindow - Visual selection on empty line":
   test "Visual mode shows selection at column 0 of empty line (no-wrap)":
     let e = createTestEditor()
@@ -1609,6 +1695,239 @@ suite "Cursor line highlight - Window boundary clipping":
     let nStyle = normalStyle()
     for x in 5 ..< 40:
       check buffer[x, 1].style.bg == nStyle.bg
+
+suite "Markdown code block - line background":
+  test "trailing empty cells inherit the code block bg":
+    # A short interior code-block line ("let x = 1") must have the code-block
+    # bg painted all the way to the window edge, not just under the text.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showSyntax = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+
+    let src = "```nim\nlet x = 1\n```\n"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), src)
+    e.activeBuffer.language = SourceLanguage.langMarkdown
+    e.activeBuffer.highlightNeedsUpdate = true
+    e.activeBuffer.updateHighlight()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 3 # not on the code block
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let codeBg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+    # Row 1 is "let x = 1" (9 chars). Trailing cells past the text must carry
+    # the code-block bg, and the fence rows (0=```nim, 2=```) must be filled too.
+    for x in 9 ..< 40:
+      check buffer[x, 1].style.bg == codeBg
+    for row in [0, 2]:
+      for x in 0 ..< 40:
+        check buffer[x, row].style.bg == codeBg
+
+  test "non-code-block lines keep the normal bg":
+    # Sanity check: lines outside the fence must not pick up the code-block bg.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showSyntax = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+
+    let src = "intro\n```nim\nlet x = 1\n```\nafter\n"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), src)
+    e.activeBuffer.language = SourceLanguage.langMarkdown
+    e.activeBuffer.highlightNeedsUpdate = true
+    e.activeBuffer.updateHighlight()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let codeBg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+    # Row 0 = "intro", row 4 = "after". Neither should carry the code-block bg.
+    for row in [0, 4]:
+      for x in 0 ..< 40:
+        check buffer[x, row].style.bg != codeBg
+
+  test "cursorLine overrides the code block bg on the cursor row":
+    # Priority chain: cursorLine ranks above lineBg in lineFillPatch. Regression
+    # guard against reordering that would let the block stripe swallow the
+    # current-line highlight.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showSyntax = true
+    e.state.showCursorLine = true
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+
+    let src = "```nim\nlet x = 1\n```\n"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), src)
+    e.activeBuffer.language = SourceLanguage.langMarkdown
+    e.activeBuffer.highlightNeedsUpdate = true
+    e.activeBuffer.updateHighlight()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 1 # the interior "let x = 1" row
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let codeBg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+    let cursorBg = cursorLineHighlightStyle().bg
+    # Row 1 is the cursor row inside the fence: cursorLine wins over lineBg
+    # everywhere, so the trailing fill is cursorBg and never codeBg.
+    for x in 0 ..< 40:
+      check buffer[x, 1].style.bg == cursorBg
+      check buffer[x, 1].style.bg != codeBg
+    # Row 0 (opening fence) is not the cursor row, so it keeps the block bg.
+    for x in 0 ..< 40:
+      check buffer[x, 0].style.bg == codeBg
+
+  test "visual selection overrides the code block bg on selected cells":
+    # Priority chain: visualSelection ranks above lineBg. Selected characters
+    # take the visual bg even inside a code block.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showSyntax = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 1, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 1, column: 5)
+    e.state.cursor = BufferPosition(line: 1, column: 5)
+
+    let src = "```nim\nlet x = 1\n```\n"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), src)
+    e.activeBuffer.language = SourceLanguage.langMarkdown
+    e.activeBuffer.highlightNeedsUpdate = true
+    e.activeBuffer.updateHighlight()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.active = true
+    window.cursor.line = 1
+    window.cursor.column = 5
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let codeBg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+    let visBg = visualStyle().bg
+    # Columns 0..5 on row 1 are inside the visual selection: they must take
+    # the visual bg, not the code block bg.
+    for x in 0 .. 5:
+      check buffer[x, 1].style.bg == visBg
+      check buffer[x, 1].style.bg != codeBg
+    # Trailing cells past the selection stay on the code block bg.
+    for x in 9 ..< 40:
+      check buffer[x, 1].style.bg == codeBg
+
+  test "wrap mode: wrapped segments of a code block line inherit the bg":
+    # renderWindowLineWrapped uses a shared precomputed LineStyleContext across
+    # wrap segments. The trailing fill on the last wrap segment must still
+    # inherit lineBg — the wrap path is a distinct code path from no-wrap.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showSyntax = true
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+    e.state.lineWrap = true
+
+    # A 50-char line that will wrap into two segments at width 40.
+    let longLine = "a".repeat(50)
+    let src = "```nim\n" & longLine & "\n```\n"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), src)
+    e.activeBuffer.language = SourceLanguage.langMarkdown
+    e.activeBuffer.highlightNeedsUpdate = true
+    e.activeBuffer.updateHighlight()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 3
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let codeBg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+    # Row 0 = opening fence, row 1 = first wrap of "aaaa...", row 2 = second
+    # wrap (10 chars of 'a' then trailing empty), row 3 = closing fence.
+    # The second wrap's trailing area (x=10..39) must still carry codeBg.
+    for x in 10 ..< 40:
+      check buffer[x, 2].style.bg == codeBg
+    for row in [0, 3]:
+      for x in 0 ..< 40:
+        check buffer[x, row].style.bg == codeBg
+
+  test "showSyntax = false suppresses the code block bg entirely":
+    # Without syntax on, character cells go through the plain-text branch and
+    # never pick up lineBg; painting only the trailing fill would leave a
+    # mismatched stripe past the text. resolveLineBg must gate on showSyntax.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showSidebar = false
+    e.state.showLineNumbers = false
+
+    let src = "```nim\nlet x = 1\n```\n"
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), src)
+    e.activeBuffer.language = SourceLanguage.langMarkdown
+    e.activeBuffer.highlightNeedsUpdate = true
+    e.activeBuffer.updateHighlight()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 3
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let codeBg = getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg
+    for row in 0 .. 2:
+      for x in 0 ..< 40:
+        check buffer[x, row].style.bg != codeBg
 
 suite "Cursor column highlight - wrap segments":
   test "cursorColumn shows on every wrap segment at cursor's screen column":
@@ -3794,27 +4113,27 @@ suite "renderScrollbar - fold/wrap-aware display rows":
       lines.add(text)
     newTextBuffer(lines.join("\n"))
 
-  test "walkDisplayRows: plain buffer equals logical line count":
+  test "totalRows: plain buffer equals logical line count":
     let buf = bufOfLines(10)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 10
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(buf.len) == 10
 
-  test "walkDisplayRows: collapsed fold shrinks range to one marker row":
+  test "totalRows: collapsed fold shrinks range to one marker row":
     # 30 lines, fold [5,15] collapsed → 5 lines + 1 marker + 14 remaining = 20.
     let buf = bufOfLines(30)
     check buf.foldState.addFold(5, 15, collapsed = true)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 20
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(buf.len) == 20
 
-  test "walkDisplayRows: non-collapsed fold leaves rows unchanged":
+  test "totalRows: non-collapsed fold leaves rows unchanged":
     let buf = bufOfLines(30)
     check buf.foldState.addFold(5, 15, collapsed = false)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, buf.len) == 30
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(buf.len) == 30
 
-  test "walkDisplayRows: wrap expands long lines to their segment count":
+  test "totalRows: wrap expands long lines to their segment count":
     # 5 lines; line 1 is 25 chars → 3 wrap segments at maxWidth 10. Others = 1.
     let buf = newTextBuffer(@["x", "x".repeat(25), "x", "x", "x"].join("\n"))
-    check walkDisplayRows(buf, buf.foldState, nil, true, 10, 4, buf.len) == 7
+    check initRowLayout(buf, nil, true, 10, 4).totalRows(buf.len) == 7
 
-  test "walkDisplayRows: fold marker counts once regardless of inner wrap":
+  test "totalRows: fold marker counts once regardless of inner wrap":
     # 5 wrapping lines (each 25 chars → 3 segments at maxWidth 10). Fold [1,3]
     # collapses three of them to one marker, so total = 3 + 1 + 3 = 7.
     var lines: seq[string]
@@ -3822,20 +4141,20 @@ suite "renderScrollbar - fold/wrap-aware display rows":
       lines.add("x".repeat(25))
     let buf = newTextBuffer(lines.join("\n"))
     check buf.foldState.addFold(1, 3, collapsed = true)
-    check walkDisplayRows(buf, buf.foldState, nil, true, 10, 4, buf.len) == 7
+    check initRowLayout(buf, nil, true, 10, 4).totalRows(buf.len) == 7
 
-  test "walkDisplayRows: stopLine exclusive; counts lines strictly before it":
+  test "totalRows: stopLine exclusive; counts lines strictly before it":
     let buf = bufOfLines(20)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 0) == 0
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 5) == 5
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 20) == 20
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(0) == 0
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(5) == 5
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(20) == 20
 
-  test "walkDisplayRows: stopLine inside collapsed fold counts the marker once":
+  test "totalRows: stopLine inside collapsed fold counts the marker once":
     # fold [5,15] collapsed, stopLine=10 (inside the fold). Loop hits the fold
     # at line=5, adds 1 for the marker, jumps line to 16 → loop exits.
     let buf = bufOfLines(30)
     check buf.foldState.addFold(5, 15, collapsed = true)
-    check walkDisplayRows(buf, buf.foldState, nil, false, 80, 4, 10) == 6
+    check initRowLayout(buf, nil, false, 80, 4).totalRows(10) == 6
 
   proc scrollbarEditor(): Editor =
     ## Editor tuned for direct renderScrollbar cell inspection: no sidebar, no

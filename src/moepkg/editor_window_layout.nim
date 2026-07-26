@@ -21,7 +21,7 @@
 ## These procs are side-effect-free helpers used by both the window
 ## management layer and the rendering layer.
 
-import types/editor_types, render_utils, buffer
+import types/editor_types, render_utils, buffer, visible_rows
 
 proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
@@ -66,18 +66,94 @@ proc calculateTerminalAreaDimensions*(
     rows: max(1, terminalContentRows(window, isBottomWindow, tabLineOffset)),
   )
 
+proc calculateSidebarWidth*(e: Editor, window: EditorWindow): int =
+  ## Calculate the width occupied by the sidebar (0 if disabled).
+  sidebarWidthFor(window, e.showSidebar)
+
+proc calculateScrollbarWidth*(e: Editor, window: EditorWindow): int =
+  ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
+  scrollbarWidthFor(window, e.scrollbar, e.scrollbarWidth)
+
+proc gutterWidth*(e: Editor, window: EditorWindow): int =
+  ## Sidebar + line-number width: the X offset of the text area's first column.
+  e.calculateSidebarWidth(window) +
+    calculateLineNumOffset(window.buffer, e.showLineNumbers)
+
+proc viewportOffsetFor*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
+  ## Everything in the window that is not text: line number + sidebar +
+  ## scrollbar. Takes the line-number width the caller is drawing with.
+  lineNumOffset + e.calculateSidebarWidth(window) + e.calculateScrollbarWidth(window)
+
+proc viewportOffsetFor*(e: Editor, window: EditorWindow): int =
+  ## `viewportOffsetFor` with the window's own line-number width.
+  viewportOffsetFor(
+    window.buffer, window, e.showLineNumbers, e.showSidebar, e.scrollbar,
+    e.scrollbarWidth,
+  )
+
+proc textAreaWidth*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
+  ## Cells the window leaves for text. Single source for the renderer, the
+  ## screen-cursor pass and the mouse hit-test.
+  textAreaWidthFor(window.viewport.width, e.viewportOffsetFor(window, lineNumOffset))
+
+proc textAreaWidth*(e: Editor, window: EditorWindow): int =
+  ## `textAreaWidth` with the window's own line-number width.
+  textAreaWidthFor(window.viewport.width, e.viewportOffsetFor(window))
+
+proc wrapWidth*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
+  ## `textAreaWidth` clamped to at least one cell: the `WrapCountCache` key.
+  wrapWidthFor(window.viewport.width, e.viewportOffsetFor(window, lineNumOffset))
+
+proc wrapWidth*(e: Editor, window: EditorWindow): int =
+  ## `wrapWidth` with the window's own line-number width.
+  wrapWidthFor(window.viewport.width, e.viewportOffsetFor(window))
+
+proc renderedCellPos*(
+    e: Editor, window: EditorWindow, lineText: string, column: int
+): tuple[row, cellX: int] =
+  ## Row and display column where `column` of `lineText` is drawn, relative to
+  ## the text area start. `row` is the wrap segment index (always 0 without
+  ## `lineWrap`). Tabs are expanded from the origin the renderer sliced at, so
+  ## two columns' `cellX` are only comparable when their `row` matches.
+  let (wrapSeg, cellX) = textCell(
+    lineText,
+    column,
+    e.lineWrap,
+    e.wrapWidth(window),
+    e.tabStop,
+    window.viewport.leftColumn,
+  )
+  (row: wrapSeg, cellX: cellX)
+
+proc rowLayoutFor*(
+    e: Editor,
+    buffer: TextBuffer,
+    viewportWidth, gutterAndScrollbar: int,
+    wrapCache: WrapCountCache,
+): RowLayout =
+  ## `RowLayout` for a window whose text area starts after `gutterAndScrollbar`
+  ## cells, using the same wrap width the renderer wrapped at.
+  initRowLayout(
+    buffer,
+    wrapCache,
+    e.lineWrap,
+    wrapWidthFor(viewportWidth, gutterAndScrollbar),
+    e.tabStop,
+  )
+
 proc calculateWindowCursor*(
     e: Editor,
     buffer: TextBuffer,
     viewport: ViewPort,
     cursor: BufferPosition,
-    lineNumOffset: int,
+    gutterWidth: int,
     reservedLines: int,
     scrollbarWidth: int = 0,
     wrapCache: WrapCountCache = nil,
 ): CursorPosition =
   ## Calculate screen cursor position for a window
   ## Returns the absolute screen coordinates
+  ## `gutterWidth` is the sidebar + line-number width the text starts after.
 
   # Validate cursor is within buffer bounds
   if cursor.line < 0 or cursor.line >= buffer.len:
@@ -87,100 +163,19 @@ proc calculateWindowCursor*(
   if cursor.line < viewport.topLine:
     return CursorPosition(x: 0, y: 0)
 
-  if e.lineWrap:
-    # WRAP MODE: Calculate cursor position considering line wrapping
-    let maxWidth = max(1, viewport.width - lineNumOffset - scrollbarWidth)
+  let
+    rl = e.rowLayoutFor(buffer, viewport.width, gutterWidth + scrollbarWidth, wrapCache)
+    visibleRows = viewport.height - reservedLines
+    (wrapSeg, cellX) = rl.cursorCell(cursor.line, cursor.column, viewport.leftColumn)
+    # `rowOfLine` stops once the walk passes the last visible row, so a cursor
+    # far below the viewport costs O(visibleRows), not O(lines).
+    screenY =
+      rl.rowOfLine(viewport.topLine, viewport.topWrapOffset, cursor.line, visibleRows) +
+      wrapSeg
 
-    if wrapCache != nil:
-      wrapCache.ensureFresh(buffer, maxWidth, e.tabStop)
+  # Guard the lower bound too: with topWrapOffset > 0 a cursor on a segment
+  # above the visible top computes a negative screenY.
+  if screenY < 0 or screenY >= visibleRows:
+    return CursorPosition(x: 0, y: 0)
 
-    # Start above the top edge by the wrap segments skipped on the first line:
-    # the loop below adds topLine's full wrap count, so a non-zero offset shifts
-    # every screen row up by exactly the hidden leading segments.
-    var screenY = -viewport.topWrapOffset
-
-    var lineIdx = viewport.topLine
-    while lineIdx < cursor.line:
-      if lineIdx < 0 or lineIdx >= buffer.len:
-        inc lineIdx
-        continue
-      # A collapsed fold renders as a single marker row at its start line; its
-      # hidden interior occupies no rows. Count the marker once and jump past
-      # the interior in one step so a large fold above the cursor costs O(1),
-      # not O(lines).
-      let collapsed = buffer.foldState.getCollapsedFoldAt(lineIdx)
-      if collapsed.isSome:
-        if collapsed.get.startLine == lineIdx:
-          screenY += 1
-        lineIdx = collapsed.get.endLine + 1
-      else:
-        let wrappedLines =
-          if wrapCache != nil:
-            wrapCache.cachedWrapCount(buffer, lineIdx)
-          else:
-            calculateWrapCount(buffer.getLine(lineIdx), maxWidth, e.tabStop)
-        screenY += wrappedLines
-        inc lineIdx
-
-      if screenY >= viewport.height - reservedLines:
-        return CursorPosition(x: 0, y: 0)
-
-    let
-      cursorLineText = buffer.getLine(cursor.line)
-      (wrapLineIndex, wrapLineColumn) =
-        cursorWrapPosition(cursorLineText, cursor.column, maxWidth, e.tabStop)
-
-    screenY += wrapLineIndex
-
-    # Guard the lower bound too: with topWrapOffset > 0 a cursor on a segment
-    # above the visible top would compute a negative screenY.
-    if screenY >= 0 and screenY < viewport.height - reservedLines:
-      let finalX = viewport.x + lineNumOffset + wrapLineColumn
-      let finalY = viewport.y + screenY
-      return CursorPosition(x: finalX, y: finalY)
-  else:
-    # NO-WRAP MODE: Calculate cursor position with horizontal scrolling.
-    # Count only the visible rows between topLine and the cursor so collapsed
-    # folds above the cursor don't push it below the rendered content. Each
-    # collapsed fold is a single marker row; skip its hidden interior in one
-    # step so a large fold above the cursor costs O(1), not O(lines).
-    var
-      screenRow = 0
-      l = viewport.topLine
-    while l < cursor.line:
-      if l < 0 or l >= buffer.len:
-        inc l
-        continue
-      let fold = buffer.foldState.getCollapsedFoldAt(l)
-      if fold.isSome:
-        # Count the marker row only at the fold's start line; jump past the rest.
-        if l == fold.get.startLine:
-          screenRow.inc
-        l = fold.get.endLine + 1
-      else:
-        screenRow.inc
-        inc l
-
-    if screenRow < viewport.height - reservedLines:
-      let
-        cursorLineText = buffer.getLine(cursor.line)
-        displayWidthUpToCursor =
-          displayWidthUpToWithTabs(cursorLineText, cursor.column, e.tabStop)
-        displayWidthUpToLeftCol =
-          displayWidthUpToWithTabs(cursorLineText, viewport.leftColumn, e.tabStop)
-        screenY = viewport.y + screenRow
-        screenX =
-          viewport.x + lineNumOffset +
-          max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
-
-      return CursorPosition(x: screenX, y: screenY)
-
-  return CursorPosition(x: 0, y: 0)
-
-proc calculateSidebarWidth*(e: Editor, mode: EditorMode): int =
-  ## Calculate the width occupied by the sidebar (0 if disabled)
-  sidebarWidthFor(mode, e.showSidebar)
-
-proc calculateScrollbarWidth*(e: Editor, mode: EditorMode): int =
-  ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
-  scrollbarWidthFor(mode, e.scrollbar, e.scrollbarWidth)
+  CursorPosition(x: viewport.x + gutterWidth + cellX, y: viewport.y + screenY)
