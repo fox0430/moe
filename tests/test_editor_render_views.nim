@@ -1927,3 +1927,97 @@ suite "renderCodeLensPicker":
     let bottomBorder = screen[9] # popupY + visibleCount + 1 = 6 + 2 + 1 = 9
     check bottomBorder.contains("└")
     check bottomBorder.contains("┘")
+
+suite "advanceLayoutForFrame - viewer selection drives the window viewport":
+  proc setupViewer(e: Editor, lineCount: int, mode: EditorMode) =
+    ## Give the active window a scrollable read-only body and the viewer mode.
+    var content = ""
+    for i in 0 ..< lineCount:
+      if i > 0:
+        content.add('\n')
+      content.add("line" & $i)
+    let win = e.windowManager.windows[0]
+    win.buffer = newTextBuffer(content)
+    win.mode = mode
+    e.state.mode = mode
+    win.viewport.topLine = 0
+
+  test "Filer selection below the viewport scrolls the window":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.setupViewer(40, EditorMode.Filer)
+
+    var filerState = FilerState(currentPath: "/tmp", showHidden: false)
+    for i in 0 ..< 40:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    filerState.selectedIndex = 35
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
+
+    e.advanceLayoutForFrame(buffer, false)
+
+    check e.windowManager.windows[0].viewport.topLine > 0
+    check e.windowManager.windows[0].cursor.line == 35
+
+  test "FileTree selection below the viewport scrolls the window":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.setupViewer(40, EditorMode.FileTree)
+
+    let treeState = FileTreeState(rootPath: "/tmp", selectedIndex: 35)
+    for i in 0 ..< 40:
+      treeState.flatList.add(FileTreeNode(name: "node" & $i, path: "/tmp/node" & $i))
+    e.windowManager.windows[0].modeState =
+      ModeState(kind: mskFileTree, fileTree: treeState)
+
+    e.advanceLayoutForFrame(buffer, false)
+
+    check e.windowManager.windows[0].viewport.topLine > 0
+    check e.windowManager.windows[0].cursor.line == 35
+
+  test "Help selection below the viewport scrolls the window":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.setupViewer(40, EditorMode.Help)
+
+    let helpState = HelpViewerState(selectedIndex: 35)
+    for i in 0 ..< 40:
+      helpState.lines.add("help" & $i)
+    e.windowManager.windows[0].modeState = ModeState(kind: mskHelp, help: helpState)
+
+    e.advanceLayoutForFrame(buffer, false)
+
+    check e.windowManager.windows[0].viewport.topLine > 0
+    check e.windowManager.windows[0].cursor.line == 35
+
+  test "Debug selection below the viewport scrolls the window":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.setupViewer(40, EditorMode.Debug)
+
+    let debugState = DebugViewerState(selectedLine: 35)
+    for i in 0 ..< 40:
+      debugState.lines.add("debug" & $i)
+    e.windowManager.windows[0].modeState = ModeState(kind: mskDebug, debug: debugState)
+
+    e.advanceLayoutForFrame(buffer, false)
+
+    check e.windowManager.windows[0].viewport.topLine > 0
+    check e.windowManager.windows[0].cursor.line == 35
+
+  test "Scrolling back to the top follows the selection up":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.setupViewer(40, EditorMode.Filer)
+
+    var filerState = FilerState(currentPath: "/tmp", showHidden: false)
+    for i in 0 ..< 40:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    filerState.selectedIndex = 35
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
+    e.advanceLayoutForFrame(buffer, false)
+    check e.windowManager.windows[0].viewport.topLine > 0
+
+    filerState.selectedIndex = 0
+    e.advanceLayoutForFrame(buffer, false)
+
+    check e.windowManager.windows[0].viewport.topLine == 0

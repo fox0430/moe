@@ -266,19 +266,6 @@ suite "FileTreeState":
     check node.isSome
     check node.get.name == "helper.nim"
 
-  test "ensureSelectedVisible adjusts topLine":
-    let tmpDir = createTestTree()
-    defer:
-      removeDir(tmpDir)
-
-    let state = newFileTreeState(tmpDir)
-    state.moveToLast()
-    state.ensureSelectedVisible(3) # Small viewport
-
-    # topLine should have been adjusted
-    if state.flatList.len > 3:
-      check state.topLine > 0
-
   test "refreshTree rebuilds the tree":
     let tmpDir = createTestTree()
     defer:
@@ -640,12 +627,12 @@ suite "FileTreeState":
     check matchCount >= 2
 
     # Start from first match
-    state.jumpToFirstMatch(20)
+    state.jumpToFirstMatch()
     check state.searchMatchIndex == 0
 
     # Jump through remaining matches and wrap around
     for j in 0 ..< matchCount:
-      state.jumpToNextMatch(20)
+      state.jumpToNextMatch()
     # After matchCount jumps from index 0, should be back at index 0
     check state.searchMatchIndex == 0
 
@@ -660,7 +647,7 @@ suite "FileTreeState":
     check state.searchMatches.len >= 1
 
     # First prev jump should go to last match
-    state.jumpToPrevMatch(20)
+    state.jumpToPrevMatch()
     check state.searchMatchIndex == state.searchMatches.len - 1
 
   test "clearSearch resets search state":
@@ -738,9 +725,9 @@ suite "FileTreeState":
     check state.searchMatches.len == 0
 
     # Should be no-ops, not crashes
-    state.jumpToNextMatch(20)
+    state.jumpToNextMatch()
     check state.searchMatchIndex == -1
-    state.jumpToPrevMatch(20)
+    state.jumpToPrevMatch()
     check state.searchMatchIndex == -1
 
   test "updateSearchMatches with empty searchText returns no matches":
@@ -885,8 +872,8 @@ suite "FileTreeState":
     check state.searchMatches.len >= 2
 
     # Jump to second match
-    state.jumpToFirstMatch(20)
-    state.jumpToNextMatch(20)
+    state.jumpToFirstMatch()
+    state.jumpToNextMatch()
     check state.searchMatchIndex == 1
     let selectedBefore = state.selectedIndex
 

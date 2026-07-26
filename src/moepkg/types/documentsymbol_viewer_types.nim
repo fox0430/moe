@@ -39,7 +39,7 @@ type
     depth*: int # Nesting depth for indentation
 
   DocumentSymbolViewerState* = ref object of ListViewer[SymbolItem]
-    ## items/selectedIndex/topLine/waitingForG/title are inherited.
+    ## items/selectedIndex/waitingForG/title are inherited.
     filePath*: string # File path for the symbols
     # Cursor/viewport of the underlying buffer captured on entry, so quitting
     # the viewer restores the position instead of leaving it at (0, 0).

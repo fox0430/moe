@@ -130,7 +130,7 @@ proc newHelpViewerState*(): HelpViewerState =
     # otherwise selectedIndex can scroll one row past the buffer end.
     lines.setLen(lines.len - 1)
 
-  HelpViewerState(lines: lines, selectedIndex: 0, topLine: 0, searchQuery: "")
+  HelpViewerState(lines: lines, selectedIndex: 0, searchQuery: "")
 
 proc lineCount*(state: HelpViewerState): int =
   ## Get the number of lines in the help
@@ -196,18 +196,6 @@ proc moveToPreviousSection*(state: HelpViewerState) =
     if state.lines[i].isSectionHeader:
       state.selectedIndex = i
       return
-
-proc ensureSelectedVisible*(state: HelpViewerState, viewportHeight: int) =
-  ## Ensure the selected line is visible in the viewport
-  # Adjust topLine to keep selected line visible
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-  elif state.selectedIndex >= state.topLine + viewportHeight:
-    state.topLine = state.selectedIndex - viewportHeight + 1
-
-  # Ensure topLine is not negative
-  if state.topLine < 0:
-    state.topLine = 0
 
 proc setSearchQuery*(state: HelpViewerState, query: string) =
   ## Set the search query

@@ -37,7 +37,7 @@ type
     chvkOutgoing ## Outgoing calls view
 
   CallHierarchyViewerState* = ref object of ListViewer[lspTypes.CallHierarchyItem]
-    ## items/selectedIndex/topLine/waitingForG/title are inherited.
+    ## items/selectedIndex/waitingForG/title are inherited.
     viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
     ## Cursor/viewport of the underlying buffer captured on entry, so quitting
     ## the viewer restores the position instead of leaving it at (0, 0).

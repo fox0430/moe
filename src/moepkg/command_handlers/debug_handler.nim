@@ -60,7 +60,7 @@ proc handleDebugModeKey*(
       # ESC does nothing in debug mode (use q to quit)
       return DebugViewerResult(kind: dvrHandled)
     of skDown:
-      debugState.scrollDown(viewportHeight)
+      debugState.scrollDown()
       return DebugViewerResult(kind: dvrHandled)
     of skUp:
       debugState.scrollUp()
@@ -69,7 +69,7 @@ proc handleDebugModeKey*(
       debugState.scrollToTop()
       return DebugViewerResult(kind: dvrHandled)
     of skEnd:
-      debugState.scrollToBottom(viewportHeight)
+      debugState.scrollToBottom()
       return DebugViewerResult(kind: dvrHandled)
     of skPageDown:
       debugState.pageDown(viewportHeight)
@@ -84,7 +84,7 @@ proc handleDebugModeKey*(
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     case keyCombo.char
     of "j":
-      debugState.scrollDown(viewportHeight)
+      debugState.scrollDown()
       return DebugViewerResult(kind: dvrHandled)
     of "k":
       debugState.scrollUp()
@@ -93,7 +93,7 @@ proc handleDebugModeKey*(
       debugState.scrollToTop()
       return DebugViewerResult(kind: dvrHandled)
     of "G":
-      debugState.scrollToBottom(viewportHeight)
+      debugState.scrollToBottom()
       return DebugViewerResult(kind: dvrHandled)
     of ":":
       return DebugViewerResult(kind: dvrEnterCommand)
