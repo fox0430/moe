@@ -277,7 +277,7 @@ suite "Editor - applyConfigSettings live-reload (S1 regression)":
 
   test "mouse setting queues a frontend request":
     let e = mkEditor()
-    discard e.state.takeMouseCaptureRequest()
+    check e.state.takeMouseCaptureRequest() == some(false)
 
     let newCfg = newEditorConfig()
     newCfg.standard.mouse = true
