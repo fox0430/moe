@@ -30,6 +30,7 @@ import config_test_helper
 
 import pkg/celina
 import pkg/celina/core/mouse_logic
+import pkg/chronos
 
 import
   ../src/moepkg/[
@@ -53,6 +54,7 @@ proc createTestState(): EditorState =
     preferredColumn: -1,
     screenCursor: CursorPosition(x: 0, y: 0),
   )
+
   EditorState(
     activeWindow: window,
     display:
@@ -89,6 +91,18 @@ proc createTestState(): EditorState =
       )
     ),
   )
+
+proc noOpFrontendHook(): Future[void] {.async.} =
+  discard
+
+proc frontendSuspendBodyRuns(
+    frontend: FrontendHooks, editor: Editor
+): Future[bool] {.async: (raises: [Exception]).} =
+  var bodyRan = false
+  {.cast(gcsafe).}:
+    withFrontendSuspend(frontend, editor):
+      bodyRan = true
+  return bodyRan
 
 suite "screenToBufferPosition - Basic":
   test "Click at top-left corner of viewport":
@@ -811,11 +825,35 @@ suite "Background Process Management":
     # After cleanup, the list should be empty
     check editor.runningBackgroundProcesses.len == 0
 
-suite "hasPendingAsyncOperations":
+suite "Pending async operations":
   test "Returns false when no pending operations":
-    # We would need an Editor instance to test this properly
-    # This test is a placeholder to document the expected behavior
-    check true
+    let editor = newEditor(newEditorConfig())
+
+    check not editor.hasPendingAsyncOperations()
+
+  test "Terminal command is skipped when frontend hooks are unavailable":
+    let editor = newEditor(newEditorConfig())
+    editor.state.pending.shellCommand = "command must not run"
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.shellCommand.len == 0
+    check editor.state.statusMessage ==
+      "This frontend does not support terminal commands"
+
+  test "Terminal body is skipped unless both frontend hooks are available":
+    let editor = newEditor(newEditorConfig())
+    for frontend in [
+      FrontendHooks(),
+      FrontendHooks(suspend: noOpFrontendHook),
+      FrontendHooks(resume: noOpFrontendHook),
+    ]:
+      let bodyRan = waitFor frontendSuspendBodyRuns(frontend, editor)
+      check not bodyRan
+
+    let frontend = FrontendHooks(suspend: noOpFrontendHook, resume: noOpFrontendHook)
+    let bodyRan = waitFor frontendSuspendBodyRuns(frontend, editor)
+    check bodyRan
 
 suite "Search Mode - History Navigation":
   test "Search state initialized correctly":

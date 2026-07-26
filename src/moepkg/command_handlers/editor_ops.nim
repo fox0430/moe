@@ -28,8 +28,6 @@ import std/[options, os, times, strutils, tables]
 
 import pkg/results
 
-import pkg/results
-
 import
   ../[
     editor, editor_window_state, editor_window_layout, modes, buffer, logger, types,

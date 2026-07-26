@@ -1248,14 +1248,15 @@ type
     tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
   SyntaxCheckInfo = tuple[path: string, language: int]
 
-template withFrontendSuspend(frontend: FrontendHooks, body: untyped) =
+template withFrontendSuspend(frontend: FrontendHooks, e: Editor, body: untyped) =
   ## Suspend the owning frontend around synchronous terminal interaction.
-  if not frontend.suspend.isNil:
+  if frontend.suspend.isNil or frontend.resume.isNil:
+    e.state.statusMessage = "This frontend does not support terminal commands"
+  else:
     await frontend.suspend()
-  try:
-    body
-  finally:
-    if not frontend.resume.isNil:
+    try:
+      body
+    finally:
       await frontend.resume()
 
 proc runSyntaxCheckAsync(
@@ -1381,7 +1382,7 @@ proc handlePendingAsyncOperationsImpl(
       # withFrontendSuspend wraps the body in try/finally so the TUI
       # resumes, even if execShellCmd/readLine raises (a missed resume leaves
       # the terminal in raw mode and destroys the screen).
-      withFrontendSuspend(frontend):
+      withFrontendSuspend(frontend, e):
         stdout.write("\e[H\e[2J") # Clear screen
         stdout.flushFile()
         let exitCode = execShellCmd(cmd)
@@ -1394,7 +1395,7 @@ proc handlePendingAsyncOperationsImpl(
     if e.state.pending.manPage.len > 0:
       let page = e.state.pending.manPage
       e.state.pending.manPage = ""
-      withFrontendSuspend(frontend):
+      withFrontendSuspend(frontend, e):
         stdout.write("\e[H\e[2J") # Clear screen
         stdout.flushFile()
         let exitCode = execShellCmd("man " & quoteShell(page))
@@ -1409,7 +1410,7 @@ proc handlePendingAsyncOperationsImpl(
     # to a blocking readLine on non-POSIX platforms where SIGTSTP is unavailable.
     if e.state.pending.background:
       e.state.pending.background = false
-      withFrontendSuspend(frontend):
+      withFrontendSuspend(frontend, e):
         when defined(posix):
           discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
         else:
@@ -1438,7 +1439,7 @@ proc handlePendingAsyncOperationsImpl(
       asyncSpawn runSyntaxCheckAsync(e, checkInfo)
 
 proc handlePendingAsyncOperations*(
-    e: Editor, frontend: FrontendHooks = FrontendHooks()
+    e: Editor, frontend: FrontendHooks
 ): Future[void] {.async: (raises: [Exception]).} =
   ## Wrapper for handlePendingAsyncOperationsImpl with gcsafe cast
   {.cast(gcsafe).}:
