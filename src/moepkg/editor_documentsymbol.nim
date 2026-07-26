@@ -24,11 +24,7 @@ import std/[options, tables]
 import pkg/results
 
 import
-  types/editor_types,
-  editor_window_state,
-  editor_lsp,
-  lsp_integration,
-  documentsymbol_viewer
+  types/editor_types, viewer_mode, editor_lsp, lsp_integration, documentsymbol_viewer
 
 const DocumentSymbolValidModes* =
   {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
@@ -82,22 +78,12 @@ proc pollLspDocumentSymbols*(e: Editor) =
         e.state.statusMessage = "No symbols found"
         return
 
-      e.state.previousMode = e.state.mode
-      e.setMode(EditorMode.DocumentSymbol)
-      let activeWin = e.activeWindow
-
-      # Capture the current position so quitting the viewer can restore it.
-      viewerState.originCursor = activeWin.cursor
-      viewerState.originTopLine = activeWin.viewport.topLine
-      viewerState.originLeftColumn = activeWin.viewport.leftColumn
-
-      activeWin.saveOriginalBuffer()
-      activeWin.buffer = viewerState.createDocumentSymbolTextBuffer()
-      activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.resetViewportTop()
-      activeWin.viewport.leftColumn = 0
-      activeWin.modeState =
-        ModeState(kind: mskDocumentSymbol, documentSymbol: viewerState)
+      discard e.enterViewerMode(
+        EditorMode.DocumentSymbol,
+        ModeState(kind: mskDocumentSymbol, documentSymbol: viewerState),
+        viewerState.createDocumentSymbolTextBuffer(),
+        vpInPlace,
+      )
       e.state.statusMessage = $symbolCount & " symbols found"
     else:
       e.state.statusMessage = "No symbols found"

@@ -162,6 +162,26 @@ type
     of mskRecentFile: recentFile*: RecentFileModeState
     of mskTerminal: terminal*: TerminalState
 
+  ViewerPlacement* = enum
+    ## Placement chosen on viewer entry and reversed on exit.
+    vpInPlace ## Swapped the active window's buffer for the listing
+    vpVSplit
+    vpHSplit
+
+  ViewerEntry* = object
+    ## What a viewer entry has to undo on exit. `mode` makes the record
+    ## self-identifying so an unrelated teardown cannot consume it.
+    mode*: EditorMode
+    placement*: ViewerPlacement
+    returnMode*: EditorMode
+    bufferId*: BufferId
+      ## Listing buffer to delete on exit. Refreshing viewers swap in an
+      ## unregistered buffer, so this must not key off the window.
+    originCursor*: BufferPosition
+    originTopLine*: int
+    originTopWrapOffset*: int
+    originLeftColumn*: int
+
   SuspendedMode* = object
     ## The (mode, modeState) a window held before a transient overlay (the
     ## DiffViewer opened from the BackupManager) replaced it. Captured on
@@ -188,6 +208,8 @@ type
     originalBuffer*: TextBuffer
       # Saved buffer for modes that swap the window buffer (Filer, Terminal,
       # BufferManager, ...). Set on mode entry, restored and cleared on exit.
+    viewerEntry*: Option[ViewerEntry]
+      # Set by enterViewerMode, consumed by leaveViewerMode.
     suspendedMode*: Option[SuspendedMode]
       # The mode suspended by a transient overlay opened from another mode
       # (DiffViewer opened from BackupManager). Set on overlay entry, restored
@@ -1041,6 +1063,12 @@ proc resetViewportTop*(v: ViewPort, line = 0) =
   ## enough to avoid starting a fresh top line mid wrap segment.
   v.topLine = line
   v.topWrapOffset = 0
+
+proc restoreViewportTop*(v: ViewPort, line, wrapOffset: int) =
+  ## Restore a snapshotted top position, preserving the wrap sub-line offset
+  ## (unlike `resetViewportTop`, which drops it to 0).
+  v.topLine = line
+  v.topWrapOffset = wrapOffset
 
 proc statusMessage*(state: EditorState): string =
   ## Get the current status message

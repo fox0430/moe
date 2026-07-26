@@ -27,7 +27,7 @@ import pkg/results
 
 import
   types/editor_types,
-  editor_window_state,
+  viewer_mode,
   editor_lsp,
   lsp_integration,
   callhierarchy_viewer,
@@ -83,36 +83,15 @@ proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool 
 proc enterCallHierarchyMode(
     e: Editor, items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind
 ) =
-  ## Enter (or refresh) CallHierarchy mode with the given items.
-  ## Preserve originalBuffer from the previous CallHierarchy entry when
-  ## switching between Incoming and Outgoing views; otherwise we are entering
-  ## CallHierarchy fresh and should save the current buffer.
-  let
-    chState = newCallHierarchyViewerState(items, viewKind)
-    activeWin = e.activeWindow
-
-  if e.state.mode == EditorMode.CallHierarchy and
-      activeWin.modeState.kind == mskCallHierarchy and activeWin.originalBuffer != nil:
-    # Re-entering (incoming/outgoing switch): carry over the origin position
-    # captured when the viewer was first opened.
-    let prev = activeWin.modeState.callHierarchy
-    chState.originCursor = prev.originCursor
-    chState.originTopLine = prev.originTopLine
-    chState.originLeftColumn = prev.originLeftColumn
-  else:
-    e.state.previousMode = e.state.mode
-    # Capture the current position so quitting the viewer can restore it.
-    chState.originCursor = activeWin.cursor
-    chState.originTopLine = activeWin.viewport.topLine
-    chState.originLeftColumn = activeWin.viewport.leftColumn
-    activeWin.saveOriginalBuffer()
-
-  e.setMode(EditorMode.CallHierarchy)
-  activeWin.buffer = chState.createCallHierarchyTextBuffer()
-  activeWin.cursor = BufferPosition(line: 0, column: 0)
-  activeWin.viewport.resetViewportTop()
-  activeWin.viewport.leftColumn = 0
-  activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
+  ## Enter or refresh CallHierarchy mode. Re-entry (Incoming ↔ Outgoing) keeps
+  ## the origin snapshot via `enterViewerMode`.
+  let chState = newCallHierarchyViewerState(items, viewKind)
+  discard e.enterViewerMode(
+    EditorMode.CallHierarchy,
+    ModeState(kind: mskCallHierarchy, callHierarchy: chState),
+    chState.createCallHierarchyTextBuffer(),
+    vpInPlace,
+  )
 
   let
     direction = if viewKind == chvkIncoming: "incoming" else: "outgoing"

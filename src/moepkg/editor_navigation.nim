@@ -29,7 +29,7 @@ import pkg/results
 import
   types/editor_types,
   editor_window,
-  editor_window_state,
+  viewer_mode,
   editor_lsp,
   lsp_service,
   lsp_integration,
@@ -266,23 +266,14 @@ proc handleLspLocations*(
       )
 
     # Enter References mode
-    e.state.previousMode = e.state.mode
-    e.setMode(EditorMode.References)
     let refState = newReferencesViewerState(items, title)
     refState.openWindowOnJump = openWindow
-    let activeWin = e.activeWindow
-
-    # Capture the current position so quitting the viewer can restore it.
-    refState.originCursor = activeWin.cursor
-    refState.originTopLine = activeWin.viewport.topLine
-    refState.originLeftColumn = activeWin.viewport.leftColumn
-
-    activeWin.saveOriginalBuffer()
-    activeWin.buffer = refState.createReferencesTextBuffer()
-    activeWin.cursor = BufferPosition(line: 0, column: 0)
-    activeWin.viewport.resetViewportTop()
-    activeWin.viewport.leftColumn = 0
-    activeWin.modeState = ModeState(kind: mskReferences, references: refState)
+    discard e.enterViewerMode(
+      EditorMode.References,
+      ModeState(kind: mskReferences, references: refState),
+      refState.createReferencesTextBuffer(),
+      vpInPlace,
+    )
     e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"
     return true
 

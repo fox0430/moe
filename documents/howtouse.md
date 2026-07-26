@@ -612,6 +612,7 @@ troubleshooting; the viewer is read-only.
 | <kbd>**G**</kbd> OR <kbd>**End**</kbd> | Go to bottom |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> OR <kbd>**Page Down**</kbd> | Page down |
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> OR <kbd>**Page Up**</kbd> | Page up |
+| <kbd>**q**</kbd> | Close the debug viewer |
 | <kbd>**:**</kbd> | Enter command mode |
 <!-- AUTO-GEN:end DebugMode -->
 
