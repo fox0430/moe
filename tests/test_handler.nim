@@ -1552,16 +1552,14 @@ proc createFilerEditor(
   result = createTestEditorWithBuffer("")
   result.state.mode = EditorMode.Filer
   var filerState = FilerState(
-    currentPath: "/tmp",
-    entries: @[],
-    selectedIndex: selectedIndex,
-    showHidden: false,
-    topLine: topLine,
+    currentPath: "/tmp", entries: @[], selectedIndex: selectedIndex, showHidden: false
   )
   for i in 0 ..< entryCount:
     filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
   result.windowManager.windows[0].modeState =
     ModeState(kind: mskFiler, filer: filerState)
+  # The window viewport is the scroll source of truth for filer.
+  result.windowManager.windows[0].viewport.topLine = topLine
 
 suite "handleMouseEvent - Left Click Filer Mode":
   test "Click selects correct entry (no tab line)":
@@ -1607,6 +1605,17 @@ suite "handleMouseEvent - Left Click Filer Mode":
 
     check handled == true
     check e.windowManager.windows[0].modeState.filer.selectedIndex == 8
+
+  test "Click follows the window viewport, not the filer's own topLine":
+    let e = createFilerEditor(20, topLine = 5)
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    e.windowManager.windows[0].modeState.filer.topLine = 12
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 2))
+
+    check handled == true
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 7
 
   test "Click on tab line area is ignored":
     let e = createFilerEditor(20)
