@@ -26,7 +26,6 @@ suite "HelpViewer - State creation":
 
     check state.lines.len > 0
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.searchQuery == ""
 
   test "lineCount returns correct count":
@@ -146,55 +145,6 @@ suite "HelpViewer - Half page navigation":
 
     state.halfPageDown(10)
     check state.selectedIndex == state.lines.high
-
-suite "HelpViewer - Viewport":
-  test "ensureSelectedVisible scrolls up when selection above viewport":
-    let state = newHelpViewerState()
-    state.topLine = 10
-    state.selectedIndex = 5
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 5
-
-  test "ensureSelectedVisible scrolls down when selection below viewport":
-    let state = newHelpViewerState()
-    state.topLine = 0
-    state.selectedIndex = 15
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 6
-
-  test "ensureSelectedVisible does not change when selection is visible":
-    let state = newHelpViewerState()
-    state.topLine = 5
-    state.selectedIndex = 10
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 5
-
-  test "ensureSelectedVisible ensures topLine is not negative":
-    let state = newHelpViewerState()
-    state.topLine = -5
-    state.selectedIndex = 0
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 0
-
-  test "ensureSelectedVisible with selection at viewport boundary":
-    let state = newHelpViewerState()
-    state.topLine = 5
-    state.selectedIndex = 14
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 5
-
-  test "ensureSelectedVisible when selection just outside viewport":
-    let state = newHelpViewerState()
-    state.topLine = 5
-    state.selectedIndex = 15
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 6
 
 suite "HelpViewer - Section navigation":
   test "moveToNextSection jumps to next '# ' header":

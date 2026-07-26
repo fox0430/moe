@@ -40,7 +40,7 @@ type
 
   DiffViewerState* = ref object of ListViewer[DiffLine]
     ## State for the diff viewer UI.
-    ## items (diff lines)/selectedIndex/topLine/waitingForG are inherited.
+    ## items (diff lines)/selectedIndex/waitingForG are inherited.
     sourceFilePath*: string # Path of the source file (current version)
     backupFilePath*: string # Path of the backup file (old version)
     errorMessage*: string # Error message if diff failed

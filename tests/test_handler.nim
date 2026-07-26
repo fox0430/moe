@@ -1517,9 +1517,8 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     let e = createTestEditorWithBuffer("")
     e.state.mode = EditorMode.Filer
 
-    var filerState = FilerState(
-      currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false, topLine: 0
-    )
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false)
     # Add dummy entries
     for i in 0 ..< 20:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
@@ -1535,9 +1534,8 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     let e = createTestEditorWithBuffer("")
     e.state.mode = EditorMode.Filer
 
-    var filerState = FilerState(
-      currentPath: "/tmp", entries: @[], selectedIndex: 5, showHidden: false, topLine: 0
-    )
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 5, showHidden: false)
     for i in 0 ..< 20:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
     e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
@@ -1552,9 +1550,8 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     let e = createTestEditorWithBuffer("")
     e.state.mode = EditorMode.Filer
 
-    var filerState = FilerState(
-      currentPath: "/tmp", entries: @[], selectedIndex: 1, showHidden: false, topLine: 0
-    )
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 1, showHidden: false)
     for i in 0 ..< 10:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
     e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
@@ -1569,9 +1566,8 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     let e = createTestEditorWithBuffer("")
     e.state.mode = EditorMode.Filer
 
-    var filerState = FilerState(
-      currentPath: "/tmp", entries: @[], selectedIndex: 8, showHidden: false, topLine: 0
-    )
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 8, showHidden: false)
     for i in 0 ..< 10:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
     e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
@@ -1597,16 +1593,13 @@ proc createFilerEditor(
   result = createTestEditorWithBuffer("")
   result.state.mode = EditorMode.Filer
   var filerState = FilerState(
-    currentPath: "/tmp",
-    entries: @[],
-    selectedIndex: selectedIndex,
-    showHidden: false,
-    topLine: topLine,
+    currentPath: "/tmp", entries: @[], selectedIndex: selectedIndex, showHidden: false
   )
   for i in 0 ..< entryCount:
     filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
   result.windowManager.windows[0].modeState =
     ModeState(kind: mskFiler, filer: filerState)
+  result.windowManager.windows[0].viewport.topLine = topLine
 
 suite "handleMouseEvent - Left Click Filer Mode":
   test "Click selects correct entry (no tab line)":

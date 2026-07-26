@@ -43,7 +43,6 @@ type
     rootNodes*: seq[FileTreeNode]
     flatList*: seq[FileTreeNode] # Flattened visible nodes
     selectedIndex*: int
-    topLine*: int
     showHidden*: bool
     expandedDirs*: HashSet[string] # Set of expanded directory paths
     needsBufferRefresh*: bool

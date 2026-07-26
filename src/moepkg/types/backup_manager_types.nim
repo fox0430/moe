@@ -37,7 +37,7 @@ type
 
   BackupManagerState* = ref object of ListViewer[BackupEntry]
     ## State for the backup manager UI.
-    ## items (backup entries)/selectedIndex/topLine/waitingForG are inherited.
+    ## items (backup entries)/selectedIndex/waitingForG are inherited.
     sourceFilePath*: string # Path of the source file being backed up
     backupDir*: string # Directory containing backup files
     baseBackupDir*: string # Base backup directory from config

@@ -27,7 +27,7 @@ import types/debug_viewer_types
 export debug_viewer_types
 
 proc newDebugViewerState*(): DebugViewerState =
-  DebugViewerState(lines: @[], topLine: 0, selectedLine: 0)
+  DebugViewerState(lines: @[], selectedLine: 0)
 
 proc formatBool(b: bool): string =
   if b: "true" else: "false"
@@ -411,38 +411,29 @@ proc scrollUp*(state: DebugViewerState) =
   ## Scroll up one line
   if state.selectedLine > 0:
     state.selectedLine -= 1
-    if state.selectedLine < state.topLine:
-      state.topLine = state.selectedLine
 
-proc scrollDown*(state: DebugViewerState, visibleHeight: int) =
+proc scrollDown*(state: DebugViewerState) =
   ## Scroll down one line
   if state.selectedLine < state.lines.len - 1:
     state.selectedLine += 1
-    if state.selectedLine >= state.topLine + visibleHeight:
-      state.topLine = state.selectedLine - visibleHeight + 1
 
 proc scrollToTop*(state: DebugViewerState) =
   ## Scroll to the top
   state.selectedLine = 0
-  state.topLine = 0
 
-proc scrollToBottom*(state: DebugViewerState, visibleHeight: int) =
+proc scrollToBottom*(state: DebugViewerState) =
   ## Scroll to the bottom
   state.selectedLine = max(0, state.lines.len - 1)
-  state.topLine = max(0, state.lines.len - visibleHeight)
 
 proc pageUp*(state: DebugViewerState, visibleHeight: int) =
   ## Page up
   let pageSize = max(1, visibleHeight - 1)
   state.selectedLine = max(0, state.selectedLine - pageSize)
-  state.topLine = max(0, state.topLine - pageSize)
 
 proc pageDown*(state: DebugViewerState, visibleHeight: int) =
   ## Page down
   let pageSize = max(1, visibleHeight - 1)
   state.selectedLine = min(state.lines.len - 1, state.selectedLine + pageSize)
-  let maxTopLine = max(0, state.lines.len - visibleHeight)
-  state.topLine = min(maxTopLine, state.topLine + pageSize)
 
 proc createDebugTextBuffer*(state: DebugViewerState): TextBuffer =
   ## Create a TextBuffer from debug lines for rendering via the normal view path

@@ -26,7 +26,6 @@ suite "debug_viewer - DebugViewerState initialization":
   test "newDebugViewerState creates empty state":
     let state = newDebugViewerState()
     check state.lines.len == 0
-    check state.topLine == 0
     check state.selectedLine == 0
 
 suite "debug_viewer - Format helpers":
@@ -87,45 +86,40 @@ suite "debug_viewer - Scroll operations":
     let state = newDebugViewerState()
     state.lines = @["a", "b", "c"]
     state.selectedLine = 0
-    state.scrollDown(3)
+    state.scrollDown()
     check state.selectedLine == 1
 
   test "scrollDown at bottom does nothing":
     let state = newDebugViewerState()
     state.lines = @["a", "b", "c"]
     state.selectedLine = 2
-    state.scrollDown(3)
+    state.scrollDown()
     check state.selectedLine == 2
 
   test "scrollToTop resets to zero":
     let state = newDebugViewerState()
     state.lines = @["a", "b", "c", "d", "e"]
     state.selectedLine = 4
-    state.topLine = 2
     state.scrollToTop()
     check state.selectedLine == 0
-    check state.topLine == 0
 
   test "scrollToBottom goes to last line":
     let state = newDebugViewerState()
     state.lines = @["a", "b", "c", "d", "e"]
-    state.scrollToBottom(3)
+    state.scrollToBottom()
     check state.selectedLine == 4
 
   test "pageUp moves up by page size":
     let state = newDebugViewerState()
     state.lines = @["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
     state.selectedLine = 8
-    state.topLine = 5
     state.pageUp(5)
     check state.selectedLine == 4
-    check state.topLine == 1
 
   test "pageDown moves down by page size":
     let state = newDebugViewerState()
     state.lines = @["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
     state.selectedLine = 0
-    state.topLine = 0
     state.pageDown(5)
     check state.selectedLine == 4
 

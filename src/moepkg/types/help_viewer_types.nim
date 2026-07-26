@@ -27,7 +27,6 @@
 type HelpViewerState* = ref object
   lines*: seq[string] # Help lines to display
   selectedIndex*: int # Currently selected line index (cursor position)
-  topLine*: int # Scroll position (first visible line)
   searchQuery*: string # Current search query
   waitingForG*: bool # Waiting for second 'g' for 'gg' command
   lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight

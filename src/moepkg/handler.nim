@@ -550,13 +550,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
         else:
           filerState.selectedIndex =
             min(filerState.entries.len - 1, filerState.selectedIndex + scrollLines)
-        # Adjust topLine to keep selectedIndex visible
-        let viewportHeight = e.viewport.height
-        if viewportHeight > 0:
-          if filerState.selectedIndex < filerState.topLine:
-            filerState.topLine = filerState.selectedIndex
-          elif filerState.selectedIndex >= filerState.topLine + viewportHeight:
-            filerState.topLine = filerState.selectedIndex - viewportHeight + 1
       return true
 
     # Handle text editing modes
@@ -728,13 +721,16 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
   if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
     let filerState = e.activeWindow.modeState.filer
     let
+      vp = e.activeWindow.viewport
       tabLineOffset = if e.showTabLine: TabLineHeight else: 0
-      reservedLines = steadyBottomAreaHeight()
-      adjustedMouseY = mouse.y - tabLineOffset
+      # Same reserve the renderer uses, so the hit test maps to the drawn row.
+      maxBottomY = findMaxBottomY(e.windowManager.windows)
+      reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
+      screenY = mouse.y - vp.y - tabLineOffset
 
     # Ignore clicks on tab line or status/command line area
-    if adjustedMouseY >= 0 and adjustedMouseY < e.viewport.height - reservedLines:
-      let clickedIndex = filerState.topLine + adjustedMouseY
+    if screenY >= 0 and screenY < vp.height - tabLineOffset - reservedLines:
+      let clickedIndex = vp.topLine + screenY
       if clickedIndex >= 0 and clickedIndex < filerState.entries.len:
         filerState.selectedIndex = clickedIndex
         return true

@@ -71,11 +71,7 @@ proc newFilerState*(path: string): FilerState =
   ## Create a new FilerState for the given directory
   let normalizedPath = normalizedPath(absolutePath(expandTilde(path)))
   result = FilerState(
-    currentPath: normalizedPath,
-    entries: @[],
-    selectedIndex: 0,
-    showHidden: true,
-    topLine: 0,
+    currentPath: normalizedPath, entries: @[], selectedIndex: 0, showHidden: true
   )
   result.refresh()
 
@@ -111,7 +107,6 @@ proc moveDown*(state: FilerState) =
 proc moveToFirst*(state: FilerState) =
   ## Move selection to the first entry
   state.selectedIndex = 0
-  state.topLine = 0
 
 proc moveToLast*(state: FilerState) =
   ## Move selection to the last entry
@@ -128,7 +123,6 @@ proc enterDirectory*(state: FilerState, path: string): bool =
   if dirExists(normalizedPath):
     state.currentPath = normalizedPath
     state.selectedIndex = 0
-    state.topLine = 0
     state.refresh()
     true
   else:
@@ -143,7 +137,6 @@ proc goToParent*(state: FilerState): bool =
     let oldDir = extractFilename(state.currentPath)
     state.currentPath = parent
     state.selectedIndex = 0
-    state.topLine = 0
     state.refresh()
 
     # Try to select the directory we came from
@@ -156,40 +149,17 @@ proc goToParent*(state: FilerState): bool =
   else:
     false
 
-proc visibleEntries*(state: FilerState, height: int): seq[FileEntry] =
-  ## Get the visible entries based on current scroll position
-  let startIdx = state.topLine
-  let endIdx = min(state.topLine + height, state.entries.len)
-  if startIdx < state.entries.len:
-    state.entries[startIdx ..< endIdx]
-  else:
-    @[]
-
-proc ensureSelectedVisible*(
-    state: FilerState, viewportHeight: int, reservedLines: int = 1
-) =
-  ## Ensure the selected entry is visible in the viewport
-  ## reservedLines: total lines reserved (status + command share same row)
-  let availableHeight = max(1, viewportHeight - reservedLines)
-
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-  elif state.selectedIndex >= state.topLine + availableHeight:
-    state.topLine = state.selectedIndex - availableHeight + 1
-
 proc halfPageDown*(state: FilerState, viewportHeight: int, reservedLines: int = 1) =
   ## Move half a page down
   let availableHeight = max(1, viewportHeight - reservedLines)
   let halfPage = max(1, availableHeight div 2)
   state.selectedIndex = min(state.entries.len - 1, state.selectedIndex + halfPage)
-  state.ensureSelectedVisible(viewportHeight, reservedLines)
 
 proc halfPageUp*(state: FilerState, viewportHeight: int, reservedLines: int = 1) =
   ## Move half a page up
   let availableHeight = max(1, viewportHeight - reservedLines)
   let halfPage = max(1, availableHeight div 2)
   state.selectedIndex = max(0, state.selectedIndex - halfPage)
-  state.ensureSelectedVisible(viewportHeight, reservedLines)
 
 proc deleteSelected*(
     state: FilerState

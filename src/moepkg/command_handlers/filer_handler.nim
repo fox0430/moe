@@ -90,11 +90,9 @@ proc handleFilerModeKey*(
       return FilerResult(kind: frHandled)
     of skUp:
       filerState.moveUp()
-      filerState.ensureSelectedVisible(viewportHeight)
       return FilerResult(kind: frHandled)
     of skDown:
       filerState.moveDown()
-      filerState.ensureSelectedVisible(viewportHeight)
       return FilerResult(kind: frHandled)
     else:
       discard
@@ -115,11 +113,9 @@ proc handleFilerModeKey*(
       return FilerResult(kind: frEnterCommand)
     of "j":
       filerState.moveDown()
-      filerState.ensureSelectedVisible(viewportHeight)
       return FilerResult(kind: frHandled)
     of "k":
       filerState.moveUp()
-      filerState.ensureSelectedVisible(viewportHeight)
       return FilerResult(kind: frHandled)
     of "l":
       # Enter directory or open file (follows symlinks)
@@ -138,7 +134,6 @@ proc handleFilerModeKey*(
       return FilerResult(kind: frHandled)
     of "G":
       filerState.moveToLast()
-      filerState.ensureSelectedVisible(viewportHeight)
       return FilerResult(kind: frHandled)
     of ".":
       filerState.toggleHidden()

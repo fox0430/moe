@@ -31,5 +31,5 @@ type
     path*: string
 
   RecentFileModeState* = ref object of ListViewer[RecentFileEntry]
-    ## items (recent file entries)/selectedIndex/topLine/waitingForG are
+    ## items (recent file entries)/selectedIndex/waitingForG are
     ## inherited from ListViewer.

@@ -26,5 +26,4 @@
 
 type DebugViewerState* = ref object ## State for the debug mode viewer
   lines*: seq[string] # Debug information lines
-  topLine*: int # Top visible line (for scrolling)
   selectedLine*: int # Currently selected line (for navigation)
