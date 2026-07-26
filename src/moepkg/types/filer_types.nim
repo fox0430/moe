@@ -47,7 +47,6 @@ type
     entries*: seq[FileEntry] # File/directory entries
     selectedIndex*: int # Currently selected entry index
     showHidden*: bool # Whether to show hidden files
-    topLine*: int # Scroll position (first visible line)
     needsBufferRefresh*: bool # Flag to trigger buffer regeneration after state changes
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
     # Cursor/viewport of the underlying buffer captured on entry, so quitting

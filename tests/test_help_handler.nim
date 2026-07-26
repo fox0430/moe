@@ -318,55 +318,32 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
     check result.kind == hvrHandled
     check helpState.selectedIndex == 0
 
-  test "} adjusts topLine to keep target visible":
+suite "help_handler: handleHelpViewerModeKey - Selection movement":
+  test "Moving down past the viewport edge keeps advancing the selection":
     let helpState = newHelpViewerState()
-    helpState.selectedIndex = 0
-    helpState.topLine = 0
-
-    let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("}"))
-
-    check result.kind == hvrHandled
-    check helpState.topLine <= helpState.selectedIndex
-    check helpState.topLine + TestViewportHeight > helpState.selectedIndex
-
-suite "help_handler: handleHelpViewerModeKey - Scroll adjustment":
-  test "Moving down adjusts topLine when cursor goes below viewport":
-    let helpState = newHelpViewerState()
-    # Set position at the bottom edge of viewport
     helpState.selectedIndex = TestViewportHeight - 1
-    helpState.topLine = 0
 
-    # Move down should trigger scroll adjustment
     let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("j"))
 
     check result.kind == hvrHandled
     check helpState.selectedIndex == TestViewportHeight
-    check helpState.topLine == 1 # topLine adjusted to keep cursor visible
 
-  test "Moving up adjusts topLine when cursor goes above viewport":
+  test "Moving up past the viewport edge keeps retreating the selection":
     let helpState = newHelpViewerState()
-    # Set position at top of viewport (which is scrolled down)
     helpState.selectedIndex = 30
-    helpState.topLine = 30
 
-    # Move up should trigger scroll adjustment
     let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("k"))
 
     check result.kind == hvrHandled
     check helpState.selectedIndex == 29
-    check helpState.topLine == 29 # topLine adjusted to keep cursor visible
 
-  test "G command scrolls to make last line visible":
+  test "G moves the selection to the last line":
     let helpState = newHelpViewerState()
-    helpState.topLine = 0
 
     let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("G"))
 
     check result.kind == hvrHandled
     check helpState.selectedIndex == helpState.lines.high
-    # topLine should be adjusted so selected line is visible
-    check helpState.topLine <= helpState.selectedIndex
-    check helpState.topLine + TestViewportHeight > helpState.selectedIndex
 
 suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highlight":
   test "First Escape returns handled and marks lastKeyWasEscape":

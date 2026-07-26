@@ -145,7 +145,6 @@ proc newFileTreeState*(
     rootNodes: @[],
     flatList: @[],
     selectedIndex: 0,
-    topLine: 0,
     showHidden: false,
     expandedDirs: initHashSet[string](),
     needsBufferRefresh: true,
@@ -203,7 +202,6 @@ proc moveDown*(state: FileTreeState) =
 proc moveToFirst*(state: FileTreeState) =
   if state.flatList.len > 0:
     state.selectedIndex = 0
-    state.topLine = 0
 
 proc moveToLast*(state: FileTreeState) =
   if state.flatList.len > 0:
@@ -221,14 +219,7 @@ proc moveToParent*(state: FileTreeState): bool =
         return true
   return false
 
-proc ensureSelectedVisible*(state: FileTreeState, viewportHeight: int) =
-  let availableHeight = max(1, viewportHeight - 1)
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-  elif state.selectedIndex >= state.topLine + availableHeight:
-    state.topLine = state.selectedIndex - availableHeight + 1
-
-proc jumpToNextMatch*(state: FileTreeState, viewportHeight: int) =
+proc jumpToNextMatch*(state: FileTreeState) =
   ## Jump to the next search match, wrapping around.
   if state.searchMatches.len == 0:
     return
@@ -237,10 +228,9 @@ proc jumpToNextMatch*(state: FileTreeState, viewportHeight: int) =
   else:
     state.searchMatchIndex = (state.searchMatchIndex + 1) mod state.searchMatches.len
   state.selectedIndex = state.searchMatches[state.searchMatchIndex]
-  state.ensureSelectedVisible(viewportHeight)
   state.needsBufferRefresh = true
 
-proc jumpToPrevMatch*(state: FileTreeState, viewportHeight: int) =
+proc jumpToPrevMatch*(state: FileTreeState) =
   ## Jump to the previous search match, wrapping around.
   if state.searchMatches.len == 0:
     return
@@ -250,16 +240,14 @@ proc jumpToPrevMatch*(state: FileTreeState, viewportHeight: int) =
     state.searchMatchIndex =
       (state.searchMatchIndex - 1 + state.searchMatches.len) mod state.searchMatches.len
   state.selectedIndex = state.searchMatches[state.searchMatchIndex]
-  state.ensureSelectedVisible(viewportHeight)
   state.needsBufferRefresh = true
 
-proc jumpToFirstMatch*(state: FileTreeState, viewportHeight: int) =
+proc jumpToFirstMatch*(state: FileTreeState) =
   ## Jump to the first search match.
   if state.searchMatches.len == 0:
     return
   state.searchMatchIndex = 0
   state.selectedIndex = state.searchMatches[0]
-  state.ensureSelectedVisible(viewportHeight)
   state.needsBufferRefresh = true
 
 proc clearSearch*(state: FileTreeState) =
@@ -277,7 +265,6 @@ proc changeRoot*(state: FileTreeState) =
       state.rootPath = node.path
       state.expandedDirs.clear()
       state.selectedIndex = 0
-      state.topLine = 0
       state.refreshTree()
 
 proc moveRootUp*(state: FileTreeState) =
@@ -287,7 +274,6 @@ proc moveRootUp*(state: FileTreeState) =
     state.rootPath = parent
     state.expandedDirs.clear()
     state.selectedIndex = 0
-    state.topLine = 0
     state.refreshTree()
 
 proc toggleHidden*(state: FileTreeState) =

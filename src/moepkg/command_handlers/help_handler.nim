@@ -84,11 +84,9 @@ proc handleHelpViewerModeKey*(
     case keyCombo.special
     of skUp:
       helpState.moveUp()
-      helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
     of skDown:
       helpState.moveDown()
-      helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
     else:
       discard
@@ -115,22 +113,18 @@ proc handleHelpViewerModeKey*(
       # Search forward for next match. Re-enable highlight (like Vim's n) only
       # when there is a match to jump to; an empty query must not touch the gate.
       if helpState.searchForward().isSome:
-        helpState.ensureSelectedVisible(viewportHeight)
         return HelpViewerResult(kind: hvrRepeatSearch)
       return HelpViewerResult(kind: hvrHandled)
     of "N":
       # Search backward for previous match (see "n" for the gate rationale).
       if helpState.searchBackward().isSome:
-        helpState.ensureSelectedVisible(viewportHeight)
         return HelpViewerResult(kind: hvrRepeatSearch)
       return HelpViewerResult(kind: hvrHandled)
     of "j":
       helpState.moveDown()
-      helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
     of "k":
       helpState.moveUp()
-      helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
     of "g":
       # Start waiting for second 'g'
@@ -138,15 +132,12 @@ proc handleHelpViewerModeKey*(
       return HelpViewerResult(kind: hvrHandled)
     of "G":
       helpState.moveToLast()
-      helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
     of "}":
       helpState.moveToNextSection()
-      helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
     of "{":
       helpState.moveToPreviousSection()
-      helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
     else:
       discard

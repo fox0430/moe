@@ -78,7 +78,7 @@ proc handleFileTreeModeKey*(
           fileTreeState.searchText.setLen(fileTreeState.searchText.len - 1)
           fileTreeState.updateSearchMatches()
           if fileTreeState.searchMatches.len > 0:
-            fileTreeState.jumpToFirstMatch(viewportHeight)
+            fileTreeState.jumpToFirstMatch()
         return FileTreeResult(
           kind: ftrHandled, statusMessage: "/" & fileTreeState.searchText
         )
@@ -91,7 +91,7 @@ proc handleFileTreeModeKey*(
       fileTreeState.searchText.add(keyCombo.char)
       fileTreeState.updateSearchMatches()
       if fileTreeState.searchMatches.len > 0:
-        fileTreeState.jumpToFirstMatch(viewportHeight)
+        fileTreeState.jumpToFirstMatch()
       return
         FileTreeResult(kind: ftrHandled, statusMessage: "/" & fileTreeState.searchText)
 
@@ -100,7 +100,6 @@ proc handleFileTreeModeKey*(
     fileTreeState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       fileTreeState.moveToFirst()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     # Non-g key cancels the pending g and falls through to handle it normally
 
@@ -144,17 +143,14 @@ proc handleFileTreeModeKey*(
       if node.isSome:
         if node.get.isDirectory:
           fileTreeState.toggleExpand()
-          fileTreeState.ensureSelectedVisible(viewportHeight)
         else:
           return FileTreeResult(kind: ftrOpenFile, filePath: node.get.path)
       return FileTreeResult(kind: ftrHandled)
     of skUp:
       fileTreeState.moveUp()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of skDown:
       fileTreeState.moveDown()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     else:
       discard
@@ -174,19 +170,17 @@ proc handleFileTreeModeKey*(
       return FileTreeResult(kind: ftrHandled, statusMessage: "/")
     of "n":
       # Next search match
-      fileTreeState.jumpToNextMatch(viewportHeight)
+      fileTreeState.jumpToNextMatch()
       return FileTreeResult(kind: ftrHandled)
     of "N":
       # Previous search match
-      fileTreeState.jumpToPrevMatch(viewportHeight)
+      fileTreeState.jumpToPrevMatch()
       return FileTreeResult(kind: ftrHandled)
     of "j":
       fileTreeState.moveDown()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "k":
       fileTreeState.moveUp()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "o":
       # Open file or toggle expand/collapse directory
@@ -194,7 +188,6 @@ proc handleFileTreeModeKey*(
       if node.isSome:
         if node.get.isDirectory:
           fileTreeState.toggleExpand()
-          fileTreeState.ensureSelectedVisible(viewportHeight)
         else:
           return FileTreeResult(kind: ftrOpenFile, filePath: node.get.path)
       return FileTreeResult(kind: ftrHandled)
@@ -204,14 +197,12 @@ proc handleFileTreeModeKey*(
       if node.isSome:
         if node.get.isDirectory:
           fileTreeState.expandSelected()
-          fileTreeState.ensureSelectedVisible(viewportHeight)
         else:
           return FileTreeResult(kind: ftrOpenFile, filePath: node.get.path)
       return FileTreeResult(kind: ftrHandled)
     of "x", "h":
       # Collapse or move to parent
       fileTreeState.collapseSelected()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "p":
       # Move to parent node
@@ -219,34 +210,28 @@ proc handleFileTreeModeKey*(
         return FileTreeResult(
           kind: ftrError, errorMessage: "Parent directory not visible in tree"
         )
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "C":
       # Change root to selected directory
       fileTreeState.changeRoot()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "u":
       # Move root up one level
       fileTreeState.moveRootUp()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of ".":
       # Toggle hidden files
       fileTreeState.toggleHidden()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "R":
       # Refresh tree
       fileTreeState.refreshTree()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "g":
       fileTreeState.waitingForG = true
       return FileTreeResult(kind: ftrHandled)
     of "G":
       fileTreeState.moveToLast()
-      fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     else:
       discard

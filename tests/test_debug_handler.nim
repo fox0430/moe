@@ -63,7 +63,6 @@ suite "Debug handler - Navigation keys":
   test "g key scrolls to top":
     let debugState = createDebugState(@["line1", "line2", "line3"])
     debugState.selectedLine = 2
-    debugState.topLine = 1
     let keyCombo = charKeyCombo('g')
     let viewportHeight = 10
 
@@ -71,7 +70,6 @@ suite "Debug handler - Navigation keys":
 
     check result.kind == dvrHandled
     check debugState.selectedLine == 0
-    check debugState.topLine == 0
 
   test "G key scrolls to bottom":
     let debugState = createDebugState(@["line1", "line2", "line3"])
@@ -149,7 +147,6 @@ suite "Debug handler - Page navigation":
       ]
     )
     debugState.selectedLine = 8
-    debugState.topLine = 4
     let keyCombo = ctrlKeyCombo('u')
     let viewportHeight = 5
 
@@ -181,7 +178,6 @@ suite "Debug handler - Page navigation":
       ]
     )
     debugState.selectedLine = 8
-    debugState.topLine = 4
     let keyCombo = specialKeyCombo(skPageUp)
     let viewportHeight = 5
 

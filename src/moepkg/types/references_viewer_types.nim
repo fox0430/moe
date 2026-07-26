@@ -35,7 +35,7 @@ type
     text*: string # Optional context text
 
   ReferencesViewerState* = ref object of ListViewer[ReferenceItem]
-    ## items/selectedIndex/topLine/waitingForG/title are inherited.
+    ## items/selectedIndex/waitingForG/title are inherited.
     # When true, jumping to a selected item opens a new vertical split window
     # instead of reusing the current one (goto features' openWindow option).
     openWindowOnJump*: bool
