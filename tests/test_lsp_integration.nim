@@ -661,6 +661,20 @@ suite "LspIntegration - applyTextEdits":
     check result.isOk
     check buffer.getLine(0) == "hello"
 
+  test "applyTextEdits skips malformed range where end=(0,0) and start>end":
+    let buffer = newTextBuffer("hello world")
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 5), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "",
+      )
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isOk
+    check buffer.getLine(0) == "hello world"
+
   test "applyTextEdits multiple edits in reverse order":
     let buffer = newTextBuffer("abc")
     let edits = @[
