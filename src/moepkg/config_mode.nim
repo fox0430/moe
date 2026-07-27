@@ -366,7 +366,6 @@ proc newConfigModeState*(config: EditorConfig): ConfigModeState =
   result = ConfigModeState(
     items: @[],
     selectedIndex: 0,
-    topLine: 0,
     editMode: false,
     editBuffer: "",
     editCursor: 0,
@@ -397,25 +396,15 @@ proc moveUp*(state: ConfigModeState) =
   ## Move selection up
   if state.selectedIndex > 0:
     state.selectedIndex.dec
-    if state.selectedIndex < state.topLine:
-      state.topLine = state.selectedIndex
 
 proc moveDown*(state: ConfigModeState) =
   ## Move selection down
   if state.selectedIndex < state.items.len - 1:
     state.selectedIndex.inc
 
-proc ensureSelectedVisible*(state: ConfigModeState, viewportHeight: int) =
-  ## Ensure the selected item is visible in the viewport
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-  elif state.selectedIndex >= state.topLine + viewportHeight:
-    state.topLine = state.selectedIndex - viewportHeight + 1
-
 proc moveToFirst*(state: ConfigModeState) =
   ## Move to first item
   state.selectedIndex = 0
-  state.topLine = 0
 
 proc moveToLast*(state: ConfigModeState) =
   ## Move to last item

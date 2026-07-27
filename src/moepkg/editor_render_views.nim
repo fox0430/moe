@@ -235,10 +235,29 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
     # (e.g. resuming a long backup list after closing a diff). No-op for modes
     # whose modeState isn't a selection list.
     window.syncSelectionCursor()
-    adjustViewportForCursor(
-      window.viewport, window.cursor, layout.adjustHeight, layout.textAreaWidth,
-      layout.effectiveLineWrap, window.buffer, e.tabStop, window.wrapCountCache,
-    )
+    if window.modeState.kind == mskConfig:
+      # Config has no backing TextBuffer to walk; its list geometry matches
+      # renderConfig (viewport height minus the steady bottom reserve and tab
+      # line), so scroll the shared viewport directly to keep the selected
+      # item visible.
+      let
+        visible = max(
+          1,
+          window.viewport.height - steadyReservedBottom(layout.isBottomWindow) -
+            tabLineOffset,
+        )
+        selected = window.modeState.config.selectedIndex
+      if selected < window.viewport.topLine:
+        window.viewport.topLine = selected
+      elif selected >= window.viewport.topLine + visible:
+        window.viewport.topLine = selected - visible + 1
+      if window.viewport.topLine < 0:
+        window.viewport.topLine = 0
+    else:
+      adjustViewportForCursor(
+        window.viewport, window.cursor, layout.adjustHeight, layout.textAreaWidth,
+        layout.effectiveLineWrap, window.buffer, e.tabStop, window.wrapCountCache,
+      )
 
   # Set screen cursor to active window position.
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:

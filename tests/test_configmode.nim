@@ -31,7 +31,6 @@ suite "ConfigMode - ConfigModeState initialization":
     let state = newConfigModeState(cfg)
 
     check state.selectedIndex == 0
-    check state.topLine == 0
     check state.editMode == false
     check state.editBuffer == ""
     check state.editCursor == 0
@@ -119,25 +118,13 @@ suite "ConfigMode - Navigation":
     state.moveUp()
     check state.selectedIndex == 0
 
-  test "moveUp adjusts topLine when needed":
-    let cfg = newEditorConfig()
-    let state = newConfigModeState(cfg)
-    state.selectedIndex = 5
-    state.topLine = 5
-
-    state.moveUp()
-    check state.selectedIndex == 4
-    check state.topLine == 4
-
   test "moveToFirst goes to index 0":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
     state.selectedIndex = 10
-    state.topLine = 5
 
     state.moveToFirst()
     check state.selectedIndex == 0
-    check state.topLine == 0
 
   test "moveToLast goes to last item":
     let cfg = newEditorConfig()
@@ -145,24 +132,6 @@ suite "ConfigMode - Navigation":
 
     state.moveToLast()
     check state.selectedIndex == state.items.len - 1
-
-  test "ensureSelectedVisible adjusts topLine for above viewport":
-    let cfg = newEditorConfig()
-    let state = newConfigModeState(cfg)
-    state.selectedIndex = 3
-    state.topLine = 10
-
-    state.ensureSelectedVisible(20)
-    check state.topLine == 3
-
-  test "ensureSelectedVisible adjusts topLine for below viewport":
-    let cfg = newEditorConfig()
-    let state = newConfigModeState(cfg)
-    state.selectedIndex = 30
-    state.topLine = 0
-
-    state.ensureSelectedVisible(10)
-    check state.topLine == 21 # selectedIndex - viewportHeight + 1
 
 suite "ConfigMode - Bool value manipulation":
   test "toggleBoolValue toggles bool item":
