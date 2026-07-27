@@ -21,7 +21,8 @@
 
 import std/[unittest, monotimes, tables, times, json, options, importutils]
 
-import ../src/moepkg/[editor, buffer, config, config_loader, types, hover_popup]
+import ../src/moepkg/[editor, config, config_loader, types, hover_popup]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/editor_hover
 import ../src/moepkg/lsp_service
 

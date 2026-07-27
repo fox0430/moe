@@ -21,7 +21,7 @@
 
 import std/[strutils, options, times]
 
-import modes, buffer
+import modes, buffer/core
 
 import types/debug_viewer_types
 export debug_viewer_types

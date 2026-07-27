@@ -21,10 +21,11 @@ import std/[unittest, options, strutils]
 
 import
   ../src/moepkg/[
-    editor, editor_window_state, config, config_mode, types, buffer, modes, help_viewer,
+    editor, editor_window_state, config, config_mode, types, modes, help_viewer,
     diff_viewer, buffer_manager, backup_manager, references_viewer, recent_file_mode,
     debug_viewer, message_log,
   ]
+import ../src/moepkg/buffer/core
 
 # Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =

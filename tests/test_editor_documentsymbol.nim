@@ -21,7 +21,8 @@
 
 import std/[unittest, options, importutils, json, tables]
 
-import ../src/moepkg/[editor, buffer, config, config_loader, lsp_service, types]
+import ../src/moepkg/[editor, config, config_loader, lsp_service, types]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/editor_documentsymbol
 
 proc createTestEditor(): Editor =

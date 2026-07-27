@@ -21,7 +21,8 @@
 
 import std/[unittest, options]
 
-import ../src/moepkg/[bookmark_manager, buffer, key_bindings]
+import ../src/moepkg/[bookmark_manager, key_bindings]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/bookmark_manager_handler
 
 proc createTestBookmarkManagerState(): BookmarkManagerState =

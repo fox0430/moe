@@ -27,7 +27,8 @@ import std/[options, os, tables, unittest]
 
 import pkg/results
 
-import ../src/moepkg/[editor, config, config_loader, types, buffer]
+import ../src/moepkg/[editor, config, config_loader, types]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/editor_lsp
 
 proc createTestEditor(): Editor =

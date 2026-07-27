@@ -33,11 +33,12 @@ from std/strutils import startsWith
 
 import
   ../src/moepkg/[
-    editor, buffer, config, config_loader, types, lsp_service, editor_navigation,
+    editor, config, config_loader, types, lsp_service, editor_navigation,
     editor_documentsymbol, editor_callhierarchy, window_manager, editor_window,
     editor_window_state, editor_buffers, diff_viewer, message_log,
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
 const TestLines = "aaaa\nbbbb\ncccc\ndddd\neeee\nffff\ngggg\nhhhh\niiii\njjjj\n"
