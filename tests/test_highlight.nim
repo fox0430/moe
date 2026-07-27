@@ -3845,9 +3845,6 @@ suite "Highlight - Semantic overlay edit shift":
   test "single-line shift clips token whose tail exceeds new line length":
     # Token [10..20), new line length 15 → clipped to length 5.
     let h = mkH({0: @[mkTok(10, 10)]})
-    h.semanticShiftForSingleLineEdit(0, 5, 0, 15) # colDelta=0 short-circuits
-    # colDelta=0 short-circuits; try non-zero delta forcing clip.
-    # Actually with colDelta 0 nothing changes. Use colDelta -2:
     h.semanticShiftForSingleLineEdit(0, 5, -2, 15)
     # After shift: token at firstColumn=8, length would be 10, clipped to 7.
     check h.semantic[0].tokens.len == 1
