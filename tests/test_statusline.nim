@@ -23,7 +23,8 @@ import std/[unittest, options, tables, strutils, os, osproc]
 
 import pkg/celina
 
-import ../src/moepkg/[types, modes, registers, buffer, config, git_cache]
+import ../src/moepkg/[types, modes, registers, config, git_cache]
+import ../src/moepkg/buffer/[core, edit]
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
 
