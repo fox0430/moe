@@ -285,7 +285,7 @@ suite "Editor - applyConfigSettings live-reload (S1 regression)":
 
     let request = e.state.takeMouseCaptureRequest()
     check request.isSome
-    check request.get == true
+    check request.get() == true
     check e.state.takeMouseCaptureRequest().isNone
 
 suite "Editor - applyConfigSettings LSP server configs":
