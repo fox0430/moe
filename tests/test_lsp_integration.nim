@@ -18,8 +18,10 @@
 #[############################################################################]#
 
 import
-  std/
-    [unittest, json, options, os, tables, times, strutils, importutils, deques, random]
+  std/[
+    unittest, json, options, os, tables, times, strutils, importutils, deques, random,
+    unicode,
+  ]
 
 import pkg/results
 
@@ -275,7 +277,22 @@ suite "LspIntegration - Progress Text":
       startTime: 0.0,
     )
     let text = getProgressText(state)
-    check text.len <= MaxProgressTextLen + 10 # Allow some margin for UTF-8
+    check text.len <= MaxProgressTextLen
+
+  test "getProgressText truncates long full-width text by display width":
+    let state = LspProgressState(
+      token: "1",
+      langId: "nim",
+      title: "とても長いタイトルで切り詰められるはず",
+      message: some(
+        "これはさらに長いメッセージで上限を確実に超える内容です"
+      ),
+      percentage: some(99),
+      cancellable: false,
+      startTime: 0.0,
+    )
+    let text = getProgressText(state)
+    check displayWidthUpTo(text, text.runeLen) <= MaxProgressTextLen
 
 suite "LspIntegration - Hover Text":
   test "getHoverText with string content":
