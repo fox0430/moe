@@ -1079,8 +1079,16 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
       edit.range.start.line == lspEndPos.line and
       edit.range.start.character == lspEndPos.character
 
+    # Malformed range where start > end (spec-compliant servers never send this).
+    # Treat as empty so we skip deletion but still honor the insert at startPos.
+    let isMalformedRange =
+      lspEndPos.line < edit.range.start.line or (
+        lspEndPos.line == edit.range.start.line and
+        lspEndPos.character < edit.range.start.character
+      )
+
     # Delete the range if it's not empty
-    if not isEmptyRange:
+    if not isEmptyRange and not isMalformedRange:
       # Convert LSP exclusive end to buffer inclusive end
       var adjustedEndPos: BufferPosition
 
@@ -1106,13 +1114,10 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
       else:
         # End is at start of a line (character == 0)
         # Need to point to end of previous line to include the newline
-        if lspEndPos.line > 0:
-          let prevIdx = min(lspEndPos.line - 1, buffer.len - 1)
-          adjustedEndPos =
-            BufferPosition(line: prevIdx, column: buffer.getLine(prevIdx).charLen)
-        else:
-          # Edge case: end is at (0, 0), skip deletion
-          adjustedEndPos = startPos
+        # lspEndPos.line > 0 here: isMalformedRange rejected end at (0,0).
+        let prevIdx = min(lspEndPos.line - 1, buffer.len - 1)
+        adjustedEndPos =
+          BufferPosition(line: prevIdx, column: buffer.getLine(prevIdx).charLen)
 
       # Only delete if we have a valid range
       if startPos.line < adjustedEndPos.line or (
