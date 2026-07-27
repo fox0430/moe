@@ -19,8 +19,6 @@
 
 import std/options
 
-import pkg/results
-
 import types, buffer, motion, command_registry, key_bindings
 
 type CommandExecutor* = ref object
@@ -90,43 +88,3 @@ proc newCommandExecutor*(
     commandRegistry: cmdReg,
     keyBindingRegistry: keyReg,
   )
-
-proc execute*(e: CommandExecutor, command: string): Result[(), string] =
-  ## Execute a command string through the command registry
-  let ctx = CommandContext(
-    buffer: e.buffer,
-    state: e.state,
-    viewport: e.viewport,
-    motionController: e.motionController,
-    keyBindingRegistry: nil,
-  )
-
-  let r = e.commandRegistry.execute(ctx, command)
-  if r.isOk:
-    e.state.pendingInput.pendingCommand = PendingNone
-    e.state.input.commandText = ""
-    e.state.input.commandCursor = 0
-
-  return r
-
-proc executeKeybinding*(
-    e: CommandExecutor, binding: key_bindings.Command
-): Result[(), string] =
-  ## Execute a keybinding command
-  let ctx = CommandContext(
-    buffer: e.buffer,
-    state: e.state,
-    viewport: e.viewport,
-    motionController: e.motionController,
-    keyBindingRegistry: nil,
-  )
-
-  return e.commandRegistry.executeCommand(ctx, binding)
-
-# Compatibility methods for existing code
-proc executeMotion*(exec: CommandExecutor, motion: Motion, count: int = 1) =
-  ## Compatibility wrapper for direct motion execution
-  let cmd = MotionCommand(motion: motion, count: count)
-  let r = exec.motionController.executeMotion(cmd, exec.cursor)
-  if r.isOk:
-    exec.cursor = r.value
