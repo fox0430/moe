@@ -424,8 +424,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         e.redirectWindowsFromBuffer(deletedBuffer, newBuf)
 
         # Update executor if current buffer was deleted
-        if e.activeBuffer() != e.executer.buffer:
-          e.executer.setBuffer(e.activeBuffer())
+        if e.activeBuffer() != e.motionController.buffer:
+          e.motionController.setBuffer(e.activeBuffer())
 
         # Keep state.windowDisplay.currentBufferId off the deleted buffer so subsequent
         # Jump List (Ctrl-o/Ctrl-i) compares don't false-match a dead id.

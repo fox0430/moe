@@ -279,8 +279,8 @@ suite "saveActiveWindowState":
   test "saves viewport state":
     let e = createTestEditor()
     # Set viewport in motion controller
-    e.executer.motionController.viewportManager.viewport.topLine = 10
-    e.executer.motionController.viewportManager.viewport.leftColumn = 5
+    e.motionController.viewportManager.viewport.topLine = 10
+    e.motionController.viewportManager.viewport.leftColumn = 5
 
     e.saveActiveWindowState()
 
@@ -307,8 +307,8 @@ suite "syncActiveWindow":
 
     e.syncActiveWindow()
 
-    check e.executer.buffer == newBuffer
-    check e.executer.motionController.executor.buffer == newBuffer
+    check e.motionController.buffer == newBuffer
+    check e.motionController.executor.buffer == newBuffer
 
   test "syncs viewport to motion controller":
     let e = createTestEditor()
@@ -317,13 +317,13 @@ suite "syncActiveWindow":
 
     e.syncActiveWindow()
 
-    check e.executer.motionController.viewportManager.viewport.topLine == 15
-    check e.executer.motionController.viewportManager.viewport.leftColumn == 8
+    check e.motionController.viewportManager.viewport.topLine == 15
+    check e.motionController.viewportManager.viewport.leftColumn == 8
 
   test "binds wrapCountCache to active window's cache":
     let e = createTestEditor()
     e.syncActiveWindow()
-    check e.executer.motionController.viewportManager.wrapCountCache ==
+    check e.motionController.viewportManager.wrapCountCache ==
       e.activeWindow.wrapCountCache
 
   test "hsplit rebinds wrapCountCache to the new active window":
@@ -333,8 +333,7 @@ suite "syncActiveWindow":
     check res.isOk
     let win1 = e.activeWindow
     check win1 != win0
-    check e.executer.motionController.viewportManager.wrapCountCache ==
-      win1.wrapCountCache
+    check e.motionController.viewportManager.wrapCountCache == win1.wrapCountCache
 
   test "closeWindow rebinds wrapCountCache after switching active window":
     # vsplit inserts the new window at activeWindowIndex, so after vsplit
@@ -349,8 +348,7 @@ suite "syncActiveWindow":
     let shouldQuit = e.closeWindow()
     check not shouldQuit
     check e.activeWindow == survivor
-    check e.executer.motionController.viewportManager.wrapCountCache ==
-      survivor.wrapCountCache
+    check e.motionController.viewportManager.wrapCountCache == survivor.wrapCountCache
 
   test "vsplit rebinds wrapCountCache to the new active window":
     let e = createTestEditor()
@@ -359,8 +357,7 @@ suite "syncActiveWindow":
     check res.isOk
     let win1 = e.activeWindow
     check win1 != win0
-    check e.executer.motionController.viewportManager.wrapCountCache ==
-      win1.wrapCountCache
+    check e.motionController.viewportManager.wrapCountCache == win1.wrapCountCache
 
   test "switchToNextWindow rebinds wrapCountCache":
     let e = createTestEditor()
@@ -370,8 +367,7 @@ suite "syncActiveWindow":
     e.switchToNextWindow()
     let winB = e.activeWindow
     check winA != winB
-    check e.executer.motionController.viewportManager.wrapCountCache ==
-      winB.wrapCountCache
+    check e.motionController.viewportManager.wrapCountCache == winB.wrapCountCache
 
   test "closeWindow rebinds wrapCountCache to the surviving window":
     let e = createTestEditor()
@@ -379,7 +375,7 @@ suite "syncActiveWindow":
     check res.isOk
     let shouldQuit = e.closeWindow()
     check not shouldQuit
-    check e.executer.motionController.viewportManager.wrapCountCache ==
+    check e.motionController.viewportManager.wrapCountCache ==
       e.activeWindow.wrapCountCache
 
   test "enew rebinds wrapCountCache (same window, new buffer)":
@@ -394,7 +390,7 @@ suite "syncActiveWindow":
     let res = e.enew()
     check res.isOk
 
-    check e.executer.motionController.viewportManager.wrapCountCache ==
+    check e.motionController.viewportManager.wrapCountCache ==
       e.activeWindow.wrapCountCache
 
     let newBuf = e.activeWindow.buffer
@@ -493,13 +489,13 @@ suite "enew - additional cases":
 
   test "syncs with executor":
     let e = createTestEditor()
-    let oldBuffer = e.executer.buffer
+    let oldBuffer = e.motionController.buffer
 
     let result = e.enew()
     check result.isOk
     # Executor should have the new buffer
-    check e.executer.buffer != oldBuffer
-    check e.executer.buffer == e.activeWindow.buffer
+    check e.motionController.buffer != oldBuffer
+    check e.motionController.buffer == e.activeWindow.buffer
 
 suite "closeWindow - sync after close":
   test "syncs to remaining window after close":
@@ -513,7 +509,7 @@ suite "closeWindow - sync after close":
     check not shouldQuit
 
     # Should be synced to remaining window
-    check e.executer.buffer == e.activeWindow.buffer
+    check e.motionController.buffer == e.activeWindow.buffer
 
 suite "switchToNextWindow - state preservation":
   test "preserves cursor position when switching":
@@ -539,7 +535,7 @@ suite "switchToPrevWindow - state preservation":
 
     # Set viewport in first window
     e.windowManager.activeWindowIndex = 0
-    e.executer.motionController.viewportManager.viewport.topLine = 20
+    e.motionController.viewportManager.viewport.topLine = 20
     e.saveActiveWindowState()
     let savedTopLine = e.activeWindow.viewport.topLine
 

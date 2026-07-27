@@ -75,7 +75,6 @@ suite "CommandRegistry - newCommandRegistry":
   test "creates empty registry":
     let registry = newCommandRegistry()
     check registry.commands.len == 0
-    check registry.aliases.len == 0
 
   test "builtin commands array is initialized":
     let registry = newCommandRegistry()
@@ -151,50 +150,6 @@ suite "CommandRegistry - register":
     check cmd.get.name == "UpUpdated"
     check cmd.get.description == "Second description"
 
-suite "CommandRegistry - registerAlias":
-  test "register alias for builtin command":
-    let registry = newCommandRegistry()
-
-    registry.register(
-      builtin(bcMotionLeft),
-      "Left",
-      "Move left",
-      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-        ok(()),
-    )
-
-    registry.registerAlias("h", builtin(bcMotionLeft))
-
-    let cmd = registry.findCommand("h")
-    check cmd.isSome
-    check cmd.get.name == "Left"
-
-  test "register alias with CommandId":
-    let registry = newCommandRegistry()
-
-    registry.register(
-      custom("test.cmd"),
-      "TestCmd",
-      "Test command",
-      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-        ok(()),
-    )
-
-    registry.registerAlias("tc", custom("test.cmd"))
-
-    let cmd = registry.findCommand("tc")
-    check cmd.isSome
-    check cmd.get.name == "TestCmd"
-
-  test "alias for non-existent command is not registered":
-    let registry = newCommandRegistry()
-
-    # Try to register alias for command that doesn't exist
-    registry.registerAlias("x", builtin(bcMotionLeft))
-
-    let cmd = registry.findCommand("x")
-    check cmd.isNone
-
 suite "CommandRegistry - findCommand":
   test "find builtin command by CommandId":
     let registry = newCommandRegistry()
@@ -240,23 +195,6 @@ suite "CommandRegistry - findCommand":
     let cmd = registry.findCommand("string.lookup")
     check cmd.isSome
     check cmd.get.name == "StringLookup"
-
-  test "find command by alias":
-    let registry = newCommandRegistry()
-
-    registry.register(
-      builtin(bcEditUndo),
-      "Undo",
-      "Undo edit",
-      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-        ok(()),
-    )
-
-    registry.registerAlias("u", builtin(bcEditUndo))
-
-    let cmd = registry.findCommand("u")
-    check cmd.isSome
-    check cmd.get.name == "Undo"
 
   test "find non-existent command returns none":
     let registry = newCommandRegistry()
@@ -633,29 +571,6 @@ suite "CommandRegistry - Command execution with context":
     check ctx.state.mode == EditorMode.Insert
 
 suite "CommandRegistry - Edge cases":
-  test "multiple aliases for same command":
-    let registry = newCommandRegistry()
-    registry.register(
-      builtin(bcMotionLeft),
-      "Left",
-      "Move left",
-      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-        ok(()),
-    )
-
-    registry.registerAlias("h", builtin(bcMotionLeft))
-    registry.registerAlias("left", builtin(bcMotionLeft))
-    registry.registerAlias("cursor-left", builtin(bcMotionLeft))
-
-    check registry.findCommand("h").isSome
-    check registry.findCommand("left").isSome
-    check registry.findCommand("cursor-left").isSome
-
-    # All should resolve to same command
-    check registry.findCommand("h").get.name == "Left"
-    check registry.findCommand("left").get.name == "Left"
-    check registry.findCommand("cursor-left").get.name == "Left"
-
   test "execute with exact min args":
     let registry = newCommandRegistry()
     var receivedArgs: seq[string] = @[]

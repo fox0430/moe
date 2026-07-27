@@ -1288,7 +1288,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-  result.executer.motionController.viewportManager.viewport = result.viewport
+  result.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
 
 proc makeWheelEvent(button: MouseButton, x, y: int): Event =
@@ -2771,7 +2771,7 @@ proc createTestEditorForMiddleClick(content: string): Editor =
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-  result.executer.motionController.viewportManager.viewport = result.viewport
+  result.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
 
 proc makeMiddleClickEvent(x, y: int): Event =
@@ -2974,7 +2974,7 @@ suite "handlePasteEvent":
     result.windowManager.windows[0].buffer = buf
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.motionController.viewportManager.viewport = result.viewport
 
   proc makePasteEvent(text: string): Event =
     Event(kind: EventKind.Paste, pastedText: text)
@@ -3103,7 +3103,7 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     result.windowManager.windows[0].buffer = buf
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
   test "Ctrl-C in Normal mode with insertNormalMode clears flag and commits":
@@ -3184,7 +3184,7 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     result.windowManager.windows[0].buffer = buf
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
   proc setupInsertNormalCommandOverlay(e: Editor) =
@@ -3285,7 +3285,7 @@ suite "Macro recording - Command / Search overlay keys":
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
   proc startRecording(e: Editor, register: char) =
@@ -3354,7 +3354,7 @@ suite "Macro playback - overlay-aware routing":
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
   test "Character keys in Command overlay build commandText, not buffer edits":

@@ -577,4 +577,3 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   registry.registerEditCommands()
   registry.registerClipboardCommands()
   registry.registerMiscCommands()
-  registry.registerCommonAliases()

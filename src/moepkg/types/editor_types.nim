@@ -22,7 +22,7 @@
 
 import std/[options, tables]
 
-import ../[types, commands, command_registry, modes, quick_run_utils]
+import ../[types, motion, commands, command_registry, modes, quick_run_utils]
 import ../key_bindings except Command
 import ../command_handlers/handler_types
 import ../buffer/core as buffer_core
@@ -33,10 +33,10 @@ import
   config_types, window_manager_types, lsp_integration_types
 
 export
-  types, commands, command_registry, modes, handler_types, background_process_types,
-  persist_types, virtual_text_types, command_line_types, command_config_types,
-  key_router_types, config_types, buffer_core, window_manager_types,
-  lsp_integration_types
+  types, motion, commands, command_registry, modes, handler_types,
+  background_process_types, persist_types, virtual_text_types, command_line_types,
+  command_config_types, key_router_types, config_types, buffer_core,
+  window_manager_types, lsp_integration_types
 
 type
   ScreenSize* = object
@@ -46,7 +46,7 @@ type
   Editor* = ref object
     state*: EditorState
     screenSize*: ScreenSize
-    executer*: CommandExecutor
+    motionController*: MotionController
     commandRegistry*: CommandRegistry
     keyBindingRegistry*: KeyBindingRegistry
     keyRouter*: KeyRouter

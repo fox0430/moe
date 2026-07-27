@@ -56,7 +56,7 @@ proc syncActiveWindow*(e: Editor) =
   ## re-aliased in a single place via `bindToWindow`, so split / navigation /
   ## close / resize paths only have to call this hook.
   e.state.activeWindow = e.activeWindow
-  e.executer.bindToWindow(e.activeWindow)
+  e.motionController.bindToWindow(e.activeWindow)
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
   # anchor without each call site having to remember to update it.
