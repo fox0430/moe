@@ -154,7 +154,6 @@ type
     commands*: Table[string, RegisteredCommand]
     builtinCommands*: array[BuiltinCommandId, RegisteredCommand]
       ## Fast access for builtins
-    aliases*: Table[string, CommandId] ## Alias -> command ID mapping
 
 proc cursor*(ctx: CommandContext): var BufferPosition {.inline.} =
   ## Cursor position forwarded to EditorState (which delegates to activeWindow)
@@ -206,10 +205,7 @@ proc custom*(id: string): CommandId =
 
 proc newCommandRegistry*(): CommandRegistry =
   ## Create a new command registry
-  result = CommandRegistry(
-    commands: initTable[string, RegisteredCommand](),
-    aliases: initTable[string, CommandId](),
-  )
+  result = CommandRegistry(commands: initTable[string, RegisteredCommand]())
   # Initialize builtin commands array with empty entries
   for i in BuiltinCommandId:
     result.builtinCommands[i] = RegisteredCommand(
@@ -243,18 +239,6 @@ proc register*(
   if id.kind == ckBuiltin and id.builtin != bcNone:
     registry.builtinCommands[id.builtin] = cmd
 
-proc registerAlias*(registry: CommandRegistry, alias: string, commandId: CommandId) =
-  ## Register an alias for a command
-  let idStr = $commandId
-  if idStr in registry.commands:
-    registry.aliases[alias] = commandId
-
-proc registerAlias*(
-    registry: CommandRegistry, alias: string, builtinId: BuiltinCommandId
-) =
-  ## Convenience overload for builtin commands
-  registry.registerAlias(alias, builtin(builtinId))
-
 proc findCommand*(registry: CommandRegistry, id: CommandId): Option[RegisteredCommand] =
   ## Find a command by CommandId
   # Fast path for builtin commands
@@ -270,16 +254,10 @@ proc findCommand*(registry: CommandRegistry, id: CommandId): Option[RegisteredCo
 
   return none(RegisteredCommand)
 
-proc findCommand*(
-    registry: CommandRegistry, idOrAlias: string
-): Option[RegisteredCommand] =
-  ## Find a command by string ID or alias
-  if idOrAlias in registry.commands:
-    return some(registry.commands[idOrAlias])
-
-  if idOrAlias in registry.aliases:
-    let id = registry.aliases[idOrAlias]
-    return registry.findCommand(id)
+proc findCommand*(registry: CommandRegistry, idStr: string): Option[RegisteredCommand] =
+  ## Find a command by string ID
+  if idStr in registry.commands:
+    return some(registry.commands[idStr])
 
   return none(RegisteredCommand)
 

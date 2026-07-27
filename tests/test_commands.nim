@@ -19,71 +19,8 @@
 
 ## Tests for commands.nim
 
-import std/[unittest, options]
-import
-  ../src/moepkg/[
-    commands, buffer, types, config, command_registry, key_bindings, modes, motion,
-    render_utils,
-  ]
-
-proc createTestState(): EditorState =
-  ## Create a minimal EditorState for testing
-  EditorState(
-    activeWindow: EditorWindow(
-      cursor: BufferPosition(line: 0, column: 0),
-      preferredColumn: -1,
-      screenCursor: CursorPosition(x: 0, y: 0),
-      mode: EditorMode.Normal,
-      previousMode: EditorMode.Normal,
-    ),
-    display:
-      DisplaySettings(showLineCount: true, showLinePercentage: true, showEncoding: true),
-    config: newEditorConfig(),
-    windowDisplay: WindowDisplayState(viewportReservedLines: steadyBottomAreaHeight()),
-  )
-
-proc createTestViewport(): ViewPort =
-  ## Create a minimal viewport for testing
-  ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
-
-suite "CommandExecutor - Constructor":
-  test "Create CommandExecutor with default registries":
-    let buf = newTextBuffer()
-    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
-
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    let exec = newCommandExecutor(buf, state, viewport)
-
-    check exec.buffer == buf
-    check exec.state == state
-    check exec.viewport == viewport
-    check exec.commandRegistry != nil
-    check exec.keyBindingRegistry != nil
-
-  test "Create CommandExecutor with provided CommandRegistry":
-    let buf = newTextBuffer()
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    let customRegistry = newCommandRegistry()
-    let exec =
-      newCommandExecutor(buf, state, viewport, commandRegistry = some(customRegistry))
-
-    check exec.commandRegistry == customRegistry
-
-  test "Create CommandExecutor with provided KeyBindingRegistry":
-    let buf = newTextBuffer()
-    let state = createTestState()
-    let viewport = createTestViewport()
-
-    let customKeyRegistry = newKeyBindingRegistry()
-    let exec = newCommandExecutor(
-      buf, state, viewport, keyBindingRegistry = some(customKeyRegistry)
-    )
-
-    check exec.keyBindingRegistry == customKeyRegistry
+import std/unittest
+import ../src/moepkg/[buffer, motion, render_utils, types]
 
 suite "ViewportManager - Goto Line Scrolling":
   proc createTestBuffer(lineCount: int): TextBuffer =

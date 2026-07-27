@@ -710,17 +710,3 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     0,
     0,
   )
-
-proc registerCommonAliases*(registry: CommandRegistry) =
-  ## Register common keybinding aliases.
-  registry.registerAlias("h", bcMotionLeft)
-  registry.registerAlias("l", bcMotionRight)
-  registry.registerAlias("j", bcMotionDown)
-  registry.registerAlias("k", bcMotionUp)
-  registry.registerAlias("w", bcMotionWord)
-  registry.registerAlias("b", bcMotionWordBack)
-  registry.registerAlias("e", bcMotionWordEnd)
-  registry.registerAlias("gg", bcMotionFirstLine)
-  registry.registerAlias("G", bcMotionLastLine)
-  registry.registerAlias("u", bcEditUndo)
-  registry.registerAlias("C-r", bcEditRedo)

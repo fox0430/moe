@@ -17,74 +17,20 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/options
+import types, buffer, motion
 
-import types, buffer, motion, command_registry, key_bindings
+proc buffer*(mc: MotionController): buffer.TextBuffer =
+  ## Buffer the motion controller currently targets.
+  mc.executor.buffer
 
-type CommandExecutor* = ref object
-  motionController*: MotionController
-  state*: EditorState
-  commandRegistry*: CommandRegistry
-  keyBindingRegistry*: KeyBindingRegistry
+proc setBuffer*(mc: MotionController, b: buffer.TextBuffer) =
+  ## Point the motion controller at `b`.
+  mc.executor.buffer = b
 
-proc buffer*(e: CommandExecutor): buffer.TextBuffer {.inline.} =
-  ## Buffer forwarded to the motion controller (single internal source of truth).
-  e.motionController.executor.buffer
-
-proc viewport*(e: CommandExecutor): ViewPort {.inline.} =
-  ## Viewport forwarded to the motion controller (single internal source of truth).
-  e.motionController.viewportManager.viewport
-
-proc cursor*(e: CommandExecutor): var BufferPosition {.inline.} =
-  ## Cursor position forwarded to EditorState (which delegates to activeWindow)
-  e.state.cursor
-
-proc `cursor=`*(e: CommandExecutor, pos: BufferPosition) {.inline.} =
-  e.state.cursor = pos
-
-proc setBuffer*(e: CommandExecutor, b: buffer.TextBuffer) {.inline.} =
-  ## Point the executor's motion controller at `b`. `buffer` derives from this.
-  e.motionController.executor.buffer = b
-
-proc bindToWindow*(e: CommandExecutor, win: EditorWindow) =
-  ## Bind this executor's motion controller to `win`'s buffer/viewport.
-  ## Single place that re-aliases the per-window state the executor caches,
+proc bindToWindow*(mc: MotionController, win: EditorWindow) =
+  ## Bind the motion controller to `win`'s buffer/viewport.
+  ## Single place that re-aliases the per-window state the controller caches,
   ## so window switch / split / close / resize only update one method.
-  e.setBuffer(win.buffer)
-  e.motionController.viewportManager.viewport = win.viewport
-  e.motionController.viewportManager.wrapCountCache = win.wrapCountCache
-
-proc newCommandExecutor*(
-    buffer: buffer.TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    commandRegistry: Option[CommandRegistry] = none(CommandRegistry),
-    keyBindingRegistry: Option[KeyBindingRegistry] = none(KeyBindingRegistry),
-): CommandExecutor =
-  ## Clipboard/Notification are read live from `state.config` through
-  ## CommandContext getters, so no per-executor snapshots are needed.
-  let cmdReg =
-    if commandRegistry.isSome:
-      commandRegistry.get
-    else:
-      newCommandRegistry()
-  let keyReg =
-    if keyBindingRegistry.isSome:
-      keyBindingRegistry.get
-    else:
-      newKeyBindingRegistry()
-
-  # Register built-in commands if using new registry
-  if commandRegistry.isNone:
-    cmdReg.registerBuiltinCommands
-
-  # Setup default key bindings if using new registry
-  if keyBindingRegistry.isNone:
-    keyReg.setupDefaultBindings
-
-  CommandExecutor(
-    motionController: newMotionController(buffer, state, viewport),
-    state: state,
-    commandRegistry: cmdReg,
-    keyBindingRegistry: keyReg,
-  )
+  mc.setBuffer(win.buffer)
+  mc.viewportManager.viewport = win.viewport
+  mc.viewportManager.wrapCountCache = win.wrapCountCache

@@ -48,7 +48,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-  result.executer.motionController.viewportManager.viewport = result.viewport
+  result.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
 
 proc createTestEditorInHelpMode(): Editor =

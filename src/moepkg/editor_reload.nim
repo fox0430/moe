@@ -44,7 +44,7 @@ proc clampCursorAfterReload(e: Editor, buf: TextBuffer) =
   ## line. Re-clamp to valid bounds here so rendering, completion and
   ## word-at-cursor reads don't observe a stale out-of-range position in the
   ## window before the next motion would have re-clamped it.
-  let clamped = e.executer.motionController.cursorManager.clampPosition(
+  let clamped = e.motionController.cursorManager.clampPosition(
     CursorPosition(x: e.cursor.column, y: e.cursor.line), buf
   )
   e.cursor = BufferPosition(line: clamped.y, column: clamped.x)

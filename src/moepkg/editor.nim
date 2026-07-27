@@ -332,13 +332,12 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     "Default window created, windows.len: " & $result.windowManager.windows.len,
   )
 
-  result.executer = newCommandExecutor(
-    initialBuffer, result.state, initialViewport, some(cmdRegistry), some(keyRegistry)
-  )
+  result.motionController =
+    newMotionController(initialBuffer, result.state, initialViewport)
 
   result.handlerManager = newHandlerManager(
-    result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
-    cmdRegistry, result.lsp,
+    result.motionController, keyRegistry, cmdLineParser, cmdConfig, cmdRegistry,
+    result.lsp,
   )
 
   # Route the initial config push through the reload path so the two lists

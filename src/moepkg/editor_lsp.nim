@@ -177,7 +177,7 @@ proc clampAllWindowCursors*(e: Editor) =
   ## window, leaving its cursor past the new end. Clamping an in-bounds cursor
   ## is a no-op, so this is safe to call broadly.
   for window in e.windowManager.windows:
-    let clamped = e.executer.motionController.cursorManager.clampPosition(
+    let clamped = e.motionController.cursorManager.clampPosition(
       CursorPosition(x: window.cursor.column, y: window.cursor.line), window.buffer
     )
     window.cursor = BufferPosition(line: clamped.y, column: clamped.x)

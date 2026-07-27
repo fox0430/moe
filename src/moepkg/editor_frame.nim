@@ -367,7 +367,7 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
   if e.state.windowDisplay.scrollAnimation.active:
     let reservedLines = steadyBottomAreaHeight()
     let bufferLen = e.activeBuffer().len
-    let (_, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
+    let (_, cursorLine) = e.motionController.viewportManager.updateScrollAnimation(
       e.state.windowDisplay.scrollAnimation, e.config.smoothScroll, reservedLines,
       bufferLen,
     )
