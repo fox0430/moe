@@ -56,11 +56,6 @@ type
     bcModeNormal = "mode.normal"
     bcModeInsert = "mode.insert"
     bcModeCommand = "mode.command"
-    # File operations
-    bcFileSave = "file.save"
-    bcFileOpen = "file.open"
-    bcFileNew = "file.new"
-    bcFileClose = "file.close"
     # Edit operations
     bcEditUndo = "edit.undo"
     bcEditRedo = "edit.redo"
@@ -69,17 +64,6 @@ type
     bcEditPaste = "edit.paste"
     bcEditIncrementNumber = "edit.increment"
     bcEditDecrementNumber = "edit.decrement"
-    # Jump list operations
-    bcJumpBack = "jump.back" # Ctrl-o
-    bcJumpForward = "jump.forward" # Ctrl-i
-    # Change list operations
-    bcChangeListPrev = "changelist.prev" # g;
-    bcChangeListNext = "changelist.next" # g,
-    # Bookmark operations
-    bcBookmarkToggle = "bookmark.toggle"
-    bcBookmarkNext = "bookmark.next"
-    bcBookmarkPrev = "bookmark.prev"
-    bcBookmarkClear = "bookmark.clear"
     # Insert mode operations
     bcInsertChar = "insert.char"
     bcInsertBackspace = "insert.backspace"
@@ -118,14 +102,6 @@ type
     bcVisualChange = "visual.change"
     bcVisualSwapSelection = "visual.swap.selection"
     bcVisualPaste = "visual.paste"
-    # Filer operations
-    bcFiler = "filer.open"
-    # LSP operations
-    bcLspGotoDefinition = "lsp.goto.definition"
-    bcLspFindReferences = "lsp.find.references"
-    bcLspCodeLensExecute = "lsp.codelens.execute"
-    bcLspCallHierarchyIncoming = "lsp.callhierarchy.incoming"
-    bcLspCallHierarchyOutgoing = "lsp.callhierarchy.outgoing"
     # Fold operations
     bcFoldOpen = "fold.open" # zo - open fold at cursor
     bcFoldClose = "fold.close" # zc - close fold at cursor

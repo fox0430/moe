@@ -389,12 +389,6 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcModeInsert == "mode.insert"
     check $bcModeCommand == "mode.command"
 
-  test "file commands have correct string values":
-    check $bcFileSave == "file.save"
-    check $bcFileOpen == "file.open"
-    check $bcFileNew == "file.new"
-    check $bcFileClose == "file.close"
-
   test "insert commands have correct string values":
     check $bcInsertChar == "insert.char"
     check $bcInsertBackspace == "insert.backspace"
@@ -429,15 +423,6 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcFoldCreate == "fold.create"
     check $bcFoldDelete == "fold.delete"
     check $bcFoldDeleteAll == "fold.delete.all"
-
-  test "jump commands have correct string values":
-    check $bcJumpBack == "jump.back"
-    check $bcJumpForward == "jump.forward"
-
-  test "LSP commands have correct string values":
-    check $bcLspGotoDefinition == "lsp.goto.definition"
-    check $bcLspFindReferences == "lsp.find.references"
-    check $bcLspCodeLensExecute == "lsp.codelens.execute"
 
 suite "CommandRegistry - registerBuiltinCommands":
   test "registers all motion commands":
