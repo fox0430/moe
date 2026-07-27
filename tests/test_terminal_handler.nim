@@ -19,7 +19,8 @@
 
 import std/[unittest, options, os]
 import pkg/results
-import ../src/moepkg/[terminal_mode, key_bindings, buffer]
+import ../src/moepkg/[terminal_mode, key_bindings]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/terminal_handler
 import ../src/moepkg/terminal/pty
 

@@ -21,7 +21,8 @@
 
 import std/[unittest, os, strutils, options, json, importutils, tables]
 
-import ../src/moepkg/[editor, buffer, config, config_loader, types, lsp_service]
+import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/callhierarchy_viewer
 import ../src/moepkg/editor_callhierarchy {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes

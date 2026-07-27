@@ -22,7 +22,8 @@ import std/[unittest, os, options, strutils]
 import pkg/chronos
 
 import ../src/moepkg/quick_run_utils {.all.}
-import ../src/moepkg/[config, buffer, background_process]
+import ../src/moepkg/[config, background_process]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/syntax/tokenizer
 
 suite "QuickRunUtils - quickRunStartupMessage":

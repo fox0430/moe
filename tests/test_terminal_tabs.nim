@@ -23,9 +23,9 @@
 
 import std/[unittest, options, posix, tables]
 
-import ../src/moepkg/[editor, config, types, buffer, modes, terminal_mode]
-import ../src/moepkg/terminal/pty
-import ../src/moepkg/terminal/ansi_parser
+import ../src/moepkg/[editor, config, types, modes, terminal_mode]
+import ../src/moepkg/terminal/[pty, ansi_parser]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
 
 proc createTestEditor(): Editor =

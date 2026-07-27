@@ -17,8 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-## Main buffer facade — re-exports all `buffer/*` sub-modules. External code
-## should `import buffer` rather than importing the sub-modules directly.
+## Convenience facade re-exporting every `buffer/*` sub-module. Prefer
+## importing the specific sub-modules you need (e.g. `buffer/core`) so
+## callers aren't compile-time coupled to the full API surface.
 
 import buffer/[core, edit, undo, file_io, markers, search, highlight, fold, paren]
 export core, edit, undo, file_io, markers, search, highlight, fold, paren

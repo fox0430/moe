@@ -33,7 +33,7 @@ import
   visible_rows,
   status_line,
   tab_line,
-  buffer,
+  buffer/core,
   unicode_utils,
   command_completion,
   color,

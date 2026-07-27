@@ -27,7 +27,8 @@
 
 import std/options
 
-import ../[modes, buffer, setting_options]
+import ../[modes, setting_options]
+import ../buffer/core
 import ../lsp/protocol/types as lspTypes
 
 type

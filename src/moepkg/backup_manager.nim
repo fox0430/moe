@@ -24,7 +24,7 @@ import std/[options, os, times, algorithm]
 
 import pkg/results
 
-import backup, buffer, list_viewer
+import backup, buffer/core, list_viewer
 import buffer/atomic_write
 import types/backup_manager_types
 

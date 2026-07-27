@@ -26,7 +26,7 @@
 import std/unicode
 import pkg/celina
 
-import types, buffer, unicode_utils, color, modes, sidebar
+import types, buffer/core, unicode_utils, color, modes, sidebar
 
 # Rendering constants
 const

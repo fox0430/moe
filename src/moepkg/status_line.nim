@@ -21,7 +21,7 @@ import std/[strformat, options, strutils, os, unicode]
 
 import pkg/celina
 
-import types, buffer, modes, color, config, git_cache, unicode_utils, highlight
+import types, buffer/core, modes, color, config, git_cache, unicode_utils, highlight
 import syntax/tokenizer
 
 proc toggleStatusLine*(state: var EditorState) =

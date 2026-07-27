@@ -22,7 +22,8 @@
 
 import std/[unittest, strutils]
 
-import ../src/moepkg/[buffer, types, modes, key_bindings]
+import ../src/moepkg/[types, modes, key_bindings]
+import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/log_viewer_handler
 
 const TestViewportHeight = 24

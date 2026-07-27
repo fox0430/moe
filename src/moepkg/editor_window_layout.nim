@@ -21,7 +21,7 @@
 ## These procs are side-effect-free helpers used by both the window
 ## management layer and the rendering layer.
 
-import types/editor_types, render_utils, buffer, visible_rows
+import types/editor_types, render_utils, buffer/core, visible_rows
 
 proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
