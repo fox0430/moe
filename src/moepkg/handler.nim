@@ -26,10 +26,10 @@ import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
 
 import
-  editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
-  logger, types, motion, quick_run_utils, command_completion, build, render_utils,
-  tab_line, terminal_mode, clipboard, git_cache, cursor_util, syntax_checker,
-  background_process, key_router, pending_input, visible_rows
+  editor, editor_window_layout, key_bindings, modes, buffer, logger, types, motion,
+  quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
+  clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
+  pending_input, visible_rows, viewer_mode
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -149,19 +149,6 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # Ignore other special keys
   return true
 
-proc closeRecentFileWindow(e: Editor, activeWin: EditorWindow) =
-  ## Close the Recent File split window and discard its scratch buffer.
-  activeWin.clearModeState(EditorMode.RecentFile)
-  let buf = activeWin.buffer
-  let idx = e.bufferIndexById(buf.id)
-  if idx >= 0:
-    e.state.git.evictGitCacheForBuffer(buf)
-    e.deleteBufferAt(idx)
-    e.pruneBufferIdFromAllWindows(buf.id)
-  activeWin.mode = EditorMode.Normal
-  e.setMode(EditorMode.Normal)
-  discard e.closeWindow
-
 proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in Recent File mode.
   # Get viewport height for the recent file list
@@ -178,7 +165,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 
   case r.kind
   of hrRecentFileQuit:
-    e.closeRecentFileWindow(activeWin)
+    e.leaveViewerMode(EditorMode.RecentFile)
     e.state.statusMessage = ""
     return true
   of hrRecentFileOpenFile:
@@ -187,7 +174,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       logError("handler", "File not found: " & filePath)
       e.state.statusMessage = "File not found: " & filePath
       return true
-    e.closeRecentFileWindow(activeWin)
+    e.leaveViewerMode(EditorMode.RecentFile)
     # Open the file in the now-active window
     let editResult = e.editFile(filePath)
     if editResult.isErr:
@@ -231,25 +218,11 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro:
     discard # Not expected from RecentFile mode handler
 
-  # Handle overlay transitions (e.g., entering Command mode with :)
-  let overlayTransition = r.getOverlayTransition()
-  if overlayTransition.isSome:
-    case overlayTransition.get
-    of okCommand:
-      e.state.enterCommandOverlay()
-    of okSearch:
-      e.state.enterSearchOverlay(e.state.input.search.direction)
-    of okRename:
-      e.state.enterRenameOverlay(
-        e.state.renameState.originalWord, e.state.renameState.cursorLine,
-        e.state.renameState.cursorColumn,
-      )
-
-  # Handle mode transitions
-  let modeTransition = r.getModeTransition()
-  if modeTransition.isSome:
-    e.state.previousMode = e.state.mode
-    e.setMode(modeTransition.get)
+  # Route overlay/mode transitions through processResult so a viewer target
+  # gets its real entry replayed, not a bare setMode. Only hrHandled carries
+  # either transition.
+  if r.kind == hrHandled:
+    return e.processResult(r, e.activeBuffer())
 
   return true
 
@@ -267,6 +240,8 @@ proc handleDebugModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   let r = handleDebugModeKey(activeWin.modeState.debug, viewportHeight, keyCombo)
 
   case r.kind
+  of dvrQuit:
+    return e.processResult(HandlerResult(kind: hrDebugViewerQuit), e.activeBuffer())
   of dvrEnterCommand:
     e.state.enterCommandOverlay()
     return true

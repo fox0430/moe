@@ -35,9 +35,9 @@ import
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
     config_loader, lsp_service, message_log, uri_utils, primitives, syntax_checker,
-    git_cache, cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode,
-    log_viewer, git_conflict, registers, setting_options, command_completion,
-    key_bindings, key_router, window_manager, lsp_integration,
+    cursor_util, quick_run_utils, help_viewer, debug_viewer, config_mode, log_viewer,
+    git_conflict, registers, setting_options, command_completion, key_bindings,
+    key_router, window_manager, lsp_integration, viewer_mode,
   ]
 import editor_ops, handler_result, handler_manager
 
@@ -60,6 +60,14 @@ type
     ## Playback overlay dispatch. `none` = no overlay, fall through; `some(true)`
     ## = handled, continue; `some(false)` = handled, requested app exit. Wired
     ## from handler.nim to avoid an import cycle (overlay handlers import here).
+
+const ModesNeedingContext = {
+  EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
+  EditorMode.DiffViewer,
+}
+  ## Modes that only make sense with a payload (an LSP response, a pair of
+  ## files). A `mode_switch` keybinding naming one of these is rejected rather
+  ## than entered with no listing to show.
 
 var overlayPlaybackHook*: OverlayPlaybackHook = nil
 
@@ -114,18 +122,36 @@ proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
     # is defensive only.
     oxaExitAndResync
 
-proc closeViewerSplitWindow(e: Editor, activeWin: EditorWindow) =
-  ## Discard a viewer's scratch buffer and close its split window. A no-op when
-  ## the viewer is the only window, so the editor is never left windowless.
-  if e.windowManager.windows.len <= 1:
-    return
-  let buf = activeWin.buffer
-  let idx = e.bufferIndexById(buf.id)
-  if idx >= 0:
-    e.state.git.evictGitCacheForBuffer(buf)
-    e.deleteBufferAt(idx)
-    e.pruneBufferIdFromAllWindows(buf.id)
-  discard e.closeWindow()
+proc modeSwitchEntry(mode: EditorMode): Option[HandlerResult] =
+  ## Entry result for the modes a `mode_switch` keybinding can name that build
+  ## a listing and mode state on entry. Flipping `EditorWindow.mode` alone
+  ## would leave the window in a mode whose dispatcher has no state to work
+  ## with, and no key — not even `:` — would be dispatched again.
+  case mode
+  of EditorMode.Filer:
+    some(HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string)))
+  of EditorMode.BufferManager:
+    some(HandlerResult(kind: hrEnterBufferManager))
+  of EditorMode.BookmarkManager:
+    some(HandlerResult(kind: hrEnterBookmarkManager))
+  of EditorMode.Help:
+    some(HandlerResult(kind: hrEnterHelpViewer))
+  of EditorMode.LogViewer:
+    some(HandlerResult(kind: hrEnterLogViewer))
+  of EditorMode.BackupManager:
+    some(HandlerResult(kind: hrEnterBackupManager))
+  of EditorMode.RecentFile:
+    some(HandlerResult(kind: hrRecentFile))
+  of EditorMode.Debug:
+    some(HandlerResult(kind: hrDebug))
+  of EditorMode.Config:
+    some(HandlerResult(kind: hrConfig))
+  of EditorMode.Terminal:
+    some(HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: ""))
+  of EditorMode.FileTree:
+    some(HandlerResult(kind: hrEnterFileTree, enterFileTreePath: none(string)))
+  else:
+    none(HandlerResult)
 
 proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Apply the editor-level side effects implied by `r`. Returns true to
@@ -168,15 +194,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Buffer no longer available"
   of hrFilerOpenFile:
     # Open file from filer (Adds to the active window's per-window tab list)
-    let activeWin = e.activeWindow
-    activeWin.restoreOriginalBuffer(EditorMode.Filer)
+    discard e.leaveViewerModeForJump(EditorMode.Filer)
     let editResult = e.editFile(r.filerFilePath)
     if editResult.isErr:
       e.state.statusMessage = "Error: " & editResult.error
     else:
-      activeWin.modeState = ModeState(kind: mskNone)
-      activeWin.mode = EditorMode.Normal
-      e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
         e.notify("Opened: " & r.filerFilePath)
@@ -185,15 +207,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     return true
   of hrFilerOpenFileVSplit:
     # Open file in vertical split from filer
-    let activeWinVS = e.activeWindow
-    activeWinVS.restoreOriginalBuffer(EditorMode.Filer)
+    discard e.leaveViewerModeForJump(EditorMode.Filer)
     let splitResult = e.vsplit(some(r.filerFilePath))
     if splitResult.isErr:
       e.state.statusMessage = "Error: " & splitResult.error
     else:
-      let activeWin = e.activeWindow
-      activeWin.modeState = ModeState(kind: mskNone)
-      activeWin.mode = EditorMode.Normal
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
@@ -203,15 +221,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     return true
   of hrFilerOpenFileHSplit:
     # Open file in horizontal split from filer
-    let activeWinHS = e.activeWindow
-    activeWinHS.restoreOriginalBuffer(EditorMode.Filer)
+    discard e.leaveViewerModeForJump(EditorMode.Filer)
     let splitResult = e.hsplit(some(r.filerFilePath))
     if splitResult.isErr:
       e.state.statusMessage = "Error: " & splitResult.error
     else:
-      let activeWin = e.activeWindow
-      activeWin.modeState = ModeState(kind: mskNone)
-      activeWin.mode = EditorMode.Normal
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
@@ -220,20 +234,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
   of hrFilerQuit:
-    # Close filer and return to Normal mode, restoring the cursor/viewport
-    # that were active before the filer was opened.
-    let win = e.activeWindow
-    var origin = none(FilerState)
-    if win.modeState.kind == mskFiler:
-      origin = some(win.modeState.filer)
-    win.clearModeState(EditorMode.Filer) # restores the original buffer
-    if origin.isSome:
-      let st = origin.get
-      win.cursor = st.originCursor
-      win.viewport.resetViewportTop(st.originTopLine)
-      win.viewport.leftColumn = st.originLeftColumn
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    e.leaveViewerMode(EditorMode.Filer)
     return true
   of hrTerminalQuit:
     # Close the Terminal tab in the active window. closeTerminalBuffer
@@ -309,12 +310,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.state.statusMessage = r.filerFileInfo
     return true
   of hrLogViewerQuit:
-    # Close log viewer window and return to Normal mode
-    let activeWin = e.activeWindow
-    activeWin.clearModeState(EditorMode.LogViewer)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    e.closeViewerSplitWindow(activeWin)
+    e.leaveViewerMode(EditorMode.LogViewer)
     return true
   of hrLogViewerRefresh:
     # Refresh log viewer content by creating new buffer with updated content
@@ -343,91 +339,43 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Log refreshed"
     return true
   of hrHelpViewerQuit:
-    # Close help viewer split window and return to Normal mode
-    let activeWin = e.activeWindow
-    activeWin.clearModeState(EditorMode.Help)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    e.closeViewerSplitWindow(activeWin)
+    e.leaveViewerMode(EditorMode.Help)
     return true
   of hrReferencesQuit:
-    # Close references viewer and return to Normal mode, restoring the
-    # cursor/viewport that were active before the viewer was opened.
-    let win = e.activeWindow
-    var origin = none(ReferencesViewerState)
-    if win.modeState.kind == mskReferences:
-      origin = some(win.modeState.references)
-    win.clearModeState(EditorMode.References) # restores the original buffer
-    if origin.isSome:
-      let refState = origin.get
-      win.cursor = refState.originCursor
-      win.viewport.resetViewportTop(refState.originTopLine)
-      win.viewport.leftColumn = refState.originLeftColumn
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    e.leaveViewerMode(EditorMode.References)
     return true
   of hrReferencesJumpTo:
     # Jump to selected reference. Restore the pre-viewer cursor first so the
     # jump list anchors at the original position (enabling jump-back).
     let win = e.activeWindow
-    var openWindow = false
-    if win.modeState.kind == mskReferences:
-      let refState = win.modeState.references
-      openWindow = refState.openWindowOnJump
-      win.clearModeState(EditorMode.References)
-      win.cursor = refState.originCursor
-    else:
-      win.clearModeState(EditorMode.References)
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    let openWindow =
+      win.modeState.kind == mskReferences and win.modeState.references.openWindowOnJump
+    let entry = e.leaveViewerModeForJump(EditorMode.References)
+    if entry.isSome:
+      win.cursor = entry.get.originCursor
     discard e.openFileAndJumpTo(r.jumpToPath, r.jumpToLine, r.jumpToColumn, openWindow)
     return true
   of hrDocumentSymbolQuit:
-    # Close document symbol viewer and return to Normal mode, restoring the
-    # cursor/viewport that were active before the viewer was opened.
-    let win = e.activeWindow
-    var origin = none(DocumentSymbolViewerState)
-    if win.modeState.kind == mskDocumentSymbol:
-      origin = some(win.modeState.documentSymbol)
-    win.clearModeState(EditorMode.DocumentSymbol) # restores the original buffer
-    if origin.isSome:
-      let st = origin.get
-      win.cursor = st.originCursor
-      win.viewport.resetViewportTop(st.originTopLine)
-      win.viewport.leftColumn = st.originLeftColumn
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    e.leaveViewerMode(EditorMode.DocumentSymbol)
     return true
   of hrDocumentSymbolJumpTo:
     # Jump to selected symbol (same file). Restore the pre-viewer cursor first
     # so the jump list anchors at the original position (enabling jump-back).
     let activeWin = e.activeWindow
-    let st = activeWin.modeState.documentSymbol
-    let
-      filePath = st.filePath
-      originCursor = st.originCursor
-    activeWin.clearModeState(EditorMode.DocumentSymbol)
-    activeWin.cursor = originCursor
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    discard e.openFileAndJumpTo(filePath, r.symbolLine, r.symbolColumn)
+    let filePath =
+      if activeWin.modeState.kind == mskDocumentSymbol:
+        activeWin.modeState.documentSymbol.filePath
+      else:
+        ""
+    let entry = e.leaveViewerModeForJump(EditorMode.DocumentSymbol)
+    if entry.isSome:
+      activeWin.cursor = entry.get.originCursor
+    if filePath.len > 0:
+      discard e.openFileAndJumpTo(filePath, r.symbolLine, r.symbolColumn)
     return true
   of hrCallHierarchyQuit:
-    # Close call hierarchy viewer and return to Normal mode, restoring the
-    # cursor/viewport that were active before the viewer was opened.
     cancelAllCallHierarchy(e)
-    let win = e.activeWindow
-    var origin = none(CallHierarchyViewerState)
-    if win.modeState.kind == mskCallHierarchy:
-      origin = some(win.modeState.callHierarchy)
-    win.clearModeState(EditorMode.CallHierarchy) # restores the original buffer
-    if origin.isSome:
-      let st = origin.get
-      win.cursor = st.originCursor
-      win.viewport.resetViewportTop(st.originTopLine)
-      win.viewport.leftColumn = st.originLeftColumn
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    e.leaveViewerMode(EditorMode.CallHierarchy)
     return true
   of hrCallHierarchyJumpTo:
     # Jump to selected call hierarchy item. Restore the pre-viewer cursor first
@@ -435,13 +383,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     let path = lsp_service.uriToPath(r.callHierarchyJumpUri)
     cancelAllCallHierarchy(e)
     let win = e.activeWindow
-    var originCursor = BufferPosition(line: 0, column: 0)
-    if win.modeState.kind == mskCallHierarchy:
-      originCursor = win.modeState.callHierarchy.originCursor
-    win.clearModeState(EditorMode.CallHierarchy)
-    win.cursor = originCursor
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    let entry = e.leaveViewerModeForJump(EditorMode.CallHierarchy)
+    win.cursor =
+      if entry.isSome:
+        entry.get.originCursor
+      else:
+        BufferPosition(line: 0, column: 0)
     discard
       e.openFileAndJumpTo(path, r.callHierarchyJumpLine, r.callHierarchyJumpColumn)
     return true
@@ -454,31 +401,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     discard e.requestCallHierarchyOutgoingForItem(r.callHierarchyOutgoingItem)
     return true
   of hrBufferManagerQuit:
-    # Close buffer manager and return to Normal mode, restoring the
-    # cursor/viewport that were active before the manager was opened.
-    let win = e.activeWindow
-    var origin = none(BufferManagerState)
-    if win.modeState.kind == mskBufferManager:
-      origin = some(win.modeState.bufferManager)
-    win.clearModeState(EditorMode.BufferManager) # restores the original buffer
-    if origin.isSome:
-      let st = origin.get
-      win.cursor = st.originCursor
-      win.viewport.resetViewportTop(st.originTopLine)
-      win.viewport.leftColumn = st.originLeftColumn
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    e.leaveViewerMode(EditorMode.BufferManager)
     return true
   of hrBufferManagerSelectBuffer:
     # Select the buffer and switch to it
     let bufferIndex = r.selectBufferIndex
-    let activeWin = e.activeWindow
-    activeWin.restoreOriginalBuffer(EditorMode.BufferManager)
+    discard e.leaveViewerModeForJump(EditorMode.BufferManager)
     if bufferIndex >= 0 and bufferIndex < e.buffers.len:
       e.switchToBufferByIndex(bufferIndex)
-    activeWin.modeState = ModeState(kind: mskNone)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
     return true
   of hrBufferManagerDeleteBuffer:
     # Delete the buffer from the buffer list
@@ -520,26 +450,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Cannot delete the last buffer"
     return true
   of hrBookmarkManagerQuit:
-    # Close bookmark manager and return to Normal mode, restoring the
-    # cursor/viewport that were active before the manager was opened.
-    let win = e.activeWindow
-    var origin = none(BookmarkManagerState)
-    if win.modeState.kind == mskBookmarkManager:
-      origin = some(win.modeState.bookmarkManager)
-    win.clearModeState(EditorMode.BookmarkManager) # restores the original buffer
-    if origin.isSome:
-      let st = origin.get
-      win.cursor = st.originCursor
-      win.viewport.resetViewportTop(st.originTopLine)
-      win.viewport.leftColumn = st.originLeftColumn
-    win.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    e.leaveViewerMode(EditorMode.BookmarkManager)
     return true
   of hrBookmarkManagerJump:
     # Resolve BufferId at jump time to survive buffer-list mutations.
     let jumpLine = r.bookmarkJumpLine
-    let activeWin = e.activeWindow
-    activeWin.restoreOriginalBuffer(EditorMode.BookmarkManager)
+    discard e.leaveViewerModeForJump(EditorMode.BookmarkManager)
     let bufferIndex = e.bufferIndexById(r.bookmarkJumpBufferId)
     if bufferIndex >= 0:
       e.switchToBufferByIndex(bufferIndex)
@@ -547,9 +463,6 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let clampedLine = min(jumpLine, max(0, buf.len - 1))
       e.activeWindow.cursor = BufferPosition(line: clampedLine, column: 0)
       e.activeWindow.viewport.resetViewportTop(max(0, clampedLine - 5))
-    activeWin.modeState = ModeState(kind: mskNone)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
     return true
   of hrBookmarkManagerDelete:
     # Delete the bookmark and refresh
@@ -562,12 +475,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       activeWin.cursor.column = 0
     return true
   of hrBackupManagerQuit:
-    # Close backup manager and return to Normal mode
-    let activeWin = e.activeWindow
-    activeWin.clearModeState(EditorMode.BackupManager)
-    activeWin.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
-    e.closeViewerSplitWindow(activeWin)
+    e.leaveViewerMode(EditorMode.BackupManager)
     return true
   of hrDiffViewerQuit:
     # Close the diff viewer overlay and resume the mode it was opened from.
@@ -604,10 +512,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # event (e.g. `:map <F5> togglekey ZQ`) would otherwise lose the change.
     if activeWin.modeState.kind == mskConfig and activeWin.modeState.config.pendingApply:
       e.applyConfigSettings(e.config)
-    activeWin.clearModeState(EditorMode.Config)
-    activeWin.mode = e.state.previousMode
-    e.setMode(e.state.previousMode)
-    e.closeViewerSplitWindow(activeWin)
+    e.leaveViewerMode(EditorMode.Config)
     return true
   of hrConfigSaveConfig:
     # Save configuration to TOML file
@@ -917,11 +822,21 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       logError("handler", "Enew failed: " & enewResult.error)
       e.state.statusMessage = "Error: " & enewResult.error
   of hrEnterFiler:
+    # Tear the active viewer down so startPath resolves from the file under
+    # it, not the listing. When a split teardown surfaces another viewer as
+    # active, its originalBuffer still holds the user's file.
+    e.closeLiveViewer()
+    let win = e.activeWindow
+    let originBuffer =
+      if win.viewerEntry.isSome and win.originalBuffer != nil:
+        win.originalBuffer
+      else:
+        win.buffer
     let startPath =
       if r.enterFilerPath.isSome:
         r.enterFilerPath.get
-      elif e.activeWindow.buffer.filePath.isSome:
-        parentDir(e.activeWindow.buffer.filePath.get)
+      elif originBuffer.filePath.isSome:
+        parentDir(originBuffer.filePath.get)
       else:
         getCurrentDir()
     e.enterFilerInActiveWindow(startPath)
@@ -1199,6 +1114,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       )
       e.state.statusMessage = "Building: " & filePath
   of hrDebug:
+    if e.focusExistingViewerWindow(EditorMode.Debug):
+      return true
     var debugLines: seq[string] = @[]
     let debugConfig = e.config.debug
     for i, window in e.windowManager.windows:
@@ -1281,34 +1198,38 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     let debugState = newDebugViewerState()
     debugState.lines = debugLines
     let debugBuffer = debugState.createDebugTextBuffer()
-    let splitResult = e.vsplitWithBuffer(debugBuffer)
-    if splitResult.isErr:
-      e.state.statusMessage = "Failed to open debug: " & splitResult.error
+    let enterResult = e.enterViewerMode(
+      EditorMode.Debug,
+      ModeState(kind: mskDebug, debug: debugState),
+      debugBuffer,
+      vpVSplit,
+    )
+    if enterResult.isErr:
+      e.state.statusMessage = "Failed to open debug: " & enterResult.error
     else:
       e.state.statusMessage = "Debug info (auto-refresh)"
       e.state.windowDisplay.debugBuffer = debugBuffer
       e.state.timing.lastDebugUpdate = getMonoTime()
       if e.state.timing.debugUpdateInterval == 0:
         e.state.timing.debugUpdateInterval = 500
-      e.activeWindow.modeState = ModeState(kind: mskDebug, debug: debugState)
-      e.state.previousMode = e.state.mode
-      e.setMode(EditorMode.Debug)
   of hrConfig:
+    if e.focusExistingViewerWindow(EditorMode.Config):
+      return true
     let configBuffer = newTextBuffer("")
     configBuffer.readOnly = true
-    let splitResult = e.vsplitWithBuffer(configBuffer)
-    if splitResult.isErr:
-      e.state.statusMessage = "Failed to open config: " & splitResult.error
-    else:
-      e.state.previousMode = e.state.mode
-      e.setMode(EditorMode.Config)
-      let activeWin = e.activeWindow
-      activeWin.mode = EditorMode.Config
-      let cfgState = newConfigModeState(e.config)
-      activeWin.modeState = ModeState(kind: mskConfig, config: cfgState)
+    let enterResult = e.enterViewerMode(
+      EditorMode.Config,
+      ModeState(kind: mskConfig, config: newConfigModeState(e.config)),
+      configBuffer,
+      vpVSplit,
+    )
+    if enterResult.isErr:
+      e.state.statusMessage = "Failed to open config: " & enterResult.error
   of hrTheme:
     e.applyThemeCommand(r.hrThemeName)
   of hrLspLog:
+    if e.focusExistingViewerWindow(EditorMode.LogViewer):
+      return true
     let logLines = getLspMessageLog()
     let logContent =
       if logLines.len > 0:
@@ -1317,15 +1238,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         ""
     let logBuffer = newTextBuffer(logContent)
     logBuffer.readOnly = true
-    let splitResult = e.hsplitWithBuffer(logBuffer)
-    if splitResult.isErr:
-      e.state.statusMessage = "Failed to open LSP log: " & splitResult.error
-    else:
-      e.setMode(EditorMode.LogViewer)
-      let activeWin = e.activeWindow
-      activeWin.mode = EditorMode.LogViewer
-      let logState = newLogViewerState(lckLsp)
-      activeWin.modeState = ModeState(kind: mskLogViewer, logViewer: logState)
+    let enterResult = e.enterViewerMode(
+      EditorMode.LogViewer,
+      ModeState(kind: mskLogViewer, logViewer: newLogViewerState(lckLsp)),
+      logBuffer,
+      vpHSplit,
+    )
+    if enterResult.isErr:
+      e.state.statusMessage = "Failed to open LSP log: " & enterResult.error
   of hrJumpList:
     if e.state.jumpList.list.len == 0:
       e.state.statusMessage = "Jump list is empty"
@@ -1401,17 +1321,17 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     else:
       e.state.statusMessage = "No previous git conflict"
   of hrRecentFile:
+    if e.focusExistingViewerWindow(EditorMode.RecentFile):
+      return true
     let loadResult = e.enterRecentFileMode()
     if loadResult.isErr:
       logError("handler", "Failed to enter Recent File mode: " & loadResult.error)
       e.state.statusMessage = "Error: " & loadResult.error
     else:
-      e.state.previousMode = e.state.mode
-      e.setMode(EditorMode.RecentFile)
       e.state.statusMessage = ""
-      let activeWin = e.activeWindow
-      activeWin.mode = EditorMode.RecentFile
   of hrEnterLogViewer:
+    if e.focusExistingViewerWindow(EditorMode.LogViewer):
+      return true
     let logLines = getMessageLog()
     let logContent =
       if logLines.len > 0:
@@ -1420,82 +1340,69 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         ""
     let logBuffer = newTextBuffer(logContent)
     logBuffer.readOnly = true
-    let splitResult = e.hsplitWithBuffer(logBuffer)
-    if splitResult.isErr:
-      e.state.statusMessage = "Failed to open log: " & splitResult.error
-    else:
-      e.setMode(EditorMode.LogViewer)
-      let activeWin = e.activeWindow
-      activeWin.mode = EditorMode.LogViewer
-      let logState = newLogViewerState(lckEditor)
-      activeWin.modeState = ModeState(kind: mskLogViewer, logViewer: logState)
+    let enterResult = e.enterViewerMode(
+      EditorMode.LogViewer,
+      ModeState(kind: mskLogViewer, logViewer: newLogViewerState(lckEditor)),
+      logBuffer,
+      vpHSplit,
+    )
+    if enterResult.isErr:
+      e.state.statusMessage = "Failed to open log: " & enterResult.error
   of hrEnterHelpViewer:
-    e.state.previousMode = e.state.mode
+    if e.focusExistingViewerWindow(EditorMode.Help):
+      return true
     let helpState = newHelpViewerState()
-    let helpBuffer = helpState.createHelpTextBuffer()
-    let splitResult = e.hsplitWithBuffer(helpBuffer)
-    if splitResult.isErr:
-      e.state.statusMessage = "Failed to open help: " & splitResult.error
-    else:
-      e.setMode(EditorMode.Help)
-      let activeWin = e.activeWindow
-      activeWin.mode = EditorMode.Help
-      activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.resetViewportTop()
-      activeWin.viewport.leftColumn = 0
-      activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
+    let enterResult = e.enterViewerMode(
+      EditorMode.Help,
+      ModeState(kind: mskHelp, help: helpState),
+      helpState.createHelpTextBuffer(),
+      vpHSplit,
+    )
+    if enterResult.isErr:
+      e.state.statusMessage = "Failed to open help: " & enterResult.error
   of hrEnterBufferManager:
-    e.state.previousMode = e.state.mode
-    e.setMode(EditorMode.BufferManager)
     let bmState = newBufferManagerState()
     bmState.updateEntries(e.getBufferInfos())
-    let activeWin = e.activeWindow
-    # Capture the current position so quitting the manager can restore it.
-    bmState.originCursor = activeWin.cursor
-    bmState.originTopLine = activeWin.viewport.topLine
-    bmState.originLeftColumn = activeWin.viewport.leftColumn
-    activeWin.mode = EditorMode.BufferManager
-    activeWin.saveOriginalBuffer()
-    activeWin.buffer = bmState.createBufferManagerTextBuffer()
-    activeWin.cursor = BufferPosition(line: 0, column: 0)
-    activeWin.viewport.resetViewportTop()
-    activeWin.viewport.leftColumn = 0
-    activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
   of hrEnterBookmarkManager:
-    e.state.previousMode = e.state.mode
-    e.setMode(EditorMode.BookmarkManager)
     let bkmState = newBookmarkManagerState()
     bkmState.updateEntries(e.buffers)
-    let activeWin = e.activeWindow
-    # Capture the current position so quitting the manager can restore it.
-    bkmState.originCursor = activeWin.cursor
-    bkmState.originTopLine = activeWin.viewport.topLine
-    bkmState.originLeftColumn = activeWin.viewport.leftColumn
-    activeWin.mode = EditorMode.BookmarkManager
-    activeWin.saveOriginalBuffer()
-    activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
-    activeWin.cursor = BufferPosition(line: 0, column: 0)
-    activeWin.viewport.resetViewportTop()
-    activeWin.viewport.leftColumn = 0
-    activeWin.modeState = ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
+    discard e.enterViewerMode(
+      EditorMode.BookmarkManager,
+      ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState),
+      bkmState.createBookmarkManagerTextBuffer(),
+      vpInPlace,
+    )
   of hrEnterBackupManager:
+    if e.focusExistingViewerWindow(EditorMode.BackupManager):
+      return true
     let baseBackupDir = e.config.autoBackup.getBaseBackupDir()
     var sourceFilePath = ""
     if e.activeBuffer.filePath.isSome:
       sourceFilePath = absolutePath(e.activeBuffer.filePath.get)
     let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
-    let bkBuffer = bkState.createBackupManagerTextBuffer()
-    let splitResult = e.vsplitWithBuffer(bkBuffer)
-    if splitResult.isErr:
-      e.state.statusMessage = "Failed to open backup manager: " & splitResult.error
-    else:
-      e.state.previousMode = e.state.mode
-      e.setMode(EditorMode.BackupManager)
-      let activeWin = e.activeWindow
-      activeWin.mode = EditorMode.BackupManager
-      activeWin.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+    let enterResult = e.enterViewerMode(
+      EditorMode.BackupManager,
+      ModeState(kind: mskBackupManager, backupManager: bkState),
+      bkState.createBackupManagerTextBuffer(),
+      vpVSplit,
+    )
+    if enterResult.isErr:
+      e.state.statusMessage = "Failed to open backup manager: " & enterResult.error
   of hrEnterTerminal:
+    # Capture previousMode before teardown so it names the mode the user was
+    # actually in, not the returnMode a closed viewer restored.
     e.state.previousMode = e.state.mode
+    # Drain viewers on the active window: teardown may shift active to a
+    # survivor that still holds its own viewerEntry/originalBuffer, and the
+    # terminal takeover would leave those dangling.
+    while e.activeWindow.viewerEntry.isSome:
+      e.closeLiveViewer()
     e.enterTerminalInActiveWindow(r.enterTerminalCommand)
   of hrOnlyWindow:
     e.windowManager.onlyWindow(e.screenSize.width, e.screenSize.height)
@@ -1506,8 +1413,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
   of hrPlaybackMacro:
     discard # Consumed by processReplayedResult; only reaches here defensively.
-  of hrDebugViewerQuit, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterDiffViewer,
-      hrEnterReferences, hrEnterDocumentSymbol, hrEnterCallHierarchy:
+  of hrDebugViewerQuit:
+    e.leaveViewerMode(EditorMode.Debug)
+    e.state.windowDisplay.debugBuffer = nil
+    return true
+  of hrRecentFileOpenFile, hrRecentFileQuit, hrEnterDiffViewer, hrEnterReferences,
+      hrEnterDocumentSymbol, hrEnterCallHierarchy:
     discard # Handled by per-mode dispatchers or produced from within those modes
 
   # Handle overlay transitions
@@ -1530,84 +1441,64 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   if modeTransition.isSome:
     let oldMode = e.state.mode
     let newMode = modeTransition.get
+
+    # A `mode_switch` keybinding can name a viewer mode directly. Replay that
+    # mode's real entry result so it never goes live without its state.
+    #
+    # Only when the window does not already hold that state: a transition back
+    # into a viewer the window is still showing (Escape out of a Visual
+    # selection made inside it, which returns to `previousMode`) needs the mode
+    # flipped, not a second listing and a second split.
+    # Source of truth: viewerEntry names the mode the window is running.
+    # Keying off modeState.kind would misclassify if any path reset the state
+    # variant behind viewerEntry's back.
+    let alreadyLive =
+      e.activeWindow.viewerEntry.isSome and
+      e.activeWindow.viewerEntry.get.mode == newMode
+
+    # Reject only fresh entries; Escape back into a live viewer is a mode flip.
+    if not alreadyLive and newMode in ModesNeedingContext:
+      e.state.statusMessage = "Cannot switch to " & $newMode & " mode directly"
+      return true
+
     e.state.previousMode = oldMode
-    e.setMode(newMode)
 
-    # Initialize filer state when entering Filer mode
-    let activeWin = e.activeWindow
-    if newMode == EditorMode.Filer and activeWin.modeState.kind != mskFiler:
-      # Use buffer's directory or current working directory
-      let startPath =
-        if activeBuffer.filePath.isSome:
-          parentDir(activeBuffer.filePath.get)
-        else:
-          getCurrentDir()
-      let filerState = newFilerState(startPath)
-      # Capture the current position so quitting the filer can restore it.
-      filerState.originCursor = activeWin.cursor
-      filerState.originTopLine = activeWin.viewport.topLine
-      filerState.originLeftColumn = activeWin.viewport.leftColumn
-      activeWin.saveOriginalBuffer()
-      activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
-      activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)
-      activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.resetViewportTop()
-      activeWin.viewport.leftColumn = 0
-      activeWin.mode = EditorMode.Filer
+    # FileTree is a sidebar with toggle semantics, so replaying its entry with
+    # the sidebar open would close it. A `mode_switch` naming it focuses it.
+    let focused = newMode == EditorMode.FileTree and e.focusFileTreeWindow()
 
-    # Initialize buffer manager state when entering BufferManager mode
-    if newMode == EditorMode.BufferManager:
-      let bmState = newBufferManagerState()
-      bmState.updateEntries(e.getBufferInfos())
-      # Capture the current position so quitting the manager can restore it.
-      bmState.originCursor = activeWin.cursor
-      bmState.originTopLine = activeWin.viewport.topLine
-      bmState.originLeftColumn = activeWin.viewport.leftColumn
-      activeWin.saveOriginalBuffer()
-      activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
-      activeWin.buffer = bmState.createBufferManagerTextBuffer()
-      activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.resetViewportTop()
-      activeWin.viewport.leftColumn = 0
-      activeWin.mode = EditorMode.BufferManager
+    let entry =
+      if alreadyLive or focused:
+        none(HandlerResult)
+      else:
+        modeSwitchEntry(newMode)
+    if entry.isSome:
+      if not e.processResult(entry.get, activeBuffer):
+        return false
+    elif not focused:
+      e.setMode(newMode)
 
-    # Initialize bookmark manager state when entering BookmarkManager mode
-    if newMode == EditorMode.BookmarkManager:
-      let bkmState = newBookmarkManagerState()
-      bkmState.updateEntries(e.buffers)
-      # Capture the current position so quitting the manager can restore it.
-      bkmState.originCursor = activeWin.cursor
-      bkmState.originTopLine = activeWin.viewport.topLine
-      bkmState.originLeftColumn = activeWin.viewport.leftColumn
-      activeWin.saveOriginalBuffer()
-      activeWin.modeState =
-        ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
-      activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
-      activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.resetViewportTop()
-      activeWin.mode = EditorMode.BookmarkManager
+      # Adjust cursor when transitioning from Insert to Normal mode
+      # Skip cursor adjustment for insert-normal mode (Ctrl-o) since we'll return to Insert
+      if oldMode == EditorMode.Insert and newMode == EditorMode.Normal and
+          not e.state.insertNormalMode:
+        let
+          lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
+          oldColumn = e.activeWindow.cursor.column
 
-    # Adjust cursor when transitioning from Insert to Normal mode
-    # Skip cursor adjustment for insert-normal mode (Ctrl-o) since we'll return to Insert
-    if oldMode == EditorMode.Insert and newMode == EditorMode.Normal and
-        not e.state.insertNormalMode:
-      let
-        lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
-        oldColumn = e.activeWindow.cursor.column
-
-      logDebug(
-        "handler",
-        "Insert→Normal transition: line=" & $e.activeWindow.cursor.line & " oldColumn=" &
-          $oldColumn & " lineCharLen=" & $lineCharLen,
-      )
-
-      adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
-
-      if oldColumn != e.activeWindow.cursor.column:
         logDebug(
           "handler",
-          "Cursor adjusted: " & $oldColumn & " → " & $e.activeWindow.cursor.column,
+          "Insert→Normal transition: line=" & $e.activeWindow.cursor.line &
+            " oldColumn=" & $oldColumn & " lineCharLen=" & $lineCharLen,
         )
+
+        adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+
+        if oldColumn != e.activeWindow.cursor.column:
+          logDebug(
+            "handler",
+            "Cursor adjusted: " & $oldColumn & " → " & $e.activeWindow.cursor.column,
+          )
 
   # Filer buffer regeneration after state changes (e.g. enterDirectory, toggleHidden)
   if e.state.mode == EditorMode.Filer:
@@ -1945,7 +1836,9 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
   of oxaHandledGeneric:
     e.state.exitOverlay()
     let t = r.getModeTransition()
-    if t.isSome:
+    # `ModesNeedingContext` targets were refused by processResult; re-applying
+    # the transition here would put the window in that mode with no state.
+    if t.isSome and t.get notin ModesNeedingContext:
       e.setMode(t.get)
     else:
       e.setMode(e.state.mode)

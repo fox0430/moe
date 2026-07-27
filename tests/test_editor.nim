@@ -2466,7 +2466,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
   test "processResult(hrFilerQuit) restores the pre-filer cursor/viewport":
     let e = createTestEditor()
     let f = getTempDir() / "moe_test_filer_quit_restore.txt"
-    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    writeFile(f, "aaaa\nbbbb\ncccc\ndddd\neeee\nffff\ngggg\nhhhh\niiii\njjjj\n")
     defer:
       removeFile(f)
 
@@ -2500,7 +2500,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
   test "processResult(hrBufferManagerQuit) restores the pre-manager cursor/viewport":
     let e = createTestEditor()
     let f = getTempDir() / "moe_test_bm_quit_restore.txt"
-    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    writeFile(f, "aaaa\nbbbb\ncccc\ndddd\neeee\nffff\ngggg\nhhhh\niiii\njjjj\n")
     defer:
       removeFile(f)
 
@@ -2531,10 +2531,10 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.viewport.topLine == 5
     check win.viewport.leftColumn == 2
 
-  test "processResult(modeTransition→BufferManager) swaps buffer and preserves origin for quit":
+  test "processResult(hrEnterBufferManager) swaps buffer and preserves origin for quit":
     let e = createTestEditor()
     let f = getTempDir() / "moe_test_bm_mode_transition.txt"
-    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    writeFile(f, "aaaa\nbbbb\ncccc\ndddd\neeee\nffff\ngggg\nhhhh\niiii\njjjj\n")
     defer:
       removeFile(f)
 
@@ -2546,10 +2546,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     win.viewport.topLine = 4
     win.viewport.leftColumn = 3
 
-    discard e.processResult(
-      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.BufferManager)),
-      e.activeBuffer(),
-    )
+    discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
     check win.mode == EditorMode.BufferManager
     check win.modeState.kind == mskBufferManager
     check win.buffer != origBuf
@@ -2558,7 +2555,6 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
     check win.viewport.topLine == 0
     check win.viewport.leftColumn == 0
 
-    # Quit path relies on saveOriginalBuffer captured during modeTransition entry.
     discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
     check win.mode == EditorMode.Normal
     check win.modeState.kind == mskNone
@@ -2571,7 +2567,7 @@ suite "Editor - list viewer quit restores origin cursor/viewport":
   test "processResult(hrBookmarkManagerQuit) restores the pre-manager cursor/viewport":
     let e = createTestEditor()
     let f = getTempDir() / "moe_test_bkm_quit_restore.txt"
-    writeFile(f, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    writeFile(f, "aaaa\nbbbb\ncccc\ndddd\neeee\nffff\ngggg\nhhhh\niiii\njjjj\n")
     defer:
       removeFile(f)
 
@@ -3043,15 +3039,10 @@ suite "processResult - viewer split window teardown":
     let origBuffer = e.activeBuffer
     let initialBufferCount = e.buffers.len
 
-    let helpState = newHelpViewerState()
-    check e.hsplitWithBuffer(helpState.createHelpTextBuffer()).isOk
+    discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer)
     check e.windowManager.windows.len == 2
-
-    e.setMode(EditorMode.Help)
-    let activeWin = e.activeWindow
-    activeWin.mode = EditorMode.Help
-    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
-    let helpBufId = activeWin.buffer.id
+    check e.state.mode == EditorMode.Help
+    let helpBufId = e.activeWindow.buffer.id
 
     check e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer) == true
 
@@ -3064,22 +3055,32 @@ suite "processResult - viewer split window teardown":
     check e.activeWindow.mode == EditorMode.Normal
     check e.activeWindow.buffer == origBuffer
 
-  test "hrHelpViewerQuit on a single window keeps that window and its buffer":
+  test "hrHelpViewerQuit on a single window swaps in a usable buffer":
     let e = createTestEditor()
     let initialBufferCount = e.buffers.len
 
+    # Hand-built single-window Help: a split placement recorded on the only
+    # window, so the teardown has nothing to fall back to.
     let helpState = newHelpViewerState()
     let activeWin = e.activeWindow
     e.setMode(EditorMode.Help)
     activeWin.mode = EditorMode.Help
     activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
-    let onlyBufId = activeWin.buffer.id
+    activeWin.viewerEntry = some(
+      ViewerEntry(
+        mode: EditorMode.Help,
+        placement: vpHSplit,
+        returnMode: EditorMode.Normal,
+        bufferId: activeWin.buffer.id,
+      )
+    )
 
     check e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer) == true
 
-    # No window to fall back to, so the buffer must survive the teardown.
+    # No window to fall back to, so the listing is replaced with a fresh empty
+    # buffer instead of leaving the user stranded on a read-only view.
     check e.windowManager.windows.len == 1
     check e.buffers.len == initialBufferCount
-    check e.bufferIndexById(onlyBufId) >= 0
     check e.state.mode == EditorMode.Normal
     check e.activeWindow.modeState.kind == mskNone
+    check e.activeWindow.buffer != nil

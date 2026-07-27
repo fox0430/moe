@@ -25,7 +25,6 @@
 
 import std/options
 
-import ../primitives
 import list_viewer_types
 export list_viewer_types
 
@@ -39,11 +38,6 @@ type
   BufferManagerState* = ref object of ListViewer[BufferEntry]
     ## State for the buffer manager UI.
     ## items (buffer entries)/selectedIndex/waitingForG are inherited.
-    # Cursor/viewport of the underlying buffer captured on entry, so quitting
-    # the manager restores the position instead of leaving it at (0, 0).
-    originCursor*: BufferPosition
-    originTopLine*: int
-    originLeftColumn*: int
 
   BufferInfo* = object ## Information about a buffer for initializing buffer manager
     filePath*: Option[string]

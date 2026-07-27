@@ -38,6 +38,7 @@ import
   editor_display,
   editor_substitute,
   editor_buffers,
+  viewer_mode,
   editor_reload,
   editor_config_reload,
   editor_frame,
@@ -402,9 +403,9 @@ proc enterRecentFileMode*(e: Editor): Result[void, string] =
   let loadResult = state.loadRecentFiles()
   if loadResult.isErr:
     return err(loadResult.error)
-  let recentBuffer = state.createRecentFileTextBuffer()
-  let splitResult = e.vsplitWithBuffer(recentBuffer)
-  if splitResult.isErr:
-    return err(splitResult.error)
-  e.activeWindow.modeState = ModeState(kind: mskRecentFile, recentFile: state)
-  ok()
+  e.enterViewerMode(
+    EditorMode.RecentFile,
+    ModeState(kind: mskRecentFile, recentFile: state),
+    state.createRecentFileTextBuffer(),
+    vpVSplit,
+  )

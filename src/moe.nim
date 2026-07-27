@@ -23,8 +23,8 @@ import pkg/[celina, results, chronos]
 
 import
   moepkg/[
-    editor, editor_window_layout, editor_window_state, handler, modes, logger, cmdline,
-    filer, lsp_integration, config, config_loader, emergency, key_router,
+    editor, editor_window_layout, handler, modes, logger, cmdline, lsp_integration,
+    config, config_loader, emergency, key_router,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -319,22 +319,7 @@ proc main() =
     # Check if first path is a directory
     if cmdLineConfig.filePaths.len == 1 and dirExists(cmdLineConfig.filePaths[0]):
       # Directory specified - start in Filer mode
-      let dirPath = absolutePath(cmdLineConfig.filePaths[0])
-      editor.state.mode = EditorMode.Filer
-      let activeWin =
-        editor.windowManager.windows[editor.windowManager.activeWindowIndex]
-      activeWin.mode = EditorMode.Filer
-      let filerState = newFilerState(dirPath)
-      # Capture the current position so quitting the filer can restore it.
-      filerState.originCursor = activeWin.cursor
-      filerState.originTopLine = activeWin.viewport.topLine
-      filerState.originLeftColumn = activeWin.viewport.leftColumn
-      activeWin.saveOriginalBuffer()
-      activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
-      activeWin.buffer = filerState.createFilerTextBuffer(editor.config.filer.showIcons)
-      activeWin.cursor = BufferPosition(line: 0, column: 0)
-      activeWin.viewport.topLine = 0
-      activeWin.viewport.leftColumn = 0
+      editor.enterFilerInActiveWindow(absolutePath(cmdLineConfig.filePaths[0]))
     else:
       # Load first file
       block:

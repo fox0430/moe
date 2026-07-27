@@ -25,8 +25,6 @@
 
 import std/times
 
-import ../primitives
-
 type
   FileEntryKind* = enum
     fekFile
@@ -49,8 +47,3 @@ type
     showHidden*: bool # Whether to show hidden files
     needsBufferRefresh*: bool # Flag to trigger buffer regeneration after state changes
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
-    # Cursor/viewport of the underlying buffer captured on entry, so quitting
-    # the filer restores the position instead of leaving it at (0, 0).
-    originCursor*: BufferPosition
-    originTopLine*: int
-    originLeftColumn*: int

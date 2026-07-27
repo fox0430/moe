@@ -43,6 +43,19 @@ proc restoreOriginalBufferUnchecked(win: EditorWindow) =
     win.buffer = win.originalBuffer
     win.originalBuffer = nil
 
+proc takeViewerEntry*(win: EditorWindow): Option[ViewerEntry] =
+  ## Remove and return the viewer entry, whichever mode it belongs to.
+  result = win.viewerEntry
+  win.viewerEntry = none(ViewerEntry)
+
+proc takeViewerEntry*(win: EditorWindow, mode: EditorMode): Option[ViewerEntry] =
+  ## Take only when the entry belongs to `mode`, so an unrelated caller cannot
+  ## strip another viewer's record.
+  if win.viewerEntry.isSome and win.viewerEntry.get.mode == mode:
+    win.takeViewerEntry()
+  else:
+    none(ViewerEntry)
+
 proc suspendMode*(win: EditorWindow) =
   ## Suspend the current (mode, modeState) so a transient overlay (the
   ## DiffViewer opened from the BackupManager) can resume it on exit. The
@@ -100,3 +113,9 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
   # beforehand (takeSuspendedMode), so this only fires for non-resume exits
   # (window close, buffer/tab switch, ...).
   win.suspendedMode = none(SuspendedMode)
+
+  # Same for the viewer entry — leaveViewerMode takes it beforehand. Gated on
+  # ownership so an overlay teardown (DiffViewer over BackupManager) does not
+  # strip the suspended viewer's record.
+  if win.viewerEntry.isSome and win.viewerEntry.get.mode == mode:
+    win.viewerEntry = none(ViewerEntry)

@@ -23,7 +23,6 @@
 ## (notably `types` and its importers) do not transitively pull in `picker/nav`
 ## via the full `references_viewer` module.
 
-import ../primitives
 import list_viewer_types
 export list_viewer_types
 
@@ -39,8 +38,3 @@ type
     # When true, jumping to a selected item opens a new vertical split window
     # instead of reusing the current one (goto features' openWindow option).
     openWindowOnJump*: bool
-    # Cursor/viewport of the underlying buffer captured on entry, so quitting
-    # the viewer restores the position instead of leaving it at (0, 0).
-    originCursor*: BufferPosition
-    originTopLine*: int
-    originLeftColumn*: int

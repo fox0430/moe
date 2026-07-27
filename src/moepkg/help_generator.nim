@@ -693,6 +693,7 @@ const DebugModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "G or End", description: "Go to bottom"),
     HelpEntry(syntax: "Ctrl-d or Page Down", description: "Page down"),
     HelpEntry(syntax: "Ctrl-u or Page Up", description: "Page up"),
+    HelpEntry(syntax: "q", description: "Close the debug viewer"),
     HelpEntry(syntax: ":", description: "Enter command mode"),
   ]
 )

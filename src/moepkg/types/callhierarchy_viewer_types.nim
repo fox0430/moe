@@ -25,7 +25,6 @@
 ## is still required for `CallHierarchyItem`.
 
 import ../lsp/protocol/types as lspTypes
-import ../primitives
 import list_viewer_types
 
 export list_viewer_types
@@ -39,8 +38,3 @@ type
   CallHierarchyViewerState* = ref object of ListViewer[lspTypes.CallHierarchyItem]
     ## items/selectedIndex/waitingForG/title are inherited.
     viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
-    ## Cursor/viewport of the underlying buffer captured on entry, so quitting
-    ## the viewer restores the position instead of leaving it at (0, 0).
-    originCursor*: BufferPosition
-    originTopLine*: int
-    originLeftColumn*: int

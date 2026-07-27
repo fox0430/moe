@@ -35,12 +35,12 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, types, lsp_service, editor_navigation,
     editor_documentsymbol, editor_callhierarchy, window_manager, editor_window,
-    message_log,
+    editor_window_state, editor_buffers, diff_viewer, message_log,
   ]
 import ../src/moepkg/command_handlers/[handler_result, result_processor]
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
-const TestLines = "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n"
+const TestLines = "aaaa\nbbbb\ncccc\ndddd\neeee\nffff\ngggg\nhhhh\niiii\njjjj\n"
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -141,8 +141,7 @@ proc injectLspResponse(e: Editor, requestId: int, resp: JsonNode) =
   e.lsp.service.pendingResponses[requestId] = (result: some($resp), error: none(string))
 
 suite "Viewer round-trip - Filer":
-  test "modeTransition entry + hrFilerQuit restores cursor/viewport/buffer":
-    # Second, hand-written copy of the hrEnterFiler entry.
+  test "hrEnterFiler + hrFilerQuit restores cursor/viewport/buffer":
     let (e, path) = editorOnFile("moe_rt_filer_transition.txt")
     defer:
       removeFile(path)
@@ -150,10 +149,7 @@ suite "Viewer round-trip - Filer":
     let origBuf = win.buffer
     e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
 
-    discard e.processResult(
-      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.Filer)),
-      e.activeBuffer(),
-    )
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
     check win.mode == EditorMode.Filer
     check win.modeState.kind == mskFiler
     check win.buffer != origBuf
@@ -174,6 +170,119 @@ suite "Viewer round-trip - Filer":
     check win.cursor.column == 2
     check win.viewport.topLine == 4
     check win.viewport.leftColumn == 3
+
+  test "a bare modeTransition enters the viewer through its real entry":
+    # `mode_switch` keybindings (`:nmap <key> mode_switch filer`) reach the
+    # modeTransition block with nothing but a target mode. It must build the
+    # listing and mode state, or the window lands in a mode its dispatcher
+    # cannot serve and no key — not even `:` — gets through.
+    let (e, path) = editorOnFile("moe_rt_mode_switch_entry.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+
+    for (mode, stateKind, quitResult) in [
+      (EditorMode.Filer, mskFiler, hrFilerQuit),
+      (EditorMode.BufferManager, mskBufferManager, hrBufferManagerQuit),
+      (EditorMode.BookmarkManager, mskBookmarkManager, hrBookmarkManagerQuit),
+    ]:
+      discard e.processResult(
+        HandlerResult(kind: hrHandled, modeTransition: some(mode)), e.activeBuffer()
+      )
+      check win.mode == mode
+      check win.modeState.kind == stateKind
+      check win.buffer != origBuf
+      check win.originalBuffer == origBuf
+
+      discard e.processResult(HandlerResult(kind: quitResult), e.activeBuffer())
+      check win.mode == EditorMode.Normal
+      check win.modeState.kind == mskNone
+      check win.buffer == origBuf
+      check win.originalBuffer == nil
+      check win.cursor.line == 5
+      check win.viewport.leftColumn == 3
+
+  test "returning to a live viewer through previousMode does not re-enter it":
+    # `v` inside a viewer sets previousMode to it, and Escape transitions back.
+    # The window still holds the viewer's state, so that transition needs the
+    # mode flipped — replaying the entry would open a second listing each time.
+    let (e, path) = editorOnFile("moe_rt_previous_mode_reentry.txt")
+    defer:
+      removeFile(path)
+
+    discard e.processResult(HandlerResult(kind: hrEnterLogViewer), e.activeBuffer())
+    let viewerWin = e.activeWindow
+    let windowsWithViewer = e.windowManager.windows.len
+
+    for _ in 0 .. 1:
+      discard e.processResult(
+        HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.Visual)),
+        e.activeBuffer(),
+      )
+      check e.state.mode == EditorMode.Visual
+      check e.state.previousMode == EditorMode.LogViewer
+
+      discard e.processResult(
+        HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.LogViewer)),
+        e.activeBuffer(),
+      )
+      check e.windowManager.windows.len == windowsWithViewer
+      check e.activeWindow == viewerWin
+      check e.state.mode == EditorMode.LogViewer
+      check viewerWin.modeState.kind == mskLogViewer
+
+  test "returning to a live payload-only viewer through previousMode is allowed":
+    # Escape from Visual made inside References produces the same modeTransition
+    # as a bare mode_switch. The window still holds the state, so it must flip
+    # back, not error with "Cannot switch to X directly".
+    let (e, path) = editorOnFile("moe_rt_payload_reentry.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+
+    check e.handleLspLocations(
+      @[makeLocation(path, 1), makeLocation(path, 3)], "References", "Reference"
+    )
+    check win.mode == EditorMode.References
+    let refsBuf = win.buffer
+    let statusBefore = e.state.statusMessage
+
+    discard e.processResult(
+      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.Visual)),
+      e.activeBuffer(),
+    )
+    check e.state.mode == EditorMode.Visual
+    check e.state.previousMode == EditorMode.References
+
+    discard e.processResult(
+      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.References)),
+      e.activeBuffer(),
+    )
+    check e.state.mode == EditorMode.References
+    check win.modeState.kind == mskReferences
+    check win.buffer == refsBuf
+    check e.state.statusMessage == statusBefore
+
+  test "a mode_switch to a payload-only mode is rejected, not entered":
+    # References/DocumentSymbol/CallHierarchy/DiffViewer have nothing to list
+    # without an LSP response or a file pair. Entering them bare would leave
+    # the window mode-set with mskNone state.
+    let (e, path) = editorOnFile("moe_rt_mode_switch_reject.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+
+    for mode in [
+      EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
+      EditorMode.DiffViewer,
+    ]:
+      discard e.processResult(
+        HandlerResult(kind: hrHandled, modeTransition: some(mode)), e.activeBuffer()
+      )
+      check win.mode == EditorMode.Normal
+      check win.modeState.kind == mskNone
 
   test "hrFilerOpenFile leaves the listing buffer behind":
     # Opening a file is an exit too. The origin cursor is deliberately not
@@ -233,10 +342,10 @@ suite "Viewer round-trip - BufferManager":
     check win.buffer.filePath.get == path
 
 suite "Viewer round-trip - BookmarkManager":
-  test "modeTransition entry diverges from hrEnterBookmarkManager on leftColumn":
-    # KNOWN DIVERGENCE: this entry copy omits `viewport.leftColumn = 0`, so a
-    # horizontally scrolled window keeps its offset while showing the listing.
-    # Pinned so collapsing the copies flips it to 0 deliberately.
+  test "hrEnterBookmarkManager resets leftColumn on entry":
+    # The dead second entry copy omitted `viewport.leftColumn = 0`, so a
+    # horizontally scrolled window kept its offset while showing the listing.
+    # The single entry point resets it and restores it on quit.
     let (e, path) = editorOnFile("moe_rt_bkm_transition.txt")
     defer:
       removeFile(path)
@@ -244,17 +353,15 @@ suite "Viewer round-trip - BookmarkManager":
     let origBuf = win.buffer
     e.placeOrigin(line = 7, column = 3, topLine = 6, leftColumn = 1)
 
-    discard e.processResult(
-      HandlerResult(kind: hrHandled, modeTransition: some(EditorMode.BookmarkManager)),
-      e.activeBuffer(),
-    )
+    discard
+      e.processResult(HandlerResult(kind: hrEnterBookmarkManager), e.activeBuffer())
     check win.mode == EditorMode.BookmarkManager
     check win.modeState.kind == mskBookmarkManager
     check win.buffer != origBuf
     check win.cursor.line == 0
     check win.cursor.column == 0
     check win.viewport.topLine == 0
-    check win.viewport.leftColumn == 1 # would be 0 via the hrEnter* branch
+    check win.viewport.leftColumn == 0
 
     discard
       e.processResult(HandlerResult(kind: hrBookmarkManagerQuit), e.activeBuffer())
@@ -566,13 +673,11 @@ suite "Viewer round-trip - split-window viewers":
     e.checkSplitClosed(origWin, origBuf, windowsBefore)
     check e.bufferById(scratchId).isNone
 
-  test "hrConfig + hrConfigQuit leaves the origin window's mode untouched":
-    # Config is the one split viewer whose exit restores state.previousMode
-    # instead of Normal. `previousMode` is per-window and the entry assigns it
-    # after the vsplit, so it captures the fresh split window's mode (always
-    # Normal), not the mode Config was opened from; the user lands back there
-    # only because the origin window is never touched. Capturing previousMode
-    # on the origin window instead would change what hrConfigQuit restores.
+  test "hrConfig + hrConfigQuit restores the mode Config was opened from":
+    # Config is the one split viewer whose exit restores the mode it was opened
+    # from instead of Normal. The return mode is captured on the origin window
+    # before the vsplit, so it is the real prior mode and not the fresh split
+    # window's (always Normal).
     let (e, path) = editorOnFile("moe_rt_config.txt")
     defer:
       removeFile(path)
@@ -587,7 +692,7 @@ suite "Viewer round-trip - split-window viewers":
     check e.state.mode == EditorMode.Config
     check e.activeWindow != origWin
     check e.activeWindow.modeState.kind == mskConfig
-    check e.state.previousMode == EditorMode.Normal # not Visual, see above
+    check e.state.previousMode == EditorMode.Visual
     check origWin.mode == EditorMode.Visual
 
     discard e.processResult(HandlerResult(kind: hrConfigQuit), e.activeBuffer())
@@ -663,17 +768,15 @@ suite "Viewer round-trip - FileTree":
       check win.modeState.kind != mskFileTree
 
 suite "Viewer round-trip - nested entry":
-  test "entering a second viewer from inside one loses the editing buffer":
-    # saveOriginalBuffer is called unconditionally, so entering a viewer from
-    # inside another stashes the *listing* buffer as the original and quitting
-    # lands on it instead of the file. Only a message-log warning records the
-    # loss. Tearing down a live modeState on entry would flip this test to
-    # `win.buffer == origBuf` with no warning.
+  test "entering a second viewer from inside one keeps the editing buffer":
+    # enterViewerMode tears a live viewer down before taking its own snapshot,
+    # so the stashed original is the file buffer and never the outer listing.
     let (e, path) = editorOnFile("moe_rt_nested_entry.txt")
     defer:
       removeFile(path)
     let win = e.activeWindow
     let origBuf = win.buffer
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
     clearMessageLog()
 
     discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
@@ -682,16 +785,194 @@ suite "Viewer round-trip - nested entry":
 
     discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
     check win.modeState.kind == mskBufferManager
-    check win.originalBuffer == filerBuf # not origBuf
+    check win.originalBuffer == origBuf
 
     discard e.processResult(HandlerResult(kind: hrBufferManagerQuit), e.activeBuffer())
     check win.mode == EditorMode.Normal
     check win.modeState.kind == mskNone
-    check win.buffer == filerBuf # the file buffer is gone from this window
-    check win.buffer != origBuf
+    check win.buffer == origBuf
+    # The origin captured by the outer viewer survives the hand-off.
+    check win.cursor.line == 5
+    check win.cursor.column == 2
+    check win.viewport.topLine == 4
+    check win.viewport.leftColumn == 3
 
-    var warned = false
     for m in getMessageLog():
-      if m.startsWith("saveOriginalBuffer: overwriting existing originalBuffer"):
-        warned = true
-    check warned
+      check not m.startsWith("saveOriginalBuffer: overwriting existing originalBuffer")
+
+  test "a split viewer opened from inside one leaves the origin window usable":
+    # A split takes a *new* window, so the viewer live in the origin window is
+    # none of its business. Tearing that one down would reset its mode state
+    # while its mode stayed put, and every key afterwards would be rejected.
+    let (e, path) = editorOnFile("moe_rt_split_over_inplace.txt")
+    defer:
+      removeFile(path)
+    let originWin = e.activeWindow
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check originWin.modeState.kind == mskFiler
+    let filerBuf = originWin.buffer
+
+    discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    check e.activeWindow != originWin
+    check originWin.mode == EditorMode.Filer
+    check originWin.modeState.kind == mskFiler
+    check originWin.buffer == filerBuf
+
+    discard e.processResult(HandlerResult(kind: hrHelpViewerQuit), e.activeBuffer())
+    check e.activeWindow == originWin
+    check e.state.mode == EditorMode.Filer
+    check e.activeWindow.modeState.kind == mskFiler
+
+  test "a viewer entered in place restores the wrap sub-line it displaced":
+    let (e, path) = editorOnFile("moe_rt_wrap_offset.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+    win.viewport.topWrapOffset = 2
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check win.viewport.topWrapOffset == 0
+
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer())
+    check win.viewport.topLine == 4
+    check win.viewport.topWrapOffset == 2
+
+  test "the filer resolves its directory from the file, not the outer listing":
+    # The buffer live in the window is the outer viewer's generated listing and
+    # has no file path; the directory must come from the file underneath it.
+    let (e, path) = editorOnFile("moe_rt_filer_start_path.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+
+    discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
+    check win.buffer.filePath.isNone
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check win.modeState.kind == mskFiler
+    check win.modeState.filer.currentPath == parentDir(path)
+
+  test "an in-place viewer opened from a split one takes over the window left":
+    # Tearing the split viewer down closes the window it was showing in, so the
+    # in-place entry has to land on the window that survived. Writing it to the
+    # closed one leaves the survivor mode-set with mskNone state, and every key
+    # afterwards — `:` included — is rejected.
+    let (e, path) = editorOnFile("moe_rt_inplace_over_split.txt")
+    defer:
+      removeFile(path)
+    let originWin = e.activeWindow
+
+    discard e.processResult(HandlerResult(kind: hrEnterHelpViewer), e.activeBuffer())
+    check e.windowManager.windows.len == 2
+    check e.activeWindow != originWin
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check e.windowManager.windows.len == 1
+    check e.activeWindow == originWin
+    check e.state.mode == EditorMode.Filer
+    check originWin.mode == EditorMode.Filer
+    check originWin.modeState.kind == mskFiler
+    # Resolved from the file under the split, not from the help listing.
+    check originWin.modeState.filer.currentPath == parentDir(path)
+
+  test "hrEnterTerminal from an in-place viewer tears the viewer down first":
+    # Otherwise the stranded viewerEntry/originalBuffer leak into the next
+    # viewer entry as its origin, losing the file underneath.
+    let (e, path) = editorOnFile("moe_rt_terminal_over_filer.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+    let originBuf = win.buffer
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check win.modeState.kind == mskFiler
+    check win.viewerEntry.isSome
+    check win.originalBuffer == originBuf
+
+    discard e.processResult(
+      HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: "true"),
+      e.activeBuffer(),
+    )
+    check win.viewerEntry.isNone
+    # nil if PTY failed, terminal buffer if it started — never the file.
+    check (win.originalBuffer == nil or win.originalBuffer != originBuf)
+
+suite "Viewer round-trip - teardown records":
+  test "an overlay over a split viewer keeps that viewer's placement record":
+    # The DiffViewer suspends the BackupManager underneath it. Its own teardown
+    # must not consume the backup manager's placement record, or the split can
+    # never be closed and its scratch buffer is orphaned.
+    let (e, path) = editorOnFile("moe_rt_overlay_record.txt")
+    defer:
+      removeFile(path)
+    let origWin = e.activeWindow
+    let origBuf = origWin.buffer
+    let windowsBefore = e.windowManager.windows.len
+    let buffersBefore = e.buffers.len
+    e.placeOrigin(line = 5, column = 2, topLine = 4, leftColumn = 3)
+
+    discard e.processResult(HandlerResult(kind: hrEnterBackupManager), e.activeBuffer())
+    let viewerWin = e.activeWindow
+    check viewerWin.viewerEntry.isSome
+
+    # Same overlay entry hrBackupManagerOpenDiff performs, without needing a
+    # real backup on disk.
+    viewerWin.saveOriginalBuffer()
+    viewerWin.suspendMode()
+    viewerWin.buffer = newTextBuffer("diff")
+    viewerWin.modeState =
+      ModeState(kind: mskDiffViewer, diffViewer: initDiffViewerState(path, path))
+    viewerWin.mode = EditorMode.DiffViewer
+    e.setMode(EditorMode.DiffViewer)
+
+    discard e.processResult(HandlerResult(kind: hrDiffViewerQuit), e.activeBuffer())
+    check e.activeWindow.mode == EditorMode.BackupManager
+    check viewerWin.viewerEntry.isSome
+
+    discard e.processResult(HandlerResult(kind: hrBackupManagerQuit), e.activeBuffer())
+    check e.windowManager.windows.len == windowsBefore
+    check e.activeWindow == origWin
+    check e.activeWindow.buffer == origBuf
+    check e.buffers.len == buffersBefore
+
+  test "a regenerated listing does not orphan the buffer the split registered":
+    # Refreshing swaps in a buffer that was never registered in Editor.buffers.
+    # Exit must delete the one entry recorded on the way in.
+    let (e, path) = editorOnFile("moe_rt_refresh_orphan.txt")
+    defer:
+      removeFile(path)
+    let windowsBefore = e.windowManager.windows.len
+    let buffersBefore = e.buffers.len
+
+    discard e.processResult(HandlerResult(kind: hrEnterLogViewer), e.activeBuffer())
+    let scratchId = e.activeWindow.buffer.id
+    check e.bufferById(scratchId).isSome
+
+    discard e.processResult(HandlerResult(kind: hrLogViewerRefresh), e.activeBuffer())
+    check e.activeWindow.buffer.id != scratchId
+
+    discard e.processResult(HandlerResult(kind: hrLogViewerQuit), e.activeBuffer())
+    check e.windowManager.windows.len == windowsBefore
+    check e.bufferById(scratchId).isNone
+    check e.buffers.len == buffersBefore
+
+  test "hrDebugViewerQuit closes the debug split":
+    let (e, path) = editorOnFile("moe_rt_debug_quit.txt")
+    defer:
+      removeFile(path)
+    let origWin = e.activeWindow
+    let windowsBefore = e.windowManager.windows.len
+    let buffersBefore = e.buffers.len
+
+    discard e.processResult(HandlerResult(kind: hrDebug), e.activeBuffer())
+    check e.activeWindow.modeState.kind == mskDebug
+    let scratchId = e.activeWindow.buffer.id
+
+    discard e.processResult(HandlerResult(kind: hrDebugViewerQuit), e.activeBuffer())
+    check e.windowManager.windows.len == windowsBefore
+    check e.activeWindow == origWin
+    check e.state.mode == EditorMode.Normal
+    check e.bufferById(scratchId).isNone
+    check e.buffers.len == buffersBefore
