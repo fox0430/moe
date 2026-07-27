@@ -889,13 +889,14 @@ proc loadProgressiveScalarFixture(filename: string, scalarLines = 1200): TextBuf
   ## fires (the stored boundary state at the chunk edge is gtLongStringLit).
   result = newTextBuffer()
   let path = getTempDir() / filename
+  defer:
+    removeFile(path)
   var content = "top: value\nscalar: |\n"
   for i in 0 ..< scalarLines:
     content.add("  block scalar line " & $i & "\n")
   content.add("after: tail\n")
   writeFile(path, content)
   discard result.loadFile(path)
-  removeFile(path)
 
 suite "Highlight - YAML internal chunk boundary handoff":
   # updateHighlightIncremental parses in ChunkSize=100 chunks and feeds each
@@ -1044,12 +1045,13 @@ suite "Highlight - YAML internal chunk boundary handoff":
     # searches rely on).
     var buf = newTextBuffer()
     let path = getTempDir() / "moe_test_yaml_edit_during_load.yaml"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 2500:
       content.add("key" & $i & ": value" & $i & "\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
     check buf.incrementalHighlight.parsedUpTo < buf.len - 1
 
     # Edit while the progressive load is still behind.
@@ -1120,6 +1122,8 @@ suite "Highlight - early tokenizer stop keeps the line-state cache consistent":
     # tick read states[999] out of bounds — on every frame, killing the load.
     var buf = newTextBuffer()
     let path = getTempDir() / "moe_test_yaml_nul_progressive.yaml"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 1500:
       if i == 10:
@@ -1128,7 +1132,6 @@ suite "Highlight - early tokenizer stop keeps the line-state cache consistent":
         content.add("key" & $i & ": value" & $i & "\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     while buf.continueInitialHighlight():
       discard
@@ -1191,6 +1194,8 @@ suite "Highlight - diagnostics survive progressive load":
     var buf = newTextBuffer()
 
     let path = getTempDir() / "test_uri_scan_diag_no_bake.rs"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 500:
       if i == 250:
@@ -1199,7 +1204,6 @@ suite "Highlight - diagnostics survive progressive load":
         content.add("let x = " & $i & ";\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     while buf.continueInitialHighlight():
       discard
@@ -2028,12 +2032,13 @@ suite "Highlight - Progressive Initial Highlighting":
 
     # Create a temp file with 2500 lines of Rust code
     let path = getTempDir() / "test_progressive_highlight.rs"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 2500:
       content.add("let v" & $i & " = " & $i & ";\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     # After loadFile, only first 1000 lines should be parsed
     check buf.incrementalHighlight != nil
@@ -2060,6 +2065,8 @@ suite "Highlight - Progressive Initial Highlighting":
     var buf = newTextBuffer()
 
     let path = getTempDir() / "moe_test_progressive_cdata.xml"
+    defer:
+      removeFile(path)
     var
       content = ""
       lines: seq[string]
@@ -2075,7 +2082,6 @@ suite "Highlight - Progressive Initial Highlighting":
       content.add(line & "\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     check buf.language == SourceLanguage.langXml
     check buf.incrementalHighlight.parsedUpTo == 999
@@ -2108,6 +2114,8 @@ suite "Highlight - URI Underline on Load":
     var buf = newTextBuffer()
 
     let path = getTempDir() / "test_uri_highlight_initial.rs"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 10:
       if i == 5:
@@ -2116,7 +2124,6 @@ suite "Highlight - URI Underline on Load":
         content.add("let v" & $i & " = " & $i & ";\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     # Line 5 contains a URI; it should have Underline modifier
     let uriCol = "// see ".len
@@ -2127,6 +2134,8 @@ suite "Highlight - URI Underline on Load":
     var buf = newTextBuffer()
 
     let path = getTempDir() / "test_uri_highlight_plain.txt"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 10:
       if i == 3:
@@ -2135,7 +2144,6 @@ suite "Highlight - URI Underline on Load":
         content.add("plain line " & $i & "\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     let uriCol = "visit ".len
     let mods = buf.highlight.getSegmentModifiers(3, uriCol)
@@ -2146,6 +2154,8 @@ suite "Highlight - URI Underline on Load":
 
     # Create file with URI beyond line 1000
     let path = getTempDir() / "test_uri_highlight_progressive.rs"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 1500:
       if i == 1200:
@@ -2154,7 +2164,6 @@ suite "Highlight - URI Underline on Load":
         content.add("let v" & $i & " = " & $i & ";\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     # After loadFile, only first 1000 lines are scanned for URIs
     check buf.uriScanParsedUpTo == 999
@@ -2175,6 +2184,8 @@ suite "Highlight - URI Underline on Load":
 
     # Create plain text file with URI beyond line 1000
     let path = getTempDir() / "test_uri_highlight_plain_progressive.txt"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 1500:
       if i == 1200:
@@ -2183,7 +2194,6 @@ suite "Highlight - URI Underline on Load":
         content.add("plain line " & $i & "\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     # After loadFile, only first 1000 lines are scanned for URIs
     check buf.uriScanParsedUpTo == 999
@@ -2202,6 +2212,8 @@ suite "Highlight - URI Underline on Load":
 
     # Create file with URIs at line 5 and line 1500
     let path = getTempDir() / "test_uri_restore_before_edit.rs"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 2000:
       if i == 5:
@@ -2212,7 +2224,6 @@ suite "Highlight - URI Underline on Load":
         content.add("let x = " & $i & ";\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     # Complete initial highlighting and URI scan
     while buf.continueInitialHighlight():
@@ -2245,12 +2256,13 @@ suite "Highlight - URI Underline on Load":
 
     # Create file with no URIs, 1500 lines
     let path = getTempDir() / "test_uri_scan_no_uri.rs"
+    defer:
+      removeFile(path)
     var content = ""
     for i in 0 ..< 1500:
       content.add("let x = " & $i & ";\n")
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     # Complete initial highlighting
     while buf.continueInitialHighlight():
@@ -2263,10 +2275,11 @@ suite "Highlight - URI Underline on Load":
     var buf = newTextBuffer()
 
     let path = getTempDir() / "test_uri_highlight_update.rs"
+    defer:
+      removeFile(path)
     var content = "let x = 1;\nlet y = 2;\nlet z = 3;\n"
     writeFile(path, content)
     discard buf.loadFile(path)
-    removeFile(path)
 
     # Edit line 1 to contain a URI
     discard buf.beginTransaction()
