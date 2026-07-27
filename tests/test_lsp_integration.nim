@@ -2215,6 +2215,46 @@ suite "LspIntegration - Additional Request Methods (disabled)":
     let result = lsp.startSemanticTokensRequest(buffer, 0, 10)
     check result.isErr
 
+  test "startCompletionResolveRequest returns error when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    let result = lsp.startCompletionResolveRequest(buffer, %*{"label": "x"})
+    check result.isErr
+    check "disabled" in result.error
+
+  test "startCompletionResolveRequest returns error for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    let result = lsp.startCompletionResolveRequest(buffer, %*{"label": "x"})
+    check result.isErr
+    check "file path" in result.error
+
+  test "startDocumentLinkResolveRequest returns error when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    let link = DocumentLink(
+      range: Range(
+        start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+      )
+    )
+    let result = lsp.startDocumentLinkResolveRequest(buffer, link)
+    check result.isErr
+    check "disabled" in result.error
+
+  test "startDocumentLinkResolveRequest returns error for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    let link = DocumentLink(
+      range: Range(
+        start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+      )
+    )
+    let result = lsp.startDocumentLinkResolveRequest(buffer, link)
+    check result.isErr
+    check "file path" in result.error
+
 suite "LspIntegration - Additional Feature Support Checks":
   test "hasCodeLensResolveSupport returns false when disabled":
     let lsp = newLspIntegration()
@@ -2292,6 +2332,27 @@ suite "LspIntegration - Callbacks":
     )
     check not called
 
+  test "setServerRestartCallback sets callback":
+    let lsp = newLspIntegration()
+    var called = false
+    lsp.setServerRestartCallback(
+      proc(langId: string) {.gcsafe.} =
+        called = true
+    )
+    check not called
+    check lsp.service.onServerRestart != nil
+
+  test "setApplyEditCallback sets callback":
+    let lsp = newLspIntegration()
+    var called = false
+    lsp.setApplyEditCallback(
+      proc(edit: WorkspaceEdit): ApplyWorkspaceEditResult {.gcsafe.} =
+        called = true
+        (applied: true, failureReason: none(string))
+    )
+    check not called
+    check lsp.service.onApplyWorkspaceEdit != nil
+
 suite "LspIntegration - getSemanticTokensLegend":
   test "getSemanticTokensLegend returns none when disabled":
     let lsp = newLspIntegration()
@@ -2303,6 +2364,25 @@ suite "LspIntegration - getSemanticTokensLegend":
     let lsp = newLspIntegration()
     let buffer = newTextBuffer("test")
     check lsp.getSemanticTokensLegend(buffer).isNone
+
+suite "LspIntegration - getSemanticTypeColorTable":
+  test "getSemanticTypeColorTable returns none when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    check lsp.getSemanticTypeColorTable(buffer).isNone
+
+  test "getSemanticTypeColorTable returns none for buffer without path":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test")
+    check lsp.getSemanticTypeColorTable(buffer).isNone
+
+  test "getSemanticTypeColorTable returns none when server has no legend":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
+    # No server is running, so the legend lookup misses and no cache is built.
+    check lsp.getSemanticTypeColorTable(buffer).isNone
+    check lsp.semanticTypeColorTables.len == 0
 
 suite "LspIntegration - logLspDegraded":
   setup:
