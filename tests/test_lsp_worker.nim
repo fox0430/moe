@@ -147,6 +147,34 @@ suite "LspWorker - formatRawJsonLogLine":
     let line = formatRawJsonLogLine("", ljdReceived, """{"x":1}""")
     check line == """ <<< {"x":1}"""
 
+suite "LspWorker - extractErrorMessage":
+  test "returns message from a well-formed error object":
+    let err = %*{"code": -32603, "message": "boom"}
+    check extractErrorMessage(err) == "boom"
+
+  test "falls back when message field is absent":
+    let err = %*{"code": -32603}
+    check extractErrorMessage(err) == "Unknown error"
+
+  test "custom fallback is honored":
+    let err = %*{"code": -32603}
+    check extractErrorMessage(err, "unknown error") == "unknown error"
+
+  # Regression: non-object `error` (JNull / JString) used to hit `[]`'s
+  # `assert kind == JObject` and crash the worker with AssertionDefect.
+  test "non-object error node does not raise":
+    check extractErrorMessage(newJNull()) == "Unknown error"
+    check extractErrorMessage(newJString("oops")) == "Unknown error"
+    check extractErrorMessage(newJInt(42)) == "Unknown error"
+    check extractErrorMessage(newJArray()) == "Unknown error"
+
+  test "nil node does not raise":
+    check extractErrorMessage(nil) == "Unknown error"
+
+  test "non-string message field falls back":
+    let err = %*{"message": 123}
+    check extractErrorMessage(err) == "Unknown error"
+
 suite "LspWorker - dropPendingDidOpen":
   # Regression: a didClose that arrives before the server reaches lwsRunning
   # must remove the queued didOpen for the same URI. Otherwise the post-init

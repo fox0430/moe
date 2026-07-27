@@ -525,6 +525,13 @@ proc formatRawJsonLogLine*(
   let arrow = if direction == ljdSent: ">>>" else: "<<<"
   languageId & " " & arrow & " " & json
 
+proc extractErrorMessage*(errorNode: JsonNode, fallback = "Unknown error"): string =
+  ## Non-conformant servers occasionally send a non-object `error`; the `[]`
+  ## operator would assert-crash the worker, so route everything through here.
+  if errorNode.isNil or errorNode.kind != JObject:
+    return fallback
+  errorNode{"message"}.getStr(fallback)
+
 proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
   ## Convert a server notification (method + params) into the LspEvent to
   ## enqueue. Pure - no I/O, no queue access, no raising. Malformed frames
@@ -1196,9 +1203,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       # Check for error
       if response.hasKey("error"):
         ctx.sharedState.storeState(lwsCrashed)
-        sendError(
-          "Initialize error: " & response["error"]["message"].getStr("Unknown error")
-        )
+        sendError("Initialize error: " & extractErrorMessage(response["error"]))
         await cleanupProcess()
         return
 
@@ -1456,8 +1461,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           return
       else:
         let errText =
-          if response.hasKey("error") and response["error"].kind == JObject:
-            response["error"]{"message"}.getStr("unknown error")
+          if response.hasKey("error"):
+            extractErrorMessage(response["error"], "unknown error")
           else:
             "no error field"
         sendLogMessage(
@@ -1473,8 +1478,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
         # Check for error
         if response.hasKey("error"):
-          let errMsg = response["error"]["message"].getStr("Unknown error")
-          sendResponse(ourId, none(JsonNode), some(errMsg))
+          sendResponse(
+            ourId, none(JsonNode), some(extractErrorMessage(response["error"]))
+          )
         elif response.hasKey("result"):
           sendResponse(ourId, some(response["result"]), none(string))
         else:
