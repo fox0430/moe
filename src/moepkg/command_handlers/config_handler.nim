@@ -192,11 +192,9 @@ proc handleConfigModeKey*(
       return ConfigModeResult(kind: cmrHandled)
     of skUp:
       configState.moveUp()
-      configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
     of skDown:
       configState.moveDown()
-      configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
     of skLeft:
       # Cycle enum backward or decrement int/float
@@ -237,7 +235,6 @@ proc handleConfigModeKey*(
       let halfPage = max(1, viewportHeight div 2)
       for i in 0 ..< halfPage:
         configState.moveDown()
-      configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
 
     # Check for Ctrl+u (half page up)
@@ -245,7 +242,6 @@ proc handleConfigModeKey*(
       let halfPage = max(1, viewportHeight div 2)
       for i in 0 ..< halfPage:
         configState.moveUp()
-      configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
 
     case keyCombo.char
@@ -259,22 +255,18 @@ proc handleConfigModeKey*(
       # Jump to the next search match. Re-enable highlight (like Vim's n) only
       # when there is a match to jump to; an empty query must not touch the gate.
       if configState.searchForward().isSome:
-        configState.ensureSelectedVisible(viewportHeight)
         return ConfigModeResult(kind: cmrRepeatSearch)
       return ConfigModeResult(kind: cmrHandled)
     of "N":
       # Jump to the previous search match (see "n" for the gate rationale).
       if configState.searchBackward().isSome:
-        configState.ensureSelectedVisible(viewportHeight)
         return ConfigModeResult(kind: cmrRepeatSearch)
       return ConfigModeResult(kind: cmrHandled)
     of "j":
       configState.moveDown()
-      configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
     of "k":
       configState.moveUp()
-      configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
     of "g":
       # Start waiting for second 'g'
@@ -282,7 +274,6 @@ proc handleConfigModeKey*(
       return ConfigModeResult(kind: cmrHandled)
     of "G":
       configState.moveToLast()
-      configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
     of "l", " ":
       # Edit/toggle value

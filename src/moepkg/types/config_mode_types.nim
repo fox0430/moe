@@ -71,7 +71,6 @@ type
   ConfigModeState* = ref object ## State for the configuration mode UI
     items*: seq[ConfigItem] # All configuration items
     selectedIndex*: int # Index in items
-    topLine*: int # Scroll position
     editMode*: bool # Whether we're editing a value (Int/String)
     editBuffer*: string # Buffer for editing text
     editCursor*: int # Cursor position in edit buffer (rune index, not bytes)

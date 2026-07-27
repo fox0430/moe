@@ -59,11 +59,9 @@ proc renderConfig*(
   # Calculate max name width for alignment
   let maxNameWidth = calcMaxNameWidth(configState.items, width)
 
-  # Ensure selected entry is visible
-  let visibleLines = listEndY - listStartY
-  configState.ensureSelectedVisible(visibleLines)
-
   # Render config entries
+  # (viewport.topLine is clamped to keep configState.selectedIndex visible in
+  # advanceLayoutForFrame, so we can render straight from it.)
   var screenY = listStartY
   let isEditMode = configState.isEditing()
   let editInfo = configState.getEditInfo()
@@ -82,7 +80,7 @@ proc renderConfig*(
     else:
       configState.searchQuery
 
-  for i in configState.topLine ..< configState.items.len:
+  for i in window.viewport.topLine ..< configState.items.len:
     if screenY >= listEndY:
       break
 
@@ -179,7 +177,7 @@ proc renderConfig*(
       let popupHeight = enumInfo.options.len + 2 # options + border
 
       # Calculate popup position (near the value display position)
-      let selectedY = listStartY + (configState.selectedIndex - configState.topLine)
+      let selectedY = listStartY + (configState.selectedIndex - window.viewport.topLine)
       let selectedItem = configState.getSelectedItem()
       var valueX = maxNameWidth + 5 # indent + name + " : "
       if selectedItem.isSome:
@@ -247,7 +245,7 @@ proc renderConfig*(
           displayWidthUpToWithTabs(editInfo.buffer, editInfo.cursor, e.tabStop)
         e.state.screenCursor.x = startX + indent + nameWidth + 3 + cursorWidth
         e.state.screenCursor.y =
-          listStartY + (configState.selectedIndex - configState.topLine)
+          listStartY + (configState.selectedIndex - window.viewport.topLine)
       e.state.cursorVisible = true
   else:
     # Hide cursor when not in edit mode, unless an overlay (command/search) is
