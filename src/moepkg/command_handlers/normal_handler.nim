@@ -551,14 +551,13 @@ proc handleNormalModeKey*(
       state.pendingInput.macroState.commandType = ""
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
-  # Handle macro recording - check if we're in recording mode
+  # Stop recording when the user re-presses the record-start key (`q`).
+  # Per-key recording is captured centrally in `handler.handleKeyCombo`; the
+  # matching `isMacroStopKey` guard suppresses recording of this closing key.
   if state.pendingInput.macroState.isRecording:
-    # Don't treat the key as "stop recording" while the router is holding
-    # it as an f/t/r/" operand.
     let currentKeyStr = keyComboToString(keyCombo)
     if currentKeyStr == state.pendingInput.macroState.recordStartKey and
         not handler.keyBindingRegistry.isWaitingForChar():
-      # Stop recording
       state.pendingInput.macroState.registers[state.pendingInput.macroState.register] =
         state.pendingInput.macroState.recordedKeys
       state.pendingInput.macroState.isRecording = false
@@ -567,10 +566,6 @@ proc handleNormalModeKey*(
       state.statusMessage = ""
       handler.keyBindingRegistry.clearSequence()
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-    else:
-      # Record this key
-      state.pendingInput.macroState.recordedKeys.add(currentKeyStr)
-      # Continue processing the key normally
 
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)
   # This handles the second part of commands like 'diw', 'da"', 'ci(' etc.

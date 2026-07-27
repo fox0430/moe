@@ -1045,7 +1045,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     check buf.getLine(0) == "  hello"
 
 suite "InsertModeHandler - Macro Recording":
-  test "Keys recorded during macro recording":
+  test "Handler does not record macro keys (recording is unified at handleKeyCombo)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
@@ -1058,7 +1058,7 @@ suite "InsertModeHandler - Macro Recording":
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
     discard handler.handleInsertModeKey(buf, state, keyCombo)
 
-    check state.pendingInput.macroState.recordedKeys.len >= 1
+    check state.pendingInput.macroState.recordedKeys.len == 0
 
 suite "InsertModeHandler - Execute Command":
   test "Execute command via registry":

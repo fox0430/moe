@@ -205,11 +205,8 @@ proc handleReplaceModeKey*(
     state: EditorState,
     keyCombo: KeyCombo,
 ): ReplaceModeResult =
-  ## Main entry point for handling Replace mode key presses
-
-  # Record key for macro if recording is active
-  if state.pendingInput.macroState.isRecording:
-    state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
+  ## Main entry point for handling Replace mode key presses.
+  ## Macro recording is captured centrally in `handler.handleKeyCombo`.
 
   # Resolve through the shared built-in decode entry (`resolveBuiltin`), the
   # same path Normal/Visual/Insert use. Replace has no built-in sequences, but a

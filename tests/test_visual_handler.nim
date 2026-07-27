@@ -404,7 +404,7 @@ suite "VisualModeHandler - handleVisualModeKey":
 
     check r.kind == vmrUnhandled or r.kind == vmrHandled
 
-  test "Keys are recorded during macro recording":
+  test "Handler does not record macro keys (recording is unified at handleKeyCombo)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let handler = createTestHandler(buf)
@@ -419,7 +419,7 @@ suite "VisualModeHandler - handleVisualModeKey":
     let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
     discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
-    check state.pendingInput.macroState.recordedKeys.len >= 1
+    check state.pendingInput.macroState.recordedKeys.len == 0
 
 suite "VisualModeHandler - sequence dispatch (M7 regression)":
   # `gg`/`ge`/`zf` are bound as multi-key sequences to all three Visual modes.

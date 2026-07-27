@@ -566,7 +566,7 @@ suite "ReplaceModeHandler - Unhandled Keys":
     check r.kind == rmrUnhandled
 
 suite "ReplaceModeHandler - Macro Recording":
-  test "Keys recorded during macro recording":
+  test "Handler does not record macro keys (recording is unified at handleKeyCombo)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
     let handler = createTestHandler(buf)
@@ -579,7 +579,7 @@ suite "ReplaceModeHandler - Macro Recording":
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
     discard handler.handleReplaceModeKey(buf, state, keyCombo)
 
-    check state.pendingInput.macroState.recordedKeys.len >= 1
+    check state.pendingInput.macroState.recordedKeys.len == 0
 
 suite "ReplaceModeHandler - Key Binding Motions":
   test "Handle h key replaces character (not motion in Replace mode)":
