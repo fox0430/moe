@@ -168,7 +168,9 @@ type
 
   # Signature Help types
   ParameterInformation* = object ## Information about a parameter
-    label*: string # Parameter label (can also be [start, end] but we use string)
+    label*: string # Parameter label as substring form
+    labelOffsets*: Option[tuple[start, stop: int]]
+      # [start, end) offsets into the signature label
     documentation*: Option[JsonNode] # string | MarkupContent
 
   SignatureInformation* = object ## Information about a signature
@@ -776,9 +778,10 @@ proc parseParameterInformation*(node: JsonNode): ParameterInformation =
   if node.hasKey("label"):
     if node["label"].kind == JString:
       result.label = node["label"].getStr
-    elif node["label"].kind == JArray:
-      # [start, end] format - we'll just use empty string and rely on signature label
-      result.label = ""
+    elif node["label"].kind == JArray and node["label"].len == 2:
+      let a = node["label"][0].getInt
+      let b = node["label"][1].getInt
+      result.labelOffsets = some((start: a, stop: b))
   if node.hasKey("documentation"):
     result.documentation = some(node["documentation"])
 

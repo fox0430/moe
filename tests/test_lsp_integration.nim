@@ -409,6 +409,57 @@ suite "LspIntegration - Signature Help":
     check info.start >= 0
     check info.stop > info.start
 
+  test "getParameterInfo disambiguates substring-collision labels":
+    let label = "sum(count: int, c: int)"
+    let sigHelp = SignatureHelp(
+      signatures: @[
+        SignatureInformation(
+          label: label,
+          documentation: none(JsonNode),
+          parameters: some(
+            @[
+              ParameterInformation(label: "count: int", documentation: none(JsonNode)),
+              ParameterInformation(label: "c: int", documentation: none(JsonNode)),
+            ]
+          ),
+          activeParameter: none(int),
+        )
+      ],
+      activeSignature: some(0),
+      activeParameter: some(1),
+    )
+    let info = getParameterInfo(sigHelp)
+    check label[info.start ..< info.stop] == "c: int"
+    check info.start == label.rfind("c: int")
+
+  test "getParameterInfo honors labelOffsets when provided":
+    let label = "foo(a: int, b: string)"
+    let sigHelp = SignatureHelp(
+      signatures: @[
+        SignatureInformation(
+          label: label,
+          documentation: none(JsonNode),
+          parameters: some(
+            @[
+              ParameterInformation(
+                labelOffsets: some((start: 4, stop: 10)), documentation: none(JsonNode)
+              ),
+              ParameterInformation(
+                labelOffsets: some((start: 12, stop: 21)), documentation: none(JsonNode)
+              ),
+            ]
+          ),
+          activeParameter: none(int),
+        )
+      ],
+      activeSignature: some(0),
+      activeParameter: some(1),
+    )
+    let info = getParameterInfo(sigHelp)
+    check info.start == 12
+    check info.stop == 21
+    check label[info.start ..< info.stop] == "b: string"
+
 suite "LspIntegration - newLspIntegration":
   privateAccess(LspIntegration)
 

@@ -1473,6 +1473,50 @@ proc getActiveParameterIndex*(sigHelp: SignatureHelp): int =
 
   return 0
 
+proc findParameterLabel(
+    sigLabel: string, paramIdx: int, params: seq[ParameterInformation]
+): int =
+  ## Locate the paramIdx-th parameter label inside sigLabel by scanning
+  ## parameters in order with word-boundary awareness. Returns -1 if not found.
+  template isIdentChar(c: char): bool =
+    c == '_' or c.isAlphaNumeric
+
+  proc findBoundary(hay, needle: string, start: int): int =
+    var i = start
+    while i <= hay.len - needle.len:
+      let j = hay.find(needle, i)
+      if j < 0:
+        return -1
+      let leftOk = j == 0 or not isIdentChar(hay[j - 1]) or not isIdentChar(needle[0])
+      let rEnd = j + needle.len
+      let rightOk =
+        rEnd >= hay.len or not isIdentChar(hay[rEnd]) or not isIdentChar(needle[^1])
+      if leftOk and rightOk:
+        return j
+      i = j + 1
+    return -1
+
+  var cursor = 0
+  for i in 0 .. paramIdx:
+    if params[i].labelOffsets.isSome:
+      let (a, b) = params[i].labelOffsets.get
+      if i == paramIdx:
+        return a
+      cursor = b
+      continue
+    let lbl = params[i].label
+    if lbl.len == 0:
+      return -1
+    let pos = findBoundary(sigLabel, lbl, cursor)
+    if pos < 0:
+      if i == paramIdx:
+        return sigLabel.find(lbl, cursor)
+      return -1
+    if i == paramIdx:
+      return pos
+    cursor = pos + lbl.len
+  return -1
+
 proc getParameterInfo*(sigHelp: SignatureHelp): tuple[label: string, start, stop: int] =
   ## Get the active parameter's highlighting range within the signature label
   ## Returns (full label, start position, end position) for highlighting
@@ -1498,9 +1542,14 @@ proc getParameterInfo*(sigHelp: SignatureHelp): tuple[label: string, start, stop
     return
 
   let param = params[paramIdx]
+  if param.labelOffsets.isSome:
+    let (a, b) = param.labelOffsets.get
+    if a >= 0 and b <= sig.label.len and a <= b:
+      result.start = a
+      result.stop = b
+      return
   if param.label.len > 0:
-    # Find the parameter label in the signature label
-    let pos = sig.label.find(param.label)
+    let pos = findParameterLabel(sig.label, paramIdx, params)
     if pos >= 0:
       result.start = pos
       result.stop = pos + param.label.len
