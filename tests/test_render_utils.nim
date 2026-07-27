@@ -22,7 +22,8 @@ import std/[unittest, strutils, unicode]
 import pkg/results
 
 import ../src/moepkg/render_utils {.all.}
-import ../src/moepkg/[buffer, types, config, primitives]
+import ../src/moepkg/[types, config, primitives]
+import ../src/moepkg/buffer/[core, edit]
 
 suite "formatLineNumber":
   # formatLineNumber uses: align($(lineIndex + 1), width - 1) & " "

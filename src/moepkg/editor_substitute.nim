@@ -22,7 +22,8 @@
 
 import std/strutils
 
-import types/editor_types, command_line/substitute_parser, buffer
+import types/editor_types, command_line/substitute_parser
+import buffer/[core, edit]
 
 proc startSubstitutePreview*(e: Editor) =
   ## Start substitute preview by saving the current buffer content
