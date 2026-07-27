@@ -1231,18 +1231,6 @@ suite "Highlight - JS/TS String Line Bounding":
   # a line's tokens may depend only on the tokenizer state at the line's
   # start, never on later lines, or incremental re-parsing (which resumes
   # from per-line states) diverges from a full reparse.
-  proc checkIncrMatchesFull(
-      buffer: seq[string], ih: IncrementalHighlight, lang: SourceLanguage
-  ) =
-    let incrResult = Highlight(colorSegments: ih.segments)
-    var runesBuffer: seq[Runes]
-    for line in buffer:
-      runesBuffer.add(line.toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], lang)
-    for row in 0 ..< buffer.len:
-      for col in 0 ..< buffer[row].len:
-        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
-
   proc runEditBelow(
       lang: SourceLanguage, buffer0: seq[string], editRow: int, newLine: string
   ) =
@@ -1261,7 +1249,7 @@ suite "Highlight - JS/TS String Line Bounding":
       @[],
       lang,
     )
-    checkIncrMatchesFull(buffer, ih, lang)
+    checkMatchesFullParse(buffer, ih, lang)
 
   proc runColonBelowString(lang: SourceLanguage) =
     # Fuzz seed 180608 shape: an unterminated string on row 0 with a closing
@@ -1284,7 +1272,7 @@ suite "Highlight - JS/TS String Line Bounding":
       @[],
       lang,
     )
-    checkIncrMatchesFull(buffer, ih, lang)
+    checkMatchesFullParse(buffer, ih, lang)
     # Row 0's string must stay a string: its color may not depend on row 4.
     check Highlight(colorSegments: ih.segments).getColorPair(0, 4) ==
       EditorColorPairIndex.stringLit
