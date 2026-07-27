@@ -95,12 +95,8 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
     e.lsp.shutdown()
   e.lsp.service.setRequestTimeout(newConfig.lsp.timeout)
 
-  # Update mouse capture
-  if not e.app.isNil:
-    if newConfig.standard.mouse:
-      e.app.enableMouse()
-    else:
-      e.app.disableMouse()
+  # Update mouse capture in the owning frontend.
+  e.state.requestMouseCapture(newConfig.standard.mouse)
 
   # Update notification popup settings
   e.state.notificationPopup.timeoutMs = newConfig.notification.popupTimeoutMs

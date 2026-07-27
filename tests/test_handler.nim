@@ -53,6 +53,7 @@ proc createTestState(): EditorState =
     preferredColumn: -1,
     screenCursor: CursorPosition(x: 0, y: 0),
   )
+
   EditorState(
     activeWindow: window,
     display:
@@ -91,6 +92,18 @@ proc createTestState(): EditorState =
       )
     ),
   )
+
+proc noOpFrontendHook(): Future[void] {.async.} =
+  discard
+
+proc frontendSuspendBodyRuns(
+    frontend: FrontendHooks, editor: Editor
+): Future[bool] {.async: (raises: [Exception]).} =
+  var bodyRan = false
+  {.cast(gcsafe).}:
+    withFrontendSuspend(frontend, editor):
+      bodyRan = true
+  return bodyRan
 
 suite "screenToBufferPosition - Basic":
   test "Click at top-left corner of viewport":
@@ -897,6 +910,38 @@ suite "Background Process Management":
     # After cleanup, the list should be empty
     check editor.runningBackgroundProcesses.len == 0
 
+suite "Pending async operations":
+  test "Returns false when no pending operations":
+    let editor = newEditor(newEditorConfig())
+
+    check editor.state.pending.len == 0
+
+  test "Terminal command is skipped when frontend hooks are unavailable":
+    let editor = newEditor(newEditorConfig())
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoShellCommand, command: "command must not run"
+    )
+
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+
+    check editor.state.pending.len == 0
+    check editor.state.statusMessage ==
+      "This frontend does not support terminal commands"
+
+  test "Terminal body is skipped unless both frontend hooks are available":
+    let editor = newEditor(newEditorConfig())
+    for frontend in [
+      FrontendHooks(),
+      FrontendHooks(suspend: noOpFrontendHook),
+      FrontendHooks(resume: noOpFrontendHook),
+    ]:
+      let bodyRan = waitFor frontendSuspendBodyRuns(frontend, editor)
+      check not bodyRan
+
+    let frontend = FrontendHooks(suspend: noOpFrontendHook, resume: noOpFrontendHook)
+    let bodyRan = waitFor frontendSuspendBodyRuns(frontend, editor)
+    check bodyRan
+
 suite "releaseExternalResources":
   # persist off: savePersistData writes to the real user persist directory.
   proc newQuitPathEditor(): Editor =
@@ -937,7 +982,7 @@ proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception])
   asyncSpawn detachedPendingWriter(e)
   # Yield so the detached task runs before the drain.
   await sleepAsync(10)
-  await e.handlePendingAsyncOperations()
+  await e.handlePendingAsyncOperations(FrontendHooks())
 
 suite "handlePendingAsyncOperations drains ops queued from async tasks":
   test "build op drains on tick":
@@ -948,7 +993,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
       build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
     )
 
-    waitFor editor.handlePendingAsyncOperations()
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
 
@@ -960,7 +1005,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
       quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
     )
 
-    waitFor editor.handlePendingAsyncOperations()
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
 
@@ -971,7 +1016,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
       kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/x.nim", language: 0)
     )
 
-    waitFor editor.handlePendingAsyncOperations()
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
 
@@ -1001,7 +1046,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
       kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/y.nim", language: 0)
     )
 
-    waitFor editor.handlePendingAsyncOperations()
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
 
@@ -1017,7 +1062,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     )
     check editor.state.pending.len == 2
 
-    waitFor editor.handlePendingAsyncOperations()
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
 
@@ -1026,7 +1071,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
 
     # Should not raise and should leave state untouched.
-    waitFor editor.handlePendingAsyncOperations()
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
 

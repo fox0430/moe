@@ -1162,6 +1162,24 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   return true
 
+type
+  FrontendSuspendHook* = proc(): Future[void]
+  FrontendHooks* = object
+    ## Optional frontend callbacks for operations that need the host UI.
+    suspend*: FrontendSuspendHook
+    resume*: FrontendSuspendHook
+
+template withFrontendSuspend(frontend: FrontendHooks, e: Editor, body: untyped) =
+  ## Suspend the owning frontend around synchronous terminal interaction.
+  if frontend.suspend.isNil or frontend.resume.isNil:
+    e.state.statusMessage = "This frontend does not support terminal commands"
+  else:
+    await frontend.suspend()
+    try:
+      body
+    finally:
+      await frontend.resume()
+
 proc runSyntaxCheckAsync(
     editor: Editor, info: SyntaxCheckInfo
 ): Future[void] {.async: (raises: []).} =
@@ -1275,7 +1293,7 @@ proc runQuickRunAsync(
       editor.notify("QuickRun error: " & ex.msg, nlError)
 
 proc handlePendingAsyncOperationsImpl(
-    e: Editor
+    e: Editor, frontend: FrontendHooks
 ): Future[void] {.async: (raises: [Exception]).} =
   ## Drain the pending async op queue in FIFO order. Called from the main event
   ## loop on every tick. Ops queued while draining run on the next tick.
@@ -1289,10 +1307,10 @@ proc handlePendingAsyncOperationsImpl(
       of paoTerminalCommand:
         e.enterTerminalInActiveWindow(op.command)
       of paoShellCommand:
-        # withSuspendAsync wraps the body in try/finally so the TUI always
+        # withFrontendSuspend wraps the body in try/finally so the TUI always
         # resumes, even if execShellCmd/readLine raises (a missed resume leaves
         # the terminal in raw mode and destroys the screen).
-        e.app.withSuspendAsync:
+        withFrontendSuspend(frontend, e):
           stdout.write("\e[H\e[2J") # Clear screen
           stdout.flushFile()
           let exitCode = execShellCmd(op.command)
@@ -1301,7 +1319,7 @@ proc handlePendingAsyncOperationsImpl(
           stdout.flushFile()
           discard stdin.readLine()
       of paoManPage:
-        e.app.withSuspendAsync:
+        withFrontendSuspend(frontend, e):
           stdout.write("\e[H\e[2J") # Clear screen
           stdout.flushFile()
           let exitCode = execShellCmd("man " & quoteShell(op.command))
@@ -1314,7 +1332,7 @@ proc handlePendingAsyncOperationsImpl(
         # SIGTSTP to self so the shell registers moe as a proper stopped job
         # (visible in `jobs`, resumable via `fg`). Falls back to a blocking
         # readLine where SIGTSTP is unavailable.
-        e.app.withSuspendAsync:
+        withFrontendSuspend(frontend, e):
           when defined(posix):
             discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
           else:
@@ -1329,13 +1347,15 @@ proc handlePendingAsyncOperationsImpl(
       of paoSyntaxCheck:
         asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck)
 
-proc handlePendingAsyncOperations*(e: Editor): Future[void] {.async: (raises: []).} =
+proc handlePendingAsyncOperations*(
+    e: Editor, frontend: FrontendHooks
+): Future[void] {.async: (raises: []).} =
   ## Wrapper for handlePendingAsyncOperationsImpl. Swallows and logs any
   ## exception so a pending-op failure does not trip editorCallback's
   ## emergency-save-and-quit path (drain is called from every tick).
   {.cast(gcsafe).}:
     try:
-      await handlePendingAsyncOperationsImpl(e)
+      await handlePendingAsyncOperationsImpl(e, frontend)
     except Exception as ex:
       logError("moe", "handlePendingAsyncOperations failed: " & ex.msg)
 

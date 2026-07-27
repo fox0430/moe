@@ -77,7 +77,11 @@ proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
     e.toggleFileTree(none(string), e.activeBuffer())
 
 proc emergencySaveAndQuit(
-    editor: Editor, e: ref Exception, cmdLineConfig: CmdLineConfig, log: Logger
+    editor: Editor,
+    app: AsyncApp,
+    e: ref Exception,
+    cmdLineConfig: CmdLineConfig,
+    log: Logger,
 ) {.noreturn.} =
   ## Emergency save modified buffers and exit on crash.
   ##
@@ -101,7 +105,8 @@ proc emergencySaveAndQuit(
   # Always restore the terminal and report the crash, even if the rescue body
   # above threw. Guarded so a failure here still reaches quit(1).
   try:
-    editor.app.restoreTerminal()
+    if not app.isNil:
+      app.restoreTerminal()
 
     stderr.writeLine "moe: fatal error: " & e.msg
     stderr.writeLine e.getStackTrace()
@@ -113,7 +118,7 @@ proc emergencySaveAndQuit(
   quit(1)
 
 template editorCallback(
-    ed: Editor, clc: CmdLineConfig, lg: Logger, body: untyped
+    ed: Editor, app: AsyncApp, clc: CmdLineConfig, lg: Logger, body: untyped
 ): untyped =
   ## Wrap callback body with gcsafe/raises casts and emergency save on crash.
   {.cast(gcsafe).}:
@@ -121,26 +126,44 @@ template editorCallback(
       try:
         body
       except Exception as e:
-        ed.emergencySaveAndQuit(e, clc, lg)
+        ed.emergencySaveAndQuit(app, e, clc, lg)
+
+proc applyFrontendRequests(editor: Editor, app: AsyncApp) =
+  ## Drain editor-core requests that need concrete Celina app side effects.
+  let mouseCapture = editor.state.takeMouseCaptureRequest()
+  if mouseCapture.isSome:
+    if mouseCapture.get:
+      app.enableMouse()
+    else:
+      app.disableMouse()
 
 proc runEditor(
     editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
 ) {.async.} =
   ## Async entry point for the editor main loop
 
+  proc suspendFrontend(): Future[void] {.async.} =
+    await app.suspendAsync()
+
+  proc resumeFrontend(): Future[void] {.async.} =
+    await app.resumeAsync()
+
+  let frontendHooks = FrontendHooks(suspend: suspendFrontend, resume: resumeFrontend)
+
   {.cast(gcsafe).}:
     app.onEventAsync proc(e: Event, app: AsyncApp): Future[EventResult] {.async.} =
-      editorCallback(editor, cmdLineConfig, log):
+      editorCallback(editor, app, cmdLineConfig, log):
         if e.kind == EventKind.Resize:
           # celina's async_app already updates the terminal size, clears the
           # screen and forces a full render on the next frame.
           return erContinue
 
         let shouldContinue = editor.handleEvent(e)
+        editor.applyFrontendRequests(app)
 
         # Drain unconditionally: detached async tasks can set pending fields
         # after handleEvent returns; a guard here would skip that drain.
-        await editor.handlePendingAsyncOperations()
+        await editor.handlePendingAsyncOperations(frontendHooks)
 
         # Key mapping timeout control — delegated to KeyRouter so policy
         # (enabled/timeoutlen) and accumulator state are queried in one place.
@@ -153,21 +176,22 @@ proc runEditor(
         return if shouldContinue: erContinue else: erQuit
 
     app.onTimeoutAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
-      editorCallback(editor, cmdLineConfig, log):
+      editorCallback(editor, app, cmdLineConfig, log):
         let shouldContinue = editor.handleKeyMappingTimeout()
+        editor.applyFrontendRequests(app)
         app.setApplicationTimeout(0) # One-shot: disable until next prefix match
-        await editor.handlePendingAsyncOperations()
+        await editor.handlePendingAsyncOperations(frontendHooks)
         return if shouldContinue: trContinue else: trQuit
 
     app.onTickAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
-      editorCallback(editor, cmdLineConfig, log):
+      editorCallback(editor, app, cmdLineConfig, log):
         editor.lsp.poll(0)
         editor.lsp.cleanupStaleProgress()
-        await editor.handlePendingAsyncOperations()
+        await editor.handlePendingAsyncOperations(frontendHooks)
       return trContinue
 
     app.onRenderAsync proc(buffer: var Buffer) =
-      editorCallback(editor, cmdLineConfig, log):
+      editorCallback(editor, app, cmdLineConfig, log):
         # Execute startup window actions on first render
         if not editor.state.startUpWindowsDone:
           editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
@@ -176,6 +200,7 @@ proc runEditor(
         editor.pollTerminalWindows()
 
         editor.render(buffer)
+        editor.applyFrontendRequests(app)
 
         if not editor.config.standard.disableChangeCursor:
           # Set cursor style based on editor mode (unless disabled)
@@ -201,7 +226,7 @@ proc runEditor(
       # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
       await app.runAsync()
     except Exception as e:
-      editor.emergencySaveAndQuit(e, cmdLineConfig, log)
+      editor.emergencySaveAndQuit(app, e, cmdLineConfig, log)
 
     if not editor.config.standard.disableChangeCursor:
       # Restore cursor to default style on exit
@@ -262,11 +287,9 @@ proc main() =
     bracketedPaste: true,
   )
   var app = newAsyncApp(appConfig)
-  editor.app = app
 
-  # Enable mouse capture if configured
-  if editorConfig.standard.mouse:
-    app.enableMouse()
+  # Apply initial frontend requests queued by newEditor/applyConfigSettings.
+  editor.applyFrontendRequests(app)
 
   # Set up LSP diagnostics callback to update buffer markers. Route to the
   # buffer matching the URI (not only the active one) so diagnostics for

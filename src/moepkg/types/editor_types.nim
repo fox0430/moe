@@ -22,8 +22,6 @@
 
 import std/[options, tables]
 
-import pkg/celina
-
 import ../[types, commands, command_registry, modes, quick_run_utils]
 import ../key_bindings except Command
 import ../command_handlers/handler_types
@@ -72,7 +70,6 @@ type
       ## reload), so unlike changeSeq it cannot collide across an undo + edit
       ## and mask an unsynced state. Keyed per buffer: a single shared value
       ## would let one buffer's version mask unsynced changes in another.
-    app*: AsyncApp
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
     runningBackgroundProcesses*: seq[BackgroundProcess]
