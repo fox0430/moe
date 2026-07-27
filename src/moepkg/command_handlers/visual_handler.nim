@@ -188,10 +188,7 @@ proc handleVisualModeKey*(
 ): VisualModeResult =
   ## Main entry point for handling Visual mode key presses
   ## Works for Visual, VisualBlock, and VisualLine modes
-
-  # Record key for macro if recording is active
-  if state.pendingInput.macroState.isRecording:
-    state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
+  ## Macro recording is captured centrally in `handler.handleKeyCombo`.
 
   let originalMode = state.mode
 

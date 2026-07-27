@@ -852,26 +852,34 @@ proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # Otherwise just dismiss and stay in current mode
   return true
 
-proc recordOverlayKey(e: Editor, keyCombo: KeyCombo) =
-  ## Append the overlay key to the active macro register. Overlay handlers
-  ## do not record inline, so capture at the dispatcher entry instead.
-  ## Suppressed during playback via `withPlaybackGuard` clearing `isRecording`.
+proc isMacroStopKey(e: Editor, keyCombo: KeyCombo): bool =
+  ## True when this key ends an active `q<reg>...q` recording. Only Normal
+  ## mode's `q` (the recordStartKey) closes the macro; the router's operand
+  ## waiting state (f/t/r/") holds `q` as a literal.
+  if e.state.mode != EditorMode.Normal:
+    return false
+  if keyComboToString(keyCombo) != e.state.pendingInput.macroState.recordStartKey:
+    return false
+  not e.handlerManager.keyBindingRegistry.isWaitingForChar()
+
+proc recordUserKey(e: Editor, keyCombo: KeyCombo) =
+  ## Append a top-level keystroke to the active macro register. Called once
+  ## per user key at `handleKeyCombo` entry so every mode records uniformly
+  ## (overlays, popups, viewers, Normal/Insert/Visual/Replace). Playback loops
+  ## bypass `handleKeyCombo` and are additionally guarded by
+  ## `withPlaybackGuard` clearing `isRecording`.
   if not e.state.pendingInput.macroState.isRecording:
+    return
+  if e.isMacroStopKey(keyCombo):
     return
   e.state.pendingInput.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
-proc handleOverlayKeyCombo(
-    e: Editor, keyCombo: KeyCombo, recordKey = false
-): Option[bool] =
+proc handleOverlayKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.
   ## Returns some(result) if handled, none otherwise.
   if e.state.isCommandOverlay:
-    if recordKey:
-      e.recordOverlayKey(keyCombo)
     return some(e.handleCommandModeKeyCombo(keyCombo))
   if e.state.isSearchOverlay:
-    if recordKey:
-      e.recordOverlayKey(keyCombo)
     return some(e.handleSearchModeKeyCombo(keyCombo))
   if e.state.isRenameOverlay:
     return some(e.handleRenameModeKeyCombo(keyCombo))
@@ -1054,12 +1062,17 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   ## paste, and mouse input remain handled by `handleEvent`.
   e.prepareForKeyCombo()
 
+  # Single point where a user-driven keystroke is appended to the active
+  # macro register. Playback loops enter `runNestedKeyCombo` directly and
+  # never reach here, so they naturally skip recording.
+  e.recordUserKey(keyCombo)
+
   # Handle temporary messages (like :jumps output) - dismiss on any key
   if e.dismissTempMessagesKeyCombo(keyCombo):
     return true
 
   # Handle overlay modes (Command, Search, Rename) + Debug mode
-  let overlayResult = e.handleOverlayKeyCombo(keyCombo, recordKey = true)
+  let overlayResult = e.handleOverlayKeyCombo(keyCombo)
   if overlayResult.isSome:
     return overlayResult.get
 
