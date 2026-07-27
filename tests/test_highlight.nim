@@ -398,26 +398,37 @@ suite "Highlight - Segment Operations":
     check idx >= 0
     check idx < h.colorSegments.len
 
-  test "segment overlap detection":
-    let seg1 = ColorSegment(
-      firstRow: 0,
-      firstColumn: 0,
-      lastRow: 0,
-      lastColumn: 10,
-      color: EditorColorPairIndex.default,
-      style: defaultStyle,
+  test "overwrite splits an overlapping segment at the boundary":
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
     )
-    let seg2 = ColorSegment(
-      firstRow: 0,
-      firstColumn: 5,
-      lastRow: 0,
-      lastColumn: 15,
-      color: EditorColorPairIndex.keyword,
-      style: defaultStyle,
+    h.overwrite(
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 5,
+        lastRow: 0,
+        lastColumn: 15,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
     )
 
-    # These should overlap
-    check (seg1.lastRow, seg1.lastColumn) >= (seg2.firstRow, seg2.firstColumn)
+    check h.colorSegments.len == 2
+    check h.colorSegments[0].color == EditorColorPairIndex.default
+    check h.colorSegments[0].firstColumn == 0
+    check h.colorSegments[0].lastColumn == 4
+    check h.colorSegments[1].color == EditorColorPairIndex.keyword
+    check h.colorSegments[1].firstColumn == 5
+    check h.colorSegments[1].lastColumn == 10
 
   test "highlight length and high":
     let buffer = @["line1".toRunes, "line2".toRunes]
