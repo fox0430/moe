@@ -182,6 +182,30 @@ suite "LspService - Language ID Detection":
     check svc.getLanguageIdFromExtension("NIM") == some("nim")
     check svc.getLanguageIdFromExtension("PY") == some("python")
 
+  test "duplicate extension across configs resolves to alphabetically-first langId":
+    let svc = newLspService()
+    svc.setConfig(
+      "zeta",
+      LanguageServerConfig(command: "z", args: @[], extensions: @["xyz"], enabled: true),
+    )
+    svc.setConfig(
+      "alpha",
+      LanguageServerConfig(command: "a", args: @[], extensions: @["xyz"], enabled: true),
+    )
+    check svc.getLanguageIdFromPath("t.xyz") == some("alpha")
+    check svc.getLanguageIdFromExtension("xyz") == some("alpha")
+
+  test "setConfig overwriting a langId removes its old extensions from the index":
+    let svc = newLspService()
+    svc.setConfig(
+      "nim",
+      LanguageServerConfig(
+        command: "nimlangserver", args: @[], extensions: @["nim"], enabled: true
+      ),
+    )
+    check svc.getLanguageIdFromPath("pkg.nimble").isNone
+    check svc.getLanguageIdFromPath("t.nim") == some("nim")
+
 suite "LspService - URI Conversion":
   test "pathToUri converts absolute path":
     check pathToUri("/home/user/test.nim") == "file:///home/user/test.nim"
