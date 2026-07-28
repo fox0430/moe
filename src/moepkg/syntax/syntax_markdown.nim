@@ -21,9 +21,9 @@ import
   tokenizer, syntax_latex, syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp,
   syntax_csharp, syntax_diff, syntax_dockerfile, syntax_fish, syntax_git_rebase_todo,
   syntax_gitignore, syntax_haskell, syntax_html, syntax_hyprland, syntax_java,
-  syntax_javascript, syntax_lisp, syntax_log, syntax_nim, syntax_python, syntax_rust,
-  syntax_shell, syntax_tcl, syntax_toml, syntax_yaml, syntax_json, syntax_jsonc,
-  syntax_typescript, syntax_xml, syntax_zsh
+  syntax_javascript, syntax_lisp, syntax_log, syntax_lua, syntax_nim, syntax_python,
+  syntax_rust, syntax_shell, syntax_tcl, syntax_toml, syntax_yaml, syntax_json,
+  syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
 
 proc codeBlockNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -45,6 +45,7 @@ proc codeBlockNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langLatex: g.latexNextToken
   of langLisp: g.lispNextToken
   of langLog: g.logNextToken
+  of langLua: g.luaNextToken
   of langNim: g.nimNextToken
   of langPython: g.pythonNextToken
   of langRust: g.rustNextToken

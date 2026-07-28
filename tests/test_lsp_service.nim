@@ -134,6 +134,10 @@ suite "LspService - Language ID Detection":
     check svc.getLanguageIdFromPath("script.py") == some("python")
     check svc.getLanguageIdFromPath("script.pyw") == some("python")
 
+  test "getLanguageIdFromPath detects lua files":
+    let svc = newLspService()
+    check svc.getLanguageIdFromPath("init.lua") == some("lua")
+
   test "getLanguageIdFromPath detects go files":
     let svc = newLspService()
     check svc.getLanguageIdFromPath("main.go") == some("go")
