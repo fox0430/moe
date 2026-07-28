@@ -170,6 +170,77 @@ proc typescriptCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc jsxCorpus(): seq[seq[string]] =
+  ## JSX snippets exercising `jslike.inJsxMode` / `jslike.jsxTagDepth`, which
+  ## plain JS never enters. Covers tag open/close across lines, nested tags,
+  ## expression embedding `{...}` (exits JSX; a `}` followed by `<` re-enters),
+  ## `${...}` template literals nested inside JSX expressions, and fragments.
+  result = @[
+    @[
+      "function App() {", "  return (", "    <div className=\"root\">",
+      "      <h1>Hello</h1>", "      <p>world</p>", "    </div>", "  );", "}",
+    ],
+    # Self-closing tags must not push jsxTagDepth.
+    @[
+      "const view = (", "  <section>", "    <header>", "      <Title />",
+      "    </header>", "    <main>", "      <Item />", "      <Item />", "    </main>",
+      "  </section>", ");",
+    ],
+    @[
+      "const greet = (name) => (", "  <div>", "    <span>Hello, {name}!</span>",
+      "    <span>Count: {items.length}</span>", "  </div>", ");",
+    ],
+    # Nesting: JSX -> `{` expr -> `${...}` template. braceDepthStack must
+    # return the closing `}` to the template, not to JSX.
+    @[
+      "const badge = (n) => (", "  <span title={`count=${n}`}>", "    {`items: ${n}`}",
+      "  </span>", ");",
+    ],
+    # Fragment `<>...</>` + JSX comment + `<` as a less-than operator inside
+    # an expression container (must not mistrigger JSX).
+    @[
+      "const list = (xs) => (", "  <>", "    {/* render items */}",
+      "    {xs.filter((x) => x < 10).map((x) => (", "      <li key={x}>{x}</li>",
+      "    ))}", "  </>", ");",
+    ],
+  ]
+
+proc tsxCorpus(): seq[seq[string]] =
+  ## TSX layers TypeScript's generic `<T>` disambiguation on top of JSX: a `<`
+  ## preceded by an identifier character is a generic, not a tag. Mixes
+  ## `Array<T>`, `useState<number>()`, and `<Component>` so an edit that
+  ## shifts the preceding token must re-classify every downstream `<`.
+  result = @[
+    @[
+      "interface Props { name: string; count: number; }",
+      "const Card: React.FC<Props> = ({ name, count }) => (", "  <div>",
+      "    <span>{name}</span>", "    <b>{count}</b>", "  </div>", ");",
+    ],
+    @[
+      "import { useState } from \"react\";", "export function Counter() {",
+      "  const [n, setN] = useState<number>(0);", "  return (",
+      "    <div onClick={() => setN(n + 1)}>", "      <span>count: {n}</span>",
+      "    </div>", "  );", "}",
+    ],
+    # `<T,>` trailing comma disambiguates a generic arrow from JSX.
+    @[
+      "const first = <T,>(xs: T[]): T | undefined => xs[0];",
+      "const view = (items: number[]) => (", "  <>", "    {items.map((x: number) => (",
+      "      <li key={x}>{first<number>([x])}</li>", "    ))}", "  </>", ");",
+    ],
+    @[
+      "const rows: Array<string> = [\"a\", \"b\"];", "const table = (", "  <table>",
+      "    {rows.map((r) => (", "      <tr title={`row=${r}`}><td>{r}</td></tr>",
+      "    ))}", "  </table>", ");",
+    ],
+    # `@decorator` is TS-only and must not perturb the following JSX.
+    @[
+      "@Component({ selector: \"app-root\" })", "class Root {", "  render() {",
+      "    return (", "      <section>", "        <h2>title</h2>", "      </section>",
+      "    );", "  }", "}",
+    ],
+  ]
+
 proc markdownCorpus(): seq[seq[string]] =
   ## Markdown snippets covering the state-heavy multi-line constructs:
   ## frontmatter (---...---), fenced and indented code blocks, and math
@@ -965,6 +1036,12 @@ suite "Incremental Highlight Fuzz":
   test "TypeScript: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langTypeScript, typescriptCorpus(), iters, baseSeed)
 
+  test "JSX: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langJsx, jsxCorpus(), iters, baseSeed)
+
+  test "TSX: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langTsx, tsxCorpus(), iters, baseSeed)
+
   test "Markdown: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langMarkdown, markdownCorpus(), iters, baseSeed)
 
@@ -1251,6 +1328,8 @@ suite "Monotonic-advance guard":
       (SourceLanguage.langNim, nimCorpus()),
       (SourceLanguage.langJavaScript, javascriptCorpus()),
       (SourceLanguage.langTypeScript, typescriptCorpus()),
+      (SourceLanguage.langJsx, jsxCorpus()),
+      (SourceLanguage.langTsx, tsxCorpus()),
       (SourceLanguage.langMarkdown, markdownCorpus()),
       (SourceLanguage.langPython, pythonCorpus()),
       (SourceLanguage.langLatex, latexCorpus()),

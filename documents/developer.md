@@ -128,6 +128,18 @@ Opens a vertical split with a live (~500 ms refresh) dump of internal editor sta
 
 Which sections are shown is controlled by the `[Debug.*]` tables in `moerc.toml`. See `example/moerc.toml` for the full list of toggles (`Debug.WindowNode`, `Debug.EditorView`, `Debug.BufferStatus`, `Debug.Search`, `Debug.MacroState`, `Debug.Visual`, `Debug.JumpList`, `Debug.Lsp`).
 
+## Adding a syntax language
+
+Syntax highlighting is dispatched from `src/moepkg/syntax/tokenizer.nim`. To add a language:
+
+1. Add a `lang<Name>` value to the `SourceLanguage` enum.
+2. Add entries in `sourceLanguageToStr` and `getSourceLanguage` so filetype detection and LSP language IDs round-trip.
+3. Add a `case` arm in `getNextToken` that dispatches to `<name>NextToken`.
+4. Implement the tokenizer in `src/moepkg/syntax/syntax_<name>.nim`.
+5. If the tokenizer carries multi-line state (block comments, raw/long strings, template literals, mode flags, …), put it in a `<Name>State` object under `LangState` in `tokenizer.nim`, seed the initial value in `defaultLangState`, and access it as `g.lang.<name>.<field>`. Do **not** add fields directly to `GeneralTokenizer`; those are silently dropped by the incremental highlighter's capture/restore.
+6. **Any language whose tokenizer touches a `LangState` member (or otherwise carries state across lines via `g.state`) requires an entry in `tests/test_highlight_fuzz.nim`**: a `<name>Corpus` proc with snippets that exercise every stateful path, a `runFuzz` test in the `Incremental Highlight Fuzz` suite, and an entry in the `Monotonic-advance guard` corpora table. The fuzz suite is the only automated check that the incremental output matches a full reparse under random edits.
+7. Register the file extension(s) in `detectLanguage` (`src/moepkg/highlight.nim`) so buffers pick up the new language automatically.
+
 ## Documentation generators
 
 Parts of `documents/` are auto-generated from source. Regenerate them after changing config options or commands:
