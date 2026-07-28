@@ -23,10 +23,10 @@
 
 import std/[strutils, options]
 
-import buffer/core, help_generator
+import buffer/core, help_generator, list_viewer
 
 import types/help_viewer_types
-export help_viewer_types
+export help_viewer_types, list_viewer
 
 const HelpSentences* =
   "# Exiting\n\n" & renderExitingSection() & "\n# Changing modes\n\n" &
@@ -126,54 +126,22 @@ proc newHelpViewerState*(): HelpViewerState =
     lines.add(line)
 
   while lines.len > 0 and lines[^1].len == 0:
-    # Drop trailing empty lines so state.lines.len matches buffer.len —
+    # Drop trailing empty lines so state.items.len matches buffer.len —
     # otherwise selectedIndex can scroll one row past the buffer end.
     lines.setLen(lines.len - 1)
 
-  HelpViewerState(lines: lines, selectedIndex: 0, searchQuery: "")
+  HelpViewerState(items: lines, selectedIndex: 0, searchQuery: "")
 
 proc lineCount*(state: HelpViewerState): int =
   ## Get the number of lines in the help
-  state.lines.len
+  state.items.len
 
 proc getLine*(state: HelpViewerState, index: int): string =
   ## Get a specific line from the help
-  if index >= 0 and index < state.lines.len:
-    state.lines[index]
+  if index >= 0 and index < state.items.len:
+    state.items[index]
   else:
     ""
-
-proc moveUp*(state: HelpViewerState) =
-  ## Move selection up
-  if state.selectedIndex > 0:
-    state.selectedIndex.dec
-
-proc moveDown*(state: HelpViewerState) =
-  ## Move selection down
-  if state.selectedIndex < state.lines.high:
-    state.selectedIndex.inc
-
-proc moveToFirst*(state: HelpViewerState) =
-  ## Move to first line
-  state.selectedIndex = 0
-
-proc moveToLast*(state: HelpViewerState) =
-  ## Move to last line
-  if state.lines.len > 0:
-    state.selectedIndex = state.lines.high
-  else:
-    state.selectedIndex = 0
-
-proc halfPageUp*(state: HelpViewerState, viewportHeight: int) =
-  ## Move up by half a page
-  let halfPage = viewportHeight div 2
-  state.selectedIndex = max(0, state.selectedIndex - halfPage)
-
-proc halfPageDown*(state: HelpViewerState, viewportHeight: int) =
-  ## Move down by half a page
-  let halfPage = viewportHeight div 2
-  if state.lines.len > 0:
-    state.selectedIndex = min(state.lines.high, state.selectedIndex + halfPage)
 
 proc isSectionHeader(line: string): bool {.inline.} =
   # Top-level section header in HelpSentences ("# Heading").
@@ -184,8 +152,8 @@ proc isSectionHeader(line: string): bool {.inline.} =
 proc moveToNextSection*(state: HelpViewerState) =
   ## Jump to the next top-level "# " section header.
   ## Stays put if no further section exists.
-  for i in (state.selectedIndex + 1) ..< state.lines.len:
-    if state.lines[i].isSectionHeader:
+  for i in (state.selectedIndex + 1) ..< state.items.len:
+    if state.items[i].isSectionHeader:
       state.selectedIndex = i
       return
 
@@ -193,7 +161,7 @@ proc moveToPreviousSection*(state: HelpViewerState) =
   ## Jump to the previous top-level "# " section header.
   ## Stays put if no earlier section exists.
   for i in countdown(state.selectedIndex - 1, 0):
-    if state.lines[i].isSectionHeader:
+    if state.items[i].isSectionHeader:
       state.selectedIndex = i
       return
 
@@ -213,9 +181,9 @@ proc isLineMatched*(state: HelpViewerState, index: int): bool =
   ## Check if a line matches the current search query (case-insensitive)
   if not state.hasSearchQuery:
     return false
-  if index < 0 or index >= state.lines.len:
+  if index < 0 or index >= state.items.len:
     return false
-  state.lines[index].toLowerAscii.contains(state.searchQuery.toLowerAscii)
+  state.items[index].toLowerAscii.contains(state.searchQuery.toLowerAscii)
 
 proc searchForward*(state: HelpViewerState): Option[int] =
   ## Search forward from current position.
@@ -225,14 +193,14 @@ proc searchForward*(state: HelpViewerState): Option[int] =
 
   let query = state.searchQuery.toLowerAscii
   # Search from next line to end
-  for i in (state.selectedIndex + 1) ..< state.lines.len:
-    if state.lines[i].toLowerAscii.contains(query):
+  for i in (state.selectedIndex + 1) ..< state.items.len:
+    if state.items[i].toLowerAscii.contains(query):
       state.selectedIndex = i
       return some(i)
 
   # Wrap around: search from beginning to current position
   for i in 0 ..< state.selectedIndex:
-    if state.lines[i].toLowerAscii.contains(query):
+    if state.items[i].toLowerAscii.contains(query):
       state.selectedIndex = i
       return some(i)
 
@@ -247,13 +215,13 @@ proc searchBackward*(state: HelpViewerState): Option[int] =
   let query = state.searchQuery.toLowerAscii
   # Search from previous line to beginning
   for i in countdown(state.selectedIndex - 1, 0):
-    if state.lines[i].toLowerAscii.contains(query):
+    if state.items[i].toLowerAscii.contains(query):
       state.selectedIndex = i
       return some(i)
 
   # Wrap around: search from end to current position
-  for i in countdown(state.lines.high, state.selectedIndex + 1):
-    if state.lines[i].toLowerAscii.contains(query):
+  for i in countdown(state.items.high, state.selectedIndex + 1):
+    if state.items[i].toLowerAscii.contains(query):
       state.selectedIndex = i
       return some(i)
 
@@ -266,8 +234,8 @@ proc searchFirst*(state: HelpViewerState): Option[int] =
     return none(int)
 
   let query = state.searchQuery.toLowerAscii
-  for i in 0 ..< state.lines.len:
-    if state.lines[i].toLowerAscii.contains(query):
+  for i in 0 ..< state.items.len:
+    if state.items[i].toLowerAscii.contains(query):
       state.selectedIndex = i
       return some(i)
 
@@ -276,7 +244,7 @@ proc searchFirst*(state: HelpViewerState): Option[int] =
 proc createHelpTextBuffer*(state: HelpViewerState): TextBuffer =
   ## Create a TextBuffer from help lines for rendering via the normal view path
   var content = ""
-  for i, line in state.lines:
+  for i, line in state.items:
     if i > 0:
       content.add('\n')
     if line.len > 0:

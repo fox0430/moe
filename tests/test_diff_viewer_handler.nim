@@ -234,7 +234,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Unhandled keys":
     let dvState = newTestDiffViewerState(5)
 
     let result =
-      handleDiffViewerModeKey(dvState, TestViewportHeight, specialKey(skPageUp))
+      handleDiffViewerModeKey(dvState, TestViewportHeight, specialKey(skDelete))
 
     check result.kind == dvrUnhandled
 
@@ -522,41 +522,39 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
     check result.kind == dvrUnhandled
 
 suite "diff_viewer_handler: Other modifier combinations":
-  # Note: The implementation ignores modifiers for most keys except Ctrl+d and Ctrl+u
-  # This is intentional - modifiers are not checked for j/k/etc.
+  # Only Ctrl+d and Ctrl+u are consumed with a modifier; every other modified
+  # char key falls through so caller-level bindings (e.g. `C-q = quit-force`)
+  # still reach the router.
 
-  test "Ctrl+j is treated as j (modifier ignored)":
+  test "Ctrl+j falls through and does not move selection":
     let dvState = newTestDiffViewerState(5)
     check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j", {kmCtrl}))
 
-    # Implementation ignores Ctrl modifier for 'j'
-    check result.kind == dvrHandled
-    check dvState.selectedIndex == 1
+    check result.kind == dvrUnhandled
+    check dvState.selectedIndex == 0
 
-  test "Ctrl+k is treated as k (modifier ignored)":
+  test "Ctrl+k falls through and does not move selection":
     let dvState = newTestDiffViewerState(5)
     dvState.selectedIndex = 3
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("k", {kmCtrl}))
 
-    # Implementation ignores Ctrl modifier for 'k'
-    check result.kind == dvrHandled
-    check dvState.selectedIndex == 2
+    check result.kind == dvrUnhandled
+    check dvState.selectedIndex == 3
 
-  test "Alt+j is treated as j (modifier ignored)":
+  test "Alt+j falls through and does not move selection":
     let dvState = newTestDiffViewerState(5)
     check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("j", {kmAlt}))
 
-    # Implementation ignores Alt modifier for 'j'
-    check result.kind == dvrHandled
-    check dvState.selectedIndex == 1
+    check result.kind == dvrUnhandled
+    check dvState.selectedIndex == 0
 
   test "Shift modifier on special key is ignored":
     let dvState = newTestDiffViewerState(5)
@@ -569,25 +567,23 @@ suite "diff_viewer_handler: Other modifier combinations":
     check result.kind == dvrHandled
     check dvState.selectedIndex == 2
 
-  test "Ctrl+G is treated as G (modifier ignored)":
+  test "Ctrl+G falls through and does not move to last":
     let dvState = newTestDiffViewerState(10)
     check dvState.selectedIndex == 0
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("G", {kmCtrl}))
 
-    # Implementation ignores Ctrl modifier for 'G'
-    check result.kind == dvrHandled
-    check dvState.selectedIndex == 9
+    check result.kind == dvrUnhandled
+    check dvState.selectedIndex == 0
 
-  test "Ctrl+q is treated as q (modifier ignored)":
+  test "Ctrl+q falls through instead of quitting":
     let dvState = newTestDiffViewerState(5)
 
     let result =
       handleDiffViewerModeKey(dvState, TestViewportHeight, charKey("q", {kmCtrl}))
 
-    # Implementation ignores Ctrl modifier for 'q'
-    check result.kind == dvrQuit
+    check result.kind == dvrUnhandled
 
   test "Unknown key with Ctrl modifier returns unhandled":
     let dvState = newTestDiffViewerState(5)

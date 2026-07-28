@@ -347,8 +347,8 @@ suite "buffer_manager_handler: Unhandled Keys":
   test "Unhandled special key returns bmrUnhandled":
     let bmState = createTestBufferManagerState()
 
-    # PageUp is not handled
-    let keyCombo = KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0, modifiers: {})
+    # Delete is not handled
+    let keyCombo = KeyCombo(isSpecial: true, special: skDelete, fnNum: 0, modifiers: {})
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrUnhandled

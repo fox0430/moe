@@ -74,6 +74,21 @@ suite "ListViewer navigation":
     v.moveToLast()
     check v.selectedIndex == 0
 
+  test "pageDown / pageUp clamp to bounds":
+    let v = newView(20)
+    v.pageDown(10) # 0 -> 9
+    check v.selectedIndex == 9
+    v.pageDown(10) # 9 -> 18
+    v.pageDown(10) # 18 -> 19 (clamped)
+    check v.selectedIndex == 19
+    v.pageUp(10) # 19 -> 10
+    check v.selectedIndex == 10
+
+  test "pageDown on an empty list keeps the index at zero":
+    let v = newView(0)
+    v.pageDown(10)
+    check v.selectedIndex == 0
+
   test "halfPageDown / halfPageUp clamp to bounds":
     let v = newView(20)
     v.halfPageDown(10) # 0 -> 5
@@ -127,6 +142,20 @@ suite "ListViewer shared key handling":
     check v.handleListNavKey(10, ctrlKey("u")) == lvaConsumed
     check v.selectedIndex == 0
 
+  test "Home / End jump to the first / last item":
+    let v = newView(20)
+    check v.handleListNavKey(10, specialKey(skEnd)) == lvaConsumed
+    check v.selectedIndex == 19
+    check v.handleListNavKey(10, specialKey(skHome)) == lvaConsumed
+    check v.selectedIndex == 0
+
+  test "PageDown / PageUp move a full page":
+    let v = newView(40)
+    check v.handleListNavKey(10, specialKey(skPageDown)) == lvaConsumed
+    check v.selectedIndex == 9
+    check v.handleListNavKey(10, specialKey(skPageUp)) == lvaConsumed
+    check v.selectedIndex == 0
+
   test "q and Escape are distinct, : enters command":
     let v = newView(5)
     check v.handleListNavKey(10, charKey("q")) == lvaQuitKey
@@ -141,6 +170,14 @@ suite "ListViewer shared key handling":
     let v = newView(5)
     check v.handleListNavKey(10, charKey("z")) == lvaUnhandled
     check v.handleListNavKey(10, specialKey(skTab)) == lvaUnhandled
+
+  test "modified char keys other than Ctrl-d/u fall through":
+    let v = newView(5)
+    # C-q (and other modified letter combos) must not be swallowed here so
+    # user bindings like `C-q = quit-force` still reach the router.
+    check v.handleListNavKey(10, ctrlKey("q")) == lvaUnhandled
+    check v.handleListNavKey(10, ctrlKey("j")) == lvaUnhandled
+    check v.selectedIndex == 0
 
 suite "ListViewer rendering":
   test "toListTextBuffer renders header + formatted items, read-only":

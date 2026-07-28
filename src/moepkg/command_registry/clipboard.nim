@@ -21,7 +21,8 @@
 
 import pkg/results
 
-import ../types, ../buffer/[core, edit], ../clipboard
+import ../[types, clipboard]
+import ../buffer/edit
 import ../command_handlers/visual_commands
 
 import core

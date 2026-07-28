@@ -24,7 +24,7 @@ import std/[options, algorithm]
 import pkg/results
 
 import types, modes, render_utils
-import buffer/[core, edit, file_io]
+import buffer/[core, file_io]
 
 import types/window_manager_types
 export window_manager_types

@@ -24,7 +24,7 @@
 
 import std/[options, strutils, unicode]
 import ../[types, modes, unicode_utils]
-import ../buffer/[core, edit, undo]
+import ../buffer/[core, edit]
 import smart_indent
 
 proc getLineIndent*(line: string): string =

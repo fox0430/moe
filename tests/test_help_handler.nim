@@ -116,7 +116,7 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
     check helpState.waitingForG == false
     check helpState.selectedIndex == 0
 
-  test "g followed by non-g cancels":
+  test "g followed by non-g cancels and falls through":
     let helpState = newHelpViewerState()
     helpState.selectedIndex = 50
 
@@ -125,13 +125,13 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
     check result1.kind == hvrHandled
     check helpState.waitingForG == true
 
-    # Non-'g' key - cancels waiting
+    # Non-'g' key - cancels waiting and is processed normally
     let result2 = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("j"))
-    check result2.kind == hvrUnhandled
+    check result2.kind == hvrHandled
     check helpState.waitingForG == false
-    check helpState.selectedIndex == 50 # Position unchanged
+    check helpState.selectedIndex == 51
 
-  test "g followed by special key cancels":
+  test "g followed by special key cancels and falls through":
     let helpState = newHelpViewerState()
     helpState.selectedIndex = 50
 
@@ -140,12 +140,12 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
     check result1.kind == hvrHandled
     check helpState.waitingForG == true
 
-    # Special key - cancels waiting
+    # Special key - cancels waiting and is processed normally
     let result2 =
       handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skDown))
-    check result2.kind == hvrUnhandled
+    check result2.kind == hvrHandled
     check helpState.waitingForG == false
-    check helpState.selectedIndex == 50 # Position unchanged
+    check helpState.selectedIndex == 51
 
   test "G moves to last line":
     let helpState = newHelpViewerState()
@@ -154,7 +154,7 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
     let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("G"))
 
     check result.kind == hvrHandled
-    check helpState.selectedIndex == helpState.lines.high
+    check helpState.selectedIndex == helpState.items.high
 
 suite "help_handler: handleHelpViewerModeKey - Half page movement":
   test "Ctrl+d moves half page down":
@@ -200,6 +200,45 @@ suite "help_handler: handleHelpViewerModeKey - Half page movement":
     check result.kind == hvrHandled
     check helpState.selectedIndex == lastIndex # Clamped to last line
 
+suite "help_handler: handleHelpViewerModeKey - Desktop navigation keys":
+  test "Home moves to the first line":
+    let helpState = newHelpViewerState()
+    helpState.selectedIndex = 50
+
+    let result =
+      handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skHome))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex == 0
+
+  test "End moves to the last line":
+    let helpState = newHelpViewerState()
+
+    let result =
+      handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skEnd))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex == helpState.items.high
+
+  test "PageDown moves down a full page":
+    let helpState = newHelpViewerState()
+
+    let result =
+      handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skPageDown))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex == TestViewportHeight - 1
+
+  test "PageUp moves up a full page":
+    let helpState = newHelpViewerState()
+    helpState.selectedIndex = 50
+
+    let result =
+      handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skPageUp))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex == 50 - (TestViewportHeight - 1)
+
 suite "help_handler: handleHelpViewerModeKey - Mode transitions":
   test ": enters command mode":
     let helpState = newHelpViewerState()
@@ -221,6 +260,29 @@ suite "help_handler: handleHelpViewerModeKey - Mode transitions":
     let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("?"))
 
     check result.kind == hvrEnterSearchBackward
+
+  test "q quits the viewer":
+    let helpState = newHelpViewerState()
+
+    let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("q"))
+
+    check result.kind == hvrQuit
+
+  test "C-q falls through to the router (no quit)":
+    let helpState = newHelpViewerState()
+
+    let result =
+      handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("q", {kmCtrl}))
+
+    check result.kind == hvrUnhandled
+
+  test "Enter falls through so caller-level bindings can act on it":
+    let helpState = newHelpViewerState()
+
+    let result =
+      handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skEnter))
+
+    check result.kind == hvrUnhandled
 
 suite "help_handler: handleHelpViewerModeKey - Search navigation":
   test "n searches forward":
@@ -278,8 +340,8 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
     check result.kind == hvrHandled
     check helpState.selectedIndex > 0
-    check helpState.lines[helpState.selectedIndex].len >= 2
-    check helpState.lines[helpState.selectedIndex][0 .. 1] == "# "
+    check helpState.items[helpState.selectedIndex].len >= 2
+    check helpState.items[helpState.selectedIndex][0 .. 1] == "# "
 
   test "{ jumps to the previous top-level section":
     let helpState = newHelpViewerState()
@@ -290,15 +352,15 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
     check result.kind == hvrHandled
     check helpState.selectedIndex < startIdx
-    check helpState.lines[helpState.selectedIndex].len >= 2
-    check helpState.lines[helpState.selectedIndex][0 .. 1] == "# "
+    check helpState.items[helpState.selectedIndex].len >= 2
+    check helpState.items[helpState.selectedIndex][0 .. 1] == "# "
 
   test "} at last section stays on last section":
     let helpState = newHelpViewerState()
 
     # Find the last top-level "# " line.
     var lastSectionIdx = -1
-    for i, line in helpState.lines:
+    for i, line in helpState.items:
       if line.len >= 2 and line[0 .. 1] == "# ":
         lastSectionIdx = i
     check lastSectionIdx >= 0
@@ -343,7 +405,7 @@ suite "help_handler: handleHelpViewerModeKey - Selection movement":
     let result = handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("G"))
 
     check result.kind == hvrHandled
-    check helpState.selectedIndex == helpState.lines.high
+    check helpState.selectedIndex == helpState.items.high
 
 suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highlight":
   test "First Escape returns handled and marks lastKeyWasEscape":
@@ -416,8 +478,8 @@ suite "help_handler: handleHelpViewerModeKey - Unhandled keys":
   test "Unbound special key returns unhandled":
     let helpState = newHelpViewerState()
 
-    # skHome is not handled by help viewer
+    # skDelete is not handled by help viewer
     let result =
-      handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skHome))
+      handleHelpViewerModeKey(helpState, TestViewportHeight, specialKey(skDelete))
 
     check result.kind == hvrUnhandled

@@ -171,7 +171,11 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   # Update debug viewer state and create new buffer
   if foundWindow.modeState.kind == mskDebug:
     let debugState = foundWindow.modeState.debug
-    debugState.lines = debugLines
+    debugState.items = debugLines
+    # Reclamp the selection after the item set shrinks so syncSelectionCursor
+    # does not push cursor.line past the new buffer's last row.
+    debugState.selectedIndex =
+      clamp(debugState.selectedIndex, 0, max(0, debugLines.high))
     let newDebugBuffer = debugState.createDebugTextBuffer()
 
     # Preserve scroll position

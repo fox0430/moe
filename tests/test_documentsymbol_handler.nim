@@ -307,7 +307,7 @@ suite "documentsymbol_handler: handleDocumentSymbolModeKey - Unhandled keys":
 
   test "Unknown special key returns unhandled":
     let state = createTestState()
-    let keyCombo = specialKeyCombo(skPageUp)
+    let keyCombo = specialKeyCombo(skDelete)
 
     let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 

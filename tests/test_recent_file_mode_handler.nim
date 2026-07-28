@@ -282,8 +282,9 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Unhandled keys":
   test "Unbound special key returns unhandled":
     let state = createTestState()
 
-    # skHome is not handled by recent file mode
-    let result = handleRecentFileModeKey(state, TestViewportHeight, specialKey(skHome))
+    # skDelete is not handled by recent file mode
+    let result =
+      handleRecentFileModeKey(state, TestViewportHeight, specialKey(skDelete))
 
     check result.kind == rfmrUnhandled
 

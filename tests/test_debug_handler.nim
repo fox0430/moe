@@ -27,7 +27,7 @@ import ../src/moepkg/command_handlers/debug_handler
 
 proc createDebugState(lines: seq[string] = @[]): DebugViewerState =
   result = newDebugViewerState()
-  result.lines = lines
+  result.items = lines
 
 proc charKeyCombo(c: char): KeyCombo =
   KeyCombo(isSpecial: false, char: $c, modifiers: {})
@@ -47,29 +47,29 @@ suite "Debug handler - Navigation keys":
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 1
+    check debugState.selectedIndex == 1
 
   test "k key scrolls up":
     let debugState = createDebugState(@["line1", "line2", "line3"])
-    debugState.selectedLine = 2
+    debugState.selectedIndex = 2
     let keyCombo = charKeyCombo('k')
     let viewportHeight = 10
 
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 1
+    check debugState.selectedIndex == 1
 
   test "g key scrolls to top":
     let debugState = createDebugState(@["line1", "line2", "line3"])
-    debugState.selectedLine = 2
+    debugState.selectedIndex = 2
     let keyCombo = charKeyCombo('g')
     let viewportHeight = 10
 
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 0
+    check debugState.selectedIndex == 0
 
   test "G key scrolls to bottom":
     let debugState = createDebugState(@["line1", "line2", "line3"])
@@ -79,7 +79,7 @@ suite "Debug handler - Navigation keys":
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 2
+    check debugState.selectedIndex == 2
 
   test "Down arrow scrolls down":
     let debugState = createDebugState(@["line1", "line2", "line3"])
@@ -89,29 +89,29 @@ suite "Debug handler - Navigation keys":
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 1
+    check debugState.selectedIndex == 1
 
   test "Up arrow scrolls up":
     let debugState = createDebugState(@["line1", "line2", "line3"])
-    debugState.selectedLine = 2
+    debugState.selectedIndex = 2
     let keyCombo = specialKeyCombo(skUp)
     let viewportHeight = 10
 
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 1
+    check debugState.selectedIndex == 1
 
   test "Home key scrolls to top":
     let debugState = createDebugState(@["line1", "line2", "line3"])
-    debugState.selectedLine = 2
+    debugState.selectedIndex = 2
     let keyCombo = specialKeyCombo(skHome)
     let viewportHeight = 10
 
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 0
+    check debugState.selectedIndex == 0
 
   test "End key scrolls to bottom":
     let debugState = createDebugState(@["line1", "line2", "line3"])
@@ -121,7 +121,7 @@ suite "Debug handler - Navigation keys":
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 2
+    check debugState.selectedIndex == 2
 
 suite "Debug handler - Page navigation":
   test "Ctrl+d pages down":
@@ -137,7 +137,7 @@ suite "Debug handler - Page navigation":
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 4 # pageSize = max(1, 5-1) = 4
+    check debugState.selectedIndex == 4 # pageSize = max(1, 5-1) = 4
 
   test "Ctrl+u pages up":
     let debugState = createDebugState(
@@ -146,14 +146,14 @@ suite "Debug handler - Page navigation":
         "line10",
       ]
     )
-    debugState.selectedLine = 8
+    debugState.selectedIndex = 8
     let keyCombo = ctrlKeyCombo('u')
     let viewportHeight = 5
 
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 4
+    check debugState.selectedIndex == 4
 
   test "PageDown key pages down":
     let debugState = createDebugState(
@@ -168,7 +168,7 @@ suite "Debug handler - Page navigation":
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 4
+    check debugState.selectedIndex == 4
 
   test "PageUp key pages up":
     let debugState = createDebugState(
@@ -177,14 +177,14 @@ suite "Debug handler - Page navigation":
         "line10",
       ]
     )
-    debugState.selectedLine = 8
+    debugState.selectedIndex = 8
     let keyCombo = specialKeyCombo(skPageUp)
     let viewportHeight = 5
 
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == 4
+    check debugState.selectedIndex == 4
 
 suite "Debug handler - Command mode":
   test ": key enters command mode":
@@ -199,14 +199,14 @@ suite "Debug handler - Command mode":
 suite "Debug handler - Other keys":
   test "Escape key is handled but does nothing":
     let debugState = createDebugState(@["line1"])
-    let initialLine = debugState.selectedLine
+    let initialLine = debugState.selectedIndex
     let keyCombo = specialKeyCombo(skEscape)
     let viewportHeight = 10
 
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-    check debugState.selectedLine == initialLine
+    check debugState.selectedIndex == initialLine
 
   test "Unknown key is handled":
     let debugState = createDebugState(@["line1"])
