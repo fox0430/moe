@@ -25,8 +25,8 @@ import ../src/moepkg/debug_viewer {.all.}
 suite "debug_viewer - DebugViewerState initialization":
   test "newDebugViewerState creates empty state":
     let state = newDebugViewerState()
-    check state.lines.len == 0
-    check state.selectedLine == 0
+    check state.items.len == 0
+    check state.selectedIndex == 0
 
 suite "debug_viewer - Format helpers":
   test "formatBool true":
@@ -67,61 +67,61 @@ suite "debug_viewer - Section and field helpers":
     check lines[0].startsWith("  x")
     check lines[0].len >= 24 + 2 + 3 + 3 # 2 leading + 24 name + " : " + "val"
 
-suite "debug_viewer - Scroll operations":
-  test "scrollUp from top does nothing":
+suite "debug_viewer - Navigation":
+  test "moveUp from top does nothing":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c"]
-    state.selectedLine = 0
-    state.scrollUp()
-    check state.selectedLine == 0
+    state.items = @["a", "b", "c"]
+    state.selectedIndex = 0
+    state.moveUp()
+    check state.selectedIndex == 0
 
-  test "scrollUp decrements selectedLine":
+  test "moveUp decrements selectedIndex":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c"]
-    state.selectedLine = 2
-    state.scrollUp()
-    check state.selectedLine == 1
+    state.items = @["a", "b", "c"]
+    state.selectedIndex = 2
+    state.moveUp()
+    check state.selectedIndex == 1
 
-  test "scrollDown increments selectedLine":
+  test "moveDown increments selectedIndex":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c"]
-    state.selectedLine = 0
-    state.scrollDown()
-    check state.selectedLine == 1
+    state.items = @["a", "b", "c"]
+    state.selectedIndex = 0
+    state.moveDown()
+    check state.selectedIndex == 1
 
-  test "scrollDown at bottom does nothing":
+  test "moveDown at bottom does nothing":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c"]
-    state.selectedLine = 2
-    state.scrollDown()
-    check state.selectedLine == 2
+    state.items = @["a", "b", "c"]
+    state.selectedIndex = 2
+    state.moveDown()
+    check state.selectedIndex == 2
 
-  test "scrollToTop resets to zero":
+  test "moveToFirst resets to zero":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c", "d", "e"]
-    state.selectedLine = 4
-    state.scrollToTop()
-    check state.selectedLine == 0
+    state.items = @["a", "b", "c", "d", "e"]
+    state.selectedIndex = 4
+    state.moveToFirst()
+    check state.selectedIndex == 0
 
-  test "scrollToBottom goes to last line":
+  test "moveToLast goes to last line":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c", "d", "e"]
-    state.scrollToBottom()
-    check state.selectedLine == 4
+    state.items = @["a", "b", "c", "d", "e"]
+    state.moveToLast()
+    check state.selectedIndex == 4
 
   test "pageUp moves up by page size":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
-    state.selectedLine = 8
+    state.items = @["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+    state.selectedIndex = 8
     state.pageUp(5)
-    check state.selectedLine == 4
+    check state.selectedIndex == 4
 
   test "pageDown moves down by page size":
     let state = newDebugViewerState()
-    state.lines = @["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
-    state.selectedLine = 0
+    state.items = @["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+    state.selectedIndex = 0
     state.pageDown(5)
-    check state.selectedLine == 4
+    check state.selectedIndex == 4
 
 suite "debug_viewer - generateEditorStateInfo":
   test "generates editor state section":
@@ -226,7 +226,7 @@ suite "debug_viewer - generateWindowInfo":
 suite "debug_viewer - createDebugTextBuffer":
   test "creates buffer from debug lines":
     let state = newDebugViewerState()
-    state.lines = @["line 1", "line 2", "line 3"]
+    state.items = @["line 1", "line 2", "line 3"]
     let buf = createDebugTextBuffer(state)
     check buf.readOnly == true
 

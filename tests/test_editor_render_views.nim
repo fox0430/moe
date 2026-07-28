@@ -1981,7 +1981,7 @@ suite "advanceLayoutForFrame - viewer selection drives the window viewport":
 
     let helpState = HelpViewerState(selectedIndex: 35)
     for i in 0 ..< 40:
-      helpState.lines.add("help" & $i)
+      helpState.items.add("help" & $i)
     e.windowManager.windows[0].modeState = ModeState(kind: mskHelp, help: helpState)
 
     e.advanceLayoutForFrame(buffer, false)
@@ -1994,9 +1994,9 @@ suite "advanceLayoutForFrame - viewer selection drives the window viewport":
     var buffer = createTestBuffer()
     e.setupViewer(40, EditorMode.Debug)
 
-    let debugState = DebugViewerState(selectedLine: 35)
+    let debugState = DebugViewerState(selectedIndex: 35)
     for i in 0 ..< 40:
-      debugState.lines.add("debug" & $i)
+      debugState.items.add("debug" & $i)
     e.windowManager.windows[0].modeState = ModeState(kind: mskDebug, debug: debugState)
 
     e.advanceLayoutForFrame(buffer, false)

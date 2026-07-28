@@ -21,13 +21,13 @@
 
 import std/[strutils, options, times]
 
-import modes, buffer/core
+import modes, buffer/core, list_viewer
 
 import types/debug_viewer_types
-export debug_viewer_types
+export debug_viewer_types, list_viewer
 
 proc newDebugViewerState*(): DebugViewerState =
-  DebugViewerState(lines: @[], selectedLine: 0)
+  DebugViewerState(items: @[], selectedIndex: 0)
 
 proc formatBool(b: bool): string =
   if b: "true" else: "false"
@@ -407,38 +407,10 @@ proc generateLspInfo*(
   lines.addField("hasLocations", formatBool(hasLocations))
   lines.addField("cacheValid", formatBool(isValid))
 
-proc scrollUp*(state: DebugViewerState) =
-  ## Scroll up one line
-  if state.selectedLine > 0:
-    state.selectedLine -= 1
-
-proc scrollDown*(state: DebugViewerState) =
-  ## Scroll down one line
-  if state.selectedLine < state.lines.len - 1:
-    state.selectedLine += 1
-
-proc scrollToTop*(state: DebugViewerState) =
-  ## Scroll to the top
-  state.selectedLine = 0
-
-proc scrollToBottom*(state: DebugViewerState) =
-  ## Scroll to the bottom
-  state.selectedLine = max(0, state.lines.len - 1)
-
-proc pageUp*(state: DebugViewerState, visibleHeight: int) =
-  ## Page up
-  let pageSize = max(1, visibleHeight - 1)
-  state.selectedLine = max(0, state.selectedLine - pageSize)
-
-proc pageDown*(state: DebugViewerState, visibleHeight: int) =
-  ## Page down
-  let pageSize = max(1, visibleHeight - 1)
-  state.selectedLine = min(state.lines.len - 1, state.selectedLine + pageSize)
-
 proc createDebugTextBuffer*(state: DebugViewerState): TextBuffer =
   ## Create a TextBuffer from debug lines for rendering via the normal view path
   var content = ""
-  for i, line in state.lines:
+  for i, line in state.items:
     if i > 0:
       content.add('\n')
     content.add(line)

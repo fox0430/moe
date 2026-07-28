@@ -24,7 +24,7 @@ import std/[tables, options, strutils, unicode]
 import pkg/results
 
 import ../[types, motion, key_bindings, config, logger]
-import ../buffer/[core, edit, undo]
+import ../buffer/[core, edit]
 
 type
   ## Built-in command identifiers

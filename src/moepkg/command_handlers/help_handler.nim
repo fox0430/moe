@@ -54,92 +54,54 @@ proc handleHelpViewerModeKey*(
   ##
   ## Returns a HelpViewerResult indicating what action should be taken
 
-  # Handle 'gg' command (two g presses)
-  if helpState.waitingForG:
-    helpState.waitingForG = false
-    if not keyCombo.isSpecial and keyCombo.char == "g":
-      helpState.moveToFirst()
-      return HelpViewerResult(kind: hvrHandled)
-    else:
-      # If not 'g', cancel and discard this input to avoid double processing
-      return HelpViewerResult(kind: hvrUnhandled)
-
-  # Handle Escape key for double-Escape search highlight clear
+  # Escape is taken before the shared handler: here it means "clear the search
+  # highlight on the second press", not the shared `lvaEscape` = quit.
   if keyCombo.isSpecial and keyCombo.special == skEscape:
+    helpState.waitingForG = false
     if helpState.lastKeyWasEscape:
-      # Second Escape press - clear search highlight
       helpState.lastKeyWasEscape = false
       helpState.clearSearch()
       return HelpViewerResult(kind: hvrClearSearchHighlight)
-    else:
-      # First Escape press - just mark it
-      helpState.lastKeyWasEscape = true
-      return HelpViewerResult(kind: hvrHandled)
+    helpState.lastKeyWasEscape = true
+    return HelpViewerResult(kind: hvrHandled)
 
-  # Any non-Escape key resets the Escape counter
   helpState.lastKeyWasEscape = false
 
-  # Check for special keys first
+  case helpState.handleListNavKey(viewportHeight, keyCombo)
+  of lvaConsumed, lvaEscape:
+    return HelpViewerResult(kind: hvrHandled)
+  of lvaQuitKey:
+    return HelpViewerResult(kind: hvrQuit)
+  of lvaEnterCommand:
+    return HelpViewerResult(kind: hvrEnterCommand)
+  of lvaSelect, lvaUnhandled:
+    # Help has no selectable action; Enter falls through so caller-level
+    # bindings still reach the router.
+    discard
+
   if keyCombo.isSpecial:
-    case keyCombo.special
-    of skUp:
-      helpState.moveUp()
-      return HelpViewerResult(kind: hvrHandled)
-    of skDown:
-      helpState.moveDown()
-      return HelpViewerResult(kind: hvrHandled)
-    else:
-      discard
+    return HelpViewerResult(kind: hvrUnhandled)
+
+  case keyCombo.char
+  of "/":
+    return HelpViewerResult(kind: hvrEnterSearch)
+  of "?":
+    return HelpViewerResult(kind: hvrEnterSearchBackward)
+  of "n":
+    # Re-enable highlight (like Vim's n) only when there is a match to jump to;
+    # an empty query must not touch the gate.
+    if helpState.searchForward().isSome:
+      return HelpViewerResult(kind: hvrRepeatSearch)
+    return HelpViewerResult(kind: hvrHandled)
+  of "N":
+    if helpState.searchBackward().isSome:
+      return HelpViewerResult(kind: hvrRepeatSearch)
+    return HelpViewerResult(kind: hvrHandled)
+  of "}":
+    helpState.moveToNextSection()
+    return HelpViewerResult(kind: hvrHandled)
+  of "{":
+    helpState.moveToPreviousSection()
+    return HelpViewerResult(kind: hvrHandled)
   else:
-    # Character keys
-    # Check for Ctrl+d (half page down)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
-      helpState.halfPageDown(viewportHeight)
-      return HelpViewerResult(kind: hvrHandled)
-
-    # Check for Ctrl+u (half page up)
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
-      helpState.halfPageUp(viewportHeight)
-      return HelpViewerResult(kind: hvrHandled)
-
-    case keyCombo.char
-    of ":":
-      return HelpViewerResult(kind: hvrEnterCommand)
-    of "/":
-      return HelpViewerResult(kind: hvrEnterSearch)
-    of "?":
-      return HelpViewerResult(kind: hvrEnterSearchBackward)
-    of "n":
-      # Search forward for next match. Re-enable highlight (like Vim's n) only
-      # when there is a match to jump to; an empty query must not touch the gate.
-      if helpState.searchForward().isSome:
-        return HelpViewerResult(kind: hvrRepeatSearch)
-      return HelpViewerResult(kind: hvrHandled)
-    of "N":
-      # Search backward for previous match (see "n" for the gate rationale).
-      if helpState.searchBackward().isSome:
-        return HelpViewerResult(kind: hvrRepeatSearch)
-      return HelpViewerResult(kind: hvrHandled)
-    of "j":
-      helpState.moveDown()
-      return HelpViewerResult(kind: hvrHandled)
-    of "k":
-      helpState.moveUp()
-      return HelpViewerResult(kind: hvrHandled)
-    of "g":
-      # Start waiting for second 'g'
-      helpState.waitingForG = true
-      return HelpViewerResult(kind: hvrHandled)
-    of "G":
-      helpState.moveToLast()
-      return HelpViewerResult(kind: hvrHandled)
-    of "}":
-      helpState.moveToNextSection()
-      return HelpViewerResult(kind: hvrHandled)
-    of "{":
-      helpState.moveToPreviousSection()
-      return HelpViewerResult(kind: hvrHandled)
-    else:
-      discard
-
-  return HelpViewerResult(kind: hvrUnhandled)
+    return HelpViewerResult(kind: hvrUnhandled)

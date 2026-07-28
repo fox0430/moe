@@ -24,6 +24,8 @@
 ## `debug_viewer` module (which depends on `modes` and the whole debug-dump
 ## machinery).
 
-type DebugViewerState* = ref object ## State for the debug mode viewer
-  lines*: seq[string] # Debug information lines
-  selectedLine*: int # Currently selected line (for navigation)
+import list_viewer_types
+export list_viewer_types
+
+type DebugViewerState* = ref object of ListViewer[string]
+  ## State for the debug mode viewer. `items` holds the debug lines.

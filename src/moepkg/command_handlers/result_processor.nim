@@ -1196,7 +1196,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       debugConfig.lsp.enable,
     )
     let debugState = newDebugViewerState()
-    debugState.lines = debugLines
+    debugState.items = debugLines
     let debugBuffer = debugState.createDebugTextBuffer()
     let enterResult = e.enterViewerMode(
       EditorMode.Debug,

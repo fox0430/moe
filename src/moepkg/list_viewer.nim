@@ -64,6 +64,15 @@ proc halfPageUp*[T](v: ListViewer[T], viewportHeight: int) =
 proc halfPageDown*[T](v: ListViewer[T], viewportHeight: int) =
   pickerHalfPageDown(v.selectedIndex, v.items.len, viewportHeight)
 
+proc pageUp*[T](v: ListViewer[T], viewportHeight: int) =
+  ## Full page up, keeping one line of overlap.
+  v.selectedIndex = max(0, v.selectedIndex - max(1, viewportHeight - 1))
+
+proc pageDown*[T](v: ListViewer[T], viewportHeight: int) =
+  ## Full page down, keeping one line of overlap.
+  if v.items.len > 0:
+    v.selectedIndex = min(v.items.high, v.selectedIndex + max(1, viewportHeight - 1))
+
 proc handleListNavKey*[T](
     v: ListViewer[T], viewportHeight: int, keyCombo: KeyCombo
 ): ListViewerAction =
@@ -93,6 +102,18 @@ proc handleListNavKey*[T](
       return lvaConsumed
     of skEnter:
       return lvaSelect
+    of skHome:
+      v.moveToFirst()
+      return lvaConsumed
+    of skEnd:
+      v.moveToLast()
+      return lvaConsumed
+    of skPageUp:
+      v.pageUp(viewportHeight)
+      return lvaConsumed
+    of skPageDown:
+      v.pageDown(viewportHeight)
+      return lvaConsumed
     else:
       return lvaUnhandled
 
@@ -103,6 +124,11 @@ proc handleListNavKey*[T](
   if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
     v.halfPageUp(viewportHeight)
     return lvaConsumed
+
+  # Any other modifier combination falls through so caller-level bindings
+  # (e.g. `C-q = quit-force`) still reach the router.
+  if keyCombo.modifiers != {}:
+    return lvaUnhandled
 
   case keyCombo.char
   of "q":

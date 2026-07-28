@@ -300,7 +300,7 @@ suite "callhierarchy_handler: handleCallHierarchyModeKey - unhandled":
 
   test "Unhandled special key returns chvrUnhandled":
     let state = makeTestState()
-    let keyCombo = toSpecialKeyCombo(skPageUp)
+    let keyCombo = toSpecialKeyCombo(skDelete)
 
     let result = handleCallHierarchyModeKey(state, 10, keyCombo)
 
@@ -394,25 +394,25 @@ suite "callhierarchy_handler: handleCallHierarchyModeKey - modifier keys":
 
     check result.kind == chvrUnhandled
 
-  test "Alt+j still moves down (modifiers ignored for navigation)":
-    # Note: Current implementation ignores Alt modifier for j/k keys
+  test "Alt+j falls through so caller-level bindings can act on it":
     let state = makeTestState()
     let keyCombo = toKeyCombo('j', alt = true)
 
     let result = handleCallHierarchyModeKey(state, 10, keyCombo)
 
-    check result.kind == chvrHandled
-    check state.selectedIndex == 1
+    check result.kind == chvrUnhandled
+    check state.selectedIndex == 0
 
-  test "Shift+G moves to last (modifiers ignored)":
-    # Note: Current implementation handles uppercase G via char matching
+  test "Shift+G falls through so caller-level bindings can act on it":
+    # A terminal-typed uppercase G has empty modifiers (shift is baked into the
+    # char); an explicit kmShift is unusual, so let it fall through.
     let state = makeTestState()
     let keyCombo = toKeyCombo('G', shift = true)
 
     let result = handleCallHierarchyModeKey(state, 10, keyCombo)
 
-    check result.kind == chvrHandled
-    check state.selectedIndex == 2
+    check result.kind == chvrUnhandled
+    check state.selectedIndex == 0
 
 suite "CallHierarchyViewerState - multiple states independence":
   test "Multiple states have independent waitingForG":
@@ -427,16 +427,16 @@ suite "CallHierarchyViewerState - multiple states independence":
     check state2.waitingForG == false
 
 suite "callhierarchy_handler: handleCallHierarchyModeKey - g followed by unhandled special key":
-  test "g followed by PageUp returns chvrUnhandled":
+  test "g followed by Delete returns chvrUnhandled":
     let state = makeTestState()
     let keyComboG = toKeyCombo('g')
-    let keyComboPageUp = toSpecialKeyCombo(skPageUp)
+    let keyComboPageUp = toSpecialKeyCombo(skDelete)
 
     # First g
     discard handleCallHierarchyModeKey(state, 10, keyComboG)
     check state.waitingForG == true
 
-    # PageUp - should cancel gg and fall through to unhandled
+    # Delete - should cancel gg and fall through to unhandled
     let result = handleCallHierarchyModeKey(state, 10, keyComboPageUp)
     check result.kind == chvrUnhandled
     check state.waitingForG == false

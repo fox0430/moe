@@ -256,7 +256,7 @@ suite "references_handler: Unhandled keys":
   test "unhandled special key returns unhandled result":
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
-    let keyCombo = toSpecialKeyCombo(skPageUp) # PageUp is not handled
+    let keyCombo = toSpecialKeyCombo(skDelete) # Delete is not handled
 
     let result = handleReferencesModeKey(state, 10, keyCombo)
 

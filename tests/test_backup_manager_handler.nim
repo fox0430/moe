@@ -316,7 +316,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Unhandled keys":
     let bkState = newTestBackupManagerState(5)
 
     let result =
-      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skPageUp))
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skDelete))
 
     check result.kind == bkmrUnhandled
 

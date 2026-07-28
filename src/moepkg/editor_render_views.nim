@@ -152,7 +152,7 @@ proc syncSelectionCursor(window: EditorWindow) =
   of mskDiffViewer:
     window.cursor.line = window.modeState.diffViewer.selectedIndex
   of mskDebug:
-    window.cursor.line = window.modeState.debug.selectedLine
+    window.cursor.line = window.modeState.debug.selectedIndex
   of mskBufferManager:
     window.cursor.line = window.modeState.bufferManager.selectedIndex + 1
   of mskBookmarkManager:
