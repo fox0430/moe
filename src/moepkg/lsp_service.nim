@@ -191,6 +191,13 @@ proc defaultLanguageServerConfigs*(): Table[string, LanguageServerConfig] =
     enabled: true,
   )
 
+  result["lua"] = LanguageServerConfig(
+    command: "lua-language-server",
+    args: @[],
+    extensions: @["lua", "luau", "rockspec"],
+    enabled: true,
+  )
+
   result["go"] = LanguageServerConfig(
     command: "gopls", args: @[], extensions: @["go"], enabled: true
   )

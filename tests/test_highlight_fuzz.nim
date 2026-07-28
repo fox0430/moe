@@ -574,6 +574,47 @@ proc tclCorpus(): seq[seq[string]] =
     @["# a comment", "set cont \"a \\", "b\"", "foreach i {1 2 3} {puts $i}"],
   ]
 
+proc luaCorpus(): seq[seq[string]] =
+  ## Lua long brackets are the interesting part: `[[ ]]` strings and
+  ## `--[==[ ]==]` comments span lines and resume through
+  ## `lang.lua.longBracketLevel`, so an edit to the opening delimiter has to
+  ## re-colour every line to the matching terminator. Also covers quoted
+  ## strings with escapes (line-bounded), `::labels::`, hex/exponent numbers
+  ## and the `#` length operator.
+  result = @[
+    @[
+      "local function greet(name)", "  print(\"Hello, \" .. name)", "end",
+      "greet('world')",
+    ],
+    @[
+      "local doc = [[", "multi line", "long string]]", "local n = #doc",
+      "print(n, 0xFF, 1e-3)",
+    ],
+    @[
+      "--[==[ a long", "comment body ]] not the end", "]==]", "local t = {1, 2, 3}",
+      "for i, v in ipairs(t) do print(i, v) end",
+    ],
+    @[
+      "-- a line comment", "local s = \"tab\\there\\65\"", "::top::",
+      "if x ~= nil then goto top end", "local h = 0x1p-4",
+    ],
+    # Adversarial long-bracket shapes: a `]]` that does not terminate a
+    # levelled bracket, an empty long comment, an opening delimiter with
+    # nothing after it on its line, and a nested-looking `[[` (Lua does not
+    # nest — the first matching close wins).
+    @[
+      "local a = [=[ ]] still inside", "]] and still", "]=]", "local b = --[[]] 1",
+      "local c = [[", "", "]]",
+    ],
+    # Quoted strings are line-bounded, so a trailing backslash ends the string
+    # and the next line resumes as code. The `#!` shebang and a bare `#`
+    # length operator share a first byte and must not be confused by an edit.
+    @[
+      "#!/usr/bin/lua", "local s = \"trailing \\", "still code here", "local n = #s",
+      "return n",
+    ],
+  ]
+
 proc commitEditMsgCorpus(): seq[seq[string]] =
   ## COMMIT_EDITMSG snippets exercising the per-file `commit.subjectSeen`
   ## flag and the mid-line Conventional Commits / trailer sub-token machines.
@@ -934,6 +975,9 @@ suite "Incremental Highlight Fuzz":
   test "Tcl: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langTcl, tclCorpus(), iters, baseSeed)
 
+  test "Lua: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langLua, luaCorpus(), iters, baseSeed)
+
   test "CommitEditMsg: incremental output matches full reparse under random edits":
     check runFuzz(
       SourceLanguage.langCommitEditMsg, commitEditMsgCorpus(), iters, baseSeed
@@ -1087,6 +1131,22 @@ suite "Incremental Highlight Line-Bounded Strings":
   test "Tcl: escape ending at EOL does not emit an empty token":
     check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langTcl, "tcl esc")
 
+  test "Lua: editing inside a levelled long comment keeps the bracket level":
+    # The reparse enters line 3 from its cached boundary state, which must
+    # still carry `longBracketLevel == 2` — otherwise the `]]` on line 2 is
+    # mistaken for the terminator and everything below is re-coloured as code.
+    let buf =
+      @["--[==[ open", "a ]] not the end", "b ]] still not", "]==]", "local x = 1"]
+    check checkResumeEquivalence(buf, 2, "c ]=] nor this", langLua, "lua long comment")
+
+  test "Lua: editing below a multi-line long string resumes inside it":
+    let buf = @["local doc = [[", "line one", "line two", "line three]]", "print(doc)"]
+    check checkResumeEquivalence(buf, 2, "edited line", langLua, "lua long string")
+
+  test "Lua: escape ending at EOL does not emit an empty token":
+    let buf = @["local s = \"a \\", "more\"", "local n = #s", "print(n)", "return s"]
+    check checkResumeEquivalence(buf, 3, "print(1)", langLua, "lua esc")
+
   test "Tcl: an unclosed ${ brace reference is line-bounded":
     # `${some_var` (no closing brace) must not swallow the newline into one
     # gtSpecialVar token; the lines below resume as code, not variable.
@@ -1154,6 +1214,7 @@ suite "Monotonic-advance guard":
       (SourceLanguage.langZsh, zshCorpus()),
       (SourceLanguage.langFish, fishCorpus()),
       (SourceLanguage.langTcl, tclCorpus()),
+      (SourceLanguage.langLua, luaCorpus()),
     ]
     for (lang, corpus) in corpora:
       for buf in corpus:

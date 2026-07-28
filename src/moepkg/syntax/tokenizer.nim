@@ -168,6 +168,13 @@ type
   PythonState* = object
     commentDepth*: int
 
+  LuaState* = object
+    longBracketLevel*: int
+      ## `=` count of the long bracket currently open (`[[` is 0, `[==[` is 2).
+      ## Only meaningful while `state` is `gtLongComment`/`gtLongStringLit`.
+    stringQuote*: char
+      ## Quote that opened the single-line string parked on a backslash escape.
+
   LangState* = object
     ## Per-language tokenizer state, captured/restored as a whole record.
     ## 8-aligned members first, then bool-only, to minimise padding.
@@ -176,6 +183,7 @@ type
     lisp*: LispState
     haskell*: HaskellState
     python*: PythonState
+    lua*: LuaState
     html*: HtmlState
     astro*: AstroState
     yaml*: YamlState
@@ -216,6 +224,7 @@ type
     langLatex
     langLisp
     langLog
+    langLua
     langMarkdown
     langNim
     langPython
@@ -274,6 +283,7 @@ const
     langLatex: "LaTeX",
     langLisp: "Lisp",
     langLog: "Log",
+    langLua: "Lua",
     langMarkdown: "Markdown",
     langNim: "Nim",
     langPython: "Python",
@@ -308,6 +318,7 @@ proc getSourceLanguage*(name: string): SourceLanguage =
   of "cpp", "cxx": langCpp
   of "cs", "csharp": langCsharp
   of "hs": langHaskell
+  of "luau": langLua
   of "tex", "latex": langLatex
   else: langNone
 
@@ -496,9 +507,9 @@ import
   syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp, syntax_csharp,
   syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_gitignore,
   syntax_haskell, syntax_html, syntax_java, syntax_javascript, syntax_latex,
-  syntax_lisp, syntax_markdown, syntax_nim, syntax_python, syntax_rust, syntax_fish,
-  syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml, syntax_json,
-  syntax_jsonc, syntax_typescript, syntax_log, syntax_xml, syntax_zsh
+  syntax_lisp, syntax_lua, syntax_markdown, syntax_nim, syntax_python, syntax_rust,
+  syntax_fish, syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml,
+  syntax_json, syntax_jsonc, syntax_typescript, syntax_log, syntax_xml, syntax_zsh
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   let
@@ -523,6 +534,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langLatex: g.latexNextToken
   of langLisp: g.lispNextToken
   of langLog: g.logNextToken
+  of langLua: g.luaNextToken
   of langMarkdown: g.markdownNextToken
   of langNim: g.nimNextToken
   of langPython: g.pythonNextToken

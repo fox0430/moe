@@ -1402,6 +1402,15 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for Tcl .itk":
     check detectLanguage("widget.itk") == SourceLanguage.langTcl
 
+  test "detectLanguage for Lua .lua":
+    check detectLanguage("init.lua") == SourceLanguage.langLua
+
+  test "detectLanguage for Lua .luau":
+    check detectLanguage("script.luau") == SourceLanguage.langLua
+
+  test "detectLanguage for Lua .rockspec":
+    check detectLanguage("mylib-1.0-1.rockspec") == SourceLanguage.langLua
+
   test "detectLanguage for Zsh .zsh":
     check detectLanguage("script.zsh") == SourceLanguage.langZsh
 

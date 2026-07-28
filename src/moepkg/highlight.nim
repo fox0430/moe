@@ -1630,6 +1630,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langLisp
   of ".log":
     return SourceLanguage.langLog
+  of ".lua", ".luau", ".rockspec":
+    return SourceLanguage.langLua
   of ".hl":
     return SourceLanguage.langHyprland
   of ".xml", ".svg", ".xsd", ".xsl", ".xslt", ".rss", ".atom", ".plist":

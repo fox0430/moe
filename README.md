@@ -48,6 +48,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - YAML
   - JSON/JSONC
   - Lisp
+  - Lua
   - Tcl
   - Hyprland
   - Dockerfile
