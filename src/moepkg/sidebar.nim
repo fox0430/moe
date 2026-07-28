@@ -28,7 +28,7 @@ import std/[options, unicode]
 
 import pkg/celina
 
-import types, buffer, color
+import types, buffer/[core, markers], color
 
 # Sidebar display constants
 const DefaultSidebarWidth* = 2

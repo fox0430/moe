@@ -26,7 +26,8 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[buffer, types, registers, motion, modes, config, clipboard]
+import ../[types, registers, motion, modes, config, clipboard]
+import ../buffer/[core, edit, fold, undo]
 import insert_commands
 
 proc getSelectionRange*(

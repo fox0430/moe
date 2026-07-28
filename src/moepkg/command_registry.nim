@@ -27,7 +27,8 @@ import std/options
 
 import pkg/results
 
-import types, buffer, motion, key_bindings, modes, logger, render_utils
+import types, motion, key_bindings, modes, logger, render_utils
+import buffer/[core, edit, fold, undo]
 
 import command_handlers/visual_commands
 

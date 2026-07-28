@@ -29,7 +29,7 @@
 
 import std/options
 
-import types, buffer, render_utils
+import types, buffer/[core, fold], render_utils
 
 type
   RowLayout* = object

@@ -23,7 +23,8 @@ import std/[tables, options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, buffer, motion, key_bindings, config, logger]
+import ../[types, motion, key_bindings, config, logger]
+import ../buffer/[core, edit, undo]
 
 type
   ## Built-in command identifiers
@@ -130,7 +131,7 @@ type
   ## Config sections are pulled live from `state.config` via getters below, so
   ## `applyConfigSettings`' ref swap is picked up on the next command.
   CommandContext* = ref object
-    buffer*: buffer.TextBuffer
+    buffer*: core.TextBuffer
     state*: EditorState
     viewport*: ViewPort
     motionController*: MotionController

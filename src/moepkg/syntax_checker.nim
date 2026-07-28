@@ -21,7 +21,7 @@ import std/[strutils, options]
 
 import pkg/[results, chronos, regex]
 
-import background_process, primitives, buffer
+import background_process, primitives, buffer/[core, markers]
 import syntax/tokenizer
 
 import types/syntax_checker_types
