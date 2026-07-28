@@ -17,12 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os]
+import std/[unittest, options, os, times, deques]
 import pkg/results
 import ../src/moepkg/[terminal_mode, key_bindings]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/terminal_handler
-import ../src/moepkg/terminal/pty
+import ../src/moepkg/terminal/[pty, ansi_parser]
 
 proc charKey(c: string, mods: set[KeyModifier] = {}): KeyCombo =
   KeyCombo(isSpecial: false, char: c, modifiers: mods)
@@ -317,3 +317,40 @@ suite "Persistent shell behavior (regression)":
 
       check ts.exitCode.isSome
       ts.cleanup()
+
+suite "pollOutput drains multi-chunk bursts in one tick (regression)":
+  ## pollOutput used to issue a single 4 KiB readFromPty per tick, so any
+  ## burst larger than the kernel PTY buffer visibly lagged at ~4 KiB * FPS.
+  ## It now loops until EAGAIN (bounded by maxPtyReadBytesPerPoll) so one
+  ## call empties everything currently queued.
+
+  test "single pollOutput consumes well past the legacy 4 KiB ceiling":
+    # Bash-agnostic burst: 10000 "x\n" lines (~20 KiB) then a live sleep,
+    # so the exit-branch drain (unchanged) does not mask the live path.
+    let ptyResult = openPtyAndSpawn("yes x | head -n 10000; sleep 5", 80, 24)
+    require ptyResult.isOk
+    let ts = TerminalState(
+      pty: ptyResult.get,
+      grid: newTerminalGrid(80, 24),
+      subMode: tsmInput,
+      scrollbackSnapshot: nil,
+      exitCode: none(int),
+      waitingForCtrlN: false,
+      needsBufferRefresh: false,
+    )
+    defer:
+      ts.cleanup()
+
+    # Give the child enough time to write far more than one 4 KiB chunk.
+    sleep(400)
+
+    let started = epochTime()
+    discard ts.pollOutput()
+    let elapsed = epochTime() - started
+
+    # Each "x\n" that scrolls past row 24 becomes one scrollback entry. The
+    # legacy per-call ceiling was ~2024 entries (4096 / 2 - 24 visible rows).
+    check ts.grid.scrollbackBuffer.len >= 4000
+    # Draining thousands of "x\n" via the ANSI parser stays well under a
+    # frame budget.
+    check elapsed < 1.0

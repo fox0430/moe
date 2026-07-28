@@ -79,16 +79,24 @@ proc flushPendingResponses(state: TerminalState) =
   state.grid.pendingResponses.setLen(0)
 
 proc pollOutput*(state: TerminalState): bool =
-  ## Non-blocking read from PTY and process through ANSI parser.
-  ## Returns true if the grid was updated.
+  ## Drain the PTY through the ANSI parser (up to maxPtyReadBytesPerPoll
+  ## bytes; remainder drains next tick). Returns true if the grid changed.
   if state.pty.closed:
     return false
 
   discard state.pty.drainWriteBuffer()
 
-  let data = state.pty.readFromPty()
-  if data.len > 0:
+  var updated = false
+  var bytesRead = 0
+  while bytesRead < maxPtyReadBytesPerPoll:
+    let data = state.pty.readFromPty()
+    if data.len == 0:
+      break
     state.grid.processOutput(data)
+    bytesRead += data.len
+    updated = true
+
+  if updated:
     state.flushPendingResponses()
     state.needsBufferRefresh = true
     return true
