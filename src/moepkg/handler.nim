@@ -501,10 +501,10 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
   let mouse = event.mouse
 
-  # Only handle left button, middle button press and wheel events
+  # Middle-click paste is intercepted upstream in handleEvent.
   if mouse.button notin {
-    mouse_logic.MouseButton.Left, mouse_logic.MouseButton.Middle,
-    mouse_logic.MouseButton.WheelUp, mouse_logic.MouseButton.WheelDown,
+    mouse_logic.MouseButton.Left, mouse_logic.MouseButton.WheelUp,
+    mouse_logic.MouseButton.WheelDown,
   }:
     return false
   if mouse.kind != celina.MouseEventKind.Press:
@@ -640,8 +640,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             e.syncActiveWindow()
 
           e.cursor = pos
-          if mouse.button == mouse_logic.MouseButton.Middle:
-            e.middleClickPaste()
           return true
 
       return false
@@ -688,8 +686,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     let pos = posOpt.get
     # e.cursor= sets both state.cursor and activeWindow.cursor
     e.cursor = pos
-    if mouse.button == mouse_logic.MouseButton.Middle:
-      e.middleClickPaste()
     return true
 
   # Handle mouse click in Filer mode
