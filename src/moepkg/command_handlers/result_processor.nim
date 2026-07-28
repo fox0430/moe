@@ -42,14 +42,6 @@ import
 import editor_ops, handler_result, handler_manager
 
 type
-  OverlayExitAction* = enum
-    ## Post-processResult teardown for a Command-overlay dispatch.
-    oxaAppExit ## processResult returned false; wrapper skips teardown
-    oxaExitToNormal ## exitOverlay + setMode(Normal): one-shot actions
-    oxaExitToNewMode ## exitOverlay only; per-kind proc already set target mode
-    oxaExitAndResync ## exitOverlay + setMode(state.mode): base-mode resync
-    oxaHandledGeneric ## hrHandled/hrUnhandled/hrError: inspect r.modeTransition
-
   ReplayOutcome* = enum
     ## Outcome from a single replayed key, after full processResult side effects.
     roContinue
@@ -72,55 +64,6 @@ const ModesNeedingContext = {
 var overlayPlaybackHook*: OverlayPlaybackHook = nil
 
 proc executeCommandOverlay*(e: Editor, commandText: string): bool
-
-proc classifyOverlayExit*(r: HandlerResult): OverlayExitAction =
-  ## Pure lookup from `HandlerResultKind` to the wrapper's post-processResult
-  ## action. Case must be exhaustive so a newly added kind fails to compile
-  ## here until classified.
-  case r.kind
-  of hrQuit, hrCquit:
-    oxaAppExit
-  of hrHandled, hrUnhandled, hrError:
-    oxaHandledGeneric
-  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrJumpList, hrChanges,
-      hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat,
-      hrLspRestart, hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
-      hrLspCallHierarchyOutgoing:
-    oxaExitToNormal
-  of hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
-      hrEnterBufferManager, hrEnterBackupManager, hrRecentFile, hrDebug,
-      hrEnterBookmarkManager, hrConfig:
-    oxaExitToNewMode
-  of hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrNew, hrVnew, hrEdit,
-      hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
-      hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll, hrSaveAndQuit,
-      hrSaveAllAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
-      hrBuffer, hrBufferDelete, hrStripWhitespace, hrOnlyWindow, hrEnterFileTree:
-    oxaExitAndResync
-  of hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
-      hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh,
-      hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
-      hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
-      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
-      hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrBufferManagerSelectBuffer,
-      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrBookmarkManagerJump,
-      hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrBackupManagerRestore,
-      hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
-      hrBackupManagerQuit, hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFileOpenFile,
-      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight,
-      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
-      hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
-      hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
-      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-      hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
-      hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
-      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList:
-    # Kinds produced from within per-mode dispatchers (not Command overlay);
-    # if they ever reach the overlay path, resync to base mode.
-    # hrMap* are folded to hrHandled/hrError in handleCommandMode so this arm
-    # is defensive only.
-    oxaExitAndResync
 
 proc modeSwitchEntry(mode: EditorMode): Option[HandlerResult] =
   ## Entry result for the modes a `mode_switch` keybinding can name that build
@@ -1790,9 +1733,9 @@ proc handleInsertNormalReturn(e: Editor) =
 
 proc executeCommandOverlay*(e: Editor, commandText: string): bool =
   ## Full lifecycle of a Command-overlay Enter: pre-teardown, dispatch,
-  ## side effects via processResult, teardown driven by classifyOverlayExit,
-  ## then Insert-Normal recovery. Returns false when the caller should stop
-  ## the main loop (app quit).
+  ## side effects via processResult, teardown driven by `r.group`, then
+  ## Insert-Normal recovery. Returns false when the caller should stop the
+  ## main loop (app quit).
   # 1. pre-teardown (kind-independent)
   e.state.commandCompletionManager.cancelCompletion()
   if e.state.ui.substitutePreview.isActive:
@@ -1822,18 +1765,18 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
     return false
 
   # 5. teardown
-  case classifyOverlayExit(r)
-  of oxaAppExit:
+  case r.group
+  of hrgAppExit:
     return false # unreachable — processResult would have returned false
-  of oxaExitToNormal:
+  of hrgExitToNormal:
     e.state.exitOverlay()
     e.setMode(EditorMode.Normal)
-  of oxaExitToNewMode:
+  of hrgExitToNewMode:
     e.state.exitOverlay()
-  of oxaExitAndResync:
+  of hrgExitAndResync:
     e.state.exitOverlay()
     e.setMode(e.state.mode)
-  of oxaHandledGeneric:
+  of hrgHandledGeneric:
     e.state.exitOverlay()
     let t = r.getModeTransition()
     # `ModesNeedingContext` targets were refused by processResult; re-applying

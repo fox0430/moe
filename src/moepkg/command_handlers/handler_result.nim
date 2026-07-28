@@ -32,6 +32,16 @@ import ../buffer/core
 import ../lsp/protocol/types as lspTypes
 
 type
+  HandlerResultGroup* = enum
+    ## Post-dispatch classification of a HandlerResult. The overlay wrapper
+    ## and any other consumer that needs to route by category should read this
+    ## instead of inspecting individual kinds.
+    hrgAppExit ## App is quitting; skip further teardown.
+    hrgHandledGeneric ## Generic Handled/Unhandled/Error; consult modeTransition.
+    hrgExitToNormal ## One-shot Command-mode action; overlay exits to Normal.
+    hrgExitToNewMode ## Kind proc already set the target mode; overlay just exits.
+    hrgExitAndResync ## Overlay exits and the wrapper resyncs to the current mode.
+
   HandlerResultKind* = enum
     hrHandled # Command was handled successfully
     hrQuit # Application should quit
@@ -449,3 +459,52 @@ proc getStatusMessage*(hrResult: HandlerResult): string =
   of hrHandled: hrResult.statusMessage
   of hrError: hrResult.errorMessage
   else: ""
+
+proc group*(k: HandlerResultKind): HandlerResultGroup =
+  ## Category of `k` for post-dispatch routing. Exhaustive over
+  ## `HandlerResultKind`, so a newly added kind fails to compile here until it
+  ## is classified.
+  case k
+  of hrQuit, hrCquit:
+    hrgAppExit
+  of hrHandled, hrUnhandled, hrError:
+    hrgHandledGeneric
+  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrJumpList, hrChanges,
+      hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat,
+      hrLspRestart, hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
+      hrLspCallHierarchyOutgoing:
+    hrgExitToNormal
+  of hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
+      hrEnterBufferManager, hrEnterBackupManager, hrRecentFile, hrDebug,
+      hrEnterBookmarkManager, hrConfig:
+    hrgExitToNewMode
+  of hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrNew, hrVnew, hrEdit,
+      hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
+      hrShellCommand, hrMan, hrBackground, hrSave, hrSaveAll, hrSaveAndQuit,
+      hrSaveAllAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
+      hrBuffer, hrBufferDelete, hrStripWhitespace, hrOnlyWindow, hrEnterFileTree,
+      hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
+      hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh,
+      hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
+      hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
+      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
+      hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrBufferManagerSelectBuffer,
+      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrBookmarkManagerJump,
+      hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrBackupManagerRestore,
+      hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
+      hrBackupManagerQuit, hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFileOpenFile,
+      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight,
+      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
+      hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
+      hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
+      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+      hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
+      hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
+      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrMapAdd,
+      hrMapRemove, hrMapClear, hrMapList:
+    hrgExitAndResync
+
+proc group*(r: HandlerResult): HandlerResultGroup =
+  ## `r`'s category. Same values as `group(kind)`; supplied so consumers
+  ## already holding a HandlerResult don't need to reach into `.kind`.
+  r.kind.group
