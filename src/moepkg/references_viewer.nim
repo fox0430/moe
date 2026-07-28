@@ -27,7 +27,7 @@
 
 import std/[strformat, strutils]
 
-import buffer, list_viewer
+import buffer/core, list_viewer
 import types/references_viewer_types
 
 export references_viewer_types

@@ -34,7 +34,7 @@ import std/[options, tables, monotimes, times]
 
 import pkg/results
 
-import buffer, git_diff
+import buffer/core, git_diff
 import types/git_cache_types
 
 export git_cache_types

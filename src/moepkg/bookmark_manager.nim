@@ -22,7 +22,7 @@
 
 import std/[options, unicode]
 
-import buffer, list_viewer
+import buffer/core, list_viewer
 import types/bookmark_manager_types
 
 export bookmark_manager_types

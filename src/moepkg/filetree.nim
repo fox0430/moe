@@ -25,7 +25,7 @@ import std/[os, options, sets, strutils, tables, times, unicode]
 
 import pkg/celina
 
-import buffer, highlight, color, filer, dir_scan, unicode_utils
+import buffer/core, highlight, color, filer, dir_scan, unicode_utils
 
 import types/filetree_types
 export filetree_types

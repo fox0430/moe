@@ -24,7 +24,7 @@
 
 import std/[strformat, options, os, strutils, tables]
 
-import buffer, list_viewer, lsp_service, unicode_utils
+import buffer/core, list_viewer, lsp_service, unicode_utils
 import lsp/protocol/types as lspTypes
 import types/callhierarchy_viewer_types
 

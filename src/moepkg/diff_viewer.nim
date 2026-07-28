@@ -24,7 +24,7 @@ import std/[osproc, strutils, os]
 
 import pkg/results
 
-import buffer, highlight, list_viewer
+import buffer/core, highlight, list_viewer
 import syntax/tokenizer
 import types/diff_viewer_types
 

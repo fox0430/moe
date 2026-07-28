@@ -24,7 +24,7 @@
 
 import std/options
 
-import buffer, key_bindings
+import buffer/core, key_bindings
 import picker/nav
 import types/list_viewer_types
 

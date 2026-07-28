@@ -22,7 +22,7 @@
 
 import std/options
 
-import buffer, list_viewer
+import buffer/core, list_viewer
 import types/buffer_manager_types
 
 export buffer_manager_types

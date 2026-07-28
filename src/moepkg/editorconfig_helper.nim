@@ -26,7 +26,7 @@ import std/[options, tables, strutils, os]
 
 import pkg/editorconfig
 
-import buffer, config, logger
+import buffer/core, config, logger
 
 const MaxTabWidth = 16
   ## Matches the global config cfgMax for Standard.tabStop/shiftWidth.
