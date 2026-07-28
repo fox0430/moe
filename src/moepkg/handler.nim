@@ -248,6 +248,20 @@ proc handleDebugModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   of dvrHandled, dvrUnhandled, dvrError:
     return true
 
+proc cursorAfterPaste(startPos: BufferPosition, pastedText: string): BufferPosition =
+  ## Iterate by rune: cursor.column is a rune index everywhere
+  ## (insertTextWithNewlines/deleteChar), so byte iteration would over-advance
+  ## on multibyte text.
+  var line = startPos.line
+  var column = startPos.column
+  for r in pastedText.runes:
+    if r == Rune('\n'):
+      line += 1
+      column = 0
+    else:
+      column += 1
+  BufferPosition(line: line, column: column)
+
 proc handlePasteEvent*(e: Editor, event: Event): bool =
   ## Handle paste events from Bracketed Paste Mode
   ## Inserts pasted text without triggering auto-indentation
@@ -285,23 +299,9 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
         e.state.statusMessage = "Paste failed: " & transactionResult.error
         return true
 
-    var pos = e.cursor
+    let pos = e.cursor
     discard activeBuffer.insertText(pos, pastedText)
-
-    # Calculate new cursor position after paste. Iterate by rune: cursor.column
-    # is a rune index everywhere (insertTextWithNewlines/deleteChar), so byte
-    # iteration would over-advance on multibyte text.
-    var newLine = pos.line
-    var newColumn = pos.column
-    for r in pastedText.runes:
-      if r == Rune('\n'):
-        newLine += 1
-        newColumn = 0
-      else:
-        newColumn += 1
-
-    e.activeWindow.cursor.line = newLine
-    e.activeWindow.cursor.column = newColumn
+    e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
 
     if ownTransaction:
       discard activeBuffer.commitTransaction()
@@ -424,23 +424,9 @@ proc middleClickPaste(e: Editor) =
       e.state.statusMessage = "Paste failed: " & transactionResult.error
       return
 
-  var pos = e.cursor
+  let pos = e.cursor
   discard activeBuffer.insertText(pos, pastedText)
-
-  # Calculate new cursor position after paste. Iterate by rune: cursor.column
-  # is a rune index everywhere (insertTextWithNewlines/deleteChar), so byte
-  # iteration would over-advance on multibyte text.
-  var newLine = pos.line
-  var newColumn = pos.column
-  for r in pastedText.runes:
-    if r == Rune('\n'):
-      newLine += 1
-      newColumn = 0
-    else:
-      newColumn += 1
-
-  e.activeWindow.cursor.line = newLine
-  e.activeWindow.cursor.column = newColumn
+  e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
 
   if ownTransaction:
     discard activeBuffer.commitTransaction()

@@ -2782,6 +2782,50 @@ proc makeMiddleClickEvent(x, y: int): Event =
     ),
   )
 
+suite "cursorAfterPaste":
+  test "Empty text leaves cursor at start position":
+    let start = BufferPosition(line: 3, column: 7)
+    let after = cursorAfterPaste(start, "")
+    check after.line == 3
+    check after.column == 7
+
+  test "Single-line ASCII advances column by rune count":
+    let start = BufferPosition(line: 0, column: 5)
+    let after = cursorAfterPaste(start, " world")
+    check after.line == 0
+    check after.column == 11
+
+  test "Multibyte runes advance column by rune, not byte":
+    # "café" is 4 runes / 5 bytes: byte iteration would land at column 5.
+    let start = BufferPosition(line: 0, column: 0)
+    let after = cursorAfterPaste(start, "café")
+    check after.line == 0
+    check after.column == 4
+
+  test "LF resets column and increments line":
+    let start = BufferPosition(line: 2, column: 4)
+    let after = cursorAfterPaste(start, "\nabc")
+    check after.line == 3
+    check after.column == 3
+
+  test "Multiple newlines advance across several lines":
+    let start = BufferPosition(line: 0, column: 2)
+    let after = cursorAfterPaste(start, "a\nbb\nccc")
+    check after.line == 2
+    check after.column == 3
+
+  test "Trailing newline lands cursor at column 0 of next line":
+    let start = BufferPosition(line: 1, column: 3)
+    let after = cursorAfterPaste(start, "xy\n")
+    check after.line == 2
+    check after.column == 0
+
+  test "Start column is preserved when first rune stays on same line":
+    let start = BufferPosition(line: 4, column: 10)
+    let after = cursorAfterPaste(start, "z")
+    check after.line == 4
+    check after.column == 11
+
 suite "middleClickPaste":
   test "Clipboard disabled":
     let e = createTestEditorForMiddleClick("hello")
