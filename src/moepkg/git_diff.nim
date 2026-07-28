@@ -26,7 +26,7 @@ import std/[options, osproc, strutils, tables, os, tempfiles, streams, times]
 
 import pkg/results
 
-import buffer, logger
+import buffer/[core, file_io, markers], logger
 
 const
   DEFAULT_GIT_DIFF_TIMEOUT* = 5.0 ## Default timeout for git diff operations in seconds

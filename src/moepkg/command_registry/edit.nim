@@ -24,7 +24,8 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, buffer, motion, modes, registers, logger, clipboard, unicode_utils]
+import ../[types, motion, modes, registers, logger, clipboard, unicode_utils]
+import ../buffer/[core, edit, undo]
 
 import core, operator_engine
 

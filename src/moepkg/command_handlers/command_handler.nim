@@ -26,7 +26,8 @@
 
 import std/[options, os, strutils]
 
-import ../[buffer, modes, command_line, command_config, command_registry, config_loader]
+import ../[modes, command_line, command_config, command_registry, config_loader]
+import ../buffer/[core, edit, fold, undo]
 import ../setting_options
 import handler_types, handler_result
 export setting_options, handler_types

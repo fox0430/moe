@@ -22,7 +22,7 @@
 ## about the editor's OWN config, not `.editorconfig` files — those live in
 ## `editorconfig_helper`.
 
-import buffer, config
+import buffer/[core, file_io, highlight], config
 
 proc applyHighlightCap*(buffer: TextBuffer, config: EditorConfig) =
   ## Seed the per-line tokenization cap from config. Must run BEFORE `loadFile`,

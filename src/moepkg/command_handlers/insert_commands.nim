@@ -23,7 +23,8 @@
 ## that are independent of CommandContext for better testability
 
 import std/[options, strutils, unicode]
-import ../[buffer, types, modes, unicode_utils]
+import ../[types, modes, unicode_utils]
+import ../buffer/[core, edit, undo]
 import smart_indent
 
 proc getLineIndent*(line: string): string =

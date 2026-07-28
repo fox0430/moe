@@ -26,7 +26,7 @@ import std/[options, monotimes, tables]
 
 import pkg/results
 
-import types/editor_types, editor_lsp, lsp_integration, hover_popup, buffer
+import types/editor_types, editor_lsp, lsp_integration, hover_popup, buffer/[core, markers]
 
 const HoverValidModes* =
   {EditorMode.Normal, EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}

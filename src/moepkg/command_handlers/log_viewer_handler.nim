@@ -25,7 +25,8 @@
 
 import std/[options, unicode]
 
-import ../[types, key_bindings, buffer, search_utils]
+import ../[types, key_bindings, search_utils]
+import ../buffer/[core, search]
 import handler_types
 export handler_types
 

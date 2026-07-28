@@ -25,7 +25,7 @@
 
 import std/[os, times, json, options, strformat]
 
-import types/editor_types, buffer, backup
+import types/editor_types, buffer/[core, file_io], backup
 
 const DefaultCrashRecoveryDir* = "~/.cache/moe/crash_recovery"
 

@@ -23,7 +23,8 @@ import std/options
 
 import pkg/results
 
-import ../[types, buffer, motion, modes, render_utils]
+import ../[types, motion, modes, render_utils]
+import ../buffer/[core, fold]
 
 import core
 

@@ -26,7 +26,8 @@ import std/[options, unicode, monotimes, times]
 
 import pkg/results
 
-import buffer, types, unicode_utils, logger, render_utils, config, modes
+import types, unicode_utils, logger, render_utils, config, modes
+import buffer/[core, edit, fold, undo]
 import visible_rows
 
 type
@@ -38,7 +39,7 @@ type
 
   # Motion executor - handles only motion logic
   MotionExecutor* = ref object
-    buffer*: buffer.TextBuffer
+    buffer*: core.TextBuffer
 
   # Viewport manager - handles viewport updates
   ViewportManager* = ref object
@@ -61,7 +62,7 @@ const tagScanInitialRadius = 128
   ## window quadruples until the enclosing pair is found, so the common case
   ## touches only nearby lines instead of flattening the whole buffer.
 
-proc newMotionExecutor*(buffer: buffer.TextBuffer): MotionExecutor =
+proc newMotionExecutor*(buffer: core.TextBuffer): MotionExecutor =
   MotionExecutor(buffer: buffer)
 
 proc maxCursorColumn(lineCharLen: int, mode: EditorMode): int =
@@ -919,7 +920,7 @@ proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
 
 proc clampPosition*(
-    mgr: CursorManager, pos: CursorPosition, buf: buffer.TextBuffer
+    mgr: CursorManager, pos: CursorPosition, buf: core.TextBuffer
 ): CursorPosition =
   ## Ensure cursor position is within valid bounds
   result = pos
@@ -965,7 +966,7 @@ proc updateViewport*(
     showStatusLine: bool = true,
     reservedLines: int = -1, # -1 means auto-calculate from showStatusLine
     lineWrap: bool = false,
-    buffer: buffer.TextBuffer = nil,
+    buffer: core.TextBuffer = nil,
     viewportOffset: int = 0,
     tabStop: int = 4,
 ) =
@@ -1212,7 +1213,7 @@ proc updateScrollAnimation*(
   return (true, newCursorLine)
 
 proc newMotionController*(
-    buf: buffer.TextBuffer, state: EditorState, viewport: ViewPort
+    buf: core.TextBuffer, state: EditorState, viewport: ViewPort
 ): MotionController =
   MotionController(
     executor: newMotionExecutor(buf),

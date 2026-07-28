@@ -26,7 +26,7 @@
 
 import std/options
 
-import buffer
+import buffer/[core, markers]
 
 const
   MarkerLen = 7

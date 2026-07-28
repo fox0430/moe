@@ -22,7 +22,7 @@ import std/[os, strformat, options, strutils]
 import pkg/[results, chronos]
 
 import syntax/tokenizer
-import config, buffer, background_process
+import config, buffer/[core, file_io], background_process
 
 export SourceLanguage
 
