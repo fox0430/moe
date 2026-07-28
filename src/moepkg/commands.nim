@@ -17,13 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import types, buffer, motion
+import types, buffer/core, motion
 
-proc buffer*(mc: MotionController): buffer.TextBuffer =
+proc buffer*(mc: MotionController): core.TextBuffer =
   ## Buffer the motion controller currently targets.
   mc.executor.buffer
 
-proc setBuffer*(mc: MotionController, b: buffer.TextBuffer) =
+proc setBuffer*(mc: MotionController, b: core.TextBuffer) =
   ## Point the motion controller at `b`.
   mc.executor.buffer = b
 

@@ -24,7 +24,7 @@
 
 import std/[strformat, strutils, options]
 
-import buffer, list_viewer
+import buffer/core, list_viewer
 import lsp/protocol/[types, enums]
 import types/documentsymbol_viewer_types
 

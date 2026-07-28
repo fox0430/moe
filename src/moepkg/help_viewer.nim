@@ -23,7 +23,7 @@
 
 import std/[strutils, options]
 
-import buffer, help_generator
+import buffer/core, help_generator
 
 import types/help_viewer_types
 export help_viewer_types

@@ -26,7 +26,7 @@ import std/[os, options, uri, strutils]
 
 import pkg/results
 
-import buffer, list_viewer
+import buffer/core, list_viewer
 import types/recent_file_mode_types
 
 export recent_file_mode_types

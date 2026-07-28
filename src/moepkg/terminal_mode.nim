@@ -25,7 +25,7 @@ import std/[options, os]
 import pkg/results
 
 import terminal/[pty, ansi_parser]
-import buffer
+import buffer/core
 
 type
   TerminalSubMode* = enum
