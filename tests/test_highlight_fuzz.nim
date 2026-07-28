@@ -574,6 +574,41 @@ proc tclCorpus(): seq[seq[string]] =
     @["# a comment", "set cont \"a \\", "b\"", "foreach i {1 2 3} {puts $i}"],
   ]
 
+proc goCorpus(): seq[seq[string]] =
+  ## Go raw strings (backtick-delimited) span lines and resume through
+  ## `g.state == gtLongStringLit`, so an edit to the opening backtick has to
+  ## re-colour every line to the matching terminator. Also covers block
+  ## comments across lines, interpreted strings with escapes (line-bounded),
+  ## rune literals, and prefixed / hex-exponent numbers with `_` separators.
+  result = @[
+    @[
+      "package main", "", "import \"fmt\"", "",
+      "func main() { fmt.Println(\"hello\", 0xFF, 1_000) }",
+    ],
+    @[
+      "package p", "var doc = `raw", "multi line", "value` + \"end\"",
+      "const c = 0b1010",
+    ],
+    @[
+      "/* block", " * comment body */", "func f() int { return 0o755 }", "",
+      "// line comment",
+    ],
+    @[
+      "package p", "var s = \"tab\\there\\x41\"", "var r = '\\u0041'",
+      "for i := 0; i < 3; i++ { _ = i }", "var h = 0x1p-4",
+    ],
+    # Adversarial raw-string shapes: nested-looking backticks (Go does not
+    # nest — the first ` closes), an empty raw string, and an opening
+    # delimiter with nothing after it on its line.
+    @["var a = `outer ` + \"middle\" + `still`", "var b = ``", "var c = `", "", "`"],
+    # Interpreted strings are line-bounded, so a trailing backslash ends the
+    # string and the next line resumes as code.
+    @[
+      "package p", "var s = \"trailing \\", "still code here", "var n = len(s)",
+      "func g() {}",
+    ],
+  ]
+
 proc luaCorpus(): seq[seq[string]] =
   ## Lua long brackets are the interesting part: `[[ ]]` strings and
   ## `--[==[ ]==]` comments span lines and resume through
@@ -975,6 +1010,9 @@ suite "Incremental Highlight Fuzz":
   test "Tcl: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langTcl, tclCorpus(), iters, baseSeed)
 
+  test "Go: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langGo, goCorpus(), iters, baseSeed)
+
   test "Lua: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langLua, luaCorpus(), iters, baseSeed)
 
@@ -1131,6 +1169,18 @@ suite "Incremental Highlight Line-Bounded Strings":
   test "Tcl: escape ending at EOL does not emit an empty token":
     check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langTcl, "tcl esc")
 
+  test "Go: editing below a multi-line raw string resumes inside it":
+    let buf = @["var doc = `", "line one", "line two", "line three`", "var _ = doc"]
+    check checkResumeEquivalence(buf, 2, "edited line", langGo, "go raw string")
+
+  test "Go: editing below a multi-line block comment resumes inside it":
+    let buf = @["/* opens", "still body", "more body", "still body */", "var x = 1"]
+    check checkResumeEquivalence(buf, 2, "edited line", langGo, "go block comment")
+
+  test "Go: escape ending at EOL does not emit an empty token":
+    let buf = @["var s = \"a \\", "more\"", "var n = len(s)", "var _ = n", "var _ = s"]
+    check checkResumeEquivalence(buf, 3, "var y = 1", langGo, "go esc")
+
   test "Lua: editing inside a levelled long comment keeps the bracket level":
     # The reparse enters line 3 from its cached boundary state, which must
     # still carry `longBracketLevel == 2` — otherwise the `]]` on line 2 is
@@ -1215,6 +1265,7 @@ suite "Monotonic-advance guard":
       (SourceLanguage.langFish, fishCorpus()),
       (SourceLanguage.langTcl, tclCorpus()),
       (SourceLanguage.langLua, luaCorpus()),
+      (SourceLanguage.langGo, goCorpus()),
     ]
     for (lang, corpus) in corpora:
       for buf in corpus:

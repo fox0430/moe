@@ -1586,6 +1586,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langCsharp
   of ".dockerfile":
     return SourceLanguage.langDockerfile
+  of ".go":
+    return SourceLanguage.langGo
   of ".cabal", ".hs":
     return SourceLanguage.langHaskell
   of ".html":

@@ -1402,6 +1402,9 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for Tcl .itk":
     check detectLanguage("widget.itk") == SourceLanguage.langTcl
 
+  test "detectLanguage for Go .go":
+    check detectLanguage("main.go") == SourceLanguage.langGo
+
   test "detectLanguage for Lua .lua":
     check detectLanguage("init.lua") == SourceLanguage.langLua
 

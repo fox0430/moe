@@ -52,6 +52,8 @@ proc languageExtension(lang: SourceLanguage): Result[string, string] =
     Result[string, string].ok "rs"
   of SourceLanguage.langLua:
     Result[string, string].ok "lua"
+  of SourceLanguage.langGo:
+    Result[string, string].ok "go"
   else:
     Result[string, string].err "Unknown language"
 
@@ -186,6 +188,11 @@ proc luaQuickRunCommand(
 ): BackgroundProcessCommand =
   BackgroundProcessCommand(cmd: "lua", args: @[path])
 
+proc goQuickRunCommand(
+    path: string, settings: QuickRunConfig
+): BackgroundProcessCommand =
+  BackgroundProcessCommand(cmd: "go", args: @["run", path])
+
 proc rustQuickRunCommand(
     path: string, settings: QuickRunConfig
 ): BackgroundProcessCommand =
@@ -222,6 +229,8 @@ proc quickRunCommand(
     command = rustQuickRunCommand(path, settings)
   of SourceLanguage.langLua:
     command = luaQuickRunCommand(path, settings)
+  of SourceLanguage.langGo:
+    command = goQuickRunCommand(path, settings)
   else:
     let shebang = parseShebang(buffer)
     if shebang.isSome:

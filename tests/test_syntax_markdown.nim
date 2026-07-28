@@ -580,6 +580,34 @@ suite "syntax_markdown - code block edge cases":
         foundBold = true
     check foundBold
 
+  test "unclosed Go raw string does not swallow the closing ``` fence":
+    # Go's raw string shares its delimiter with the markdown fence. Without
+    # the fence taking precedence, `unclosed` would consume the fence's first
+    # backtick and the rest of the document would render as Go code.
+    let tokens = collectTokens("```go\n`unclosed\n```\n# heading")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1] == (gtKeyword, "go")
+    var sawClosingFence = false
+    var sawHeadingMarker = false
+    for (kind, text) in tokens:
+      if kind == gtSpecialVar and text == "```":
+        sawClosingFence = true
+      if kind == gtBuiltin and text == "#" and sawClosingFence:
+        sawHeadingMarker = true
+    check sawClosingFence
+    check sawHeadingMarker
+
+  test "well-formed multi-line Go raw string in ```go block":
+    # Regression guard for the fix: closing ` on a subsequent line must still
+    # end the raw string normally when no fence intervenes.
+    let tokens = collectTokens("```go\n`line1\nline2`\n```")
+    var sawRawString = false
+    for (kind, _) in tokens:
+      if kind == gtLongStringLit:
+        sawRawString = true
+    check sawRawString
+    check tokens[^1] == (gtSpecialVar, "```")
+
 suite "syntax_markdown - bold edge cases":
   test "** followed by space is not bold":
     let tokens = collectTokens("** text**")
