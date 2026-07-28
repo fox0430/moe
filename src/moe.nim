@@ -59,7 +59,7 @@ proc pollTerminalWindows*(e: Editor) =
           # so an exit only happens when the user quits the shell itself.
           # Tear down the tab in every case.
           e.closeTerminalBuffer(window.buffer.id)
-          return
+          continue
 
 proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
   ## Execute startup window actions on first render when terminal size is known.
