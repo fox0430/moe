@@ -36,6 +36,10 @@ type PtyHandle* = ref object
 const maxPtyWriteBufferBytes* = 64 * 1024
   ## Bound on writeBuffer so a wedged child can't grow it without limit.
 
+const maxPtyReadBytesPerPoll* = 256 * 1024
+  ## Byte cap for one pollOutput drain. Bounds tick cost so a runaway
+  ## child (`yes`, `cat` big file) can't monopolize a render frame.
+
 # POSIX PTY bindings
 when defined(macosx):
   proc forkpty(
