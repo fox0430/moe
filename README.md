@@ -33,6 +33,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - C
   - C++
   - C#
+  - Go
   - Haskell
   - Java
   - JavaScript

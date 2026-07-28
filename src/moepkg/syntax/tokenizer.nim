@@ -215,6 +215,7 @@ type
     langFish
     langGitRebaseTodo
     langGitignore
+    langGo
     langHaskell
     langHtml
     langHyprland
@@ -274,6 +275,7 @@ const
     langFish: "Fish",
     langGitRebaseTodo: "git-rebase-todo",
     langGitignore: "gitignore",
+    langGo: "Go",
     langHaskell: "Haskell",
     langHtml: "HTML",
     langHyprland: "Hyprland",
@@ -317,6 +319,7 @@ proc getSourceLanguage*(name: string): SourceLanguage =
   of "md": langMarkdown
   of "cpp", "cxx": langCpp
   of "cs", "csharp": langCsharp
+  of "golang": langGo
   of "hs": langHaskell
   of "luau": langLua
   of "tex", "latex": langLatex
@@ -505,7 +508,7 @@ proc isKeyword*(x: openArray[string], y: string): int =
 
 import
   syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp, syntax_csharp,
-  syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_gitignore,
+  syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_gitignore, syntax_go,
   syntax_haskell, syntax_html, syntax_java, syntax_javascript, syntax_latex,
   syntax_lisp, syntax_lua, syntax_markdown, syntax_nim, syntax_python, syntax_rust,
   syntax_fish, syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml,
@@ -526,6 +529,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langFish: g.fishNextToken
   of langGitRebaseTodo: g.gitRebaseTodoNextToken
   of langGitignore: g.gitignoreNextToken
+  of langGo: g.goNextToken
   of langHaskell: g.haskellNextToken
   of langHtml: g.htmlNextToken
   of langHyprland: g.hyprlandNextToken

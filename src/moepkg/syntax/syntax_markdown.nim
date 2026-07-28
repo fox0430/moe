@@ -20,10 +20,10 @@
 import
   tokenizer, syntax_latex, syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp,
   syntax_csharp, syntax_diff, syntax_dockerfile, syntax_fish, syntax_git_rebase_todo,
-  syntax_gitignore, syntax_haskell, syntax_html, syntax_hyprland, syntax_java,
-  syntax_javascript, syntax_lisp, syntax_log, syntax_lua, syntax_nim, syntax_python,
-  syntax_rust, syntax_shell, syntax_tcl, syntax_toml, syntax_yaml, syntax_json,
-  syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
+  syntax_gitignore, syntax_go, syntax_haskell, syntax_html, syntax_hyprland,
+  syntax_java, syntax_javascript, syntax_lisp, syntax_log, syntax_lua, syntax_nim,
+  syntax_python, syntax_rust, syntax_shell, syntax_tcl, syntax_toml, syntax_yaml,
+  syntax_json, syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
 
 proc codeBlockNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -37,6 +37,7 @@ proc codeBlockNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langFish: g.fishNextToken
   of langGitRebaseTodo: g.gitRebaseTodoNextToken
   of langGitignore: g.gitignoreNextToken
+  of langGo: g.goNextToken
   of langHaskell: g.haskellNextToken
   of langHtml: g.htmlNextToken
   of langHyprland: g.hyprlandNextToken
@@ -216,9 +217,18 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           lexer.state = gtNone
         inc position
     of '`':
+      # Go raw strings share the backtick with the fence — ``` can never
+      # appear inside a Go raw string body, so the fence wins even when Go
+      # left state = gtLongStringLit. Other sub-languages (Nim, Python) can
+      # legitimately embed ``` inside a multi-line string, so keep the state
+      # check for them.
+      let goFenceClose =
+        lexer.lang.markdown.codeBlockLang == langGo and lexer.state == gtLongStringLit and
+        lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`'
       if lexer.lang.markdown.codeBlockLang != langNone and
           lexer.state in
-          {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData}:
+          {gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData} and
+          not goFenceClose:
         codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
         return
       if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
@@ -229,6 +239,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           inc position
         lexer.lang.markdown.inCodeBlock = false
         lexer.lang.markdown.codeBlockLang = langNone
+        lexer.state = gtNone
       elif lexer.lang.markdown.codeBlockLang != langNone:
         codeBlockNextToken(lexer, lexer.lang.markdown.codeBlockLang)
         return
