@@ -27,6 +27,14 @@ import key_bindings/registry
 export registry.KeyModifier
 
 type
+  GridRegion* = object
+    ## Rectangular region in Moe's rendered cell grid.
+    ## `rows` and `columns` are always non-negative for regions returned by Moe.
+    row*: int
+    column*: int
+    rows*: int
+    columns*: int
+
   PointerButton* = enum
     pbPrimary
     pbMiddle
@@ -52,6 +60,27 @@ type
     column*: int
     deltaRows*: int
     modifiers*: set[KeyModifier]
+
+  ScrollOutcome* = object
+    ## Result of applying a semantic row scroll.
+    ##
+    ## A GUI bridge can translate `region` when `viewportRowsMoved != 0`, while
+    ## repainting ordinary cell changes (such as cursor movement) without moving
+    ## the surrounding tab/status rows. Movement fields are signed: positive is
+    ## toward later buffer rows.
+    handled*: bool
+    region*: GridRegion
+    requestedRows*: int
+    appliedRows*: int
+    viewportRowsMoved*: int
+
+func initGridRegion*(row, column, rows, columns: int): GridRegion =
+  GridRegion(
+    row: row,
+    column: column,
+    rows: max(rows, 0),
+    columns: max(columns, 0),
+  )
 
 func initPointerInput*(
     row, column: int,

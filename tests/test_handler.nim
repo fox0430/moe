@@ -1330,11 +1330,87 @@ suite "frontend-neutral pointer and scroll input":
     )
     e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
 
-    check e.handleScrollInput(initScrollInput(2, 10, 4))
+    let down = e.handleScrollInput(initScrollInput(2, 10, 4))
+    check down.handled
+    check down.requestedRows == 4
+    check down.appliedRows == 4
+    check down.viewportRowsMoved == 0
     check e.windowManager.windows[0].cursor.line == 5
 
-    check e.handleScrollInput(initScrollInput(2, 10, -2))
+    let up = e.handleScrollInput(initScrollInput(2, 10, -2))
+    check up.handled
+    check up.requestedRows == -2
+    check up.appliedRows == -2
+    check up.viewportRowsMoved == 0
     check e.windowManager.windows[0].cursor.line == 3
+
+  test "outcome identifies the scrollable region and viewport movement":
+    let e = createTestEditorWithBuffer(
+      "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14"
+    )
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
+    e.screenSize.width = 40
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 2, y: 3, width: 40, height: 8, topLine: 0, leftColumn: 0)
+    e.windowManager.windows[0].cursor = BufferPosition(line: 6, column: 0)
+
+    let outcome = e.handleScrollInput(initScrollInput(5, 10, 4))
+
+    check outcome.handled
+    check outcome.region == initGridRegion(4, 2, 6, 40)
+    check outcome.requestedRows == 4
+    check outcome.appliedRows == 4
+    check outcome.viewportRowsMoved == 3
+
+  test "outcome reports the movement actually applied at a buffer edge":
+    let e = createTestEditorWithBuffer("0\n1\n2")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
+
+    let outcome = e.handleScrollInput(initScrollInput(2, 10, 8))
+
+    check outcome.handled
+    check outcome.requestedRows == 8
+    check outcome.appliedRows == 1
+    check outcome.viewportRowsMoved == 0
+
+  test "zero row input produces an unhandled outcome":
+    let e = createTestEditorWithBuffer("0\n1\n2")
+
+    let outcome = e.handleScrollInput(initScrollInput(2, 10, 0))
+
+    check not outcome.handled
+    check outcome.requestedRows == 0
+    check outcome.appliedRows == 0
+    check outcome.viewportRowsMoved == 0
+    check outcome.region == GridRegion()
+
+  test "outcome region follows the split window under the pointer":
+    let e = createTestEditorWithBuffer("left0\nleft1\nleft2\nleft3")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    e.screenSize.width = 80
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0)
+    let rightBuffer = newTextBuffer("right0\nright1\nright2\nright3\nright4")
+    let rightWindow = EditorWindow(
+      buffer: rightBuffer,
+      bufferIds: @[rightBuffer.id],
+      viewport:
+        ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+    e.windowManager.windows.add(rightWindow)
+
+    let outcome = e.handleScrollInput(initScrollInput(5, 50, 3))
+
+    check outcome.handled
+    check outcome.region == initGridRegion(0, 40, 23, 40)
+    check outcome.appliedRows == 3
+    check e.windowManager.windows[0].cursor.line == 0
+    check e.windowManager.windows[1].cursor.line == 3
 
   test "primary press uses rendered grid coordinates":
     let e = createTestEditorWithBuffer("zero\none\ntwo\nthree")

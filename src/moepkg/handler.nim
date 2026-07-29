@@ -473,38 +473,72 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
   e.state.previousMode = e.state.mode
   e.state.mode = EditorMode.Normal
 
-proc handleScrollInputCore(e: Editor, input: ScrollInput): bool =
-  ## Apply a frontend-neutral, cell-based vertical scroll.
+proc scrollTargetIndex(e: Editor, input: ScrollInput): int =
+  ## Resolve the window under a cell-coordinate scroll, falling back to active.
+  if e.windowManager.windows.len == 0:
+    return -1
+
+  result = clamp(
+    e.windowManager.activeWindowIndex, 0, e.windowManager.windows.high
+  )
+  if e.windowManager.windows.len > 1:
+    for i, window in e.windowManager.windows:
+      let vp = window.viewport
+      if input.column >= vp.x and input.column < vp.x + vp.width and
+          input.row >= vp.y and input.row < vp.y + vp.height:
+        return i
+
+proc scrollRegion(e: Editor, window: EditorWindow): GridRegion =
+  ## Grid rows belonging to scrollable window content. Tab and bottom/status
+  ## rows are deliberately excluded so a GUI bridge can leave them stationary.
+  let
+    vp = window.viewport
+    maxBottomY = findMaxBottomY(e.windowManager.windows)
+    isBottomWindow = vp.y + vp.height == maxBottomY
+    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+    reservedLines = e.calculateReservedLines(isBottomWindow)
+  initGridRegion(
+    vp.y + tabLineOffset,
+    vp.x,
+    vp.height - tabLineOffset - reservedLines,
+    vp.width,
+  )
+
+proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
+  ## Apply a frontend-neutral, cell-based vertical scroll and describe the
+  ## affected rendered region for GUI interpolation.
+  result.requestedRows = input.deltaRows
   if not e.config.standard.mouse:
-    return false
+    return
   if input.deltaRows == 0:
-    return false
+    return
+  if e.windowManager.windows.len == 0:
+    return
 
   # Handle Filer mode scroll.
   if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
+    let window = e.activeWindow
     let filerState = e.activeWindow.modeState.filer
+    let previousIndex = filerState.selectedIndex
+    let previousTopLine = window.viewport.topLine
     if filerState.entries.len > 0:
       filerState.selectedIndex =
         clamp(filerState.selectedIndex + input.deltaRows, 0, filerState.entries.high)
-    return true
+    result.handled = true
+    result.region = e.scrollRegion(window)
+    result.appliedRows = filerState.selectedIndex - previousIndex
+    result.viewportRowsMoved = window.viewport.topLine - previousTopLine
+    return
 
   # Handle text editing modes.
   if e.state.mode in {
     EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
     EditorMode.VisualBlock, EditorMode.Replace,
   }:
-    # Determine target window by pointer position.
-    var targetIdx = e.windowManager.activeWindowIndex
-    if e.windowManager.windows.len > 1:
-      for i, window in e.windowManager.windows:
-        let vp = window.viewport
-        if input.column >= vp.x and input.column < vp.x + vp.width and
-            input.row >= vp.y and input.row < vp.y + vp.height:
-          targetIdx = i
-          break
-
+    let targetIdx = e.scrollTargetIndex(input)
     let window = e.windowManager.windows[targetIdx]
     let curLine = window.cursor.line
+    let previousTopLine = window.viewport.topLine
     let maxLine = window.buffer.len - 1
     let newLine = clamp(curLine + input.deltaRows, 0, maxLine)
 
@@ -525,9 +559,14 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): bool =
         elif newLine >= window.viewport.topLine + viewportHeight:
           window.viewport.resetViewportTop(newLine - viewportHeight + 1)
 
-    return true
+    result.handled = true
+    result.region = e.scrollRegion(window)
+    result.appliedRows = newLine - curLine
+    result.viewportRowsMoved = window.viewport.topLine - previousTopLine
+    return
 
-  return true
+  result.handled = true
+  result.region = e.scrollRegion(e.activeWindow)
 
 proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
   ## Apply a frontend-neutral pointer event expressed in rendered grid cells.
@@ -737,8 +776,9 @@ proc handlePointerInput*(e: Editor, input: PointerInput): bool =
   e.prepareForInput(false)
   e.handlePointerInputCore(input)
 
-proc handleScrollInput*(e: Editor, input: ScrollInput): bool =
-  ## Handle a vertical scroll expressed as a signed number of grid rows.
+proc handleScrollInput*(e: Editor, input: ScrollInput): ScrollOutcome =
+  ## Handle a vertical scroll expressed as a signed number of grid rows and
+  ## return the movement/region metadata needed for GUI interpolation.
   e.prepareForInput(false)
   e.handleScrollInputCore(input)
 
@@ -765,9 +805,9 @@ proc handleMouseEvent*(e: Editor, event: Event): bool =
   let modifiers = celinaMouseModifiers(mouse.modifiers)
   case mouse.button
   of mouse_logic.MouseButton.WheelUp:
-    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, -3, modifiers))
+    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, -3, modifiers)).handled
   of mouse_logic.MouseButton.WheelDown:
-    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, 3, modifiers))
+    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, 3, modifiers)).handled
   of mouse_logic.MouseButton.Left:
     e.handlePointerInputCore(
       initPointerInput(mouse.y, mouse.x, modifiers = modifiers)
