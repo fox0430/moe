@@ -507,7 +507,7 @@ suite "Visual Commands - visualDelete":
 
     visualDelete(buf, state)
 
-    check state.registers.getNoNamedRegister().getContent() == "bc\nde\n"
+    check state.registers.getNoNamedRegister().getContent() == "bc\nde"
     check state.registers.getNoNamedRegister().isLine == false
 
 suite "Visual Commands - visualIndent":
