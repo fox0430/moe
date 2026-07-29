@@ -1323,6 +1323,39 @@ suite "handleMouseEvent - Mouse Disabled":
     check handled == false
     check e.windowManager.windows[0].cursor.line == 0
 
+suite "frontend-neutral pointer and scroll input":
+  test "signed row delta controls scroll distance":
+    let e = createTestEditorWithBuffer(
+      "line0\nline1\nline2\nline3\nline4\nline5\nline6"
+    )
+    e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
+
+    check e.handleScrollInput(initScrollInput(2, 10, 4))
+    check e.windowManager.windows[0].cursor.line == 5
+
+    check e.handleScrollInput(initScrollInput(2, 10, -2))
+    check e.windowManager.windows[0].cursor.line == 3
+
+  test "primary press uses rendered grid coordinates":
+    let e = createTestEditorWithBuffer("zero\none\ntwo\nthree")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+
+    let handled = e.handlePointerInput(initPointerInput(2, 8))
+
+    check handled
+    check e.cursor.line == 2
+
+  test "non-primary pointer input remains available to the host":
+    let e = createTestEditorWithBuffer("zero\none")
+
+    let handled = e.handlePointerInput(
+      initPointerInput(1, 5, button = pbSecondary)
+    )
+
+    check not handled
+    check e.cursor.line == 0
+
 suite "handleMouseEvent - Wheel Scroll":
   test "WheelDown scrolls cursor down by 3 lines":
     let e = createTestEditorWithBuffer(
@@ -3023,6 +3056,16 @@ suite "handlePasteEvent":
   proc makePasteEvent(text: string): Event =
     Event(kind: EventKind.Paste, pastedText: text)
 
+  test "frontend-neutral paste does not require a Celina event":
+    let e = createTestEditorForPaste("")
+    e.state.mode = EditorMode.Insert
+
+    discard e.handlePaste("café\r\nnext")
+
+    check $e.activeBuffer.getLine(0) == "café"
+    check $e.activeBuffer.getLine(1) == "next"
+    check e.cursor == BufferPosition(line: 1, column: 4)
+
   test "Insert mode with active transaction - paste succeeds":
     let e = createTestEditorForPaste("hello")
     e.state.mode = EditorMode.Insert
@@ -3317,6 +3360,24 @@ suite "handleKeyCombo - frontend-neutral input":
     check e.state.isSearchOverlay
     check e.state.input.search.text == "w"
     check e.state.input.search.cursor == 1
+
+  test "committed GUI text can contain composed Unicode":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Insert
+
+    discard e.handleTextInput("é🙂")
+
+    check $e.activeBuffer.getLine(0) == "é🙂"
+    check e.cursor.column == 2
+
+  test "multi-rune text advances the command cursor by runes":
+    let e = createTestEditorWithBuffer("")
+    e.state.enterCommandOverlay()
+
+    discard e.handleTextInput("λx")
+
+    check e.state.input.commandText == ":λx"
+    check e.state.input.commandCursor == 2
 
 suite "Macro recording - Command / Search overlay keys":
   # Regression: overlay dispatch used to bypass macro recording, so `qa:s/foo/bar/<CR>q`

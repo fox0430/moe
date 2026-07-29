@@ -29,13 +29,13 @@ import
   editor, editor_window_layout, key_bindings, modes, buffer, logger, types, motion,
   quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
   clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
-  pending_input, visible_rows, viewer_mode
+  pending_input, visible_rows, viewer_mode, frontend_input
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
     result_processor,
   ]
-export command_mode_handler, search_mode_handler, cursor_util
+export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
 # Wire the playback overlay hook so nested key replay routes to the overlay
 # handler when Command / Search overlay is active.
@@ -262,16 +262,12 @@ proc cursorAfterPaste(startPos: BufferPosition, pastedText: string): BufferPosit
       column += 1
   BufferPosition(line: line, column: column)
 
-proc handlePasteEvent*(e: Editor, event: Event): bool =
-  ## Handle paste events from Bracketed Paste Mode
-  ## Inserts pasted text without triggering auto-indentation
-  if event.kind != EventKind.Paste:
-    return true
-
+proc handlePasteText(e: Editor, text: string): bool =
+  ## Insert pasted text without triggering auto-indentation.
   # Normalize CRLF / lone CR to LF up front (matching loadFile) so a stray \r
   # never reaches line content and the cursor advance below counts line breaks
   # correctly. insertText normalizes again defensively for non-paste callers.
-  let pastedText = event.pastedText.normalizeNewlines()
+  let pastedText = text.normalizeNewlines()
   if pastedText.len == 0:
     return true
 
@@ -477,88 +473,70 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
   e.state.previousMode = e.state.mode
   e.state.mode = EditorMode.Normal
 
-proc handleMouseEvent(e: Editor, event: Event): bool =
-  ## Handle mouse events for cursor movement
-  ## Returns true if the event was handled, false otherwise
-  if event.kind != EventKind.Mouse:
-    return false
+proc handleScrollInputCore(e: Editor, input: ScrollInput): bool =
+  ## Apply a frontend-neutral, cell-based vertical scroll.
   if not e.config.standard.mouse:
     return false
-
-  let mouse = event.mouse
-
-  # Middle-click paste is intercepted upstream in handleEvent.
-  if mouse.button notin {
-    mouse_logic.MouseButton.Left, mouse_logic.MouseButton.WheelUp,
-    mouse_logic.MouseButton.WheelDown,
-  }:
-    return false
-  if mouse.kind != celina.MouseEventKind.Press:
+  if input.deltaRows == 0:
     return false
 
-  # Handle wheel scroll events
-  if mouse.button in {
-    mouse_logic.MouseButton.WheelUp, mouse_logic.MouseButton.WheelDown
+  # Handle Filer mode scroll.
+  if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
+    let filerState = e.activeWindow.modeState.filer
+    if filerState.entries.len > 0:
+      filerState.selectedIndex =
+        clamp(filerState.selectedIndex + input.deltaRows, 0, filerState.entries.high)
+    return true
+
+  # Handle text editing modes.
+  if e.state.mode in {
+    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
+    EditorMode.VisualBlock, EditorMode.Replace,
   }:
-    const scrollLines = 3
+    # Determine target window by pointer position.
+    var targetIdx = e.windowManager.activeWindowIndex
+    if e.windowManager.windows.len > 1:
+      for i, window in e.windowManager.windows:
+        let vp = window.viewport
+        if input.column >= vp.x and input.column < vp.x + vp.width and
+            input.row >= vp.y and input.row < vp.y + vp.height:
+          targetIdx = i
+          break
 
-    # Handle Filer mode scroll
-    if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
-      let filerState = e.activeWindow.modeState.filer
-      if filerState.entries.len > 0:
-        if mouse.button == mouse_logic.MouseButton.WheelUp:
-          filerState.selectedIndex = max(0, filerState.selectedIndex - scrollLines)
-        else:
-          filerState.selectedIndex =
-            min(filerState.entries.len - 1, filerState.selectedIndex + scrollLines)
-      return true
+    let window = e.windowManager.windows[targetIdx]
+    let curLine = window.cursor.line
+    let maxLine = window.buffer.len - 1
+    let newLine = clamp(curLine + input.deltaRows, 0, maxLine)
 
-    # Handle text editing modes
-    if e.state.mode in {
-      EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
-      EditorMode.VisualBlock, EditorMode.Replace,
-    }:
-      # Determine target window by mouse position
-      var targetIdx = e.windowManager.activeWindowIndex
-      if e.windowManager.windows.len > 1:
-        for i, window in e.windowManager.windows:
-          let vp = window.viewport
-          if mouse.x >= vp.x and mouse.x < vp.x + vp.width and mouse.y >= vp.y and
-              mouse.y < vp.y + vp.height:
-            targetIdx = i
-            break
+    if newLine != curLine:
+      window.cursor = BufferPosition(line: newLine, column: window.cursor.column)
+      # Clamp column to line length.
+      let lineLen = window.buffer[newLine].charLen
+      if lineLen > 0:
+        window.cursor.column = min(window.cursor.column, lineLen - 1)
+      else:
+        window.cursor.column = 0
 
-      let window = e.windowManager.windows[targetIdx]
-      let curLine = window.cursor.line
-      let maxLine = window.buffer.len - 1
-      let newLine =
-        if mouse.button == mouse_logic.MouseButton.WheelUp:
-          max(0, curLine - scrollLines)
-        else:
-          min(maxLine, curLine + scrollLines)
-
-      if newLine != curLine:
-        window.cursor = BufferPosition(line: newLine, column: window.cursor.column)
-        # Clamp column to line length
-        let lineLen = window.buffer[newLine].charLen
-        if lineLen > 0:
-          window.cursor.column = min(window.cursor.column, lineLen - 1)
-        else:
-          window.cursor.column = 0
-
-        # Update viewport topLine to keep cursor visible
-        let viewportHeight = window.viewport.height
-        if viewportHeight > 0:
-          if newLine < window.viewport.topLine:
-            window.viewport.resetViewportTop(newLine)
-          elif newLine >= window.viewport.topLine + viewportHeight:
-            window.viewport.resetViewportTop(newLine - viewportHeight + 1)
-
-      return true
+      # Update viewport topLine to keep cursor visible.
+      let viewportHeight = window.viewport.height
+      if viewportHeight > 0:
+        if newLine < window.viewport.topLine:
+          window.viewport.resetViewportTop(newLine)
+        elif newLine >= window.viewport.topLine + viewportHeight:
+          window.viewport.resetViewportTop(newLine - viewportHeight + 1)
 
     return true
 
-  # Handle mouse click in text editing modes
+  return true
+
+proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
+  ## Apply a frontend-neutral pointer event expressed in rendered grid cells.
+  if not e.config.standard.mouse:
+    return false
+  if input.action != paPress or input.button != pbPrimary:
+    return false
+
+  # Handle pointer click in text editing modes.
   if e.state.mode in {
     EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
     EditorMode.VisualBlock, EditorMode.Replace,
@@ -569,7 +547,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       if e.showTabLine:
         for i, window in e.windowManager.windows:
           let vp = window.viewport
-          if mouse.y == vp.y and mouse.x >= vp.x and mouse.x < vp.x + vp.width:
+          if input.row == vp.y and input.column >= vp.x and
+              input.column < vp.x + vp.width:
             # Resolve this window's per-window tab list to TextBuffer refs.
             var buffersToShow: seq[TextBuffer] = @[]
             for id in window.bufferIds:
@@ -579,7 +558,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             if buffersToShow.len == 0:
               buffersToShow = @[window.buffer]
             let tabIdx =
-              hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, mouse.x)
+              hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, input.column)
             if tabIdx >= 0:
               if i != e.windowManager.activeWindowIndex:
                 e.finalizeCurrentWindowForMouseJump()
@@ -594,8 +573,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       for i, window in e.windowManager.windows:
         let vp = window.viewport
         # Check if click is within this window's viewport
-        if mouse.x >= vp.x and mouse.x < vp.x + vp.width and mouse.y >= vp.y and
-            mouse.y < vp.y + vp.height:
+        if input.column >= vp.x and input.column < vp.x + vp.width and
+            input.row >= vp.y and input.row < vp.y + vp.height:
           let
             # Same reserve the renderer uses, so the hit test cannot claim the
             # shared status/command row nor drop a real text row.
@@ -603,8 +582,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             posOpt = screenToBufferPosition(
               vp,
               window.buffer,
-              mouse.x,
-              mouse.y,
+              input.column,
+              input.row,
               e.gutterWidth(window),
               reservedLines,
               e.lineWrap,
@@ -632,7 +611,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
     # Single window mode
     # Check tab line click first
-    if e.showTabLine and mouse.y == 0:
+    if e.showTabLine and input.row == 0:
       var buffersToShow: seq[TextBuffer] = @[]
       for id in e.activeWindow.bufferIds:
         let bufOpt = e.bufferById(id)
@@ -641,7 +620,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       if buffersToShow.len == 0:
         buffersToShow = @[e.activeBuffer()]
       let tabIdx =
-        hitTestTabLine(buffersToShow, e.state.mode, 0, e.viewport.width, mouse.x)
+        hitTestTabLine(buffersToShow, e.state.mode, 0, e.viewport.width, input.column)
       if tabIdx >= 0:
         e.switchToWindowBuffer(tabIdx)
         return true
@@ -652,11 +631,11 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       reservedLines = steadyBottomAreaHeight()
       # Account for tab line offset
       tabLineOffset = if e.showTabLine: TabLineHeight else: 0
-      adjustedMouseY = mouse.y - tabLineOffset
+      adjustedMouseY = input.row - tabLineOffset
       posOpt = screenToBufferPosition(
         e.viewport,
         activeBuffer,
-        mouse.x,
+        input.column,
         adjustedMouseY,
         e.gutterWidth(e.activeWindow),
         reservedLines,
@@ -683,7 +662,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       # Same reserve the renderer uses, so the hit test maps to the drawn row.
       maxBottomY = findMaxBottomY(e.windowManager.windows)
       reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
-      screenY = mouse.y - vp.y - tabLineOffset
+      screenY = input.row - vp.y - tabLineOffset
 
     # Ignore clicks on tab line or status/command line area
     if screenY >= 0 and screenY < vp.height - tabLineOffset - reservedLines:
@@ -736,16 +715,68 @@ proc prepareForInput(e: Editor, isKeyInput: bool) =
   if isKeyInput and e.state.windowDisplay.scrollAnimation.active:
     cancelScrollAnimation(e.state.windowDisplay.scrollAnimation)
 
-proc prepareForEvent(e: Editor, event: Event) =
-  ## Per-event setup for Celina events.
-  e.prepareForInput(event.kind == EventKind.Key)
-
 proc prepareForKeyCombo(e: Editor) =
   ## Per-input setup for frontend-neutral key handling.
   e.prepareForInput(true)
 
-proc handleQuitEvent(e: Editor): bool =
-  ## Handle Ctrl-C (Quit event from celina). Behaviour depends on the
+proc handlePaste*(e: Editor, text: string): bool =
+  ## Handle pasted text supplied by any frontend.
+  e.prepareForInput(false)
+  e.handlePasteText(text)
+
+proc handlePasteEvent*(e: Editor, event: Event): bool =
+  ## Compatibility adapter for Celina bracketed-paste events.
+  if event.kind != EventKind.Paste:
+    return true
+  e.handlePaste(event.pastedText)
+
+proc handlePointerInput*(e: Editor, input: PointerInput): bool =
+  ## Handle a pointer event whose coordinates are cells in the rendered grid.
+  ## Middle-click paste is intentionally a host policy: GUI frontends should
+  ## obtain the selection text and pass it to `handlePaste`.
+  e.prepareForInput(false)
+  e.handlePointerInputCore(input)
+
+proc handleScrollInput*(e: Editor, input: ScrollInput): bool =
+  ## Handle a vertical scroll expressed as a signed number of grid rows.
+  e.prepareForInput(false)
+  e.handleScrollInputCore(input)
+
+proc celinaMouseModifiers(
+    modifiers: set[celina.KeyModifier]
+): set[key_bindings.KeyModifier] =
+  if celina.KeyModifier.Ctrl in modifiers:
+    result.incl(kmCtrl)
+  if celina.KeyModifier.Alt in modifiers:
+    result.incl(kmAlt)
+  if celina.KeyModifier.Shift in modifiers:
+    result.incl(kmShift)
+
+proc handleMouseEvent*(e: Editor, event: Event): bool =
+  ## Compatibility adapter from Celina mouse events to Moe input values.
+  e.prepareForInput(false)
+  if event.kind != EventKind.Mouse:
+    return false
+
+  let mouse = event.mouse
+  if mouse.kind != celina.MouseEventKind.Press:
+    return false
+
+  let modifiers = celinaMouseModifiers(mouse.modifiers)
+  case mouse.button
+  of mouse_logic.MouseButton.WheelUp:
+    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, -3, modifiers))
+  of mouse_logic.MouseButton.WheelDown:
+    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, 3, modifiers))
+  of mouse_logic.MouseButton.Left:
+    e.handlePointerInputCore(
+      initPointerInput(mouse.y, mouse.x, modifiers = modifiers)
+    )
+  else:
+    false
+
+proc handleInterruptCore(e: Editor): bool =
+  ## Handle Ctrl-C. Behaviour depends on the
   ## current mode/overlay: forward to Terminal PTY, cancel overlays, exit
   ## Insert-Normal, or transition file-edit modes back to Normal.
 
@@ -819,6 +850,11 @@ proc handleQuitEvent(e: Editor): bool =
     adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
 
   return true
+
+proc handleInterrupt*(e: Editor): bool =
+  ## Handle a frontend interrupt request, such as Ctrl-C in a terminal.
+  e.prepareForInput(false)
+  e.handleInterruptCore()
 
 proc dismissTempMessagesKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   ## Dismiss temporary messages (e.g. :jumps output) on any key.
@@ -1100,6 +1136,17 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   return outcome != roQuit
 
+proc handleTextInput*(e: Editor, text: string): bool =
+  ## Handle committed text from a GUI text-input protocol.
+  ##
+  ## This is distinct from a physical key event so frontends can preserve IME,
+  ## dead-key, and composed Unicode input. Special keys and modified shortcuts
+  ## should still be sent through `handleKeyCombo`. `text` may contain more than
+  ## one rune, but paste operations should use `handlePaste`.
+  if text.len == 0:
+    return true
+  e.handleKeyCombo(KeyCombo(isSpecial: false, char: text, modifiers: {}))
+
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Main event handler using the new handler manager system
   if event.kind == EventKind.Key:
@@ -1109,11 +1156,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
       return true
     return e.handleKeyCombo(keyComboOpt.get)
 
-  prepareForEvent(e, event)
-
   # Handle Ctrl-C (Quit event from celina)
   if event.kind == EventKind.Quit:
-    return e.handleQuitEvent()
+    return e.handleInterrupt()
 
   # Handle mouse events first
   if event.kind == EventKind.Mouse:
@@ -1121,6 +1166,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # is always enabled and would otherwise block the terminal's native paste.
     if event.mouse.button == mouse_logic.MouseButton.Middle and
         event.mouse.kind == celina.MouseEventKind.Press:
+      e.prepareForInput(false)
       e.middleClickPaste()
       return true
     discard e.handleMouseEvent(event)
@@ -1130,6 +1176,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if event.kind == EventKind.Paste:
     return e.handlePasteEvent(event)
 
+  e.prepareForInput(false)
   return true
 
 type

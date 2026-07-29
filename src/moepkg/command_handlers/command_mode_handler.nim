@@ -434,7 +434,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.state.input.commandText =
       e.state.input.commandText[0 ..< bytePos] & keyCombo.char &
       e.state.input.commandText[bytePos ..^ 1]
-    e.state.input.commandCursor += 1
+    e.state.input.commandCursor += keyCombo.char.runeLen
     # Handle completion
     let mgr = e.state.commandCompletionManager
     let hasSpace = ' ' in e.state.input.commandText
