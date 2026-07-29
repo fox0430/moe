@@ -442,25 +442,3 @@ proc recordJump*(state: EditorState) =
 
   # Reset index to indicate we're not navigating the list
   state.jumpList.index = -1
-
-## Helper for clipboard operations
-proc getSelectedText*(state: EditorState, buffer: TextBuffer): string =
-  ## Get the currently selected text in visual mode
-  ## Returns empty string if no active selection
-  if not state.visualSelection.active:
-    return ""
-
-  # Normalize selection range (ensure start <= end)
-  let (selStart, selEnd) =
-    if state.visualSelection.start.line < state.visualSelection.current.line:
-      (state.visualSelection.start, state.visualSelection.current)
-    elif state.visualSelection.start.line > state.visualSelection.current.line:
-      (state.visualSelection.current, state.visualSelection.start)
-    else:
-      # Same line - compare columns
-      if state.visualSelection.start.column <= state.visualSelection.current.column:
-        (state.visualSelection.start, state.visualSelection.current)
-      else:
-        (state.visualSelection.current, state.visualSelection.start)
-
-  return buffer.getTextInRange(selStart, selEnd)

@@ -26,6 +26,7 @@ import pkg/results
 
 import ../src/moepkg/[buffer, types, motion, key_bindings, config, modes, registers]
 import ../src/moepkg/command_registry {.all.}
+import ../src/moepkg/command_handlers/visual_commands
 
 proc createTestContext(buffer: TextBuffer): CommandContext =
   let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
@@ -2855,6 +2856,77 @@ suite "Handler - Clipboard operations":
     let result = registry.execute(ctx, builtin(bcEditCopy))
     check result.isErr
     check "No text selected" in result.error
+
+  test "clipboard cut on V-line preserves full lines in the delete register":
+    # Regression: cut on V-mode used to write a char-range slice to the
+    # clipboard (missing head/tail bytes) while visualDelete removed whole
+    # lines. Now the copy step respects the vskLine kind, so the region fed
+    # to writeToClipboardAsync matches what the delete side removes.
+    let buffer = newTextBuffer("hello world\nfoo bar baz\ntail")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 3, 1, 4, mode = EditorMode.VisualLine, kind = vskLine)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcEditCut)).isOk
+
+    # Full lines removed from buffer.
+    check buffer.len == 1
+    check buffer[0] == "tail"
+    # Delete register captured the full lines line-wise.
+    let noname = ctx.state.registers.getNoNamedRegister()
+    check noname.getContent() == "hello world\nfoo bar baz"
+    check noname.isLine == true
+    check ctx.state.visualSelection.active == false
+
+  test "clipboard cut on V-line captures both lines when kind is vskLine":
+    # A tighter version of the above: verify getVisualSelectionText (invoked
+    # by handleClipboardCopy) matches the deleted region, not the char span.
+    let buffer = newTextBuffer("first\nsecond")
+    let ctx = createTestContext(buffer)
+    # Deliberately place start.col past the end of "first" and current.col
+    # mid-way through "second" so a naive char-range would drop bytes on
+    # both ends.
+    ctx.setupVisual(0, 5, 1, 2, mode = EditorMode.VisualLine, kind = vskLine)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+
+    check getVisualSelectionText(buffer, ctx.state.visualSelection) == "first\nsecond"
+
+    let registry = createTestRegistry()
+    check registry.execute(ctx, builtin(bcEditCut)).isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+
+  test "clipboard cut on block selection captures rectangle":
+    let buffer = newTextBuffer("abcdef\nghijkl\nmnopqr")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 1, 2, 3, mode = EditorMode.VisualBlock, kind = vskBlock)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+
+    check getVisualSelectionText(buffer, ctx.state.visualSelection) == "bcd\nhij\nnop"
+
+    let registry = createTestRegistry()
+    check registry.execute(ctx, builtin(bcEditCut)).isOk
+    check buffer[0] == "aef"
+    check buffer[1] == "gkl"
+    check buffer[2] == "mqr"
+    # Rectangle delete stores characterwise (isLine == false).
+    let noname = ctx.state.registers.getNoNamedRegister()
+    check noname.getContent() == "bcd\nhij\nnop"
+    check noname.isLine == false
+
+  test "clipboard cut on char selection unchanged":
+    # Regression guard: vskChar must still copy the char range only.
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 2, 0, 6, mode = EditorMode.Visual, kind = vskChar)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+
+    check getVisualSelectionText(buffer, ctx.state.visualSelection) == "llo w"
+
+    let registry = createTestRegistry()
+    check registry.execute(ctx, builtin(bcEditCut)).isOk
+    check buffer[0] == "heorld"
 
 suite "Handler - Visual Paragraph motion":
   test "visual move paragraph forward":
