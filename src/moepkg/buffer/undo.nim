@@ -326,6 +326,9 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     return Result[BufferPosition, string].err "Nothing to undo"
 
   var undoneChanges: seq[BufferChange] = @[]
+  var poppedOriginals: seq[BufferChange] = @[]
+  let initialChangeSeq = b.changeSeq
+  let initialChangeListIndex = b.changeListIndex
 
   # Undo 'count' changes
   for i in 0 ..< count:
@@ -349,14 +352,26 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let r = b.undoChange(change)
     if r.isErr:
-      # Restore the change to undo stack if undo failed
-      b.undoStack.addLast(change)
-      # Restore previously undone changes to undo stack
+      # Roll forward the already-undone changes so the buffer returns to the
+      # pre-call state, then restore the originals to undoStack. The in-flight
+      # redo entries carry post-mutation savedModifiedLines/savedLineMarkers,
+      # so they must not be reused as undoStack entries.
       for j in countdown(undoneChanges.len - 1, 0):
-        b.undoStack.addLast(undoneChanges[j])
+        let rr = b.redoChange(undoneChanges[j])
+        if rr.isErr:
+          logError(
+            "buffer", "Failed to roll forward after partial undo(count): " & rr.error
+          )
+      b.changeSeq = initialChangeSeq
+      b.advanceContentVersion()
+      b.changeListIndex = initialChangeListIndex
+      b.undoStack.addLast(change)
+      for j in countdown(poppedOriginals.len - 1, 0):
+        b.undoStack.addLast(poppedOriginals[j])
       return err("Undo failed: " & r.error)
 
     undoneChanges.add(redoEntry)
+    poppedOriginals.add(change)
 
     # Restore changeSeq to the pre-mutation value. For transactions this
     # collapses N inc'd changes back to the saved value in one step, fixing
@@ -494,6 +509,9 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     return Result[BufferPosition, string].err "Nothing to redo"
 
   var redoneChanges: seq[BufferChange] = @[]
+  var poppedOriginals: seq[BufferChange] = @[]
+  let initialChangeSeq = b.changeSeq
+  let initialChangeListIndex = b.changeListIndex
 
   # Redo 'count' changes
   for i in 0 ..< count:
@@ -517,14 +535,26 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let r = b.redoChange(change)
     if r.isErr:
-      # Restore the change to redo stack if redo failed
-      b.redoStack.addLast(change)
-      # Restore previously redone changes to redo stack
+      # Roll back the already-redone changes so the buffer returns to the
+      # pre-call state, then restore the originals to redoStack. The in-flight
+      # undo entries carry pre-mutation savedModifiedLines/savedLineMarkers,
+      # so they must not be reused as redoStack entries.
       for j in countdown(redoneChanges.len - 1, 0):
-        b.redoStack.addLast(redoneChanges[j])
+        let rr = b.undoChange(redoneChanges[j])
+        if rr.isErr:
+          logError(
+            "buffer", "Failed to roll back after partial redo(count): " & rr.error
+          )
+      b.changeSeq = initialChangeSeq
+      b.advanceContentVersion()
+      b.changeListIndex = initialChangeListIndex
+      b.redoStack.addLast(change)
+      for j in countdown(poppedOriginals.len - 1, 0):
+        b.redoStack.addLast(poppedOriginals[j])
       return err("Redo failed: " & r.error)
 
     redoneChanges.add(undoEntry)
+    poppedOriginals.add(change)
 
     # Restore changeSeq to the post-mutation value (symmetric with undo()).
     b.changeSeq = change.endSeq

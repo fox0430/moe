@@ -85,6 +85,22 @@ suite "Buffer - Undo/Redo Basic Operations":
     check r.isOk
     check b.getLine(0) == "hello world"
 
+  test "undo of zero-width deleteRange on empty final line does not grow buffer":
+    # v-d on the empty final line touches nothing; undo must not resurrect a
+    # phantom empty line from a fabricated "\n" in the deleted-range text.
+    let b = newTextBuffer("Line1")
+    discard b.insert(1, "")
+    check b.len == 2
+    discard b.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 0)
+    )
+    check b.len == 2
+    let r = b.undo()
+    check r.isOk
+    check b.len == 2
+    check b.getLine(0) == "Line1"
+    check b.getLine(1) == ""
+
   test "undo deleteRange multi-line":
     let b = newTextBuffer("line1\nline2\nline3")
     # Delete from end of line1 (inclusive) to first char of line3 (inclusive)
@@ -1356,6 +1372,80 @@ suite "Buffer - Transaction Partial Failure Recovery":
     # Roll-back removed the "X" that inner[0] had inserted.
     check b.getLine(0) == preLine
     check b.redoStack.len == stackLenBefore
+
+suite "Buffer - Batch Partial Failure Recovery (count>1)":
+  # These tests exercise the roll-forward/roll-back path in undo(count)/redo(count)
+  # itself (not the inner ckTransaction recovery). We hand-craft one "bad" stack
+  # entry so exactly one iteration fails after some already succeeded, then
+  # verify the buffer is back to the pre-call state and the stacks are intact.
+
+  test "undo(count) rolls forward when a later iteration fails":
+    let b = newTextBuffer("abc")
+    # Legit change on top of the stack: insert " X" at end so undo removes it.
+    discard b.insertText(BufferPosition(line: 0, column: 3), " X")
+    check b.getLine(0) == "abc X"
+    let seqBefore = b.changeSeq
+    let idxBefore = b.changeListIndex
+    let preLine = b.getLine(0)
+    let redoLenBefore = b.redoStack.len
+
+    # Bad entry beneath it: undoChange calls backendDeleteLine(999) → raises.
+    let bad = BufferChange(
+      startSeq: b.changeSeq,
+      endSeq: b.changeSeq,
+      kind: ckInsertLine,
+      insertLineIdx: 999,
+      insertLineText: "x",
+    )
+    b.undoStack.addFirst(bad)
+    let undoLenBefore = b.undoStack.len
+
+    let r = b.undo(2)
+    check r.isErr
+    # Buffer content rolled forward to the pre-call state.
+    check b.getLine(0) == preLine
+    # Stacks unchanged; counters restored.
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore
+    check b.changeSeq == seqBefore
+    check b.changeListIndex == idxBefore
+    # The retry actually retries: a plain undo() now succeeds and pops " X".
+    let r2 = b.undo()
+    check r2.isOk
+    check b.getLine(0) == "abc"
+
+  test "redo(count) rolls back when a later iteration fails":
+    let b = newTextBuffer("abc")
+    discard b.insertText(BufferPosition(line: 0, column: 3), " X")
+    discard b.undo()
+    check b.getLine(0) == "abc"
+    check b.redoStack.len == 1
+    let seqBefore = b.changeSeq
+    let idxBefore = b.changeListIndex
+    let preLine = b.getLine(0)
+    let undoLenBefore = b.undoStack.len
+
+    # Bad entry beneath legit: popLast pops legit first (succeeds), then bad.
+    let bad = BufferChange(
+      startSeq: b.changeSeq,
+      endSeq: b.changeSeq,
+      kind: ckInsertLine,
+      insertLineIdx: 999,
+      insertLineText: "x",
+    )
+    b.redoStack.addFirst(bad)
+    let redoLenBefore = b.redoStack.len
+
+    let r = b.redo(2)
+    check r.isErr
+    check b.getLine(0) == preLine
+    check b.redoStack.len == redoLenBefore
+    check b.undoStack.len == undoLenBefore
+    check b.changeSeq == seqBefore
+    check b.changeListIndex == idxBefore
+    let r2 = b.redo()
+    check r2.isOk
+    check b.getLine(0) == "abc X"
 
 suite "Buffer - Transaction Cursor Cache Staleness":
   test "redo of a transaction does not reuse a stale char->byte cache":

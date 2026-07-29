@@ -277,6 +277,46 @@ suite "Buffer - Editing Operations":
     )
     check text == "lo\nWorld\nTes"
 
+  test "getTextInRange empty final line does not fabricate a newline":
+    # v-d-u on the empty final line used to duplicate the empty line because
+    # getTextInRange returned "\n" for a range with no next line, and undo
+    # then inserted the phantom byte.
+    let buf = newTextBuffer("Line1")
+    discard buf.insert(1, "")
+    check buf.len == 2
+    check buf[1] == ""
+    let text = buf.getTextInRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 0)
+    )
+    check text == ""
+
+  test "getTextInRange non-empty final line past end does not add newline":
+    let buf = newTextBuffer("Line1\nLast")
+    let text = buf.getTextInRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 10)
+    )
+    check text == "Last"
+
+  test "getTextInRange multi-line reaching final line does not fabricate a newline":
+    let buf = newTextBuffer("Line1\nLine2\nLast")
+    let text = buf.getTextInRange(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 10)
+    )
+    check text == "Line1\nLine2\nLast"
+
+  test "undo of multi-line deleteRange to final line does not add phantom line":
+    let buf = newTextBuffer("Line1\nLine2\nLast")
+    let before = buf.len
+    discard buf.deleteRange(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 2, column: 10)
+    )
+    let u = buf.undo()
+    check u.isOk
+    check buf.len == before
+    check buf[0] == "Line1"
+    check buf[1] == "Line2"
+    check buf[2] == "Last"
+
   test "deleteRange single line":
     let buf = newTextBuffer("Hello World")
     discard buf.deleteRange(
