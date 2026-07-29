@@ -300,7 +300,13 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
         return true
 
     let pos = e.cursor
-    discard activeBuffer.insertText(pos, pastedText)
+    let insertResult = activeBuffer.insertText(pos, pastedText)
+    if insertResult.isErr:
+      if ownTransaction:
+        discard activeBuffer.rollbackTransaction()
+      e.state.statusMessage = "Paste failed: " & insertResult.error
+      return true
+
     e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
 
     if ownTransaction:
@@ -425,7 +431,13 @@ proc middleClickPaste(e: Editor) =
       return
 
   let pos = e.cursor
-  discard activeBuffer.insertText(pos, pastedText)
+  let insertResult = activeBuffer.insertText(pos, pastedText)
+  if insertResult.isErr:
+    if ownTransaction:
+      discard activeBuffer.rollbackTransaction()
+    e.state.statusMessage = "Paste failed: " & insertResult.error
+    return
+
   e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
 
   if ownTransaction:
