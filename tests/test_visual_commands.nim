@@ -306,6 +306,69 @@ suite "Visual Commands - visualMoveDown":
     check state.cursor.line == 1
     check state.cursor.column == 5 # clamped to "short" length
 
+suite "Visual Commands - getVisualSelectionText":
+  test "vskChar returns char range only":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 3),
+      current: BufferPosition(line: 0, column: 6),
+      active: true,
+      kind: vskChar,
+    )
+    check getVisualSelectionText(buf, selection) == "lo w"
+
+  test "vskLine returns entire covered lines regardless of start/end columns":
+    # Regression: clipboard-cut on V-mode used to fall back to a char range
+    # keyed off (start.col, current.col), truncating the head of the first line
+    # and the tail of the last line.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar baz")
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 3),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskLine,
+    )
+    check getVisualSelectionText(buf, selection) == "hello world\nfoo bar baz"
+
+  test "vskBlock returns rectangle joined by newlines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abcdef")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nghijkl")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nmnopqr")
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 1),
+      current: BufferPosition(line: 2, column: 3),
+      active: true,
+      kind: vskBlock,
+    )
+    check getVisualSelectionText(buf, selection) == "bcd\nhij\nnop"
+
+  test "vskLine with reversed selection still returns full lines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nbbb")
+    let selection = VisualSelection(
+      start: BufferPosition(line: 1, column: 2),
+      current: BufferPosition(line: 0, column: 1),
+      active: true,
+      kind: vskLine,
+    )
+    check getVisualSelectionText(buf, selection) == "aaa\nbbb"
+
+  test "Inactive selection returns empty string":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: false,
+      kind: vskChar,
+    )
+    check getVisualSelectionText(buf, selection) == ""
+
 suite "Visual Commands - visualYank":
   test "Yank character selection":
     let buf = newTextBuffer()
@@ -641,6 +704,43 @@ suite "Visual Commands - visualLowercase":
     check buf.getLine(0) == "hello"
     check buf.getLine(1) == "world"
 
+  test "Lowercase block selection lowers rectangle only":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ABCDEF")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nGHIJKL")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nMNOPQR")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 1),
+      current: BufferPosition(line: 2, column: 3),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualLowercase(buf, state)
+
+    check buf.getLine(0) == "AbcdEF"
+    check buf.getLine(1) == "GhijKL"
+    check buf.getLine(2) == "MnopQR"
+
+  test "Lowercase multiline char selection preserves newlines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "AAABBB")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nCCCDDD")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 3),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualLowercase(buf, state)
+
+    check buf.getLine(0) == "AAAbbb"
+    check buf.getLine(1) == "cccDDD"
+
 suite "Visual Commands - visualUppercase":
   test "Convert selection to uppercase":
     let buf = newTextBuffer()
@@ -676,6 +776,26 @@ suite "Visual Commands - visualUppercase":
     check buf.getLine(0) == "HELLO"
     check buf.getLine(1) == "WORLD"
 
+  test "Uppercase block selection uppers rectangle only":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abcdef")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nghijkl")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nmnopqr")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 1),
+      current: BufferPosition(line: 2, column: 3),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "aBCDef"
+    check buf.getLine(1) == "gHIJkl"
+    check buf.getLine(2) == "mNOPqr"
+
 suite "Visual Commands - visualToggleCase":
   test "Toggle case of selection":
     let buf = newTextBuffer()
@@ -707,6 +827,42 @@ suite "Visual Commands - visualToggleCase":
     visualToggleCase(buf, state)
 
     check buf.getLine(0) == "hELLO123wORLD"
+
+  test "Toggle case block selection flips rectangle only":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "AbCdEf")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nGhIjKl")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 1),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualToggleCase(buf, state)
+
+    check buf.getLine(0) == "ABcDEf"
+    check buf.getLine(1) == "GHiJKl"
+
+  test "Toggle case line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aBcD")
+    discard buf.insertText(BufferPosition(line: 0, column: 4), "\nEfGh")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualToggleCase(buf, state)
+
+    check buf.getLine(0) == "AbCd"
+    check buf.getLine(1) == "eFgH"
 
 suite "Visual Commands - visualReplace":
   test "Replace selection with character":

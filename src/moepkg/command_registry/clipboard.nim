@@ -32,9 +32,13 @@ proc handleClipboardCopy*(ctx: CommandContext): Result[(), string] =
   if not ctx.clipboardConfig.enable:
     return err("Clipboard integration is disabled")
 
-  # Get selected text
-  let selectedText = getSelectedText(ctx.state, ctx.buffer)
-  if selectedText.len == 0:
+  if not ctx.state.visualSelection.active:
+    return err("No text selected")
+
+  # Respect selection kind so V-line / Ctrl-V-block cuts copy the same region
+  # the buffer-side visualDelete will remove.
+  let selectedText = getVisualSelectionText(ctx.buffer, ctx.state.visualSelection)
+  if selectedText.len == 0 and ctx.state.visualSelection.kind == vskChar:
     return err("No text selected")
 
   # Write to clipboard (fire-and-forget)
