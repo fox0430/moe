@@ -3098,6 +3098,25 @@ suite "handlePasteEvent":
 
     check e.state.statusMessage == "Paste not supported in this mode"
 
+  test "Insert mode - failed insertText rolls back and does not move cursor":
+    # A readOnly buffer makes insertText fail after beginTransaction has
+    # succeeded. Without the guard the cursor would still advance past valid
+    # bytes and the transaction would commit as an empty entry.
+    let e = createTestEditorForPaste("hello")
+    e.state.mode = EditorMode.Insert
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
+    e.state.cursor = BufferPosition(line: 0, column: 5)
+    e.activeBuffer.readOnly = true
+
+    let event = makePasteEvent(" world")
+    discard e.handleEvent(event)
+
+    check $e.activeBuffer.getLine(0) == "hello"
+    check e.windowManager.windows[0].cursor.column == 5
+    check not e.activeBuffer.inTransaction
+    check e.state.statusMessage.len > 0
+    check e.state.statusMessage[0 ..< len("Paste failed")] == "Paste failed"
+
   test "Command overlay - bracketed paste inserts at cursor":
     let e = createTestEditorForPaste("hello")
     e.state.enterCommandOverlay()
