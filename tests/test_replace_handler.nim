@@ -166,7 +166,9 @@ suite "ReplaceModeHandler - Backspace":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 1)
     state.editState.replaceHistory.add(
-      ReplaceHistoryEntry(pos: BufferPosition(line: 0, column: 0), originalChar: "h")
+      ReplaceHistoryEntry(
+        kind: rheReplace, pos: BufferPosition(line: 0, column: 0), originalChar: "h"
+      )
     )
 
     let result = handler.handleBackspace(buf, state)
@@ -223,7 +225,9 @@ suite "ReplaceModeHandler - Backspace":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 6)
     state.editState.replaceHistory.add(
-      ReplaceHistoryEntry(pos: BufferPosition(line: 0, column: 5), originalChar: "")
+      ReplaceHistoryEntry(
+        kind: rheReplace, pos: BufferPosition(line: 0, column: 5), originalChar: ""
+      )
     )
 
     let result = handler.handleBackspace(buf, state)
@@ -391,7 +395,9 @@ suite "ReplaceModeHandler - Key Handling":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 1)
     state.editState.replaceHistory.add(
-      ReplaceHistoryEntry(pos: BufferPosition(line: 0, column: 0), originalChar: "h")
+      ReplaceHistoryEntry(
+        kind: rheReplace, pos: BufferPosition(line: 0, column: 0), originalChar: "h"
+      )
     )
 
     let keyCombo =
@@ -723,7 +729,9 @@ suite "ReplaceModeHandler - Unicode Edge Cases":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 2)
     state.editState.replaceHistory.add(
-      ReplaceHistoryEntry(pos: BufferPosition(line: 0, column: 1), originalChar: "本")
+      ReplaceHistoryEntry(
+        kind: rheReplace, pos: BufferPosition(line: 0, column: 1), originalChar: "本"
+      )
     )
 
     let result = handler.handleBackspace(buf, state)
@@ -774,4 +782,136 @@ suite "ReplaceModeHandler - Multiple Replacements":
     discard handler.handleBackspace(buf, state)
     check buf.getLine(0) == "hello"
 
+    check state.editState.replaceHistory.len == 0
+
+suite "ReplaceModeHandler - Newline history (Enter + Backspace)":
+  test "handleNewline pushes rheNewline marker at split position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    let result = handler.handleNewline(buf, state)
+
+    check result.kind == rmrHandled
+    check state.editState.replaceHistory.len == 1
+    check state.editState.replaceHistory[0].kind == rheNewline
+    check state.editState.replaceHistory[0].pos.line == 0
+    check state.editState.replaceHistory[0].pos.column == 3
+
+  test "Backspace after Enter joins the split lines back":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "helloworld")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    discard handler.handleNewline(buf, state)
+    check buf.len == 2
+    check buf.getLine(0) == "hello"
+    check buf.getLine(1) == "world"
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == rmrHandled
+    check buf.len == 1
+    check buf.getLine(0) == "helloworld"
+    check state.cursor.line == 0
+    check state.cursor.column == 5
+    check state.editState.replaceHistory.len == 0
+
+  test "Backspace after Enter preserves prior replacements":
+    # Regression: previously Enter left no marker, so Backspace popped the
+    # pre-Enter char-replace entry, reverted an unrelated character, and left
+    # the split intact.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard handler.handleCharacterReplacement(buf, state, "A")
+    check buf.getLine(0) == "Aello"
+
+    discard handler.handleNewline(buf, state)
+    check buf.len == 2
+    check buf.getLine(0) == "A"
+    check buf.getLine(1) == "ello"
+
+    let result = handler.handleBackspace(buf, state)
+    check result.kind == rmrHandled
+    check buf.len == 1
+    check buf.getLine(0) == "Aello"
+    # Cursor lands on the split point (where Enter was pressed).
+    check state.cursor.line == 0
+    check state.cursor.column == 1
+    check state.editState.replaceHistory.len == 1
+    check state.editState.replaceHistory[0].kind == rheReplace
+    check state.editState.replaceHistory[0].originalChar == "h"
+
+  test "Backspace after Enter at end of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    discard handler.handleNewline(buf, state)
+    check buf.len == 2
+    check buf.getLine(0) == "hello"
+    check buf.getLine(1) == ""
+
+    let result = handler.handleBackspace(buf, state)
+    check result.kind == rmrHandled
+    check buf.len == 1
+    check buf.getLine(0) == "hello"
+    check state.cursor.line == 0
+    check state.cursor.column == 5
+
+  test "Backspace after Enter at start of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    discard handler.handleNewline(buf, state)
+    check buf.len == 2
+    check buf.getLine(0) == ""
+    check buf.getLine(1) == "hello"
+
+    let result = handler.handleBackspace(buf, state)
+    check result.kind == rmrHandled
+    check buf.len == 1
+    check buf.getLine(0) == "hello"
+    check state.cursor.line == 0
+    check state.cursor.column == 0
+
+  test "Enter then char-replace then two Backspaces walks history correctly":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    discard handler.handleNewline(buf, state)
+    check buf.getLine(0) == "hel"
+    check buf.getLine(1) == "lo"
+    check state.cursor.line == 1
+    check state.cursor.column == 0
+
+    discard handler.handleCharacterReplacement(buf, state, "L")
+    check buf.getLine(1) == "Lo"
+
+    discard handler.handleBackspace(buf, state)
+    check buf.getLine(1) == "lo"
+    check state.cursor.line == 1
+    check state.cursor.column == 0
+
+    discard handler.handleBackspace(buf, state)
+    check buf.len == 1
+    check buf.getLine(0) == "hello"
+    check state.cursor.line == 0
+    check state.cursor.column == 3
     check state.editState.replaceHistory.len == 0

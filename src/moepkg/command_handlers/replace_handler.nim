@@ -74,7 +74,9 @@ proc handleCharacterReplacement*(
         kind: rmrError, errorMessage: "Failed to insert text: " & insertResult.error
       )
     # Save empty string as original character for consistency
-    state.editState.replaceHistory.add(ReplaceHistoryEntry(pos: pos, originalChar: ""))
+    state.editState.replaceHistory.add(
+      ReplaceHistoryEntry(kind: rheReplace, pos: pos, originalChar: "")
+    )
   else:
     # Replace character at cursor
     # Save original character for undo with backspace
@@ -97,7 +99,7 @@ proc handleCharacterReplacement*(
 
     # Only add to history if operations succeeded
     state.editState.replaceHistory.add(
-      ReplaceHistoryEntry(pos: pos, originalChar: originalChar)
+      ReplaceHistoryEntry(kind: rheReplace, pos: pos, originalChar: originalChar)
     )
 
   # Move cursor right after replacement/insertion
@@ -127,39 +129,69 @@ proc handleBackspace*(
   # Pop last replace entry
   let lastEntry = state.editState.replaceHistory.pop()
 
-  # Move cursor to the position where the character was replaced
-  state.cursor = lastEntry.pos
+  case lastEntry.kind
+  of rheNewline:
+    # Rejoin the split lines (raw concat — not a Vim J).
+    let splitLine = lastEntry.pos.line
+    if splitLine + 1 >= buffer.len:
+      # Buffer shape no longer matches the marker; just restore the cursor.
+      state.cursor = lastEntry.pos
+      return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
 
-  # Restore original character if there was one
-  if lastEntry.originalChar.len > 0:
-    # Delete the replacement character and restore original
-    let deleteResult = buffer.deleteChar(state.cursor)
+    let tailContent = buffer.getLine(splitLine + 1)
+    let deleteResult = buffer.deleteLine(splitLine + 1)
     if deleteResult.isErr:
-      # Restore history entry on error
       state.editState.replaceHistory.add(lastEntry)
       return ReplaceModeResult(
-        kind: rmrError,
-        errorMessage: "Failed to delete character: " & deleteResult.error,
+        kind: rmrError, errorMessage: "Failed to undo newline: " & deleteResult.error
       )
 
-    let insertResult = buffer.insertText(state.cursor, lastEntry.originalChar)
-    if insertResult.isErr:
-      # Restore history entry on error
-      state.editState.replaceHistory.add(lastEntry)
-      return ReplaceModeResult(
-        kind: rmrError,
-        errorMessage: "Failed to restore character: " & insertResult.error,
-      )
-  else:
-    # Was an insertion at end of line, just delete it
-    let deleteResult = buffer.deleteChar(state.cursor)
-    if deleteResult.isErr:
-      # Restore history entry on error
-      state.editState.replaceHistory.add(lastEntry)
-      return ReplaceModeResult(
-        kind: rmrError,
-        errorMessage: "Failed to delete character: " & deleteResult.error,
-      )
+    if tailContent.len > 0:
+      let joinPos =
+        BufferPosition(line: splitLine, column: buffer.getLine(splitLine).charLen)
+      let insertResult = buffer.insertText(joinPos, tailContent)
+      if insertResult.isErr:
+        state.editState.replaceHistory.add(lastEntry)
+        return ReplaceModeResult(
+          kind: rmrError,
+          errorMessage: "Failed to restore joined text: " & insertResult.error,
+        )
+
+    state.cursor = lastEntry.pos
+  of rheReplace:
+    # Move cursor to the position where the character was replaced
+    state.cursor = lastEntry.pos
+
+    # Restore original character if there was one
+    if lastEntry.originalChar.len > 0:
+      # Delete the replacement character and restore original
+      let deleteResult = buffer.deleteChar(state.cursor)
+      if deleteResult.isErr:
+        # Restore history entry on error
+        state.editState.replaceHistory.add(lastEntry)
+        return ReplaceModeResult(
+          kind: rmrError,
+          errorMessage: "Failed to delete character: " & deleteResult.error,
+        )
+
+      let insertResult = buffer.insertText(state.cursor, lastEntry.originalChar)
+      if insertResult.isErr:
+        # Restore history entry on error
+        state.editState.replaceHistory.add(lastEntry)
+        return ReplaceModeResult(
+          kind: rmrError,
+          errorMessage: "Failed to restore character: " & insertResult.error,
+        )
+    else:
+      # Was an insertion at end of line, just delete it
+      let deleteResult = buffer.deleteChar(state.cursor)
+      if deleteResult.isErr:
+        # Restore history entry on error
+        state.editState.replaceHistory.add(lastEntry)
+        return ReplaceModeResult(
+          kind: rmrError,
+          errorMessage: "Failed to delete character: " & deleteResult.error,
+        )
 
   return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
 
@@ -175,6 +207,10 @@ proc handleNewline*(
     return ReplaceModeResult(
       kind: rmrError, errorMessage: "Failed to insert newline: " & insertResult.error
     )
+
+  # Anchor a marker at the split so Backspace can undo the Enter by
+  # rejoining the two lines.
+  state.editState.replaceHistory.add(ReplaceHistoryEntry(kind: rheNewline, pos: pos))
 
   # Move cursor to start of new line
   state.cursor.line += 1
