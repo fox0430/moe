@@ -49,31 +49,50 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
   ## Extract net inserted text from a transaction
   ## Handles insertions and deletions (backspace during insert mode)
   ## Optimized with StringBuilder for O(n) instead of O(n²) performance
+  ##
+  ## Insert-mode backspace at a line start decomposes into ckDeleteLine plus
+  ## ckInsertText, where the insert payload is the pre-existing content of the
+  ## joined line — not user input. Skip that paired re-attach so it does not
+  ## leak into lastEditCommand and get replayed by `.` (dot-repeat).
   var sb = newStringBuilder()
+  var skipNextInsertText = false
   for change in transaction.changes:
     case change.kind
     of buffer.ckInsertText:
-      sb.add(change.insertText)
+      if skipNextInsertText:
+        skipNextInsertText = false
+      else:
+        sb.add(change.insertText)
     of buffer.ckDeleteText:
       # Backspace - remove from end of accumulated text
       sb.removeLast(change.deletedText.len)
+      skipNextInsertText = false
     of buffer.ckInsertLine:
       # Line insertion - add the line text
       sb.add(change.insertLineText)
       # Ensure it ends with newline if it doesn't already
       if change.insertLineText.len == 0 or change.insertLineText[^1] != '\n':
         sb.add("\n")
+      skipNextInsertText = false
     of buffer.ckDeleteLine:
-      # Line deletion during insert mode (rare, but handle it)
-      # We can't easily track which line was deleted, so clear accumulated text
+      # Line deletion during insert mode: the paired ckInsertText that follows
+      # is a line-join re-attach, not user input. Clear accumulated text and
+      # arm the skip for the immediate next ckInsertText — but only when the
+      # deleted line had content, since joining an empty line omits the
+      # re-attach entirely (insertText no-ops on ""), and the next
+      # ckInsertText would then be real typing.
       sb.clear()
+      skipNextInsertText = change.deletedLineText.len > 0
     of buffer.ckDeleteRange:
       # Range deletion - remove from end of accumulated text
       sb.removeLast(change.deletedRangeText.len)
+      skipNextInsertText = false
     of buffer.ckReplaceLine:
       discard # Line replacement doesn't contribute to inserted text tracking
+      skipNextInsertText = false
     of buffer.ckSnapshot:
       discard # Snapshots don't contribute to inserted text tracking
+      skipNextInsertText = false
     of buffer.ckTransaction:
       # Nested transaction - recursively extract text
       let nestedTransaction = buffer.BufferTransaction(
@@ -82,6 +101,7 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
         startSeq: 0,
       )
       sb.add(extractInsertedText(nestedTransaction))
+      skipNextInsertText = false
   return sb.toString()
 
 proc typedTextInRange(buffer: TextBuffer, startPos, endPos: BufferPosition): string =
