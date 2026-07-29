@@ -21,3 +21,5 @@ lasm.log
 moe-debug.log
 
 nimbledeps/
+/deps/
+nim.cfg
