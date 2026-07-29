@@ -627,9 +627,17 @@ type
       # Current stop's default is untouched (= selected); the next typed
       # character or Backspace replaces/deletes the whole default range
 
+  ReplaceHistoryEntryKind* = enum
+    rheReplace # Character replacement (or end-of-line insertion)
+    rheNewline # Line split via Enter
+
   ReplaceHistoryEntry* = object ## Replace mode history entry for undo with Backspace
-    pos*: BufferPosition # Position where character was replaced
-    originalChar*: string # Original character before replacement
+    pos*: BufferPosition # Position anchoring the operation
+    case kind*: ReplaceHistoryEntryKind
+    of rheReplace:
+      originalChar*: string # Original char (empty when it was an end-of-line insert)
+    of rheNewline:
+      discard
 
   SubstituteKind* = enum
     ## Kind of substitute operation that led to Insert mode
