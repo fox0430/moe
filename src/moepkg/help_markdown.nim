@@ -122,19 +122,16 @@ proc tokenizeKey*(syntax: string): seq[string] =
   ##
   ## The `any` placeholder used in source data (`"q any"`, `"yt any"`,
   ## `"@ any"`) is normalized to the canonical `Any key`.
-  # Normalize the `any` / `any key` placeholders to the canonical SpecialKey
-  # form so the greedy scan below finds them via the `Any key` entry.
-  # `replace(" any", ...)` would over-match (` anything` → ` Any keything`),
-  # so each substitution is scoped to a token boundary: leading space on
-  # both sides, plus trailing space or string-end on the right.
-  var s = syntax.replace(" any key", " Any key")
+  # Sentinel leading space makes start-of-string a word boundary, so
+  # leading-`any` forms (`any Escape`) hit the same rules as mid-string.
+  var s = " " & syntax
+  s = s.replace(" any key ", " Any key ")
+  if s.endsWith(" any key"):
+    s = s[0 ..< s.len - 8] & " Any key"
   s = s.replace(" any ", " Any key ")
   if s.endsWith(" any"):
     s = s[0 ..< s.len - 4] & " Any key"
-  if s == "any key":
-    s = "Any key"
-  if s == "any":
-    return @["Any key"]
+  s = s[1 .. ^1]
 
   # Greedy scan: at each position, prefer the longest matching SpecialKey;
   # then a single character. Replaces the older split-by-space approach,
