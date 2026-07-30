@@ -1325,9 +1325,8 @@ suite "handleMouseEvent - Mouse Disabled":
 
 suite "frontend-neutral pointer and scroll input":
   test "signed row delta controls scroll distance":
-    let e = createTestEditorWithBuffer(
-      "line0\nline1\nline2\nline3\nline4\nline5\nline6"
-    )
+    let e =
+      createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
     e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
 
     let down = e.handleScrollInput(initScrollInput(2, 10, 4))
@@ -1345,9 +1344,8 @@ suite "frontend-neutral pointer and scroll input":
     check e.windowManager.windows[0].cursor.line == 3
 
   test "outcome identifies the scrollable region and viewport movement":
-    let e = createTestEditorWithBuffer(
-      "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14"
-    )
+    let e =
+      createTestEditorWithBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14")
     e.state.showTabLine = true
     e.state.showStatusLine = true
     e.screenSize.width = 40
@@ -1396,8 +1394,7 @@ suite "frontend-neutral pointer and scroll input":
     let rightWindow = EditorWindow(
       buffer: rightBuffer,
       bufferIds: @[rightBuffer.id],
-      viewport:
-        ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,
@@ -1425,9 +1422,7 @@ suite "frontend-neutral pointer and scroll input":
   test "non-primary pointer input remains available to the host":
     let e = createTestEditorWithBuffer("zero\none")
 
-    let handled = e.handlePointerInput(
-      initPointerInput(1, 5, button = pbSecondary)
-    )
+    let handled = e.handlePointerInput(initPointerInput(1, 5, button = pbSecondary))
 
     check not handled
     check e.cursor.line == 0

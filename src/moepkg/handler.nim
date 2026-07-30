@@ -478,14 +478,12 @@ proc scrollTargetIndex(e: Editor, input: ScrollInput): int =
   if e.windowManager.windows.len == 0:
     return -1
 
-  result = clamp(
-    e.windowManager.activeWindowIndex, 0, e.windowManager.windows.high
-  )
+  result = clamp(e.windowManager.activeWindowIndex, 0, e.windowManager.windows.high)
   if e.windowManager.windows.len > 1:
     for i, window in e.windowManager.windows:
       let vp = window.viewport
-      if input.column >= vp.x and input.column < vp.x + vp.width and
-          input.row >= vp.y and input.row < vp.y + vp.height:
+      if input.column >= vp.x and input.column < vp.x + vp.width and input.row >= vp.y and
+          input.row < vp.y + vp.height:
         return i
 
 proc scrollRegion(e: Editor, window: EditorWindow): GridRegion =
@@ -498,10 +496,7 @@ proc scrollRegion(e: Editor, window: EditorWindow): GridRegion =
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
     reservedLines = e.calculateReservedLines(isBottomWindow)
   initGridRegion(
-    vp.y + tabLineOffset,
-    vp.x,
-    vp.height - tabLineOffset - reservedLines,
-    vp.width,
+    vp.y + tabLineOffset, vp.x, vp.height - tabLineOffset - reservedLines, vp.width
   )
 
 proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
@@ -612,8 +607,8 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
       for i, window in e.windowManager.windows:
         let vp = window.viewport
         # Check if click is within this window's viewport
-        if input.column >= vp.x and input.column < vp.x + vp.width and
-            input.row >= vp.y and input.row < vp.y + vp.height:
+        if input.column >= vp.x and input.column < vp.x + vp.width and input.row >= vp.y and
+            input.row < vp.y + vp.height:
           let
             # Same reserve the renderer uses, so the hit test cannot claim the
             # shared status/command row nor drop a real text row.
@@ -809,9 +804,7 @@ proc handleMouseEvent*(e: Editor, event: Event): bool =
   of mouse_logic.MouseButton.WheelDown:
     e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, 3, modifiers)).handled
   of mouse_logic.MouseButton.Left:
-    e.handlePointerInputCore(
-      initPointerInput(mouse.y, mouse.x, modifiers = modifiers)
-    )
+    e.handlePointerInputCore(initPointerInput(mouse.y, mouse.x, modifiers = modifiers))
   else:
     false
 

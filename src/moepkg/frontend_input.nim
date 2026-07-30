@@ -75,12 +75,7 @@ type
     viewportRowsMoved*: int
 
 func initGridRegion*(row, column, rows, columns: int): GridRegion =
-  GridRegion(
-    row: row,
-    column: column,
-    rows: max(rows, 0),
-    columns: max(columns, 0),
-  )
+  GridRegion(row: row, column: column, rows: max(rows, 0), columns: max(columns, 0))
 
 func initPointerInput*(
     row, column: int,
@@ -101,6 +96,4 @@ func initPointerInput*(
 func initScrollInput*(
     row, column, deltaRows: int, modifiers: set[KeyModifier] = {}
 ): ScrollInput =
-  ScrollInput(
-    row: row, column: column, deltaRows: deltaRows, modifiers: modifiers
-  )
+  ScrollInput(row: row, column: column, deltaRows: deltaRows, modifiers: modifiers)
