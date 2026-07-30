@@ -66,6 +66,15 @@ suite "help_markdown.tokenizeKey":
     check tokenizeKey("yt any") == @["y", "t", "Any key"]
     check tokenizeKey("any key") == @["Any key"]
 
+  test "leading 'any' followed by a SpecialKey does not decay to per-char":
+    check tokenizeKey("any Escape") == @["Any key", "Escape"]
+    check tokenizeKey("any key Escape") == @["Any key", "Escape"]
+    check tokenizeKey("any y") == @["Any key", "y"]
+
+  test "words containing 'any' are not falsely normalized":
+    check tokenizeKey("anything") == @["a", "n", "y", "t", "h", "i", "n", "g"]
+    check tokenizeKey("many") == @["m", "a", "n", "y"]
+
 suite "help_markdown.renderKbdKeysCell":
   test "single key wraps in kbd with bold":
     check renderKbdKeysCell("h") == "<kbd>**h**</kbd>"
