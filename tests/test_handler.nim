@@ -1333,14 +1333,14 @@ suite "frontend-neutral pointer and scroll input":
     check down.handled
     check down.requestedRows == 4
     check down.appliedRows == 4
-    check down.viewportRowsMoved == 0
+    check down.viewportPhysicalRowsMoved == 0
     check e.windowManager.windows[0].cursor.line == 5
 
     let up = e.handleScrollInput(initScrollInput(2, 10, -2))
     check up.handled
     check up.requestedRows == -2
     check up.appliedRows == -2
-    check up.viewportRowsMoved == 0
+    check up.viewportPhysicalRowsMoved == 0
     check e.windowManager.windows[0].cursor.line == 3
 
   test "outcome identifies the scrollable region and viewport movement":
@@ -1359,7 +1359,7 @@ suite "frontend-neutral pointer and scroll input":
     check outcome.region == initGridRegion(4, 2, 6, 40)
     check outcome.requestedRows == 4
     check outcome.appliedRows == 4
-    check outcome.viewportRowsMoved == 3
+    check outcome.viewportPhysicalRowsMoved == 3
 
   test "outcome reports the movement actually applied at a buffer edge":
     let e = createTestEditorWithBuffer("0\n1\n2")
@@ -1370,7 +1370,7 @@ suite "frontend-neutral pointer and scroll input":
     check outcome.handled
     check outcome.requestedRows == 8
     check outcome.appliedRows == 1
-    check outcome.viewportRowsMoved == 0
+    check outcome.viewportPhysicalRowsMoved == 0
 
   test "zero row input produces an unhandled outcome":
     let e = createTestEditorWithBuffer("0\n1\n2")
@@ -1380,8 +1380,49 @@ suite "frontend-neutral pointer and scroll input":
     check not outcome.handled
     check outcome.requestedRows == 0
     check outcome.appliedRows == 0
-    check outcome.viewportRowsMoved == 0
+    check outcome.viewportPhysicalRowsMoved == 0
     check outcome.region == GridRegion()
+
+  test "unsupported mode produces an unhandled outcome":
+    let e = createTestEditorWithBuffer("0\n1\n2")
+    e.state.mode = EditorMode.Help
+
+    let outcome = e.handleScrollInput(initScrollInput(2, 10, 1))
+
+    check not outcome.handled
+    check outcome.requestedRows == 1
+    check outcome.appliedRows == 0
+    check outcome.viewportPhysicalRowsMoved == 0
+    check outcome.region == GridRegion()
+
+  test "wrapped text outcome remains physical-line based":
+    let e = createTestEditorWithBuffer("abcdefghij\nnext")
+    e.state.lineWrap = true
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 5, height: 2, topLine: 0, leftColumn: 0)
+
+    let outcome = e.handleScrollInput(initScrollInput(0, 0, 1))
+
+    check outcome.handled
+    check outcome.appliedRows == 1
+    check outcome.viewportPhysicalRowsMoved == 0
+    check e.cursor.line == 1
+
+  test "Filer outcome reports selection movement before layout":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Filer
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false)
+    for i in 0 ..< 10:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
+
+    let outcome = e.handleScrollInput(initScrollInput(0, 0, 3))
+
+    check outcome.handled
+    check outcome.appliedRows == 3
+    check outcome.viewportPhysicalRowsMoved == 0
+    check e.activeWindow.modeState.filer.selectedIndex == 3
 
   test "outcome region follows the split window under the pointer":
     let e = createTestEditorWithBuffer("left0\nleft1\nleft2\nleft3")

@@ -20,8 +20,9 @@
 ## Frontend-neutral pointer and scrolling input.
 ##
 ## Coordinates are cells in Moe's rendered grid. A GUI frontend should convert
-## view coordinates before constructing these values. Positive `deltaRows`
-## scrolls toward later buffer rows; negative values scroll toward earlier rows.
+## view coordinates before constructing these values. Positive
+## `deltaPhysicalRows` scrolls toward later buffer lines; negative values scroll
+## toward earlier lines.
 
 import key_bindings/registry
 export registry.KeyModifier
@@ -58,21 +59,21 @@ type
   ScrollInput* = object
     row*: int
     column*: int
-    deltaRows*: int
+    deltaPhysicalRows*: int
     modifiers*: set[KeyModifier]
 
   ScrollOutcome* = object
-    ## Result of applying a semantic row scroll.
+    ## Result of applying a semantic physical-line scroll.
     ##
-    ## A GUI bridge can translate `region` when `viewportRowsMoved != 0`, while
-    ## repainting ordinary cell changes (such as cursor movement) without moving
-    ## the surrounding tab/status rows. Movement fields are signed: positive is
-    ## toward later buffer rows.
+    ## Movement fields are signed physical-line deltas (positive means later
+    ## lines); grid-row conversion under line wrap is the consumer's job.
+    ## `viewportPhysicalRowsMoved` is a pre-layout approximation that may be 0
+    ## or short. It is a repaint hint, not an exact translation amount.
     handled*: bool
     region*: GridRegion
     requestedRows*: int
     appliedRows*: int
-    viewportRowsMoved*: int
+    viewportPhysicalRowsMoved*: int
 
 func initGridRegion*(row, column, rows, columns: int): GridRegion =
   GridRegion(row: row, column: column, rows: max(rows, 0), columns: max(columns, 0))
@@ -94,6 +95,8 @@ func initPointerInput*(
   )
 
 func initScrollInput*(
-    row, column, deltaRows: int, modifiers: set[KeyModifier] = {}
+    row, column, deltaPhysicalRows: int, modifiers: set[KeyModifier] = {}
 ): ScrollInput =
-  ScrollInput(row: row, column: column, deltaRows: deltaRows, modifiers: modifiers)
+  ScrollInput(
+    row: row, column: column, deltaPhysicalRows: deltaPhysicalRows, modifiers: modifiers
+  )

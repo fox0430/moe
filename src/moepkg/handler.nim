@@ -500,12 +500,12 @@ proc scrollRegion(e: Editor, window: EditorWindow): GridRegion =
   )
 
 proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
-  ## Apply a frontend-neutral, cell-based vertical scroll and describe the
-  ## affected rendered region for GUI interpolation.
-  result.requestedRows = input.deltaRows
+  ## Apply a frontend-neutral physical-line scroll and describe the affected
+  ## rendered region for GUI repainting.
+  result.requestedRows = input.deltaPhysicalRows
   if not e.config.standard.mouse:
     return
-  if input.deltaRows == 0:
+  if input.deltaPhysicalRows == 0:
     return
   if e.windowManager.windows.len == 0:
     return
@@ -517,12 +517,13 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
     let previousIndex = filerState.selectedIndex
     let previousTopLine = window.viewport.topLine
     if filerState.entries.len > 0:
-      filerState.selectedIndex =
-        clamp(filerState.selectedIndex + input.deltaRows, 0, filerState.entries.high)
+      filerState.selectedIndex = clamp(
+        filerState.selectedIndex + input.deltaPhysicalRows, 0, filerState.entries.high
+      )
     result.handled = true
     result.region = e.scrollRegion(window)
     result.appliedRows = filerState.selectedIndex - previousIndex
-    result.viewportRowsMoved = window.viewport.topLine - previousTopLine
+    result.viewportPhysicalRowsMoved = window.viewport.topLine - previousTopLine
     return
 
   # Handle text editing modes.
@@ -535,7 +536,7 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
     let curLine = window.cursor.line
     let previousTopLine = window.viewport.topLine
     let maxLine = window.buffer.len - 1
-    let newLine = clamp(curLine + input.deltaRows, 0, maxLine)
+    let newLine = clamp(curLine + input.deltaPhysicalRows, 0, maxLine)
 
     if newLine != curLine:
       window.cursor = BufferPosition(line: newLine, column: window.cursor.column)
@@ -557,11 +558,8 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
     result.handled = true
     result.region = e.scrollRegion(window)
     result.appliedRows = newLine - curLine
-    result.viewportRowsMoved = window.viewport.topLine - previousTopLine
+    result.viewportPhysicalRowsMoved = window.viewport.topLine - previousTopLine
     return
-
-  result.handled = true
-  result.region = e.scrollRegion(e.activeWindow)
 
 proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
   ## Apply a frontend-neutral pointer event expressed in rendered grid cells.
@@ -772,8 +770,8 @@ proc handlePointerInput*(e: Editor, input: PointerInput): bool =
   e.handlePointerInputCore(input)
 
 proc handleScrollInput*(e: Editor, input: ScrollInput): ScrollOutcome =
-  ## Handle a vertical scroll expressed as a signed number of grid rows and
-  ## return the movement/region metadata needed for GUI interpolation.
+  ## Handle a vertical scroll expressed as a signed number of physical lines
+  ## and return the movement/region metadata needed for GUI repainting.
   e.prepareForInput(false)
   e.handleScrollInputCore(input)
 
