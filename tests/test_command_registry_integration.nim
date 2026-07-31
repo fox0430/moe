@@ -926,7 +926,8 @@ suite "executeCommand - Edge cases":
     let result = registry.executeCommand(ctx, cmd)
 
     check result.isOk
-    check buffer.len == 0 or buffer[0] != "\n"
+    check buffer.len == 1
+    check buffer[0] == ""
 
   test "operator cancelled when motion fails":
     let buffer = newTextBuffer("hello")
@@ -1784,7 +1785,7 @@ suite "Handler - Join lines":
 
     let result = registry.execute(ctx, custom("join.lines"))
     # Joining on last line returns an error because there's nothing to join
-    check result.isErr or buffer.len == 1
+    check result.isErr
 
 suite "Handler - Toggle case":
   test "toggle case (~)":
@@ -1794,7 +1795,7 @@ suite "Handler - Toggle case":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("toggle.case")).isOk
-    check buffer[0] == "hEllo" or buffer[0][0] == 'h' # First char toggled
+    check buffer[0] == "hello"
 
   test "toggle case multiple chars (3~)":
     let buffer = newTextBuffer("Hello")
@@ -3454,9 +3455,11 @@ suite "Handler - Fold Operations":
     ctx.setupVisual(1, 0, 2, 0)
     let registry = createTestRegistry()
 
-    discard registry.execute(ctx, builtin(bcFoldCreate))
-    # Just check it doesn't crash
-    check true # Just verify no crash
+    check registry.execute(ctx, builtin(bcFoldCreate)).isOk
+    let fold = buffer.foldState.getFoldAt(1)
+    check fold.isSome
+    check fold.get.startLine == 1
+    check fold.get.endLine == 2
 
   test "fold delete":
     let buffer = newTextBuffer("line1\nline2\nline3")
