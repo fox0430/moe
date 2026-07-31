@@ -1912,7 +1912,7 @@ proc isEscaped(runes: seq[Rune], idx: int): bool =
   ## Check if the character at idx is escaped by counting preceding backslashes
   var backslashCount = 0
   var i = idx - 1
-  while i >= 0 and $runes[i] == "\\":
+  while i >= 0 and runes[i] == Rune('\\'):
     backslashCount.inc
     i.dec
   # Odd number of backslashes means the character is escaped
@@ -1944,7 +1944,7 @@ proc findQuotedBoundaries(
   # Collect all unescaped quote positions on the line
   var quotePositions: seq[int] = @[]
   for i in 0 ..< runes.len:
-    if $runes[i] == $quoteChar and not isEscaped(runes, i):
+    if runes[i] == Rune(quoteChar) and not isEscaped(runes, i):
       quotePositions.add(i)
 
   if quotePositions.len < 2:
@@ -2032,8 +2032,13 @@ proc findMatchingParen(
   let cursorCol = min(cursor.column, max(0, cursorRunes.len - 1))
 
   if cursorRunes.len > 0 and cursorCol < cursorRunes.len and
-      $cursorRunes[cursorCol] == $closeChar:
+      cursorRunes[cursorCol] == Rune(closeChar):
     depth = 1
+
+  # When the cursor sits on a close delimiter, depth is seeded with that close
+  # and the open that pops it back to 0 is the match. Closed pairs passed over
+  # during the scan must not match when they balance out.
+  let cursorOnClose = depth > 0
 
   # Search backward from cursor position
   var searchLine = cursor.line
@@ -2050,16 +2055,16 @@ proc findMatchingParen(
 
       while searchCol >= 0:
         if searchCol < runes.len:
-          if $runes[searchCol] == $closeChar:
+          if runes[searchCol] == Rune(closeChar):
             depth.inc
-          elif $runes[searchCol] == $openChar:
+          elif runes[searchCol] == Rune(openChar):
             if depth == 0:
               startLine = searchLine
               startCol = searchCol
               break searchBackward
             else:
               depth.dec
-              if depth == 0:
+              if cursorOnClose and depth == 0:
                 startLine = searchLine
                 startCol = searchCol
                 break searchBackward
@@ -2091,9 +2096,9 @@ proc findMatchingParen(
         searchCol = 0
 
       while searchCol < runes.len:
-        if $runes[searchCol] == $openChar:
+        if runes[searchCol] == Rune(openChar):
           depth.inc
-        elif $runes[searchCol] == $closeChar:
+        elif runes[searchCol] == Rune(closeChar):
           if depth == 0:
             endLine = searchLine
             endCol = searchCol
