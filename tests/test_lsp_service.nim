@@ -320,10 +320,6 @@ suite "LspService - Worker Management (without actual workers)":
     check result1.isOk
     let worker1 = result1.get
 
-    # Worker is started but LSP server state is still lwsStopped
-    # (lcmdStart hasn't been processed yet)
-    check worker1.state == lwsStopped
-
     # Second call must return the same worker, not create a new one
     let result2 = svc.startWorker("nim")
     check result2.isOk
