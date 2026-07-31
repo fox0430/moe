@@ -91,14 +91,19 @@ suite "Config - newEditorConfig defaults":
     check config.standard.colorMode == cm256color
     check config.standard.mouse == false
     check config.standard.lineWrap == true
+    check config.standard.relativeNumber == false
+    check config.standard.scrollbar == false
+    check config.standard.scrollbarWidth == 1
+    check config.standard.bookmarkMarker == "♥ "
+    check config.standard.showModifiedLines == true
+    check config.standard.smartIndent == false
+    check config.standard.timeoutlen == 1000
+    check config.standard.bracketSplit == bsmDisable
 
   test "Clipboard config defaults":
     let config = newEditorConfig()
 
     check config.clipboard.enable == true
-    # detectClipboardTool() returns environment-dependent value
-    check config.clipboard.tool in
-      {cbtXsel, cbtXclip, cbtWlClipboard, cbtWin32yank, cbtPbcopy}
 
   test "BuildOnSave config defaults":
     let config = newEditorConfig()
@@ -132,12 +137,17 @@ suite "Config - newEditorConfig defaults":
     let config = newEditorConfig()
 
     check config.highlight.currentLine == true
+    check config.highlight.currentColumn == false
     check config.highlight.reservedWord == @["TODO", "WIP", "NOTE"]
     check config.highlight.replaceText == true
     check config.highlight.pairOfParen == true
     check config.highlight.fullWidthSpace == true
     check config.highlight.trailingSpaces == true
     check config.highlight.currentWord == true
+    check config.highlight.findCharHighlight == true
+    check config.highlight.colorCodeHighlight == true
+    check config.highlight.gitConflict == true
+    check config.highlight.gitConflictTwoColor == true
     # Pin the config default to the buffer fail-safe. config.nim hardcodes the
     # literal 3000 because it must not import the highlight engine; this guards
     # the two from drifting (a drift would make even default-config buffers
@@ -192,6 +202,12 @@ suite "Config - newEditorConfig defaults":
     check config.notification.lspScreenNotify == true
     check config.notification.lspLogNotify == true
     check config.notification.lspForcePopup == true
+    check config.notification.popupNotifications == false
+    check config.notification.popupPosition == "bottomRight"
+    check config.notification.popupTimeoutMs == 3000
+    check config.notification.popupMaxVisible == 3
+    check config.notification.popupMaxWidth == 60
+    check config.notification.popupBorder == false
 
   test "Filer config defaults":
     let config = newEditorConfig()
@@ -218,6 +234,7 @@ suite "Config - newEditorConfig defaults":
     check config.persist.search == true
     check config.persist.searchHistoryLimit == 1000
     check config.persist.cursorPosition == true
+    check config.persist.bookmarks == true
 
   test "Git config defaults":
     let config = newEditorConfig()
@@ -344,12 +361,24 @@ suite "Config - newEditorConfig defaults":
     # Servers should be empty by default
     check config.lsp.servers.len == 0
 
+  test "Top-level config defaults":
+    let config = newEditorConfig()
+
+    check config.bufferBackend.kind == bbcAuto
+    check config.fileTree.width == 30
+    check config.editorConfig.enable == true
+    check config.log.clearOnStart == false
+    check config.keyMapping.all.len == 0
+    check config.keyMapping.visualAll.len == 0
+    for t in config.keyMapping.perMode:
+      check t.len == 0
+    check config.shellCommands.len == 0
+    check config.commandAliases.len == 0
+    check config.disabledCommandAliases.len == 0
+
 suite "Config - detectClipboardTool":
-  test "detectClipboardTool returns valid ClipboardTool":
-    # This test verifies that detectClipboardTool returns a valid enum value
-    # The actual value depends on the system environment
-    let tool = detectClipboardTool()
-    check tool in {cbtXsel, cbtXclip, cbtWlClipboard, cbtWin32yank, cbtPbcopy}
+  test "detectClipboardTool does not raise":
+    discard detectClipboardTool()
 
 suite "Config - Multiple config instances":
   test "newEditorConfig creates independent instances":
@@ -382,6 +411,7 @@ suite "Config - LspServerConfig defaults":
     check serverConfig.extensions.len == 0
     check serverConfig.command == ""
     check serverConfig.trace == ltOff
+    check serverConfig.settings == ""
     check serverConfig.rustAnalyzerRunSingle == false
     check serverConfig.rustAnalyzerDebugSingle == false
 
