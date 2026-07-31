@@ -5450,6 +5450,31 @@ suite "Operator + Word End Backward (ge) motions":
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
 
+  test "ge with count across lines (2ge)":
+    # Second iteration must scan the line reached by the first iteration
+    let buffer = newTextBuffer("hello world\nfoo")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(1, 0) # on 'f' of "foo"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 2)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge with multibyte characters":
+    # Columns are rune indices, not byte offsets
+    let buffer = newTextBuffer("こんにちは 世界")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on '世'
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4)
+      # 'は' (end of "こんにちは")
+
   test "ge with count exceeding available words":
     # 10ge but only 2 word ends exist; should stop at the earliest one
     let buffer = newTextBuffer("hello world")

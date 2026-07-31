@@ -610,11 +610,14 @@ proc moveWordEndBackward(
     var y = result.y
     var found = false
 
+    # Convert the line once and refresh only when moving to a previous line
+    var runes = getLineRunes(y)
+
     while not found:
       if pos < 0:
         if y > 0:
           y -= 1
-          let runes = getLineRunes(y)
+          runes = getLineRunes(y)
           pos = runes.len - 1
           if pos < 0:
             # Empty line - continue to previous line
@@ -623,7 +626,6 @@ proc moveWordEndBackward(
           # Beginning of buffer
           break
 
-      let runes = getLineRunes(y)
       if isWordEnd(runes, pos):
         found = true
       else:
