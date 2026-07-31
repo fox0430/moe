@@ -1323,6 +1323,151 @@ suite "handleMouseEvent - Mouse Disabled":
     check handled == false
     check e.windowManager.windows[0].cursor.line == 0
 
+suite "frontend-neutral pointer and scroll input":
+  test "signed row delta controls scroll distance":
+    let e =
+      createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
+
+    let down = e.handleScrollInput(initScrollInput(2, 10, 4))
+    check down.handled
+    check down.requestedRows == 4
+    check down.appliedRows == 4
+    check down.viewportPhysicalRowsMoved == 0
+    check e.windowManager.windows[0].cursor.line == 5
+
+    let up = e.handleScrollInput(initScrollInput(2, 10, -2))
+    check up.handled
+    check up.requestedRows == -2
+    check up.appliedRows == -2
+    check up.viewportPhysicalRowsMoved == 0
+    check e.windowManager.windows[0].cursor.line == 3
+
+  test "outcome identifies the scrollable region and viewport movement":
+    let e =
+      createTestEditorWithBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14")
+    e.state.showTabLine = true
+    e.state.showStatusLine = true
+    e.screenSize.width = 40
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 2, y: 3, width: 40, height: 8, topLine: 0, leftColumn: 0)
+    e.windowManager.windows[0].cursor = BufferPosition(line: 6, column: 0)
+
+    let outcome = e.handleScrollInput(initScrollInput(5, 10, 4))
+
+    check outcome.handled
+    check outcome.region == initGridRegion(4, 2, 6, 40)
+    check outcome.requestedRows == 4
+    check outcome.appliedRows == 4
+    check outcome.viewportPhysicalRowsMoved == 3
+
+  test "outcome reports the movement actually applied at a buffer edge":
+    let e = createTestEditorWithBuffer("0\n1\n2")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
+
+    let outcome = e.handleScrollInput(initScrollInput(2, 10, 8))
+
+    check outcome.handled
+    check outcome.requestedRows == 8
+    check outcome.appliedRows == 1
+    check outcome.viewportPhysicalRowsMoved == 0
+
+  test "zero row input produces an unhandled outcome":
+    let e = createTestEditorWithBuffer("0\n1\n2")
+
+    let outcome = e.handleScrollInput(initScrollInput(2, 10, 0))
+
+    check not outcome.handled
+    check outcome.requestedRows == 0
+    check outcome.appliedRows == 0
+    check outcome.viewportPhysicalRowsMoved == 0
+    check outcome.region == GridRegion()
+
+  test "unsupported mode produces an unhandled outcome":
+    let e = createTestEditorWithBuffer("0\n1\n2")
+    e.state.mode = EditorMode.Help
+
+    let outcome = e.handleScrollInput(initScrollInput(2, 10, 1))
+
+    check not outcome.handled
+    check outcome.requestedRows == 1
+    check outcome.appliedRows == 0
+    check outcome.viewportPhysicalRowsMoved == 0
+    check outcome.region == GridRegion()
+
+  test "wrapped text outcome remains physical-line based":
+    let e = createTestEditorWithBuffer("abcdefghij\nnext")
+    e.state.lineWrap = true
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 5, height: 2, topLine: 0, leftColumn: 0)
+
+    let outcome = e.handleScrollInput(initScrollInput(0, 0, 1))
+
+    check outcome.handled
+    check outcome.appliedRows == 1
+    check outcome.viewportPhysicalRowsMoved == 0
+    check e.cursor.line == 1
+
+  test "Filer outcome reports selection movement before layout":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Filer
+    var filerState =
+      FilerState(currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false)
+    for i in 0 ..< 10:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
+
+    let outcome = e.handleScrollInput(initScrollInput(0, 0, 3))
+
+    check outcome.handled
+    check outcome.appliedRows == 3
+    check outcome.viewportPhysicalRowsMoved == 0
+    check e.activeWindow.modeState.filer.selectedIndex == 3
+
+  test "outcome region follows the split window under the pointer":
+    let e = createTestEditorWithBuffer("left0\nleft1\nleft2\nleft3")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    e.screenSize.width = 80
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0)
+    let rightBuffer = newTextBuffer("right0\nright1\nright2\nright3\nright4")
+    let rightWindow = EditorWindow(
+      buffer: rightBuffer,
+      bufferIds: @[rightBuffer.id],
+      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+    e.windowManager.windows.add(rightWindow)
+
+    let outcome = e.handleScrollInput(initScrollInput(5, 50, 3))
+
+    check outcome.handled
+    check outcome.region == initGridRegion(0, 40, 23, 40)
+    check outcome.appliedRows == 3
+    check e.windowManager.windows[0].cursor.line == 0
+    check e.windowManager.windows[1].cursor.line == 3
+
+  test "primary press uses rendered grid coordinates":
+    let e = createTestEditorWithBuffer("zero\none\ntwo\nthree")
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+
+    let handled = e.handlePointerInput(initPointerInput(2, 8))
+
+    check handled
+    check e.cursor.line == 2
+
+  test "non-primary pointer input remains available to the host":
+    let e = createTestEditorWithBuffer("zero\none")
+
+    let handled = e.handlePointerInput(initPointerInput(1, 5, button = pbSecondary))
+
+    check not handled
+    check e.cursor.line == 0
+
 suite "handleMouseEvent - Wheel Scroll":
   test "WheelDown scrolls cursor down by 3 lines":
     let e = createTestEditorWithBuffer(
@@ -3023,6 +3168,16 @@ suite "handlePasteEvent":
   proc makePasteEvent(text: string): Event =
     Event(kind: EventKind.Paste, pastedText: text)
 
+  test "frontend-neutral paste does not require a Celina event":
+    let e = createTestEditorForPaste("")
+    e.state.mode = EditorMode.Insert
+
+    discard e.handlePaste("café\r\nnext")
+
+    check $e.activeBuffer.getLine(0) == "café"
+    check $e.activeBuffer.getLine(1) == "next"
+    check e.cursor == BufferPosition(line: 1, column: 4)
+
   test "Insert mode with active transaction - paste succeeds":
     let e = createTestEditorForPaste("hello")
     e.state.mode = EditorMode.Insert
@@ -3336,6 +3491,24 @@ suite "handleKeyCombo - frontend-neutral input":
     check e.state.isSearchOverlay
     check e.state.input.search.text == "w"
     check e.state.input.search.cursor == 1
+
+  test "committed GUI text can contain composed Unicode":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Insert
+
+    discard e.handleTextInput("é🙂")
+
+    check $e.activeBuffer.getLine(0) == "é🙂"
+    check e.cursor.column == 2
+
+  test "multi-rune text advances the command cursor by runes":
+    let e = createTestEditorWithBuffer("")
+    e.state.enterCommandOverlay()
+
+    discard e.handleTextInput("λx")
+
+    check e.state.input.commandText == ":λx"
+    check e.state.input.commandCursor == 2
 
 suite "Macro recording - Command / Search overlay keys":
   # Regression: overlay dispatch used to bypass macro recording, so `qa:s/foo/bar/<CR>q`
