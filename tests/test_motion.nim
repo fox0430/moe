@@ -743,6 +743,39 @@ suite "Text Objects - Quoted":
     check range.start.column == 5
     check range.endPos.column == 9
 
+  test "findQuotedBoundaries with multibyte runes inside and outside quotes":
+    # Rune columns: 例(0) :(1) sp(2) "(3) あ(4) い(5) う(6) "(7)
+    let buffer = newTextBuffer("例: \"あいう\" end")
+    let cursor = BufferPosition(line: 0, column: 5)
+    let innerRes = findQuotedBoundaries(buffer, cursor, '"', inner = true)
+    check innerRes.isOk
+    check innerRes.get.start.column == 4
+    check innerRes.get.endPos.column == 6
+    let aroundRes = findQuotedBoundaries(buffer, cursor, '"', inner = false)
+    check aroundRes.isOk
+    check aroundRes.get.start.column == 3
+    check aroundRes.get.endPos.column == 7
+
+  test "findQuotedBoundaries skips escaped quote":
+    # say "a\"b" end -- the middle quote is escaped, so the pair is the outer
+    # quotes and the content keeps the escaped quote.
+    let buffer = newTextBuffer("say \"a\\\"b\" end")
+    let cursor = BufferPosition(line: 0, column: 8) # on 'b'
+    let result = findQuotedBoundaries(buffer, cursor, '"', inner = true)
+    check result.isOk
+    check result.get.start.column == 5
+    check result.get.endPos.column == 8
+
+  test "findQuotedBoundaries treats double backslash as not escaping":
+    # "a\\" -- the second backslash is itself escaped, so the closing quote
+    # is a real delimiter.
+    let buffer = newTextBuffer("\"a\\\\\" x")
+    let cursor = BufferPosition(line: 0, column: 1)
+    let result = findQuotedBoundaries(buffer, cursor, '"', inner = true)
+    check result.isOk
+    check result.get.start.column == 1
+    check result.get.endPos.column == 3
+
 suite "Text Objects - Parenthesis":
   test "findMatchingParen cursor on close paren":
     let buffer = newTextBuffer("(x)")
@@ -798,6 +831,59 @@ suite "Text Objects - Parenthesis":
     check not range.isEmpty
     check (range.start.line, range.start.column) == (0, 5)
     check (range.endPos.line, range.endPos.column) == (1, 5)
+
+  test "findMatchingParen with multibyte runes inside and outside":
+    # Rune columns: 日(0) 本(1) 語(2) ((3) あ(4) +(5) い(6) )(7) 末(8) 尾(9)
+    let buffer = newTextBuffer("日本語(あ+い)末尾")
+    let cursor = BufferPosition(line: 0, column: 5)
+    let innerRes = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check innerRes.isOk
+    check innerRes.get.start.column == 4
+    check innerRes.get.endPos.column == 6
+    let aroundRes = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    check aroundRes.isOk
+    check aroundRes.get.start.column == 3
+    check aroundRes.get.endPos.column == 7
+
+  test "findMatchingParen skips a closed pair when scanning backward":
+    # f(g(x) + y) with the cursor on '+': the backward scan passes over the
+    # closed inner pair (x) and must select the outer pair, like vim's i(.
+    let buffer = newTextBuffer("f(g(x) + y)")
+    let cursor = BufferPosition(line: 0, column: 7)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check result.isOk
+    check result.get.start.column == 2
+    check result.get.endPos.column == 9
+
+  test "findMatchingParen selects the innermost enclosing pair":
+    let buffer = newTextBuffer("f(g(x))")
+    let cursor = BufferPosition(line: 0, column: 4)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check result.isOk
+    check result.get.start.column == 4
+    check result.get.endPos.column == 4
+
+  test "findMatchingParen cursor on close paren of the outer nested pair":
+    # f(g(x)) with the cursor on the outer ')': the seeded close must match
+    # the outer '(', not the inner one.
+    let buffer = newTextBuffer("f(g(x))")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    check result.isOk
+    check result.get.start.column == 1
+    check result.get.endPos.column == 6
+
+  test "findMatchingParen cursor on close paren multi-line":
+    let buffer = newTextBuffer("func(\n  arg\n)")
+    let cursor = BufferPosition(line: 2, column: 0)
+    let innerRes = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check innerRes.isOk
+    check (innerRes.get.start.line, innerRes.get.start.column) == (0, 5)
+    check (innerRes.get.endPos.line, innerRes.get.endPos.column) == (1, 5)
+    let aroundRes = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    check aroundRes.isOk
+    check (aroundRes.get.start.line, aroundRes.get.start.column) == (0, 4)
+    check (aroundRes.get.endPos.line, aroundRes.get.endPos.column) == (2, 0)
 
 suite "calculateTextObjectRange":
   test "word text object":
