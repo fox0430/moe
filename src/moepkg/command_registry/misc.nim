@@ -26,7 +26,7 @@ import pkg/results
 import ../[types, buffer, motion, modes, search_utils, git_conflict, render_utils]
 import ../command_handlers/[insert_commands, normal_commands]
 
-import core
+import core, operator_engine
 
 ## Command handler wrappers (delegate to mode-specific command modules)
 
@@ -67,7 +67,9 @@ proc handleInsertLineBelow*(ctx: CommandContext): Result[(), string] =
   let txnResult = ctx.buffer.beginTransaction("Insert line below")
   if txnResult.isErr:
     return err("Failed to begin transaction: " & txnResult.error)
-  insertLineBelow(ctx.buffer, ctx.state)
+  let insertResult = insertLineBelow(ctx.buffer, ctx.state)
+  if insertResult.isErr:
+    return rollbackAndPropagate(ctx, insertResult.error)
   Result[(), string].ok ()
 
 proc handleInsertLineAbove*(ctx: CommandContext): Result[(), string] =
@@ -75,7 +77,9 @@ proc handleInsertLineAbove*(ctx: CommandContext): Result[(), string] =
   let txnResult = ctx.buffer.beginTransaction("Insert line above")
   if txnResult.isErr:
     return err("Failed to begin transaction: " & txnResult.error)
-  insertLineAbove(ctx.buffer, ctx.state)
+  let insertResult = insertLineAbove(ctx.buffer, ctx.state)
+  if insertResult.isErr:
+    return rollbackAndPropagate(ctx, insertResult.error)
   Result[(), string].ok ()
 
 proc handleAppend*(ctx: CommandContext): Result[(), string] =

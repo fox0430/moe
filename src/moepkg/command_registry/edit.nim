@@ -128,7 +128,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.rollbackTransaction()
+          return rollbackAndPropagate(ctx, insertResult.error)
         return err(insertResult.error)
 
       # Move cursor to the first non-whitespace character of pasted line
@@ -151,7 +151,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.rollbackTransaction()
+          return rollbackAndPropagate(ctx, insertResult.error)
         return err(insertResult.error)
 
       # Advance cursor past the inserted text so the next iteration inserts
@@ -255,7 +255,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.rollbackTransaction()
+          return rollbackAndPropagate(ctx, insertResult.error)
         return err(insertResult.error)
 
       # Move cursor to the first non-whitespace character of pasted line
@@ -272,7 +272,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
       if insertResult.isErr:
         # Rollback transaction on error
         if actualCount > 1:
-          discard ctx.buffer.rollbackTransaction()
+          return rollbackAndPropagate(ctx, insertResult.error)
         return err(insertResult.error)
 
       # Advance cursor past the inserted text so the next iteration inserts
@@ -528,8 +528,7 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
     let endPos = ctx.cursor
     let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
     if delResult.isErr:
-      discard ctx.buffer.rollbackTransaction()
-      return err(delResult.error)
+      return rollbackAndPropagate(ctx, delResult.error)
 
   # Store in register only after the buffer change succeeded (registers are not
   # covered by the buffer transaction, so a rollback would not undo them)
@@ -584,8 +583,7 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
     if startLine + 1 < ctx.buffer.len:
       let deleteResult = ctx.buffer.deleteLine(startLine + 1)
       if deleteResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err("Failed to delete line: " & deleteResult.error)
+        return rollbackAndPropagate(ctx, "Failed to delete line: " & deleteResult.error)
 
   # Clear the first line but preserve indent
   if startLine < ctx.buffer.len:
@@ -597,16 +595,15 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
         BufferPosition(line: startLine, column: 0),
       )
       if deleteResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err("Failed to clear line: " & deleteResult.error)
+        return rollbackAndPropagate(ctx, "Failed to clear line: " & deleteResult.error)
 
     # Insert indent if auto-indent is enabled
     if ctx.state.autoIndent and indent.len > 0:
       let insertResult =
         ctx.buffer.insertText(BufferPosition(line: startLine, column: 0), indent)
       if insertResult.isErr:
-        discard ctx.buffer.rollbackTransaction()
-        return err("Failed to insert indent: " & insertResult.error)
+        return
+          rollbackAndPropagate(ctx, "Failed to insert indent: " & insertResult.error)
 
   # Store in register only after the buffer change succeeded (registers are not
   # covered by the buffer transaction, so a rollback would not undo them)

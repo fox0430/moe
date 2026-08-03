@@ -1727,7 +1727,11 @@ proc handleInsertNormalReturn(e: Editor) =
     let activeBuffer = e.activeBuffer()
     if activeBuffer.inTransaction:
       clearAutoIndentIfUnedited(activeBuffer, e.state)
-      discard activeBuffer.commitTransaction()
+      let commitResult = activeBuffer.commitTransaction()
+      if commitResult.isErr:
+        logError "result_processor",
+          "Failed to commit transaction: " & commitResult.error
+        e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
     e.state.editState.insertModeStartPos = none(BufferPosition)
     e.state.editState.substituteContext = none(types.SubstituteContext)
 

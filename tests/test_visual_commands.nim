@@ -2531,3 +2531,137 @@ suite "Visual delete - register/buffer atomicity":
 
     check state.registers.getNumberRegister(1).getContent() == "SEED_LINE\n"
     check buf.getLine(0) == "hello world"
+
+suite "Visual edit commands - read-only failure rolls back and reports":
+  proc newReadOnlyVisualState(): (TextBuffer, EditorState) =
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFoo Bar")
+    let state = createTestState()
+    state.previousMode = EditorMode.Normal
+    buf.readOnly = true
+    (buf, state)
+
+  test "visualUppercase on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualReplace on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualChange on read-only buffer keeps text and stays out of Insert":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualChange(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualSurround on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualPaste on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.registers.setYankedRegister("XYZ", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualUppercase linewise on read-only buffer keeps all lines":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.len == 2
+    check buf.getLine(0) == "Hello World"
+    check buf.getLine(1) == "Foo Bar"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+
+  test "visualDelete on read-only buffer restores previousMode, not a hardcoded mode":
+    let (buf, state) = newReadOnlyVisualState()
+    # previousMode differs from Normal here: a regression that hardcodes
+    # EditorMode.Normal in the failure path must not pass this check.
+    state.previousMode = EditorMode.Insert
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Insert

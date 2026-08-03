@@ -21,6 +21,8 @@
 
 import std/[unittest, options, tables]
 
+import pkg/results
+
 import ../src/moepkg/[buffer, types, config, modes, registers]
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/command_handlers/[insert_commands, smart_indent]
@@ -446,7 +448,7 @@ suite "Insert Commands - insertLineBelow smart indent (Nim)":
     let state = createSmartIndentState()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check buf.getLine(0) == "var"
     check buf.getLine(1) == "  "
@@ -458,7 +460,7 @@ suite "Insert Commands - insertLineBelow smart indent (Nim)":
     let state = createSmartIndentState()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check buf.getLine(1) == "  "
     check state.cursor.column == 2
@@ -468,7 +470,7 @@ suite "Insert Commands - insertLineBelow smart indent (Nim)":
     let state = createSmartIndentState()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check buf.getLine(1) == ""
     check state.cursor.column == 0

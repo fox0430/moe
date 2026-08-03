@@ -298,15 +298,23 @@ proc handlePasteText(e: Editor, text: string): bool =
     let pos = e.cursor
     let insertResult = activeBuffer.insertText(pos, pastedText)
     if insertResult.isErr:
+      var msg = "Paste failed: " & insertResult.error
       if ownTransaction:
-        discard activeBuffer.rollbackTransaction()
-      e.state.statusMessage = "Paste failed: " & insertResult.error
+        let rollbackResult = activeBuffer.rollbackTransaction()
+        if rollbackResult.isErr:
+          logError "handler",
+            "Failed to rollback paste transaction: " & rollbackResult.error
+          msg &= " (rollback failed: " & rollbackResult.error & ")"
+      e.state.statusMessage = msg
       return true
 
     e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
 
     if ownTransaction:
-      discard activeBuffer.commitTransaction()
+      let commitResult = activeBuffer.commitTransaction()
+      if commitResult.isErr:
+        logError "handler", "Failed to commit paste transaction: " & commitResult.error
+        e.state.statusMessage = "Paste failed: " & commitResult.error
   else:
     # For other modes, just show a message
     e.state.statusMessage = "Paste not supported in this mode"
@@ -429,15 +437,23 @@ proc middleClickPaste(e: Editor) =
   let pos = e.cursor
   let insertResult = activeBuffer.insertText(pos, pastedText)
   if insertResult.isErr:
+    var msg = "Paste failed: " & insertResult.error
     if ownTransaction:
-      discard activeBuffer.rollbackTransaction()
-    e.state.statusMessage = "Paste failed: " & insertResult.error
+      let rollbackResult = activeBuffer.rollbackTransaction()
+      if rollbackResult.isErr:
+        logError "handler",
+          "Failed to rollback paste transaction: " & rollbackResult.error
+        msg &= " (rollback failed: " & rollbackResult.error & ")"
+    e.state.statusMessage = msg
     return
 
   e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
 
   if ownTransaction:
-    discard activeBuffer.commitTransaction()
+    let commitResult = activeBuffer.commitTransaction()
+    if commitResult.isErr:
+      logError "handler", "Failed to commit paste transaction: " & commitResult.error
+      e.state.statusMessage = "Paste failed: " & commitResult.error
 
 proc finalizeCurrentWindowForMouseJump(e: Editor) =
   ## Exit the current mode before a mouse click hands focus to another window.
@@ -449,7 +465,10 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
   of EditorMode.Insert, EditorMode.Replace:
     if activeBuffer.inTransaction:
       clearAutoIndentIfUnedited(activeBuffer, e.state)
-      discard activeBuffer.commitTransaction()
+      let commitResult = activeBuffer.commitTransaction()
+      if commitResult.isErr:
+        logError "handler", "Failed to commit transaction: " & commitResult.error
+        e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
     e.state.editState.insertModeStartPos = none(BufferPosition)
     e.state.editState.substituteContext = none(types.SubstituteContext)
     e.state.editState.replaceHistory = @[]
@@ -467,7 +486,10 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
   if e.state.insertNormalMode:
     if activeBuffer.inTransaction:
       clearAutoIndentIfUnedited(activeBuffer, e.state)
-      discard activeBuffer.commitTransaction()
+      let commitResult = activeBuffer.commitTransaction()
+      if commitResult.isErr:
+        logError "handler", "Failed to commit transaction: " & commitResult.error
+        e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
     e.state.insertNormalMode = false
     e.state.editState.insertModeStartPos = none(BufferPosition)
 
@@ -863,7 +885,10 @@ proc handleInterruptCore(e: Editor): bool =
       let activeBuffer = e.activeBuffer()
       if activeBuffer.inTransaction:
         clearAutoIndentIfUnedited(activeBuffer, e.state)
-        discard activeBuffer.commitTransaction()
+        let commitResult = activeBuffer.commitTransaction()
+        if commitResult.isErr:
+          logError "handler", "Failed to commit transaction: " & commitResult.error
+          e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
       e.state.editState.insertModeStartPos = none(BufferPosition)
       e.state.editState.substituteContext = none(types.SubstituteContext)
       let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
@@ -879,7 +904,10 @@ proc handleInterruptCore(e: Editor): bool =
     if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
       if activeBuffer.inTransaction:
         clearAutoIndentIfUnedited(activeBuffer, e.state)
-        discard activeBuffer.commitTransaction()
+        let commitResult = activeBuffer.commitTransaction()
+        if commitResult.isErr:
+          logError "handler", "Failed to commit transaction: " & commitResult.error
+          e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
       # Clear insert mode tracking state
       e.state.editState.insertModeStartPos = none(BufferPosition)
       e.state.editState.substituteContext = none(types.SubstituteContext)

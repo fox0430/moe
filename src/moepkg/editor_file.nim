@@ -201,13 +201,18 @@ proc savePersistData*(e: Editor) =
         except CatchableError as ex:
           logError("editor", "Failed to remove empty bookmark file: " & ex.msg)
 
-proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer) =
-  if shouldTrimTrailingWhitespace(buffer):
+proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] =
+  # Read-only buffers cannot be edited, so skip trimming and save as-is.
+  # Otherwise a trim failure would permanently block saving the file.
+  if not buffer.readOnly and shouldTrimTrailingWhitespace(buffer):
     for i in 0 ..< buffer.len:
       let line = buffer.getLine(i)
       let trimmed = line.strip(leading = false, trailing = true)
       if trimmed.len != line.len:
-        discard buffer.replaceLine(i, trimmed)
+        let replaceResult = buffer.replaceLine(i, trimmed)
+        if replaceResult.isErr:
+          return err(replaceResult.error)
+  ok(())
 
 proc saveFile*(
     e: Editor, path: Option[string] = none(string), force: bool = false
@@ -236,7 +241,13 @@ proc saveFile*(
     return err(ExternalModErrorMsg)
 
   # Trim trailing whitespace if EditorConfig says so
-  trimTrailingWhitespaceIfConfigured(activeBuffer)
+  let trimResult = trimTrailingWhitespaceIfConfigured(activeBuffer)
+  if trimResult.isErr:
+    logError(
+      "editor",
+      "Failed to trim trailing whitespace for " & savePath & ": " & trimResult.error,
+    )
+    return err("Failed to trim trailing whitespace: " & trimResult.error)
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)
@@ -277,7 +288,13 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
       continue
 
     # Mirror saveFile: honor EditorConfig trim_trailing_whitespace per buffer.
-    trimTrailingWhitespaceIfConfigured(buffer)
+    let trimResult = trimTrailingWhitespaceIfConfigured(buffer)
+    if trimResult.isErr:
+      logError(
+        "editor", "Save all trim failed for " & savePath & ": " & trimResult.error
+      )
+      result.failures.add((path: savePath, error: trimResult.error))
+      continue
 
     let saveResult = buffer.saveFile(savePath, checkExternalMod = not force)
     if saveResult.isErr:

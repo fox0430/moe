@@ -166,14 +166,23 @@ proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
     cursor = advancePastText(cursor, unit)
   state.cursor = cursor
 
-proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, string] =
+proc finalizeInsertExit(
+    buffer: TextBuffer, state: EditorState
+): Result[string, string] =
   ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, `.`-repeat +
   ## `[count]i` bookkeeping, visual-block replication, insert-state reset, and
   ## transaction commit. Called by both the Escape path and the imap ->
   ## Command-mode alias bridge so the bridge does not skip the cleanup.
+  ##
+  ## ok carries a non-fatal warning to surface (empty when clean): the
+  ## transaction is committed at that point, so the message must not block the
+  ## mode transition or a pending aliased command. err is a fatal commit
+  ## failure.
   state.snippetSession.active = false
 
   clearAutoIndentIfUnedited(buffer, state)
+
+  var replicationError = ""
 
   if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
     let transaction = buffer.currentTransaction.get
@@ -187,11 +196,17 @@ proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, st
           let col = ctx.insertColumn
           if col > lineCharLen:
             let padding = ' '.repeat(col - lineCharLen)
-            discard buffer.insertText(
+            let padResult = buffer.insertText(
               BufferPosition(line: lineNum, column: lineCharLen), padding
             )
-          discard
+            if padResult.isErr:
+              replicationError = padResult.error
+              break
+          let replayResult =
             buffer.insertText(BufferPosition(line: lineNum, column: col), insertedText)
+          if replayResult.isErr:
+            replicationError = replayResult.error
+            break
       state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
 
     if insertedText.len > 0:
@@ -225,8 +240,15 @@ proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, st
   if buffer.inTransaction:
     let transactionResult = buffer.commitTransaction()
     if transactionResult.isErr:
-      return err(transactionResult.error)
-  ok()
+      return err("Failed to commit transaction: " & transactionResult.error)
+
+  if replicationError.len > 0:
+    # A replication edit failed partway; the transaction was still committed
+    # above (rolling the session back would also lose the user's typed text),
+    # so report the partial replication after the commit as a warning only.
+    return ok("Failed to replicate visual block insert: " & replicationError)
+
+  ok("")
 
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
@@ -247,13 +269,15 @@ proc handleInsertMode*(
         )
 
       let finalizeResult = finalizeInsertExit(buffer, state)
-      if finalizeResult.isErr:
-        # Even if commit fails, allow mode transition so user isn't stuck in Insert mode
-        return HandlerResult(
-          kind: hrHandled,
-          modeTransition: r.modeTransition,
-          statusMessage: "Failed to commit transaction: " & finalizeResult.error,
-        )
+      # Even on failure, allow mode transition so user isn't stuck in Insert
+      # mode. A committed replication warning (ok with a message) surfaces the
+      # same way.
+      return HandlerResult(
+        kind: hrHandled,
+        modeTransition: r.modeTransition,
+        statusMessage:
+          if finalizeResult.isErr: finalizeResult.error else: finalizeResult.get,
+      )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
@@ -265,10 +289,12 @@ proc handleInsertMode*(
     # cleanup all fire before the aliased command runs.
     let finalizeResult = finalizeInsertExit(buffer, state)
     if finalizeResult.isErr:
-      return HandlerResult(
-        kind: hrError,
-        errorMessage: "Failed to commit transaction: " & finalizeResult.error,
-      )
+      return HandlerResult(kind: hrError, errorMessage: finalizeResult.error)
+    if finalizeResult.get.len > 0:
+      # Committed with a partial-replication warning: surface it but run the
+      # alias anyway. The session is already finalized, and aborting here would
+      # leave Insert mode without a transaction.
+      state.statusMessage = finalizeResult.get
     return HandlerResult(
       kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
     )

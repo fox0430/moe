@@ -30,6 +30,19 @@ import ../command_handlers/insert_commands
 
 import core
 
+proc rollbackAndPropagate*(
+    ctx: CommandContext, primaryError: string
+): Result[(), string] =
+  ## Roll back the open transaction on an edit-failure path and return the error
+  ## to propagate. If the rollback itself fails the buffer may be left
+  ## inconsistent, so that failure is logged and appended to the propagated
+  ## error (which surfaces as the status message) instead of being discarded.
+  let rollbackResult = ctx.buffer.rollbackTransaction()
+  if rollbackResult.isErr:
+    logError "operator", "Failed to rollback transaction: " & rollbackResult.error
+    return err(primaryError & " (rollback failed: " & rollbackResult.error & ")")
+  err(primaryError)
+
 ## Helper for register dispatch
 ## These helpers check pendingRegister and route content to the correct register.
 
@@ -198,8 +211,7 @@ proc executeOperatorOnRange*(
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
     if delResult.isErr:
-      discard ctx.buffer.rollbackTransaction()
-      return err(delResult.error)
+      return rollbackAndPropagate(ctx, delResult.error)
 
     if not range.isEmpty:
       # Store in register only after the buffer change succeeded (registers are
@@ -259,7 +271,9 @@ proc executeOperatorOnRange*(
       for lineNum in startLine .. endLine:
         if lineNum < ctx.buffer.len:
           let insertPos = BufferPosition(line: lineNum, column: 0)
-          discard ctx.buffer.insertText(insertPos, indentStr)
+          let insertResult = ctx.buffer.insertText(insertPos, indentStr)
+          if insertResult.isErr:
+            return err(insertResult.error)
     if txr.isErr:
       return err("Transaction failed: " & txr.error)
 
@@ -288,7 +302,9 @@ proc executeOperatorOnRange*(
           if removeCount > 0:
             for i in 1 .. removeCount:
               let deletePos = BufferPosition(line: lineNum, column: 0)
-              discard ctx.buffer.deleteChar(deletePos)
+              let deleteResult = ctx.buffer.deleteChar(deletePos)
+              if deleteResult.isErr:
+                return err(deleteResult.error)
     if txr.isErr:
       return err("Transaction failed: " & txr.error)
 
@@ -306,13 +322,21 @@ proc executeOperatorOnRange*(
               let lowerText = lineText.toLowerAscii()
               let startPos = BufferPosition(line: lineNum, column: 0)
               let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-              discard ctx.buffer.deleteRange(startPos, endPos)
-              discard ctx.buffer.insertText(startPos, lowerText)
+              let delResult = ctx.buffer.deleteRange(startPos, endPos)
+              if delResult.isErr:
+                return err(delResult.error)
+              let insResult = ctx.buffer.insertText(startPos, lowerText)
+              if insResult.isErr:
+                return err(insResult.error)
       else:
         let text = extractRangeText(ctx.buffer, range)
         let lowerText = text.toLowerAscii()
-        discard ctx.buffer.deleteRange(range.start, range.endPos)
-        discard ctx.buffer.insertText(range.start, lowerText)
+        let delResult = ctx.buffer.deleteRange(range.start, range.endPos)
+        if delResult.isErr:
+          return err(delResult.error)
+        let insResult = ctx.buffer.insertText(range.start, lowerText)
+        if insResult.isErr:
+          return err(insResult.error)
     if txr.isErr:
       return err("Transaction failed: " & txr.error)
 
@@ -332,13 +356,21 @@ proc executeOperatorOnRange*(
               let upperText = lineText.toUpperAscii()
               let startPos = BufferPosition(line: lineNum, column: 0)
               let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-              discard ctx.buffer.deleteRange(startPos, endPos)
-              discard ctx.buffer.insertText(startPos, upperText)
+              let delResult = ctx.buffer.deleteRange(startPos, endPos)
+              if delResult.isErr:
+                return err(delResult.error)
+              let insResult = ctx.buffer.insertText(startPos, upperText)
+              if insResult.isErr:
+                return err(insResult.error)
       else:
         let text = extractRangeText(ctx.buffer, range)
         let upperText = text.toUpperAscii()
-        discard ctx.buffer.deleteRange(range.start, range.endPos)
-        discard ctx.buffer.insertText(range.start, upperText)
+        let delResult = ctx.buffer.deleteRange(range.start, range.endPos)
+        if delResult.isErr:
+          return err(delResult.error)
+        let insResult = ctx.buffer.insertText(range.start, upperText)
+        if insResult.isErr:
+          return err(insResult.error)
     if txr.isErr:
       return err("Transaction failed: " & txr.error)
 

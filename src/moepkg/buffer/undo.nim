@@ -286,9 +286,6 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.modifiedLines = b.pendingSnapshotModifiedLines
     b.foldState = b.pendingSnapshotFolds
     b.bookmarks = b.pendingSnapshotBookmarks
-    # Drop every pending-snapshot artifact, matching commit/push cleanup, so a
-    # later ckSnapshot delta is never computed against a rolled-back base.
-    b.discardPendingSnapshot()
   else:
     for i in countdown(transaction.changes.len - 1, 0):
       let r = b.undoChange(transaction.changes[i])
@@ -296,7 +293,15 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
         # Clean up transaction state even if rollback partially fails
         b.inTransaction = false
         b.currentTransaction = none(BufferTransaction)
+        b.discardPendingSnapshot()
         return err("Failed to rollback transaction: " & r.error)
+
+  # Drop every pending-snapshot artifact, matching the commit path, so a later
+  # capture/edit never reuses a stale pre-transaction base. Required for the
+  # non-PieceTable backends too: beginTransaction captured the hasPending*
+  # flags, and a zero-change rollback must clear them or the next
+  # pushUndoChange attaches a stale pre-mutation snapshot.
+  b.discardPendingSnapshot()
 
   # Restore changeSeq to its value at transaction start
   b.changeSeq = transaction.startSeq
