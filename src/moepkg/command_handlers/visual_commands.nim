@@ -198,13 +198,16 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
     state.statusMessage = ""
     state.mode = state.previousMode
 
-proc storeVisualDeletedText(state: EditorState, text: string, isLine: bool) =
-  ## Store deleted text in the register selected by pendingRegister.
-  ## Call this only after the buffer change succeeded: registers are not covered
-  ## by the buffer transaction, so a rollback would not undo them.
-  if state.pendingInput.pendingRegister.isSome and
-      state.pendingInput.pendingRegister.get != '\0':
-    let regName = state.pendingInput.pendingRegister.get
+proc storeVisualDeletedText(
+    state: EditorState, reg: Option[char], text: string, isLine: bool
+) =
+  ## Store deleted text in the register selected by `reg` — the pending
+  ## register captured before the edit. Call this only after the buffer change
+  ## succeeded: registers are not covered by the buffer transaction, so a
+  ## rollback would not undo them. Reading pendingRegister at store time is
+  ## unsafe because the edit path consumes it before the commit.
+  if reg.isSome and reg.get != '\0':
+    let regName = reg.get
     if regName.isNamedRegisterName:
       discard state.registers.setNamedRegister(regName, text, isLine)
     elif regName.isClipboardRegisterName:
@@ -294,6 +297,13 @@ proc deleteLineSelection(
 proc visualDelete*(buffer: TextBuffer, state: EditorState) =
   ## Delete visual selection and return to previous mode
   if state.visualSelection.active:
+    # Consume the pending register up front: the register store happens only
+    # after the transaction commits (registers are not covered by buffer
+    # transactions), so routing must use a value captured before the edit, and
+    # a failed edit must still consume the selector.
+    let pendingReg = state.pendingInput.pendingRegister
+    state.pendingInput.pendingRegister = none(char)
+
     var deletedText = ""
     var deletedIsLine = false
 
@@ -311,8 +321,6 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
 
         checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
         state.cursor = selStart
-
-      state.pendingInput.pendingRegister = none(char)
     if txr.isErr:
       state.visualSelection.active = false
       state.mode = state.previousMode
@@ -320,7 +328,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
 
     # Registers are not covered by the buffer transaction, so store the
     # deleted text only after the transaction committed.
-    state.storeVisualDeletedText(deletedText, deletedIsLine)
+    state.storeVisualDeletedText(pendingReg, deletedText, deletedIsLine)
 
     # Clamp cursor to valid position after deletion
     if state.cursor.line >= buffer.len:
@@ -814,7 +822,9 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
     if state.visualSelection.kind == vskBlock:
       # Registers are not covered by the buffer transaction, so store the
       # deleted text only after the transaction committed.
-      state.storeVisualDeletedText(deletedText, false)
+      state.storeVisualDeletedText(
+        state.pendingInput.pendingRegister, deletedText, false
+      )
 
     state.visualSelection.active = false
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
