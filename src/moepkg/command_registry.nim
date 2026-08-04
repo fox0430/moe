@@ -259,10 +259,10 @@ proc executeCommand*(
     discard ctx.buffer.foldState.openFoldsInRange(selLo, selHi)
 
   # Primitive-level checks in moepkg/buffer/edit.nim reject writes on readOnly
-  # buffers at the choke point, but several operators (indent, outdent, case
-  # conversion, visual replace/surround) discard the primitive results so the
-  # user would never see the rejection. Keep this gate as defense-in-depth to
-  # surface a status message and cancel any visual selection or pending operator.
+  # buffers at the choke point, and the operators now propagate those results.
+  # Keep this gate as defense-in-depth: it centralizes the status message and
+  # cancels any visual selection or pending operator in one place, instead of
+  # leaving each handler to unwind its own state after a rejected edit.
   if (isEditCommand or isVisualEditCommand) and ctx.buffer.readOnly:
     if isVisualEditCommand:
       ctx.state.visualSelection.active = false

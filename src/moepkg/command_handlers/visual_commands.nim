@@ -30,6 +30,18 @@ import ../[types, registers, motion, modes, config, clipboard]
 import ../buffer/[core, edit, fold, undo]
 import insert_commands
 
+template checkVisualEdit(state: EditorState, r: Result[(), string]) =
+  ## For use inside a withTransaction body of a Visual command: on an edit
+  ## failure surface the error, leave Visual mode and return from the enclosing
+  ## proc. The return makes withTransaction roll back, so no partially applied
+  ## edit is committed.
+  let checkVisualEditResult = r
+  if checkVisualEditResult.isErr:
+    state.statusMessage = checkVisualEditResult.error
+    state.visualSelection.active = false
+    state.mode = state.previousMode
+    return
+
 proc getSelectionRange*(
     selection: VisualSelection
 ): tuple[start, endPos: BufferPosition] {.inline.} =
@@ -186,13 +198,16 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
     state.statusMessage = ""
     state.mode = state.previousMode
 
-proc storeVisualDeletedText(state: EditorState, text: string, isLine: bool) =
-  ## Store deleted text in the register selected by pendingRegister.
-  ## Call this only after the buffer change succeeded: registers are not covered
-  ## by the buffer transaction, so a rollback would not undo them.
-  if state.pendingInput.pendingRegister.isSome and
-      state.pendingInput.pendingRegister.get != '\0':
-    let regName = state.pendingInput.pendingRegister.get
+proc storeVisualDeletedText(
+    state: EditorState, reg: Option[char], text: string, isLine: bool
+) =
+  ## Store deleted text in the register selected by `reg` — the pending
+  ## register captured before the edit. Call this only after the buffer change
+  ## succeeded: registers are not covered by the buffer transaction, so a
+  ## rollback would not undo them. Reading pendingRegister at store time is
+  ## unsafe because the edit path consumes it before the commit.
+  if reg.isSome and reg.get != '\0':
+    let regName = reg.get
     if regName.isNamedRegisterName:
       discard state.registers.setNamedRegister(regName, text, isLine)
     elif regName.isClipboardRegisterName:
@@ -202,8 +217,13 @@ proc storeVisualDeletedText(state: EditorState, text: string, isLine: bool) =
   else:
     state.registers.setDeletedRegister(text, isLine)
 
-proc deleteBlockSelection(buffer: TextBuffer, state: EditorState): Result[(), string] =
-  ## Delete a block (rectangular) selection
+proc deleteBlockSelection(
+    buffer: TextBuffer, state: EditorState, deletedText: var string
+): Result[(), string] =
+  ## Delete a block (rectangular) selection. On success `deletedText` receives
+  ## the removed text; the caller stores it in a register only after the
+  ## enclosing transaction committed (registers are not covered by buffer
+  ## transactions, so a rollback would not undo them).
   let
     startLine =
       min(state.visualSelection.start.line, state.visualSelection.current.line)
@@ -214,7 +234,7 @@ proc deleteBlockSelection(buffer: TextBuffer, state: EditorState): Result[(), st
       max(state.visualSelection.start.column, state.visualSelection.current.column)
 
   # Get text to yank first
-  let deletedText = getBlockText(buffer, state.visualSelection)
+  deletedText = getBlockText(buffer, state.visualSelection)
 
   # Delete from each line in reverse order to preserve line numbers
   for lineNum in countdown(endLine, startLine):
@@ -227,8 +247,6 @@ proc deleteBlockSelection(buffer: TextBuffer, state: EditorState): Result[(), st
       let delResult = buffer.deleteRange(startPos, endPos)
       if delResult.isErr:
         return err(delResult.error)
-
-  state.storeVisualDeletedText(deletedText, false)
 
   # Move cursor to start of deleted block, clamped to valid position
   state.cursor.line = startLine
@@ -243,15 +261,20 @@ proc deleteBlockSelection(buffer: TextBuffer, state: EditorState): Result[(), st
 
   return ok(())
 
-proc deleteLineSelection(buffer: TextBuffer, state: EditorState): Result[(), string] =
-  ## Delete a line-wise selection (entire lines)
+proc deleteLineSelection(
+    buffer: TextBuffer, state: EditorState, deletedText: var string
+): Result[(), string] =
+  ## Delete a line-wise selection (entire lines). On success `deletedText`
+  ## receives the removed text; the caller stores it in a register only after
+  ## the enclosing transaction committed (registers are not covered by buffer
+  ## transactions, so a rollback would not undo them).
   let
     startLine =
       min(state.visualSelection.start.line, state.visualSelection.current.line)
     endLine = max(state.visualSelection.start.line, state.visualSelection.current.line)
 
   # Get text to yank first
-  let deletedText = getLineText(buffer, state.visualSelection)
+  deletedText = getLineText(buffer, state.visualSelection)
 
   # Delete lines from end to start to preserve line numbers
   for lineNum in countdown(endLine, startLine):
@@ -265,8 +288,6 @@ proc deleteLineSelection(buffer: TextBuffer, state: EditorState): Result[(), str
     if insResult.isErr:
       return err(insResult.error)
 
-  state.storeVisualDeletedText(deletedText, true)
-
   # Move cursor to start line (or last line if start was beyond buffer)
   let newLine = min(startLine, buffer.len - 1)
   state.cursor = BufferPosition(line: newLine, column: 0)
@@ -276,35 +297,38 @@ proc deleteLineSelection(buffer: TextBuffer, state: EditorState): Result[(), str
 proc visualDelete*(buffer: TextBuffer, state: EditorState) =
   ## Delete visual selection and return to previous mode
   if state.visualSelection.active:
-    var deleteError = ""
+    # Consume the pending register up front: the register store happens only
+    # after the transaction commits (registers are not covered by buffer
+    # transactions), so routing must use a value captured before the edit, and
+    # a failed edit must still consume the selector.
+    let pendingReg = state.pendingInput.pendingRegister
+    state.pendingInput.pendingRegister = none(char)
+
+    var deletedText = ""
+    var deletedIsLine = false
 
     let txr = withTransaction(buffer, "Visual delete"):
       case state.visualSelection.kind
       of vskBlock:
-        let delResult = deleteBlockSelection(buffer, state)
-        if delResult.isErr:
-          deleteError = delResult.error
+        checkVisualEdit(state, deleteBlockSelection(buffer, state, deletedText))
       of vskLine:
-        let delResult = deleteLineSelection(buffer, state)
-        if delResult.isErr:
-          deleteError = delResult.error
+        checkVisualEdit(state, deleteLineSelection(buffer, state, deletedText))
+        deletedIsLine = true
       of vskChar:
         let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
-        let selectedText = buffer.getTextInRange(selStart, selEnd)
+        deletedText = buffer.getTextInRange(selStart, selEnd)
 
-        let delResult = buffer.deleteRange(selStart, selEnd)
-        if delResult.isErr:
-          deleteError = delResult.error
-        else:
-          state.cursor = selStart
-          state.storeVisualDeletedText(selectedText, false)
-
-      state.pendingInput.pendingRegister = none(char)
+        checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
+        state.cursor = selStart
     if txr.isErr:
       state.visualSelection.active = false
       state.mode = state.previousMode
       return
+
+    # Registers are not covered by the buffer transaction, so store the
+    # deleted text only after the transaction committed.
+    state.storeVisualDeletedText(pendingReg, deletedText, deletedIsLine)
 
     # Clamp cursor to valid position after deletion
     if state.cursor.line >= buffer.len:
@@ -317,10 +341,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
         state.cursor.column = 0
 
     state.visualSelection.active = false
-    if deleteError.len > 0:
-      state.statusMessage = "Error: " & deleteError
-    else:
-      state.statusMessage = ""
+    state.statusMessage = ""
     # Return to previous mode (before entering Visual mode)
     state.mode = state.previousMode
 
@@ -413,8 +434,8 @@ proc applyVisualTextTransform(
           let startPos = BufferPosition(line: lineNum, column: startCol)
           let endPos = BufferPosition(line: lineNum, column: actualEndCol)
           let segment = buffer.getTextInRange(startPos, endPos)
-          discard buffer.deleteRange(startPos, endPos)
-          discard buffer.insertText(startPos, transform(segment))
+          checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
+          checkVisualEdit(state, buffer.insertText(startPos, transform(segment)))
     of vskLine:
       let
         startLine =
@@ -427,12 +448,12 @@ proc applyVisualTextTransform(
         if lineText.charLen > 0:
           let startPos = BufferPosition(line: lineNum, column: 0)
           let endPos = BufferPosition(line: lineNum, column: lineText.charLen - 1)
-          discard buffer.deleteRange(startPos, endPos)
-          discard buffer.insertText(startPos, transform(lineText))
+          checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
+          checkVisualEdit(state, buffer.insertText(startPos, transform(lineText)))
     of vskChar:
       let segment = buffer.getTextInRange(selStart, selEnd)
-      discard buffer.deleteRange(selStart, selEnd)
-      discard buffer.insertText(selStart, transform(segment))
+      checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
+      checkVisualEdit(state, buffer.insertText(selStart, transform(segment)))
 
     state.cursor = selStart
   if txr.isErr:
@@ -496,8 +517,8 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
             let endPos = BufferPosition(line: lineNum, column: actualEndCol)
             let blockText = buffer.getTextInRange(startPos, endPos)
             let replaceText = $ch.repeat(blockText.charLen)
-            discard buffer.deleteRange(startPos, endPos)
-            discard buffer.insertText(startPos, replaceText)
+            checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
+            checkVisualEdit(state, buffer.insertText(startPos, replaceText))
       of vskLine:
         let
           startLine =
@@ -512,8 +533,8 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
             let startPos = BufferPosition(line: lineNum, column: 0)
             let endPos =
               BufferPosition(line: lineNum, column: max(0, lineText.charLen - 1))
-            discard buffer.deleteRange(startPos, endPos)
-            discard buffer.insertText(startPos, replaceText)
+            checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
+            checkVisualEdit(state, buffer.insertText(startPos, replaceText))
       of vskChar:
         let selectedText = buffer.getTextInRange(selStart, selEnd)
         var replaceText = ""
@@ -522,8 +543,8 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
             replaceText.add('\n')
           else:
             replaceText.add(ch)
-        discard buffer.deleteRange(selStart, selEnd)
-        discard buffer.insertText(selStart, replaceText)
+        checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
+        checkVisualEdit(state, buffer.insertText(selStart, replaceText))
 
       state.cursor = selStart
     if txr.isErr:
@@ -752,6 +773,8 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
 proc visualChange*(buffer: TextBuffer, state: EditorState) =
   ## Delete visual selection and enter insert mode (c command)
   if state.visualSelection.active:
+    var deletedText = ""
+
     let txr = withTransaction(buffer, "Visual change"):
       case state.visualSelection.kind
       of vskBlock:
@@ -761,7 +784,7 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
           min(state.visualSelection.start.line, state.visualSelection.current.line)
         let endLine =
           max(state.visualSelection.start.line, state.visualSelection.current.line)
-        discard deleteBlockSelection(buffer, state)
+        checkVisualEdit(state, deleteBlockSelection(buffer, state, deletedText))
         state.cursor.line = startLine
         state.cursor.column = startCol
         state.editState.visualBlockInsertContext = some(
@@ -780,21 +803,28 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
             max(state.visualSelection.start.line, state.visualSelection.current.line)
 
         for _ in startLine .. endLine:
-          discard buffer.deleteLine(startLine)
+          checkVisualEdit(state, buffer.deleteLine(startLine))
 
-        discard buffer.insert(startLine, "")
+        checkVisualEdit(state, buffer.insert(startLine, ""))
         state.cursor.line = startLine
         state.cursor.column = 0
       of vskChar:
         let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
-        discard buffer.deleteRange(selStart, selEnd)
+        checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
 
         state.cursor = selStart
     if txr.isErr:
       state.visualSelection.active = false
       state.mode = state.previousMode
       return
+
+    if state.visualSelection.kind == vskBlock:
+      # Registers are not covered by the buffer transaction, so store the
+      # deleted text only after the transaction committed.
+      state.storeVisualDeletedText(
+        state.pendingInput.pendingRegister, deletedText, false
+      )
 
     state.visualSelection.active = false
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
@@ -851,17 +881,20 @@ proc visualPaste*(
       state.mode = state.previousMode
       return
 
+    var deletedText = ""
+    var deletedIsLine = false
+
     let txr = withTransaction(buffer, "Visual paste"):
       case state.visualSelection.kind
       of vskBlock:
-        discard deleteBlockSelection(buffer, state)
+        checkVisualEdit(state, deleteBlockSelection(buffer, state, deletedText))
         let startCol =
           min(state.visualSelection.start.column, state.visualSelection.current.column)
         let startLine =
           min(state.visualSelection.start.line, state.visualSelection.current.line)
         state.cursor.line = startLine
         state.cursor.column = startCol
-        discard buffer.insertText(state.cursor, pasteText)
+        checkVisualEdit(state, buffer.insertText(state.cursor, pasteText))
       of vskLine:
         let
           startLine =
@@ -869,18 +902,11 @@ proc visualPaste*(
           endLine =
             max(state.visualSelection.start.line, state.visualSelection.current.line)
 
-        let deletedText = getLineText(buffer, state.visualSelection)
+        deletedText = getLineText(buffer, state.visualSelection)
+        deletedIsLine = true
 
-        var deleted = true
         for _ in startLine .. endLine:
-          if buffer.deleteLine(startLine).isErr:
-            deleted = false
-            break
-
-        # Registers are not covered by the buffer transaction, so write the
-        # replaced text only after the buffer change went through
-        if deleted:
-          state.registers.setDeletedRegister(deletedText, true)
+          checkVisualEdit(state, buffer.deleteLine(startLine))
 
         # Linewise register stores a trailing \n, so split yields an empty tail
         # element -- drop it or an extra blank line gets inserted.
@@ -888,29 +914,29 @@ proc visualPaste*(
         if lines.len > 1 and lines[^1].len == 0:
           lines.setLen(lines.len - 1)
         for i, line in lines:
-          discard buffer.insert(startLine + i, line)
+          checkVisualEdit(state, buffer.insert(startLine + i, line))
         state.cursor.line = startLine
         state.cursor.column = 0
       of vskChar:
         let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
-        let deletedText = buffer.getTextInRange(selStart, selEnd)
-        let isMultiLine = selStart.line != selEnd.line
+        deletedText = buffer.getTextInRange(selStart, selEnd)
+        deletedIsLine = selStart.line != selEnd.line
 
-        let delResult = buffer.deleteRange(selStart, selEnd)
-        if delResult.isOk:
-          # Registers are not covered by the buffer transaction, so write the
-          # replaced text only after the buffer change went through
-          state.registers.setDeletedRegister(deletedText, isMultiLine)
+        checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
 
         state.cursor = selStart
-        discard buffer.insertText(state.cursor, pasteText)
+        checkVisualEdit(state, buffer.insertText(state.cursor, pasteText))
 
       state.pendingInput.pendingRegister = none(char)
     if txr.isErr:
       state.visualSelection.active = false
       state.mode = state.previousMode
       return
+
+    # Registers are not covered by the buffer transaction, so write the
+    # replaced text only after the transaction committed.
+    state.registers.setDeletedRegister(deletedText, deletedIsLine)
 
     state.visualSelection.active = false
     state.statusMessage = ""
@@ -940,8 +966,8 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
       case state.visualSelection.kind
       of vskChar:
         let afterEnd = BufferPosition(line: selEnd.line, column: selEnd.column + 1)
-        discard buffer.insertText(afterEnd, $closeChar)
-        discard buffer.insertText(selStart, $openChar)
+        checkVisualEdit(state, buffer.insertText(afterEnd, $closeChar))
+        checkVisualEdit(state, buffer.insertText(selStart, $openChar))
       of vskLine:
         let
           startLine =
@@ -951,9 +977,9 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
         for lineNum in countdown(endLine, startLine):
           let lineLen = buffer.getLine(lineNum).charLen
           let lineEnd = BufferPosition(line: lineNum, column: lineLen)
-          discard buffer.insertText(lineEnd, $closeChar)
+          checkVisualEdit(state, buffer.insertText(lineEnd, $closeChar))
           let lineStart = BufferPosition(line: lineNum, column: 0)
-          discard buffer.insertText(lineStart, $openChar)
+          checkVisualEdit(state, buffer.insertText(lineStart, $openChar))
       of vskBlock:
         let
           startLine =
@@ -971,9 +997,9 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
           if startCol < lineLen:
             let actualEndCol = min(endCol, lineLen - 1)
             let afterEnd = BufferPosition(line: lineNum, column: actualEndCol + 1)
-            discard buffer.insertText(afterEnd, $closeChar)
+            checkVisualEdit(state, buffer.insertText(afterEnd, $closeChar))
             let colStart = BufferPosition(line: lineNum, column: startCol)
-            discard buffer.insertText(colStart, $openChar)
+            checkVisualEdit(state, buffer.insertText(colStart, $openChar))
 
       state.cursor = selStart
     if txr.isErr:

@@ -3190,3 +3190,105 @@ suite "InsertModeHandler - autocomplete / lsp completion gates":
     # 'h' inserts but no completion menu should activate.
     check buf.getLine(1) == "h"
     check not handler.completionManager.isActive()
+
+suite "InsertModeHandler - read-only failure keeps cursor and reports error":
+  test "handleCharacterInsertion on read-only buffer returns error, cursor unchanged":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let result = handler.handleCharacterInsertion(buf, state, "x")
+
+    check result.kind == imrError
+    check result.errorMessage.len > 0
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+
+  test "handleBackspace on read-only buffer returns error, cursor unchanged":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrError
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 3)
+
+  test "handleBackspace line-join on read-only buffer keeps lines and cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello\nworld")
+    buf.readOnly = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrError
+    check buf.len == 2
+    check buf.getLine(0) == "hello"
+    check buf.getLine(1) == "world"
+    check state.cursor == BufferPosition(line: 1, column: 0)
+
+  test "handleBackspace pair-delete on read-only buffer keeps cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a()b")
+    buf.readOnly = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoDeleteParen = true
+    state.cursor = BufferPosition(line: 0, column: 2) # between ( and )
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrError
+    check buf.getLine(0) == "a()b"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+
+  test "handleDelete on read-only buffer returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let result = handler.handleDelete(buf, state)
+
+    check result.kind == imrError
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+
+  test "handleDelete at end of line is a silent no-op":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    let result = handler.handleDelete(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 5)
+
+  test "handleTab on read-only buffer returns error, cursor unchanged":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let result = handler.handleTab(buf, state)
+
+    check result.kind == imrError
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)

@@ -471,19 +471,37 @@ proc handleInsertModeEntry*(
     let lineContent = buffer.getLine(state.cursor.line)
     state.cursor.column = lineContent.charLen
   of "open-below":
-    if not buffer.inTransaction:
+    let beganTransactionHere = not buffer.inTransaction
+    if beganTransactionHere:
       let txResult =
         buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
       if txResult.isErr:
         return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
-    insertLineBelow(buffer, state)
+    let openResult = insertLineBelow(buffer, state)
+    if openResult.isErr:
+      var errorMessage = openResult.error
+      if beganTransactionHere:
+        let rollbackResult = buffer.rollbackTransaction()
+        if rollbackResult.isErr:
+          errorMessage =
+            errorMessage & " (rollback failed: " & rollbackResult.error & ")"
+      return NormalModeResult(kind: nmrError, errorMessage: errorMessage)
   of "open-above":
-    if not buffer.inTransaction:
+    let beganTransactionHere = not buffer.inTransaction
+    if beganTransactionHere:
       let txResult =
         buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
       if txResult.isErr:
         return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
-    insertLineAbove(buffer, state)
+    let openResult = insertLineAbove(buffer, state)
+    if openResult.isErr:
+      var errorMessage = openResult.error
+      if beganTransactionHere:
+        let rollbackResult = buffer.rollbackTransaction()
+        if rollbackResult.isErr:
+          errorMessage =
+            errorMessage & " (rollback failed: " & rollbackResult.error & ")"
+      return NormalModeResult(kind: nmrError, errorMessage: errorMessage)
   else:
     return NormalModeResult(
       kind: nmrError, errorMessage: "Unknown insert type: " & insertType

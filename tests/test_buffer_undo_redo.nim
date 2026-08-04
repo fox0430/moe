@@ -371,6 +371,56 @@ suite "Buffer - withTransaction scope guard":
     check u.isOk
     check u.value == anchor
 
+  test "partial edit before a failed edit is rolled back (no partial commit)":
+    # Class B regression: a successful deleteRange followed by a failed
+    # insertText must not commit the partial state. The early return from the
+    # enclosing proc triggers a rollback of every change made so far.
+    let b = newTextBuffer("abc")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      let r = withTransaction(b, "partial"):
+        let delResult = b.deleteRange(
+          BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)
+        )
+        if delResult.isErr:
+          return err(delResult.error)
+        # Line 5 does not exist, so this insert fails after the delete landed.
+        let insResult = b.insertText(BufferPosition(line: 5, column: 0), "x")
+        if insResult.isErr:
+          return err(insResult.error)
+      r
+
+    let outcome = runIt(b)
+    check outcome.isErr
+    check not b.inTransaction
+    check b.getLine(0) == "abc"
+    check b.undo().isErr
+
+  test "readOnly flip mid-transaction rolls back landed edits":
+    # A buffer that becomes read-only after a landed edit rejects the next one;
+    # the early return must roll the landed edit back as well.
+    let b = newTextBuffer("abc")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      let r = withTransaction(b, "flip"):
+        let insResult = b.insertText(BufferPosition(line: 0, column: 3), "d")
+        if insResult.isErr:
+          return err(insResult.error)
+        b.readOnly = true
+        let delResult = b.deleteChar(BufferPosition(line: 0, column: 0))
+        if delResult.isErr:
+          return err(delResult.error)
+      r
+
+    let outcome = runIt(b)
+    check outcome.isErr
+    check not b.inTransaction
+    check b.getLine(0) == "abc"
+    # Clear readOnly so the undo check is not satisfied by the readOnly guard:
+    # the rollback must have left nothing to undo.
+    b.readOnly = false
+    check b.undo().isErr
+
 suite "Buffer - Transaction lastChangedLines":
   test "commitTransaction updates lastChangedLines to minimum line":
     # Regression test: commitTransaction must set lastChangedLines to the

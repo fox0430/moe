@@ -26,6 +26,8 @@
 
 import std/[options, os, strutils]
 
+import pkg/results
+
 import ../[modes, command_line, command_config, command_registry, config_loader]
 import ../buffer/[core, edit, fold, undo]
 import ../setting_options
@@ -287,15 +289,19 @@ proc executeStripWhitespace*(
   if buffer.readOnly:
     return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
   var strippedCount = 0
-  discard withTransaction(buffer, "stripwhitespace"):
+  let txr = withTransaction(buffer, "stripwhitespace"):
     for lineIdx in 0 ..< buffer.len:
       let line = buffer.getLine(lineIdx)
       let trimmed = line.strip(leading = false, trailing = true)
       if trimmed != line:
         # Reveal the line if it is hidden inside a collapsed fold.
         discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
-        discard buffer.replaceLine(lineIdx, trimmed)
+        let replaceResult = buffer.replaceLine(lineIdx, trimmed)
+        if replaceResult.isErr:
+          return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
         strippedCount.inc
+  if txr.isErr:
+    return HandlerResult(kind: hrError, errorMessage: txr.error)
   HandlerResult(kind: hrStripWhitespace, strippedLineCount: strippedCount)
 
 proc executeQuickRun*(handler: CommandModeHandler): HandlerResult =
@@ -351,7 +357,7 @@ proc executeSubstitute*(
     rangeStart = currentLine
     rangeEnd = currentLine
 
-  discard withTransaction(buffer, "substitute"):
+  let txr = withTransaction(buffer, "substitute"):
     for lineIdx in rangeStart .. rangeEnd:
       var line = buffer.getLine(lineIdx)
       var modified = false
@@ -379,7 +385,11 @@ proc executeSubstitute*(
 
       if modified:
         discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
-        discard buffer.replaceLine(lineIdx, newLine)
+        let replaceResult = buffer.replaceLine(lineIdx, newLine)
+        if replaceResult.isErr:
+          return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
+  if txr.isErr:
+    return HandlerResult(kind: hrError, errorMessage: txr.error)
 
   if replaceCount == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern not found: " & pattern)
@@ -442,14 +452,22 @@ proc executeDelete*(
 
   discard buffer.foldState.openFoldsInRange(rangeStart, rangeEnd)
 
-  discard withTransaction(buffer, "delete lines"):
+  let txr = withTransaction(buffer, "delete lines"):
     if deletingAll:
       for i in countdown(buffer.len - 1, 1):
-        discard buffer.deleteLine(i)
-      discard buffer.replaceLine(0, "")
+        let deleteResult = buffer.deleteLine(i)
+        if deleteResult.isErr:
+          return HandlerResult(kind: hrError, errorMessage: deleteResult.error)
+      let replaceResult = buffer.replaceLine(0, "")
+      if replaceResult.isErr:
+        return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
     else:
       for i in countdown(rangeEnd, rangeStart):
-        discard buffer.deleteLine(i)
+        let deleteResult = buffer.deleteLine(i)
+        if deleteResult.isErr:
+          return HandlerResult(kind: hrError, errorMessage: deleteResult.error)
+  if txr.isErr:
+    return HandlerResult(kind: hrError, errorMessage: txr.error)
 
   HandlerResult(kind: hrDeleteLines, hrDeletedText: text, hrDeletedLineCount: lineCount)
 

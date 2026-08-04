@@ -19,7 +19,7 @@
 
 ## Tests for insert_commands.nim
 
-import std/[unittest, options, tables]
+import std/[unittest, options, tables, strutils]
 
 import pkg/results
 
@@ -590,7 +590,7 @@ suite "Insert Commands - insertLineBelow":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check buf.len >= 2
     check state.cursor.line == 1
@@ -604,7 +604,7 @@ suite "Insert Commands - insertLineBelow":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check buf.len >= 2
     check state.cursor.line == 1
@@ -619,7 +619,7 @@ suite "Insert Commands - insertLineAbove":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineAbove(buf, state)
+    check insertLineAbove(buf, state).isOk
 
     check buf.len >= 2
     check state.cursor.line == 0
@@ -633,7 +633,7 @@ suite "Insert Commands - insertLineAbove":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineAbove(buf, state)
+    check insertLineAbove(buf, state).isOk
 
     check buf.len >= 2
     check state.cursor.line == 0
@@ -917,7 +917,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     # New line should have auto-indent
     check buf.getLine(1) == "    "
@@ -939,7 +939,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     # Simulate user typing on the new line
     insertChar(buf, state, 'x')
@@ -959,7 +959,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineAbove(buf, state)
+    check insertLineAbove(buf, state).isOk
 
     # New line (line 0) should have auto-indent
     check buf.getLine(0) == "    "
@@ -1001,7 +1001,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     state.autoIndent = false
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check state.editState.autoIndentedLine.isNone
 
@@ -1012,7 +1012,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     state.autoIndent = true
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check state.editState.autoIndentedLine.isNone
 
@@ -1025,7 +1025,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
 
     # Start transaction (as normal_handler would do for o/O)
     discard buf.beginTransaction("Insert mode edit")
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     # New line should have auto-indent
     check buf.getLine(1) == "    "
@@ -1051,7 +1051,7 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
 
     # Start transaction (as normal_handler would do for o/O)
     discard buf.beginTransaction("Insert mode edit")
-    insertLineAbove(buf, state)
+    check insertLineAbove(buf, state).isOk
 
     # New line (line 0) should have auto-indent
     check buf.getLine(0) == "    "
@@ -1078,7 +1078,7 @@ suite "Insert Commands - Undo Cursor Position":
     # Simulate 'o' command: save cursor pos, begin transaction, insert line below
     let originalCursor = state.cursor
     discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check buf.len == 2
     check state.cursor.line == 1
@@ -1103,7 +1103,7 @@ suite "Insert Commands - Undo Cursor Position":
 
     let originalCursor = state.cursor
     discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
-    insertLineAbove(buf, state)
+    check insertLineAbove(buf, state).isOk
 
     check buf.len == 2
     check state.cursor.line == 0
@@ -1126,7 +1126,7 @@ suite "Insert Commands - Undo Cursor Position":
 
     let originalCursor = state.cursor
     discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     check buf.len == 2
     check buf.getLine(1) == "    " # auto-indented new line
@@ -1149,7 +1149,7 @@ suite "Insert Commands - Undo Cursor Position":
 
     let originalCursor = state.cursor
     discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
 
     # Simulate typing "new text" in insert mode
     discard buf.insertText(state.cursor, "new text")
@@ -1176,7 +1176,7 @@ suite "Insert Commands - Undo Cursor Position":
 
     let originalCursor = state.cursor
     discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
-    insertLineAbove(buf, state)
+    check insertLineAbove(buf, state).isOk
 
     # Simulate typing "above" in insert mode on line 0
     discard buf.insertText(state.cursor, "above")
@@ -1203,7 +1203,7 @@ suite "Insert Commands - Undo Cursor Position":
 
     let originalCursor = state.cursor
     discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
-    insertLineBelow(buf, state)
+    check insertLineBelow(buf, state).isOk
     discard buf.commitTransaction()
 
     discard buf.undo()
@@ -1215,3 +1215,186 @@ suite "Insert Commands - Undo Cursor Position":
     # Redo returns the saved cursor position
     check r.value.line == 0
     check r.value.column == 2
+
+suite "Insert Commands - read-only failure keeps cursor and reports":
+  test "insertChar on read-only buffer keeps cursor and sets message":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertChar(buf, state, 'x')
+
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+    check state.statusMessage.len > 0
+
+  test "insertBackspace on read-only buffer keeps cursor (pre-move type)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    insertBackspace(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 3)
+    check state.statusMessage.len > 0
+
+  test "insertBackspace line-join on read-only buffer keeps lines and cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello\nworld")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+
+    insertBackspace(buf, state)
+
+    check buf.len == 2
+    check buf.getLine(0) == "hello"
+    check buf.getLine(1) == "world"
+    check state.cursor == BufferPosition(line: 1, column: 0)
+    check state.statusMessage.len > 0
+
+  test "deleteWordBackward on read-only buffer keeps cursor (pre-move type)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo bar")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    deleteWordBackward(buf, state)
+
+    check buf.getLine(0) == "foo bar"
+    check state.cursor == BufferPosition(line: 0, column: 7)
+    check state.statusMessage.len > 0
+
+  test "deleteToLineStart on read-only buffer keeps cursor (pre-move type)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    deleteToLineStart(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 4)
+    check state.statusMessage.len > 0
+
+  test "insertNewline on read-only buffer keeps cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertNewline(buf, state)
+
+    check buf.len == 1
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+    check state.statusMessage.len > 0
+
+  test "indentLine on read-only buffer keeps cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    indentLine(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+    check state.statusMessage.len > 0
+
+  test "dedentLine on read-only buffer keeps cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    dedentLine(buf, state)
+
+    check buf.getLine(0) == "    hello"
+    check state.cursor == BufferPosition(line: 0, column: 6)
+    check state.statusMessage.len > 0
+
+  test "insertCharFromAbove on read-only buffer keeps cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ab\ncd")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+
+    let inserted = insertCharFromAbove(buf, state)
+
+    check not inserted
+    check buf.getLine(1) == "cd"
+    check state.cursor == BufferPosition(line: 1, column: 0)
+
+  test "insertLineBelow on read-only buffer keeps cursor and mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.mode = EditorMode.Normal
+    state.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let r = insertLineBelow(buf, state)
+
+    check r.isErr
+    check "read-only" in r.error
+    check buf.len == 1
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+    check state.mode == EditorMode.Normal
+
+  test "insertLineAbove on read-only buffer keeps cursor and mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.mode = EditorMode.Normal
+    state.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let r = insertLineAbove(buf, state)
+
+    check r.isErr
+    check "read-only" in r.error
+    check buf.len == 1
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+    check state.mode == EditorMode.Normal
+
+  test "insertDelete at end of line is a silent no-op":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    insertDelete(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 5)
+    check state.statusMessage.len == 0
+
+  test "insertDelete on read-only buffer reports error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.readOnly = true
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertDelete(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+    check state.statusMessage.len > 0

@@ -165,7 +165,10 @@ proc endInsertNormalSession(buffer: TextBuffer, state: EditorState) =
   state.insertNormalMode = false
   if buffer.inTransaction:
     clearAutoIndentIfUnedited(buffer, state)
-    discard buffer.commitTransaction()
+    let commitResult = buffer.commitTransaction()
+    if commitResult.isErr:
+      logError "handler_manager", "Failed to commit transaction: " & commitResult.error
+      state.statusMessage = "Failed to commit transaction: " & commitResult.error
   state.editState.insertModeStartPos = none(BufferPosition)
   state.editState.insertReplayCount = 0
   state.editState.insertReplayLineEntry = false
@@ -199,7 +202,12 @@ proc applyNormalModePostProcessing(
         endInsertNormalSession(buffer, state)
         let newMode = normalResult.modeTransition.get
         if newMode == EditorMode.Replace:
-          discard buffer.beginTransaction("Replace mode edit")
+          let beginResult = buffer.beginTransaction("Replace mode edit")
+          if beginResult.isErr:
+            return HandlerResult(
+              kind: hrError,
+              errorMessage: "Failed to begin transaction: " & beginResult.error,
+            )
         return normalResult
 
   if state.insertNormalMode and

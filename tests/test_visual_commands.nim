@@ -573,6 +573,81 @@ suite "Visual Commands - visualDelete":
     check state.registers.getNoNamedRegister().getContent() == "bc\nde"
     check state.registers.getNoNamedRegister().isLine == false
 
+  test "Delete charwise selection into named pending register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == " world"
+    check state.registers.getNamedRegister('a').getContent() == "hello"
+    check state.pendingInput.pendingRegister.isNone
+
+  test "Delete linewise selection into named pending register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualDelete(buf, state)
+
+    check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2"
+    check state.registers.getNamedRegister('a').isLine == true
+    check state.pendingInput.pendingRegister.isNone
+
+  test "Delete blockwise selection into named pending register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\ndef")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 1),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualDelete(buf, state)
+
+    check state.registers.getNamedRegister('a').getContent() == "ab\nde"
+    check state.pendingInput.pendingRegister.isNone
+
+  test "Delete charwise selection into clipboard pending register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.pendingInput.pendingRegister = some('+')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == " world"
+    check state.registers.getClipboardRegister('+').getContent() == "hello"
+    check state.pendingInput.pendingRegister.isNone
+
 suite "Visual Commands - visualIndent":
   test "Indent single line selection":
     let buf = newTextBuffer()
@@ -2500,6 +2575,23 @@ suite "Visual delete - register/buffer atomicity":
 
     check state.registers.getNamedRegister('a').getContent() == "SEED_A"
 
+  test "pending register selector is consumed even when the delete fails":
+    let (buf, state) = newReadOnlyState()
+    state.mode = EditorMode.Visual
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    # The selector is captured and cleared before the edit, so a failed delete
+    # must not leak it into the next yank/delete.
+    check state.pendingInput.pendingRegister.isNone
+
   test "charwise visual paste keeps registers when the delete fails":
     let (buf, state) = newReadOnlyState()
     state.mode = EditorMode.Visual
@@ -2531,3 +2623,137 @@ suite "Visual delete - register/buffer atomicity":
 
     check state.registers.getNumberRegister(1).getContent() == "SEED_LINE\n"
     check buf.getLine(0) == "hello world"
+
+suite "Visual edit commands - read-only failure rolls back and reports":
+  proc newReadOnlyVisualState(): (TextBuffer, EditorState) =
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFoo Bar")
+    let state = createTestState()
+    state.previousMode = EditorMode.Normal
+    buf.readOnly = true
+    (buf, state)
+
+  test "visualUppercase on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualReplace on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualChange on read-only buffer keeps text and stays out of Insert":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualChange(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualSurround on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualPaste on read-only buffer keeps text and reports":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.Visual
+    state.registers.setYankedRegister("XYZ", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
+
+  test "visualUppercase linewise on read-only buffer keeps all lines":
+    let (buf, state) = newReadOnlyVisualState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.len == 2
+    check buf.getLine(0) == "Hello World"
+    check buf.getLine(1) == "Foo Bar"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+
+  test "visualDelete on read-only buffer restores previousMode, not a hardcoded mode":
+    let (buf, state) = newReadOnlyVisualState()
+    # previousMode differs from Normal here: a regression that hardcodes
+    # EditorMode.Normal in the failure path must not pass this check.
+    state.previousMode = EditorMode.Insert
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == "Hello World"
+    check state.statusMessage.len > 0
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Insert

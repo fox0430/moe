@@ -6226,3 +6226,87 @@ suite "Register/buffer atomicity - failed edits must not touch registers":
 
     check registry.execute(ctx, custom("delete.line")).isErr
     check ctx.state.registers.getNamedRegister('a').getContent() == "SEED_A"
+
+suite "Operator engine - read-only failure rolls back and reports":
+  test "OpIndent on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 1, column: 0),
+      isLinewise: true,
+    )
+    let r = executeOperatorOnRange(ctx, OpIndent, range, 1)
+    check r.isErr
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+    check not buffer.inTransaction
+
+  test "OpOutdent on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("    line1\n    line2")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 1, column: 0),
+      isLinewise: true,
+    )
+    let r = executeOperatorOnRange(ctx, OpOutdent, range, 1)
+    check r.isErr
+    check buffer[0] == "    line1"
+    check buffer[1] == "    line2"
+    check not buffer.inTransaction
+
+  test "OpLowerCase on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("HELLO WORLD")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    let r = executeOperatorOnRange(ctx, OpLowerCase, range, 1)
+    check r.isErr
+    check buffer[0] == "HELLO WORLD"
+    check not buffer.inTransaction
+
+  test "OpUpperCase on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    let r = executeOperatorOnRange(ctx, OpUpperCase, range, 1)
+    check r.isErr
+    check buffer[0] == "hello world"
+    check not buffer.inTransaction
+
+  test "OpUpperCase linewise on read-only buffer keeps all lines":
+    let buffer = newTextBuffer("hello\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 1, column: 4),
+      isLinewise: true,
+    )
+    let r = executeOperatorOnRange(ctx, OpUpperCase, range, 1)
+    check r.isErr
+    check buffer[0] == "hello"
+    check buffer[1] == "world"
+    check not buffer.inTransaction

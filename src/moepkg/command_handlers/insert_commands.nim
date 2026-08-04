@@ -23,6 +23,9 @@
 ## that are independent of CommandContext for better testability
 
 import std/[options, strutils, unicode]
+
+import pkg/results
+
 import ../[types, modes, unicode_utils]
 import ../buffer/[core, edit]
 import smart_indent
@@ -58,14 +61,20 @@ proc getIndentString*(state: EditorState): string =
 proc insertChar*(buffer: TextBuffer, state: EditorState, ch: char) =
   ## Insert a character at cursor position
   let pos = state.cursor
-  discard buffer.insertText(pos, $ch)
+  let insertResult = buffer.insertText(pos, $ch)
+  if insertResult.isErr:
+    state.statusMessage = insertResult.error
+    return
   # Move cursor right after insertion
   state.cursor.column += 1
 
 proc insertTab*(buffer: TextBuffer, state: EditorState) =
   ## Insert a tab character at cursor position
   let pos = state.cursor
-  discard buffer.insertText(pos, "\t")
+  let insertResult = buffer.insertText(pos, "\t")
+  if insertResult.isErr:
+    state.statusMessage = insertResult.error
+    return
   # Move cursor right after insertion
   state.cursor.column += 1
 
@@ -73,9 +82,14 @@ proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
   ## Handle backspace key in insert mode
   let pos = state.cursor
   if pos.column > 0:
-    # Move cursor back and delete
+    # Delete the character before the cursor; move the cursor only after the
+    # edit succeeds so a failure cannot desync cursor and buffer.
+    let deletePos = BufferPosition(line: pos.line, column: pos.column - 1)
+    let deleteResult = buffer.deleteChar(deletePos)
+    if deleteResult.isErr:
+      state.statusMessage = deleteResult.error
+      return
     state.cursor.column -= 1
-    discard buffer.deleteChar(state.cursor)
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
@@ -83,12 +97,19 @@ proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
     let prevLineLen = prevLine.charLen
 
     # Delete the current line first
-    discard buffer.deleteLine(pos.line)
+    let deleteResult = buffer.deleteLine(pos.line)
+    if deleteResult.isErr:
+      state.statusMessage = deleteResult.error
+      return
     # Append current line content to previous line
     if currentLine.len > 0:
-      discard buffer.insertText(
+      let insertResult = buffer.insertText(
         BufferPosition(line: pos.line - 1, column: prevLineLen), currentLine
       )
+      if insertResult.isErr:
+        # The current line is already deleted, so the cursor must still move
+        # to the join point to stay in bounds.
+        state.statusMessage = insertResult.error
 
     # Move cursor to the join point
     state.cursor.line -= 1
@@ -96,7 +117,14 @@ proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
 
 proc insertDelete*(buffer: TextBuffer, state: EditorState) =
   ## Handle delete key in insert mode
-  discard buffer.deleteChar(state.cursor)
+  let pos = state.cursor
+  if pos.line >= 0 and pos.line < buffer.len and
+      pos.column >= buffer.getLine(pos.line).charLen:
+    # At end of line: nothing to delete (no-op)
+    return
+  let deleteResult = buffer.deleteChar(pos)
+  if deleteResult.isErr:
+    state.statusMessage = deleteResult.error
 
 proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   ## Handle newline insertion with optional auto-indentation
@@ -122,7 +150,10 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
         ""
     let closeIndent = if indented: baseIndent else: ""
     let textToInsert = "\n" & middleIndent & "\n" & closeIndent
-    discard buffer.insertText(pos, textToInsert)
+    let insertResult = buffer.insertText(pos, textToInsert)
+    if insertResult.isErr:
+      state.statusMessage = insertResult.error
+      return
     state.cursor.line += 1
     state.cursor.column = middleIndent.runeLen
     # Register the middle line for auto-indent cleanup on Esc — if the user
@@ -157,7 +188,10 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
       indentLen = newLineIndent.len
 
   # Insert newline (and indent if any) as a single undo-able operation
-  discard buffer.insertText(pos, textToInsert)
+  let insertResult = buffer.insertText(pos, textToInsert)
+  if insertResult.isErr:
+    state.statusMessage = insertResult.error
+    return
 
   # Move cursor to start of new line (after indent if any)
   state.cursor.line += 1
@@ -169,12 +203,12 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   else:
     state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
 
-proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
+proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string] =
   ## Handle 'o' command - insert line below and enter insert mode with auto-indent
   let currentLine = state.cursor.line
   let lineContent = buffer.getLine(currentLine)
 
-  state.cursor.column = lineContent.charLen
+  let insertPos = BufferPosition(line: currentLine, column: lineContent.charLen)
 
   var textToInsert = "\n"
   var indentLen = 0
@@ -193,7 +227,9 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
       textToInsert = "\n" & newLineIndent
       indentLen = newLineIndent.len
 
-  discard buffer.insertText(state.cursor, textToInsert)
+  let insertResult = buffer.insertText(insertPos, textToInsert)
+  if insertResult.isErr:
+    return err(insertResult.error)
 
   state.cursor.line = currentLine + 1
   state.cursor.column = indentLen
@@ -205,13 +241,12 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
     state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
 
   state.mode = EditorMode.Insert
+  ok(())
 
-proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
+proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string] =
   ## Handle 'O' command - insert line above and enter insert mode with auto-indent
   let currentLine = state.cursor.line
   let lineContent = buffer.getLine(currentLine)
-
-  state.cursor.column = 0
 
   # Use "indent\n" (not "\nindent") — inserting "\nindent" at column 0 would
   # concatenate the indent with the original line content.
@@ -224,7 +259,10 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
       textToInsert = indent & "\n"
       indentLen = indent.len
 
-  discard buffer.insertText(state.cursor, textToInsert)
+  let insertResult =
+    buffer.insertText(BufferPosition(line: currentLine, column: 0), textToInsert)
+  if insertResult.isErr:
+    return err(insertResult.error)
 
   state.cursor.line = currentLine
   state.cursor.column = indentLen
@@ -236,6 +274,7 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
     state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
 
   state.mode = EditorMode.Insert
+  ok(())
 
 proc insertAppend*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'a' command - move cursor right and enter insert mode
@@ -271,7 +310,10 @@ proc indentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
 
   # Insert at the beginning of the line
   let insertPos = BufferPosition(line: currentLine, column: 0)
-  discard buffer.insertText(insertPos, fullIndent)
+  let insertResult = buffer.insertText(insertPos, fullIndent)
+  if insertResult.isErr:
+    state.statusMessage = insertResult.error
+    return
 
   # Keep cursor at the same relative position within the line content
   # (move cursor right by the amount of indentation added)
@@ -298,16 +340,25 @@ proc dedentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   if removeCount <= 0:
     return
 
-  # Delete characters from the beginning of the line
+  # Delete characters from the beginning of the line. Track how many were
+  # actually removed so the cursor adjustment stays correct on partial failure.
+  var deleted = 0
   for i in 1 .. removeCount:
     let deletePos = BufferPosition(line: currentLine, column: 0)
-    discard buffer.deleteChar(deletePos)
+    let deleteResult = buffer.deleteChar(deletePos)
+    if deleteResult.isErr:
+      state.statusMessage = deleteResult.error
+      break
+    inc deleted
+
+  if deleted == 0:
+    return
 
   # Adjust cursor position
   # If cursor was in the indentation area, move it to column 0
   # Otherwise, move it left by the amount removed
-  if state.cursor.column >= removeCount:
-    state.cursor.column -= removeCount
+  if state.cursor.column >= deleted:
+    state.cursor.column -= deleted
   else:
     state.cursor.column = 0
 
@@ -349,11 +400,17 @@ proc deleteWordBackward*(buffer: TextBuffer, state: EditorState) =
           not isWhitespace(runes[newCol - 1]):
         newCol -= 1
 
-  # Delete characters from newCol to pos.column
+  # Delete characters from newCol to pos.column. Delete from the top down so
+  # each position is stable, and move the cursor only after each edit succeeds
+  # so a failure cannot desync cursor and buffer.
   let deleteCount = min(pos.column, runes.len) - newCol
-  for _ in 0 ..< deleteCount:
+  for i in 0 ..< deleteCount:
+    let deletePos = BufferPosition(line: pos.line, column: pos.column - 1 - i)
+    let deleteResult = buffer.deleteChar(deletePos)
+    if deleteResult.isErr:
+      state.statusMessage = deleteResult.error
+      return
     state.cursor.column -= 1
-    discard buffer.deleteChar(state.cursor)
 
 proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
   ## Delete from cursor to beginning of line (Ctrl-U in insert mode)
@@ -366,12 +423,20 @@ proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
   let line = buffer.getLine(pos.line)
   let lineLen = line.toRunes().len
 
-  # Delete all characters from column 0 to cursor position
+  # Delete all characters from column 0 to cursor position. Repeatedly delete
+  # at column 0 (each removal shifts the next character down), and derive the
+  # final cursor position from the number of characters actually removed so a
+  # failure cannot desync cursor and buffer.
   let deleteCount = min(pos.column, lineLen)
-  state.cursor.column = 0
-
+  var deleted = 0
   for _ in 0 ..< deleteCount:
-    discard buffer.deleteChar(state.cursor)
+    let deleteResult = buffer.deleteChar(BufferPosition(line: pos.line, column: 0))
+    if deleteResult.isErr:
+      state.statusMessage = deleteResult.error
+      break
+    inc deleted
+
+  state.cursor.column = min(max(0, pos.column - deleted), lineLen - deleted)
 
 proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
   ## Insert character from the line above at the same column (Ctrl-Y in insert mode)
@@ -394,7 +459,10 @@ proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
     return false # No character at this column in the line above
 
   let ch = $aboveRunes[pos.column]
-  discard buffer.insertText(pos, ch)
+  let insertResult = buffer.insertText(pos, ch)
+  if insertResult.isErr:
+    state.statusMessage = insertResult.error
+    return false
   state.cursor.column += 1
   return true
 
@@ -419,7 +487,10 @@ proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
     return false # No character at this column in the line below
 
   let ch = $belowRunes[pos.column]
-  discard buffer.insertText(pos, ch)
+  let insertResult = buffer.insertText(pos, ch)
+  if insertResult.isErr:
+    state.statusMessage = insertResult.error
+    return false
   state.cursor.column += 1
   return true
 
@@ -431,7 +502,9 @@ proc clearAutoIndentIfUnedited*(buffer: TextBuffer, state: EditorState) =
     if line >= 0 and line < buffer.len:
       let lineContent = buffer.getLine(line)
       if lineContent == indent:
-        discard buffer.replaceLine(line, "")
-        if state.cursor.line == line:
+        let replaceResult = buffer.replaceLine(line, "")
+        if replaceResult.isErr:
+          state.statusMessage = replaceResult.error
+        elif state.cursor.line == line:
           state.cursor.column = 0
     state.editState.autoIndentedLine = none(tuple[line: int, indent: string])

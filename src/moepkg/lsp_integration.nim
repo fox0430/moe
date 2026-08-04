@@ -25,7 +25,7 @@ from std/os import absolutePath, normalizedPath
 
 import pkg/[results, chronos]
 
-import buffer, types, lsp_service, message_log, unicode_utils, highlight
+import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger
 import lsp/protocol/types as lspTypes
 
 import types/lsp_integration_types
@@ -1057,7 +1057,10 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
 
   template failEdit(msg: string): untyped =
     if ownTransaction:
-      discard buffer.rollbackTransaction()
+      let rollbackResult = buffer.rollbackTransaction()
+      if rollbackResult.isErr:
+        logError "lsp", "Failed to rollback transaction: " & rollbackResult.error
+        return err(msg & " (rollback failed: " & rollbackResult.error & ")")
     return err(msg)
 
   # Apply each edit
@@ -1138,7 +1141,13 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
     if cr.isErr:
       # Commit failed but we own the transaction. Attempt to rollback so the
       # buffer doesn't stay stuck in an in-progress transaction.
-      discard buffer.rollbackTransaction()
+      let rollbackResult = buffer.rollbackTransaction()
+      if rollbackResult.isErr:
+        logError "lsp", "Failed to rollback transaction: " & rollbackResult.error
+        return err(
+          "Failed to commit transaction: " & cr.error & " (rollback also failed: " &
+            rollbackResult.error & ")"
+        )
       return err("Failed to commit transaction: " & cr.error)
 
   return ok()

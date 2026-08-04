@@ -391,6 +391,27 @@ suite "Editor - saveFile":
     check result.isOk
     check fileExists(target)
 
+  test "Save read-only buffer succeeds with trim enabled (trim skipped)":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_save_readonly_trim.txt"
+
+    writeFile(testFile, "Trailing space   \nLine 2")
+    defer:
+      removeFile(testFile)
+
+    discard e.loadFile(testFile)
+
+    e.activeBuffer.readOnly = true
+    e.activeBuffer.editorConfig =
+      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
+
+    let result = e.saveFile()
+    check result.isOk
+
+    # Content is written as-is, without trimming.
+    let content = readFile(testFile)
+    check content == "Trailing space   \nLine 2"
+
 suite "Editor - saveBufferCursorPosition":
   test "Save cursor position when enabled":
     var config = newEditorConfig()
