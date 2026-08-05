@@ -655,6 +655,1436 @@ proc checkMatchesFullParse(
     for col in 0 ..< buffer[row].len:
       check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
 
+suite "Highlight - budgeted incremental update":
+  # A line-count change re-parses from the change point to EOF, which on a
+  # large file must not block one frame: `budgetLines` splits the re-parse
+  # across calls. Each call returns true while work remains, progress is
+  # carried in `pendingReparse`, and the pre-change segments are trimmed
+  # when the re-parse starts.
+
+  proc parseFullIncremental(
+      buf: seq[string], lang: SourceLanguage
+  ): IncrementalHighlight =
+    let (segments, lineStates) =
+      initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
+    IncrementalHighlight(
+      segments: segments, lineStates: LineStateCache(states: lineStates)
+    )
+
+  proc rustLines(n: int): seq[string] =
+    result = newSeq[string](n)
+    for i in 0 ..< n:
+      result[i] = "let value" & $i & " = " & $i & "; // note " & $i
+
+  test "budget stops the re-parse early and returns true":
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    let ongoing = updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100
+    )
+
+    # Budget 100 < the ~240 lines below the change point: one chunk parsed,
+    # still going.
+    check ongoing
+    check ih.pendingReparse != nil
+    check ih.pendingReparse.currentStart > 10
+    # No segment may point at a row the re-parse has not produced yet: the
+    # pre-change segments below the trim point were dropped at the start.
+    for seg in ih.segments:
+      check seg.firstRow <= ih.pendingReparse.reparseEnd
+
+  test "resume calls finish the re-parse and match a full parse":
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var calls = 0
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100
+    )
+    :
+      inc calls
+    inc calls
+
+    check calls >= 2
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+    check ih.lineStates.states.len == buffer.len
+
+  test "mid-re-parse segments stay sorted across calls":
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var ongoing = true
+    while ongoing:
+      ongoing = updateHighlightIncremental(
+        buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100
+      )
+      for i in 1 ..< ih.segments.len:
+        check ih.segments[i].firstRow >= ih.segments[i - 1].firstRow
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+
+  test "an edit during the re-parse restarts from the new anchor":
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    # Consume one budget slice
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100
+    )
+    check ih.pendingReparse != nil
+
+    # A new edit (line-count change) arrives while the re-parse is in flight.
+    buffer.insert("let another = 2;", 2)
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 2, @[], SourceLanguage.langRust, 0, 100
+    )
+
+    # Restarted from the new anchor (2-line backward margin), not resumed
+    # from the old frontier; far more than one budget remains below it, so
+    # the re-parse stays in flight.
+    check ih.pendingReparse != nil
+    check ih.pendingReparse.reparseStart == 0
+
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 2, @[], SourceLanguage.langRust, 0, 100
+    )
+    :
+      discard
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+
+  test "an edit on the same line during the re-parse restarts":
+    # A second edit on the same line cannot change the anchor, so the
+    # restart must be driven by the content-version bump.
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+    let oldFrontier = ih.pendingReparse.reparseEnd
+
+    # Same line, new content (version 1 -> 2).
+    buffer[10] = "let inserted = 1; // changed again"
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 2
+    )
+    check ih.pendingReparse != nil
+    # Restarted from scratch (rewound near the edit), not resumed from the
+    # old frontier; exact values pin the restart.
+    check ih.pendingReparse.reparseStart == 8
+    check ih.pendingReparse.currentStart == oldFrontier + 1
+
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 2
+    )
+    :
+      discard
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+
+  test "content-version mismatch always restarts even when the new version is -1":
+    # Regression: the restart predicate used to gate `pr.contentVersion !=
+    # contentVersion` behind `contentVersion >= 0`, so a caller that
+    # dropped from a real version to the default -1 skipped the version
+    # check silently. Removing the gate makes any mismatch (including
+    # `real -> -1`) restart.
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 5
+    )
+    check ih.pendingReparse != nil
+    let firstCurrentStart = ih.pendingReparse.currentStart
+
+    # Same anchor, same line count, but the caller now passes the -1
+    # default. The old gate short-circuited to false and left the flight
+    # resuming over the stale content; the fix restarts.
+    buffer[10] = "let inserted = 1; // changed"
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, -1
+    )
+    check ih.pendingReparse != nil
+    # A restart re-processes the same first chunk, so `currentStart`
+    # matches the first-call value; a resume would advance past it.
+    check ih.pendingReparse.currentStart <= firstCurrentStart
+
+  test "same-line-count edit with a tiny budget re-attaches the valid tail":
+    # Convergence stops the re-parse at the first chunk boundary whose end
+    # state matches the cache; the untouched tail rows keep their old
+    # segments via the stashed tail.
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer[5] = "let changed = 1; // edited"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 5, @[], SourceLanguage.langRust, 0, 100
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+    check ih.lineStates.states.len == buffer.len
+
+  test "empty buffer with a budget completes immediately":
+    var ih = parseFullIncremental(@[], SourceLanguage.langRust)
+    let getLine = proc(i: int): string =
+      ""
+    check not updateHighlightIncremental(
+      0, getLine, ih, 0, @[], SourceLanguage.langRust, 0, 100
+    )
+    check ih.pendingReparse == nil
+
+  test "budgeted YAML re-parse resumes across a block scalar":
+    # The scalar is resumable across chunk boundaries (its context is
+    # persisted on the boundary capture), so the budget spreads the re-parse
+    # across calls instead of doubling the window until it spans the scalar.
+    var buffer = @["long: |"]
+    for i in 0 ..< 150:
+      buffer.add("  scalar content " & $i)
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[1] = "  edited scalar content"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var calls = 0
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 100
+    )
+    :
+      inc calls
+      check calls < 50 # must terminate
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "budgeted YAML re-parse inside a large block scalar stays within the budget":
+    # Regression: a window fully inside a block scalar used to double
+    # geometrically until it spanned the scalar's remainder — the per-frame
+    # freeze the budget exists to prevent. The scalar is now resumable, so
+    # each call accepts a budget-sized chunk; the varying content indentation
+    # keeps convergence off, so the flight genuinely spans calls.
+    var buffer = @["long: |"]
+    for i in 0 ..< 250:
+      buffer.add("    deeper content " & $i)
+    for i in 0 ..< 250:
+      buffer.add("  shallow content " & $i)
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[1] = "    edited deeper content"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var maxParsed = 0
+    while true:
+      var parsed = 0
+      if not updateHighlightIncremental(
+        buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 100, 1, parsed
+      ):
+        break
+      maxParsed = max(maxParsed, parsed)
+    check maxParsed <= 100
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "budgeted YAML re-parse across a long blank run stays within the budget":
+    # Regression: a blank-line run is a YAML handoff hazard, so a window
+    # inside it used to double geometrically and the doubled window
+    # PERSISTED across frames (the per-frame freeze the budget exists to
+    # prevent). Blank lines are resumable, so each call must accept a
+    # budget-sized chunk; without the fix `maxParsed` grows 100, 200, 400...
+    const BlankRun = 20000
+    var buffer = @["a: 1", "b: 2"]
+    for i in 0 ..< BlankRun:
+      buffer.add("")
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer.insert("b2: 22", 1)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var maxParsed = 0
+    while true:
+      var parsed = 0
+      if not updateHighlightIncremental(
+        buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 100, 1, parsed
+      ):
+        break
+      maxParsed = max(maxParsed, parsed)
+    check maxParsed <= 100
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "an emptied state cache mid-flight restarts from the cache top":
+    # Regression (review finding): a line-count change at the top trims the
+    # state cache; if the first chunk then sits inside a YAML handoff
+    # hazard, the budget break leaves the flight live with an empty cache.
+    # A second edit must restart from the top of the available cache (the
+    # seed for the new anchor is gone), not from the new anchor's margin.
+    var buffer = @["long: |"]
+    for i in 1 .. 99:
+      buffer.add("")
+    for i in 100 ..< 1500:
+      buffer.add("key" & $i & ": value")
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer.insert("", 1)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    # First call: the window inside the blank run doubles until the budget
+    # (50) is exhausted before any chunk is accepted; the cache stays empty.
+    check updateHighlightIncremental(
+      buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 50, 1
+    )
+    check ih.pendingReparse != nil
+    check ih.lineStates.states.len == 0
+
+    # A second edit below the cache while the flight is live: the restart
+    # must rewind to the top of the available cache.
+    buffer.insert("let second = 1;", 500)
+    check updateHighlightIncremental(
+      buffer.len, getLine, ih, 500, @[], SourceLanguage.langYaml, 0, 1000, 2
+    )
+    check ih.pendingReparse != nil
+    check ih.pendingReparse.reparseStart == 0
+
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 500, @[], SourceLanguage.langYaml, 0, 1000, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "an emptied-cache flight does not fall back to a full rebuild":
+    # Regression (review finding): `updateHighlight`'s cache-validity gate
+    # used to treat a live flight with an emptied state cache as "no cache"
+    # and rebuild the whole file in one unbudgeted call.
+    var content = "long: |\n"
+    for i in 0 ..< 1500:
+      content.add("\n")
+    content.add("after: tail\n")
+    let buf = newTextBuffer(content)
+    buf.language = SourceLanguage.langYaml
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
+
+    discard buf.beginTransaction()
+    discard buf.insert(1, "")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(1000)
+    check buf.incrementalHighlight.pendingReparse != nil
+    check buf.incrementalHighlight.lineStates.states.len == 0
+
+    # A second edit must restart the budgeted flight, not rebuild the whole
+    # file in one call (which would leave no flight to resume).
+    discard buf.beginTransaction()
+    discard buf.insert(500, "let second = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(1000)
+    check buf.incrementalHighlight.pendingReparse != nil
+    check buf.incrementalHighlight.pendingReparse.reparseStart == 0
+    while buf.continueIncrementalHighlight(1000):
+      discard
+    check buf.incrementalHighlight.pendingReparse == nil
+    var lines = newSeq[string](buf.len)
+    for i in 0 ..< buf.len:
+      lines[i] = buf.getLine(i)
+    checkMatchesFullParse(lines, buf.incrementalHighlight, SourceLanguage.langYaml)
+
+  test "geometric growth in a handoff hazard does not over-charge parsedLines":
+    # Regression: a rejected handoff-hazard attempt used to bump
+    # `parsedLines` by the full window, draining the caller's shared budget
+    # on every doubling. Refund the rejection.
+    var buffer = @["long: |"]
+    for i in 1 .. 99:
+      buffer.add("")
+    for i in 100 ..< 1500:
+      buffer.add("key" & $i & ": value")
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer.insert("", 1)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var parsedLines: int
+    check updateHighlightIncremental(
+      buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 50, 1, parsedLines
+    )
+    check ih.pendingReparse != nil
+    # The doubling attempts were rejected, so nothing was accepted; the
+    # shared-budget charge must reflect that (was previously ≥ 50 — the
+    # doubled window's full length).
+    check parsedLines == 0
+
+  test "an empty chunk cut right after a YAML block-scalar header keeps the end checks":
+    # Regression: a chunk ending at the blank line right after a block-scalar
+    # header (header at row ChunkSize - 2, blank at the chunk's last row)
+    # used to persist `blockScalarMinIndent = 0`. The resume then compared
+    # every later line against 0, so a `#` comment less indented than the
+    # scalar's content was swallowed as content.
+    var buffer = newSeq[string](ChunkSize - 2)
+    for i in 0 ..< ChunkSize - 2:
+      buffer[i] = "key" & $i & ": value"
+    buffer.add("long: |")
+    buffer.add("")
+    buffer.add("  scalar content")
+    buffer.add("  more content")
+    buffer.add(" # comment below the content indent")
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[1] = "b2: 22"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var calls = 0
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 100
+    )
+    :
+      inc calls
+      check calls < 50 # must terminate
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "a resumed YAML block scalar ends at a comment below the persisted minimum":
+    # Regression: a chunk boundary landing right before a `#` comment less
+    # indented than the scalar's content must end the scalar like a
+    # single-buffer scan. The resume must not fold the comment's indent into
+    # the minimum before the end check — that would swallow the comment as
+    # content.
+    var buffer = @["long: |"]
+    for i in 0 ..< ChunkSize - 1:
+      buffer.add("  scalar content " & $i)
+    buffer.add(" # comment below the content indent")
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[1] = "  edited scalar content"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var calls = 0
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 100
+    )
+    :
+      inc calls
+      check calls < 50 # must terminate
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "an indicator header cut right after it keeps a shallow first-line comment as content":
+    # Regression: a chunk boundary right after an indicator header (`key: |4`)
+    # used to persist the indicator alone as the minimum, so a resume ended
+    # the scalar at a `#` comment shallower than the indicator — while a
+    # single-buffer scan folds the first content line into the indicator and
+    # keeps the comment as content.
+    var buffer = newSeq[string](ChunkSize)
+    for i in 0 ..< ChunkSize - 1:
+      buffer[i] = "key" & $i & ": value"
+    buffer[ChunkSize - 1] = "long: |4"
+    buffer.add("  # comment below the indicator")
+    buffer.add("  scalar content")
+    buffer.add("after: tail")
+    var ih = parseFullIncremental(buffer, SourceLanguage.langYaml)
+    buffer[1] = "b2: 22"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    var calls = 0
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 1, @[], SourceLanguage.langYaml, 0, 100, 1
+    )
+    :
+      inc calls
+      check calls < 50 # must terminate
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langYaml)
+
+  test "updateHighlight and continueIncrementalHighlight drive the re-parse":
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_budgeted_update.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 2500:
+      content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+
+    check buf.updateHighlight(100)
+    var frames = 1
+    while buf.continueIncrementalHighlight(100):
+      inc frames
+    check frames > 1
+    check buf.incrementalHighlight.pendingReparse == nil
+    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    var lines = newSeq[string](buf.len)
+    for i in 0 ..< buf.len:
+      lines[i] = buf.getLine(i)
+    checkMatchesFullParse(lines, buf.incrementalHighlight, SourceLanguage.langRust)
+
+  test "URI underlines re-cover a budgeted re-parse region":
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_budgeted_uri.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 1500:
+      if i == 100:
+        content.add("let x = 1; // see https://example.com/api\n")
+      else:
+        content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    let uriCol = "let x = 1; // see ".len
+    check Underline in buf.highlight.getSegmentModifiers(100, uriCol)
+
+    # Insert at the top: the re-parse trims the segments (URI underlines
+    # included); the progressive scan must re-cover them.
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+
+    check buf.updateHighlight(100)
+    while buf.continueIncrementalHighlight(100):
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    check Underline in buf.highlight.getSegmentModifiers(101, uriCol)
+
+  test "URI rewind covers rows above the change when a block comment opener trims them":
+    # Regression: the previous `-3` heuristic missed the MultiLineKinds
+    # rewind — a `/*` opener above the edit trimmed segments from the
+    # opener onward, but the URI scan resumed at `lastChangedLines - 3`,
+    # skipping the URI inside the comment.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_uri_multiline_rewind.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 5:
+      content.add("let value" & $i & " = " & $i & ";\n")
+    content.add("/* opener\n")
+    for i in 6 ..< 50:
+      content.add(" * padding " & $i & "\n")
+    content.add(" * see https://example.com/api\n")
+    for i in 51 ..< 150:
+      content.add(" * padding " & $i & "\n")
+    content.add(" */\n")
+    for i in 151 ..< 200:
+      content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    let uriCol = " * see ".len
+    check Underline in buf.highlight.getSegmentModifiers(50, uriCol)
+
+    # Edit line 100 (inside the comment): reparseStart rewinds to the `/*`
+    # opener, trimming the URI's segment. Re-parse completes in one call
+    # (fits in the default budget); the completed-branch URI rewind must
+    # reach past the URI so `continueUriScan` re-underlines it.
+    discard buf.replaceLine(100, " * padding 100 edited")
+    check buf.updateHighlight(1000) == false
+    check buf.incrementalHighlight.pendingReparse == nil
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    check Underline in buf.highlight.getSegmentModifiers(50, uriCol)
+
+  test "URI scan clamps to the re-parse frontier while in flight":
+    # The scan must not run past the re-parse frontier: the trimmed rows
+    # beyond it have no segments yet, and scanning past them would
+    # permanently skip their underlines.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_budgeted_uri_clamp.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 1500:
+      if i == 100:
+        content.add("let x = 1; // see https://example.com/api\n")
+      else:
+        content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    discard buf.continueUriScan()
+    # Clamped to the frontier: without it the scan would reach row 999 while
+    # the re-parse has produced only rows up to 99.
+    check buf.uriScanParsedUpTo <= buf.incrementalHighlight.pendingReparse.reparseEnd
+    while buf.continueIncrementalHighlight(100):
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    let uriCol = "let x = 1; // see ".len
+    check Underline in buf.highlight.getSegmentModifiers(101, uriCol)
+
+  test "URI scan covers flight rows beyond a stalled initial-load frontier":
+    # Regression: while a re-parse is in flight, the scan's early exit used
+    # the STALE initial-load frontier (`parsedUpTo`), so rows the flight
+    # re-parsed past it got no underlines until completion. The flight's
+    # frontier (`reparseEnd`) must govern: rows up to it have fresh segments
+    # and must be scanned immediately.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_uri_stalled_load.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 3000:
+      if i == 2000:
+        content.add("let x = 1; // see https://example.com/api\n")
+      else:
+        content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    # Advance the initial load by one chunk only: the frontier stalls below
+    # the URI row (2000) while the URI sits beyond it.
+    discard buf.continueInitialHighlight()
+    let loadFrontier = buf.incrementalHighlight.parsedUpTo
+    check loadFrontier < 2000
+    check loadFrontier < buf.len - 1
+    discard buf.continueUriScan()
+    check buf.uriScanParsedUpTo == loadFrontier
+
+    # Line-count change above the URI: the flight re-parses past the stale
+    # load frontier and reparseStart <= parsedUpTo + 1, so the flight covers
+    # the whole unparsed tail.
+    discard buf.beginTransaction()
+    discard buf.insert(500, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+
+    # Drive the flight past the URI row, then let the scan catch up: it must
+    # pass the stale load frontier up to the flight's frontier and underline
+    # the URI while the flight is still in flight. `continueUriScan` returns
+    # whether URIs were applied, not whether work remains, so drive by the
+    # pointer.
+    while buf.incrementalHighlight.pendingReparse.reparseEnd < 2100:
+      discard buf.continueIncrementalHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    while buf.uriScanParsedUpTo < buf.incrementalHighlight.pendingReparse.reparseEnd:
+      discard buf.continueUriScan()
+    let uriCol = "let x = 1; // see ".len
+    check Underline in buf.highlight.getSegmentModifiers(2001, uriCol)
+    check buf.uriScanParsedUpTo > loadFrontier
+
+  test "a line-count change mid-re-parse keeps the EOF re-parse after undo":
+    # Regression: a restart discarded the flight's original tail, leaving
+    # rows beyond its start without segments. The undo changes the line
+    # count (251 -> 250): the tail is dropped and convergence stays off, so
+    # the restarted re-parse runs to EOF.
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+
+    # Undo the insert: the line-count change mid-flight must keep the
+    # restarted re-parse from converging (it would splice a misaligned
+    # tail); the assertions pin the EOF re-parse path.
+    buffer.delete(10)
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+
+  test "a mid-re-parse line-count change re-parses to EOF instead of converging":
+    # Rows below a line-count change shift, so convergence must stay off for
+    # the restarted flight; `canConverge` alone cannot carry the suppression
+    # (the count can match the cached length again), so `tailAligned` does.
+    var buffer = newSeq[string](300)
+    for i in 0 ..< 300:
+      case i mod 3
+      of 0:
+        buffer[i] = "let value" & $i & " = " & $i & "; // note " & $i
+      of 1:
+        buffer[i] = "const S" & $i & ": &str = \"string " & $i & "\";"
+      else:
+        buffer[i] = "fn f" & $i & "() { let x = " & $i & "; }"
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+
+    # A line-count change lands while the re-parse is in flight.
+    buffer.delete(200)
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 200, @[], SourceLanguage.langRust, 0, 100, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+
+  test "an edit below the old frontier re-covers the gap on restart":
+    # Regression: a restart from a lower anchor left the rows between the
+    # old frontier and the new anchor without segments.
+    var buffer = rustLines(300)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 10)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 10, @[], SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+
+    # A new edit below the flight's frontier: restarting from the new anchor
+    # alone would skip rows [oldFrontier, newAnchor], which exist in no cache.
+    buffer.insert("let another = 2;", 200)
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 200, @[], SourceLanguage.langRust, 0, 100, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+
+  test "an edit below the frontier with an incomplete initial load re-covers the band":
+    # Regression: a discarded flight started during an incomplete initial
+    # load trims nothing (its stashed tail is empty), so the restart override
+    # must be position-based (`reparseStart > oldFrontier`), not tail-based.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_band_restart.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 2500:
+      content.add("let value" & $i & " = " & $i & "; // note " & $i & "\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    # loadFile parses the first 1000 rows; one more chunk leaves the load
+    # incomplete (caches cover rows [0, 1999], `states.len` < line count).
+    check buf.incrementalHighlight.parsedUpTo == 999
+    check buf.continueInitialHighlight()
+    check buf.incrementalHighlight.parsedUpTo == 1999
+
+    # An edit below the load frontier: the flight trims nothing, so its
+    # stashed tail is empty.
+    discard buf.beginTransaction()
+    discard buf.insert(2200, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    let oldFrontier = buf.incrementalHighlight.pendingReparse.reparseEnd
+
+    # A second edit below the flight's frontier restarts it; the override
+    # must rewind the re-parse to the discarded flight's start, not the new
+    # anchor's margin, or the band [oldFrontier, newAnchor) stays uncovered.
+    discard buf.beginTransaction()
+    discard buf.insert(2400, "let second = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    let pr = buf.incrementalHighlight.pendingReparse
+    check pr != nil
+    check pr.reparseStart < oldFrontier
+
+    # Drain the restarted flight; every row above the old frontier must carry
+    # fresh segments from the flight itself.
+    while buf.continueIncrementalHighlight(100):
+      discard
+    check buf.incrementalHighlight.pendingReparse == nil
+
+    # The completed flight must NOT advance the progressive-load frontier:
+    # the band [2000, 2198) was covered by neither (the flight's initial
+    # state was the neutral fallback). Regression: the completion used to
+    # advance `parsedUpTo` unconditionally, leaving the band without
+    # segments forever.
+    check buf.incrementalHighlight.parsedUpTo == 1999
+    while buf.continueInitialHighlight():
+      discard
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
+
+    let incrResult = Highlight(colorSegments: buf.incrementalHighlight.segments)
+    var runesBuffer: seq[Runes]
+    var lines = newSeq[string](buf.len)
+    for i in 0 ..< buf.len:
+      lines[i] = buf.getLine(i)
+      runesBuffer.add(lines[i].toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    for row in 0 ..< buf.len:
+      for col in 0 ..< lines[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
+  test "a band-flight with a construct open at its start heals on load resume":
+    # Regression: when an edit lands below the load frontier, the flight
+    # starts from the neutral state (the true entering state sits in the
+    # unloaded band), so rows from `reparseStart` on can be mis-lexed — here
+    # a `/*` comment opened inside the band colors the rows below as code.
+    # The load must resume from its stale frontier and re-parse the band.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_band_construct.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 2500:
+      if i == 2100:
+        content.add("/*\n")
+      elif i == 2300:
+        content.add("*/\n")
+      elif i >= 2100:
+        content.add("  comment body " & $i & "\n")
+      else:
+        content.add("let value" & $i & " = " & $i & "; // note " & $i & "\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    check buf.continueInitialHighlight()
+    check buf.incrementalHighlight.parsedUpTo == 1999
+
+    # An edit inside the band, below the load frontier: the flight starts at
+    # 2198 — inside the still-open comment — from the neutral state.
+    discard buf.beginTransaction()
+    discard buf.insert(2200, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    while buf.continueIncrementalHighlight(100):
+      discard
+    check buf.incrementalHighlight.pendingReparse == nil
+    # The load must still resume from its stale frontier and re-parse the
+    # band [2000, 2198) and the mis-lexed rows below it with the true state.
+    check buf.incrementalHighlight.parsedUpTo == 1999
+    while buf.continueInitialHighlight():
+      discard
+
+    let incrResult = Highlight(colorSegments: buf.incrementalHighlight.segments)
+    var runesBuffer: seq[Runes]
+    var lines = newSeq[string](buf.len)
+    for i in 0 ..< buf.len:
+      lines[i] = buf.getLine(i)
+      runesBuffer.add(lines[i].toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    for row in 0 ..< buf.len:
+      for col in 0 ..< lines[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
+  test "a restarted re-parse does not converge inside the old flight's window":
+    # Regression: after a restart, cached states inside the old flight's
+    # window are its fresh states while the tail holds the ORIGINAL
+    # segments; converging there would splice a stale tail (here: a comment
+    # closed early below the old frontier keeps comment colors on code).
+    var buffer = newSeq[string](300)
+    for i in 0 ..< 300:
+      if i == 100:
+        buffer[i] = "/*"
+      elif i == 299:
+        buffer[i] = "*/"
+      elif i > 100:
+        buffer[i] = "  comment body " & $i
+      else:
+        buffer[i] = "let value" & $i & " = " & $i & "; // note " & $i
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    # Close the comment early: the state sequence below the edit diverges
+    # from the original cache, so the re-parse keeps flying.
+    buffer[120] = "*/"
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 120, @[], SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+    check ih.pendingReparse.reparseStart == 100
+
+    # A second edit above restarts the flight. Its first chunk re-parses the
+    # still-open comment, so its end state matches the discarded flight's
+    # cache inside the old window; that convergence must be rejected (the
+    # tail is the ORIGINAL comment, stale now that the comment closes early).
+    buffer[5] = "let edited = 1; // changed"
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 5, @[], SourceLanguage.langRust, 0, 100, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langRust)
+
+  test "a re-restarted re-parse does not converge inside the inherited barrier":
+    # Regression (review finding): `convergeBarrier` is a max over restart
+    # chains, but prior tests used single restarts where
+    # `max(oldFrontier, -1) == oldFrontier` cannot tell the max apart from a
+    # "last frontier only" implementation. This chain forces the max to pick
+    # the INHERITED barrier: the third restart's first chunk ends inside the
+    # first flight's window with matching states — accepting convergence
+    # would splice the ORIGINAL tail (rows below the comment's early close
+    # stay comment-colored).
+    var buffer = newSeq[string](600)
+    for i in 0 ..< 600:
+      if i == 100:
+        buffer[i] = "/*"
+      elif i == 350:
+        buffer[i] = "*/"
+      elif i > 100:
+        buffer[i] = "  comment body " & $i
+      else:
+        buffer[i] = "let value" & $i & " = " & $i & "; // note " & $i
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    # Close the comment early: rows below diverge from the original cache, so
+    # the flight cannot converge; one 100-line chunk leaves it in flight with
+    # frontier 199.
+    buffer[120] = "*/"
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 120, @[], SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+    check ih.pendingReparse.reparseStart == 100
+    check ih.pendingReparse.reparseEnd == ih.pendingReparse.reparseStart + ChunkSize - 1
+
+    # A second edit (line-count-preserving, so the cache stays full and
+    # convergence stays live) restarts from above. Its first chunk re-parses
+    # the still-open comment and its end state matches the discarded flight's
+    # cache inside the old window; the inherited barrier (199) rejects it,
+    # and the flight persists at frontier 102 — BELOW the barrier.
+    buffer[5] = "let edited = 1; // changed"
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 5, @[], SourceLanguage.langRust, 0, 100, 2
+    )
+    check ih.pendingReparse != nil
+    check ih.pendingReparse.reparseStart == 3
+    check ih.pendingReparse.reparseEnd == ih.pendingReparse.reparseStart + ChunkSize - 1
+
+    # A third edit inside the comment rewinds the re-parse to the `/*`
+    # opener (100): its first chunk re-parses rows 100..199 and the entering
+    # state at 200 matches the first flight's fresh cache. Only the INHERITED
+    # barrier (199) rejects that convergence — a "last frontier only"
+    # implementation would accept it and splice the original tail, coloring
+    # rows 200+ (now code) as comment.
+    buffer[105] = "  edited comment body"
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 105, @[], SourceLanguage.langRust, 0, 100, 3
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    # Inline comparison instead of `checkMatchesFullParse`: a `check` inside
+    # a helper proc does not fail the test in std/unittest, so the checks
+    # must live in the test body.
+    let incrResult = Highlight(colorSegments: ih.segments)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    for row in 0 ..< buffer.len:
+      for col in 0 ..< buffer[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
+  test "a content-version bump without needsUpdate mid-re-parse rewinds the URI scan":
+    # Regression: a restart driven from continueIncrementalHighlight (the
+    # undo/redo roll-forward paths bump contentVersion without
+    # markLineChanged) re-creates segments without URI underlines, but the
+    # continuation path had no URI-scan rewind — the rows between the new
+    # reparseStart and the old scan position were never re-scanned.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_budgeted_uri_restart.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 1500:
+      if i == 100:
+        content.add("let x = 1; // see https://example.com/api\n")
+      else:
+        content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    let uriCol = "let x = 1; // see ".len
+    check Underline in buf.highlight.getSegmentModifiers(100, uriCol)
+
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    # Let the flight and the URI scan advance past the re-parse start.
+    for _ in 0 ..< 4:
+      discard buf.continueIncrementalHighlight(100)
+      discard buf.continueUriScan()
+    check buf.uriScanParsedUpTo > buf.incrementalHighlight.pendingReparse.reparseStart
+
+    # Simulate an undo/redo backend failure: contentVersion advances without
+    # highlightNeedsUpdate, so the next continuation call restarts the
+    # re-parse and must rewind the URI scan to the new reparseStart.
+    buf.advanceContentVersion()
+    discard buf.continueIncrementalHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    check buf.uriScanParsedUpTo ==
+      buf.incrementalHighlight.pendingReparse.reparseStart - 1
+
+    while buf.continueIncrementalHighlight(100):
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    # The underline is re-covered (insert moved the URI row from 100 to 101).
+    check Underline in buf.highlight.getSegmentModifiers(101, uriCol)
+
+  test "a restart completing in one continuation call rewinds the URI scan":
+    # Regression: the continuation path's completed-restart rewind (the
+    # `newPr == nil` branch of continueIncrementalHighlight) had no test.
+    # Without the rewind the rows between the new reparseStart and the old
+    # scan position keep underline-less segments that are never re-scanned.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_budgeted_uri_rewind_cont.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 900:
+      if i == 1:
+        content.add("let x = 1; // see https://example.com/api\n")
+      else:
+        content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+
+    # A flight at the top stays in flight with a small budget.
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(50)
+    check buf.incrementalHighlight.pendingReparse != nil
+    # Advance the flight and the URI scan past the re-parse start.
+    for _ in 0 ..< 4:
+      discard buf.continueIncrementalHighlight(50)
+      discard buf.continueUriScan()
+    check buf.uriScanParsedUpTo > buf.incrementalHighlight.pendingReparse.reparseStart
+
+    # A second edit below the flight's frontier restarts it from the
+    # discarded flight's start (rows between the old frontier and the new
+    # anchor have no segments); the remaining distance is small enough that
+    # a large budget completes the restart within this one continuation
+    # call, exercising the `newPr == nil` rewind branch.
+    discard buf.beginTransaction()
+    discard buf.insert(600, "let second = 1;")
+    discard buf.commitTransaction()
+    check not buf.continueIncrementalHighlight(1000)
+    check buf.incrementalHighlight.pendingReparse == nil
+    # Rewound past the new re-parse start (the restart re-parsed from row 0).
+    check buf.uriScanParsedUpTo == -1
+
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    # The underline is re-covered (the URI row moved from 1 to 2 with the
+    # first insert).
+    let uriCol = "let x = 1; // see ".len
+    check Underline in buf.highlight.getSegmentModifiers(2, uriCol)
+
+  test "a restart that completes in one call rewinds the URI scan past the inherited start":
+    # Regression: a restart whose reparseStart is overridden to the discarded
+    # flight's start re-parses rows above lastChangedLines - 3; the
+    # completed-re-parse rewind must cover them or those rows' new segments
+    # keep no URI underlines.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_budgeted_uri_rewind.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 250:
+      if i == 1:
+        content.add("let x = 1; // see https://example.com/api\n")
+      else:
+        content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    let uriCol = "let x = 1; // see ".len
+    check Underline in buf.highlight.getSegmentModifiers(1, uriCol)
+
+    # Edit at the top: the re-parse (from row 0) stays in flight and the
+    # clamped URI scan re-covers the re-parsed rows as the frontier grows.
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    discard buf.continueIncrementalHighlight(100)
+    discard buf.continueUriScan()
+    check buf.uriScanParsedUpTo > 2
+    # A second edit lands mid-flight with a reparseStart (3) below the new
+    # anchor but above the discarded flight's start (0): the restart rewinds
+    # the re-parse to row 0 and completes within this call. The completion
+    # rewind must go back to the inherited start, not just lastChangedLines -
+    # 3 (row 2), or the URI row's fresh segment keeps no underline.
+    discard buf.beginTransaction()
+    discard buf.insert(5, "let second = 1;")
+    discard buf.commitTransaction()
+    check not buf.updateHighlight(1000)
+    check buf.incrementalHighlight.pendingReparse == nil
+    # The edits grew the buffer past the initial load's stale frontier
+    # (parsedUpTo), and continueUriScan refuses to pass it, so resume the
+    # load before the scan can re-cover the re-parsed rows.
+    while buf.continueInitialHighlight():
+      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    # The URI row moved from 1 to 2 (inserts at rows 0 and 5).
+    check Underline in buf.highlight.getSegmentModifiers(2, uriCol)
+
+  test "a reserved-word change mid-re-parse restarts with the new words":
+    # setReservedWords touches neither the anchor, the line count nor the
+    # content version, so only the reserved-words check can detect it;
+    # without the restart the already-accepted chunks keep the old colors.
+    var buffer: seq[string]
+    for i in 0 ..< 250:
+      buffer.add("let value" & $i & " = " & $i & "; // NOTE " & $i)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langRust)
+    buffer.insert("let inserted = 1;", 0)
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 0, @[], SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+
+    # Same anchor / line count / content version; only the words change.
+    let newWords =
+      @[ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord)]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 0, newWords, SourceLanguage.langRust, 0, 100, 1
+    )
+    check ih.pendingReparse != nil
+
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 0, newWords, SourceLanguage.langRust, 0, 100, 1
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    # Every row must match a full parse with the new words: the restart
+    # re-parsed the chunks the old words had already colored.
+    let incrResult = Highlight(colorSegments: ih.segments)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, newWords, SourceLanguage.langRust)
+    for row in 0 ..< buffer.len:
+      for col in 0 ..< buffer[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
+  test "an edit during the progressive initial load suppresses and resumes cleanly":
+    # The initial load (parsedUpTo < lineCount) and a budgeted re-parse must
+    # not fight: while the re-parse is in flight continueInitialHighlight is
+    # suppressed, and after it completes the initial load resumes from its
+    # stale frontier without duplicating the rows the re-parse covered.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_budgeted_initial.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 2500:
+      if i == 2000:
+        content.add("let x = 1; // see https://example.com/api\n")
+      else:
+        content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    # Only one chunk of the initial load, then an edit below its frontier.
+    check buf.continueInitialHighlight()
+    check buf.incrementalHighlight.parsedUpTo < buf.len - 1
+
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    # Suppressed while the re-parse is in flight.
+    check not buf.continueInitialHighlight()
+    while buf.continueIncrementalHighlight(100):
+      discard
+    check buf.incrementalHighlight.pendingReparse == nil
+    # The initial load resumes from its stale frontier and must not leave the
+    # caches in a state that diverges from a full parse.
+    while buf.continueInitialHighlight():
+      discard
+    check buf.incrementalHighlight.lineStates.states.len == buf.len
+    var lines = newSeq[string](buf.len)
+    for i in 0 ..< buf.len:
+      lines[i] = buf.getLine(i)
+    checkMatchesFullParse(lines, buf.incrementalHighlight, SourceLanguage.langRust)
+    # URI underlines survive the flight + resume interplay (the URI row moved
+    # from 2000 to 2001 with the insert). Drive the scan per frame: it returns
+    # whether a chunk applied URIs, not whether work remains.
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
+    let uriCol = "let x = 1; // see ".len
+    check Underline in buf.highlight.getSegmentModifiers(2001, uriCol)
+
+  test "an unclosed Nim block comment spans chunk boundaries":
+    # Regression (found by the budgeted fuzz): the Nim tokenizer never set a
+    # state for an unclosed `#[` comment, so the continuation re-lexed the
+    # comment body as code and convergence spuriously matched the neutral
+    # cached state, stopping the re-parse at the boundary.
+    var buffer = rustLines(2 * ChunkSize + 50)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langNim)
+    buffer[ChunkSize + 30] = "#[ outer block"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, ChunkSize + 30, @[], SourceLanguage.langNim, 0, 100, 1
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langNim)
+
+  test "an odd-run ##[ marker across a chunk boundary nests like the same-chunk scan":
+    # Regression (review finding): the resume branch matches `##[`
+    # positionally like the opener scan, so an odd run (`###[`) spanning a
+    # chunk boundary must open a nested level and close at the SECOND `]##`,
+    # mirroring the same-chunk scan and the real Nim lexer. The opener at
+    # row 80 leaves the first chunk unclosed; only the resume branch sees
+    # the odd run.
+    var buffer = rustLines(2 * ChunkSize + 50)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langNim)
+    buffer[80] = "##[ doc"
+    let oddRun = 78 + ChunkSize + 3
+    buffer[oddRun] = "  ###[ odd run"
+    buffer[oddRun + 9] = "]##"
+    buffer[oddRun + 10] = "let tail = 1"
+    buffer[oddRun + 11] = "]##"
+    buffer[oddRun + 12] = "let real = 2"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 80, @[], SourceLanguage.langNim, 0, 100, 1
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    let incrResult = Highlight(colorSegments: ih.segments)
+    # One level deep from the odd run: the first `]##` does not close.
+    check incrResult.getColorPair(oddRun + 10, 4) == EditorColorPairIndex.docLongComment
+    # The second `]##` closes; the code below is code again.
+    check incrResult.getColorPair(oddRun + 12, 4) != EditorColorPairIndex.docLongComment
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langNim)
+
+  test "an unclosed Python docstring spans chunk boundaries":
+    # Regression (found by the budgeted fuzz): the Python tokenizer's EOF
+    # guard wiped the docstring state at the chunk end, so the continuation
+    # re-lexed the docstring body as code (and convergence spuriously
+    # matched the neutral cached state).
+    var buffer = rustLines(2 * ChunkSize + 50)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langPython)
+    buffer[ChunkSize + 31] = "y = '''"
+
+    let getLine = proc(i: int): string =
+      buffer[i]
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, ChunkSize + 31, @[], SourceLanguage.langPython, 0, 100, 1
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langPython)
+
+  test "a Markdown thematic break at a chunk boundary keeps its color":
+    # Regression (found by the budgeted fuzz): Markdown's line-start checks
+    # rely on the state a trailing newline leaves (`gtWhitespace`), which the
+    # chunk-END capture could not see — a `---` at a chunk boundary was lexed
+    # as gtNone and rendered uncolored.
+    var buffer = rustLines(ChunkSize + 160)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langMarkdown)
+    let markerLine = 102 + ChunkSize
+    buffer[markerLine] = "---"
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, markerLine, @[], SourceLanguage.langMarkdown, 0, 100, 1
+    )
+    # An edit above moves the re-parse across a chunk boundary exactly at the
+    # marker line.
+    buffer[104] = "edited paragraph"
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 104, @[], SourceLanguage.langMarkdown, 0, 100, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+  test "a JS doc comment brace block spans chunk boundaries":
+    # Regression (found by the budgeted fuzz): the `{...}` preprocessor block
+    # inside a doc comment kept its nesting depth in a local variable, so a
+    # chunk boundary inside the block lost it and the next chunk resumed the
+    # comment body.
+    var buffer = rustLines(2 * ChunkSize + 50)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langJavaScript)
+    let openerLine = ChunkSize - 20
+    buffer[openerLine] = "/**"
+    let getLine = proc(i: int): string =
+      buffer[i]
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, openerLine, @[], SourceLanguage.langJavaScript, 0, 100, 1
+    )
+    # The `{` opens the block; the MultiLineKinds rewind pushes the re-parse
+    # back to the comment opener, so the chunk boundary falls inside the block.
+    let braceLine = openerLine + ChunkSize - 6
+    buffer[braceLine] = "async function compute(x) {"
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, braceLine, @[], SourceLanguage.langJavaScript, 0, 100, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langJavaScript)
+
+  test "a JS doc comment block abandoned at the comment close resumes":
+    # Regression (found in review): when a chunk boundary splits a `{...}`
+    # block and the comment closes (`*/`) before the block's `}`, the
+    # persisted depth must be dropped at the `*/` — otherwise the resume
+    # branch returns a zero-length token at the `*/` forever and everything
+    # below the comment is re-lexed as comment/preprocessor.
+    var buffer = rustLines(2 * ChunkSize + 50)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langJavaScript)
+    buffer[0] = "/**"
+    buffer[ChunkSize - 1] = " * @param {abc"
+    buffer[ChunkSize] = " */"
+    let getLine = proc(i: int): string =
+      buffer[i]
+    # The re-parse starts at the top, so the chunk boundary at
+    # ChunkSize - 1 / ChunkSize falls inside the `{` block opened on row
+    # ChunkSize - 1, and the next chunk starts with the comment close.
+    buffer[0] = "/** edited"
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 0, @[], SourceLanguage.langJavaScript, 0, 100, 1
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langJavaScript)
+
+  test "a fenced code block sub-language construct spans chunk boundaries":
+    # Regression (found in review): the chunk-END capture must not normalize
+    # a sub-language continuation state (an open Python docstring here) to
+    # `gtWhitespace` — syntax_markdown resumes on exactly the continuation-
+    # state set, so a normalized state re-lexes the construct as fresh code,
+    # the closing `'''` opens a NEW docstring and swallows the closing fence.
+    var buffer = rustLines(2 * ChunkSize + 50)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langMarkdown)
+    buffer[ChunkSize - 2] = "```python"
+    buffer[ChunkSize - 1] = "x = '''"
+    buffer[ChunkSize] = "continued"
+    buffer[ChunkSize + 1] = "'''"
+    buffer[ChunkSize + 2] = "y = 1"
+    buffer[ChunkSize + 3] = "```"
+    let getLine = proc(i: int): string =
+      buffer[i]
+    # The re-parse starts at the top, so the chunk boundary at
+    # ChunkSize - 1 / ChunkSize falls inside the docstring opened on row
+    # ChunkSize - 1.
+    buffer[0] = "paragraph 0 edited"
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 0, @[], SourceLanguage.langMarkdown, 0, 100, 1
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
+
+  test "a restart does not converge inside the discarded flight's window":
+    # Regression (found by the budgeted fuzz): a restart inherited the
+    # ORIGINAL tail while the discarded flight had refreshed the cached
+    # states up to its frontier. The convergence guard was lost on resume
+    # calls, so the flight converged inside that window and spliced the
+    # ORIGINAL (pre-edit) segments — here an unclosed Nim triple-quoted
+    # string was colored as code below the convergence point.
+    var buffer = rustLines(250)
+    var ih = parseFullIncremental(buffer, SourceLanguage.langNim)
+    buffer[130] = "const greeting = \"\"\""
+    let getLine = proc(i: int): string =
+      buffer[i]
+    # Start a flight at the string and leave it in flight.
+    check updateHighlightIncremental(
+      buffer.len, getLine, ih, 130, @[], SourceLanguage.langNim, 0, 1, 1
+    )
+    # A second edit restarts the flight from above.
+    buffer[8] = buffer[8].substr(0, 5) & "|" & buffer[8].substr(6)
+    discard updateHighlightIncremental(
+      buffer.len, getLine, ih, 8, @[], SourceLanguage.langNim, 0, 37, 2
+    )
+    while updateHighlightIncremental(
+      buffer.len, getLine, ih, 8, @[], SourceLanguage.langNim, 0, 37, 2
+    )
+    :
+      discard
+    check ih.pendingReparse == nil
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langNim)
+
 suite "Highlight - Nim Incremental Comment/String":
   test "insert comment in Nim source":
     var buffer = @[
@@ -753,6 +2183,48 @@ suite "Highlight - Nim Incremental Comment/String":
       SourceLanguage.langNim,
     )
     checkMatchesFullParse(buffer, ih, SourceLanguage.langNim)
+
+  test "odd hash runs inside a ##[ doc comment nest positionally":
+    # Pins the doc-comment nesting semantics (review finding): the `##[`
+    # marker is matched at any offset, so an odd run like `###[` opens a
+    # nested level — the comment closes at the SECOND `]##`, exactly as the
+    # real Nim lexer behaves. The pre-budget lexHash consumed `##` in pairs
+    # and skipped odd runs; the positional behavior is intentional.
+    var buffer =
+      @["##[ outer doc", "  ###[ odd run", "]##", "let tail = 1", "]##", "let real = 2"]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim
+    )
+    var ih =
+      IncrementalHighlight(segments: seg0, lineStates: LineStateCache(states: ls0))
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langNim)
+
+    let incrResult = Highlight(colorSegments: ih.segments)
+    # One level deep from the odd run: the first `]##` does not close.
+    check incrResult.getColorPair(3, 4) == EditorColorPairIndex.docLongComment
+    # The second `]##` closes; the code below is code again.
+    check incrResult.getColorPair(5, 4) != EditorColorPairIndex.docLongComment
+
+  test "even hash runs inside a ##[ doc comment nest once":
+    # Even runs (`####[`) must open exactly one nested level too: the
+    # positional scan matches the marker at the last two hashes, matching the
+    # old pair-consuming lexHash's depth. Pin the parity so a future refactor
+    # cannot flip it.
+    var buffer = @[
+      "##[ outer doc", "  ####[ even run", "]##", "let tail = 1", "]##", "let real = 2"
+    ]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim
+    )
+    var ih =
+      IncrementalHighlight(segments: seg0, lineStates: LineStateCache(states: ls0))
+    checkMatchesFullParse(buffer, ih, SourceLanguage.langNim)
+
+    let incrResult = Highlight(colorSegments: ih.segments)
+    check incrResult.getColorPair(3, 4) == EditorColorPairIndex.docLongComment
+    check incrResult.getColorPair(5, 4) != EditorColorPairIndex.docLongComment
 
 suite "Highlight - Block Comment Multiline State":
   test "C: insert after multiline block comment":
@@ -905,7 +2377,6 @@ suite "Highlight - YAML internal chunk boundary handoff":
   # the tokenizer must not park gtOther at the chunk buffer's NUL while still
   # inside the construct. Regression tests for the chunk-handoff state loss
   # (fuzz cannot see this class: its buffers stay far below 100 lines).
-
   proc checkIncrementalMatchesFull(
       original: seq[string], editRow: int, insertLine = false
   ) =
@@ -973,6 +2444,37 @@ suite "Highlight - YAML internal chunk boundary handoff":
     buffer.add("after: tail")
     checkIncrementalMatchesFull(buffer, 0)
 
+  test "block scalar header flipped mid-chunk, blank line at the boundary":
+    # The header is not the chunk's last line, so its trailing newline flips
+    # the state to gtLongStringLit inside the chunk; the blank line after it
+    # starts the scalar (persisting `blockScalarActive`) and is then cut by
+    # the chunk end. The next chunk must resume the scalar from the
+    # persisted context, not fall back to plain parsing.
+    var buffer: seq[string]
+    for i in 0 ..< 98:
+      buffer.add("key" & $i & ": value" & $i)
+    buffer.add("block: |")
+    buffer.add("") # the chunk [0..99] ends here, one row past the header
+    for i in 0 ..< 30:
+      buffer.add("  scalar content " & $i)
+    buffer.add("after: tail")
+    checkIncrementalMatchesFull(buffer, 0)
+
+  test "block scalar first content line at the chunk boundary":
+    # The header's newline is inside the chunk, so the flip happens
+    # mid-chunk; the very first content line then starts the scalar and is
+    # cut by the chunk end. The next chunk resumes the scalar mid-flight
+    # from the persisted context.
+    var buffer: seq[string]
+    for i in 0 ..< 98:
+      buffer.add("key" & $i & ": value" & $i)
+    buffer.add("block: |")
+    buffer.add("  first scalar content") # the chunk [0..99] ends here
+    for i in 0 ..< 29:
+      buffer.add("  more scalar content " & $i)
+    buffer.add("after: tail")
+    checkIncrementalMatchesFull(buffer, 0)
+
   test "alone block scalar header at an internal chunk boundary":
     # The alone header takes its indentation from the parent line above it.
     # When the header becomes a chunk's first line, the parent search must
@@ -1016,21 +2518,50 @@ suite "Highlight - YAML internal chunk boundary handoff":
       lines[i] = buf.getLine(i)
     checkMatchesFullParse(lines, buf.incrementalHighlight, SourceLanguage.langYaml)
 
-  test "progressive load frontier grows geometrically inside a block scalar":
-    # Every tick inside a chunk-spanning block scalar rewinds to its header;
-    # with a fixed window the frontier advances only ChunkSize per tick and
-    # each tick re-parses the whole prefix again — quadratic total, one
-    # near-full re-parse per render frame near the end of the load. The
-    # doubling window converges in O(log) ticks instead.
+  test "progressive load advances a chunk-spanning block scalar linearly":
+    # A chunk-spanning block scalar used to force a rewind to its header
+    # every tick, re-parsing the whole prefix each time (quadratic total).
+    # The scalar is now resumable across chunk boundaries, so the load
+    # advances by a clean ChunkSize per tick — linear total.
     var buf = loadProgressiveScalarFixture(
       "moe_test_yaml_progressive_geometric.yaml", scalarLines = 10_000
     )
 
     var ticks = 0
-    while buf.continueInitialHighlight():
+    var maxLines = 0
+    var consumed = 0
+    while buf.continueInitialHighlight(0, consumed):
+      inc ticks
+      maxLines = max(maxLines, consumed)
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
+    # loadFile already parsed the first chunk; the remaining 9k scalar lines
+    # advance one ChunkSize per tick plus the trailing tail chunk — no
+    # rewinds.
+    check ticks == 10
+    check maxLines <= 1000
+
+  test "budgeted progressive load completes across a deep rewind":
+    # Regression: a rewind deeper than 4x the budget used to cap the window
+    # at the old frontier, stalling the load forever. The cap is floored at
+    # the rewind depth + one budget.
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_yaml_progressive_deep_rewind.yaml"
+    defer:
+      removeFile(path)
+    var content = "scalar: |\n"
+    for i in 0 ..< 5000:
+      content.add("\n")
+    content.add("after: tail\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+
+    var consumed = 0
+    var ticks = 0
+    # The tick bound keeps a pre-fix stall a bounded failure, not a hang.
+    while buf.continueInitialHighlight(1000, consumed) and ticks < 100:
       inc ticks
     check buf.incrementalHighlight.parsedUpTo == buf.len - 1
-    check ticks <= 5 # one per ChunkSize (10+) without the geometric growth
+    check ticks < 100
 
     var lines = newSeq[string](buf.len)
     for i in 0 ..< buf.len:
@@ -1138,6 +2669,22 @@ suite "Highlight - early tokenizer stop keeps the line-state cache consistent":
     check buf.incrementalHighlight.parsedUpTo == buf.len - 1
     check buf.incrementalHighlight.lineStates.states.len == buf.len
 
+  test "markdown early stop pads every row with a resumable state":
+    # Regression: the boundary normalization used to fire only for a
+    # single-row pad; every padded row must be resumable or the next chunk
+    # mis-lexes markdown line-start tokens (`---`, `#`).
+    let bufferStr = "text a\0b\nplain body\nmore text\neven more"
+    let (_, lineStates) = initHighlightIncrementalFromStr(
+      bufferStr, 0, 3, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    check lineStates.len == 4
+    const Resumable = {
+      gtWhitespace, gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit,
+      gtCData,
+    }
+    for state in lineStates:
+      check state.state in Resumable
+
   test "gtCommand resume on a blank-first-line chunk parses the chunk":
     # Regression: resuming a fresh tokenizer from a captured gtCommand state
     # (block scalar header as the previous chunk's last line) with the chunk
@@ -1207,8 +2754,8 @@ suite "Highlight - diagnostics survive progressive load":
 
     while buf.continueInitialHighlight():
       discard
-    while buf.continueUriScan():
-      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
 
     buf.diagnostics = @[
       BufferDiagnostic(
@@ -2240,8 +3787,8 @@ suite "Highlight - URI Underline on Load":
     # Complete initial highlighting and URI scan
     while buf.continueInitialHighlight():
       discard
-    while buf.continueUriScan():
-      discard
+    while buf.uriScanParsedUpTo < buf.len - 1:
+      discard buf.continueUriScan()
 
     # Verify both URIs have underlines
     let earlyCol = "// ".len
@@ -2440,6 +3987,94 @@ suite "Highlight - Markdown Incremental":
     )
     checkMatchesFullParse(buffer, ih, SourceLanguage.langMarkdown)
 
+suite "Highlight - Markdown isCodeBlockLine during multi-frame flight":
+  test "line-count-changing edit trims stale line states past the flight frontier":
+    # Regression: during a multi-frame flight after a line-count change,
+    # rows past the frontier still held pre-edit tokenizer states bound to
+    # now-shifted rows, so `isCodeBlockLine` returned the pre-edit answer
+    # for a different row. The fresh flight must trim the tail states so
+    # render-side consumers fall back to the safe default until
+    # `refreshStateCache` refills.
+    var content = ""
+    for i in 0 ..< 100:
+      content.add("intro line " & $i & "\n")
+    content.add("```nim\n")
+    for i in 0 ..< 50:
+      content.add("let x" & $i & " = " & $i & "\n")
+    content.add("```\n")
+    for i in 0 ..< 200:
+      content.add("outro line " & $i & "\n")
+    let buf = newTextBuffer(content)
+    buf.language = SourceLanguage.langMarkdown
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+    check buf.isCodeBlockLine(100) # opening fence
+    check buf.isCodeBlockLine(120) # interior
+    check not buf.isCodeBlockLine(200) # outro
+
+    # Insert a line at the top so rows shift by 1: the fence moves to
+    # rows 101-151. A tiny per-call budget stalls the flight before it
+    # refills the fence region's states.
+    discard buf.insert(0, "new line")
+    check buf.updateHighlight(5)
+    check buf.incrementalHighlight.pendingReparse != nil
+
+    # Post-edit row 100 is the old row 99 (regular text). Before the fix,
+    # the stale states[99]/[100] carried the pre-edit fence boundary
+    # (false OR true = true), a wrong "true". With the trim, the states
+    # array is shorter than the query row, so the safe default (false)
+    # is returned.
+    check not buf.isCodeBlockLine(100)
+
+  test "gap between load frontier and band flight fills with default state":
+    # Pin the gap semantics: a flight that starts above the load's frontier
+    # leaves rows [parsedUpTo+1, reparseStart) as default TokenizerState()
+    # after completion. Consumers of per-language state must gate on
+    # `parsedUpTo` for rows in that band; the invariant is fragile, so this
+    # test locks it.
+    let path = getTempDir() / "moe_test_gap_state_invariant.md"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 100:
+      content.add("intro line " & $i & "\n")
+    content.add("```nim\n")
+    for i in 0 ..< 50:
+      content.add("let x" & $i & " = " & $i & "\n")
+    content.add("```\n")
+    for i in 0 ..< 3000:
+      content.add("outro line " & $i & "\n")
+    writeFile(path, content)
+    var buf = newTextBuffer()
+    discard buf.loadFile(path)
+    # loadFile parses only the initial chunk; leave the rest unloaded.
+    check buf.incrementalHighlight.parsedUpTo < buf.len - 1
+    let loadFrontier = buf.incrementalHighlight.parsedUpTo
+
+    # Edit far below the load frontier — the flight starts well past it.
+    discard buf.beginTransaction()
+    discard buf.insert(2500, "outro edit")
+    discard buf.commitTransaction()
+    while buf.updateHighlight(200):
+      discard
+    while buf.continueIncrementalHighlight(200):
+      discard
+    check buf.incrementalHighlight.pendingReparse == nil
+
+    # parsedUpTo did NOT advance: the flight started above it, so the gap
+    # [loadFrontier+1, reparseStart) was never covered by the load.
+    check buf.incrementalHighlight.parsedUpTo == loadFrontier
+
+    # A gap row's state is the default — pinned to catch a silent change
+    # in the cache semantics; consumers of per-language state fields must
+    # gate on `parsedUpTo` for rows in this band.
+    let gapRow = loadFrontier + 100
+    let states = buf.incrementalHighlight.lineStates.states
+    check gapRow < states.len
+    check states[gapRow] == TokenizerState()
+    # And the current Markdown consumer keeps returning the safe default.
+    check not buf.isCodeBlockLine(gapRow)
+
 suite "Highlight - updateHighlight cache reuse":
   test "empty-line buffer reuses the incremental cache on re-edit":
     # All-blank buffer: `segments` stays empty but `lineStates` is populated.
@@ -2593,6 +4228,31 @@ suite "Highlight - line-length cap (synmaxcol)":
     # comment, past the cap renders as default — proving the load path capped.
     check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.comment
     check buf.highlight.getColorPair(0, 30) == EditorColorPairIndex.default
+
+  test "setMaxHighlightLineLength rebuild honors the frame budget":
+    # Regression: the rebuild path (cache invalid) used to parse the whole
+    # buffer in one call, ignoring the budget. It must chunk under a
+    # non-zero budget; unlimited (0) keeps the synchronous rebuild.
+    var content = ""
+    for i in 0 ..< 3000:
+      content.add("let v" & $i & " = " & $i & ";\n")
+    var buf = newTextBuffer(content)
+    buf.language = SourceLanguage.langRust
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight() # unlimited: prime the cache
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
+
+    buf.setMaxHighlightLineLength(80) # drops cache, sets highlightNeedsUpdate
+    check buf.incrementalHighlight == nil
+    discard buf.updateHighlight(1000)
+    # First frame parses only one chunk instead of the whole file.
+    check buf.incrementalHighlight != nil
+    check buf.incrementalHighlight.parsedUpTo < buf.len - 1
+
+    # Successive frames complete it via continueInitialHighlight.
+    while buf.continueInitialHighlight(1000):
+      discard
+    check buf.incrementalHighlight.parsedUpTo == buf.len - 1
 
 suite "Highlight - Semantic overlay":
   # Small legend used across the tests; index 0=variable, 1=function, 2=type.

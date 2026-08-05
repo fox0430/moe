@@ -123,6 +123,10 @@ type
     inJsxMode*: bool
     jsxTagDepth*: int
     commentDepth*: int
+    docBlockDepth*: int
+      ## Nesting depth of a `{...}` preprocessor block inside a doc comment
+      ## (e.g. JSDoc `@param {string} x`), persisted across chunk boundaries
+      ## so a resume continues the block. 0 = not inside a block.
 
   HtmlState* = object
     inComment*: bool
@@ -135,6 +139,25 @@ type
 
   YamlState* = object
     isKey*: bool
+    blockScalarActive*: bool
+      ## True while a block scalar is in flight: boundary captures carry its
+      ## context so a chunk cut inside it can resume without the header line
+      ## above. Cleared when the scalar ends (`gtOther`); only read in
+      ## `gtLongStringLit`.
+    blockScalarParentIndent*: int
+      ## Parent indentation of the key line the scalar belongs to (-1 = top
+      ## level), derived at the header; the content loop compares against it.
+      ## Meaningful only while `blockScalarActive` is set.
+    blockScalarMinIndent*: int
+      ## Minimum content indentation seen so far (`|2`-style indicators
+      ## included); the end checks compare against it. Monotone
+      ## non-increasing, so a mid-scalar capture carries the exact min a
+      ## resume needs. Meaningful only while `blockScalarMinIndentSet` is set.
+    blockScalarMinIndentSet*: bool
+      ## True once `blockScalarMinIndent` holds a real minimum (a content
+      ## line folded in, or an explicit indicator). A chunk cut right after
+      ## the header must not persist the empty scan's 0 as the minimum: the
+      ## end checks would then never fire.
 
   MarkdownState* = object
     ## Per-line transient `inIndentedCode` lives on `GeneralTokenizer`, not here.
@@ -175,6 +198,11 @@ type
     stringQuote*: char
       ## Quote that opened the single-line string parked on a backslash escape.
 
+  NimState* = object
+    commentDepth*: int
+      ## Nesting depth of an unclosed `#[` / `##[` block comment, persisted
+      ## across chunk boundaries so a resume closes at the right level.
+
   LangState* = object
     ## Per-language tokenizer state, captured/restored as a whole record.
     ## 8-aligned members first, then bool-only, to minimise padding.
@@ -184,6 +212,7 @@ type
     haskell*: HaskellState
     python*: PythonState
     lua*: LuaState
+    nim*: NimState
     html*: HtmlState
     astro*: AstroState
     yaml*: YamlState

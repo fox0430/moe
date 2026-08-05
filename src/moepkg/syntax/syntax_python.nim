@@ -48,11 +48,14 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
   g.start = g.pos
 
   # If a state continuation begins at end-of-buffer, emit gtEof rather than
-  # producing an empty token.
+  # producing an empty token. The docstring state survives so the chunked
+  # drivers can resume it past a chunk boundary; single-line strings are
+  # line-bounded, so their state is dropped.
   if g.buf[pos] == '\0' and g.state in {gtDocLongComment, gtStringLit}:
     g.kind = gtEof
-    g.state = gtNone
-    g.lang.python.commentDepth = 0
+    if g.state == gtStringLit:
+      g.state = gtNone
+      g.lang.python.commentDepth = 0
     g.length = 0
     g.pos = pos
     return
