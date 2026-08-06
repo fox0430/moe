@@ -1881,6 +1881,167 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.error.contains("rename")
     check buffers[0].getTextString() == "hello"
 
+  test "applyWorkspaceEdit refuses a non-file URI":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["http://example.com/file.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("only file:/// is allowed")
+    check result.error.contains("http://example.com/file.txt")
+
+  test "applyWorkspaceEdit refuses a file:// URI with a non-empty authority":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file://server/share/file.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("only file:/// is allowed")
+    check result.error.contains("file://server/share/file.txt")
+
+  test "applyWorkspaceEdit refuses a URI with a raw query or fragment":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "a.txt") & "?query=1"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("unsupported character")
+    check result.error.contains("?query=1")
+
+  test "applyWorkspaceEdit refuses an empty file:/// path":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///"] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("empty path")
+
+  test "applyWorkspaceEdit refuses a URI with an encoded NUL":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "a.txt").replace("a.txt", "a%00.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("unsupported character")
+    check result.error.contains("%00.txt")
+
+  test "applyWorkspaceEdit refuses a file:// URI with an extra leading slash":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:////tmp/x.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("extra leading slash")
+
+  test "applyWorkspaceEdit refuses an encoded extra leading slash":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///%2Ftmp/x.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("extra leading slash")
+
+  test "applyWorkspaceEdit refuses a decoded empty path":
+    # "file:///%2F" decodes to "//", which is not a usable single-root path
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///%2F"] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("extra leading slash")
+
+  test "applyWorkspaceEdit refuses short file:// URIs":
+    for uri in ["file://", "file://a"]:
+      var buffers: seq[TextBuffer] = @[]
+      var changes = initTable[string, seq[TextEdit]]()
+      changes[uri] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+      let edit = WorkspaceEdit(
+        changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+      )
+      let result = applyWorkspaceEdit(buffers, edit)
+      check result.isErr
+      check result.error.contains("only file:/// is allowed")
+
+  test "applyWorkspaceEdit refuses the whole documentChanges edit when a target is invalid":
+    var buffers = @[newTextBuffer("aaa", some(tmpDir / "ok.txt"))]
+    let docChanges = @[
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: pathToUri(tmpDir / "ok.txt"), version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")],
+      ),
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: "file:///tmp/bad%00.txt", version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")],
+      ),
+    ]
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(docChanges)
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check buffers[0].getTextString() == "aaa"
+
+  test "applyWorkspaceEdit applies an edit to a URI with an encoded space":
+    var buffers = @[newTextBuffer("aaa", some(tmpDir / "my file.txt"))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "my file.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedCount == 1
+    check buffers[0].getTextString() == "AAA"
+
+  test "applyWorkspaceEdit refuses the whole edit when one of several targets is invalid":
+    var buffers: seq[TextBuffer] = @[newTextBuffer("aaa", some(tmpDir / "ok.txt"))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "ok.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]
+    changes["ftp://example.com/other.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check buffers[0].getTextString() == "aaa"
+
   test "parseWorkspaceEdit records resource operations":
     let node = %*{
       "documentChanges": [
