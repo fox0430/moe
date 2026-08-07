@@ -36,7 +36,8 @@ import
   logger,
   buffer,
   window_manager,
-  lsp_integration
+  lsp_integration,
+  terminal_mode
 
 proc deleteBufferAt*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from

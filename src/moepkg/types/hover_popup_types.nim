@@ -17,40 +17,28 @@
 #                                                                              #
 #[############################################################################]#
 
-## Types for the per-buffer git cache. Split out from `git_cache` so `types`
-## can hold the cache on `EditorState` without pulling in the pipeline logic.
-
-import std/[options, tables, monotimes]
-
-import git_diff_types
-import ../buffer/core
-
-const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
+## Lightweight type definitions for the LSP hover popup.
+##
+## Split out from `hover_popup` so modules that only need its manager type
+## (notably `types` and its importers) do not transitively pull in the
+## popup rendering procs.
 
 type
-  GitDiffCacheEntry* = object
-    counts*: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh*: int
-    lastRefresh*: MonoTime
-    pending*: Option[GitDiffProcess]
-    populated*: bool
-    forced*: bool ## Invalidated by an event that doesn't bump `changeSeq`.
-    gitTracked*: bool
-      ## File exists in HEAD, per the last completed pipeline. Suppresses the
-      ## session "modified lines" gutter fallback, which would otherwise draw
-      ## the same glyphs from history rather than content.
-    pendingDiffInfo*: Option[GitDiffInfo]
-      ## Latest completed diff, consumed by the tick for the sidebar gutter.
+  HoverPopupState* = enum
+    hpsIdle ## No hover popup active
+    hpsActive ## Hover popup is being displayed
 
-  GitBranchCacheEntry* = object
-    path*: string
-    name*: string
-    lastRefresh*: MonoTime
-    populated*: bool
+  HoverPopupDisplay* = object ## Hover popup display state
+    lines*: seq[string] ## Text lines to display (split by \n)
+    scrollOffset*: int ## Current vertical scroll offset (first visible line)
+    horizontalOffset*: int ## Current horizontal scroll offset (first visible column)
+    maxVisibleLines*: int ## Maximum number of visible lines
+    maxVisibleWidth*: int ## Maximum visible width (set during position calculation)
+    cachedMaxLineWidth*: int ## Cached max line width (computed in show())
 
-  GitCacheState* = object
-    ## Per-buffer git status owned by `EditorState`. Both refresh cycles are
-    ## driven from the editor tick; the render path only reads.
-    diffEntries*: Table[BufferId, GitDiffCacheEntry]
-    branchEntries*: Table[BufferId, GitBranchCacheEntry]
-    diffRefreshIntervalMs*: int64
+  HoverPopupManager* = ref object ## Manages hover popup state
+    state*: HoverPopupState
+    display*: HoverPopupDisplay
+    triggerLine*: int ## Line where hover was triggered
+    triggerCol*: int ## Column where hover was triggered
+    isAutoHover*: bool ## true when triggered by auto-hover diagnostic

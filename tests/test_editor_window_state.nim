@@ -23,7 +23,7 @@ import
   ../src/moepkg/[
     editor, editor_window_state, config, config_mode, types, modes, help_viewer,
     diff_viewer, buffer_manager, backup_manager, references_viewer, recent_file_mode,
-    debug_viewer, message_log,
+    debug_viewer, message_log, log_viewer,
   ]
 import ../src/moepkg/buffer/core
 

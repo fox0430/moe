@@ -22,7 +22,7 @@
 
 import std/[unittest, strutils]
 
-import ../src/moepkg/[types, modes, key_bindings]
+import ../src/moepkg/[types, modes, key_bindings, log_viewer]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/log_viewer_handler
 

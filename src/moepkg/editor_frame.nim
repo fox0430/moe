@@ -45,8 +45,8 @@ import
 
 import
   git_cache, render_utils, logger, message_log, debug_viewer, completion,
-  signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration,
-  editor_window_layout
+  signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
+  lsp_integration, editor_window_layout
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)

@@ -29,31 +29,8 @@ import pkg/celina
 
 import color, popup_render, unicode_utils
 
-type
-  NotificationLevel* = enum
-    nlInfo
-    nlWarning
-    nlError
-
-  NotificationItem* = object
-    message*: string
-    level*: NotificationLevel
-    createdAt*: MonoTime
-    lines*: seq[string]
-
-  NotificationPopupPosition* = enum
-    nppTopRight
-    nppTopLeft
-    nppBottomRight
-    nppBottomLeft
-
-  NotificationPopupManager* = ref object
-    queue*: seq[NotificationItem]
-    maxVisible*: int
-    timeoutMs*: int
-    position*: NotificationPopupPosition
-    maxWidth*: int
-    showBorder*: bool
+import types/notification_popup_types
+export notification_popup_types
 
 const
   DefaultMaxVisible* = 3

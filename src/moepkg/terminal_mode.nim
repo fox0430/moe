@@ -27,19 +27,8 @@ import pkg/results
 import terminal/[pty, ansi_parser]
 import buffer/core
 
-type
-  TerminalSubMode* = enum
-    tsmInput # All keystrokes forwarded to PTY (default)
-    tsmNormal # Vim-like scrollback navigation
-
-  TerminalState* = ref object
-    pty*: PtyHandle
-    grid*: TerminalGrid
-    subMode*: TerminalSubMode
-    scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
-    exitCode*: Option[int]
-    waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
-    needsBufferRefresh*: bool
+import types/terminal_mode_types
+export terminal_mode_types
 
 proc newTerminalState*(
     command: string = "", cols: int = 80, rows: int = 24

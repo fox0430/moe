@@ -29,29 +29,12 @@ import pkg/celina
 
 import popup_render, unicode_utils, color
 
-type
-  HoverPopupState* = enum
-    hpsIdle ## No hover popup active
-    hpsActive ## Hover popup is being displayed
+import types/hover_popup_types
+export hover_popup_types
 
-  HoverPopupDisplay* = object ## Hover popup display state
-    lines*: seq[string] ## Text lines to display (split by \n)
-    scrollOffset*: int ## Current vertical scroll offset (first visible line)
-    horizontalOffset*: int ## Current horizontal scroll offset (first visible column)
-    maxVisibleLines*: int ## Maximum number of visible lines
-    maxVisibleWidth*: int ## Maximum visible width (set during position calculation)
-    cachedMaxLineWidth*: int ## Cached max line width (computed in show())
-
-  HoverPopupManager* = ref object ## Manages hover popup state
-    state*: HoverPopupState
-    display*: HoverPopupDisplay
-    triggerLine*: int ## Line where hover was triggered
-    triggerCol*: int ## Column where hover was triggered
-    isAutoHover*: bool ## true when triggered by auto-hover diagnostic
-
-  HoverPopupPosition* = object
-    x*, y*: int
-    width*, height*: int
+type HoverPopupPosition* = object
+  x*, y*: int
+  width*, height*: int
 
 const
   DefaultMaxVisibleLines* = 10
