@@ -19,21 +19,15 @@
 
 ## Log viewer state management
 ##
-## This module provides the data structures for the log viewer mode.
-## The actual log content is stored in a TextBuffer.
+## This module provides the data structures and operations for the log viewer
+## mode. The actual log content is stored in a TextBuffer.
 
 import std/[strformat, times]
 
 import pkg/results
 
-type
-  LogContentKind* = enum
-    lckEditor # Editor messages
-    lckLsp # LSP messages
-
-  LogViewerState* = ref object
-    contentKind*: LogContentKind # Type of log content (for refresh)
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+import types/log_viewer_types
+export log_viewer_types
 
 proc newLogViewerState*(kind: LogContentKind = lckEditor): LogViewerState =
   ## Create a new log viewer state

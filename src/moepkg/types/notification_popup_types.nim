@@ -17,40 +17,36 @@
 #                                                                              #
 #[############################################################################]#
 
-## Types for the per-buffer git cache. Split out from `git_cache` so `types`
-## can hold the cache on `EditorState` without pulling in the pipeline logic.
+## Lightweight type definitions for the notification popup.
+##
+## Split out from `notification_popup` so modules that only need its manager
+## type (notably `types` and its importers) do not transitively pull in the
+## popup rendering procs.
 
-import std/[options, tables, monotimes]
-
-import git_diff_types
-import ../buffer/core
-
-const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
+import std/monotimes
 
 type
-  GitDiffCacheEntry* = object
-    counts*: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh*: int
-    lastRefresh*: MonoTime
-    pending*: Option[GitDiffProcess]
-    populated*: bool
-    forced*: bool ## Invalidated by an event that doesn't bump `changeSeq`.
-    gitTracked*: bool
-      ## File exists in HEAD, per the last completed pipeline. Suppresses the
-      ## session "modified lines" gutter fallback, which would otherwise draw
-      ## the same glyphs from history rather than content.
-    pendingDiffInfo*: Option[GitDiffInfo]
-      ## Latest completed diff, consumed by the tick for the sidebar gutter.
+  NotificationLevel* = enum
+    nlInfo
+    nlWarning
+    nlError
 
-  GitBranchCacheEntry* = object
-    path*: string
-    name*: string
-    lastRefresh*: MonoTime
-    populated*: bool
+  NotificationItem* = object
+    message*: string
+    level*: NotificationLevel
+    createdAt*: MonoTime
+    lines*: seq[string]
 
-  GitCacheState* = object
-    ## Per-buffer git status owned by `EditorState`. Both refresh cycles are
-    ## driven from the editor tick; the render path only reads.
-    diffEntries*: Table[BufferId, GitDiffCacheEntry]
-    branchEntries*: Table[BufferId, GitBranchCacheEntry]
-    diffRefreshIntervalMs*: int64
+  NotificationPopupPosition* = enum
+    nppTopRight
+    nppTopLeft
+    nppBottomRight
+    nppBottomLeft
+
+  NotificationPopupManager* = ref object
+    queue*: seq[NotificationItem]
+    maxVisible*: int
+    timeoutMs*: int
+    position*: NotificationPopupPosition
+    maxWidth*: int
+    showBorder*: bool

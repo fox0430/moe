@@ -41,8 +41,10 @@ export git_cache_types
 
 const GitBranchTtlMs = 5000
 
-proc bufferKey(b: TextBuffer): pointer =
-  cast[pointer](b)
+proc bufferKey(b: TextBuffer): BufferId =
+  ## Stable per-buffer key: BufferId survives buffer moves/GC, unlike a raw
+  ## pointer (which could be reused after collection).
+  b.id
 
 proc refreshIntervalMs(gc: GitCacheState): int64 =
   if gc.diffRefreshIntervalMs > 0:

@@ -28,40 +28,12 @@ import pkg/results
 
 import buffer/[core, file_io, markers], logger
 
+import types/git_diff_types
+export git_diff_types
+
 const
   DEFAULT_GIT_DIFF_TIMEOUT* = 5.0 ## Default timeout for git diff operations in seconds
   PROCESS_RUNNING = -1 ## Exit code value indicating process is still running
-
-type
-  GitDiffLineKind* = enum
-    ## Type of change in git diff
-    Added ## Line was added
-    Modified ## Line was modified
-    Deleted ## Line was deleted
-
-  GitDiffLine* = object ## Represents a single line change in git diff
-    lineNumber*: int ## Line number in the current file (0-based)
-    kind*: GitDiffLineKind ## Type of change
-
-  GitDiffInfo* = object ## Git diff information for a file
-    lines*: seq[GitDiffLine] ## Changed lines
-
-  GitDiffStage* = enum
-    ## Buffer-diff pipeline stage; advances on each `checkGitDiffComplete`.
-    gdsGitRoot ## `git rev-parse --show-toplevel`
-    gdsGitShow ## `git show HEAD:<relpath>`
-    gdsGitDiff ## `git diff --no-index <orig> <mod>`
-
-  GitDiffProcess* = ref object ## Background git diff pipeline
-    process: Process
-    stage: GitDiffStage
-    startTime: float ## Overall pipeline start (for timeout)
-    filePath: string
-    workingDir: string
-    bufferContent: string ## Held until tempModified is written
-    tempOriginal: string
-    tempModified: string
-    tempDiffOut: string ## `git diff` stdout is redirected here (avoids pipe deadlock)
 
 proc removeTempFileSafely(filePath: string) =
   ## Safely remove a temporary file, ignoring errors

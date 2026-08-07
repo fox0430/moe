@@ -66,37 +66,37 @@ suite "GitCache - entry lifecycle":
     let buf = bufferAt(getTempDir() / NoRepoDir / "a.txt")
 
     gc.scheduleGitRefresh(buf)
-    let firstRefresh = gc.diffEntries[cast[pointer](buf)].lastRefresh
+    let firstRefresh = gc.diffEntries[buf.id].lastRefresh
 
     gc.scheduleGitRefresh(buf)
 
-    check gc.diffEntries[cast[pointer](buf)].lastRefresh == firstRefresh
+    check gc.diffEntries[buf.id].lastRefresh == firstRefresh
 
   test "requestGitRefresh forces a reschedule without a buffer change":
     var gc: GitCacheState
     let buf = bufferAt(getTempDir() / NoRepoDir / "a.txt")
 
     gc.scheduleGitRefresh(buf)
-    let firstRefresh = gc.diffEntries[cast[pointer](buf)].lastRefresh
+    let firstRefresh = gc.diffEntries[buf.id].lastRefresh
 
     gc.requestGitRefresh(buf)
-    check gc.diffEntries[cast[pointer](buf)].forced
+    check gc.diffEntries[buf.id].forced
     gc.scheduleGitRefresh(buf)
 
-    check not gc.diffEntries[cast[pointer](buf)].forced
-    check gc.diffEntries[cast[pointer](buf)].lastRefresh >= firstRefresh
+    check not gc.diffEntries[buf.id].forced
+    check gc.diffEntries[buf.id].lastRefresh >= firstRefresh
 
   test "a buffer edit reschedules on the next tick":
     var gc: GitCacheState
     let buf = bufferAt(getTempDir() / NoRepoDir / "a.txt")
 
     gc.scheduleGitRefresh(buf)
-    check gc.diffEntries[cast[pointer](buf)].changeSeqAtRefresh == buf.changeSeq
+    check gc.diffEntries[buf.id].changeSeqAtRefresh == buf.changeSeq
 
     buf.changeSeq = buf.changeSeq + 1
     gc.scheduleGitRefresh(buf)
 
-    check gc.diffEntries[cast[pointer](buf)].changeSeqAtRefresh == buf.changeSeq
+    check gc.diffEntries[buf.id].changeSeqAtRefresh == buf.changeSeq
 
 suite "GitCache - eviction":
   test "evictGitCacheForBuffer removes both diff and branch entries":

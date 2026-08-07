@@ -17,40 +17,27 @@
 #                                                                              #
 #[############################################################################]#
 
-## Types for the per-buffer git cache. Split out from `git_cache` so `types`
-## can hold the cache on `EditorState` without pulling in the pipeline logic.
+## Lightweight type definitions for terminal mode.
+##
+## Split out from `terminal_mode` so modules that only need its State type
+## (notably `types` and its importers) do not transitively pull in the
+## PTY/ANSI pipeline procs.
 
-import std/[options, tables, monotimes]
+import std/options
 
-import git_diff_types
+import ../terminal/[pty, ansi_parser]
 import ../buffer/core
 
-const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
-
 type
-  GitDiffCacheEntry* = object
-    counts*: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh*: int
-    lastRefresh*: MonoTime
-    pending*: Option[GitDiffProcess]
-    populated*: bool
-    forced*: bool ## Invalidated by an event that doesn't bump `changeSeq`.
-    gitTracked*: bool
-      ## File exists in HEAD, per the last completed pipeline. Suppresses the
-      ## session "modified lines" gutter fallback, which would otherwise draw
-      ## the same glyphs from history rather than content.
-    pendingDiffInfo*: Option[GitDiffInfo]
-      ## Latest completed diff, consumed by the tick for the sidebar gutter.
+  TerminalSubMode* = enum
+    tsmInput # All keystrokes forwarded to PTY (default)
+    tsmNormal # Vim-like scrollback navigation
 
-  GitBranchCacheEntry* = object
-    path*: string
-    name*: string
-    lastRefresh*: MonoTime
-    populated*: bool
-
-  GitCacheState* = object
-    ## Per-buffer git status owned by `EditorState`. Both refresh cycles are
-    ## driven from the editor tick; the render path only reads.
-    diffEntries*: Table[BufferId, GitDiffCacheEntry]
-    branchEntries*: Table[BufferId, GitBranchCacheEntry]
-    diffRefreshIntervalMs*: int64
+  TerminalState* = ref object
+    pty*: PtyHandle
+    grid*: TerminalGrid
+    subMode*: TerminalSubMode
+    scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
+    exitCode*: Option[int]
+    waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
+    needsBufferRefresh*: bool

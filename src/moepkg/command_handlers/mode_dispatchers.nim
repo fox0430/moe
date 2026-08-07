@@ -36,7 +36,7 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, modes, key_bindings, keybind_config, string_builder, filer, filetree,
-    diff_viewer, recent_file_mode,
+    diff_viewer, recent_file_mode, terminal_mode,
   ]
 import ../lsp/protocol/types as lspTypes
 import ../types/editor_types

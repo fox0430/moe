@@ -17,40 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-## Types for the per-buffer git cache. Split out from `git_cache` so `types`
-## can hold the cache on `EditorState` without pulling in the pipeline logic.
-
-import std/[options, tables, monotimes]
-
-import git_diff_types
-import ../buffer/core
-
-const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
+## Lightweight type definitions for the log viewer.
+##
+## Split out from `log_viewer` so modules that only need its State type
+## (notably `types` and its importers) do not transitively pull in the
+## implementation procs.
 
 type
-  GitDiffCacheEntry* = object
-    counts*: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh*: int
-    lastRefresh*: MonoTime
-    pending*: Option[GitDiffProcess]
-    populated*: bool
-    forced*: bool ## Invalidated by an event that doesn't bump `changeSeq`.
-    gitTracked*: bool
-      ## File exists in HEAD, per the last completed pipeline. Suppresses the
-      ## session "modified lines" gutter fallback, which would otherwise draw
-      ## the same glyphs from history rather than content.
-    pendingDiffInfo*: Option[GitDiffInfo]
-      ## Latest completed diff, consumed by the tick for the sidebar gutter.
+  LogContentKind* = enum
+    lckEditor # Editor messages
+    lckLsp # LSP messages
 
-  GitBranchCacheEntry* = object
-    path*: string
-    name*: string
-    lastRefresh*: MonoTime
-    populated*: bool
-
-  GitCacheState* = object
-    ## Per-buffer git status owned by `EditorState`. Both refresh cycles are
-    ## driven from the editor tick; the render path only reads.
-    diffEntries*: Table[BufferId, GitDiffCacheEntry]
-    branchEntries*: Table[BufferId, GitBranchCacheEntry]
-    diffRefreshIntervalMs*: int64
+  LogViewerState* = ref object
+    contentKind*: LogContentKind # Type of log content (for refresh)
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command

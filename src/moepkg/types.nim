@@ -27,7 +27,7 @@ import
   types/registers_types,
   types/filer_types,
   types/filetree_types,
-  log_viewer,
+  types/log_viewer_types,
   types/help_viewer_types,
   types/command_completion_types,
   message_log,
@@ -41,24 +41,25 @@ import
   types/references_viewer_types,
   types/documentsymbol_viewer_types,
   types/callhierarchy_viewer_types,
-  hover_popup,
-  notification_popup,
+  types/hover_popup_types,
+  types/notification_popup_types,
   primitives,
   types/syntax_checker_types,
   types/recent_file_mode_types,
   types/git_cache_types,
-  terminal_mode,
+  types/terminal_mode_types,
   config
 
 from lsp/protocol/types import SemanticTokensLegend
 
 export
   buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
-  filetree_types, log_viewer, help_viewer_types, buffer_manager_types,
+  filetree_types, log_viewer_types, help_viewer_types, buffer_manager_types,
   bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
   config_mode_types, references_viewer_types, documentsymbol_viewer_types,
-  callhierarchy_viewer_types, hover_popup, notification_popup, primitives,
-  syntax_checker_types, recent_file_mode_types, terminal_mode, config.BracketSplitMode
+  callhierarchy_viewer_types, hover_popup_types, notification_popup_types, primitives,
+  syntax_checker_types, recent_file_mode_types, terminal_mode_types,
+  config.BracketSplitMode
 
 type
   SidebarItem* = object ## Single cell in the sidebar

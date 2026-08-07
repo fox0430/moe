@@ -17,40 +17,41 @@
 #                                                                              #
 #[############################################################################]#
 
-## Types for the per-buffer git cache. Split out from `git_cache` so `types`
-## can hold the cache on `EditorState` without pulling in the pipeline logic.
+## Lightweight type definitions for git diff.
+##
+## Split out from `git_diff` so modules that only need the diff/cache types
+## (notably `types/git_cache_types`) do not transitively pull in the pipeline
+## implementation (tempfiles, buffer I/O, logger, ...).
 
-import std/[options, tables, monotimes]
-
-import git_diff_types
-import ../buffer/core
-
-const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
+import std/osproc
 
 type
-  GitDiffCacheEntry* = object
-    counts*: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh*: int
-    lastRefresh*: MonoTime
-    pending*: Option[GitDiffProcess]
-    populated*: bool
-    forced*: bool ## Invalidated by an event that doesn't bump `changeSeq`.
-    gitTracked*: bool
-      ## File exists in HEAD, per the last completed pipeline. Suppresses the
-      ## session "modified lines" gutter fallback, which would otherwise draw
-      ## the same glyphs from history rather than content.
-    pendingDiffInfo*: Option[GitDiffInfo]
-      ## Latest completed diff, consumed by the tick for the sidebar gutter.
+  GitDiffLineKind* = enum
+    ## Type of change in git diff
+    Added ## Line was added
+    Modified ## Line was modified
+    Deleted ## Line was deleted
 
-  GitBranchCacheEntry* = object
-    path*: string
-    name*: string
-    lastRefresh*: MonoTime
-    populated*: bool
+  GitDiffLine* = object ## Represents a single line change in git diff
+    lineNumber*: int ## Line number in the current file (0-based)
+    kind*: GitDiffLineKind ## Type of change
 
-  GitCacheState* = object
-    ## Per-buffer git status owned by `EditorState`. Both refresh cycles are
-    ## driven from the editor tick; the render path only reads.
-    diffEntries*: Table[BufferId, GitDiffCacheEntry]
-    branchEntries*: Table[BufferId, GitBranchCacheEntry]
-    diffRefreshIntervalMs*: int64
+  GitDiffInfo* = object ## Git diff information for a file
+    lines*: seq[GitDiffLine] ## Changed lines
+
+  GitDiffStage* = enum
+    ## Buffer-diff pipeline stage; advances on each `checkGitDiffComplete`.
+    gdsGitRoot ## `git rev-parse --show-toplevel`
+    gdsGitShow ## `git show HEAD:<relpath>`
+    gdsGitDiff ## `git diff --no-index <orig> <mod>`
+
+  GitDiffProcess* = ref object ## Background git diff pipeline
+    process*: Process
+    stage*: GitDiffStage
+    startTime*: float ## Overall pipeline start (for timeout)
+    filePath*: string
+    workingDir*: string
+    bufferContent*: string ## Held until tempModified is written
+    tempOriginal*: string
+    tempModified*: string
+    tempDiffOut*: string ## `git diff` stdout is redirected here (avoids pipe deadlock)
