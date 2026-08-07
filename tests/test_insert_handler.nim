@@ -21,6 +21,8 @@
 
 import std/[unittest, options, tables, json, monotimes]
 
+import pkg/results
+
 import
   ../src/moepkg/[
     buffer,
@@ -2251,6 +2253,283 @@ suite "InsertModeHandler - completion commit":
     check state.cursor.line == 2
     check state.cursor.column == 6
     check not handler.completionManager.isActive()
+
+  test "Failed additionalTextEdits aborts completion and closes the popup":
+    # A failed applyTextEdits must abort the completion and close the popup.
+    let buf = newTextBuffer("foo")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "foobar",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 0),
+              `end`: lspTypes.Position(line: 0, character: 3),
+            ),
+            newText: "foobar",
+          )
+        ),
+        additionalTextEdits: some(
+          @[
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: 99, character: 0),
+                `end`: lspTypes.Position(line: 99, character: 0),
+              ),
+              newText: "x",
+            )
+          ]
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foo"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrError
+    # Popup closed: no re-commit is possible.
+    check not handler.completionManager.isActive()
+    check buf.getLine(0) == "foo"
+    check state.cursor == BufferPosition(line: 0, column: 3)
+
+  test "Failed additionalTextEdits in a session transaction keep partial edits until commit":
+    # In a live session transaction applyTextEdits rolls nothing back: the
+    # partial edit stays in the session until its commit.
+    let buf = newTextBuffer("foo\nbar\nbaz")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    check buf.beginTransaction("Insert mode edit").isOk
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "foobar",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 0),
+              `end`: lspTypes.Position(line: 0, character: 3),
+            ),
+            newText: "foobar",
+          )
+        ),
+        additionalTextEdits: some(
+          @[
+            # Applies first (back-to-front order), succeeds.
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: 2, character: 0),
+                `end`: lspTypes.Position(line: 2, character: 2),
+              ),
+              newText: "import ",
+            ),
+            # Applies last, fails: the -1 line makes insertText reject it.
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: -1, character: 0),
+                `end`: lspTypes.Position(line: -1, character: 0),
+              ),
+              newText: "x",
+            ),
+          ]
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foo"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrError
+    check not handler.completionManager.isActive()
+    check buf.inTransaction
+    # Main text not inserted; the partial additional edit survives until commit.
+    check buf.getLine(0) == "foo"
+    check buf.getLine(2) == "import z"
+    check state.cursor == BufferPosition(line: 0, column: 3)
+    check buf.commitTransaction().isOk
+    check buf.getLine(2) == "import z"
+
+  test "Failed additionalTextEdits above the site shift the tracked cursor":
+    # The applied edit (a whole-line import at line 0) lands above the
+    # completion site, so the tracked cursor must follow it down; the failing
+    # edit applies last and leaves nothing further behind.
+    let buf = newTextBuffer("import a\nimport b\nfoo\nbar")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 2, column: 3)
+    check buf.beginTransaction("Insert mode edit").isOk
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "foobar",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 2, character: 0),
+              `end`: lspTypes.Position(line: 2, character: 3),
+            ),
+            newText: "foobar",
+          )
+        ),
+        additionalTextEdits: some(
+          @[
+            # Applies first (back-to-front order), succeeds: a whole-line
+            # import at line 0 pushes the completion site down one line.
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: 0, character: 0),
+                `end`: lspTypes.Position(line: 0, character: 0),
+              ),
+              newText: "import x\n",
+            ),
+            # Applies last, fails: the -1 line makes insertText reject it.
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: -1, character: 0),
+                `end`: lspTypes.Position(line: -1, character: 0),
+              ),
+              newText: "y",
+            ),
+          ]
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foo"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrError
+    check not handler.completionManager.isActive()
+    check buf.inTransaction
+    # The applied import stayed and the cursor follows the site down to "foo".
+    check buf.getLine(0) == "import x"
+    check buf.getLine(3) == "foo"
+    check state.cursor == BufferPosition(line: 3, column: 3)
+    check buf.commitTransaction().isOk
+    check buf.getLine(3) == "foo"
+
+  test "Failed additionalTextEdits above the site shift an active snippet session":
+    # Regression: a partial application of additionalTextEdits above the
+    # completion site must shift the tracked cursor AND the snippet session's
+    # stops, or the next Tab jump lands in the wrong place. The existing
+    # failure tests commit without a session, so the stop-shift branch was
+    # dead code in tests.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx\nimport b")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    # First commit starts a live snippet session whose stops sit on line 0.
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "x",
+        matchScore: 100,
+        source: csLsp,
+        isSnippet: true,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 4),
+              `end`: lspTypes.Position(line: 0, character: 6),
+            ),
+            newText: "func ${1:name}()",
+          )
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "xx"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    discard handler.commitCompletion(buf, state)
+    check state.snippetSession.active
+    let stopBefore = state.snippetSession.stops[0]
+    check stopBefore.pos.line == 0
+
+    # Second commit on line 1 inside the live session transaction: the
+    # applied import lands above the site, the failing edit applies last,
+    # and the session must follow the shift.
+    check buf.beginTransaction("Insert mode edit").isOk
+    state.cursor = BufferPosition(line: 1, column: 8)
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "foobar",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 1, character: 8),
+              `end`: lspTypes.Position(line: 1, character: 8),
+            ),
+            newText: "foobar",
+          )
+        ),
+        additionalTextEdits: some(
+          @[
+            # Applies first (back-to-front order), succeeds: a whole-line
+            # import at line 0 pushes the session down one line.
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: 0, character: 0),
+                `end`: lspTypes.Position(line: 0, character: 0),
+              ),
+              newText: "import x\n",
+            ),
+            # Applies last, fails: the -1 line makes insertText reject it.
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: -1, character: 0),
+                `end`: lspTypes.Position(line: -1, character: 0),
+              ),
+              newText: "y",
+            ),
+          ]
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foobar"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrError
+    check not handler.completionManager.isActive()
+    check buf.inTransaction
+    # The applied import stays and the whole session followed it down.
+    check buf.getLine(0) == "import x"
+    check buf.getLine(1) == "    func name()"
+    check state.cursor == BufferPosition(line: 2, column: 8)
+    check state.snippetSession.active
+    check state.snippetSession.stops ==
+      @[
+        SnippetStop(
+          num: stopBefore.num,
+          pos: BufferPosition(line: 1, column: stopBefore.pos.column),
+          len: stopBefore.len,
+        )
+      ]
+    check buf.commitTransaction().isOk
+    check buf.getLine(1) == "    func name()"
 
   test "Commit honors a textEdit range that extends past the cursor":
     # Replace-mode completion: the cursor sits between "foo" and "bar" and the

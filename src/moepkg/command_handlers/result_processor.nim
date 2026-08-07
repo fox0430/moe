@@ -1478,7 +1478,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
 
   return true # Continue running
 
-const MaxMacroRecursionDepth = 100
+const MaxMacroRecursionDepth* = 100
   ## Macro recursion depth guard (@a inside @a...) before abort.
 
 const MaxMapRecursionDepth = 50
@@ -1523,9 +1523,10 @@ proc processReplayedResult*(
     return roQuit
   roContinue
 
-template withPlaybackGuard(e: Editor, body: untyped): ReplayOutcome =
+template withPlaybackGuard*(e: Editor, body: untyped): ReplayOutcome =
   ## Shared depth guard + isRecording suspension for macro / runtime-mapping
   ## replay loops. `body` must assign to `outcome`.
+  ## Exposed for tests that fire the exception path with a raising body.
   block:
     let state = e.state
     if state.pendingInput.macroState.playbackDepth >= MaxMacroRecursionDepth:
@@ -1537,9 +1538,12 @@ template withPlaybackGuard(e: Editor, body: untyped): ReplayOutcome =
       let wasRecording = state.pendingInput.macroState.isRecording
       state.pendingInput.macroState.isRecording = false
       var outcome {.inject.} = roContinue
-      body
-      state.pendingInput.macroState.isRecording = wasRecording
-      state.pendingInput.macroState.playbackDepth -= 1
+      try:
+        body
+      finally:
+        # Exception safety: always restore playback state, even on failure.
+        state.pendingInput.macroState.isRecording = wasRecording
+        state.pendingInput.macroState.playbackDepth -= 1
       outcome
 
 proc playbackKeyCombosImpl(e: Editor, combos: seq[KeyCombo]): ReplayOutcome =

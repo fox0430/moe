@@ -279,10 +279,18 @@ proc searchMatchAndOperate(
   of OpDelete, OpChange:
     let transactionName =
       if op.operatorType == OpDelete: "Delete search match" else: "Change search match"
-    let txr = withTransaction(buffer, transactionName):
-      let deleteResult = buffer.deleteRange(pos, matchEnd)
-      if deleteResult.isErr:
-        return NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
+    let txr =
+      try:
+        withTransaction(buffer, transactionName):
+          let deleteResult = buffer.deleteRange(pos, matchEnd)
+          if deleteResult.isErr:
+            return
+              NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
+      except TransactionRollbackError as exc:
+        # Surface a failed rollback (untrustworthy buffer) as a status message.
+        return NormalModeResult(
+          kind: nmrError, errorMessage: exc.msg & " (buffer state may be inconsistent)"
+        )
     if txr.isErr:
       return NormalModeResult(
         kind: nmrError, errorMessage: "Transaction failed: " & txr.error

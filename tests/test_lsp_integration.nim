@@ -26,6 +26,7 @@ import
 import pkg/results
 
 import ../src/moepkg/[lsp_integration, buffer, message_log, unicode_utils]
+import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/lsp/protocol/types
 
 let tmpDir = getTempDir()
@@ -762,6 +763,251 @@ suite "LspIntegration - applyTextEdits":
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(0) == "AbC"
+
+  test "applyTextEdits failure rolls back its own transaction":
+    # Edits apply back-to-front; the malformed one fails last, so the
+    # transaction applyTextEdits opened must be rolled back to the pre-call
+    # state.
+    let buffer = newTextBuffer("hello world")
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
+        ),
+        newText: "hi",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isErr
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "hello world"
+
+  test "applyTextEdits failure keeps partial edits in a joined session transaction":
+    # In a live session transaction applyTextEdits joins it: edits before the
+    # failing one stay in the session until its commit.
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    check buffer.beginTransaction("Insert mode edit").isOk
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 2, character: 0), `end`: Position(line: 2, character: 2)
+        ),
+        newText: "AB",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isErr
+    check "joined transaction" in result.error
+    check buffer.inTransaction
+    check buffer.getLine(2) == "ABne3"
+    check buffer.commitTransaction().isOk
+    check buffer.getLine(2) == "ABne3"
+
+  test "applyTextEdits failure reports the edits that remain applied":
+    # In a joined session the lower-line edit applies first and stays; the
+    # tracking list must report exactly that edit so callers can re-sync
+    # their own coordinates against the partial application.
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    check buffer.beginTransaction("Insert mode edit").isOk
+    var applied: seq[TextEdit]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 2, character: 0), `end`: Position(line: 2, character: 2)
+        ),
+        newText: "AB",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits, appliedEdits = applied)
+    check result.isErr
+    check applied.len == 1
+    check applied[0].newText == "AB"
+    check buffer.getLine(2) == "ABne3"
+    check buffer.commitTransaction().isOk
+
+  test "applyTextEdits clears appliedEdits when it rolls back its own transaction":
+    # Self-managed failure rolls everything back, so nothing remains applied
+    # and the tracking list must be empty.
+    let buffer = newTextBuffer("abc")
+    var applied: seq[TextEdit]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+        ),
+        newText: "A",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits, appliedEdits = applied)
+    check result.isErr
+    check applied.len == 0
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "abc"
+
+  test "applyTextEdits can suppress the joined-transaction note":
+    # A caller that rolls the joined transaction back itself (withTransaction
+    # scope) must not see the "may remain applied" note: the edits are
+    # reverted by that scope, so the note would be wrong.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    var applied: seq[TextEdit]
+    let result = applyTextEdits(
+      buffer,
+      @[
+        TextEdit(
+          range: Range(
+            start: Position(line: -1, character: 0),
+            `end`: Position(line: -1, character: 0),
+          ),
+          newText: "x",
+        )
+      ],
+      appliedEdits = applied,
+      discloseJoined = false,
+    )
+    check result.isErr
+    check "joined transaction" notin result.error
+    check applied.len == 0
+    check buffer.inTransaction
+    check buffer.commitTransaction().isOk
+
+  test "abortTextEditsOnException rolls back its own transaction":
+    # Direct unit test of the exception tail.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    var applied: seq[TextEdit]
+    let result = abortTextEditsOnException(
+      buffer, ownTransaction = true, excMsg = "boom", appliedEdits = applied
+    )
+    check result.isErr
+    check "Failed to apply text edits: boom" in result.error
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "hello world"
+    # A successful rollback reverts everything: the tracking list is cleared.
+    check applied.len == 0
+
+  test "abortTextEditsOnException leaves a joined session transaction open":
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("Insert mode edit").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    # The caller's tracking list already reports the applied edit: the tail
+    # must leave it untouched when nothing was rolled back.
+    var applied = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let result = abortTextEditsOnException(
+      buffer, ownTransaction = false, excMsg = "boom", appliedEdits = applied
+    )
+    check result.isErr
+    check "joined transaction" in result.error
+    check "may remain applied" in result.error
+    check buffer.inTransaction
+    check buffer.getLine(0) == "hellox world"
+    check applied.len == 1
+    check buffer.commitTransaction().isOk
+    check buffer.getLine(0) == "hellox world"
+
+  test "abortTextEditsOnException can suppress the joined-transaction note":
+    # A caller that rolls the joined transaction back itself (withTransaction
+    # scope) suppresses the note on the exception path too, matching the
+    # failEdit path's discloseJoined handling.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    var applied = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let result = abortTextEditsOnException(
+      buffer,
+      ownTransaction = false,
+      excMsg = "boom",
+      appliedEdits = applied,
+      discloseJoined = false,
+    )
+    check result.isErr
+    check result.error == "Failed to apply text edits: boom"
+    check "joined transaction" notin result.error
+    check buffer.inTransaction
+    check buffer.getLine(0) == "hellox world"
+    check applied.len == 1
+    check buffer.commitTransaction().isOk
+    check buffer.getLine(0) == "hellox world"
+
+  test "abortTextEditsOnException discloses a failed rollback and keeps the applied list":
+    # A rollback that fails partway must disclose that edits may remain
+    # applied and must NOT clear the tracking list: the buffer state can no
+    # longer be trusted. A pending snapshot would give an O(1) rollback that
+    # cannot fail, so clear it to force the per-change undo path.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    buffer.currentTransaction.get.changes.add(
+      BufferChange(
+        startSeq: buffer.changeSeq,
+        endSeq: buffer.changeSeq + 1,
+        kind: ckInsertLine,
+        insertLineIdx: 999,
+        insertLineText: "x",
+      )
+    )
+    buffer.pendingSnapshot = none(PieceTableSnapshot)
+    var applied = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let result = abortTextEditsOnException(
+      buffer, ownTransaction = true, excMsg = "boom", appliedEdits = applied
+    )
+    check result.isErr
+    check "Failed to apply text edits: boom" in result.error
+    check "rollback failed" in result.error
+    check "some edits may remain applied" in result.error
+    check applied.len == 1
+    # The partial rollback cleaned up the transaction state.
+    check not buffer.inTransaction
 
   test "applyTextEdits with multiline buffer":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -1739,6 +1985,69 @@ suite "LspIntegration - applyWorkspaceEdit":
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
     check result.get.modifiedCount == 0
+
+  test "applyWorkspaceEdit surfaces an apply failure as an err":
+    # Regression: a failing edit (here an out-of-bounds line) must come back
+    # as an err through the raise-and-convert layer, not as an exception, and
+    # the transaction must be rolled back. The
+    # "(buffer state may be inconsistent)" suffix is reserved for the
+    # failed-rollback case, so it must not appear here.
+    let buffer = newTextBuffer("hello", some(tmpDir / "fail.txt"))
+    var buffers = @[buffer]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "fail.txt")] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      )
+    ]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check "Failed to apply edits" in result.error
+    check "Failed to insert text" in result.error
+    check "buffer state may be inconsistent" notin result.error
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "hello"
+
+  test "applyWorkspaceEdit failure reports already-modified buffers":
+    # One open buffer succeeds, then an unopened file fails to load: the err
+    # must disclose that earlier targets were already modified (the warning
+    # path rewritten to raise-and-convert).
+    let buffer = newTextBuffer("hello", some(tmpDir / "ok_modify.txt"))
+    var buffers = @[buffer]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "ok_modify.txt")] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
+        ),
+        newText: "HELLO",
+      )
+    ]
+    # Nonexistent directory: loadFile fails, so no file is ever created.
+    changes[pathToUri(tmpDir / "moe_nonexistent_dir" / "b.txt")] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check "Failed to modify" in result.error
+    check "1 file(s) already modified" in result.error
+    check "ok_modify.txt" in result.error
+    check buffer.getLine(0) == "HELLO"
 
   test "applyWorkspaceEdit with changes field":
     var buffers = @[newTextBuffer("hello", some(tmpDir / "test.txt"))]

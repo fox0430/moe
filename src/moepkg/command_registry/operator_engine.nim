@@ -31,17 +31,41 @@ import ../command_handlers/insert_commands
 import core
 
 proc rollbackAndPropagate*(
-    ctx: CommandContext, primaryError: string
+    ctx: CommandContext,
+    primaryError: string,
+    savedCursor: Option[BufferPosition] = none(BufferPosition),
 ): Result[(), string] =
-  ## Roll back the open transaction on an edit-failure path and return the error
-  ## to propagate. If the rollback itself fails the buffer may be left
-  ## inconsistent, so that failure is logged and appended to the propagated
-  ## error (which surfaces as the status message) instead of being discarded.
+  ## Roll back the open transaction and return `primaryError`. A failed
+  ## rollback is logged and appended to the error; with `savedCursor`,
+  ## restore the cursor after a successful rollback.
   let rollbackResult = ctx.buffer.rollbackTransaction()
   if rollbackResult.isErr:
     logError "operator", "Failed to rollback transaction: " & rollbackResult.error
     return err(primaryError & " (rollback failed: " & rollbackResult.error & ")")
+  if savedCursor.isSome:
+    ctx.cursor = savedCursor.get
   err(primaryError)
+
+proc rollbackPasteOnException*(
+    ctx: CommandContext, excMsg: string, actualCount: int, savedCursor: BufferPosition
+): Result[(), string] =
+  ## Exception-safety tail for the paste loops: on an unexpected error, roll
+  ## back the paste's own transaction (`actualCount > 1`) and restore the
+  ## cursor; a joined outer transaction is left for its own commit path.
+  if actualCount > 1 and ctx.buffer.inTransaction:
+    let rollbackResult = ctx.buffer.rollbackTransaction()
+    if rollbackResult.isErr:
+      logError "paste", "Failed to rollback transaction: " & rollbackResult.error
+      return err(
+        "Paste failed: " & excMsg & " (rollback failed: " & rollbackResult.error & ")"
+      )
+    ctx.cursor = savedCursor
+  elif ctx.buffer.inTransaction:
+    return err(
+      "Paste failed: " & excMsg &
+        " (joined transaction: earlier edits may remain applied)"
+    )
+  err("Paste failed: " & excMsg)
 
 ## Helper for register dispatch
 ## These helpers check pendingRegister and route content to the correct register.

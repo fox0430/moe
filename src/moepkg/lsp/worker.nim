@@ -1739,6 +1739,12 @@ proc pollEvents*(worker: LspWorker): seq[LspEvent] =
   ## Poll for events from the worker (non-blocking)
   result = worker.eventQueue.popAll()
 
+proc enqueueEventForTest*(worker: LspWorker, evt: LspEvent) =
+  ## Test hook: inject an event as if it arrived from the server process.
+  ## Deliberately compiled into release builds so the test suite (which has no
+  ## `testing` define) can call it.
+  push(worker.eventQueue, evt)
+
 proc state*(worker: LspWorker): LspWorkerState =
   ## Get the current worker state (thread-safe)
   LspWorkerState(worker.sharedState.stateVal.load(moAcquire))

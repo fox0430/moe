@@ -620,19 +620,36 @@ proc commitCompletion*(
     # (imports), never edits that change columns on the completion's own line, so
     # an intra-line column shift is intentionally not handled here.
     let adds = entry.additionalTextEdits.get
-    if buffer.applyTextEdits(adds).isOk:
-      var lineShift = 0
-      for e in adds:
+    var appliedAdds: seq[TextEdit]
+    let addResult = buffer.applyTextEdits(adds, appliedEdits = appliedAdds)
+    if addResult.isErr:
+      # Some edits may have partially applied: shift tracked coordinates by
+      # the ones that DID apply, then abort the completion.
+      var appliedShift = 0
+      for e in appliedAdds:
         if e.range.start.line <= startLine:
-          lineShift += e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
-      startLine += lineShift
-      endLine += lineShift
-      state.cursor.line += lineShift
+          appliedShift +=
+            e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+      state.cursor.line += appliedShift
       if state.snippetSession.active:
-        # Session stops live at the completion site, below whole-line imports,
-        # so they shift down with it.
         for stop in state.snippetSession.stops.mitems:
-          stop.pos.line += lineShift
+          stop.pos.line += appliedShift
+      handler.completionManager.cancelCompletion()
+      return InsertModeResult(
+        kind: imrError, errorMessage: addResult.error & " (completion aborted)"
+      )
+    var lineShift = 0
+    for e in adds:
+      if e.range.start.line <= startLine:
+        lineShift += e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+    startLine += lineShift
+    endLine += lineShift
+    state.cursor.line += lineShift
+    if state.snippetSession.active:
+      # Session stops live at the completion site, below whole-line imports,
+      # so they shift down with it.
+      for stop in state.snippetSession.stops.mitems:
+        stop.pos.line += lineShift
 
   # Widen the deletion end to the cursor when it sits past the textEdit end
   # (characters typed after the request was sent). Positions are compared as
