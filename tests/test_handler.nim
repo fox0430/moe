@@ -3105,26 +3105,27 @@ suite "middleClickPaste":
       check e.activeBuffer.getLine(0) == "hello"
       check e.state.statusMessage == "Paste failed: Line position out of bounds: 5"
 
-  test "Visual mode - failed insert rolls back the paste's own transaction":
+  test "Insert mode without transaction - failed insert rolls back the paste's own transaction":
     if not isClipboardToolAvailable():
       skip()
     else:
       let tool = getAvailableClipboardTool()
-      let testText = "visual_fail_paste"
+      let testText = "insert_own_txn_fail_paste"
       let writeResult = writeToPrimarySelectionSync(tool, testText)
       check writeResult.isOk
       sleep(100)
 
       let e = createTestEditorForMiddleClick("hello")
-      e.state.mode = EditorMode.Visual
-      # Out-of-bounds line makes insertText fail, hitting the own-transaction
+      e.state.mode = EditorMode.Insert
+      # No beginTransaction here, so middleClickPaste opens its own. The
+      # out-of-bounds line makes insertText fail, hitting the own-transaction
       # rollback path (enteringInsertFromNormal is false here, so no mode
       # switch happens).
       e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
 
       e.middleClickPaste()
 
-      check e.state.mode == EditorMode.Visual
+      check e.state.mode == EditorMode.Insert
       check not e.activeBuffer.inTransaction
       check e.activeBuffer.getLine(0) == "hello"
       check e.activeBuffer.len == 1
