@@ -19,13 +19,14 @@
 
 ## Tests for editor_lsp.nim
 
-import std/[unittest, os, options, strutils, tables, importutils]
+import std/[unittest, os, options, strutils, tables, importutils, json]
 
 import pkg/chronos
 
 import ../src/moepkg/[editor, buffer, config, config_loader, message_log, types]
 import ../src/moepkg/editor_lsp {.all.}
 import ../src/moepkg/lsp_integration {.all.}
+import ../src/moepkg/lsp_service
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
 proc createTestEditor(): Editor =
@@ -582,3 +583,34 @@ suite "editor_lsp - applyWorkspaceEditFromServer staleness":
 
     check res.applied
     check buf.getTextString() == "xxx"
+
+suite "editor_lsp - TransactionRollbackError propagation":
+  test "tick propagates TransactionRollbackError from the LSP poll":
+    # The frame's tick is the poller that feeds the main loop's
+    # emergency-save boundary (moe.nim editorCallback), so a
+    # TransactionRollbackError from the LSP layer must propagate out of the
+    # frame, not be swallowed. Defensive path: the production wiring converts
+    # the exception to an err inside applyWorkspaceEdit, so this only fires
+    # for a custom callback that raises directly.
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(%*{"changes": {"file:///t.nim": []}}),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        raise newException(
+          TransactionRollbackError, "withTransaction: failed to roll back: boom"
+        )
+    expect TransactionRollbackError:
+      e.tick()

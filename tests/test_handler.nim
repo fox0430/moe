@@ -3059,6 +3059,79 @@ suite "middleClickPaste":
       let line = e.activeBuffer.getLine(0)
       check $line == testText & "hello"
 
+  test "Normal mode - failed insert rolls back and returns to Normal":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "normal_fail_paste"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.state.mode = EditorMode.Normal
+      # Out-of-bounds line makes insertText fail, hitting the rollback path
+      e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
+
+      e.middleClickPaste()
+
+      check e.state.mode == EditorMode.Normal
+      check not e.activeBuffer.inTransaction
+      check e.activeBuffer.getLine(0) == "hello"
+      check e.activeBuffer.len == 1
+      check e.windowManager.windows[0].cursor.line == 5
+      check e.state.statusMessage == "Paste failed: Line position out of bounds: 5"
+
+  test "Insert mode - failed insert leaves joined session transaction open":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "insert_fail_paste"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.state.mode = EditorMode.Insert
+      discard e.activeBuffer.beginTransaction("Insert mode edit")
+      e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
+
+      e.middleClickPaste()
+
+      check e.state.mode == EditorMode.Insert
+      check e.activeBuffer.inTransaction
+      check e.activeBuffer.getLine(0) == "hello"
+      check e.state.statusMessage == "Paste failed: Line position out of bounds: 5"
+
+  test "Insert mode without transaction - failed insert rolls back the paste's own transaction":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "insert_own_txn_fail_paste"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.state.mode = EditorMode.Insert
+      # No beginTransaction here, so middleClickPaste opens its own. The
+      # out-of-bounds line makes insertText fail, hitting the own-transaction
+      # rollback path (enteringInsertFromNormal is false here, so no mode
+      # switch happens).
+      e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
+
+      e.middleClickPaste()
+
+      check e.state.mode == EditorMode.Insert
+      check not e.activeBuffer.inTransaction
+      check e.activeBuffer.getLine(0) == "hello"
+      check e.activeBuffer.len == 1
+      check e.windowManager.windows[0].cursor.line == 5
+      check e.state.statusMessage == "Paste failed: Line position out of bounds: 5"
+
   test "Insert mode - multiline paste":
     if not isClipboardToolAvailable():
       skip()

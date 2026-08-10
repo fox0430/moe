@@ -22,6 +22,7 @@ import std/[unittest, strutils, options, deques]
 import pkg/results
 
 import ../src/moepkg/buffer
+import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/syntax/tokenizer
 
 suite "Buffer - Undo/Redo Basic Operations":
@@ -420,6 +421,144 @@ suite "Buffer - withTransaction scope guard":
     # the rollback must have left nothing to undo.
     b.readOnly = false
     check b.undo().isErr
+
+  test "rollback failure raises instead of being silently logged":
+    # Regression: a failed rollback must surface as an exception (the buffer
+    # can no longer be trusted) — not a log line the caller never sees. The
+    # dedicated type lets blanket CatchableError handlers exclude it.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.insertText(BufferPosition(line: 0, column: 4), " x")
+        discard b.rollbackTransaction()
+        return err("boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except TransactionRollbackError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+    check not b.inTransaction
+    check b.getLine(0) == "test"
+    check b.undo().isErr
+
+  test "rollback failure raise preserves the original exception message":
+    # Regression: when a raise propagates through the failed rollback, the
+    # replacement raise must keep the original cause so the log and status
+    # message show why the edit failed, not only that the rollback failed.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        raise newException(ValueError, "original boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except TransactionRollbackError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+    check "original boom" in caught
+    check not b.inTransaction
+
+  test "rollback failure raise is a ValueError (catches as its base type)":
+    # The dedicated type must stay catchable as its documented base class so
+    # existing handlers that already excluded ValueError keep working.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        return err("boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except ValueError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+
+  test "rollback failure keeps an in-flight Defect fatal":
+    # Regression: when a Defect is in flight and the rollback fails, the
+    # finally must re-raise the Defect unchanged: demoting it to a catchable
+    # TransactionRollbackError would let blanket handlers swallow a fatal
+    # signal.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        raise newException(IndexDefect, "boom")
+
+    var caught: ref Defect = nil
+    try:
+      discard runIt(b)
+    except IndexDefect as e:
+      caught = e
+    check caught != nil
+    check caught.msg == "boom"
+    check not b.inTransaction
+    check b.getLine(0) == "test"
+
+  test "rollback failure keeps an in-flight Defect fatal via withTransaction":
+    # Same as above but routed through a catch-all handler that would swallow
+    # a CatchableError: the Defect must still escape it.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        raise newException(IndexDefect, "boom")
+
+    var caught: ref Defect = nil
+    try:
+      try:
+        discard runIt(b)
+      except TransactionRollbackError:
+        discard # must not be reached
+      except CatchableError:
+        discard # must not be reached
+    except Defect as e:
+      caught = e
+    check caught != nil
+    check caught.msg == "boom"
+    check not b.inTransaction
+
+  test "rollback failure on partial undo failure raises (real failure mode)":
+    # Unlike the tests above (which break the rollback by ending the
+    # transaction in the body), this exercises the real failure mode: an
+    # inner undoChange fails partway through the rollback, leaving the
+    # buffer partially reverted and raising TransactionRollbackError.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.insertText(BufferPosition(line: 0, column: 4), " x")
+        # Hand-craft a change undoChange cannot apply (out-of-range line) and
+        # clear the pending snapshot to force the per-change undo path.
+        b.currentTransaction.get.changes.add(
+          BufferChange(
+            startSeq: b.changeSeq,
+            endSeq: b.changeSeq + 1,
+            kind: ckInsertLine,
+            insertLineIdx: 999,
+            insertLineText: "x",
+          )
+        )
+        b.pendingSnapshot = none(PieceTableSnapshot)
+        return err("boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except TransactionRollbackError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+    check "Failed to undo change" in caught
+    check not b.inTransaction
 
 suite "Buffer - Transaction lastChangedLines":
   test "commitTransaction updates lastChangedLines to minimum line":

@@ -112,65 +112,73 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
     if txnResult.isErr:
       return err(txnResult.error)
 
-  # Paste count times
-  var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
-  for i in 1 .. actualCount:
-    if isFullLine:
-      # Paste on new line below current line (Vim 'p' behavior for linewise yank)
-      let currentLine = ctx.buffer.getLine(ctx.cursor.line)
-      let pastePos = BufferPosition(line: ctx.cursor.line, column: currentLine.charLen)
+  let savedCursor = ctx.cursor
+  try:
+    # Paste count times
+    var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
+    for i in 1 .. actualCount:
+      if isFullLine:
+        # Paste on new line below current line (Vim 'p' behavior for linewise yank)
+        let currentLine = ctx.buffer.getLine(ctx.cursor.line)
+        let pastePos =
+          BufferPosition(line: ctx.cursor.line, column: currentLine.charLen)
 
-      # Insert the paste content
-      # Remove trailing newline from pasteText and add newline prefix
-      let textToInsert =
-        "\n" & pasteText.strip(leading = false, trailing = true, chars = {'\n'})
-      let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
-      if insertResult.isErr:
-        # Rollback transaction on error
-        if actualCount > 1:
-          return rollbackAndPropagate(ctx, insertResult.error)
-        return err(insertResult.error)
+        # Insert the paste content
+        # Remove trailing newline from pasteText and add newline prefix
+        let textToInsert =
+          "\n" & pasteText.strip(leading = false, trailing = true, chars = {'\n'})
+        let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
+        if insertResult.isErr:
+          # Rollback transaction on error
+          if actualCount > 1:
+            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          return err(insertResult.error)
 
-      # Move cursor to the first non-whitespace character of pasted line
-      ctx.cursor.line = ctx.cursor.line + 1
-      ctx.cursor.column =
-        firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
-    else:
-      # Paste after cursor position (Vim 'p' behavior for characterwise yank)
-      let lineContent = ctx.buffer.getLine(ctx.cursor.line)
-      var pastePos = ctx.cursor
+        # Move cursor to the first non-whitespace character of pasted line
+        ctx.cursor.line = ctx.cursor.line + 1
+        ctx.cursor.column =
+          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
+      else:
+        # Paste after cursor position (Vim 'p' behavior for characterwise yank)
+        let lineContent = ctx.buffer.getLine(ctx.cursor.line)
+        var pastePos = ctx.cursor
 
-      # Move one character right if not at end of line (only for first paste)
-      if i == 1 and ctx.cursor.column < lineContent.charLen:
-        pastePos.column = ctx.cursor.column + 1
+        # Move one character right if not at end of line (only for first paste)
+        if i == 1 and ctx.cursor.column < lineContent.charLen:
+          pastePos.column = ctx.cursor.column + 1
 
-      if firstPastedChar.isNone:
-        firstPastedChar = some(pastePos)
+        if firstPastedChar.isNone:
+          firstPastedChar = some(pastePos)
 
-      let insertResult = ctx.buffer.insertText(pastePos, pasteText)
-      if insertResult.isErr:
-        # Rollback transaction on error
-        if actualCount > 1:
-          return rollbackAndPropagate(ctx, insertResult.error)
-        return err(insertResult.error)
+        let insertResult = ctx.buffer.insertText(pastePos, pasteText)
+        if insertResult.isErr:
+          # Rollback transaction on error
+          if actualCount > 1:
+            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          return err(insertResult.error)
 
-      # Advance cursor past the inserted text so the next iteration inserts
-      # immediately after it. For multi-line paste, land on the final inserted
-      # line at column = last-segment charLen (not startCol + total charLen,
-      # which would treat '\n' as a column-adding rune).
-      let endPos = pasteEndPos(pastePos, pasteText)
-      ctx.cursor.line = endPos.line
-      ctx.cursor.column = endPos.column
+        # Move the cursor to the end of the inserted text so the next
+        # iteration inserts after it. For multi-line paste, land on the final
+        # line at its column: '\n' must not count as a column-adding rune.
+        let endPos = pasteEndPos(pastePos, pasteText)
+        ctx.cursor.line = endPos.line
+        ctx.cursor.column = endPos.column
 
-  # Place cursor on the first character of the pasted text
-  if not isFullLine and firstPastedChar.isSome:
-    ctx.cursor = firstPastedChar.get
+    # Place cursor on the first character of the pasted text
+    if not isFullLine and firstPastedChar.isSome:
+      ctx.cursor = firstPastedChar.get
 
-  # Commit transaction if we started one
-  if actualCount > 1:
-    let txnResult = ctx.buffer.commitTransaction()
-    if txnResult.isErr:
-      return err(txnResult.error)
+    # Commit transaction if we started one
+    if actualCount > 1:
+      let txnResult = ctx.buffer.commitTransaction()
+      if txnResult.isErr:
+        return err(txnResult.error)
+  except Exception as exc:
+    if exc of Defect:
+      # Defects stay fatal (codebase policy): roll back first, then re-raise.
+      discard rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
+      raise
+    return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand =
@@ -240,58 +248,65 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
     if txnResult.isErr:
       return err(txnResult.error)
 
-  # Paste count times
-  var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
-  for i in 1 .. actualCount:
-    if isFullLine:
-      # Paste on new line above current line (Vim 'P' behavior for linewise yank)
-      let pastePos = BufferPosition(line: ctx.cursor.line, column: 0)
+  let savedCursor = ctx.cursor
+  try:
+    # Paste count times
+    var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
+    for i in 1 .. actualCount:
+      if isFullLine:
+        # Paste on new line above current line (Vim 'P' behavior for linewise yank)
+        let pastePos = BufferPosition(line: ctx.cursor.line, column: 0)
 
-      # Insert the paste content
-      # Remove trailing newline from pasteText and add newline suffix
-      let textToInsert =
-        pasteText.strip(leading = false, trailing = true, chars = {'\n'}) & "\n"
-      let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
-      if insertResult.isErr:
-        # Rollback transaction on error
-        if actualCount > 1:
-          return rollbackAndPropagate(ctx, insertResult.error)
-        return err(insertResult.error)
+        # Insert the paste content
+        # Remove trailing newline from pasteText and add newline suffix
+        let textToInsert =
+          pasteText.strip(leading = false, trailing = true, chars = {'\n'}) & "\n"
+        let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
+        if insertResult.isErr:
+          # Rollback transaction on error
+          if actualCount > 1:
+            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          return err(insertResult.error)
 
-      # Move cursor to the first non-whitespace character of pasted line
-      ctx.cursor.column =
-        firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
-    else:
-      # Paste at cursor position (Vim 'P' behavior for characterwise yank)
-      let pastePos = ctx.cursor
+        # Move cursor to the first non-whitespace character of pasted line
+        ctx.cursor.column =
+          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
+      else:
+        # Paste at cursor position (Vim 'P' behavior for characterwise yank)
+        let pastePos = ctx.cursor
 
-      if firstPastedChar.isNone:
-        firstPastedChar = some(pastePos)
+        if firstPastedChar.isNone:
+          firstPastedChar = some(pastePos)
 
-      let insertResult = ctx.buffer.insertText(pastePos, pasteText)
-      if insertResult.isErr:
-        # Rollback transaction on error
-        if actualCount > 1:
-          return rollbackAndPropagate(ctx, insertResult.error)
-        return err(insertResult.error)
+        let insertResult = ctx.buffer.insertText(pastePos, pasteText)
+        if insertResult.isErr:
+          # Rollback transaction on error
+          if actualCount > 1:
+            return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          return err(insertResult.error)
 
-      # Advance cursor past the inserted text so the next iteration inserts
-      # immediately after it. For multi-line paste, land on the final inserted
-      # line at column = last-segment charLen (not startCol + total charLen,
-      # which would treat '\n' as a column-adding rune).
-      let endPos = pasteEndPos(pastePos, pasteText)
-      ctx.cursor.line = endPos.line
-      ctx.cursor.column = endPos.column
+        # Move the cursor to the end of the inserted text so the next
+        # iteration inserts after it. For multi-line paste, land on the final
+        # line at its column: '\n' must not count as a column-adding rune.
+        let endPos = pasteEndPos(pastePos, pasteText)
+        ctx.cursor.line = endPos.line
+        ctx.cursor.column = endPos.column
 
-  # Place cursor on the first character of the pasted text
-  if not isFullLine and firstPastedChar.isSome:
-    ctx.cursor = firstPastedChar.get
+    # Place cursor on the first character of the pasted text
+    if not isFullLine and firstPastedChar.isSome:
+      ctx.cursor = firstPastedChar.get
 
-  # Commit transaction if we started one
-  if actualCount > 1:
-    let txnResult = ctx.buffer.commitTransaction()
-    if txnResult.isErr:
-      return err(txnResult.error)
+    # Commit transaction if we started one
+    if actualCount > 1:
+      let txnResult = ctx.buffer.commitTransaction()
+      if txnResult.isErr:
+        return err(txnResult.error)
+  except Exception as exc:
+    if exc of Defect:
+      # Defects stay fatal (codebase policy): roll back first, then re-raise.
+      discard rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
+      raise
+    return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand =
@@ -316,34 +331,46 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
   if ctx.state.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
 
+    # Guard only the probe: keep withTransaction's untrustworthy-state raise visible.
+    var isPair = false
     try:
-      if isAdjacentPair(lineContent, cursorCol):
-        let txr = withTransaction(ctx.buffer, "delete paren pair"):
-          # Delete opening char, then closing char (now at same position)
-          for i in 0 ..< 2:
-            let delResult = ctx.buffer.deleteRange(
-              BufferPosition(line: ctx.cursor.line, column: cursorCol),
-              BufferPosition(line: ctx.cursor.line, column: cursorCol),
-            )
-            if delResult.isErr:
-              return err(delResult.error)
-        if txr.isErr:
-          return err(txr.error)
-
-        # Both chars were deleted, so both go in the register
-        storeDeletedText(
-          ctx,
-          $lineContent.runeAtPos(cursorCol) & $lineContent.runeAtPos(cursorCol + 1),
-          false,
-        )
-
-        let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
-        if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
-          ctx.cursor.column = updatedLineLen - 1
-
-        return Result[(), string].ok ()
+      isPair = isAdjacentPair(lineContent, cursorCol)
     except CatchableError:
       discard
+
+    if isPair:
+      let txr =
+        try:
+          withTransaction(ctx.buffer, "delete paren pair"):
+            # Delete opening char, then closing char (now at same position)
+            for i in 0 ..< 2:
+              let delResult = ctx.buffer.deleteRange(
+                BufferPosition(line: ctx.cursor.line, column: cursorCol),
+                BufferPosition(line: ctx.cursor.line, column: cursorCol),
+              )
+              if delResult.isErr:
+                # Raise instead of returning so a failed rollback keeps this
+                # original error in the TransactionRollbackError message.
+                raise newException(ValueError, delResult.error)
+        except ValueError as exc:
+          if exc of TransactionRollbackError:
+            return err(exc.msg & " (buffer state may be inconsistent)")
+          return err(exc.msg)
+      if txr.isErr:
+        return err(txr.error)
+
+      # Both chars were deleted, so both go in the register
+      storeDeletedText(
+        ctx,
+        $lineContent.runeAtPos(cursorCol) & $lineContent.runeAtPos(cursorCol + 1),
+        false,
+      )
+
+      let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
+      if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
+        ctx.cursor.column = updatedLineLen - 1
+
+      return Result[(), string].ok ()
 
   # Normal delete logic
   # Calculate how many characters we can actually delete
@@ -410,32 +437,44 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
   if ctx.state.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
 
+    # Guard only the probe: keep withTransaction's untrustworthy-state raise visible.
+    var isPair = false
     try:
       # X deletes char before cursor; check if char at cursorCol-1 and cursorCol form a pair
-      if isAdjacentPair(lineContent, cursorCol - 1):
-        let txr = withTransaction(ctx.buffer, "delete paren pair"):
-          # Delete opening char, then closing char (now at same position)
-          for i in 0 ..< 2:
-            let delResult = ctx.buffer.deleteRange(
-              BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
-              BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
-            )
-            if delResult.isErr:
-              return err(delResult.error)
-        if txr.isErr:
-          return err(txr.error)
-
-        # Both chars were deleted, so both go in the register
-        storeDeletedText(
-          ctx,
-          $lineContent.runeAtPos(cursorCol - 1) & $lineContent.runeAtPos(cursorCol),
-          false,
-        )
-        ctx.cursor.column = cursorCol - 1
-
-        return Result[(), string].ok ()
+      isPair = isAdjacentPair(lineContent, cursorCol - 1)
     except CatchableError:
       discard
+
+    if isPair:
+      let txr =
+        try:
+          withTransaction(ctx.buffer, "delete paren pair"):
+            # Delete opening char, then closing char (now at same position)
+            for i in 0 ..< 2:
+              let delResult = ctx.buffer.deleteRange(
+                BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+                BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+              )
+              if delResult.isErr:
+                # Raise instead of returning so a failed rollback keeps this
+                # original error in the TransactionRollbackError message.
+                raise newException(ValueError, delResult.error)
+        except ValueError as exc:
+          if exc of TransactionRollbackError:
+            return err(exc.msg & " (buffer state may be inconsistent)")
+          return err(exc.msg)
+      if txr.isErr:
+        return err(txr.error)
+
+      # Both chars were deleted, so both go in the register
+      storeDeletedText(
+        ctx,
+        $lineContent.runeAtPos(cursorCol - 1) & $lineContent.runeAtPos(cursorCol),
+        false,
+      )
+      ctx.cursor.column = cursorCol - 1
+
+      return Result[(), string].ok ()
 
   # Normal delete logic
   # Calculate how many characters we can actually delete

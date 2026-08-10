@@ -413,7 +413,9 @@ proc middleClickPaste(e: Editor) =
 
   let activeBuffer = e.activeBuffer()
 
-  if e.state.mode == EditorMode.Normal:
+  let enteringInsertFromNormal = e.state.mode == EditorMode.Normal
+
+  if enteringInsertFromNormal:
     let insertTransaction = activeBuffer.beginTransaction(
       "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
     )
@@ -438,12 +440,17 @@ proc middleClickPaste(e: Editor) =
   let insertResult = activeBuffer.insertText(pos, pastedText)
   if insertResult.isErr:
     var msg = "Paste failed: " & insertResult.error
-    if ownTransaction:
+    # Roll back the transaction we opened; a joined session transaction is
+    # left untouched for the mode's own commit path.
+    if ownTransaction or enteringInsertFromNormal:
       let rollbackResult = activeBuffer.rollbackTransaction()
       if rollbackResult.isErr:
         logError "handler",
           "Failed to rollback paste transaction: " & rollbackResult.error
         msg &= " (rollback failed: " & rollbackResult.error & ")"
+      if enteringInsertFromNormal:
+        # The Insert session never started: return to Normal mode.
+        e.setMode(EditorMode.Normal)
     e.state.statusMessage = msg
     return
 

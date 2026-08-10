@@ -493,17 +493,23 @@ proc executeCommand*(
       let charsAvailable = lineContent.charLen - ctx.cursor.column
       let charsToReplace = min(actualCount, charsAvailable)
 
-      let txr = withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
-        for i in 0 ..< charsToReplace:
-          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+      let txr =
+        try:
+          withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
+            for i in 0 ..< charsToReplace:
+              let pos =
+                BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
-          let delResult = ctx.buffer.deleteRange(pos, pos)
-          if delResult.isErr:
-            return err(delResult.error)
+              let delResult = ctx.buffer.deleteRange(pos, pos)
+              if delResult.isErr:
+                return err(delResult.error)
 
-          let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
-          if insResult.isErr:
-            return err(insResult.error)
+              let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
+              if insResult.isErr:
+                return err(insResult.error)
+        except TransactionRollbackError as exc:
+          # Surface a failed rollback (untrustworthy buffer) as a status message.
+          return err(exc.msg & " (buffer state may be inconsistent)")
       if txr.isErr:
         return err(txr.error)
 
@@ -529,8 +535,12 @@ proc executeCommand*(
       if not ctx.state.visualSelection.active:
         return err("No visual selection active")
 
-      # Call visualReplace with the target character
-      visualReplace(ctx.buffer, ctx.state, cmd.targetChar[0])
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      try:
+        visualReplace(ctx.buffer, ctx.state, cmd.targetChar[0])
+      except TransactionRollbackError as exc:
+        return err(exc.msg & " (buffer state may be inconsistent)")
 
       return ok(())
     of "visual-surround":
@@ -541,7 +551,12 @@ proc executeCommand*(
       if not ctx.state.visualSelection.active:
         return err("No visual selection active")
 
-      visualSurround(ctx.buffer, ctx.state, cmd.targetChar[0])
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      try:
+        visualSurround(ctx.buffer, ctx.state, cmd.targetChar[0])
+      except TransactionRollbackError as exc:
+        return err(exc.msg & " (buffer state may be inconsistent)")
 
       return ok(())
     else:

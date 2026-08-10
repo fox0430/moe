@@ -966,6 +966,53 @@ suite "executeCommand - Edge cases":
     check result.isOk
     check ctx.keyBindingRegistry.sequenceState.keys.len == 0
 
+  test "execute converts TransactionRollbackError to err":
+    # Regression: every command path funnels through execute, so a
+    # TransactionRollbackError from a failed rollback must surface as an err
+    # status message, not escape to the crash handler.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    let cmdId = custom("test.raise.rollback")
+    registry.register(
+      cmdId,
+      "test.raise.rollback",
+      "test",
+      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+        raise newException(
+          TransactionRollbackError, "withTransaction: failed to roll back: boom"
+        ),
+    )
+
+    let result = registry.execute(ctx, cmdId)
+    check result.isErr
+    check "boom" in result.error
+    check "buffer state may be inconsistent" in result.error
+
+  test "execute by string ID converts TransactionRollbackError to err":
+    # The string-ID overload shares the same conversion: a command invoked
+    # from the Command line must not crash the editor either.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    let cmdId = custom("test.raise.rollback.str")
+    registry.register(
+      cmdId,
+      "test.raise.rollback.str",
+      "test",
+      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+        raise newException(
+          TransactionRollbackError, "withTransaction: failed to roll back: boom"
+        ),
+    )
+
+    let result = registry.execute(ctx, "test.raise.rollback.str")
+    check result.isErr
+    check "boom" in result.error
+    check "buffer state may be inconsistent" in result.error
+
 suite "Handler - Paste operations":
   test "paste after cursor (p) - characterwise":
     let buffer = newTextBuffer("hello world")
@@ -1047,6 +1094,92 @@ suite "Handler - Paste operations":
     let result = registry.execute(ctx, custom("paste.after"))
     check result.isErr
     check "Nothing to paste" in result.error
+
+  test "paste failure keeps an outer session transaction open":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("X", false)
+    # Simulate a live Insert session: the paste must not roll it back.
+    check buffer.beginTransaction("Insert mode edit").isOk
+    let registry = createTestRegistry()
+
+    # Out-of-bounds cursor fails insertText with count == 1 (no transaction
+    # owned by the paste): the session transaction must stay open.
+    ctx.cursor = BufferPosition(line: 5, column: 0)
+    let result = registry.execute(ctx, custom("paste.after"))
+
+    check result.isErr
+    check buffer.inTransaction
+    check buffer[0] == "hello"
+    check buffer.commitTransaction().isOk
+
+  test "paste failure rolls back own transaction and restores cursor":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("X", false)
+    let registry = createTestRegistry()
+
+    # count = 2 opens the paste's own transaction; the out-of-bounds cursor
+    # fails insertText before any move, so the error path must roll back the
+    # transaction and leave the cursor where it was.
+    ctx.cursor = BufferPosition(line: 5, column: 0)
+    let result = registry.execute(ctx, custom("paste.after"), @["2"])
+
+    check result.isErr
+    check not buffer.inTransaction
+    check buffer[0] == "hello"
+    check ctx.cursor == BufferPosition(line: 5, column: 0)
+
+  test "paste exception rollback restores buffer and cursor (own transaction)":
+    # Direct unit test of the paste loops' exception tail.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    check buffer.beginTransaction("paste 2 times").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    let savedCursor = BufferPosition(line: 0, column: 0)
+    let result = rollbackPasteOnException(ctx, "boom", actualCount = 2, savedCursor)
+
+    check result.isErr
+    check "Paste failed: boom" in result.error
+    check not buffer.inTransaction
+    check buffer[0] == "hello"
+    check ctx.cursor == savedCursor
+
+  test "paste exception keeps a joined session transaction open":
+    # actualCount == 1 in a live session: the paste owns no transaction, so
+    # nothing is rolled back and the partial edit stays in the session.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    check buffer.beginTransaction("Insert mode edit").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    let savedCursor = BufferPosition(line: 0, column: 5)
+    let result = rollbackPasteOnException(ctx, "boom", actualCount = 1, savedCursor)
+
+    check result.isErr
+    check "Paste failed: boom" in result.error
+    check "joined transaction" in result.error
+    check "may remain applied" in result.error
+    check buffer.inTransaction
+    check buffer[0] == "hellox"
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+    check buffer.commitTransaction().isOk
+    check buffer[0] == "hellox"
+
+  test "paste exception without any transaction reports a plain failure":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let result = rollbackPasteOnException(
+      ctx, "boom", actualCount = 1, BufferPosition(line: 0, column: 0)
+    )
+
+    check result.isErr
+    check result.error == "Paste failed: boom"
+    check not buffer.inTransaction
 
   test "paste before cursor (P) - characterwise":
     let buffer = newTextBuffer("hello world")

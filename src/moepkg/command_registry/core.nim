@@ -24,7 +24,7 @@ import std/[tables, options, strutils, unicode]
 import pkg/results
 
 import ../[types, motion, key_bindings, config, logger, notification_popup]
-import ../buffer/core
+import ../buffer/[core, undo]
 
 type
   ## Built-in command identifiers
@@ -281,7 +281,13 @@ proc execute*(
     return Result[(), string].err "Too many arguments: expected at most " &
       $command.maxArgs & ", got " & $args.len
 
-  return command.handler(ctx, args)
+  return
+    try:
+      command.handler(ctx, args)
+    except TransactionRollbackError as exc:
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      Result[(), string].err(exc.msg & " (buffer state may be inconsistent)")
 
 proc execute*(
     registry: CommandRegistry,
@@ -302,7 +308,13 @@ proc execute*(
     return Result[(), string].err "Too many arguments: expected at most " &
       $command.maxArgs & ", got " & $args.len
 
-  return command.handler(ctx, args)
+  return
+    try:
+      command.handler(ctx, args)
+    except TransactionRollbackError as exc:
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      Result[(), string].err(exc.msg & " (buffer state may be inconsistent)")
 
 proc findAllCharPositions*(
     buffer: TextBuffer, line: int, targetChar: string

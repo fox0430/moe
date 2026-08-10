@@ -29,6 +29,11 @@ import ../[primitives, unicode_utils, logger]
 import ../buffer_backends/piece_table
 import core, internal_mutations
 
+type TransactionRollbackError* = object of ValueError
+  ## Raised by `withTransaction` when the rollback itself fails: the buffer
+  ## can no longer be trusted. Callers catching CatchableError broadly must
+  ## re-raise it (an in-flight Defect is re-raised unchanged).
+
 # Forward declaration: undoChange calls redoChange for ckTransaction
 # roll-forward on partial failure. The reverse direction (redoChange ->
 # undoChange) does not need one because undoChange is defined first.
@@ -250,18 +255,48 @@ template withTransaction*(
   ## `body` runs inside a `block`, so a bare `break` escapes the template rather
   ## than an enclosing loop and leaves the result uninitialized: every `break` in
   ## `body` must belong to a loop `body` itself owns.
+  ##
+  ## If the rollback itself fails, a TransactionRollbackError is raised:
+  ## the buffer can no longer be trusted, so the failure is converted to an
+  ## err / status message at each call boundary.
   block:
     let beginRes = b.beginTransaction(description, cursorPos)
     if beginRes.isErr:
       beginRes
     else:
       var completed = false
+      var inFlight: ref Exception = nil
       try:
         body
         completed = true
+      except Exception as exc:
+        # Capture the exception now: getCurrentException() inside finally
+        # would see a stale one left over from an earlier handler on this
+        # thread, and a rollback failure would then re-raise an unrelated
+        # Defect instead of the TransactionRollbackError.
+        inFlight = exc
+        raise
       finally:
         if not completed:
-          discard b.rollbackTransaction()
+          let rollbackResult = b.rollbackTransaction()
+          if rollbackResult.isErr:
+            # Keep an in-flight Defect a Defect: demoting it to a catchable
+            # TransactionRollbackError would let blanket handlers swallow a
+            # fatal signal. A body that returned err(...) has no in-flight
+            # exception to recover the message from.
+            let cause =
+              if inFlight != nil:
+                " (original error: " & inFlight.msg & ")"
+              else:
+                " (original error unavailable: body returned without raising)"
+            logError "buffer",
+              "withTransaction: failed to roll back: " & rollbackResult.error & cause
+            if inFlight != nil and inFlight of Defect:
+              raise inFlight
+            raise newException(
+              TransactionRollbackError,
+              "withTransaction: failed to roll back: " & rollbackResult.error & cause,
+            )
       b.commitTransaction()
 
 template withTransaction*(
