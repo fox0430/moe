@@ -2177,6 +2177,117 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "new text"
 
+  test "applyWorkspaceEdit writes unopened files when allowed (default)":
+    # User-initiated flows (rename) may still touch files the user has not
+    # opened: the default `allowUnopenedFileWrites = true` preserves that.
+    var buffers: seq[TextBuffer] = @[]
+    let targetPath = tmpDir / "unopened_default.txt"
+    writeFile(targetPath, "hello")
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(targetPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedFilePaths == @[targetPath]
+    check readFile(targetPath) == "world"
+
+  test "applyWorkspaceEdit refuses unopened files when disallowed":
+    # Server-initiated applyEdit must not write files the user has not opened:
+    # the whole edit is refused and nothing is modified.
+    var buffers: seq[TextBuffer] = @[]
+    let targetPath = tmpDir / "unopened_disallowed.txt"
+    writeFile(targetPath, "hello")
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(targetPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains("not open in the editor")
+    check result.error.contains(targetPath)
+    check readFile(targetPath) == "hello"
+
+  test "applyWorkspaceEdit refuses mixed targets when disallowed, nothing half-applied":
+    # An edit targeting both an open buffer and an unopened file must be
+    # refused whole: the open buffer is left untouched and the unopened file
+    # is not written.
+    let openPath = tmpDir / "mixed_open.txt"
+    let closedPath = tmpDir / "mixed_closed.txt"
+    writeFile(openPath, "aaa")
+    writeFile(closedPath, "bbb")
+    var buffers: seq[TextBuffer] = @[newTextBuffer("aaa", some(openPath))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(openPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "xxx")]
+    changes[pathToUri(closedPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "yyy")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains(closedPath)
+    check buffers[0].getTextString() == "aaa"
+    check readFile(closedPath) == "bbb"
+
+  test "applyWorkspaceEdit refuses unopened files via documentChanges when disallowed":
+    # The documentChanges branch must refuse an unopened target just like the
+    # changes branch: the whole edit is discarded and nothing is written.
+    var buffers: seq[TextBuffer] = @[]
+    let targetPath = tmpDir / "unopened_doc_disallowed.txt"
+    writeFile(targetPath, "hello")
+    let docEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: pathToUri(targetPath), version: some(1)
+      ),
+      edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")],
+    )
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(@[docEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains("not open in the editor")
+    check result.error.contains(targetPath)
+    check readFile(targetPath) == "hello"
+
+  test "applyWorkspaceEdit refuses mixed documentChanges targets when disallowed, nothing half-applied":
+    # An edit via documentChanges targeting both an open buffer and an unopened
+    # file must be refused whole: the open buffer is left untouched and the
+    # unopened file is not written.
+    let openPath = tmpDir / "mixed_doc_open.txt"
+    let closedPath = tmpDir / "mixed_doc_closed.txt"
+    writeFile(openPath, "aaa")
+    writeFile(closedPath, "bbb")
+    var buffers: seq[TextBuffer] = @[newTextBuffer("aaa", some(openPath))]
+    let docChanges = @[
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: pathToUri(openPath), version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 3), newText: "xxx")],
+      ),
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: pathToUri(closedPath), version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 3), newText: "yyy")],
+      ),
+    ]
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(docChanges)
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains(closedPath)
+    check buffers[0].getTextString() == "aaa"
+    check readFile(closedPath) == "bbb"
+
   test "applyWorkspaceEdit refuses file operations without applying edits":
     var buffers: seq[TextBuffer] = @[newTextBuffer("hello", some(tmpDir / "ro.txt"))]
     let edit = WorkspaceEdit(

@@ -214,7 +214,8 @@ proc applyWorkspaceEditFromServer*(
       return
         (applied: false, failureReason: some("buffer changed since last didChange"))
 
-    let applyResult = applyWorkspaceEdit(e.buffers, edit, "LSP Edit")
+    let applyResult =
+      applyWorkspaceEdit(e.buffers, edit, "LSP Edit", allowUnopenedFileWrites = false)
     if applyResult.isErr:
       # applyWorkspaceEdit commits each open buffer as it goes, so a failure
       # partway through can leave earlier buffers already modified. Re-sync every
