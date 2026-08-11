@@ -2971,6 +2971,21 @@ suite "cursorAfterPaste":
     check after.line == 4
     check after.column == 11
 
+suite "handlePasteText":
+  test "Insert mode paste sanitizes invalid UTF-8":
+    let e = createTestEditorForMiddleClick("hello")
+    e.state.mode = EditorMode.Insert
+    discard e.activeBuffer.beginTransaction("Insert mode edit")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
+
+    # 0xC0 is an invalid UTF-8 leading byte; 0x41 is ASCII 'A'
+    discard e.handlePasteText("\xC0\x41ok")
+
+    let line = e.activeBuffer.getLine(0)
+    check $line == "hello" & "\xEF\xBF\xBD" & "Aok"
+    # Cursor advances by rune count: 4 runes inserted
+    check e.windowManager.windows[0].cursor.column == 9
+
 suite "middleClickPaste":
   test "Clipboard disabled":
     let e = createTestEditorForMiddleClick("hello")
@@ -3038,6 +3053,26 @@ suite "middleClickPaste":
 
       let line = e.activeBuffer.getLine(0)
       check $line == "hello" & testText
+
+  test "Insert mode - invalid UTF-8 in selection is sanitized":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      # 0xC0 is an invalid UTF-8 leading byte; 0x41 is ASCII 'A'
+      let writeResult = writeToPrimarySelectionSync(tool, "\xC0\x41")
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.state.mode = EditorMode.Insert
+      discard e.activeBuffer.beginTransaction("Insert mode edit")
+      e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
+
+      e.middleClickPaste()
+
+      let line = e.activeBuffer.getLine(0)
+      check $line == "hello" & "\xEF\xBF\xBD" & "A"
 
   test "Normal mode - auto enter Insert mode and paste":
     if not isClipboardToolAvailable():

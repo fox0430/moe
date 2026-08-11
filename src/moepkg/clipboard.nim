@@ -24,10 +24,9 @@
 
 import std/[options, osproc, streams]
 
-import pkg/results
-import pkg/chronos
+import pkg/[results, chronos]
 
-import config
+import config, encoding
 
 type
   ClipboardOperation = enum
@@ -106,7 +105,7 @@ proc readFromPrimarySelectionSync*(tool: ClipboardTool): Result[string, string] 
     let exitCode = process.waitForExit()
 
     if exitCode == 0:
-      return Result[string, string].ok(output)
+      return Result[string, string].ok(sanitizeInvalidUtf8(output))
     else:
       return Result[string, string].err(
         "Failed to read from primary selection: exit code " & $exitCode
@@ -190,7 +189,7 @@ proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
     let exitCode = process.waitForExit()
 
     if exitCode == 0:
-      return Result[string, string].ok(output)
+      return Result[string, string].ok(sanitizeInvalidUtf8(output))
     else:
       return Result[string, string].err(
         "Failed to read from clipboard: exit code " & $exitCode
