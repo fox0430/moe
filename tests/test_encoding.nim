@@ -161,3 +161,45 @@ suite "Encoding Transcoding":
     check bomBytes(CharacterEncoding.utf32Le) == "\xFF\xFE\x00\x00"
     check bomBytes(CharacterEncoding.utf32Be) == "\x00\x00\xFE\xFF"
     check bomBytes(CharacterEncoding.unknown) == ""
+
+suite "sanitizeInvalidUtf8":
+  test "valid UTF-8 passes through unchanged":
+    check sanitizeInvalidUtf8("hello") == "hello"
+    check sanitizeInvalidUtf8("こんにちは") == "こんにちは"
+    check sanitizeInvalidUtf8("héllo") == "héllo"
+    check sanitizeInvalidUtf8("a😀b") == "a😀b"
+
+  test "invalid leading byte becomes U+FFFD":
+    check sanitizeInvalidUtf8("\xC0\x41") == "\xEF\xBF\xBD" & "A"
+    # 0xF5-0xF7 are invalid 4-byte leading bytes (code point > U+10FFFF);
+    # the trailing continuation bytes are each substituted too.
+    check sanitizeInvalidUtf8("\xF5\x80\x80\x80") ==
+      "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "truncated sequence becomes U+FFFD per byte":
+    check sanitizeInvalidUtf8("\xE3\x81") == "\xEF\xBF\xBD\xEF\xBF\xBD"
+    check sanitizeInvalidUtf8("\xF0\x9F") == "\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "bad continuation byte splits the sequence":
+    # 0xE3 0x28 (ASCII '(') is not a valid continuation
+    check sanitizeInvalidUtf8("\xE3\x28") == "\xEF\xBF\xBD" & "("
+    check sanitizeInvalidUtf8("\xE3\x81\x28") == "\xEF\xBF\xBD\xEF\xBF\xBD" & "("
+
+  test "overlong encoding becomes U+FFFD per byte":
+    # 0xC0 0x80 encodes NUL overlong; 0x80 alone is also invalid
+    check sanitizeInvalidUtf8("\xC0\x80") == "\xEF\xBF\xBD\xEF\xBF\xBD"
+    # 0xE0 0x80 0x80 encodes NUL overlong in 3 bytes
+    check sanitizeInvalidUtf8("\xE0\x80\x80") == "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "surrogate code point becomes U+FFFD per byte":
+    # 0xED 0xA0 0x80 is a UTF-8-encoded surrogate
+    check sanitizeInvalidUtf8("\xED\xA0\x80") == "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "code point above U+10FFFF becomes U+FFFD per byte":
+    # 0xF4 0x90 0x80 0x80 encodes U+110000
+    check sanitizeInvalidUtf8("\xF4\x90\x80\x80") ==
+      "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "mixed valid and invalid text":
+    check sanitizeInvalidUtf8("ok\xC0\x41ok") == "ok" & "\xEF\xBF\xBD" & "Aok"
+    check sanitizeInvalidUtf8("a\xE3\x81\x82b") == "aあb"

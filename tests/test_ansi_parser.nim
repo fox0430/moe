@@ -418,6 +418,33 @@ suite "TerminalGrid - Incomplete sequences":
     grid.processOutput("\xa9")
     check grid.cells[0][0].ch == "é"
 
+suite "TerminalGrid - Invalid UTF-8":
+  test "Invalid leading byte becomes U+FFFD without swallowing following ASCII":
+    let grid = newTerminalGrid(80, 24)
+    # 0xC0 is an invalid leading byte; 0x41 is ASCII 'A'
+    grid.processOutput("\xc0\x41")
+    check grid.cells[0][0].ch == "\xef\xbf\xbd"
+    check grid.cells[0][1].ch == "A"
+
+  test "0xF5 4-byte leading byte is rejected per byte":
+    let grid = newTerminalGrid(80, 24)
+    # 0xF5-0xF7 encode code points above U+10FFFF; each byte is substituted
+    # individually, matching sanitizeInvalidUtf8.
+    grid.processOutput("\xf5\x80\x80\x80B")
+    check grid.cells[0][0].ch == "\xef\xbf\xbd"
+    check grid.cells[0][1].ch == "\xef\xbf\xbd"
+    check grid.cells[0][2].ch == "\xef\xbf\xbd"
+    check grid.cells[0][3].ch == "\xef\xbf\xbd"
+    check grid.cells[0][4].ch == "B"
+
+  test "Bad continuation byte splits the sequence":
+    let grid = newTerminalGrid(80, 24)
+    # 0xE3 0x41 0x42: 0x41 is not a valid continuation byte
+    grid.processOutput("\xe3\x41\x42")
+    check grid.cells[0][0].ch == "\xef\xbf\xbd"
+    check grid.cells[0][1].ch == "A"
+    check grid.cells[0][2].ch == "B"
+
 suite "TerminalGrid - Scrollback buffer":
   test "Lines scroll into scrollback buffer":
     let grid = newTerminalGrid(10, 3)
