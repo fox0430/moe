@@ -211,10 +211,61 @@ proc nimNumber(g: var GeneralTokenizer, position: int): int =
       inc(pos)
   result = nimNumberPostfix(g, pos)
 
+proc nimBlockCommentBody(g: var GeneralTokenizer, pos: var int, isDoc: bool): bool =
+  ## Scan the body of an open `#[` / `##[` block comment from `g.pos`,
+  ## maintaining the nesting depth in `g.lang.nim.commentDepth`. Returns
+  ## true if the comment closed (`g.state` = gtNone); false if the buffer
+  ## ended first (the state is left as the comment kind for the resume).
+  while true:
+    case g.buf[pos]
+    of '\0':
+      return false
+    of '#':
+      # `##[` is matched positionally at any offset, so an odd run like
+      # `###[` nests via its trailing `##[`, matching the real Nim lexer.
+      inc(pos)
+      if isDoc:
+        if g.buf[pos] == '#' and g.buf[pos + 1] == '[':
+          inc(pos, 2)
+          inc g.lang.nim.commentDepth
+      elif g.buf[pos] == '[':
+        inc(pos)
+        inc g.lang.nim.commentDepth
+    of ']':
+      inc(pos)
+      if isDoc:
+        if g.buf[pos] == '#' and g.buf[pos + 1] == '#':
+          inc(pos, 2)
+          if g.lang.nim.commentDepth == 0:
+            g.state = gtNone
+            g.lang.nim.commentDepth = 0
+            return true
+          else:
+            dec g.lang.nim.commentDepth
+      elif g.buf[pos] == '#':
+        inc(pos)
+        if g.lang.nim.commentDepth == 0:
+          g.state = gtNone
+          g.lang.nim.commentDepth = 0
+          return true
+        else:
+          dec g.lang.nim.commentDepth
+    else:
+      inc(pos)
+
 proc nimNextToken*(g: var GeneralTokenizer) =
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
+  if g.state == gtLongComment or g.state == gtDocLongComment:
+    # Resume an unclosed `#[` / `##[` block comment body from a previous
+    # chunk; the nesting depth is in `g.lang.nim.commentDepth`. Each kind
+    # counts its own opener/closer, matching the opener scans below.
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = g.state
+      discard nimBlockCommentBody(g, pos, g.state == gtDocLongComment)
+  elif g.state == gtStringLit:
     if g.buf[pos] == '\\':
       g.kind = gtEscapeSequence
       inc(pos)
@@ -269,7 +320,24 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of '#':
-      pos = g.lexHash(pos, flagsNim)
+      if g.buf[pos + 1] == '[':
+        # `#[` block comment: lexed here (not in the shared hash lexer) so an
+        # unclosed comment persists its state and depth across chunks; the
+        # resume branch above continues the body.
+        inc(pos, 2)
+        g.kind = gtLongComment
+        g.lang.nim.commentDepth = 0
+        if not nimBlockCommentBody(g, pos, isDoc = false):
+          g.state = gtLongComment
+      elif g.buf[pos + 1] == '#' and g.buf[pos + 2] == '[':
+        # `##[` doc block comment: same treatment with its own delimiters.
+        inc(pos, 3)
+        g.kind = gtDocLongComment
+        g.lang.nim.commentDepth = 0
+        if not nimBlockCommentBody(g, pos, isDoc = true):
+          g.state = gtDocLongComment
+      else:
+        pos = g.lexHash(pos, flagsNim)
     of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in SymChars + {'_'}:

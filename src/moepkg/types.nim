@@ -874,6 +874,10 @@ type
     ui*: UiState # Transient UI display state (preview, progress, find char)
     windowDisplay*: WindowDisplayState
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
+    inactiveHighlightScanIndex*: int
+      # Round-robin start index for `updateForFrame`'s inactive-buffer
+      # highlight budget, so a buffer with sustained work cannot starve the
+      # buffers behind it.
 
   DebouncedLspPoll* = object
     ## Debounce + exponential backoff timer for a single LSP poll feature.

@@ -329,79 +329,86 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       g.kind = gtEof
       g.length = 0
       return
-    if g.buf[pos] notin {'\n', '\r'}:
-      # Buffer was modified and state is stale; fall back to normal parsing.
-      # Consume nothing: flipping to `gtOther` already guarantees progress
-      # (matching the gtCommand else arm), the next call re-parses this char
-      # through the regular branches instead of silently swallowing it, and a
-      # NUL here must not be stepped over (`inc` would push `pos` to `len + 1`
-      # and the next call would read past the terminator). `g.length` must be
-      # set explicitly — returning early skips the shared epilogue and would
-      # leave the previous token's length on this zero-progress token.
-      g.kind = gtNone
-      g.state = gtOther
-      g.length = 0
-      return
-    var lookbehind = pos - 1
-    var headerStart = -1
-    while lookbehind >= 0 and g.buf[lookbehind] notin {'\n', '\r'}:
-      if headerStart == -1 and g.buf[lookbehind] in {'|', '>'}:
-        headerStart = lookbehind
-      dec(lookbehind)
-    if headerStart == -1:
-      # Block scalar header not found; buffer was modified. Fall back without
-      # consuming the newline at `pos` (the gtOther whitespace branch tokenizes
-      # it on the next call, keeping the consumer's row accounting intact) and
-      # with `g.length` set, for the same reasons as the fallback above.
-      g.kind = gtNone
-      g.state = gtOther
-      g.length = 0
-      return
-    var indentation = 1
-    while g.buf[lookbehind + indentation] == ' ':
-      inc(indentation)
-    let headerAlone = g.buf[lookbehind + indentation] in {'|', '>'}
-    var foundParent = false
-    if headerAlone:
-      # when the header is alone in a line, this line does not show the parent's
-      # indentation, so we must go further. search the first previous line with
-      # non-whitespace content.
-      while lookbehind >= 0 and g.buf[lookbehind] in {'\n', '\r'}:
-        dec(lookbehind)
-        while lookbehind >= 0 and g.buf[lookbehind] in {' ', '\t'}:
-          dec(lookbehind)
-      # `>= 0`: landed on a real parent line whose indentation we honour.
-      # `-1`: ran off the top, so there is no parent and the block is top level.
-      foundParent = lookbehind >= 0
-      # now, find the beginning of the line...
+    var
+      parentIndentation: int
+      minIndentation: int
+      indentation: int
+      headerStart = -1
+    let resuming = g.buf[pos] notin {'\n', '\r'} and g.lang.yaml.blockScalarActive
+    if resuming:
+      # Chunk-boundary resume: the boundary capture persisted the scalar's
+      # context (a fresh buffer lacks the header line above); the
+      # indentation count restarts at the current line.
+      parentIndentation = g.lang.yaml.blockScalarParentIndent
+      indentation = 0
+    else:
+      if g.buf[pos] notin {'\n', '\r'}:
+        # Buffer was modified and state is stale; fall back to normal parsing.
+        # Consume nothing (the state flip guarantees progress) and set
+        # `g.length` explicitly (the early return skips the shared epilogue).
+        g.kind = gtNone
+        g.state = gtOther
+        # Clear the persisted context like the regular end path: `gtOther`
+        # must imply no scalar is in flight.
+        g.lang.yaml.blockScalarActive = false
+        g.length = 0
+        return
+      # Find the parent indentation of the block scalar to know when to stop.
+      var lookbehind = pos - 1
       while lookbehind >= 0 and g.buf[lookbehind] notin {'\n', '\r'}:
+        if headerStart == -1 and g.buf[lookbehind] in {'|', '>'}:
+          headerStart = lookbehind
         dec(lookbehind)
-      # ... and its indentation
+      if headerStart == -1:
+        # Block scalar header not found; buffer was modified. Fall back
+        # without consuming the newline at `pos` (the whitespace branch
+        # tokenizes it next call) and with `g.length` set, as above.
+        g.kind = gtNone
+        g.state = gtOther
+        g.lang.yaml.blockScalarActive = false
+        g.length = 0
+        return
       indentation = 1
       while g.buf[lookbehind + indentation] == ' ':
         inc(indentation)
-    if headerAlone and not foundParent:
-      # Alone header with nothing above it: top level. Keyed on `foundParent`,
-      # not `lookbehind == -1`, because a reparse chunk can start on the parent
-      # line itself (parent found, yet `lookbehind` still hits the buffer start);
-      # forcing top level there would let the block swallow following keys. An
-      # inline header (`key: |`) keeps its own indentation here — though the
-      # document-marker check below still forces top level when the header's
-      # own line is a `---` marker (`--- |`).
-      indentation = 0
-    elif g.buf[lookbehind + 1] == '-' and g.buf[lookbehind + 2] == '-' and
-        g.buf[lookbehind + 3] == '-' and g.buf[lookbehind + 4] in {'\t' .. '\r', ' '}:
-      # The line at `lookbehind + 1` — the parent line for an alone header,
-      # otherwise the header's own line (`--- |`) — is a document start
-      # marker, therefore we are at top level. No `lookbehind >= 0` guard:
-      # `lookbehind` is the newline BEFORE that line, so it is -1 when the
-      # line starts the buffer — which an incremental reparse chunk regularly
-      # does. `lookbehind + 1` is the line's first char either way (>= 0,
-      # never out of bounds).
-      indentation = 0
-    # because lookbehind was at newline char when calculating indentation, we're
-    # off by one. fix that. top level's parent will have indentation of -1.
-    let parentIndentation = indentation - 1
+      let headerAlone = g.buf[lookbehind + indentation] in {'|', '>'}
+      var foundParent = false
+      if headerAlone:
+        # An alone header shows no parent indentation; search the first
+        # previous line with non-whitespace content.
+        while lookbehind >= 0 and g.buf[lookbehind] in {'\n', '\r'}:
+          dec(lookbehind)
+          while lookbehind >= 0 and g.buf[lookbehind] in {' ', '\t'}:
+            dec(lookbehind)
+        # `>= 0`: real parent line; `-1`: no parent (top level).
+        foundParent = lookbehind >= 0
+        # Find the line's beginning and its indentation.
+        while lookbehind >= 0 and g.buf[lookbehind] notin {'\n', '\r'}:
+          dec(lookbehind)
+        indentation = 1
+        while g.buf[lookbehind + indentation] == ' ':
+          inc(indentation)
+      if headerAlone and not foundParent:
+        # Alone header with nothing above it: top level. Keyed on
+        # `foundParent`, not `lookbehind == -1`, because a reparse chunk can
+        # start on the parent line itself; forcing top level there would let
+        # the block swallow following keys. The `--- |` marker below still
+        # forces top level.
+        indentation = 0
+      elif g.buf[lookbehind + 1] == '-' and g.buf[lookbehind + 2] == '-' and
+          g.buf[lookbehind + 3] == '-' and g.buf[lookbehind + 4] in {'\t' .. '\r', ' '}:
+        # The line at `lookbehind + 1` (the parent line for an alone header,
+        # otherwise the header's own line `--- |`) is a document start
+        # marker: top level. No `lookbehind >= 0` guard: it is the newline
+        # before that line, so -1 when the line starts the buffer.
+        indentation = 0
+      # `lookbehind` sat on the newline when indentation was counted, so fix
+      # the off-by-one; a top-level block's parent indentation is -1.
+      parentIndentation = indentation - 1
+      # Persist the scalar's context so boundary captures carry it into the
+      # next chunk; `blockScalarMinIndent` is completed below.
+      g.lang.yaml.blockScalarActive = true
+      g.lang.yaml.blockScalarParentIndent = parentIndentation
 
     # find first content
     while g.buf[pos] in {' ', '\n', '\r'}:
@@ -410,14 +417,43 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       else:
         indentation = 0
       inc(pos)
-    var minIndentation = indentation
-
-    # for stupid edge cases, we must check whether an explicit indentation depth
-    # is given at the header.
-    while g.buf[headerStart] in {'>', '|', '+', '-'}:
-      inc(headerStart)
-    if g.buf[headerStart] in {'0' .. '9'}:
-      minIndentation = min(minIndentation, ord(g.buf[headerStart]) - ord('0'))
+    if resuming:
+      if g.lang.yaml.blockScalarMinIndentSet:
+        # The persisted minimum already covers all content lines scanned so
+        # far.
+        minIndentation = g.lang.yaml.blockScalarMinIndent
+      elif g.lang.yaml.blockScalarMinIndent >= 0:
+        # Cut right after an indicator header (`key: |4`): this is the first
+        # content line, which a single-buffer scan folds into the indicator;
+        # fold it here too, or a `#` comment below the indicator's indent
+        # would end the scalar where a single-buffer scan keeps it.
+        minIndentation = min(indentation, g.lang.yaml.blockScalarMinIndent)
+      else:
+        # Cut right after a plain header: start the minimum from this line,
+        # like a single-buffer scan's first content line.
+        minIndentation = indentation
+    else:
+      minIndentation = indentation
+      # Check for an explicit indentation indicator at the header (e.g. `|2`).
+      while g.buf[headerStart] in {'>', '|', '+', '-'}:
+        inc(headerStart)
+      let hasIndicator = g.buf[headerStart] in {'0' .. '9'}
+      if hasIndicator:
+        let indicatorIndent = ord(g.buf[headerStart]) - ord('0')
+        # An empty scan (buffer cut right after the header) has no content
+        # indent to fold; the indicator alone is then the real minimum.
+        minIndentation =
+          if g.buf[pos] == '\0':
+            indicatorIndent
+          else:
+            min(indentation, indicatorIndent)
+      # Persist the minimum for a chunk-boundary resume: an indicator is a
+      # real floor even with no content line in this chunk; a content line's
+      # fold is already in `minIndentation`; with neither, use -1 (the empty
+      # scan's 0 would otherwise poison the end checks on every resume).
+      g.lang.yaml.blockScalarMinIndentSet = g.buf[pos] != '\0'
+      g.lang.yaml.blockScalarMinIndent =
+        if hasIndicator or g.buf[pos] != '\0': minIndentation else: -1
 
     # process content lines
     while indentation > parentIndentation and g.buf[pos] != '\0':
@@ -428,6 +464,8 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         # comment after end of block scalar, or end of document
         break
       minIndentation = min(indentation, minIndentation)
+      g.lang.yaml.blockScalarMinIndentSet = true
+      g.lang.yaml.blockScalarMinIndent = minIndentation
       while g.buf[pos] notin {'\0', '\n', '\r'}:
         inc(pos)
       while g.buf[pos] in {' ', '\n', '\r'}:
@@ -438,16 +476,15 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         inc(pos)
 
     if g.buf[pos] != '\0':
-      # The scalar genuinely ended inside this buffer (dedent line, comment,
-      # or `...` document end found at `pos`).
+      # The scalar ended inside this buffer (dedent line, comment, or `...`
+      # document end at `pos`).
       g.state = gtOther
-    # else: the buffer ended while scanning the scalar's extent — whether it
-    # continues depends on lines this buffer does not contain (a chunked parse
-    # cuts here). Keep gtLongStringLit so the boundary capture is truthful;
-    # the chunked drivers rewind the handoff because a fresh buffer cannot
-    # resume a block scalar (its extent needs the header and parent lines
-    # above). At a true end of file nothing follows, so keeping it is
-    # harmless.
+      # `blockScalarActive` must imply a scalar is in flight; clear it so a
+      # resume cannot pick up a stale one.
+      g.lang.yaml.blockScalarActive = false
+    # else: the buffer ended mid-scalar — whether it continues depends on
+    # lines this buffer lacks. Keep `gtLongStringLit` so the boundary capture
+    # carries the persisted context; at a true EOF nothing follows.
   elif g.state == gtOther:
     # gtOther means 'inside YAML document'
     case g.buf[pos]
