@@ -23,7 +23,7 @@
 
 import std/[strutils, deques, unicode]
 
-import ../unicode_utils
+import ../[encoding, unicode_utils]
 
 type
   ColorKind* = enum
@@ -860,8 +860,14 @@ proc processOutput*(grid: TerminalGrid, data: string) =
             else:
               1
           if i + byteLen <= actualData.len:
-            runeStr = actualData[i ..< i + byteLen]
-            i += byteLen - 1 # -1 because the main loop increments
+            let candidate = actualData[i ..< i + byteLen]
+            # Reject invalid sequences; substitute only the leading byte so
+            # the following bytes are reprocessed individually.
+            if candidate.sanitizeInvalidUtf8 == candidate:
+              runeStr = candidate
+              i += byteLen - 1 # -1 because the main loop increments
+            else:
+              runeStr = "\xEF\xBF\xBD"
           else:
             # Incomplete UTF-8 sequence at end of buffer — save for next read
             grid.utf8Buffer = actualData[i ..< actualData.len]

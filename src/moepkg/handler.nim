@@ -29,7 +29,7 @@ import
   editor, editor_window_layout, key_bindings, modes, buffer, logger, types, motion,
   quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
   clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
-  pending_input, visible_rows, viewer_mode, frontend_input, hover_popup
+  pending_input, visible_rows, viewer_mode, frontend_input, hover_popup, encoding
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -267,7 +267,8 @@ proc handlePasteText(e: Editor, text: string): bool =
   # Normalize CRLF / lone CR to LF up front (matching loadFile) so a stray \r
   # never reaches line content and the cursor advance below counts line breaks
   # correctly. insertText normalizes again defensively for non-paste callers.
-  let pastedText = text.normalizeNewlines()
+  # Sanitize invalid UTF-8 so byte/rune conversions stay consistent.
+  let pastedText = text.sanitizeInvalidUtf8().normalizeNewlines()
   if pastedText.len == 0:
     return true
 
@@ -407,7 +408,8 @@ proc middleClickPaste(e: Editor) =
 
   # Normalize CRLF / lone CR to LF (matching loadFile) before insert and the
   # cursor advance below, so embedded \r never corrupts line content.
-  let pastedText = readResult.get().normalizeNewlines()
+  # Sanitize invalid UTF-8 so byte/rune conversions stay consistent.
+  let pastedText = readResult.get().sanitizeInvalidUtf8().normalizeNewlines()
   if pastedText.len == 0:
     return
 

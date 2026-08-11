@@ -166,6 +166,65 @@ const EncodingDetectionSampleSize* = 8 * 1024
   ## detection. 8 KB is enough to reliably detect BOM markers and encoding
   ## patterns while avoiding full-file scans on large files.
 
+proc sanitizeInvalidUtf8*(s: string): string =
+  ## Replace invalid UTF-8 sequences with U+FFFD. Applied at input boundaries
+  ## (paste, clipboard, PTY) where untrusted text enters the editor.
+  result = newStringOfCap(s.len)
+  var i = 0
+  while i < s.len:
+    let b = ord(s[i])
+    if b < 0x80:
+      result.add(s[i])
+      inc i
+      continue
+    # Expected length from the leading byte
+    var byteLen = 0
+    if (b and 0xE0) == 0xC0:
+      byteLen = 2
+    elif (b and 0xF0) == 0xE0:
+      byteLen = 3
+    elif (b and 0xF8) == 0xF0:
+      byteLen = 4
+    if byteLen == 0 or i + byteLen > s.len:
+      # Invalid leading byte or truncated sequence
+      result.add("\xEF\xBF\xBD")
+      inc i
+      continue
+    # Validate continuation bytes and the decoded code point
+    var valid = true
+    var cp: uint32 = 0
+    case byteLen
+    of 2:
+      cp = uint32(b and 0x1F)
+    of 3:
+      cp = uint32(b and 0x0F)
+    of 4:
+      cp = uint32(b and 0x07)
+    else:
+      discard
+    for j in 1 ..< byteLen:
+      let cb = ord(s[i + j])
+      if (cb and 0xC0) != 0x80:
+        valid = false
+        break
+      cp = (cp shl 6) or uint32(cb and 0x3F)
+    if valid:
+      # Reject overlong encodings, surrogates, and code points above U+10FFFF
+      if byteLen == 2 and cp < 0x80:
+        valid = false
+      elif byteLen == 3 and (cp < 0x800 or cp in 0xD800'u32 .. 0xDFFF'u32):
+        valid = false
+      elif byteLen == 4 and (cp < 0x10000'u32 or cp > 0x10FFFF'u32):
+        valid = false
+    if valid:
+      result.add(s[i ..< i + byteLen])
+      inc i, byteLen
+    else:
+      # Invalid sequence: substitute U+FFFD for the leading byte only, so a
+      # stray continuation byte is not consumed along with a valid one.
+      result.add("\xEF\xBF\xBD")
+      inc i
+
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
   ## Detect character encoding from raw file content
   ##
@@ -208,8 +267,9 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
     else:
       s
 
-  # Try UTF-8 validation first (most common)
-  if sample.validateUtf8 == -1:
+  # Try UTF-8 validation first (most common). Uses the full validation
+  # (overlongs, surrogates, > U+10FFFF rejected) shared with input sanitizing.
+  if sample.sanitizeInvalidUtf8 == sample:
     return CharacterEncoding.utf8
 
   # Try other Unicode encodings
