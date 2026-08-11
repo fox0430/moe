@@ -1348,11 +1348,17 @@ proc applyWorkspaceEdit*(
     buffers: var seq[TextBuffer],
     edit: WorkspaceEdit,
     transactionName: string = "Rename",
+    allowUnopenedFileWrites: bool = true,
 ): Result[WorkspaceEditResult, string] =
   ## Apply a WorkspaceEdit to multiple buffers
   ## Returns which buffers/files were modified
   ## For open buffers: uses transactions for undo support
   ## For unopened files: loads, modifies, and saves directly
+  ##
+  ## `allowUnopenedFileWrites` is true for user-initiated flows (rename) and
+  ## false for server-initiated workspace/applyEdit: a server must not write
+  ## files the user has not opened, and refusing the whole edit avoids
+  ## half-applied outcomes.
   ##
   ## Note: Per LSP spec, documentChanges takes precedence over changes.
   ## If both are present, only documentChanges is used.
@@ -1385,6 +1391,11 @@ proc applyWorkspaceEdit*(
       if bufferIdxOpt.isSome:
         openBuffersToModify.add((bufferIdxOpt.get, docEdit.edits))
       else:
+        if not allowUnopenedFileWrites:
+          return err(
+            "Server edit targets a file not open in the editor: " & path &
+              "; edit discarded"
+          )
         unopenedFilesToModify.add((path, docEdit.edits))
   elif edit.changes.isSome:
     # Handle changes field (uri -> seq[TextEdit]) only if documentChanges is absent
@@ -1397,6 +1408,11 @@ proc applyWorkspaceEdit*(
       if bufferIdxOpt.isSome:
         openBuffersToModify.add((bufferIdxOpt.get, edits))
       else:
+        if not allowUnopenedFileWrites:
+          return err(
+            "Server edit targets a file not open in the editor: " & path &
+              "; edit discarded"
+          )
         unopenedFilesToModify.add((path, edits))
 
   # Track successfully modified files for error reporting

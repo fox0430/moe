@@ -584,6 +584,27 @@ suite "editor_lsp - applyWorkspaceEditFromServer staleness":
     check res.applied
     check buf.getTextString() == "xxx"
 
+  test "rejects an edit targeting a file not open in the editor":
+    # Server-initiated applyEdit must not write files the user has not opened:
+    # the whole edit is refused, nothing is written, and the refusal is
+    # reported through the status message.
+    let tmpDir = getTempDir() / "moe_test_server_edit_unopened"
+    createDir(tmpDir)
+    defer:
+      removeDir(tmpDir)
+
+    let path = tmpDir / "closed.txt"
+    writeFile(path, "aaa")
+
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let res = e.applyWorkspaceEditFromServer(replaceFirstThree(path))
+
+    check not res.applied
+    check e.state.statusMessage.contains("not open in the editor")
+    check readFile(path) == "aaa"
+
 suite "editor_lsp - TransactionRollbackError propagation":
   test "tick propagates TransactionRollbackError from the LSP poll":
     # The frame's tick is the poller that feeds the main loop's
