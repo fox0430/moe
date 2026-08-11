@@ -838,6 +838,38 @@ suite "unicode_utils - setRuneCell":
     # Adjacent cell is untouched (remains default)
     check buf[3, 1].symbol == " "
 
+  test "C0 control rune is substituted with a single space":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    # ESC (0x1B) must never reach a cell as a raw control sequence
+    let w = setRuneCell(buf, 2, 1, Rune(0x1B), style)
+    check w == 1
+    check buf[2, 1].symbol == " "
+
+  test "DEL (0x7F) rune is substituted with a single space":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    let w = setRuneCell(buf, 2, 1, Rune(0x7F), style)
+    check w == 1
+    check buf[2, 1].symbol == " "
+
+  test "isC0Control covers C0 range and DEL but not printable ASCII":
+    check isC0Control(Rune(0x00))
+    check isC0Control(Rune(0x08))
+    check isC0Control(Rune(0x1B))
+    check isC0Control(Rune(0x1F))
+    check isC0Control(Rune(0x7F))
+    check not isC0Control(Rune(0x20))
+    check not isC0Control(Rune(0x41))
+    check not isC0Control(Rune(0x80))
+
+  test "sanitizeCellRune substitutes only C0 controls and DEL":
+    check sanitizeCellRune(Rune(0x1B)) == ' '.Rune
+    check sanitizeCellRune(Rune(0x00)) == ' '.Rune
+    check sanitizeCellRune(Rune(0x7F)) == ' '.Rune
+    check sanitizeCellRune(Rune(0x41)) == 'A'.Rune
+    check sanitizeCellRune(Rune(0x80)) == Rune(0x80)
+
   test "Wide rune writes main and continuation cell, returns width 2":
     var buf = newBuffer(10, 3)
     let style = defaultStyle()

@@ -27,6 +27,17 @@ import pkg/celina
 
 export buffer.runeWidth, buffer.displayWidth, buffer.foldZeroWidthRune
 
+proc isC0Control*(r: Rune): bool =
+  ## C0 control character (0x00..0x1F) or DEL (0x7F). Writing these directly
+  ## to a terminal moves the cursor or runs escape sequences (terminal
+  ## injection), so they must be substituted before reaching a cell.
+  int(r) < 0x20 or int(r) == 0x7F
+
+proc sanitizeCellRune*(r: Rune): Rune =
+  ## Substitute C0 control characters and DEL with a single space so they
+  ## never reach a terminal cell as raw control sequences.
+  if isC0Control(r): ' '.Rune else: r
+
 proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
   ## Write a single rune at (x, y), returning its display width so callers can
   ## advance the cursor. Wide chars (width 2) get an empty continuation cell so
@@ -34,11 +45,13 @@ proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
   ## avoiding ghost artifacts on popup close. Zero-width runes (combining marks,
   ## joiners, variation selectors) are folded into the preceding base cell and
   ## return 0 — writing them standalone would overwrite the following glyph.
-  let w = runeWidth(r)
+  ## C0 control characters and DEL are substituted with a single space.
+  let rune = sanitizeCellRune(r)
+  let w = runeWidth(rune)
   if w == 0:
-    foldZeroWidthRune(buffer, x, y, r)
+    foldZeroWidthRune(buffer, x, y, rune)
     return 0
-  buffer[x, y] = cell($r, style)
+  buffer[x, y] = cell($rune, style)
   if w == 2 and x + 1 < buffer.area.width:
     buffer[x + 1, y] = cell("", style)
   return w
