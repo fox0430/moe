@@ -26,7 +26,7 @@ import std/[options, osproc, streams]
 
 import pkg/[results, chronos]
 
-import config, encoding
+import config, encoding, logger
 
 type
   ClipboardOperation = enum
@@ -261,12 +261,14 @@ proc writeToClipboard*(
 proc writeToClipboardInternal(
     tool: ClipboardTool, text: string
 ): Future[void] {.async: (raises: []).} =
-  discard await writeToClipboard(tool, text)
+  let writeResult = await writeToClipboard(tool, text)
+  if writeResult.isErr:
+    logError "clipboard", writeResult.error
 
 # Fire-and-forget wrapper for clipboard write
 proc writeToClipboardAsync*(tool: ClipboardTool, text: string) =
   ## Write text to clipboard in the background (fire-and-forget)
-  ## This does not block and errors are silently ignored
+  ## This does not block and errors are logged
   asyncSpawn writeToClipboardInternal(tool, text)
 
 proc writeToPrimarySelection*(
@@ -279,10 +281,12 @@ proc writeToPrimarySelection*(
 proc writeToPrimarySelectionInternal(
     tool: ClipboardTool, text: string
 ): Future[void] {.async: (raises: []).} =
-  discard await writeToPrimarySelection(tool, text)
+  let writeResult = await writeToPrimarySelection(tool, text)
+  if writeResult.isErr:
+    logError "clipboard", writeResult.error
 
 # Fire-and-forget wrapper for primary selection write
 proc writeToPrimarySelectionAsync*(tool: ClipboardTool, text: string) =
   ## Write text to X11 PRIMARY selection in the background (fire-and-forget)
-  ## This does not block and errors are silently ignored
+  ## This does not block and errors are logged
   asyncSpawn writeToPrimarySelectionInternal(tool, text)

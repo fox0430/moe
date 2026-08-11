@@ -427,6 +427,7 @@ proc autoBackup*(e: Editor) =
   # so background-tab buffers would silently miss auto backup.
   var backupCount = 0
   var backupPaths: seq[string] = @[]
+  var backupFailures: seq[string] = @[]
 
   for buffer in e.buffers:
     # Only backup modified buffers with a file path
@@ -437,9 +438,21 @@ proc autoBackup*(e: Editor) =
       if backupResult.isOk:
         backupCount += 1
         backupPaths.add(backupResult.get)
+      else:
+        # "No changes since last backup" is a normal skip, not a failure
+        if "No changes since last backup" notin backupResult.error:
+          backupFailures.add(buffer.filePath.get & ": " & backupResult.error)
 
   # Always update last backup time to prevent repeated checks every frame
   e.state.timing.lastAutoBackup = now
+
+  # Report failures: backup is the user's safety net, a silent miss means
+  # work is only one crash away from being lost.
+  for failure in backupFailures:
+    logError "editor", "Auto backup failed for " & failure
+  if backupFailures.len > 0 and e.config.notification.screenNotifications and
+      e.config.notification.autoBackupScreenNotify:
+    e.state.statusMessage = "Auto backup failed for " & $backupFailures.len & " file(s)"
 
   # Show notification if any files were backed up
   if backupCount > 0:

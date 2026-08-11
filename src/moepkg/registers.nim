@@ -30,7 +30,7 @@ import std/[options, strutils, tables]
 
 import pkg/results
 
-import config, clipboard
+import config, clipboard, logger
 import types/registers_types
 
 export registers_types
@@ -324,10 +324,16 @@ proc getNoNamedRegister*(r: Registers): Register =
   let clipResult = r.getFromClipboard()
   if clipResult.isOk:
     clipContent = clipResult.get
+  else:
+    logDebug "registers",
+      "Clipboard read failed, falling back to internal register: " & clipResult.error
 
   let primaryResult = r.getFromPrimarySelection()
   if primaryResult.isOk:
     primaryContent = primaryResult.get
+  else:
+    logDebug "registers",
+      "PRIMARY read failed, falling back to internal register: " & primaryResult.error
 
   let current = r.noNamed.getContent
   let clipChanged = clipContent.len > 0 and clipContent != current

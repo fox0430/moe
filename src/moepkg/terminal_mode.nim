@@ -26,6 +26,7 @@ import pkg/results
 
 import terminal/[pty, ansi_parser]
 import buffer/core
+import logger
 
 import types/terminal_mode_types
 export terminal_mode_types
@@ -64,7 +65,9 @@ proc flushPendingResponses(state: TerminalState) =
   if state.pty.closed:
     return
   for response in state.grid.pendingResponses:
-    discard state.pty.writeToPty(response)
+    let writeResult = state.pty.writeToPty(response)
+    if writeResult.isErr:
+      logError "terminal", writeResult.error
   state.grid.pendingResponses.setLen(0)
 
 proc pollOutput*(state: TerminalState): bool =
@@ -73,7 +76,9 @@ proc pollOutput*(state: TerminalState): bool =
   if state.pty.closed:
     return false
 
-  discard state.pty.drainWriteBuffer()
+  let drainResult = state.pty.drainWriteBuffer()
+  if drainResult.isErr:
+    logError "terminal", drainResult.error
 
   var updated = false
   var bytesRead = 0
@@ -110,7 +115,9 @@ proc pollOutput*(state: TerminalState): bool =
 proc feedInput*(state: TerminalState, data: string) =
   ## Forward raw bytes to the PTY (keystrokes).
   if not state.pty.closed:
-    discard state.pty.writeToPty(data)
+    let writeResult = state.pty.writeToPty(data)
+    if writeResult.isErr:
+      logError "terminal", writeResult.error
 
 proc enterNormalSubMode*(state: TerminalState): TextBuffer =
   ## Switch to Terminal-Normal sub-mode.

@@ -22,6 +22,8 @@ import std/strformat
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
+import logger
+
 when defined(posix):
   import std/posix
 
@@ -118,8 +120,8 @@ proc readAllOutput*(
     while not stdout.atEof():
       let line = await stdout.readLine(sep = "\n")
       lines.add(line)
-  except AsyncStreamError:
-    discard
+  except AsyncStreamError as e:
+    logError "background_process", "Failed to read process output: " & e.msg
   except CancelledError:
     discard
 

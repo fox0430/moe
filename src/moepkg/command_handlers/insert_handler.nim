@@ -847,6 +847,8 @@ proc triggerLspCompletionRequest*(
       handler.completionManager.lastLspRequestTime = getMonoTime()
       handler.completionManager.lastLspPrefix = prefix
       handler.completionManager.setLspRequestPending(reqResult.get)
+    else:
+      logLspDegraded("Completion request failed", reqResult.error)
 
 proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
   ## Poll for pending LSP completion response

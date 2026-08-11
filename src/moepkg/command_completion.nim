@@ -28,7 +28,7 @@ import pkg/celina
 
 import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,
-  popup_render, color, unicode_utils
+  popup_render, color, unicode_utils, logger
 
 import types/command_completion_types
 export command_completion_types
@@ -240,8 +240,8 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
         1
       else:
         cmp(a.command.toLowerAscii, b.command.toLowerAscii)
-  except OSError:
-    discard
+  except OSError as e:
+    logDebug "command_completion", "Failed to scan directory for completion: " & e.msg
 
 proc collectSetOptions*(prefix: string): seq[CommandCompletionEntry] =
   ## Collect :set options for completion
