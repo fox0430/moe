@@ -2879,6 +2879,38 @@ suite "renderLineSegmentWithSelection - zero-width rune folding":
     check buf[1, 0].symbol == "" # wide-char shadow intact
     check buf[2, 0].symbol == "z"
 
+suite "renderLineSegmentWithSelection - C0 control sanitization":
+  proc plainEditor(): Editor =
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    result = newEditor(config, vr)
+    result.state.showSyntax = false
+    result.state.showCursorLine = false
+    result.state.showIndentationLines = false
+
+  test "C0 controls and DEL in real text are substituted with a space":
+    var e = plainEditor()
+    # ESC and DEL must never reach a cell as raw control bytes.
+    let text = "a\x1b" & "b\x7f" & "c"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    check buf[0, 0].symbol == "a"
+    check buf[1, 0].symbol == " "
+    check buf[2, 0].symbol == "b"
+    check buf[3, 0].symbol == " "
+    check buf[4, 0].symbol == "c"
+
 suite "renderLineSegmentWithSelection - full-width space highlight":
   test "Normal mode highlights full-width space":
     let config = newEditorConfig()
@@ -3655,6 +3687,42 @@ suite "renderLineSegmentWithSelection - end-of-line virtual text":
     check buf[6, 0].style == hintStyle
     # Cells after the virtual text are filled with spaces
     check buf[7, 0].symbol == " "
+
+  test "C0 controls in end-of-line virtual text are substituted with a space":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.showSyntax = false
+    e.state.showCursorLine = false
+    e.state.showIndentationLines = false
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let provider = stubProvider(
+      @[
+        VirtualText(
+          line: 0,
+          placement: vtpEndOfLine,
+          chunks: @[
+            VirtualTextChunk(text: "\x1b" & "x", color: EditorColorPairIndex.inlayHint)
+          ],
+        )
+      ]
+    )
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[provider],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    check buf[3, 0].symbol == " "
+    check buf[4, 0].symbol == "x"
 
   test "clips virtual text at the window right edge":
     let config = newEditorConfig()
