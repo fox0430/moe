@@ -26,7 +26,8 @@
 import std/[options, sets, unittest]
 
 import ../tools/gen_howtouse_docs
-import ../src/moepkg/[command_line_commands, help_generator]
+import ../src/moepkg/[command_line_commands]
+import ../src/moepkg/help_generator {.all.}
 import ../src/moepkg/help_markdown {.all.}
 
 suite "howtouse.md auto-gen sync":

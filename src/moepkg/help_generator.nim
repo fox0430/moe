@@ -698,7 +698,7 @@ const DebugModeCommands*: HelpGroup = HelpGroup(
   ]
 )
 
-const ExitingHelpNames* =
+const ExitingHelpNames =
   @["w", "q", "wq", "q!", "qa", "qa!", "wqa", "wqa!", "w!", "wq!", "cq"]
 
 proc boolSetHead(spec: SetOptionSpec): string =
