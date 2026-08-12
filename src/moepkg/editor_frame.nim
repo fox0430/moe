@@ -405,9 +405,10 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
   else:
     e.state.currentWord = ""
 
-  # Update syntax highlight before rendering (so semantic tokens can be applied on top)
+  # Update syntax highlight before rendering (so semantic tokens can be applied
+  # on top). The debug buffer is skipped below; the sweep after it still runs.
+  let activeBuffer = e.activeBuffer()
   if not isDebugBuffer:
-    let activeBuffer = e.activeBuffer()
     # Budgeted re-parse per frame: a line-count change re-parses to EOF,
     # which on a large file must not block the frame; unfinished flights
     # resume below on later frames. Invalidate the LSP overlay caches only
@@ -450,54 +451,6 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
       consumed = 0
       discard activeBuffer.continueUriScan(min(1000, activeBudget), consumed)
       activeBudget -= consumed
-    # Also advance re-parses, initial loads and URI scans of the other open
-    # buffers: they have no frame of their own, and a stale load frontier
-    # would freeze tail rows' underlines until the buffer reactivates. The
-    # rotating start index serves every buffer at least once per
-    # `e.buffers.len` frames.
-    const InactiveFrameBudget = 2000
-    var frameBudget = InactiveFrameBudget
-    let bufCount = e.buffers.len
-    if bufCount > 0:
-      let startIdx = e.state.inactiveHighlightScanIndex mod bufCount
-      e.state.inactiveHighlightScanIndex =
-        (e.state.inactiveHighlightScanIndex + 1) mod bufCount
-      for offset in 0 ..< bufCount:
-        let buf = e.buffers[(startIdx + offset) mod bufCount]
-        if buf.id == activeBuffer.id or buf.isUtilityBuffer:
-          continue
-        if frameBudget <= 0:
-          break
-        # Charge by the ACTUAL lines consumed (lookahead growth, rewinds and
-        # clamps make nominal chunks differ).
-        var consumed = 0
-        # Run on a live flight or any flag-only edit (LSP diagnostics,
-        # setReservedWords, etc.); gating on `pendingReparse` alone would
-        # leave those unprocessed until the buffer reactivates.
-        let hasFlight =
-          buf.incrementalHighlight != nil and
-          buf.incrementalHighlight.pendingReparse != nil
-        if hasFlight or buf.highlightNeedsUpdate:
-          let reparseOngoing = buf.updateHighlight(min(1000, frameBudget), consumed)
-          # Only continue when the trigger left work behind; else the
-          # continuation resets `consumed` to 0 and under-charges the budget.
-          if not reparseOngoing and buf.incrementalHighlight != nil and
-              buf.incrementalHighlight.pendingReparse != nil:
-            discard buf.continueIncrementalHighlight(min(1000, frameBudget), consumed)
-        frameBudget -= consumed
-        if frameBudget <= 0:
-          break
-        var loadLines = 0
-        # Skip while a flight is pending (mirrors the active-buffer branch).
-        if buf.incrementalHighlight == nil or
-            buf.incrementalHighlight.pendingReparse == nil:
-          discard buf.continueInitialHighlight(min(1000, frameBudget), loadLines)
-          frameBudget -= loadLines
-        if frameBudget <= 0:
-          break
-        var uriLines = 0
-        discard buf.continueUriScan(min(1000, frameBudget), uriLines)
-        frameBudget -= uriLines
     # If the content changed, re-apply semantic tokens
     if contentChanged:
       invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
@@ -508,6 +461,55 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
       invalidateInlayHintCache(e.lsp, e.state.lspCache)
     # Apply semantic tokens after local highlight is ready
     e.updateSemanticTokensCache()
+
+  # Also advance re-parses, initial loads and URI scans of the other open
+  # buffers: they have no frame of their own, and a stale load frontier
+  # would freeze tail rows' underlines until the buffer reactivates. The
+  # rotating start index serves every buffer at least once per
+  # `e.buffers.len` frames. Runs even while the debug viewer is active.
+  const InactiveFrameBudget = 2000
+  var frameBudget = InactiveFrameBudget
+  let bufCount = e.buffers.len
+  if bufCount > 0:
+    let startIdx = e.state.inactiveHighlightScanIndex mod bufCount
+    e.state.inactiveHighlightScanIndex =
+      (e.state.inactiveHighlightScanIndex + 1) mod bufCount
+    for offset in 0 ..< bufCount:
+      let buf = e.buffers[(startIdx + offset) mod bufCount]
+      if buf.id == activeBuffer.id or buf.isUtilityBuffer:
+        continue
+      if frameBudget <= 0:
+        break
+      # Charge by the ACTUAL lines consumed (lookahead growth, rewinds and
+      # clamps make nominal chunks differ).
+      var consumed = 0
+      # Run on a live flight or any flag-only edit (LSP diagnostics,
+      # setReservedWords, etc.); gating on `pendingReparse` alone would
+      # leave those unprocessed until the buffer reactivates.
+      let hasFlight =
+        buf.incrementalHighlight != nil and
+        buf.incrementalHighlight.pendingReparse != nil
+      if hasFlight or buf.highlightNeedsUpdate:
+        let reparseOngoing = buf.updateHighlight(min(1000, frameBudget), consumed)
+        # Only continue when the trigger left work behind; else the
+        # continuation resets `consumed` to 0 and under-charges the budget.
+        if not reparseOngoing and buf.incrementalHighlight != nil and
+            buf.incrementalHighlight.pendingReparse != nil:
+          discard buf.continueIncrementalHighlight(min(1000, frameBudget), consumed)
+      frameBudget -= consumed
+      if frameBudget <= 0:
+        break
+      var loadLines = 0
+      # Skip while a flight is pending (mirrors the active-buffer branch).
+      if buf.incrementalHighlight == nil or
+          buf.incrementalHighlight.pendingReparse == nil:
+        discard buf.continueInitialHighlight(min(1000, frameBudget), loadLines)
+        frameBudget -= loadLines
+      if frameBudget <= 0:
+        break
+      var uriLines = 0
+      discard buf.continueUriScan(min(1000, frameBudget), uriLines)
+      frameBudget -= uriLines
 
   result = e.updateViewportSize(buffer)
   e.advanceLayoutForFrame(buffer, result)

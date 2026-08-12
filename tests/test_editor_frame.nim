@@ -19,12 +19,12 @@
 
 ## Tests for editor_frame.nim
 
-import std/[unittest, os]
+import std/[unittest, os, monotimes]
 
 import pkg/celina
 
 import ../src/moepkg/[types, editor, config, message_log]
-import ../src/moepkg/[highlight, editor_frame]
+import ../src/moepkg/[highlight, editor_frame, editor_window]
 import ../src/moepkg/buffer {.all.}
 
 suite "notify - routing and logging":
@@ -574,11 +574,11 @@ suite "updateForFrame - split buffer re-parse budget":
     check not buf.diagnosticsDirty
     check buf.highlight.getSegmentModifiers(10, 2) == {StyleModifier.Undercurl}
 
-  test "render advances an in-flight re-parse once, not per visible row":
-    # Regression: the draw path called `continueIncrementalHighlight(1000)`
-    # from every painted row, so one frame's draw re-parsed
-    # visibleHeight * 1000 lines and bypassed the frame budget. The advance
-    # must happen once per window per frame.
+  test "render does not advance an in-flight re-parse in the draw pass":
+    # Regression: the draw path advanced the active buffer's flight once more
+    # per frame (`continueIncrementalHighlight(1000)` in renderWindow),
+    # bypassing the frame budget owned by `updateForFrame`. The draw pass
+    # must not advance re-parses at all.
     let config = newEditorConfig()
     let e = newEditor(config)
 
@@ -607,10 +607,102 @@ suite "updateForFrame - split buffer re-parse budget":
     e.render(screenBuffer)
 
     # `updateForFrame` advances the active buffer by at most one budget slice
-    # (1000) and the draw pass one more chunk (1000); a per-row advance (the
-    # regression) would move the frontier by ~visibleHeight * 1000.
+    # (1000); a draw-pass advance (the regression) would move the frontier by
+    # another 1000, and a per-row advance by ~visibleHeight * 1000.
     if buf.incrementalHighlight.pendingReparse != nil:
-      check buf.incrementalHighlight.pendingReparse.reparseEnd <= oldFrontier + 2000
+      check buf.incrementalHighlight.pendingReparse.reparseEnd <= oldFrontier + 1000
+      check buf.incrementalHighlight.pendingReparse.reparseEnd > oldFrontier
+    else:
+      check false
+
+  test "a split showing the same buffer does not advance the flight per window":
+    # Regression: the draw pass advanced the flight once per window, so
+    # N windows showing the same buffer re-parsed up to N*1000 lines per frame
+    # outside the frame budget. The budget is owned solely by `updateForFrame`.
+    let config = newEditorConfig()
+    let e = newEditor(config)
+
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_frame_render_split_advance.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 5000:
+      content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    e.addBuffer(buf)
+    e.activeWindow.buffer = buf
+
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+    check e.windowManager.windows[0].buffer == buf
+    check e.windowManager.windows[1].buffer == buf
+
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    let oldFrontier = buf.incrementalHighlight.pendingReparse.reparseEnd
+
+    var screenBuffer = newBuffer(80, 24)
+    e.render(screenBuffer)
+
+    # The flight advances by at most one budget slice (1000); a per-window
+    # draw advance (the regression) would move it by ~2000.
+    if buf.incrementalHighlight.pendingReparse != nil:
+      check buf.incrementalHighlight.pendingReparse.reparseEnd <= oldFrontier + 1000
+      check buf.incrementalHighlight.pendingReparse.reparseEnd > oldFrontier
+    else:
+      check false
+
+  test "inactive buffers keep advancing while the debug viewer is active":
+    # Regression: the sweep must run while the debug viewer holds the focus.
+    let config = newEditorConfig()
+    let e = newEditor(config)
+
+    var buf = newTextBuffer()
+    let path = getTempDir() / "moe_test_frame_debug_active.rs"
+    defer:
+      removeFile(path)
+    var content = ""
+    for i in 0 ..< 5000:
+      content.add("let value" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    while buf.continueInitialHighlight():
+      discard
+    e.addBuffer(buf)
+    e.activeWindow.buffer = buf
+
+    # Simulate an open debug viewer: the new split window becomes the active
+    # one and shows a generated (read-only) listing, as `:debug` does.
+    discard e.vsplit()
+    var debugBuf = newTextBuffer()
+    debugBuf.readOnly = true
+    e.activeWindow.buffer = debugBuf
+    e.state.windowDisplay.debugBuffer = debugBuf
+    e.state.timing.lastDebugUpdate = getMonoTime()
+    e.state.timing.debugUpdateInterval = 60 * 60 * 1000
+    check e.activeBuffer() == debugBuf
+
+    discard buf.beginTransaction()
+    discard buf.insert(0, "let inserted = 1;")
+    discard buf.commitTransaction()
+    check buf.updateHighlight(100)
+    check buf.incrementalHighlight.pendingReparse != nil
+    let oldFrontier = buf.incrementalHighlight.pendingReparse.reparseEnd
+
+    var screenBuffer = newBuffer(80, 24)
+    e.render(screenBuffer)
+
+    # The sweep advances `buf` by at most one budget slice (1000) even though
+    # the debug buffer holds the focus.
+    if buf.incrementalHighlight.pendingReparse != nil:
+      check buf.incrementalHighlight.pendingReparse.reparseEnd <= oldFrontier + 1000
       check buf.incrementalHighlight.pendingReparse.reparseEnd > oldFrontier
     else:
       check false
