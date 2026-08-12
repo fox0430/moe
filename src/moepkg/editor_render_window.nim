@@ -584,7 +584,7 @@ proc renderLineSegmentWithSelection*(
       let p = precomputed.get
       (p.fullLine, p.indentInfo, p.lineCtx)
     else:
-      # The highlight was advanced once per frame by `renderWindow`; this
+      # The highlight advancement budget is owned by `updateForFrame`; this
       # per-line path must not advance it further.
       let fl = textBuffer.getLine(lineIndex)
       (
@@ -797,7 +797,7 @@ proc renderWindowLineWrapped*(
   let tabStop = e.tabStop
 
   # Build per-logical-line state once so each wrap segment can reuse it.
-  # The highlight was already advanced once per frame by `renderWindow`.
+  # The highlight was already advanced by `updateForFrame` before the draw.
   let precomputed = some(
     LinePrecomputed(
       fullLine: line,
@@ -1186,14 +1186,9 @@ proc renderWindow*(
         @[],
   )
 
-  # Advance the buffer's highlight once per window per frame: a per-row
-  # advance would re-parse up to 1000 lines per painted row and bypass the
-  # frame budget enforced by `updateForFrame`.
-  if e.hasSyntaxHighlight(window.buffer, ctx.windowMode):
-    discard window.buffer.updateHighlight(1000)
-    if window.buffer.incrementalHighlight != nil and
-        window.buffer.incrementalHighlight.pendingReparse != nil:
-      discard window.buffer.continueIncrementalHighlight(1000)
+  # The frame budget for highlight advancement is owned solely by
+  # `updateForFrame`; the draw pass must not advance re-parses, or the
+  # per-window charges (N windows x 1000 lines) would bypass the budget.
 
   # Fold skipping and wrap-segment counting come from the shared row walk, so
   # the painted rows, the screen cursor and the mouse hit-test agree by
