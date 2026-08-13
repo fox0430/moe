@@ -676,17 +676,6 @@ suite "NormalModeHandler - All Mode Switches":
     check result.modeTransition.isSome
     check result.modeTransition.get == EditorMode.Filer
 
-  test "Switch to QuickRun mode":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-
-    let result = handler.handleModeSwitch(EditorMode.QuickRun, state, buf)
-
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.QuickRun
-
   test "Switch to LogViewer mode":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)

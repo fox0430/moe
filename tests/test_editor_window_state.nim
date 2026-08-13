@@ -432,7 +432,6 @@ suite "ModeState variant invariants":
     check modeStateKind(EditorMode.Normal) == mskNone
     check modeStateKind(EditorMode.Insert) == mskNone
     check modeStateKind(EditorMode.Command) == mskNone
-    check modeStateKind(EditorMode.QuickRun) == mskNone
     check modeStateKind(EditorMode.Filer) == mskFiler
     check modeStateKind(EditorMode.FileTree) == mskFileTree
     check modeStateKind(EditorMode.LogViewer) == mskLogViewer

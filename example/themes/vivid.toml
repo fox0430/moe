@@ -38,10 +38,6 @@ statusLineExMode = { fg = "#000000", bg = "#ff0087" }
 statusLineExModeLabel = { fg = "#000000", bg = "#ffffff" }
 statusLineExModeInactive = { fg = "#ff0087", bg = "#ffffff" }
 
-statusLineQuickRunMode = { fg = "#000000", bg = "#ff0087" }
-statusLineQuickRunModeLabel = { fg = "#000000", bg = "#ffffff" }
-statusLineQuickRunModeInactive = { fg = "#ff0087", bg = "#ffffff" }
-
 statusLineLogViewerMode = { fg = "#000000", bg = "#ff0087" }
 statusLineLogViewerModeLabel = { fg = "#000000", bg = "#ffffff" }
 statusLineLogViewerModeInactive = { fg = "#ff0087", bg = "#ffffff" }

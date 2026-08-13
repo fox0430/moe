@@ -23,7 +23,7 @@
 ##   * isNone × 11 template-driven modes (template expansion symmetry)
 ##   * isNone × Terminal (explicit branch, distinct handler signature)
 ##   * isSome smoke for Filer (template happy path)
-##   * Early-return branches (migrated modes + Command/RecentFile/Debug/QuickRun)
+##   * Early-return branches (migrated modes + Command/RecentFile/Debug)
 
 import std/[unittest, os]
 
@@ -220,10 +220,8 @@ suite "dispatchSubStateMode - early-return branches":
       let r = manager.dispatchSubStateMode(editor, keyCombo)
       check r.kind == hrUnhandled
 
-  test "Command/RecentFile/Debug/QuickRun return hrUnhandled":
-    for m in [
-      EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug, EditorMode.QuickRun
-    ]:
+  test "Command/RecentFile/Debug return hrUnhandled":
+    for m in [EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug]:
       let (manager, editor, keyCombo) = setupDispatchTest(m)
       let r = manager.dispatchSubStateMode(editor, keyCombo)
       check r.kind == hrUnhandled

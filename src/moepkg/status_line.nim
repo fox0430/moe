@@ -93,8 +93,6 @@ proc toStatusLineModeColorIndex(mode: EditorMode): EditorColorPairIndex =
     EditorColorPairIndex.statusLineExMode
   of EditorMode.Filer:
     EditorColorPairIndex.statusLineFilerMode
-  of EditorMode.QuickRun:
-    EditorColorPairIndex.statusLineQuickRunMode
   of EditorMode.LogViewer:
     EditorColorPairIndex.statusLineLogViewerMode
   of EditorMode.Help:
