@@ -23,7 +23,7 @@ import std/[options, algorithm]
 
 import pkg/results
 
-import types, modes, render_utils
+import logger, modes, render_utils, types
 import buffer/[core, file_io]
 
 import types/window_manager_types
@@ -186,14 +186,24 @@ proc equalizeWidthsInGroup*(
   for i, idx in sortedGroup:
     wm.windows[idx].viewport.x = currentX
     if i == sortedGroup.len - 1:
-      # Last window gets remaining width to fill the screen edge.
-      # For fixedWidth windows, use at least their fixed size.
+      # Last window gets remaining width; cap fixedWidth at the remaining
+      # space and clamp positive so overflow cannot go negative (warn-log).
       let remaining = (startX + totalWidth) - currentX
-      wm.windows[idx].viewport.width =
+      if remaining < 1:
+        logWarn(
+          "window_manager",
+          "last window does not fit in the group: totalWidth=" & $totalWidth & " startX=" &
+            $startX & " currentX=" & $currentX,
+        )
+      let width =
         if wm.windows[idx].fixedWidth.isSome:
-          max(wm.windows[idx].fixedWidth.get, remaining)
+          # Cap fixedWidth at the remaining space to stay inside the group.
+          max(1, min(wm.windows[idx].fixedWidth.get, remaining))
         else:
-          remaining
+          max(1, remaining)
+      wm.windows[idx].viewport.width = width
+      # Pull x back so the window ends at the group's right end.
+      wm.windows[idx].viewport.x = min(currentX, startX + totalWidth - width)
     else:
       let w =
         if wm.windows[idx].fixedWidth.isSome:
@@ -217,24 +227,50 @@ proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth
         win = wm.windows[idx]
         minX = win.viewport.x
         winTop = win.viewport.y
-        winBottom = win.viewport.y + win.viewport.height
-      var rightBoundary = newWidth
+        # A zero-height window bounds as one row so it cannot swallow the width.
+        winBottom = win.viewport.y + max(1, win.viewport.height)
+      var
+        rightBoundary = newWidth
+        # A scaled x inside a left neighbor (e.g. wide fixed-width sidebar)
+        # would overlap it; shift right of it.
+        leftLimit = minX
       for i in 0 ..< wm.windows.len:
         if i == idx:
           continue
         let
           other = wm.windows[i]
           otherTop = other.viewport.y
-          otherBottom = other.viewport.y + other.viewport.height
-        if winTop < otherBottom and otherTop < winBottom and other.viewport.x > minX and
-            other.viewport.x < rightBoundary:
-          rightBoundary = other.viewport.x
-      let width =
-        if rightBoundary < newWidth:
-          rightBoundary - WindowSeparatorWidth - minX
-        else:
-          newWidth - minX
-      wm.windows[idx].viewport.width = max(1, width)
+          # Zero-height/boundary-touching neighbors still bound the width.
+          otherBottom = other.viewport.y + max(1, other.viewport.height)
+        let boundsWidth =
+          (otherTop < winBottom and winTop < otherBottom) or (
+            winTop <= otherBottom and otherTop < winBottom and
+            win.viewport.x < other.viewport.x + other.viewport.width and
+            other.viewport.x < win.viewport.x + win.viewport.width
+          )
+        if boundsWidth:
+          if other.viewport.x > minX and other.viewport.x < rightBoundary:
+            rightBoundary = other.viewport.x
+          elif other.viewport.x <= minX and
+              minX < other.viewport.x + other.viewport.width and
+              other.viewport.x + other.viewport.width > leftLimit:
+            # An x coinciding with the left neighbor is still an overlap.
+            leftLimit = other.viewport.x + other.viewport.width
+      if leftLimit > minX:
+        # A squeezed gap would push the window past the right boundary; pull it back.
+        let width = max(
+          1, rightBoundary - WindowSeparatorWidth - (leftLimit + WindowSeparatorWidth)
+        )
+        wm.windows[idx].viewport.x =
+          min(leftLimit + WindowSeparatorWidth, rightBoundary - width)
+        wm.windows[idx].viewport.width = width
+      else:
+        let width =
+          if rightBoundary < newWidth:
+            rightBoundary - WindowSeparatorWidth - minX
+          else:
+            newWidth - minX
+        wm.windows[idx].viewport.width = max(1, width)
     return
 
   var sortedGroup = group
@@ -245,8 +281,42 @@ proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth
 
   let
     firstWindow = wm.windows[sortedGroup[0]]
+    firstTop = firstWindow.viewport.y
+    # A zero-height window bounds as one row so the cover test still works.
+    firstBottom = firstWindow.viewport.y + max(1, firstWindow.viewport.height)
+  # A scaled group x may land inside a left neighbor (e.g. a fixed-width
+  # sidebar wider than the new screen); shift right of it, and stop the
+  # extension at a differently-sized right neighbor (T-junction) so the
+  # last window is not drawn over it.
+  var
     minX = firstWindow.viewport.x
-    availableWidth = newWidth - minX
+    rightBoundary = newWidth
+  for i in 0 ..< wm.windows.len:
+    if sortedGroup.contains(i):
+      continue
+    let other = wm.windows[i]
+    # Neighbors touching the group's top still bound its extension (T-junction).
+    let boundsGroup =
+      (
+        firstTop < other.viewport.y + other.viewport.height and
+        other.viewport.y < firstBottom
+      ) or (
+        firstTop <= other.viewport.y + max(1, other.viewport.height) and
+        other.viewport.y < firstBottom and
+        firstWindow.viewport.x < other.viewport.x + other.viewport.width and
+        other.viewport.x < firstWindow.viewport.x + firstWindow.viewport.width
+      )
+    if boundsGroup:
+      if other.viewport.x < minX and minX < other.viewport.x + other.viewport.width:
+        minX = max(minX, other.viewport.x + other.viewport.width + WindowSeparatorWidth)
+      elif other.viewport.x > minX and other.viewport.x < rightBoundary:
+        rightBoundary = other.viewport.x
+  let
+    availableWidth =
+      if rightBoundary < newWidth:
+        rightBoundary - WindowSeparatorWidth - minX
+      else:
+        newWidth - minX
     numSeparators = sortedGroup.len - 1
 
   # Calculate fixed width consumption
@@ -269,20 +339,64 @@ proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth
 
   var currentX = minX
   for i, idx in sortedGroup:
-    wm.windows[idx].viewport.x = currentX
     if i == sortedGroup.len - 1:
+      # Last window: clamp positive so a fixed-width overflow cannot go
+      # negative (warn-log).
       let remaining = (minX + availableWidth) - currentX
-      wm.windows[idx].viewport.width =
+      if remaining < 1:
+        logWarn(
+          "window_manager",
+          "last window does not fit in the group: availableWidth=" & $availableWidth &
+            " minX=" & $minX & " currentX=" & $currentX,
+        )
+      let width =
         if wm.windows[idx].fixedWidth.isSome:
           max(wm.windows[idx].fixedWidth.get, remaining)
         else:
-          remaining
+          max(1, remaining)
+      wm.windows[idx].viewport.width = width
+      # An overflow past the right boundary would cover a group member;
+      # slide the window left to the rightmost free column.
+      if currentX + width > rightBoundary:
+        var newX = rightBoundary - width
+        var slid = false
+        while newX > minX:
+          var blocked = false
+          for k in 0 ..< sortedGroup.len - 1:
+            let member = wm.windows[sortedGroup[k]]
+            if newX < member.viewport.x + member.viewport.width and
+                member.viewport.x < newX + width:
+              blocked = true
+              break
+          if not blocked:
+            slid = true
+            break
+          dec newX
+        if slid:
+          wm.windows[idx].viewport.x = newX
+        else:
+          # No free position: shrink the window into the gap after the
+          # previous member.
+          let prevRight =
+            wm.windows[sortedGroup[^2]].viewport.x +
+            wm.windows[sortedGroup[^2]].viewport.width
+          let gapX =
+            min(prevRight + WindowSeparatorWidth, rightBoundary - WindowSeparatorWidth)
+          wm.windows[idx].viewport.x = gapX
+          wm.windows[idx].viewport.width =
+            max(1, rightBoundary - WindowSeparatorWidth - gapX)
+      else:
+        wm.windows[idx].viewport.x = currentX
     else:
+      # Cap fixedWidth members at the space left for the remaining windows.
+      let space = (minX + availableWidth) - currentX
+      let maxAllowed = space - 2 * (sortedGroup.len - 1 - i)
       let w =
         if wm.windows[idx].fixedWidth.isSome:
-          wm.windows[idx].fixedWidth.get
+          max(1, min(wm.windows[idx].fixedWidth.get, maxAllowed))
         else:
           windowWidth
+      wm.windows[idx].viewport.x = currentX
       wm.windows[idx].viewport.width = w
       currentX += w + WindowSeparatorWidth
 
@@ -334,24 +448,45 @@ proc equalizeHeightsInGroup*(
         StatusLineHeight
     totalContentHeight =
       totalHeight - numSeparators - numStatusLines - steadyBottomAreaHeight()
-    windowContentHeight = totalContentHeight div sortedGroup.len
+    # Clamp positive: a tiny totalHeight used to give non-last windows height 0.
+    windowContentHeight = max(1, totalContentHeight div sortedGroup.len)
     separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
+
+  # Draw a separator only while the last window's 1-row floor still fits
+  # below it; otherwise it would push the last window past the box end.
+  let separatorBudget =
+    max(0, totalHeight - 1 - (sortedGroup.len - 1) * windowContentHeight)
+  var separatorsDrawn = 0
 
   var currentY = startY
   for i, idx in sortedGroup:
     wm.windows[idx].viewport.y = currentY
     if i == sortedGroup.len - 1:
-      # Last window: give it remaining height including status line and command line
-      wm.windows[idx].viewport.height = (startY + totalHeight) - currentY
+      # Last window: remaining height incl. status/command line, clamped
+      # positive (warn-log).
+      let remaining = (startY + totalHeight) - currentY
+      if remaining < 1:
+        logWarn(
+          "window_manager",
+          "last window does not fit in the group: totalHeight=" & $totalHeight &
+            " startY=" & $startY & " currentY=" & $currentY,
+        )
+      wm.windows[idx].viewport.height = max(1, remaining)
     else:
       # Non-last windows
       if multiStatusLine:
-        # Each window has its own status line
-        wm.windows[idx].viewport.height = windowContentHeight + StatusLineHeight
+        # Each window has its own status line: cap the height so the last
+        # window's 1-row floor still fits below.
+        let maxFit = max(1, (totalHeight - 1) div (sortedGroup.len - 1))
+        wm.windows[idx].viewport.height =
+          min(windowContentHeight + StatusLineHeight, maxFit)
       else:
         # No status line for non-last windows
         wm.windows[idx].viewport.height = windowContentHeight
-      currentY += wm.windows[idx].viewport.height + separatorOffset
+      currentY += wm.windows[idx].viewport.height
+      if separatorOffset > 0 and separatorsDrawn < separatorBudget:
+        currentY += separatorOffset
+        inc separatorsDrawn
 
 proc equalizeHeightsForResize*(
     wm: EditorWindowManager, group: seq[int], newHeight: int, multiStatusLine: bool
@@ -362,11 +497,25 @@ proc equalizeHeightsForResize*(
       idx = group[0]
       window = wm.windows[idx]
       minY = window.viewport.y
+    # A single-element vertical group is not necessarily the only window in
+    # its column: a gap wider than the adjacency tolerance (or a zero-height
+    # neighbor) can leave another window below. Stop the fill there instead
+    # of covering it with the full column height.
+    var bottomLimit = newHeight
+    for i in 0 ..< wm.windows.len:
+      if i == idx:
+        continue
+      let other = wm.windows[i]
+      if other.viewport.y > minY and other.viewport.y < bottomLimit and
+          window.viewport.x < other.viewport.x + other.viewport.width and
+          other.viewport.x < window.viewport.x + window.viewport.width:
+        bottomLimit = other.viewport.y
+    let
       # Check if this is the bottom window
       isBottomWindow = (window.viewport.y + window.viewport.height >= newHeight - 1)
       # Reserve line for command line if this is the bottom window
       commandLineReserve = steadyReservedBottom(isBottomWindow)
-    wm.windows[idx].viewport.height = newHeight - minY - commandLineReserve
+    wm.windows[idx].viewport.height = max(1, bottomLimit - minY - commandLineReserve)
     return
 
   var sortedGroup = group
@@ -398,26 +547,97 @@ proc equalizeHeightsForResize*(
       else:
         StatusLineHeight
     totalContentHeight = availableHeight - numSeparators - numStatusLines
-    windowContentHeight = totalContentHeight div sortedGroup.len
+    # Clamp positive: a tiny availableHeight used to give non-last windows height 0.
+    windowContentHeight = max(1, totalContentHeight div sortedGroup.len)
     separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
+
+  # Draw a separator only while the last window's 1-row floor still fits
+  # below it; otherwise it would push the last window past the box end.
+  let separatorBudget =
+    max(0, availableHeight - 1 - (sortedGroup.len - 1) * windowContentHeight)
+  var separatorsDrawn = 0
 
   var currentY = minY
   for i, idx in sortedGroup:
     wm.windows[idx].viewport.y = currentY
     if i == sortedGroup.len - 1:
-      # Last window: give it remaining height including status line
-      wm.windows[idx].viewport.height = (minY + availableHeight) - currentY
+      # Last window: remaining height incl. status line, clamped positive (warn-log).
+      let remaining = (minY + availableHeight) - currentY
+      if remaining < 1:
+        logWarn(
+          "window_manager",
+          "last window does not fit in the group: availableHeight=" & $availableHeight &
+            " minY=" & $minY & " currentY=" & $currentY,
+        )
+      wm.windows[idx].viewport.height = max(1, remaining)
     else:
       # Non-last windows
       if multiStatusLine:
-        # Each window has its own status line
-        wm.windows[idx].viewport.height = windowContentHeight + StatusLineHeight
+        # Each window has its own status line: cap the height so the last
+        # window's 1-row floor still fits below.
+        let maxFit = max(1, (availableHeight - 1) div (sortedGroup.len - 1))
+        wm.windows[idx].viewport.height =
+          min(windowContentHeight + StatusLineHeight, maxFit)
       else:
         # No status line for non-last windows
         wm.windows[idx].viewport.height = windowContentHeight
-      currentY += wm.windows[idx].viewport.height + separatorOffset
+      currentY += wm.windows[idx].viewport.height
+      if separatorOffset > 0 and separatorsDrawn < separatorBudget:
+        currentY += separatorOffset
+        inc separatorsDrawn
 
-proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
+proc validateViewportInvariants*(
+    wm: EditorWindowManager, screenWidth: int = -1, screenHeight: int = -1
+) =
+  ## Check viewport invariants: positive dimensions, no pairwise overlap,
+  ## and placement within the screen. Violations assert in non-release
+  ## builds and are warn-logged (logWarn only writes when file logging is
+  ## enabled).
+  ## The within-screen check is a warning only: a fixed-width sidebar may
+  ## exceed a narrower screen.
+  for i in 0 ..< wm.windows.len:
+    let v = wm.windows[i].viewport
+    if v.width <= 0 or v.height <= 0:
+      let msg =
+        "window " & $i & " has non-positive dimensions: width=" & $v.width & " height=" &
+        $v.height
+      logWarn("window_manager", msg)
+
+      when not defined(release):
+        assert false, msg
+
+    for j in i + 1 ..< wm.windows.len:
+      let o = wm.windows[j].viewport
+      if v.x < o.x + o.width and o.x < v.x + v.width and v.y < o.y + o.height and
+          o.y < v.y + v.height:
+        let msg = "windows " & $i & " and " & $j & " overlap"
+        logWarn("window_manager", msg)
+
+        # An overlap involving a 1-cell-floor window is the expected
+        # degradation on a tiny terminal; only fully-sized overlaps assert.
+        when not defined(release):
+          if v.width > 1 and v.height > 1 and o.width > 1 and o.height > 1:
+            assert false, msg
+
+    if screenWidth > 0 and (v.x < 0 or v.x + v.width > screenWidth):
+      logWarn(
+        "window_manager",
+        "window " & $i & " is outside the screen width: x=" & $v.x & " width=" & $v.width &
+          " screenWidth=" & $screenWidth,
+      )
+    if screenHeight > 0 and (v.y < 0 or v.y + v.height > screenHeight):
+      logWarn(
+        "window_manager",
+        "window " & $i & " is outside the screen height: y=" & $v.y & " height=" &
+          $v.height & " screenHeight=" & $screenHeight,
+      )
+
+proc closeWindow*(
+    wm: EditorWindowManager,
+    multiStatusLine: bool,
+    screenWidth: int = -1,
+    screenHeight: int = -1,
+): bool =
   ## Close the active window and redistribute space to remaining windows
   ## Returns true if this was the last window (editor should quit)
   ## Note: The last window is never actually deleted - only the quit flag is returned
@@ -478,7 +698,8 @@ proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
     else:
       # Single remaining window: expand to cover the closed window's space
       wm.windows[sortedGroup[0]].viewport.y = firstY
-      wm.windows[sortedGroup[0]].viewport.height = totalHeight
+      # Clamp positive: degenerate neighbors could yield a zero totalHeight.
+      wm.windows[sortedGroup[0]].viewport.height = max(1, totalHeight)
   elif vSplitGroup.len > 0:
     # Vertical split: re-equalize widths in the group
     var sortedGroup = vSplitGroup
@@ -496,11 +717,72 @@ proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
     else:
       # Single remaining window: expand to cover the closed window's space
       wm.windows[sortedGroup[0]].viewport.x = firstX
-      wm.windows[sortedGroup[0]].viewport.width = totalWidth
+      # Clamp positive: degenerate neighbors could yield a zero totalWidth.
+      wm.windows[sortedGroup[0]].viewport.width = max(1, totalWidth)
+  else:
+    # No group matched: re-tile the remaining windows over the bounding box
+    # that also covers the closed window so its space is reclaimed.
+    var
+      boxX = closedX
+      boxY = closedY
+      boxRight = closedX + closedWidth
+      boxBottom = closedY + closedHeight
+    for window in wm.windows:
+      boxX = min(boxX, window.viewport.x)
+      boxY = min(boxY, window.viewport.y)
+      boxRight = max(boxRight, window.viewport.x + window.viewport.width)
+      boxBottom = max(boxBottom, window.viewport.y + window.viewport.height)
+    let
+      boxWidth = boxRight - boxX
+      boxHeight = boxBottom - boxY
+
+    if wm.windows.len == 1:
+      # Single remaining window: expand to the full bounding box.
+      wm.windows[0].viewport.x = boxX
+      wm.windows[0].viewport.y = boxY
+      # Clamp positive: degenerate neighbors could yield a zero box.
+      wm.windows[0].viewport.width = max(1, boxWidth)
+      wm.windows[0].viewport.height = max(1, boxHeight)
+    else:
+      # A single column of remaining windows (all share x and width):
+      # expand to the full box width and re-equalize heights. The width
+      # override ignores fixedWidth: no window keeps its fixed slot here.
+      let columns = wm.groupWindowsByXAndWidth()
+      if columns.len == 1 and columns[0].len == wm.windows.len:
+        for idx in columns[0]:
+          wm.windows[idx].viewport.x = boxX
+          wm.windows[idx].viewport.width = boxWidth
+        wm.equalizeHeightsInGroup(columns[0], boxHeight, boxY, multiStatusLine)
+      else:
+        # A single row (all share y and height): expand to the box height
+        # and re-equalize widths.
+        let rows = wm.groupAdjacentWindowsHorizontally()
+        if rows.len == 1 and rows[0].len == wm.windows.len:
+          for idx in rows[0]:
+            wm.windows[idx].viewport.y = boxY
+            wm.windows[idx].viewport.height = boxHeight
+          wm.equalizeWidthsInGroup(rows[0], boxWidth, boxX)
+        else:
+          # Complex layout: stack all remaining windows vertically over the box.
+          var allIdx: seq[int] = @[]
+          for i in 0 ..< wm.windows.len:
+            allIdx.add(i)
+          for idx in allIdx:
+            wm.windows[idx].viewport.x = boxX
+            wm.windows[idx].viewport.width = boxWidth
+          wm.equalizeHeightsInGroup(allIdx, boxHeight, boxY, multiStatusLine)
 
   # Activate the new active window
   if wm.windows.len > 0:
     wm.activateWindow(wm.activeWindowIndex)
+
+  # Normalize degenerate dimensions so the redistribution cannot violate
+  # the positive-dimension invariant.
+  for win in wm.windows:
+    win.viewport.width = max(1, win.viewport.width)
+    win.viewport.height = max(1, win.viewport.height)
+
+  wm.validateViewportInvariants(screenWidth, screenHeight)
 
   return false # Not the last window, don't quit
 
@@ -1272,6 +1554,27 @@ proc resizeWindows*(
   for group in horizontalGroups:
     wm.equalizeWidthsForResize(group, newWidth)
 
+  # The horizontal pass can shift one member of a column (T-junction
+  # corner): re-align each vertical group to its topmost member so the
+  # vertical pass re-tiles a straight column.
+  for group in verticalGroups:
+    if group.len > 1:
+      var sortedGroup = group
+      sortedGroup.sort(
+        proc(a, b: int): int =
+          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+      )
+      let head = wm.windows[sortedGroup[0]]
+      for idx in sortedGroup:
+        let member = wm.windows[idx]
+        let rightEdge = member.viewport.x + member.viewport.width
+        wm.windows[idx].viewport.x = head.viewport.x
+        # Align width to the head's, but never past the member's own row's
+        # right edge: a row split further than the head's cannot spare the
+        # head's width without covering its row-mates.
+        wm.windows[idx].viewport.width =
+          max(1, min(head.viewport.width, rightEdge - head.viewport.x))
+
   # Vertical groups (same x and width, vertically adjacent)
   for group in verticalGroups:
     wm.equalizeHeightsForResize(group, newHeight, multiStatusLine)
@@ -1311,3 +1614,5 @@ proc resizeWindows*(
     # If cursor is above the visible area
     elif window.cursor.line < window.viewport.topLine:
       window.viewport.resetViewportTop(window.cursor.line)
+
+  wm.validateViewportInvariants(newWidth, newHeight)
