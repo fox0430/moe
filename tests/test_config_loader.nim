@@ -2703,9 +2703,11 @@ suite "Config Validation - KeyMapping section":
     check config.keyMapping.perMode[Normal]["C-s"].rhs == "save"
     check config.keyMapping.perMode[Normal]["jj"].rhs == "Escape"
 
-  test "QuickRun/BookmarkManager/FileTree modes are mappable (parity)":
-    # These three modes were mappable via the old keybindings.toml [[keybinding]]
-    # surface; the unified [KeyMapping] surface must accept them too.
+  test "Removed QuickRun mode is rejected; BookmarkManager/FileTree mappable (parity)":
+    # BookmarkManager/FileTree were mappable via the old keybindings.toml
+    # [[keybinding]] surface; the unified [KeyMapping] surface must accept
+    # them too. The QuickRun mode no longer exists, so its section is now
+    # rejected as an unknown key.
     let toml = """
 [KeyMapping.QuickRun]
 "q" = "Escape"
@@ -2717,8 +2719,8 @@ suite "Config Validation - KeyMapping section":
 "r" = "Escape"
 """
     let (config, vr) = loadFromTomlString(toml)
-    check not vr.hasErrors
-    check config.keyMapping.perMode[QuickRun]["q"].rhs == "Escape"
+    check vr.hasErrors
+    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "KeyMapping.QuickRun")
     check config.keyMapping.perMode[BookmarkManager]["d"].rhs == "Escape"
     check config.keyMapping.perMode[FileTree]["r"].rhs == "Escape"
 

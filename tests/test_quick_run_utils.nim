@@ -18,12 +18,13 @@
 #[############################################################################]#
 
 import std/[unittest, os, options, strutils]
+from std/times import getTime, initDuration, `-`
 
 import pkg/chronos
 
 import ../src/moepkg/quick_run_utils {.all.}
 import ../src/moepkg/[config, background_process]
-import ../src/moepkg/buffer/core
+import ../src/moepkg/buffer/[core, file_io, edit]
 import ../src/moepkg/syntax/tokenizer
 
 suite "QuickRunUtils - quickRunStartupMessage":
@@ -78,6 +79,14 @@ suite "QuickRunUtils - languageExtension":
 suite "QuickRunUtils - isSh":
   test "Buffer with #!/bin/sh shebang":
     var buffer = newTextBuffer("#!/bin/sh\necho hello")
+    check buffer.isSh == true
+
+  test "Buffer with #!/bin/sh shebang and arguments":
+    var buffer = newTextBuffer("#!/bin/sh -e\necho hello")
+    check buffer.isSh == true
+
+  test "Buffer with #!/usr/bin/env sh shebang":
+    var buffer = newTextBuffer("#!/usr/bin/env sh\necho hello")
     check buffer.isSh == true
 
   test "Buffer with #!/bin/bash shebang":
@@ -445,34 +454,6 @@ suite "QuickRunUtils - quickRunCommand":
     check result.isErr
     check "Unsupported language" in result.error
 
-suite "QuickRunUtils - quickRunBufferExists":
-  test "Always returns false (TODO implementation)":
-    let buffers: seq[TextBuffer] = @[newTextBuffer("test")]
-    check quickRunBufferExists(buffers, "/path/to/file") == false
-
-  test "Empty buffer list returns false":
-    let buffers: seq[TextBuffer] = @[]
-    check quickRunBufferExists(buffers, "/path/to/file") == false
-
-  test "Multiple buffers returns false":
-    let buffers =
-      @[newTextBuffer("content1"), newTextBuffer("content2"), newTextBuffer("content3")]
-    check quickRunBufferExists(buffers, "/any/path") == false
-
-suite "QuickRunUtils - quickRunBufferIndex":
-  test "Always returns none (TODO implementation)":
-    let buffers: seq[TextBuffer] = @[newTextBuffer("test")]
-    check quickRunBufferIndex(buffers, "/path/to/file").isNone
-
-  test "Empty buffer list returns none":
-    let buffers: seq[TextBuffer] = @[]
-    check quickRunBufferIndex(buffers, "/path/to/file").isNone
-
-  test "Multiple buffers returns none":
-    let buffers =
-      @[newTextBuffer("content1"), newTextBuffer("content2"), newTextBuffer("content3")]
-    check quickRunBufferIndex(buffers, "/any/path").isNone
-
 suite "QuickRunUtils - prepareQuickRun":
   test "Prepare QuickRun for Nim file with path":
     var buffer = newTextBuffer("echo \"hello\"", some(getTempDir() / "test.nim"))
@@ -532,6 +513,46 @@ suite "QuickRunUtils - prepareQuickRun":
     check result.isOk
     check result.get.filePath == getTempDir() / "test_nosave.nim"
     check result.get.isTempFile == false
+
+  test "Prepare QuickRun refuses to overwrite an externally modified file":
+    let path = getTempDir() / "test_quickrun_ext_mod.nim"
+    writeFile(path, "echo \"original\"")
+    defer:
+      removeFile(path)
+
+    var buffer = newTextBuffer()
+    discard buffer.loadFile(path)
+    buffer.language = SourceLanguage.langNim
+
+    # Simulate external modification after load.
+    buffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(path, "echo \"external change\"")
+
+    let config = newEditorConfig()
+    let result = prepareQuickRun(buffer, config)
+    check result.isErr
+    check "Failed to save" in result.error
+    # On-disk content must be left untouched.
+    check readFile(path) == "echo \"external change\""
+
+  test "Prepare QuickRun saves an unsaved edit when not externally modified":
+    let path = getTempDir() / "test_quickrun_ok.nim"
+    writeFile(path, "echo \"original\"")
+    defer:
+      removeFile(path)
+
+    var buffer = newTextBuffer()
+    discard buffer.loadFile(path)
+    buffer.language = SourceLanguage.langNim
+    # Simulate an unsaved edit; the file on disk keeps its original mtime.
+    discard buffer.insert(1, "echo \"edited\"")
+
+    let config = newEditorConfig()
+    let result = prepareQuickRun(buffer, config)
+    check result.isOk
+    check result.get.filePath == path
+    # The unsaved edit must have been written to disk.
+    check "echo \"edited\"" in readFile(path)
 
   test "Prepare QuickRun with nonexistent file path uses temp file":
     var buffer = newTextBuffer("echo \"hello\"", some("/nonexistent/path/file.nim"))
@@ -600,6 +621,28 @@ suite "QuickRunUtils - prepareQuickRun":
       check result.get.filePath == "quickruntemp.bash"
       if fileExists("quickruntemp.bash"):
         removeFile("quickruntemp.bash")
+
+    # Test Shell with sh shebang
+    block:
+      var buffer = newTextBuffer("#!/bin/sh\necho hello")
+      buffer.language = SourceLanguage.langShell
+      let config = newEditorConfig()
+      let result = prepareQuickRun(buffer, config)
+      check result.isOk
+      check result.get.filePath == "quickruntemp.sh"
+      if fileExists("quickruntemp.sh"):
+        removeFile("quickruntemp.sh")
+
+    # Test Shell with sh shebang and arguments
+    block:
+      var buffer = newTextBuffer("#!/bin/sh -e\necho hello")
+      buffer.language = SourceLanguage.langShell
+      let config = newEditorConfig()
+      let result = prepareQuickRun(buffer, config)
+      check result.isOk
+      check result.get.filePath == "quickruntemp.sh"
+      if fileExists("quickruntemp.sh"):
+        removeFile("quickruntemp.sh")
 
     # Test Rust
     block:

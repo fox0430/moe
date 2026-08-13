@@ -81,11 +81,6 @@ type
     statusLineExModeLabel
     statusLineExModeInactive
 
-    # Status line - QuickRun mode
-    statusLineQuickRunMode
-    statusLineQuickRunModeLabel
-    statusLineQuickRunModeInactive
-
     # Status line - Log viewer mode
     statusLineLogViewerMode
     statusLineLogViewerModeLabel
@@ -440,11 +435,6 @@ const
     EditorColorPairIndex.statusLineExModeLabel: "Status line mode label in Command mode",
     EditorColorPairIndex.statusLineExModeInactive:
       "Status line in Command mode (inactive)",
-    EditorColorPairIndex.statusLineQuickRunMode: "Status line in QuickRun mode (active)",
-    EditorColorPairIndex.statusLineQuickRunModeLabel:
-      "Status line mode label in QuickRun mode",
-    EditorColorPairIndex.statusLineQuickRunModeInactive:
-      "Status line in QuickRun mode (inactive)",
     EditorColorPairIndex.statusLineLogViewerMode:
       "Status line in Log viewer mode (active)",
     EditorColorPairIndex.statusLineLogViewerModeLabel:

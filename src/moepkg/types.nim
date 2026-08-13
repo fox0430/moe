@@ -1199,7 +1199,7 @@ proc baseMode*(state: EditorState): EditorMode =
 proc modeStateKind*(mode: EditorMode): ModeStateKind =
   ## Map an `EditorMode` to the `ModeStateKind` it expects on `EditorWindow`.
   ## Modes that do not own per-window state (Normal/Insert/Visual/... and
-  ## the QuickRun/Command/Replace/Replace/Search overlay modes) return
+  ## the Command/Replace/Search overlay modes) return
   ## `mskNone`.
   case mode
   of EditorMode.Filer: mskFiler

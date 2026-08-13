@@ -44,7 +44,8 @@ proc languageExtension(lang: SourceLanguage): Result[string, string] =
   of SourceLanguage.langCpp:
     Result[string, string].ok "cpp"
   of SourceLanguage.langShell:
-    # TODO: Add support for other shells.
+    # sh is handled by the caller (isSh), so a temp file for a sh script
+    # never gets a bash extension. TODO: Add support for other shells.
     Result[string, string].ok "bash"
   of SourceLanguage.langPython:
     Result[string, string].ok "py"
@@ -56,12 +57,6 @@ proc languageExtension(lang: SourceLanguage): Result[string, string] =
     Result[string, string].ok "go"
   else:
     Result[string, string].err "Unknown language"
-
-proc isSh(buffer: TextBuffer): bool {.inline.} =
-  if buffer.len > 0:
-    let firstLine = buffer.getLine(0)
-    return firstLine == "#!/bin/sh"
-  return false
 
 proc parseShebang(buffer: TextBuffer): Option[BackgroundProcessCommand] =
   ## Parse a shebang line and return the interpreter command (without
@@ -96,6 +91,13 @@ proc parseShebang(buffer: TextBuffer): Option[BackgroundProcessCommand] =
       args.add parts[1 .. ^1]
 
   return some(BackgroundProcessCommand(cmd: cmd, args: args))
+
+proc isSh(buffer: TextBuffer): bool {.inline.} =
+  ## Return true if the buffer's first line is an sh shebang, with or
+  ## without interpreter arguments (``#!/bin/sh``, ``#!/bin/sh -e``,
+  ## ``#!/usr/bin/env sh``, ...).
+  let shebang = parseShebang(buffer)
+  return shebang.isSome and shebang.get.cmd.extractFilename == "sh"
 
 proc shebangQuickRunCommand(
     path: string, shebang: BackgroundProcessCommand
@@ -253,16 +255,6 @@ proc kill*(p: QuickRunProcess) {.inline.} =
 proc isFinish*(p: QuickRunProcess): bool {.inline.} =
   p.process.isFinish
 
-proc quickRunBufferExists*(buffers: seq[TextBuffer], path: string): bool =
-  ## Return true if already exists a buffer for the quickrun.
-  # TODO: Implement QuickRun mode detection
-  false
-
-proc quickRunBufferIndex*(buffers: seq[TextBuffer], path: string): Option[int] =
-  ## Return a buffer index if exists a buffer for the quickrun.
-  # TODO: Implement QuickRun mode detection
-  none(int)
-
 type QuickRunPrepareResult* = object
   command*: BackgroundProcessCommand
   filePath*: string
@@ -275,7 +267,11 @@ proc prepareQuickRun*(
 
   let
     useTempFile = buffer.filePath.isNone or not fileExists(buffer.filePath.get)
-    langExt = buffer.language.languageExtension
+    langExt =
+      if buffer.language == SourceLanguage.langShell and buffer.isSh:
+        Result[string, string].ok "sh"
+      else:
+        buffer.language.languageExtension
     path =
       if useTempFile:
         # A temporary file name.
@@ -285,17 +281,12 @@ proc prepareQuickRun*(
       else:
         buffer.filePath.get
 
-  if settings.quickRun.saveBufferWhenQuickRun and not useTempFile:
-    try:
-      let lastModificationTime = getLastModificationTime(path)
-      # TODO: Compare with buffer's last save time
-      discard lastModificationTime
-    except OSError:
-      discard
-
   if settings.quickRun.saveBufferWhenQuickRun or useTempFile:
     # Create and use a temporary file if the source code file does not exist.
-    let saveResult = buffer.saveFile(path)
+    # `checkExternalMod` refuses to overwrite a file that was modified by
+    # another program since the buffer last read it; it only guards writes
+    # back to the buffer's own path (temp saves are unaffected).
+    let saveResult = buffer.saveFile(path, checkExternalMod = true)
     if saveResult.isErr:
       return Result[QuickRunPrepareResult, string].err fmt"Failed to save the current code: {saveResult.error}"
 

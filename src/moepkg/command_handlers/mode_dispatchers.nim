@@ -1146,9 +1146,8 @@ proc dispatchSubStateMode*(
     else:
       return
         HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
-  of EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug, EditorMode.QuickRun:
+  of EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug:
     # Command: handled via overlay in handler.nim.
     # RecentFile: requires its own state, handled at a higher level.
     # Debug: handled at a higher level in handler.nim.
-    # QuickRun: not interactive, handled through command mode.
     return HandlerResult(kind: hrUnhandled)

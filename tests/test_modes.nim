@@ -53,9 +53,6 @@ suite "Modes - modeLabel":
   test "Filer mode":
     check modeLabel(EditorMode.Filer) == "FILER"
 
-  test "QuickRun mode":
-    check modeLabel(EditorMode.QuickRun) == "QUICKRUN"
-
   test "LogViewer mode":
     check modeLabel(EditorMode.LogViewer) == "LOG"
 
@@ -119,9 +116,6 @@ suite "Modes - isFileEditMode":
 
   test "Filer is not file edit mode":
     check isFileEditMode(EditorMode.Filer) == false
-
-  test "QuickRun is not file edit mode":
-    check isFileEditMode(EditorMode.QuickRun) == false
 
   test "LogViewer is not file edit mode":
     check isFileEditMode(EditorMode.LogViewer) == false

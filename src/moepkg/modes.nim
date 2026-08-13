@@ -36,7 +36,6 @@ type
     Replace
     Command
     Filer
-    QuickRun
     LogViewer
     Help
     BufferManager
@@ -58,8 +57,7 @@ type
 
 proc isFileEditMode*(m: EditorMode): bool =
   ## Returns true if the mode is a file editing mode where syntax highlighting applies
-  ## Special modes (Filer, Help, Config, QuickRun, etc.) return false
-  ## - QuickRun shows execution output, not editable source
+  ## Special modes (Filer, Help, Config, etc.) return false
   m in {
     EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
     EditorMode.VisualLine, EditorMode.Replace,
@@ -83,8 +81,6 @@ proc modeLabel*(m: EditorMode, insertNormal: bool = false): string =
     "COMMAND"
   of EditorMode.Filer:
     "FILER"
-  of EditorMode.QuickRun:
-    "QUICKRUN"
   of EditorMode.LogViewer:
     "LOG"
   of EditorMode.Help:

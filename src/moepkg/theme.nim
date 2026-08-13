@@ -79,12 +79,6 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.statusLineExModeLabel: makeColorPair("#000000", "#ffffff"),
   EditorColorPairIndex.statusLineExModeInactive: makeColorPair("#61afef", "#ffffff"),
 
-  # Status line - QuickRun mode
-  EditorColorPairIndex.statusLineQuickRunMode: makeColorPair("#ffffff", "#61afef"),
-  EditorColorPairIndex.statusLineQuickRunModeLabel: makeColorPair("#000000", "#ffffff"),
-  EditorColorPairIndex.statusLineQuickRunModeInactive:
-    makeColorPair("#61afef", "#ffffff"),
-
   # Status line - Log viewer mode
   EditorColorPairIndex.statusLineLogViewerMode: makeColorPair("#ffffff", "#61afef"),
   EditorColorPairIndex.statusLineLogViewerModeLabel: makeColorPair("#000000", "#ffffff"),

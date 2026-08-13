@@ -480,7 +480,9 @@ Persistent key remappings per editor mode. Uses the same key notation as `:nmap`
 
 Values can be a command name (e.g., `"save"`), a command with arguments (`"<command> <args...>"`), a key sequence (e.g., `"Escape"`), a mode switch (`"mode_switch <mode>"`), or an overlay switch (`"overlay_switch command|search|rename"`). See [How to use - Runtime Key Mapping](howtouse.md#runtime-key-mapping) for the full list of right-hand-side forms.
 
-Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `QuickRun`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree`.
+Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree`.
+
+The legacy mode name `quickrun` (the QuickRun mode no longer exists) is still accepted in `mode_switch` values and runtime mapping commands, and is treated as an alias for `Normal`. Note that a `[KeyMapping.QuickRun]` section header is not accepted; use `[KeyMapping.Normal]` instead.
 
 `[KeyMapping.All]` applies mappings to all modes (except CommandLine). Mode-specific sections override `All`.
 
@@ -924,7 +926,7 @@ Entries here are merged on top of `moerc.toml`'s `[KeyMapping]` section. When bo
 
 #### Format
 
-Each section is a mode name (`All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `QuickRun`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree` — the same set as `[KeyMapping]`). Each entry maps a key (left-hand side) to a right-hand side that is either a bare string or an inline table, identical to the `[KeyMapping]` value forms (bare command name / key sequence / `"mode_switch <mode>"` / `"overlay_switch <overlay>"`, or `{ command = …, args = […] }` / `{ keys = …, noremap = … }`). See [KeyMapping table](#keymapping-table) for the full description of the value forms and the inline-table fields.
+Each section is a mode name (`All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree` — the same set as `[KeyMapping]`). Each entry maps a key (left-hand side) to a right-hand side that is either a bare string or an inline table, identical to the `[KeyMapping]` value forms (bare command name / key sequence / `"mode_switch <mode>"` / `"overlay_switch <overlay>"`, or `{ command = …, args = […] }` / `{ keys = …, noremap = … }`). See [KeyMapping table](#keymapping-table) for the full description of the value forms and the inline-table fields.
 
 #### Examples
 
@@ -1369,6 +1371,10 @@ Notes:
   the input are dropped.
 - `--in-place` overwrites an existing `<file>.bak` without warning.
 
+The `statusLineQuickRunMode*` keys (the QuickRun mode no longer exists) are
+no longer recognized; if a theme file still contains them, they are skipped
+with an unknown-key warning and can be removed.
+
 <!-- AUTO-GEN:start Colors -->
 | Name | Description |
 |:---|:---|
@@ -1396,9 +1402,6 @@ Notes:
 | statusLineExMode | Status line in Command mode (active) |
 | statusLineExModeLabel | Status line mode label in Command mode |
 | statusLineExModeInactive | Status line in Command mode (inactive) |
-| statusLineQuickRunMode | Status line in QuickRun mode (active) |
-| statusLineQuickRunModeLabel | Status line mode label in QuickRun mode |
-| statusLineQuickRunModeInactive | Status line in QuickRun mode (inactive) |
 | statusLineLogViewerMode | Status line in Log viewer mode (active) |
 | statusLineLogViewerModeLabel | Status line mode label in Log viewer mode |
 | statusLineLogViewerModeInactive | Status line in Log viewer mode (inactive) |
