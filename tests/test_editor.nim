@@ -25,7 +25,7 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
     render_utils, lsp_service, lsp_integration, diff_viewer, setting_options,
-    editor_init, command_config, command_registry, help_viewer,
+    editor_init, command_config, command_registry, help_viewer, logger, modes,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import
@@ -2670,6 +2670,52 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
     check e.activeBuffer().id == f2Id # still focused on the dirty buffer
     check e.buffers.len == bufferCountBefore
     check "No write since last change" in e.state.statusMessage
+
+suite "Editor - unreachable kinds reaching processResult are loud":
+  ## Kinds whose real processing happens before processResult (folded by
+  ## handleCommandMode, handled by handler.handleRecentFileModeKeyCombo, or
+  ## intercepted by processReplayedResult) must not silently no-op if a
+  ## routing bug ever lets them through: log a warning instead (S9-style).
+  test "hrMapAdd / hrRecentFileOpenFile / hrPlaybackMacro log a warning":
+    let e = createTestEditor()
+    let oldLogger = getGlobalLogger()
+    let oldDir = getCurrentDir()
+    # Per-process temp dir so the test cannot clobber a real ./moe-debug.log
+    # or collide with parallel test processes.
+    let logDir = getTempDir() / "moe-result-processor-log-" & $getCurrentProcessId()
+    let logPath = logDir / "moe-debug.log"
+    createDir(logDir)
+    setCurrentDir(logDir)
+    let newLogger = initLogger(LogLevel.Warn, enabled = true, clearOnStart = true)
+    defer:
+      close(newLogger)
+      setGlobalLogger(oldLogger)
+      setCurrentDir(oldDir)
+      removeFile(logPath)
+      removeDir(logDir)
+    setGlobalLogger(newLogger)
+
+    let kinds = [
+      HandlerResult(
+        kind: hrMapAdd,
+        mapAddLhs: "x",
+        mapAddRhs: "y",
+        mapAddModes: @[EditorMode.Normal],
+        mapAddNoremap: false,
+      ),
+      HandlerResult(kind: hrRecentFileOpenFile, recentFilePath: "/tmp/nonexistent"),
+      HandlerResult(
+        kind: hrPlaybackMacro, playbackMacroKeys: @[], playbackMacroCount: 1
+      ),
+    ]
+    for r in kinds:
+      check e.processResult(r, e.activeBuffer())
+    let logContent = readFile(logPath)
+    check logContent.contains("unreachable kind reached processResult: hrMapAdd")
+    check logContent.contains(
+      "unreachable kind reached processResult: hrRecentFileOpenFile"
+    )
+    check logContent.contains("unreachable kind reached processResult: hrPlaybackMacro")
 
 suite "Editor - :theme routes through config so save/reload stay in sync":
   test ":theme default resets config.theme to tkDefault":
