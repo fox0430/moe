@@ -2756,6 +2756,89 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
     check buffer.diagnostics[1].startCol == 2 # a(0) 😀(1) b(2)
     check buffer.diagnostics[1].endCol == 4
 
+  test "applyDiagnosticsToBuffer does not store out-of-range start lines":
+    let buffer = newTextBuffer("line1\nline2")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(5, 0, 5, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "past EOF",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(-1, 0, -1, 3),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "negative line",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(0, 0, 0, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "valid",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    # Storage must match the marker pass: out-of-range start lines are skipped.
+    check buffer.diagnostics.len == 1
+    check buffer.diagnostics[0].startLine == 0
+    check buffer.diagnostics[0].message == "valid"
+
+  test "applyDiagnosticsToBuffer clamps an out-of-range end line":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(1, 0, 100, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "runs to EOF",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 1
+    check buffer.diagnostics[0].startLine == 1
+    check buffer.diagnostics[0].endLine == buffer.len - 1
+
+  test "applyDiagnosticsToBuffer degenerates a reversed range":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(2, 0, 0, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "reversed",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 1
+    check buffer.diagnostics[0].startLine == 2
+    check buffer.diagnostics[0].endLine == 2
+
 suite "LspIntegration - Additional Request Methods (disabled)":
   test "startDeclarationRequest returns error when disabled":
     let lsp = newLspIntegration()

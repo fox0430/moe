@@ -197,8 +197,15 @@ proc jumpToLspLocation*(
   ## Jump to a single LSP location. When `openWindow` is true, the jump
   ## happens in a new vertical split window instead of the current one.
   ## Returns true if successful
+  ##
+  ## The URI is LSP-server-sourced (trust boundary #3): only a well-formed
+  ## local file URI may open a buffer, so anything else is refused here.
+  let pathRes = lsp_service.validateLocalFileUri(loc.uri)
+  if pathRes.isErr:
+    e.state.statusMessage = "Cannot jump to non-file location: " & pathRes.error
+    return false
+  let path = pathRes.get
   let activeBuffer = e.activeBuffer()
-  let path = lsp_service.uriToPath(loc.uri)
 
   # Add current position to jump list before jumping
   e.addToJumpList()
@@ -252,18 +259,25 @@ proc handleLspLocations*(
     # Single location - jump directly
     return e.jumpToLspLocation(locations[0], singularName, openWindow)
   else:
-    # Multiple locations - open References viewer mode
+    # Multiple locations - open References viewer mode. The URIs are
+    # server-sourced, so only well-formed local file URIs become jumpable
+    # items; anything else is dropped rather than opened on Enter.
     var items: seq[ReferenceItem] = @[]
     for loc in locations:
-      let path = lsp_service.uriToPath(loc.uri)
+      let pathRes = lsp_service.validateLocalFileUri(loc.uri)
+      if pathRes.isErr:
+        continue
       items.add(
         ReferenceItem(
-          path: path,
+          path: pathRes.get,
           line: loc.range.start.line,
           column: loc.range.start.character,
           text: "",
         )
       )
+    if items.len == 0:
+      e.state.statusMessage = "No local file locations found"
+      return false
 
     # Enter References mode
     let refState = newReferencesViewerState(items, title)
@@ -274,7 +288,7 @@ proc handleLspLocations*(
       refState.createReferencesTextBuffer(),
       vpInPlace,
     )
-    e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"
+    e.state.statusMessage = $items.len & " " & title.toLowerAscii() & " found"
     return true
 
 proc openFileAndJumpTo*(

@@ -1514,6 +1514,16 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
   # Store full diagnostics for hover display
   buffer.diagnostics.setLen(0)
   for diag in diagnostics:
+    let startLine = diag.range.start.line
+    # Match the marker pass above: a diagnostic whose start line is outside
+    # the buffer is not stored — it can never be shown or hovered, and an
+    # arbitrary line must not drive the highlight overlay loops.
+    if startLine < 0 or startLine >= buffer.len:
+      continue
+    # An end beyond the buffer is common (a diagnostic running to EOF); clamp
+    # it so the overlay rebuild stays bounded by the buffer size. A reversed
+    # range degenerates to a zero-width diagnostic at the start line.
+    let endLine = min(max(diag.range.`end`.line, startLine), buffer.len - 1)
     let severity =
       if diag.severity.isSome:
         case diag.severity.get
@@ -1524,24 +1534,14 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
       else:
         bdsError
     # LSP columns are UTF-16 code units; consumers (markers, highlights)
-    # expect rune indexes. Convert using the referenced line's text; lines
-    # outside the buffer fall back to "" so the columns clamp to 0.
-    let startLineText =
-      if diag.range.start.line >= 0 and diag.range.start.line < buffer.len:
-        buffer.getLine(diag.range.start.line)
-      else:
-        ""
-    let endLineText =
-      if diag.range.`end`.line >= 0 and diag.range.`end`.line < buffer.len:
-        buffer.getLine(diag.range.`end`.line)
-      else:
-        ""
+    # expect rune indexes. Convert using the referenced line's text.
     buffer.diagnostics.add(
       BufferDiagnostic(
-        startLine: diag.range.start.line,
-        startCol: utf16ToRuneIndex(startLineText, diag.range.start.character),
-        endLine: diag.range.`end`.line,
-        endCol: utf16ToRuneIndex(endLineText, diag.range.`end`.character),
+        startLine: startLine,
+        startCol:
+          utf16ToRuneIndex(buffer.getLine(startLine), diag.range.start.character),
+        endLine: endLine,
+        endCol: utf16ToRuneIndex(buffer.getLine(endLine), diag.range.`end`.character),
         severity: severity,
         message: diag.message,
       )
