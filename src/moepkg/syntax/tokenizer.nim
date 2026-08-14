@@ -535,53 +535,16 @@ proc scanRadixNumber*(g: var GeneralTokenizer, position: int): int =
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
-import
-  syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp, syntax_csharp,
-  syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_gitignore, syntax_go,
-  syntax_haskell, syntax_html, syntax_java, syntax_javascript, syntax_latex,
-  syntax_lisp, syntax_lua, syntax_markdown, syntax_nim, syntax_python, syntax_rust,
-  syntax_fish, syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml,
-  syntax_json, syntax_jsonc, syntax_typescript, syntax_log, syntax_xml, syntax_zsh
+import syntax_markdown
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   let
     startPos = g.pos
     startState = g.state
-  case lang
-  of langAstro: g.astroNextToken
-  of langC: g.cNextToken
-  of langCommitEditMsg: g.commitEditMsgNextToken
-  of langCpp: g.cppNextToken
-  of langCsharp: g.csharpNextToken
-  of langDiff: g.diffNextToken
-  of langDockerfile: g.dockerfileNextToken
-  of langFish: g.fishNextToken
-  of langGitRebaseTodo: g.gitRebaseTodoNextToken
-  of langGitignore: g.gitignoreNextToken
-  of langGo: g.goNextToken
-  of langHaskell: g.haskellNextToken
-  of langHtml: g.htmlNextToken
-  of langHyprland: g.hyprlandNextToken
-  of langJava: g.javaNextToken
-  of langJavaScript, langJsx: g.javaScriptNextToken
-  of langLatex: g.latexNextToken
-  of langLisp: g.lispNextToken
-  of langLog: g.logNextToken
-  of langLua: g.luaNextToken
-  of langMarkdown: g.markdownNextToken
-  of langNim: g.nimNextToken
-  of langPython: g.pythonNextToken
-  of langRust: g.rustNextToken
-  of langShell: g.shellNextToken
-  of langTcl: g.tclNextToken
-  of langToml: g.tomlNextToken
-  of langYaml: g.yamlNextToken
-  of langJson: g.jsonNextToken
-  of langJsonc: g.jsoncNextToken
-  of langTypeScript, langTsx: g.typescriptNextToken
-  of langXml: g.xmlNextToken
-  of langZsh: g.zshNextToken
-  of langNone: discard
+  if lang == langMarkdown:
+    g.markdownNextToken
+  else:
+    g.codeBlockNextToken(lang)
 
   if g.kind != gtEof and g.pos <= startPos and g.state == startState:
     # Monotonic-advance guard: a non-EOF token must make progress, by consuming
