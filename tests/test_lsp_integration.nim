@@ -1195,6 +1195,37 @@ suite "LspIntegration - applyTextEdits":
     check result.isOk
     check buffer.getTextString() == "Q"
 
+  test "applyTextEdits rejects start position past the end of its line":
+    # A server position whose character exceeds the line's UTF-16 length
+    # must fail instead of silently clamping to the end of line.
+    let buffer = newTextBuffer("abc")
+    let edit = TextEdit(range: newRange(0, 5, 0, 5), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isErr
+    check "past the end of its line" in result.error
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "abc"
+
+  test "applyTextEdits rejects start past EOL after multibyte characters":
+    # "あいう" is 3 UTF-16 units; character 4 exceeds the line.
+    let buffer = newTextBuffer("あいう")
+    let edit = TextEdit(range: newRange(0, 4, 0, 4), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isErr
+    check "past the end of its line" in result.error
+    check buffer.getLine(0) == "あいう"
+
+  test "applyTextEdits rejects end position past the end of its line":
+    # Same rejection for the delete end. "def" is 3 UTF-16 units, so
+    # character 10 points past the end of line 1.
+    let buffer = newTextBuffer("abc\ndef")
+    let edit = TextEdit(range: newRange(0, 0, 1, 10), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isErr
+    check "past the end of its line" in result.error
+    check not buffer.inTransaction
+    check buffer.getTextString() == "abc\ndef"
+
 suite "LspIntegration - applyLspFoldingRanges":
   test "applyLspFoldingRanges with empty ranges":
     let buffer = newTextBuffer("line1\nline2\nline3")
