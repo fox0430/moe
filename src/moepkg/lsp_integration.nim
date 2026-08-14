@@ -1122,13 +1122,20 @@ proc applyTextEdits*(
       let startLine = edit.range.start.line
       let lspEndPos = edit.range.`end`
 
-      # Convert UTF-16 character offset to rune index
+      # Convert UTF-16 character offset to rune index; offsets past the
+      # line's end are rejected instead of silently clamped.
       let startLineText =
         if startLine >= 0 and startLine < buffer.len:
           buffer.getLine(startLine)
         else:
           ""
-      let startCol = utf16ToRuneIndex(startLineText, edit.range.start.character)
+      let (startCol, startUtf16Walked) =
+        utf16OffsetToRune(startLineText, edit.range.start.character)
+      if startUtf16Walked < edit.range.start.character:
+        failEdit(
+          "Invalid edit range: start position (line " & $startLine & ", character " &
+            $edit.range.start.character & ") is past the end of its line"
+        )
       let startPos = BufferPosition(line: startLine, column: startCol)
 
       # Check if range is empty (LSP exclusive end == start means empty range)
@@ -1165,7 +1172,13 @@ proc applyTextEdits*(
             adjustedEndPos =
               BufferPosition(line: last, column: buffer.getLine(last).charLen)
           else:
-            let endRune = utf16ToRuneIndex(endLineText, lspEndPos.character)
+            let (endRune, endUtf16Walked) =
+              utf16OffsetToRune(endLineText, lspEndPos.character)
+            if endUtf16Walked < lspEndPos.character:
+              failEdit(
+                "Invalid edit range: end position (line " & $lspEndPos.line &
+                  ", character " & $lspEndPos.character & ") is past the end of its line"
+              )
             adjustedEndPos =
               BufferPosition(line: lspEndPos.line, column: max(endRune - 1, 0))
         else:
