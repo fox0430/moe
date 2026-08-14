@@ -98,7 +98,6 @@ type
     hrBackupManagerQuit # Close backup manager and return to previous mode
     hrEnterBackupManager # Enter backup manager mode
     hrDiffViewerQuit # Close diff viewer and return to previous mode
-    hrEnterDiffViewer # Enter diff viewer mode
     hrRecentFile # Enter recent file selection mode
     hrRecentFileOpenFile # Open file from recent file mode
     hrRecentFileQuit # Quit recent file mode
@@ -147,15 +146,12 @@ type
     hrDeleteLines # Delete lines (:d, :%d)
     hrReferencesQuit # Close references viewer and return to previous mode
     hrReferencesJumpTo # Jump to the selected reference
-    hrEnterReferences # Enter references viewer mode
     hrDocumentSymbolQuit # Close document symbol viewer and return to previous mode
     hrDocumentSymbolJumpTo # Jump to the selected symbol
-    hrEnterDocumentSymbol # Enter document symbol viewer mode
     hrCallHierarchyQuit # Close call hierarchy viewer and return to previous mode
     hrCallHierarchyJumpTo # Jump to the selected call hierarchy item
     hrCallHierarchyRequestIncoming # Request incoming calls for selected item
     hrCallHierarchyRequestOutgoing # Request outgoing calls for selected item
-    hrEnterCallHierarchy # Enter call hierarchy viewer mode
     hrEnterTerminal # Enter terminal mode
     hrTerminalQuit # Close terminal and return to previous mode
     hrExecCommand # Execute a Command mode command directly (@:)
@@ -283,9 +279,6 @@ type
       discard
     of hrDiffViewerQuit:
       discard
-    of hrEnterDiffViewer:
-      diffSourcePath*: string
-      diffBackupPath*: string
     of hrRecentFile:
       discard
     of hrRecentFileOpenFile:
@@ -375,15 +368,11 @@ type
       jumpToPath*: string
       jumpToLine*: int
       jumpToColumn*: int
-    of hrEnterReferences:
-      discard
     of hrDocumentSymbolQuit:
       discard
     of hrDocumentSymbolJumpTo:
       symbolLine*: int
       symbolColumn*: int
-    of hrEnterDocumentSymbol:
-      discard
     of hrCallHierarchyQuit:
       discard
     of hrCallHierarchyJumpTo:
@@ -394,8 +383,6 @@ type
       callHierarchyIncomingItem*: lspTypes.CallHierarchyItem
     of hrCallHierarchyRequestOutgoing:
       callHierarchyOutgoingItem*: lspTypes.CallHierarchyItem
-    of hrEnterCallHierarchy:
-      discard
     of hrEnterTerminal:
       enterTerminalCommand*: string # Optional command (empty = default shell)
     of hrTerminalQuit:
@@ -485,23 +472,22 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrBuffer, hrBufferDelete, hrStripWhitespace, hrOnlyWindow, hrEnterFileTree,
       hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
       hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh,
-      hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
-      hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
-      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
-      hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrBufferManagerSelectBuffer,
-      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrBookmarkManagerJump,
-      hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrBackupManagerRestore,
-      hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
-      hrBackupManagerQuit, hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFileOpenFile,
-      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight,
-      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
-      hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
-      hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
-      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-      hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
-      hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
-      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList:
+      hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrDocumentSymbolQuit,
+      hrDocumentSymbolJumpTo, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
+      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
+      hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
+      hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
+      hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+      hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
+      hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
+      hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
+      hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition,
+      hrLspGotoDeclaration, hrLspFindReferences, hrLspDocumentSymbol,
+      hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
+      hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
+      hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit,
+      hrExecCommand, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro,
+      hrMapAdd, hrMapRemove, hrMapClear, hrMapList:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

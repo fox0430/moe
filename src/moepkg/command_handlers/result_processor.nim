@@ -182,12 +182,26 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     return e.processConflictJumpResult(r)
   of hrDebugViewerQuit:
     return e.processDebugResult(r)
-  of hrRecentFileOpenFile, hrRecentFileQuit, hrEnterDiffViewer, hrEnterReferences,
-      hrEnterDocumentSymbol, hrEnterCallHierarchy:
-    discard # Handled by per-mode dispatchers or produced from within those modes
+  of hrRecentFileOpenFile, hrRecentFileQuit:
+    logWarn(
+      "result_processor",
+      "unreachable kind reached processResult: " & $r.kind &
+        " (handled by handler.handleRecentFileModeKeyCombo)",
+    )
+    discard # Handled by handler.handleRecentFileModeKeyCombo; unreachable here.
   of hrMapAdd, hrMapRemove, hrMapClear, hrMapList:
+    logWarn(
+      "result_processor",
+      "unreachable kind reached processResult: " & $r.kind &
+        " (folded by handleCommandMode)",
+    )
     discard # Folded to hrHandled/hrError by handleCommandMode; unreachable here.
   of hrPlaybackMacro:
+    logWarn(
+      "result_processor",
+      "unreachable kind reached processResult: hrPlaybackMacro" &
+        " (intercepted by processReplayedResult)",
+    )
     discard # Consumed by processReplayedResult; only reaches here defensively.
 
   return e.processResultEpilogue(r, activeBuffer)
