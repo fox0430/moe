@@ -19,7 +19,8 @@
 
 import std/[unittest, sets, strutils]
 
-import ../src/moepkg/syntax/tokenizer
+import
+  ../src/moepkg/syntax/[tokenizer, syntax_markdown, syntax_python, syntax_javascript]
 
 suite "tokenizer - TokenClass enum":
   test "TokenClass has expected values":
@@ -1188,3 +1189,44 @@ suite "tokenizer - scanRadixNumber":
     g.initGeneralTokenizer("0xFFu")
     # The 'u' suffix is not consumed by the radix scanner.
     check g.scanRadixNumber(0) == 4
+
+suite "tokenizer - getNextToken dispatch":
+  test "langMarkdown routes to the markdown tokenizer":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("`code`")
+    g.getNextToken(langMarkdown)
+    check g.kind == gtSpecialVar
+    check g.length == 6
+
+  test "langMarkdown inline code matches markdownNextToken":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("`code`")
+    g.getNextToken(langMarkdown)
+    let viaDispatch = (g.kind, g.length, g.pos)
+    g.initGeneralTokenizer("`code`")
+    g.markdownNextToken()
+    check (g.kind, g.length, g.pos) == viaDispatch
+
+  test "langNone is a no-op":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("abc")
+    g.getNextToken(langNone)
+    check g.pos == 0
+
+  test "langPython dispatch matches pythonNextToken":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("def foo():")
+    g.getNextToken(langPython)
+    let viaDispatch = (g.kind, g.length, g.pos, g.state)
+    g.initGeneralTokenizer("def foo():")
+    g.pythonNextToken()
+    check (g.kind, g.length, g.pos, g.state) == viaDispatch
+
+  test "langJsx dispatch matches javaScriptNextToken":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("const x = <div/>")
+    g.getNextToken(langJsx)
+    let viaDispatch = (g.kind, g.length, g.pos, g.state)
+    g.initGeneralTokenizer("const x = <div/>")
+    g.javaScriptNextToken()
+    check (g.kind, g.length, g.pos, g.state) == viaDispatch
