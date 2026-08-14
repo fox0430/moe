@@ -39,10 +39,10 @@ export core, operator_engine, clipboard, motion_scroll, visual, edit, misc
 const EditCommandIds = [
   "delete.char", "delete.char.before", "delete.line", "delete.word",
   "operator.delete.to.end", "operator.change.to.end", "paste.after", "paste.before",
-  "join.lines", "substitute.char", "substitute.line", "toggle.case", "operator.delete",
-  "operator.change", "operator.indent", "operator.outdent", "operator.lowercase",
-  "operator.uppercase", "autoindent.line", "edit.increment", "edit.decrement",
-  "edit.repeat",
+  "edit.paste", "join.lines", "substitute.char", "substitute.line", "toggle.case",
+  "operator.delete", "operator.change", "operator.indent", "operator.outdent",
+  "operator.lowercase", "operator.uppercase", "autoindent.line", "edit.increment",
+  "edit.decrement", "edit.repeat",
 ]
   ## Built-in command ids (dotted form, as carried by Command.commandId) that
   ## modify the buffer at the cursor. Used to expand a collapsed fold before the
@@ -569,15 +569,20 @@ proc executeCommand*(
     # Debug: log the count
     logDebug("command", "Executing " & cmd.commandId & " with count=" & $count)
 
+    # First try as alias, then as custom command
+    let cmdResult = registry.findCommand(cmd.commandId)
+
     # Pass count as arg when explicitly typed, so `1G` (visual) reaches the
     # handler as count=1 instead of falling back to the "no count" default.
+    # Only prepend for handlers that accept an argument (maxArgs >= 1);
+    # maxArgs=0 handlers (e.g. visual.yank, scroll.cursor.*) reject the
+    # prefixed count with "Too many arguments".
     var finalArgs = cmd.args
-    if count > 1 or (cmd.hasCount and count > 0):
+    if cmdResult.isSome and cmdResult.get.maxArgs >= 1 and
+        (count > 1 or (cmd.hasCount and count > 0)):
       finalArgs = @[$count] & cmd.args
     logDebug("command", "finalArgs (count=" & $count & "): " & $finalArgs)
 
-    # First try as alias, then as custom command
-    let cmdResult = registry.findCommand(cmd.commandId)
     if cmdResult.isSome:
       # Found via alias or existing command
       return registry.execute(ctx, cmdResult.get.id, finalArgs)

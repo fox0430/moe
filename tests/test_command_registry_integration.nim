@@ -6075,6 +6075,20 @@ suite "executeCommand - auto-open folds on edit":
     check registry.executeCommand(ctx, cmd).isOk
     check not buffer.foldState.folds[0].collapsed
 
+  test "clipboard paste opens a collapsed fold at the cursor":
+    # edit.paste modifies the buffer at the cursor, so the fold auto-open must
+    # fire before the handler runs — even when the handler itself errors out
+    # (clipboard is disabled in the test context).
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(0, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0) # on the fold start line
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.paste", count: 1)
+    discard registry.executeCommand(ctx, cmd)
+    check not buffer.foldState.folds[0].collapsed
+
   test "operator delete opens a collapsed fold at the cursor":
     let buffer = newTextBuffer("hello world\n1\n2\n3")
     check buffer.foldState.addFold(0, 2, collapsed = true)
@@ -6237,6 +6251,77 @@ suite "executeCommand - fold auto-open allowlists stay in sync":
     let ops = registeredOperatorTypes()
     for op in VisualEditOperatorTypes:
       check op in ops
+
+suite "executeCommand - count prefix respects handler maxArgs":
+  # executeCommand prepends an explicit count to the handler args so commands
+  # like `3x` reach the handler as args=["3"]. Handlers registered with
+  # maxArgs=0 (visual.yank, scroll.cursor.*, ...) reject that prefixed arg
+  # with "Too many arguments", so the prefix must only apply when the target
+  # handler accepts an argument. An explicitly typed count of 1 (hasCount)
+  # still counts: `1G` must reach the handler as count=1, not as "no count".
+
+  test "count is not prefixed for a maxArgs=0 handler (2y visual yank)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctCustom, commandId: "visual.yank", count: 2, hasCount: true)
+    check registry.executeCommand(ctx, cmd).isOk
+    check "hello" in ctx.state.registers.getNoNamedRegister().getContent()
+
+  test "count is not prefixed for a maxArgs=0 scroll handler (2zz)":
+    let buffer = newTextBuffer(
+      "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25"
+    )
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 12, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 0
+    ctx.motionController.viewportManager.viewport.height = 24
+    let registry = createTestRegistry()
+
+    let cmd = Command(
+      kind: ctCustom, commandId: "scroll.cursor.center", count: 2, hasCount: true
+    )
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.motionController.viewportManager.viewport.topLine > 0
+
+  test "count is still prefixed for a maxArgs>=1 handler (3x)":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctCustom, commandId: "delete.char", count: 3, hasCount: true)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "lo"
+
+  test "count 1 with hasCount is still prefixed for a maxArgs>=1 handler (1G)":
+    # Without the prefix, visual.move.lastline falls back to its no-arg
+    # default (last line), so this asserts the hasCount + count 1 branch.
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(2, 0, 2, 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(
+      kind: ctCustom, commandId: "visual.move.lastline", count: 1, hasCount: true
+    )
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.cursor.line == 0
+
+  test "count 1 with hasCount is not prefixed for a maxArgs=0 handler (1y)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctCustom, commandId: "visual.yank", count: 1, hasCount: true)
+    check registry.executeCommand(ctx, cmd).isOk
+    check "hello" in ctx.state.registers.getNoNamedRegister().getContent()
 
 suite "Register/buffer atomicity - failed edits must not touch registers":
   # deleteRange/deleteLine reject writes on a read-only buffer, so a read-only
