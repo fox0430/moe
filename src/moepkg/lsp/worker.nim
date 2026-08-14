@@ -1771,6 +1771,17 @@ proc hasPendingCommands*(worker: LspWorker): bool =
   withLock(worker.commandQueue.lock):
     result = worker.commandQueue.queue.len > 0
 
+proc pendingCommandsForTest*(worker: LspWorker): seq[LspCommand] =
+  ## Snapshot queued commands without dequeuing them (test hook).
+  withLock(worker.commandQueue.lock):
+    for cmd in worker.commandQueue.queue:
+      result.add(cmd)
+
+proc setStateForTest*(worker: LspWorker, state: LspWorkerState) =
+  ## Force the worker state without starting the thread (test hook).
+  worker.sharedState.running.store(true, moRelease)
+  worker.sharedState.stateVal.store(state.ord, moRelease)
+
 proc isThreadAlive*(worker: LspWorker): bool =
   ## Check if the worker thread itself is still running its main loop
   ## (thread-safe). The server process state is independent: a worker whose

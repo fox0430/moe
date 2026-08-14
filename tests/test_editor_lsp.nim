@@ -635,3 +635,215 @@ suite "editor_lsp - TransactionRollbackError propagation":
         )
     expect TransactionRollbackError:
       e.tick()
+
+suite "editor_lsp - levApplyEdit target validation":
+  proc negativeResponseQueued(worker: LspWorker, reqId: string): bool =
+    ## A rejected edit must still be answered: queue an lcmdApplyEditResponse
+    ## with applied = false and a non-empty reason.
+    for cmd in worker.pendingCommandsForTest():
+      if cmd.kind == lcmdApplyEditResponse and cmd.applyEditReqIdJson == reqId and
+          not cmd.applyEditApplied and cmd.applyEditFailureReason.len > 0:
+        return true
+    false
+
+  proc positiveResponseQueued(worker: LspWorker, reqId: string): bool =
+    ## An applied edit must be answered: queue an lcmdApplyEditResponse
+    ## with applied = true and an empty reason.
+    for cmd in worker.pendingCommandsForTest():
+      if cmd.kind == lcmdApplyEditResponse and cmd.applyEditReqIdJson == reqId and
+          cmd.applyEditApplied and cmd.applyEditFailureReason.len == 0:
+        return true
+    false
+
+  test "rejects an applyEdit with a non-file target URI without the callback":
+    # Bad target URIs must not reach the apply callback.
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(%*{"changes": {"untitled:Untitled-1": []}}),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    var callbackCalled = false
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        callbackCalled = true
+        (applied: true, failureReason: none(string))
+    e.tick()
+    check not callbackCalled
+    check negativeResponseQueued(worker, "7")
+
+  test "rejects an applyEdit whose documentChanges targets a non-file URI":
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson:
+          $(%*{"documentChanges": [{"textDocument": {"uri": "untitled:Untitled-1"}}]}),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    var callbackCalled = false
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        callbackCalled = true
+        (applied: true, failureReason: none(string))
+    e.tick()
+    check not callbackCalled
+    check negativeResponseQueued(worker, "7")
+
+  test "rejects an applyEdit carrying file operations without the callback":
+    # File operations must not reach a weaker callback either.
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(%*{"documentChanges": [{"kind": "rename"}]}),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    var callbackCalled = false
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        callbackCalled = true
+        (applied: true, failureReason: none(string))
+    e.tick()
+    check not callbackCalled
+    check negativeResponseQueued(worker, "7")
+
+  test "rejects an applyEdit mixing a valid and an invalid target URI":
+    # All-or-nothing: a single malformed target refuses the whole edit.
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(%*{"changes": {"file:///ok.nim": [], "untitled:Bad": []}}),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    var callbackCalled = false
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        callbackCalled = true
+        (applied: true, failureReason: none(string))
+    e.tick()
+    check not callbackCalled
+    check negativeResponseQueued(worker, "7")
+
+  test "forwards an applyEdit with a well-formed file URI to the callback":
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(%*{"changes": {"file:///t.nim": []}}),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    var callbackCalled = false
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        callbackCalled = true
+        (applied: true, failureReason: none(string))
+    e.tick()
+    check callbackCalled
+    check positiveResponseQueued(worker, "7")
+
+  test "forwards an applyEdit with a well-formed documentChanges URI":
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson:
+          $(%*{"documentChanges": [{"textDocument": {"uri": "file:///t.nim"}}]}),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    var callbackCalled = false
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        callbackCalled = true
+        (applied: true, failureReason: none(string))
+    e.tick()
+    check callbackCalled
+    check positiveResponseQueued(worker, "7")
+
+  test "forwards an applyEdit when documentChanges is valid and changes is not":
+    # documentChanges takes precedence; the ignored changes map is not checked.
+    privateAccess(LspIntegration)
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let worker = newLspWorker("nim").get
+    worker.setStateForTest(lwsRunning)
+    worker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(
+          %*{
+            "documentChanges": [{"textDocument": {"uri": "file:///t.nim"}}],
+            "changes": {"untitled:Bad": []},
+          }
+        ),
+      )
+    )
+    e.lsp.service.workers["nim"] = worker
+    var callbackCalled = false
+    e.lsp.service.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        callbackCalled = true
+        (applied: true, failureReason: none(string))
+    e.tick()
+    check callbackCalled
+    check positiveResponseQueued(worker, "7")
