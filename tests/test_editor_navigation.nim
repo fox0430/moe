@@ -233,6 +233,23 @@ suite "editor_navigation - handleLspLocations":
     check e.cursor.line == 2
     check e.state.statusMessage.contains("Definition")
 
+  test "Rejects a non-file single location":
+    let e = createTestEditor()
+    let loc = lspTypes.Location(
+      uri: "untitled:Untitled-1",
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 0, character: 0),
+        `end`: lspTypes.Position(line: 0, character: 1),
+      ),
+    )
+    let locations = @[loc]
+
+    let result = e.handleLspLocations(locations, "Definitions", "Definition")
+
+    check not result
+    check e.state.statusMessage.contains("non-file")
+    check e.buffers.len == 1
+
   test "Enters References mode when multiple locations":
     let e = createTestEditor()
     let testFile = getTempDir() / "moe_test_multi_loc.txt"
@@ -264,6 +281,63 @@ suite "editor_navigation - handleLspLocations":
     check result
     check e.state.mode == EditorMode.References
     check e.state.statusMessage.contains("2 references found")
+
+  test "Filters non-file URIs when building the References viewer":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_multi_loc_filter.txt"
+
+    writeFile(testFile, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+
+    let loc1 = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 0, character: 0),
+        `end`: lspTypes.Position(line: 0, character: 6),
+      ),
+    )
+    let loc2 = lspTypes.Location(
+      uri: "untitled:Untitled-1",
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 0, character: 0),
+        `end`: lspTypes.Position(line: 0, character: 1),
+      ),
+    )
+    let loc3 = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 2, character: 0),
+        `end`: lspTypes.Position(line: 2, character: 6),
+      ),
+    )
+    let locations = @[loc1, loc2, loc3]
+
+    let result = e.handleLspLocations(locations, "References", "Reference")
+
+    # Only the two file URIs become items; the count message reflects the
+    # filtered list, not the raw server response.
+    check result
+    check e.state.mode == EditorMode.References
+    check e.state.statusMessage.contains("2 references found")
+
+  test "Rejects all-non-file locations":
+    let e = createTestEditor()
+    let loc = lspTypes.Location(
+      uri: "untitled:Untitled-1",
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 0, character: 0),
+        `end`: lspTypes.Position(line: 0, character: 1),
+      ),
+    )
+    let locations = @[loc, loc]
+
+    let result = e.handleLspLocations(locations, "References", "Reference")
+
+    check not result
+    check e.state.statusMessage.contains("No local file locations found")
 
 suite "editor_navigation - switchToBufferForLsp":
   test "Does nothing for invalid negative index":

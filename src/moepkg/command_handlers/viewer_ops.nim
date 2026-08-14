@@ -77,6 +77,11 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     return true
   of hrReferencesJumpTo:
     # Restore the pre-viewer cursor so the jump list anchors at the origin.
+    # The path is LSP-server-sourced; refuse obviously invalid values even
+    # though the items are already validated when the viewer is built.
+    if r.jumpToPath.len == 0 or '\0' in r.jumpToPath:
+      e.state.statusMessage = "Invalid reference target path"
+      return true
     let win = e.activeWindow
     let openWindow =
       win.modeState.kind == mskReferences and win.modeState.references.openWindowOnJump
@@ -108,7 +113,13 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     return true
   of hrCallHierarchyJumpTo:
     # Restore the pre-viewer cursor so the jump list anchors at the origin.
-    let path = lsp_service.uriToPath(r.callHierarchyJumpUri)
+    # The URI is LSP-server-sourced: only a well-formed local file URI may
+    # open a buffer, so anything else is refused here.
+    let pathRes = lsp_service.validateLocalFileUri(r.callHierarchyJumpUri)
+    if pathRes.isErr:
+      e.state.statusMessage = "Cannot jump to non-file location: " & pathRes.error
+      return true
+    let path = pathRes.get
     cancelAllCallHierarchy(e)
     let win = e.activeWindow
     let entry = e.leaveViewerModeForJump(EditorMode.CallHierarchy)
