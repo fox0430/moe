@@ -17,13 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils, os, osproc]
+import std/[os, osproc, strutils, unittest]
 
 import pkg/results
 
 import ../src/moepkg/registers
 import ../src/moepkg/clipboard {.all.}
 import ../src/moepkg/config
+
+import clipboard_test_helper
 
 suite "Registers":
   test "initRegisters creates empty registers":
@@ -422,6 +424,245 @@ suite "Registers":
     # Without clipboard tool, should just return internal register
     check r.getNoNamedRegister().getContent() == "internal"
 
+  test "getNoNamedRegister reads the CLIPBOARD selection on every put":
+    # Put reads the CLIPBOARD selection each time, so an external copy is
+    # picked up even right after a yank.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        r.setYankedRegister("cached", false)
+
+        # Overwrite CLIPBOARD to simulate an external copy.
+        writeFile(clipboardFilePath(fakeDir), fakeClipboardContent)
+        check r.getNoNamedRegister().getContent() == fakeClipboardContent
+
+        # A newer external change is picked up by the next put too.
+        writeFile(clipboardFilePath(fakeDir), "newer external content")
+        check r.getNoNamedRegister().getContent() == "newer external content"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "put keeps the linewise type when CLIPBOARD holds moe's own write":
+    # Regression: a single-line linewise yank writes no trailing newline,
+    # so the read cannot tell linewise from characterwise by content alone;
+    # the internal type must be kept when the selection matches.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        r.setYankedRegister("single line", true)
+
+        let reg = r.getNoNamedRegister()
+        check reg.getContent() == "single line"
+        check reg.isLine == true
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "put keeps the characterwise type for multiline content moe wrote":
+    # Regression: a multiline characterwise yank is exported newline-joined,
+    # so the read would infer linewise from the newline alone; the internal
+    # type must be kept when the selection matches.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        r.setYankedRegister("first\nsecond", false)
+
+        let reg = r.getNoNamedRegister()
+        check reg.getContent() == "first\nsecond"
+        check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "getNoNamedRegister ignores PRIMARY selection changes":
+    # Put reads CLIPBOARD only; PRIMARY is reachable through the `*`
+    # register and must not affect put.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        r.setYankedRegister("cached", false)
+
+        writeFile(clipboardFilePath(fakeDir), "clip content")
+        writeFile(primaryFilePath(fakeDir), "mouse selected content")
+
+        check r.getNoNamedRegister().getContent() == "clip content"
+        check r.getClipboardRegister('*').getContent() == "mouse selected content"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "unnamed put after a CLIPBOARD-only register write returns the CLIPBOARD content":
+    # `"+y` writes CLIPBOARD only, so every put returns the written content.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+
+        # A prior yank leaves both selections holding the same value.
+        writeFile(clipboardFilePath(fakeDir), "old value")
+        writeFile(primaryFilePath(fakeDir), "old value")
+        r.setYankedRegister("old value", false)
+
+        # `"+y "new value"` writes the CLIPBOARD selection only.
+        r.setClipboardRegister('+', "new value", false)
+
+        # Every put returns the written content (no PRIMARY-based oscillation).
+        check r.getNoNamedRegister().getContent() == "new value"
+        check r.getNoNamedRegister().getContent() == "new value"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "unnamed put after a PRIMARY-only register write reads CLIPBOARD":
+    # `"*y` writes PRIMARY only; put still reads the old CLIPBOARD value.
+    # The new value is reachable through `"*p`.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+
+        writeFile(clipboardFilePath(fakeDir), "old value")
+        writeFile(primaryFilePath(fakeDir), "old value")
+        r.setYankedRegister("old value", false)
+
+        writeFile(primaryFilePath(fakeDir), "new value")
+        r.setClipboardRegister('*', "new value", false)
+
+        check r.getNoNamedRegister().getContent() == "old value"
+        check r.getClipboardRegister('*').getContent() == "new value"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "unnamed put keeps moe's own write inside the wl-copy claim window":
+    # A non-forking wl-copy keeps running, so a read shortly after moe's own
+    # write can still return the previous content; the internal register
+    # must be kept inside the claim window instead.
+    let fakeDir = installFakeWlClipboardTool("old external content", stayRunning = true)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtWlClipboard)
+        # Wait for the fake wl-copy to record the write before reading back.
+        r.setNoNamedRegister("new content", true)
+        waitForClipboardWrite(fakeDir, "new content")
+
+        # Restart the claim window so the wait above cannot move the put
+        # past it.
+        restartClipboardClaimWindow(r)
+
+        # The first read returns the pre-write content; the claim window
+        # keeps the internal register instead of adopting the stale read.
+        var reg = r.getNoNamedRegister()
+        check reg.getContent() == "new content"
+        check reg.isLine == true
+
+        # After the claim window has expired, an external change is picked
+        # up by the next put.
+        expireClipboardClaimWindow(r)
+        writeFile(clipboardFilePath(fakeDir), "external copy")
+        reg = r.getNoNamedRegister()
+        check reg.getContent() == "external copy"
+        check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "unnamed put adopts an external change made right after moe's own write":
+    # A forking wl-copy confirms the write, so no claim window opens and an
+    # external copy right after moe's own write is picked up by the next put.
+    let fakeDir = installFakeWlClipboardTool("old external content")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtWlClipboard)
+        r.setNoNamedRegister("new content", true)
+        waitForClipboardWrite(fakeDir, "new content")
+
+        # The write is confirmed (the fake exits right away), so the
+        # immediate external change is adopted by the next put.
+        writeFile(clipboardFilePath(fakeDir), "external copy")
+        let reg = r.getNoNamedRegister()
+        check reg.getContent() == "external copy"
+        check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "+ register put returns the yanked content inside the wl-copy claim window":
+    # Regression: sendToClipboard must keep the `+` cache in sync like the
+    # copy command does, otherwise `"+p` right after a yank returns the
+    # pre-yank content for the whole claim window.
+    let fakeDir = installFakeWlClipboardTool("old external content", stayRunning = true)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtWlClipboard)
+
+        # The fake selection holds pre-yank content so the read differs
+        # from the yanked content.
+        writeFile(clipboardFilePath(fakeDir), "old external content")
+
+        r.setYankedRegister("yanked line", true)
+        waitForClipboardWrite(fakeDir, "yanked line")
+
+        # Restart the claim window so the wait above cannot move the put
+        # past it.
+        restartClipboardClaimWindow(r)
+
+        let reg = r.getClipboardRegister('+')
+        check reg.getContent() == "yanked line"
+        check reg.isLine == true
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "claim window boundary is decided by real elapsed time":
+    # Regression: the boundary must hold against actual elapsed time, not
+    # only against the restart/expire test seams.
+    let fakeDir = installFakeWlClipboardTool("old external content", stayRunning = true)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtWlClipboard)
+
+        r.setYankedRegister("new content", true)
+        waitForClipboardWrite(fakeDir, "new content")
+
+        # Inside the 500ms boundary the pre-write read is not adopted.
+        # 250ms leaves margin for the fake wl-paste spawn on a slow CI.
+        setClipboardWriteAgo(r, 250)
+        check r.getNoNamedRegister().getContent() == "new content"
+
+        # Outside the boundary an external change is adopted by the next put.
+        setClipboardWriteAgo(r, 750)
+        writeFile(clipboardFilePath(fakeDir), "external copy")
+        check r.getNoNamedRegister().getContent() == "external copy"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
 proc isToolAvailable(cmd: string): bool =
   try:
     let (_, exitCode) = execCmdEx("which " & cmd)
@@ -463,7 +704,7 @@ proc readPrimaryWithRetry(
     tool: ClipboardTool, expected: string, maxRetries: int = 10, delayMs: int = 100
 ): Result[string, string] =
   ## Retry reading from PRIMARY selection until the expected value is returned.
-  ## Async writes may not be ready immediately.
+  ## Selection writes may not be visible immediately in CI environments.
   for i in 0 ..< maxRetries:
     result = readFromPrimarySelectionSync(tool)
     if result.isOk and result.get() == expected:
@@ -472,7 +713,7 @@ proc readPrimaryWithRetry(
   return readFromPrimarySelectionSync(tool)
 
 proc cleanup(tool: ClipboardTool) =
-  ## Clean up clipboard tool processes spawned by async writes during tests.
+  ## Clean up clipboard tool processes spawned by writes during tests.
   ## Uses -f flag to match only processes started from the test's working dir,
   ## avoiding killing unrelated user processes.
   let pid = getCurrentProcessId()
@@ -495,9 +736,8 @@ suite "Registers clipboard integration":
       r.setClipboardTool(tool)
       r.setYankedRegister("old internal", false)
 
-      # setYankedRegister spawns async writes to both CLIPBOARD and PRIMARY.
-      # Wait for them to land before our explicit sync write below, otherwise
-      # the lingering "old internal" write can race and overwrite testText.
+      # setYankedRegister writes to both CLIPBOARD and PRIMARY synchronously.
+      # Verify they landed before our explicit sync write below.
       let clipSeeded = readClipboardWithRetry(tool, "old internal")
       check clipSeeded.isOk and clipSeeded.get() == "old internal"
       let primarySeeded = readPrimaryWithRetry(tool, "old internal")
@@ -512,13 +752,18 @@ suite "Registers clipboard integration":
       let clipReady = readClipboardWithRetry(tool, testText)
       check clipReady.isOk and clipReady.get() == testText
 
+      # On Wayland, expire the claim window so the external change is
+      # observed.
+      if tool == cbtWlClipboard:
+        expireClipboardClaimWindow(r)
+
       # getNoNamedRegister should pick up the external clipboard content
       let reg = r.getNoNamedRegister()
       check reg.getContent() == testText
 
       cleanup(tool)
 
-  test "getNoNamedRegister syncs from PRIMARY selection":
+  test "PRIMARY changes do not affect the unnamed put":
     let (available, tool) = getAvailableTool()
     if not available:
       skip()
@@ -527,9 +772,8 @@ suite "Registers clipboard integration":
       r.setClipboardTool(tool)
       r.setYankedRegister("old internal", false)
 
-      # setYankedRegister spawns async writes to both CLIPBOARD and PRIMARY.
-      # Wait for them to land before our explicit sync write below, otherwise
-      # the lingering "old internal" write can race and overwrite testText.
+      # setYankedRegister writes to both CLIPBOARD and PRIMARY synchronously.
+      # Verify they landed before our explicit sync write below.
       let clipSeeded = readClipboardWithRetry(tool, "old internal")
       check clipSeeded.isOk and clipSeeded.get() == "old internal"
       let primarySeeded = readPrimaryWithRetry(tool, "old internal")
@@ -544,7 +788,43 @@ suite "Registers clipboard integration":
       let primaryReady = readPrimaryWithRetry(tool, testText)
       check primaryReady.isOk and primaryReady.get() == testText
 
-      # getNoNamedRegister should pick up the PRIMARY selection content
+      # Put reads CLIPBOARD only, so the unnamed put keeps the old value;
+      # the PRIMARY content is reachable through the `*` register.
+      let reg = r.getNoNamedRegister()
+      check reg.getContent() == "old internal"
+      check r.getClipboardRegister('*').getContent() == testText
+
+      cleanup(tool)
+
+  test "getNoNamedRegister picks up external CLIPBOARD changes after a yank":
+    let (available, tool) = getAvailableTool()
+    if not available:
+      skip()
+    else:
+      let r = initRegisters()
+      r.setClipboardTool(tool)
+      r.setYankedRegister("cached internal", false)
+
+      # setYankedRegister writes synchronously; verify they landed before
+      # the external write below.
+      let clipSeeded = readClipboardWithRetry(tool, "cached internal")
+      check clipSeeded.isOk and clipSeeded.get() == "cached internal"
+      let primarySeeded = readPrimaryWithRetry(tool, "cached internal")
+      check primarySeeded.isOk and primarySeeded.get() == "cached internal"
+
+      # An external copy after moe's yank is picked up by the next put.
+      let testText = "external copy after yank"
+      let writeResult = writeToClipboardSync(tool, testText)
+      check writeResult.isOk
+
+      let clipReady = readClipboardWithRetry(tool, testText)
+      check clipReady.isOk and clipReady.get() == testText
+
+      # On Wayland, expire the claim window so the external change is
+      # observed.
+      if tool == cbtWlClipboard:
+        expireClipboardClaimWindow(r)
+
       let reg = r.getNoNamedRegister()
       check reg.getContent() == testText
 
@@ -561,7 +841,7 @@ suite "Registers clipboard integration":
       let testText = "primary selection test"
       r.setNoNamedRegister(testText, false)
 
-      # Read back from PRIMARY selection (with retry for async write)
+      # Read back from PRIMARY selection (writes are synchronous)
       let readResult = readPrimaryWithRetry(tool, testText)
       check readResult.isOk
       check readResult.get() == testText
@@ -579,10 +859,8 @@ suite "Registers clipboard integration":
       let testText = "dual clipboard test"
       r.setNoNamedRegister(testText, false)
 
-      # Allow async writes to complete
-      sleep(200)
-
-      let clipResult = readFromClipboardSync(tool)
+      # Writes are synchronous
+      let clipResult = readClipboardWithRetry(tool, testText)
       check clipResult.isOk
       check clipResult.get() == testText
 
