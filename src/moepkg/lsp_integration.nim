@@ -1333,25 +1333,6 @@ proc hasStaleServerEditTarget*(
 
   return false
 
-proc validateEditTargetUri(uri: string): Result[string, string] =
-  ## Reject URIs that cannot be safely treated as a local file path, so a
-  ## malformed or non-`file:` URI is never written to a bogus file name.
-  ## Returns the decoded local path on success.
-  if not uri.startsWith("file://") or uri.len < 8 or uri[7] != '/':
-    return err("unsupported edit target URI (only file:/// is allowed): " & uri)
-  if '?' in uri or '#' in uri:
-    return err("unsupported character in edit target URI: " & uri)
-  let path = uriToPath(uri)
-  if '\0' in path:
-    return err("unsupported character in edit target URI: " & uri)
-  # Checks on the decoded path: percent-encoded forms (e.g. %2F) must not
-  # smuggle in what the raw checks reject.
-  if path.startsWith("//"):
-    return err("unsupported file:// URI with extra leading slash: " & uri)
-  if path == "/":
-    return err("unsupported file:// URI with empty path: " & uri)
-  ok(path)
-
 const BufferStateInconsistentSuffix* = " (buffer state may be inconsistent)"
   ## Suffix appended to errors from a failed rollback (untrustworthy buffer).
   ## applyWorkspaceEditFromServer (editor_lsp.nim) detects this same
@@ -1380,14 +1361,11 @@ proc applyWorkspaceEdit*(
   ## the text edits of such a WorkspaceEdit would leave the workspace in a
   ## broken half-applied state, so the whole edit is refused instead.
   ##
-  ## Every target URI must be a well-formed file:/// URI (see
-  ## validateEditTargetUri); the whole edit is refused before anything is
-  ## modified if any target is malformed.
-  if edit.resourceOperations.len > 0:
-    return err(
-      "WorkspaceEdit contains unsupported file operations (" &
-        edit.resourceOperations.deduplicate().join(", ") & "); no edits applied"
-    )
+  ## Malformed targets and file operations are refused before anything is
+  ## modified (see staticRejectionReason, shared with the service-layer gate).
+  let rejectReason = staticRejectionReason(edit)
+  if rejectReason.isSome:
+    return err(rejectReason.get & "; no edits applied")
   var modifiedCount = 0
   var openBuffersToModify: seq[tuple[bufferIdx: int, edits: seq[TextEdit]]] = @[]
   var unopenedFilesToModify: seq[tuple[path: string, edits: seq[TextEdit]]] = @[]
@@ -1396,7 +1374,7 @@ proc applyWorkspaceEdit*(
   if edit.documentChanges.isSome:
     # Handle documentChanges field (seq[TextDocumentEdit])
     for docEdit in edit.documentChanges.get:
-      let pathRes = validateEditTargetUri(docEdit.textDocument.uri)
+      let pathRes = validateLocalFileUri(docEdit.textDocument.uri)
       if pathRes.isErr:
         return err(pathRes.error)
       let path = pathRes.get
@@ -1413,7 +1391,7 @@ proc applyWorkspaceEdit*(
   elif edit.changes.isSome:
     # Handle changes field (uri -> seq[TextEdit]) only if documentChanges is absent
     for uri, edits in edit.changes.get:
-      let pathRes = validateEditTargetUri(uri)
+      let pathRes = validateLocalFileUri(uri)
       if pathRes.isErr:
         return err(pathRes.error)
       let path = pathRes.get

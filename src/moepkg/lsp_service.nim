@@ -355,6 +355,43 @@ proc uriToPath*(uri: string): string =
     return decodeUrl(uri[7 ..^ 1], decodePlus = false)
   return uri
 
+proc validateLocalFileUri*(uri: string): Result[string, string] =
+  ## Reject URIs that cannot be safely treated as a local file path.
+  ## Returns the decoded local path on success.
+  if not uri.startsWith("file://") or uri.len < 8 or uri[7] != '/':
+    return err("unsupported URI (only file:/// is allowed): " & uri)
+  if '?' in uri or '#' in uri:
+    return err("unsupported character in URI: " & uri)
+  let path = uriToPath(uri)
+  if '\0' in path:
+    return err("unsupported character in URI: " & uri)
+  # Percent-encoded forms (e.g. %2F) must not bypass the raw checks.
+  if path.startsWith("//"):
+    return err("unsupported file:// URI with extra leading slash: " & uri)
+  if path == "/":
+    return err("unsupported file:// URI with empty path: " & uri)
+  ok(path)
+
+proc staticRejectionReason*(edit: WorkspaceEdit): Option[string] =
+  ## Static rejection reason for a WorkspaceEdit, shared by the applyEdit gate
+  ## and applyWorkspaceEdit so the two can never diverge.
+  if edit.resourceOperations.len > 0:
+    return some(
+      "WorkspaceEdit contains unsupported file operations (" &
+        edit.resourceOperations.join(", ") & ")"
+    )
+  if edit.documentChanges.isSome:
+    for docEdit in edit.documentChanges.get:
+      let pathRes = validateLocalFileUri(docEdit.textDocument.uri)
+      if pathRes.isErr:
+        return some(pathRes.error)
+  elif edit.changes.isSome:
+    for uri in edit.changes.get.keys:
+      let pathRes = validateLocalFileUri(uri)
+      if pathRes.isErr:
+        return some(pathRes.error)
+  none(string)
+
 proc getWorker*(svc: LspService, langId: string): Option[LspWorker] =
   ## Get existing worker for a language (running or starting)
   if langId in svc.workers:
@@ -677,9 +714,16 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
     var failureReason = ""
     try:
       let edit = parseWorkspaceEdit(parseJson(evt.applyEditEditJson))
-      let res = svc.onApplyWorkspaceEdit(edit)
-      applied = res.applied
-      failureReason = res.failureReason.get("")
+      # Service-layer gate: bad targets or file operations must not reach a
+      # callback that skips its own checks.
+      let invalidReason = staticRejectionReason(edit)
+      if invalidReason.isSome:
+        failureReason = "applyEdit rejected: " & invalidReason.get
+        svc.onLogMessage(langId, mtWarning, failureReason)
+      else:
+        let res = svc.onApplyWorkspaceEdit(edit)
+        applied = res.applied
+        failureReason = res.failureReason.get("")
     except TransactionRollbackError as err:
       let workerOpt = svc.getWorker(langId)
       if workerOpt.isSome:
