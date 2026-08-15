@@ -20,13 +20,15 @@
 ## Integration tests for command_registry
 ## These tests cover executeCommand and executeOperatorOnRange
 
-import std/[unittest, options, strutils, tables, sets]
+import std/[options, os, sets, strutils, tables, unittest]
 
 import pkg/results
 
 import ../src/moepkg/[buffer, types, motion, key_bindings, config, modes, registers]
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/command_handlers/visual_commands
+
+import clipboard_test_helper
 
 proc createTestContext(buffer: TextBuffer): CommandContext =
   let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
@@ -2991,76 +2993,315 @@ suite "Handler - Clipboard operations":
     check result.isErr
     check "No text selected" in result.error
 
-  test "clipboard cut on V-line preserves full lines in the delete register":
-    # Regression: cut on V-mode used to write a char-range slice to the
-    # clipboard (missing head/tail bytes) while visualDelete removed whole
-    # lines. Now the copy step respects the vskLine kind, so the region fed
-    # to writeToClipboardAsync matches what the delete side removes.
-    let buffer = newTextBuffer("hello world\nfoo bar baz\ntail")
+  test "clipboard copy then unnamed paste picks up the copied content":
+    # The copy writes CLIPBOARD only and the unnamed put reads it, so the
+    # put returns the copied content instead of the previously yanked one.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.Visual, kind = vskChar)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        let registry = createTestRegistry()
+
+        # Simulate a prior yank: both selections hold the yanked content.
+        writeFile(clipboardFilePath(fakeDir), "yanked content")
+        writeFile(primaryFilePath(fakeDir), "yanked content")
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        ctx.state.registers.setYankedRegister("yanked content", false)
+
+        let selectedText = getVisualSelectionText(buffer, ctx.state.visualSelection)
+        check selectedText.len > 0
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # The copy writes CLIPBOARD only; verify the write landed.
+        check readFile(clipboardFilePath(fakeDir)) == selectedText
+        check readFile(primaryFilePath(fakeDir)) == "yanked content"
+
+        # Put picks up the copied content, not the yanked one.
+        check ctx.state.registers.getNoNamedRegister().getContent() == selectedText
+        check ctx.state.registers.getNoNamedRegister().isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy on V-line keeps the linewise type on unnamed put":
+    # Regression: a single-line linewise copy writes no trailing newline,
+    # so the read cannot tell linewise from characterwise by content alone;
+    # the copy must update the internal register to keep the linewise type.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        let registry = createTestRegistry()
+
+        # A prior yank leaves old content, so the read would differ from the
+        # internal register and re-infer the type from the newline alone.
+        writeFile(clipboardFilePath(fakeDir), "old yanked content")
+        writeFile(primaryFilePath(fakeDir), "old yanked content")
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        ctx.state.registers.setYankedRegister("old yanked content", false)
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        check readFile(clipboardFilePath(fakeDir)) == "hello world"
+        check readFile(primaryFilePath(fakeDir)) == "old yanked content"
+
+        # The put returns the copied line and keeps the linewise type.
+        check ctx.state.registers.getNoNamedRegister().getContent() == "hello world"
+        check ctx.state.registers.getNoNamedRegister().isLine == true
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy then unnamed put keeps the copied content inside the wl claim window":
+    # A non-forking wl-copy cannot confirm the copy has landed, so a put
+    # shortly after reads the pre-copy content; the internal register must
+    # be kept instead.
+    let fakeDir = installFakeWlClipboardTool("old external content", stayRunning = true)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
+        let registry = createTestRegistry()
+        ctx.state.registers.setClipboardTool(cbtWlClipboard)
+
+        # The fake selection holds pre-copy content so the read differs
+        # from the copied content.
+        writeFile(clipboardFilePath(fakeDir), "old external content")
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # Wait for the fake wl-copy to record the copy before reading back.
+        waitForClipboardWrite(fakeDir, "hello world")
+
+        # Restart the claim window so the wait above cannot move the put
+        # past it.
+        restartClipboardClaimWindow(ctx.state.registers)
+
+        # The first read after a write returns the pre-copy content; the put
+        # keeps the internal register (the copied content with its type).
+        var reg = ctx.state.registers.getNoNamedRegister()
+        check reg.getContent() == "hello world"
+        check reg.isLine == true
+
+        # After the claim window has expired, an external change is picked
+        # up by the next put.
+        expireClipboardClaimWindow(ctx.state.registers)
+        writeFile(clipboardFilePath(fakeDir), "external copy")
+        reg = ctx.state.registers.getNoNamedRegister()
+        check reg.getContent() == "external copy"
+        check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy then unnamed put adopts an external change made right after the copy":
+    # A forking wl-copy confirms the copy, so no claim window opens and an
+    # external copy right after moe's copy is picked up by the next put.
+    let fakeDir = installFakeWlClipboardTool("old external content")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
+        let registry = createTestRegistry()
+        ctx.state.registers.setClipboardTool(cbtWlClipboard)
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # The write is confirmed (the fake exits right away), so the
+        # immediate external change is adopted by the next put.
+        writeFile(clipboardFilePath(fakeDir), "external copy")
+        let reg = ctx.state.registers.getNoNamedRegister()
+        check reg.getContent() == "external copy"
+        check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy then + register put returns the copied content inside the wl claim window":
+    # Regression: `"+p` right after a copy must return the copied content,
+    # symmetric with the unnamed put.
+    let fakeDir = installFakeWlClipboardTool("old external content", stayRunning = true)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
+        let registry = createTestRegistry()
+        ctx.state.registers.setClipboardTool(cbtWlClipboard)
+
+        # Prime the `+` register with pre-copy content.
+        writeFile(clipboardFilePath(fakeDir), "old external content")
+        check ctx.state.registers.getClipboardRegister('+').getContent() ==
+          "old external content"
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # Wait for the fake wl-copy write to land.
+        waitForClipboardWrite(fakeDir, "hello world")
+
+        # Restart the claim window so the wait above cannot move the put
+        # past it.
+        restartClipboardClaimWindow(ctx.state.registers)
+
+        let reg = ctx.state.registers.getClipboardRegister('+')
+        check reg.getContent() == "hello world"
+        check reg.isLine == true
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy reports a failed CLIPBOARD write":
+    # A failed write must surface as an error, otherwise the following put
+    # would paste the pre-copy content instead of the selected text.
+    let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 3, 1, 4, mode = EditorMode.VisualLine, kind = vskLine)
+    ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.Visual, kind = vskChar)
     ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
     let registry = createTestRegistry()
 
-    check registry.execute(ctx, builtin(bcEditCut)).isOk
+    # An empty PATH makes the xclip write fail deterministically.
+    let originalPath = getEnv("PATH")
+    putEnv("PATH", "")
+    try:
+      check registry.execute(ctx, builtin(bcEditCopy)).isErr
+    finally:
+      putEnv("PATH", originalPath)
 
-    # Full lines removed from buffer.
-    check buffer.len == 1
-    check buffer[0] == "tail"
-    # Delete register captured the full lines line-wise.
-    let noname = ctx.state.registers.getNoNamedRegister()
-    check noname.getContent() == "hello world\nfoo bar baz"
-    check noname.isLine == true
-    check ctx.state.visualSelection.active == false
+  test "clipboard cut on V-line preserves full lines in the delete register":
+    # Regression: cut on V-mode used to write a char-range slice (missing
+    # head/tail bytes) while visualDelete removed whole lines; the copy step
+    # must respect the vskLine kind so the region matches the deletion.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz\ntail")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 3, 1, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        let registry = createTestRegistry()
+
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+
+        # Full lines removed from buffer.
+        check buffer.len == 1
+        check buffer[0] == "tail"
+        # Delete register captured the full lines line-wise.
+        let noname = ctx.state.registers.getNoNamedRegister()
+        check noname.getContent() == "hello world\nfoo bar baz"
+        check noname.isLine == true
+        check ctx.state.visualSelection.active == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
 
   test "clipboard cut on V-line captures both lines when kind is vskLine":
     # A tighter version of the above: verify getVisualSelectionText (invoked
     # by handleClipboardCopy) matches the deleted region, not the char span.
-    let buffer = newTextBuffer("first\nsecond")
-    let ctx = createTestContext(buffer)
-    # Deliberately place start.col past the end of "first" and current.col
-    # mid-way through "second" so a naive char-range would drop bytes on
-    # both ends.
-    ctx.setupVisual(0, 5, 1, 2, mode = EditorMode.VisualLine, kind = vskLine)
-    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("first\nsecond")
+        let ctx = createTestContext(buffer)
+        # Deliberately place start.col past the end of "first" and current.col
+        # mid-way through "second" so a naive char-range would drop bytes on
+        # both ends.
+        ctx.setupVisual(0, 5, 1, 2, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
-    check getVisualSelectionText(buffer, ctx.state.visualSelection) == "first\nsecond"
+        check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
+          "first\nsecond"
 
-    let registry = createTestRegistry()
-    check registry.execute(ctx, builtin(bcEditCut)).isOk
-    check buffer.len == 1
-    check buffer[0] == ""
+        let registry = createTestRegistry()
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+        check buffer.len == 1
+        check buffer[0] == ""
+      finally:
+        removeFakeClipboardTool(fakeDir)
 
   test "clipboard cut on block selection captures rectangle":
-    let buffer = newTextBuffer("abcdef\nghijkl\nmnopqr")
-    let ctx = createTestContext(buffer)
-    ctx.setupVisual(0, 1, 2, 3, mode = EditorMode.VisualBlock, kind = vskBlock)
-    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("abcdef\nghijkl\nmnopqr")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 1, 2, 3, mode = EditorMode.VisualBlock, kind = vskBlock)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
 
-    check getVisualSelectionText(buffer, ctx.state.visualSelection) == "bcd\nhij\nnop"
+        check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
+          "bcd\nhij\nnop"
 
-    let registry = createTestRegistry()
-    check registry.execute(ctx, builtin(bcEditCut)).isOk
-    check buffer[0] == "aef"
-    check buffer[1] == "gkl"
-    check buffer[2] == "mqr"
-    # Rectangle delete stores characterwise (isLine == false).
-    let noname = ctx.state.registers.getNoNamedRegister()
-    check noname.getContent() == "bcd\nhij\nnop"
-    check noname.isLine == false
+        let registry = createTestRegistry()
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+        check buffer[0] == "aef"
+        check buffer[1] == "gkl"
+        check buffer[2] == "mqr"
+        # Rectangle delete stores characterwise (isLine == false).
+        let noname = ctx.state.registers.getNoNamedRegister()
+        check noname.getContent() == "bcd\nhij\nnop"
+        check noname.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
 
   test "clipboard cut on char selection unchanged":
     # Regression guard: vskChar must still copy the char range only.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 2, 0, 6, mode = EditorMode.Visual, kind = vskChar)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+
+        check getVisualSelectionText(buffer, ctx.state.visualSelection) == "llo w"
+
+        let registry = createTestRegistry()
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+        check buffer[0] == "heorld"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard cut continues the delete when the CLIPBOARD write fails":
+    # A failed copy must not cancel the delete half.
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 2, 0, 6, mode = EditorMode.Visual, kind = vskChar)
     ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
-
-    check getVisualSelectionText(buffer, ctx.state.visualSelection) == "llo w"
-
     let registry = createTestRegistry()
-    check registry.execute(ctx, builtin(bcEditCut)).isOk
+
+    # An empty PATH makes the xclip write fail deterministically.
+    let originalPath = getEnv("PATH")
+    putEnv("PATH", "")
+    try:
+      check registry.execute(ctx, builtin(bcEditCut)).isErr
+    finally:
+      putEnv("PATH", originalPath)
+
     check buffer[0] == "heorld"
+    check ctx.state.visualSelection.active == false
 
 suite "Handler - Visual Paragraph motion":
   test "visual move paragraph forward":

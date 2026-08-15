@@ -22,14 +22,14 @@
 ## Split out from `registers` so modules that only need the `Register` and
 ## `Registers` types (notably `types` and its ~60 importers) do not transitively
 ## pull in the full register implementation, which imports `clipboard` (and thus
-## `pkg/chronos`, `osproc`, `streams`). The clipboard-syncing logic and the
+## `osproc`, `streams`). The clipboard-syncing logic and the
 ## public accessor procs stay in `registers`.
 ##
 ## The `Registers` fields are exported so the procs in `registers` can operate
 ## on them from the implementation module; they are not part of the intended
 ## public API.
 
-import std/[options, tables]
+import std/[monotimes, options, tables]
 
 import ../config
 
@@ -41,6 +41,10 @@ type
   Registers* = ref object ## Container for all register types
     clipboardTool*: Option[ClipboardTool]
 
+    lastClipboardWriteTime*: MonoTime
+      ## Time of the last CLIPBOARD write; used to tolerate the wl-copy
+      ## claim window. The zero value (no write yet) reads as expired.
+
     noNamed*: Register ## The unnamed register (") - latest yank/delete content
 
     smallDelete*: Register ## Small delete register (-) - deleted text less than one line
@@ -48,7 +52,9 @@ type
     number*: array[10, Register]
       ## Numbered registers (0-9)
       ## 0: Most recent yank
-      ## 1-9: Delete history (1 is most recent, shifts on new delete)
+      ## 1-9: Delete history (1 is most recent, shifts on new delete).
+      ## Only linewise/multiline deletes are recorded; shorter deletions
+      ## go to the small delete register (-).
 
     named*: Table[char, Register]
       ## Named registers (a-z)
