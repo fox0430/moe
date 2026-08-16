@@ -440,7 +440,7 @@ proc autoBackup*(e: Editor) =
         backupPaths.add(backupResult.get)
       else:
         # "No changes since last backup" is a normal skip, not a failure
-        if "No changes since last backup" notin backupResult.error:
+        if NoChangesSinceLastBackupError notin backupResult.error:
           backupFailures.add(buffer.filePath.get & ": " & backupResult.error)
 
   # Always update last backup time to prevent repeated checks every frame
