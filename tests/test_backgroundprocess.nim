@@ -575,6 +575,25 @@ suite "BackgroundProcess - waitForAsync with timeout":
     check r.isErr
     check "Timed out" in r.error
 
+  when defined(linux):
+    test "Timeout when a grandchild escapes the group and keeps the pipe open":
+      # The escaped grandchild keeps the pipe open after group kill, so EOF
+      # never arrives. waitForAsync must cancel the reader before closing the
+      # handle.
+      proc runTest(): Future[ProcessOutputResult] {.async.} =
+        let cmd = BackgroundProcessCommand(
+          cmd: "sh", args: @["-c", "setsid sleep 5 & wait"], workingDir: getCurrentDir()
+        )
+
+        let r = await startBackgroundProcess(cmd)
+        if r.isErr:
+          return ProcessOutputResult.err "start failed"
+        return await r.get.waitForAsync(200.milliseconds)
+
+      let r = waitFor runTest()
+      check r.isErr
+      check "Timed out" in r.error
+
   test "InfiniteDuration waits without a bound":
     proc runTest(): Future[ProcessOutputResult] {.async.} =
       let cmd = BackgroundProcessCommand(
