@@ -186,9 +186,12 @@ proc waitForAsync*(
   # from under a live read would be a use-after-free.
   bp.kill()
   try:
+    # Wait for EOF or KillGrace, then finish any reader cancellation below.
     discard await reader.withTimeout(KillGrace)
   except CancelledError:
     discard
+  # Ensure the reader is stopped before closing the handle.
+  await reader.cancelAndWait()
   await bp.reapAsync()
   # `$Duration` keeps sub-second timeouts honest; `timeout.seconds` would
   # report "0" for anything shorter than a second.
