@@ -35,6 +35,7 @@ proc spawnChild(ignoreSigterm: bool): PtyHandle =
   let devnull = posix.open("/dev/null".cstring, O_RDWR)
   let pid = fork()
   if pid == 0:
+    discard setpgid(Pid(0), Pid(0))
     # Child: optionally make SIGTERM uncatchable-by-default into a no-op, then
     # block forever. Only SIGKILL (or, when cooperative, SIGTERM) can stop it.
     if ignoreSigterm:
@@ -42,6 +43,41 @@ proc spawnChild(ignoreSigterm: bool): PtyHandle =
     while true:
       discard posix.sleep(cint(3600))
   PtyHandle(masterFd: devnull, childPid: pid, closed: false)
+
+proc spawnChildWithDescendant(): tuple[pty: PtyHandle, descendantPid: Pid] =
+  ## Create a process-group leader and a descendant in the same group.
+  ## The leader ignores SIGTERM while the descendant keeps the default handler,
+  ## so a group signal can be distinguished from a direct-child signal.
+  var pidPipe: array[0 .. 1, cint]
+  require posix.pipe(pidPipe) == 0
+  let devnull = posix.open("/dev/null".cstring, O_RDWR)
+  let pid = fork()
+  if pid == 0:
+    discard posix.close(pidPipe[0])
+    discard setpgid(Pid(0), Pid(0))
+    let descendantPid = fork()
+    if descendantPid == 0:
+      discard posix.close(pidPipe[1])
+      while true:
+        discard posix.sleep(cint(3600))
+
+    posix.signal(SIGTERM, SIG_IGN)
+    discard posix.write(pidPipe[1], addr descendantPid, sizeof(descendantPid))
+    discard posix.close(pidPipe[1])
+    while true:
+      discard posix.sleep(cint(3600))
+
+  require pid > 0
+  discard posix.close(pidPipe[1])
+  var descendantPid: Pid
+  let bytesRead = posix.read(pidPipe[0], addr descendantPid, sizeof(descendantPid))
+  discard posix.close(pidPipe[0])
+  if bytesRead != sizeof(descendantPid):
+    discard posix.kill(posix.Pid(-pid), SIGKILL)
+    var status: cint
+    discard waitpid(pid, status, 0)
+    require false
+  (PtyHandle(masterFd: devnull, childPid: pid, closed: false), descendantPid)
 
 suite "closePty - bounded teardown":
   test "Escalates to SIGKILL when the child ignores SIGTERM":
@@ -63,6 +99,31 @@ suite "closePty - bounded teardown":
     check elapsed >= 0.15
     # ...but still bounded well under the per-file test timeout.
     check elapsed < 5.0
+
+  test "Terminates descendants in the child's process group":
+    let (pty, descendantPid) = spawnChildWithDescendant()
+    defer:
+      if not pty.closed:
+        pty.closePty()
+      if not childIsGone(descendantPid):
+        discard kill(descendantPid, SIGKILL)
+
+    let start = epochTime()
+    pty.closePty()
+    let elapsed = epochTime() - start
+
+    check pty.closed
+    check childIsGone(pty.childPid)
+    # The leader ignores SIGTERM, so closePty must wait for the SIGKILL path.
+    check elapsed >= 0.15
+    # A direct-child signal would leave this same-group descendant alive.
+    var descendantGone = false
+    for _ in 0 ..< 100:
+      if childIsGone(descendantPid):
+        descendantGone = true
+        break
+      sleep(10)
+    check descendantGone
 
   test "Returns promptly when the child honors SIGTERM":
     let pty = spawnChild(ignoreSigterm = false)
