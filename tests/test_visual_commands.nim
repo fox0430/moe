@@ -1270,6 +1270,98 @@ suite "Visual Commands - visualChange":
     check buf.len == 2 # empty line + line 3
     check state.mode == EditorMode.Insert
 
+  test "Change char selection stores deleted text into named pending register and consumes it":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualChange(buf, state)
+
+    check buf.getLine(0) == " world"
+    check state.registers.getNamedRegister('a').getContent() == "hello"
+    check state.pendingInput.pendingRegister.isNone
+
+  test "Change line selection stores deleted text into named pending register and consumes it":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualChange(buf, state)
+
+    check state.registers.getNamedRegister('a').getContent() == "line 1\nline 2"
+    check state.registers.getNamedRegister('a').isLine == true
+    check state.pendingInput.pendingRegister.isNone
+
+  test "Change block selection stores deleted text into named pending register and consumes it":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\ndef")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.pendingInput.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 1),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualChange(buf, state)
+
+    check state.registers.getNamedRegister('a').getContent() == "ab\nde"
+    check state.pendingInput.pendingRegister.isNone
+
+  test "Change char selection stores deleted text into unnamed register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualChange(buf, state)
+
+    check buf.getLine(0) == " world"
+    check state.registers.getNoNamedRegister().getContent() == "hello"
+    check state.registers.getNoNamedRegister().isLine == false
+
+  test "Change line selection stores deleted text into unnamed register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualChange(buf, state)
+
+    check state.registers.getNoNamedRegister().getContent() == "line 1\nline 2"
+    check state.registers.getNoNamedRegister().isLine == true
+
 suite "Visual Commands - visualSwapSelection":
   test "Swap selection endpoints":
     let buf = newTextBuffer()

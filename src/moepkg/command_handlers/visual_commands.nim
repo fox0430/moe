@@ -297,10 +297,9 @@ proc deleteLineSelection(
 proc visualDelete*(buffer: TextBuffer, state: EditorState) =
   ## Delete visual selection and return to previous mode
   if state.visualSelection.active:
-    # Consume the pending register up front: the register store happens only
-    # after the transaction commits (registers are not covered by buffer
-    # transactions), so routing must use a value captured before the edit, and
-    # a failed edit must still consume the selector.
+    # Capture the pending register before the edit: the store happens only after
+    # the transaction commits (registers are outside buffer transactions), and
+    # it must be consumed even if the edit fails.
     let pendingReg = state.pendingInput.pendingRegister
     state.pendingInput.pendingRegister = none(char)
 
@@ -326,8 +325,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
       state.mode = state.previousMode
       return
 
-    # Registers are not covered by the buffer transaction, so store the
-    # deleted text only after the transaction committed.
+    # Registers are outside the buffer transaction, so store after commit.
     state.storeVisualDeletedText(pendingReg, deletedText, deletedIsLine)
 
     # Clamp cursor to valid position after deletion
@@ -773,7 +771,14 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
 proc visualChange*(buffer: TextBuffer, state: EditorState) =
   ## Delete visual selection and enter insert mode (c command)
   if state.visualSelection.active:
+    # Capture the pending register before the edit: the store happens only after
+    # the transaction commits (registers are outside buffer transactions), and
+    # it must be consumed even if the edit fails.
+    let pendingReg = state.pendingInput.pendingRegister
+    state.pendingInput.pendingRegister = none(char)
+
     var deletedText = ""
+    var deletedIsLine = false
 
     let txr = withTransaction(buffer, "Visual change"):
       case state.visualSelection.kind
@@ -802,6 +807,9 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
           endLine =
             max(state.visualSelection.start.line, state.visualSelection.current.line)
 
+        deletedText = getLineText(buffer, state.visualSelection)
+        deletedIsLine = true
+
         for _ in startLine .. endLine:
           checkVisualEdit(state, buffer.deleteLine(startLine))
 
@@ -811,6 +819,8 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
       of vskChar:
         let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
+        deletedText = buffer.getTextInRange(selStart, selEnd)
+
         checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
 
         state.cursor = selStart
@@ -819,12 +829,8 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
       state.mode = state.previousMode
       return
 
-    if state.visualSelection.kind == vskBlock:
-      # Registers are not covered by the buffer transaction, so store the
-      # deleted text only after the transaction committed.
-      state.storeVisualDeletedText(
-        state.pendingInput.pendingRegister, deletedText, false
-      )
+    # Registers are outside the buffer transaction, so store after commit.
+    state.storeVisualDeletedText(pendingReg, deletedText, deletedIsLine)
 
     state.visualSelection.active = false
     state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
