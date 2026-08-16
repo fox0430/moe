@@ -259,8 +259,15 @@ proc reap(pty: PtyHandle, flags: cint): cint =
   while result == -1 and errno == EINTR:
     result = waitpid(pty.childPid, status, flags)
 
+proc signalProcessGroup(pid: Pid, signal: cint) =
+  ## forkpty makes the child a process-group leader, so its pid is also the
+  ## process group id. Signal the group to include descendants of the shell.
+  if pid <= 0:
+    return
+  discard posix.kill(posix.Pid(-pid), signal)
+
 proc closePty*(pty: PtyHandle) =
-  ## Close the master fd and reap the child shell.
+  ## Close the master fd and reap the child shell and its process group.
   ##
   ## Escalates SIGTERM -> SIGKILL with a bounded, non-blocking poll so a child
   ## that ignores SIGTERM (or the SIGHUP raised by closing the master fd) can
@@ -273,13 +280,16 @@ proc closePty*(pty: PtyHandle) =
 
   discard close(pty.masterFd)
 
+  if pty.childPid <= 0:
+    return
+
   if pty.reap(WNOHANG) != 0:
     # Exited (reaped here) or already gone — nothing left to signal.
     return
 
   # Still running: ask it to terminate, then poll for up to ~200ms without
   # blocking the shutdown path.
-  discard kill(pty.childPid, SIGTERM)
+  signalProcessGroup(pty.childPid, SIGTERM)
   var ts = Timespec(tv_sec: Time(0), tv_nsec: 10_000_000) # 10ms
   for _ in 0 ..< 20:
     var remaining: Timespec
@@ -289,5 +299,5 @@ proc closePty*(pty: PtyHandle) =
 
   # Refused SIGTERM: force-kill. SIGKILL is uncatchable, so this final reap is
   # bounded by the kernel tearing the process down.
-  discard kill(pty.childPid, SIGKILL)
+  signalProcessGroup(pty.childPid, SIGKILL)
   discard pty.reap(0)
