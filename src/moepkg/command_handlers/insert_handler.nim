@@ -1208,12 +1208,13 @@ proc handleInsertModeKey*(
         if pendingResult.isErr:
           return InsertModeResult(kind: imrError, errorMessage: pendingResult.error)
         return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+      if state.cursor.line < buffer.len and
+          state.cursor.column >= buffer.getLine(state.cursor.line).runeLen:
+        # At end of line handleDelete is a no-op (no line join), so there is
+        # nothing to delete and nothing to remap against.
+        return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
       let oldEnd =
-        if state.cursor.column < buffer.getLine(state.cursor.line).runeLen:
-          BufferPosition(line: state.cursor.line, column: state.cursor.column + 1)
-        else:
-          # Deleting at end of line joins the next line up.
-          BufferPosition(line: state.cursor.line + 1, column: 0)
+        BufferPosition(line: state.cursor.line, column: state.cursor.column + 1)
       let curBefore = session.stops[session.index]
       let res = handler.handleDelete(buffer, state)
       if res.kind != imrHandled:
