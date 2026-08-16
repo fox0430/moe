@@ -577,10 +577,9 @@ suite "BackgroundProcess - waitForAsync with timeout":
 
   when defined(linux):
     test "Timeout when a grandchild escapes the group and keeps the pipe open":
-      # A grandchild that leaves the process group (`setsid`) keeps the pipe
-      # open after the group kill, so the reader cannot reach EOF. waitForAsync
-      # must still return: it cancels the reader once KillGrace elapses and
-      # only then closes the process handle.
+      # The escaped grandchild keeps the pipe open after group kill, so EOF
+      # never arrives. waitForAsync must cancel the reader before closing the
+      # handle.
       proc runTest(): Future[ProcessOutputResult] {.async.} =
         let cmd = BackgroundProcessCommand(
           cmd: "sh", args: @["-c", "setsid sleep 5 & wait"], workingDir: getCurrentDir()
