@@ -45,7 +45,8 @@ const
   TmpPrefix = ".moe.tmp."
   BackupSuffix = "~"
 
-var tmpCounter {.threadvar.}: uint64
+when not defined(posix):
+  var tmpCounter {.threadvar.}: uint64
 
 type TargetClass* = object
   ## Snapshot of the target's on-disk attributes used to decide the write
@@ -90,20 +91,6 @@ proc classifyTarget*(path: string): TargetClass =
     except OSError:
       discard
 
-proc nextTmpPath(target: string): string =
-  ## Same-directory temp path unique per process. Same-directory is required
-  ## for rename() to be atomic on POSIX (rename across filesystems fails
-  ## with EXDEV).
-  inc tmpCounter
-  let dir = if target.parentDir.len == 0: "." else: target.parentDir
-  let base = target.extractFilename
-  let pid =
-    when defined(posix):
-      $getpid()
-    else:
-      "0"
-  dir / (TmpPrefix & base & "." & pid & "." & $tmpCounter)
-
 proc writeAndFsync(path: string, content: string): Result[(), string] =
   ## Write `content` to `path` (truncating), flush userspace buffers, and
   ## fsync the descriptor before close. `path` must not exist as a directory.
@@ -128,6 +115,81 @@ proc writeAndFsync(path: string, content: string): Result[(), string] =
     return Result[(), string].err(msg)
 
   Result[(), string].ok ()
+
+when defined(posix):
+  proc writeTempExclusive(
+      dir: string, base: string, content: string, tmpPath: var string
+  ): Result[(), string] =
+    ## Create a same-dir temp file via mkstemp (kernel-random name opened
+    ## with O_EXCL), write `content`, fsync, and close. The kernel never
+    ## follows a pre-existing symlink, so a planted link at a guessable
+    ## temp name cannot redirect the write. On error no temp file remains.
+    var tmpl = dir / (TmpPrefix & base & ".XXXXXX")
+    let fd = posix.mkstemp(tmpl.cstring)
+    if fd < 0:
+      let e = errno
+      return
+        Result[(), string].err("cannot create temporary file: " & $posix.strerror(e))
+    tmpPath = tmpl
+
+    var written = 0
+    while written < content.len:
+      let n = posix.write(
+        fd, cast[pointer](unsafeAddr content[written]), content.len - written
+      )
+      if n < 0:
+        let e = errno
+        if e == EINTR:
+          continue
+        discard posix.close(fd)
+        try:
+          removeFile(tmpPath)
+        except CatchableError:
+          discard
+        return
+          Result[(), string].err("cannot write temporary file: " & $posix.strerror(e))
+      if n == 0:
+        discard posix.close(fd)
+        try:
+          removeFile(tmpPath)
+        except CatchableError:
+          discard
+        return Result[(), string].err("cannot write temporary file: " & tmpPath)
+      written += n
+
+    var rc = posix.fsync(fd)
+    while rc != 0 and errno == EINTR:
+      rc = posix.fsync(fd)
+    if rc != 0:
+      let e = errno
+      discard posix.close(fd)
+      try:
+        removeFile(tmpPath)
+      except CatchableError:
+        discard
+      return Result[(), string].err("fsync failed: " & $posix.strerror(e))
+    discard posix.close(fd)
+
+    Result[(), string].ok ()
+
+else:
+  proc writeTempExclusive(
+      dir: string, base: string, content: string, tmpPath: var string
+  ): Result[(), string] =
+    ## Non-POSIX fallback: predictable name without O_EXCL, so a planted
+    ## symlink could redirect the write in shared directories. moe targets
+    ## POSIX and this mirrors the killProcessGroup stance: documented
+    ## limitation on other platforms.
+    inc tmpCounter
+    tmpPath = dir / (TmpPrefix & base & "." & $tmpCounter)
+    let wr = writeAndFsync(tmpPath, content)
+    if wr.isErr:
+      try:
+        removeFile(tmpPath)
+      except CatchableError:
+        discard
+      return wr
+    Result[(), string].ok ()
 
 proc fsyncDir(dir: string): bool =
   ## fsync a directory so a preceding rename is durable across power loss.
@@ -202,14 +264,11 @@ proc writeTempRename(
 ): Result[(), string] =
   ## Vim `bkc=no`: write same-dir temp with restored mode/owner, then rename
   ## over the target. Rename is atomic on POSIX within a filesystem.
-  let tmp = nextTmpPath(path)
-
-  let wr = writeAndFsync(tmp, content)
+  let dir = if path.parentDir.len == 0: "." else: path.parentDir
+  let base = path.extractFilename
+  var tmp: string
+  let wr = writeTempExclusive(dir, base, content, tmp)
   if wr.isErr:
-    try:
-      removeFile(tmp)
-    except CatchableError:
-      discard
     return wr
 
   try:
