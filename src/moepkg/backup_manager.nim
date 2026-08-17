@@ -116,7 +116,9 @@ proc deleteBackup*(state: BackupManagerState, index: int): bool =
   except OSError:
     return false
 
-proc restoreBackup*(state: BackupManagerState, index: int): bool =
+proc restoreBackup*(
+    state: BackupManagerState, index: int, restoredContent: var string
+): bool =
   ## Restore a backup file to its source atomically.
   ## Returns true on success.
   if index < 0 or index >= state.items.len:
@@ -140,7 +142,12 @@ proc restoreBackup*(state: BackupManagerState, index: int): bool =
   except CatchableError:
     return false
 
+  restoredContent = content
   not writeAtomic(state.sourceFilePath, content).isErr
+
+proc restoreBackup*(state: BackupManagerState, index: int): bool =
+  var restoredContent: string
+  state.restoreBackup(index, restoredContent)
 
 proc createBackupManagerTextBuffer*(state: BackupManagerState): TextBuffer =
   ## Create a TextBuffer from backup entries for rendering via the normal view path
