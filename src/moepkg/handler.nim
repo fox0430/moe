@@ -1398,50 +1398,60 @@ proc handlePendingAsyncOperationsImpl(
     let ops = move(e.state.pending)
     e.state.pending.setLen(0)
 
-    for op in ops:
-      case op.kind
-      of paoTerminalCommand:
-        e.enterTerminalInActiveWindow(op.command)
-      of paoShellCommand:
-        # withFrontendSuspend wraps the body in try/finally so the TUI always
-        # resumes, even if execShellCmd/readLine raises (a missed resume leaves
-        # the terminal in raw mode and destroys the screen).
-        withFrontendSuspend(frontend, e):
-          stdout.write("\e[H\e[2J") # Clear screen
-          stdout.flushFile()
-          let exitCode = execShellCmd(op.command)
-          stdout.write("\n\nShell returned " & $exitCode & "\n")
-          stdout.write("Press Enter to continue...")
-          stdout.flushFile()
-          discard stdin.readLine()
-      of paoManPage:
-        withFrontendSuspend(frontend, e):
-          stdout.write("\e[H\e[2J") # Clear screen
-          stdout.flushFile()
-          let exitCode = execShellCmd("man " & quoteShell(op.command))
-          if exitCode != 0:
-            stdout.write("man: " & op.command & " not found\n")
-          stdout.write("\nPress Enter to continue...")
-          stdout.flushFile()
-          discard stdin.readLine()
-      of paoBackground:
-        # SIGTSTP to self so the shell registers moe as a proper stopped job
-        # (visible in `jobs`, resumable via `fg`). Falls back to a blocking
-        # readLine where SIGTSTP is unavailable.
-        withFrontendSuspend(frontend, e):
-          when defined(posix):
-            discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
-          else:
-            stdout.write("\e[H\e[2J")
-            stdout.write("moe suspended. Press Enter to return to moe...")
+    for index, op in ops:
+      try:
+        case op.kind
+        of paoTerminalCommand:
+          e.enterTerminalInActiveWindow(op.command)
+        of paoShellCommand:
+          # withFrontendSuspend wraps the body in try/finally so the TUI always
+          # resumes, even if execShellCmd/readLine raises (a missed resume leaves
+          # the terminal in raw mode and destroys the screen).
+          withFrontendSuspend(frontend, e):
+            stdout.write("\e[H\e[2J") # Clear screen
+            stdout.flushFile()
+            let exitCode = execShellCmd(op.command)
+            stdout.write("\n\nShell returned " & $exitCode & "\n")
+            stdout.write("Press Enter to continue...")
             stdout.flushFile()
             discard stdin.readLine()
-      of paoBuild:
-        asyncSpawn runBuildAsync(e, op.build)
-      of paoQuickRun:
-        asyncSpawn runQuickRunAsync(e, op.quickRun)
-      of paoSyntaxCheck:
-        asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck)
+        of paoManPage:
+          withFrontendSuspend(frontend, e):
+            stdout.write("\e[H\e[2J") # Clear screen
+            stdout.flushFile()
+            let exitCode = execShellCmd("man " & quoteShell(op.command))
+            if exitCode != 0:
+              stdout.write("man: " & op.command & " not found\n")
+            stdout.write("\nPress Enter to continue...")
+            stdout.flushFile()
+            discard stdin.readLine()
+        of paoBackground:
+          # SIGTSTP to self so the shell registers moe as a proper stopped job
+          # (visible in `jobs`, resumable via `fg`). Falls back to a blocking
+          # readLine where SIGTSTP is unavailable.
+          withFrontendSuspend(frontend, e):
+            when defined(posix):
+              discard posix.kill(posix.Pid(posix.getpid()), posix.SIGTSTP)
+            else:
+              stdout.write("\e[H\e[2J")
+              stdout.write("moe suspended. Press Enter to return to moe...")
+              stdout.flushFile()
+              discard stdin.readLine()
+        of paoBuild:
+          asyncSpawn runBuildAsync(e, op.build)
+        of paoQuickRun:
+          asyncSpawn runQuickRunAsync(e, op.quickRun)
+        of paoSyntaxCheck:
+          asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck)
+      except Exception as ex:
+        logError("moe", "Pending async operation " & $op.kind & " failed: " & ex.msg)
+        e.notify("Pending operation failed (" & $op.kind & "): " & ex.msg, nlError)
+
+        # Do not lose work queued behind a failed operation. Keep ops added by
+        # async tasks during this drain after the deferred FIFO entries.
+        if index + 1 < ops.len:
+          e.state.pending = ops[index + 1 .. ^1] & e.state.pending
+        break
 
 proc handlePendingAsyncOperations*(
     e: Editor, frontend: FrontendHooks
