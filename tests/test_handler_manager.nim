@@ -2384,6 +2384,46 @@ suite "HandlerManager - FileTree search statusMessage":
     # After cancel, statusMessage should be empty (clearSearch returns "")
     check state.statusMessage == ""
 
+  test "FileTree operation error is displayed and cleared":
+    let tmpDir = createTempDir("moe_test_", "_ftmgr5")
+    defer:
+      removeDir(tmpDir)
+
+    writeFile(tmpDir / "README.md", "readme")
+
+    let manager = createTestManager()
+    let state = createTestState()
+    state.mode = EditorMode.FileTree
+    let fileTreeState = newFileTreeState(tmpDir)
+    fileTreeState.lastError = "Permission denied"
+
+    let key = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, key)
+
+    check state.statusMessage == "Permission denied"
+    check fileTreeState.lastError == ""
+
+  test "FileTree operation error takes precedence over search prompt":
+    let tmpDir = createTempDir("moe_test_", "_ftmgr6")
+    defer:
+      removeDir(tmpDir)
+
+    writeFile(tmpDir / "README.md", "readme")
+
+    let manager = createTestManager()
+    let state = createTestState()
+    state.mode = EditorMode.FileTree
+    let fileTreeState = newFileTreeState(tmpDir)
+    fileTreeState.isSearching = true
+    fileTreeState.searchText = "README"
+    fileTreeState.lastError = "Permission denied"
+
+    let key = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, key)
+
+    check state.statusMessage == "Permission denied"
+    check fileTreeState.lastError == ""
+
 suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
   ## Regression: `imap K = "bdelete"` fires while an Insert-mode transaction
   ## is open. The dispatcher must commit that transaction before producing

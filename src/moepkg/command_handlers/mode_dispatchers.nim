@@ -513,9 +513,8 @@ proc handleFileTreeMode*(
   if fileTreeState.lastError.len > 0:
     state.statusMessage = fileTreeState.lastError
     fileTreeState.lastError = ""
-
-  # Display search prompt or status message
-  if fileTreeState.isSearching:
+  elif fileTreeState.isSearching:
+    # Display search prompt when there is no operation error to report.
     state.statusMessage = "/" & fileTreeState.searchText
   else:
     state.statusMessage = r.statusMessage
