@@ -96,6 +96,9 @@ proc createTestState(): EditorState =
 proc noOpFrontendHook(): Future[void] {.async.} =
   discard
 
+proc failingFrontendHook(): Future[void] {.async.} =
+  raise newException(ValueError, "frontend suspend failed")
+
 proc frontendSuspendBodyRuns(
     frontend: FrontendHooks, editor: Editor
 ): Future[bool] {.async: (raises: [Exception]).} =
@@ -927,6 +930,24 @@ suite "Pending async operations":
     check editor.state.pending.len == 0
     check editor.state.statusMessage ==
       "This frontend does not support terminal commands"
+
+  test "Failed operation preserves later operations for the next tick":
+    let editor = newEditor(newEditorConfig())
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoShellCommand, command: "command must not run"
+    )
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoBuild,
+      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+    )
+
+    waitFor editor.handlePendingAsyncOperations(
+      FrontendHooks(suspend: failingFrontendHook, resume: noOpFrontendHook)
+    )
+
+    check editor.state.pending.len == 1
+    check editor.state.pending[0].kind == paoBuild
+    check editor.state.statusMessage.contains("Pending operation failed")
 
   test "Terminal body is skipped unless both frontend hooks are available":
     let editor = newEditor(newEditorConfig())
