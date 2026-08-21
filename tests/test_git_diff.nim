@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, osproc, strutils, options]
+import std/[unittest, os, osproc, strutils, options, times]
 
 import pkg/results
 
@@ -257,6 +257,103 @@ suite "GitDiff - calculateRelativePath":
   test "Absolute path outside git root":
     let result = calculateRelativePath("/other/path/file.nim", "/home/user/repo")
     check result == "file.nim"
+
+  test "Absolute path with prefix collision returns basename":
+    # /home/x/proj is prefix of /home/x/project/file.py but not parent
+    let result = calculateRelativePath("/home/x/project/file.py", "/home/x/proj")
+    check result == "file.py"
+
+  test "Absolute path equal to git root":
+    let result = calculateRelativePath("/home/user/repo", "/home/user/repo")
+    check result == ""
+
+  test "Git root is filesystem root":
+    check calculateRelativePath("/home/x/file.py", "/") == "home/x/file.py"
+    check calculateRelativePath("/", "/") == ""
+
+  test "Absolute path under git root returns relative path":
+    check calculateRelativePath("/home/user/repo/src/file.nim", "/home/user/repo") ==
+      "src/file.nim"
+
+suite "GitDiff - tryCanonicalPath":
+  test "Existing file resolves via expandFilename":
+    let dir = getTempDir() / "moe_git_canon_test"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    writeFile(dir / "f.txt", "x")
+    check tryCanonicalPath(dir / "f.txt") == expandFilename(dir / "f.txt")
+
+  test "Symlinked file resolves to target":
+    let dir = getTempDir() / "moe_git_canon_test"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    writeFile(dir / "target.txt", "x")
+    createSymlink(dir / "target.txt", dir / "link.txt")
+    check tryCanonicalPath(dir / "link.txt") == expandFilename(dir / "target.txt")
+
+  test "Non-existent file falls back to canonical parent":
+    let dir = getTempDir() / "moe_git_canon_test"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    check tryCanonicalPath(dir / "missing.txt") == expandFilename(dir) / "missing.txt"
+
+  test "Non-existent parent returns original path":
+    let p = "/nonexistent_moe_canon_dir/missing.txt"
+    check tryCanonicalPath(p) == p
+
+suite "GitDiff - advanceToGitShow guards":
+  test "Empty git root output returns error":
+    let diffProc = GitDiffProcess(filePath: "/tmp/moe_guard/f.txt")
+    let result = advanceToGitShow(diffProc, "")
+    check result.isSome
+    check result.get.isErr
+    check result.get.error == "File is not in a git repository"
+
+  test "Buffer path equal to git root returns error":
+    let dir = getTempDir() / "moe_git_guard_equal"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    let diffProc = GitDiffProcess(filePath: dir)
+    let result = advanceToGitShow(diffProc, dir)
+    check result.isSome
+    check result.get.isErr
+    check result.get.error == "File is not in a git repository"
+
+  test "Prefix collision outside root returns error":
+    # /tmp/x/proj is a string prefix of /tmp/x/project but not a parent.
+    let root = getTempDir() / "moe_git_guard_proj"
+    let outsideDir = getTempDir() / "moe_git_guard_project"
+    createDir(root)
+    createDir(outsideDir)
+    defer:
+      removeDir(root)
+      removeDir(outsideDir)
+    let diffProc = GitDiffProcess(filePath: outsideDir / "f.py")
+    let result = advanceToGitShow(diffProc, root)
+    check result.isSome
+    check result.get.isErr
+    check result.get.error == "File is not in a git repository"
+
+  test "Dotdot path outside root is rejected by the collapse-aware guard":
+    # This path string-prefixes the root yet resolves outside it; the guard
+    # must collapse "." / ".." before the prefix check.
+    let root = getTempDir() / "moe_git_guard_dot"
+    let outsideDir = getTempDir() / "moe_git_guard_dot_out"
+    createDir(root)
+    createDir(outsideDir)
+    defer:
+      removeDir(root)
+      removeDir(outsideDir)
+    let filePath = root / ".." / "moe_git_guard_dot_out" / "f.py"
+    let diffProc = GitDiffProcess(filePath: filePath)
+    let result = advanceToGitShow(diffProc, root)
+    check result.isSome
+    check result.get.isErr
+    check result.get.error == "File is not in a git repository"
 
 suite "GitDiff - countGitChangedLines":
   test "Count all types of changes":
@@ -687,3 +784,322 @@ suite "GitDiff - Integration tests with git repository":
       if kind == pcFile and extractFilename(path).startsWith("moe_"):
         leftovers.add(path)
     check leftovers.len == 0
+
+  test "advanceToGitShow with absolute inside path completes pipeline":
+    let testFile = testDir / "test.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add test.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
+
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: testFile,
+      workingDir: testDir,
+      bufferContent: readFile(testFile),
+    )
+
+    # Feed the known root directly, skipping the rev-parse stage.
+    let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
+    check advanced.isNone
+    check diffProc.stage == gdsGitShow
+
+    var completed = false
+    var finalOk = false
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        finalOk = checkResult.get.isOk
+        break
+      sleep(10)
+
+    check completed
+    check finalOk
+
+  test "advanceToGitShow normalizes trailing slash in git root output":
+    # Without normalization the prefix guard would reject every path.
+    let testFile = testDir / "test.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add test.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
+
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: testFile,
+      workingDir: testDir,
+      bufferContent: readFile(testFile),
+    )
+
+    let advanced = advanceToGitShow(diffProc, expandFilename(testDir) & "/")
+    check advanced.isNone
+    check diffProc.stage == gdsGitShow
+
+    var completed = false
+    var finalOk = false
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        finalOk = checkResult.get.isOk
+        break
+      sleep(10)
+
+    check completed
+    check finalOk
+
+  test "advanceToGitShow accepts in-repo path with dotdot segments":
+    # The in-repo dotdot path must pass the guard with a collapsed relative
+    # path rather than "sub/../test.txt".
+    let testFile = testDir / "test.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add test.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
+    createDir(testDir / "sub")
+
+    let dotdotPath = testDir / "sub" / ".." / "test.txt"
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: dotdotPath,
+      workingDir: testDir,
+      bufferContent: readFile(testFile),
+    )
+
+    let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
+    check advanced.isNone
+    check diffProc.stage == gdsGitShow
+
+    var completed = false
+    var finalOk = false
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        finalOk = checkResult.get.isOk
+        break
+      sleep(10)
+
+    check completed
+    check finalOk
+
+  test "advanceToGitShow resolves symlinked buffer path against real repo root":
+    # git rev-parse reports the real path; reconcile symlinked buffer paths.
+    let testFile = testDir / "test.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add test.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
+
+    let linkDir = getTempDir() / "moe_git_diff_test_link"
+    if symlinkExists(linkDir) or fileExists(linkDir):
+      removeFile(linkDir)
+    createSymlink(testDir, linkDir)
+    defer:
+      removeFile(linkDir)
+
+    let openedPath = linkDir / "test.txt"
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: openedPath,
+      workingDir: linkDir,
+      bufferContent: readFile(openedPath),
+    )
+
+    let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
+    check advanced.isNone
+    check diffProc.stage == gdsGitShow
+
+    var completed = false
+    var finalOk = false
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        finalOk = checkResult.get.isOk
+        break
+      sleep(10)
+
+    check completed
+    check finalOk
+
+  test "advanceToGitShow returns empty diff for tracked in-repo symlink pointing outside":
+    # HEAD:<symlink> resolves to the symlink blob (link target text), never the
+    # target's content, so comparing it against the buffer would always report
+    # the whole file as rewritten. The pipeline must complete with no markers.
+    let outsideFile = getTempDir() / "moe_git_diff_outside_target.txt"
+    writeFile(outsideFile, "outside\n")
+    let linkFile = testDir / "link.txt"
+    if symlinkExists(linkFile) or fileExists(linkFile):
+      removeFile(linkFile)
+    createSymlink(outsideFile, linkFile)
+    defer:
+      removeFile(linkFile)
+      removeFile(outsideFile)
+
+    discard execCmdEx("git add link.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Add symlink'", workingDir = testDir)
+
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: linkFile,
+      workingDir: testDir,
+      bufferContent: readFile(linkFile),
+    )
+
+    let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
+    check advanced.isNone
+    check diffProc.stage == gdsGitShow
+
+    var completed = false
+    var finalInfo = GitDiffInfo(lines: @[])
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        check checkResult.get.isOk
+        finalInfo = checkResult.get.get
+        break
+      sleep(10)
+
+    check completed
+    check finalInfo.lines.len == 0
+
+  test "advanceToGitShow marks an untracked in-repo symlink pointing outside as untracked":
+    # Absent from HEAD, so git show fails and the file must read as untracked,
+    # never a bogus empty-diff "tracked".
+    let outsideFile = getTempDir() / "moe_git_diff_outside_untracked.txt"
+    writeFile(outsideFile, "outside\n")
+    let linkFile = testDir / "untracked_link.txt"
+    if symlinkExists(linkFile) or fileExists(linkFile):
+      removeFile(linkFile)
+    createSymlink(outsideFile, linkFile)
+    defer:
+      removeFile(linkFile)
+      removeFile(outsideFile)
+
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: linkFile,
+      workingDir: testDir,
+      bufferContent: readFile(linkFile),
+    )
+
+    let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
+    check advanced.isNone
+    check diffProc.stage == gdsGitShow
+
+    var completed = false
+    var pipelineErr = false
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        pipelineErr = checkResult.get.isErr
+        break
+      sleep(10)
+
+    check completed
+    check pipelineErr
+
+  test "advanceToGitShow accepts a relative in-repo buffer path":
+    # `moe relpath_in.txt` from the repo root: the relative path must resolve
+    # against the CWD and the pipeline must complete normally.
+    let testFile = testDir / "relpath_in.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add relpath_in.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'Add relative path file'", workingDir = testDir)
+
+    let origCwd = getCurrentDir()
+    defer:
+      setCurrentDir(origCwd)
+    setCurrentDir(testDir)
+
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: "relpath_in.txt",
+      workingDir: testDir,
+      bufferContent: readFile(testFile),
+    )
+
+    let advanced = advanceToGitShow(diffProc, expandFilename(testDir))
+    check advanced.isNone
+    check diffProc.stage == gdsGitShow
+
+    var completed = false
+    var finalOk = false
+    for _ in 0 ..< 200:
+      let checkResult = checkGitDiffComplete(diffProc)
+      if checkResult.isSome:
+        completed = true
+        finalOk = checkResult.get.isOk
+        break
+      sleep(10)
+
+    check completed
+    check finalOk
+
+  test "advanceToGitShow rejects a relative buffer path outside the repo":
+    # A file outside the repo, opened via a relative path, must be rejected
+    # rather than falling through to a basename lookup against HEAD.
+    let outsideDir = getTempDir() / "moe_git_diff_rel_outside"
+    createDir(outsideDir)
+    defer:
+      removeDir(outsideDir)
+    writeFile(outsideDir / "out.txt", "x\n")
+
+    let origCwd = getCurrentDir()
+    defer:
+      setCurrentDir(origCwd)
+    setCurrentDir(outsideDir)
+
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: "out.txt",
+      workingDir: outsideDir,
+      bufferContent: "x\n",
+    )
+
+    let result = advanceToGitShow(diffProc, expandFilename(testDir))
+    check result.isSome
+    check result.get.isErr
+    check result.get.error == "File is not in a git repository"
+
+  test "advanceToGitShow rejects a relative basename collision with a tracked file":
+    # A different file with the same basename as a tracked one, opened
+    # relative from outside the repo, must be rejected instead of diffing
+    # `HEAD:basename` against the repo's file.
+    let testFile = testDir / "basename_collision.txt"
+    writeFile(testFile, "tracked\n")
+    discard execCmdEx("git add basename_collision.txt", workingDir = testDir)
+    discard
+      execCmdEx("git commit -m 'Add basename collision file'", workingDir = testDir)
+
+    let outsideDir = getTempDir() / "moe_git_diff_rel_collide"
+    createDir(outsideDir)
+    defer:
+      removeDir(outsideDir)
+    writeFile(outsideDir / "basename_collision.txt", "different\n")
+
+    let origCwd = getCurrentDir()
+    defer:
+      setCurrentDir(origCwd)
+    setCurrentDir(outsideDir)
+
+    let diffProc = GitDiffProcess(
+      stage: gdsGitRoot,
+      startTime: epochTime(),
+      filePath: "basename_collision.txt",
+      workingDir: outsideDir,
+      bufferContent: "different\n",
+    )
+
+    let result = advanceToGitShow(diffProc, expandFilename(testDir))
+    check result.isSome
+    check result.get.isErr
+    check result.get.error == "File is not in a git repository"

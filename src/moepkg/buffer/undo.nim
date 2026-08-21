@@ -458,6 +458,13 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   else:
     return ok(BufferPosition(line: 0, column: 0))
 
+proc discardRedoEntry*(b: TextBuffer, changeId: int64): bool =
+  ## Remove the newest redo entry when it matches changeId, without applying
+  ## it. Used to keep the user from redoing a rolled-back trim.
+  if b.redoStack.len > 0 and b.redoStack.peekLast.id == changeId:
+    discard b.redoStack.popLast()
+    return true
+
 proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Re-apply a single change (internal helper)
   ## Returns error if the operation fails
