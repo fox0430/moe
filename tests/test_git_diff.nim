@@ -656,3 +656,34 @@ suite "GitDiff - Integration tests with git repository":
 
     check completed
     check diffLineCount == lineCount
+
+  test "buffer-diff temp files live under the OS temp dir, not the file directory":
+    let testFile = testDir / "scratch.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add scratch.txt", workingDir = testDir)
+    discard execCmdEx("git commit -m 'init'", workingDir = testDir)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "changed ")
+
+    let startResult = startGitDiffFromBufferAsync(buf)
+    check startResult.isOk
+
+    let diffProc = startResult.get
+    for _ in 0 ..< 500:
+      if checkGitDiffComplete(diffProc).isSome:
+        break
+      sleep(10)
+
+    check diffProc.tempOriginal.len > 0
+    check diffProc.tempOriginal.parentDir != testDir
+    check diffProc.tempModified.parentDir != testDir
+    check diffProc.tempDiffOut.parentDir != testDir
+
+    # No `moe_*` scratch files may remain in the file's directory.
+    var leftovers: seq[string]
+    for kind, path in walkDir(testDir):
+      if kind == pcFile and extractFilename(path).startsWith("moe_"):
+        leftovers.add(path)
+    check leftovers.len == 0
