@@ -35,6 +35,11 @@ const
   DEFAULT_GIT_DIFF_TIMEOUT* = 5.0 ## Default timeout for git diff operations in seconds
   PROCESS_RUNNING = -1 ## Exit code value indicating process is still running
 
+proc gitDiffTempDir(): string =
+  ## Scratch dir for the buffer-diff pipeline. Kept in the OS temp dir so a
+  ## defunct run can never leave `moe_*` files in the user's working tree.
+  getTempDir()
+
 proc removeTempFileSafely(filePath: string) =
   ## Safely remove a temporary file, ignoring errors
   ## Safe to call with empty path or non-existent file
@@ -239,11 +244,10 @@ proc advanceToGitShow(
     return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
 
   let relativePath = calculateRelativePath(diffProc.filePath, gitRoot)
-  let fileDir = diffProc.filePath.parentDir()
 
   let tempOriginal =
     try:
-      genTempPath("moe_original_", ".tmp", fileDir)
+      genTempPath("moe_original_", ".tmp", gitDiffTempDir())
     except OSError as e:
       return some(
         Result[GitDiffInfo, string].err("Failed to create temp file path: " & e.msg)
@@ -274,11 +278,9 @@ proc advanceToGitShow(
   return none(Result[GitDiffInfo, string])
 
 proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, string]] =
-  let fileDir = diffProc.filePath.parentDir()
-
   let tempModified =
     try:
-      genTempPath("moe_modified_", ".tmp", fileDir)
+      genTempPath("moe_modified_", ".tmp", gitDiffTempDir())
     except OSError as e:
       removeTempFileSafely(diffProc.tempOriginal)
       return some(
@@ -299,7 +301,7 @@ proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, stri
 
   let tempDiffOut =
     try:
-      genTempPath("moe_diffout_", ".tmp", fileDir)
+      genTempPath("moe_diffout_", ".tmp", gitDiffTempDir())
     except OSError as e:
       cleanupTempFiles(diffProc)
       return some(
