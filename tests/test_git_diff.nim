@@ -646,6 +646,133 @@ suite "GitDiff - Integration tests with git repository":
     check completed
     check diffLineCount > 0
 
+  test "startGitDiffFromBufferAsync with relative path opened from a subdirectory works":
+    # Regression: bare relative filenames (e.g. `moe file.txt` from a
+    # subdirectory) must resolve correctly. The path-string derivation would
+    # produce `git show HEAD:file.txt` relative to the git root and fail.
+    createDir(testDir / "sub")
+    let testFile = testDir / "sub" / "file.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add -A", workingDir = testDir)
+    discard execCmdEx("git commit -m 'add sub/file'", workingDir = testDir)
+
+    let cwd = getCurrentDir()
+    setCurrentDir(testDir / "sub")
+    try:
+      let buf = newTextBuffer()
+      let loadResult = buf.loadFile("file.txt")
+      check loadResult.isOk
+      check buf.filePath == some("file.txt")
+
+      discard buf.insertText(BufferPosition(line: 1, column: 0), "modified ")
+
+      let startResult = startGitDiffFromBufferAsync(buf)
+      check startResult.isOk
+
+      let diffProc = startResult.get
+
+      var completed = false
+      var diffLineCount = -1
+      for _ in 0 ..< 200:
+        let checkResult = checkGitDiffComplete(diffProc)
+        if checkResult.isSome:
+          completed = true
+          check checkResult.get.isOk
+          diffLineCount = checkResult.get.get.lines.len
+          break
+        sleep(10)
+
+      check completed
+      check diffLineCount > 0
+    finally:
+      setCurrentDir(cwd)
+
+  test "startGitDiffFromBufferAsync with a multi-level relative path works":
+    # Guard: a multi-level relative path (e.g. `moe sub/deep/deep.txt`) must
+    # resolve to `git show HEAD:sub/deep/deep.txt` rather than a collapsed
+    # or otherwise malformed repo-relative path.
+    createDir(testDir / "sub" / "deep")
+    let testFile = testDir / "sub" / "deep" / "deep.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add -A", workingDir = testDir)
+    discard execCmdEx("git commit -m 'add sub/deep/deep'", workingDir = testDir)
+
+    let cwd = getCurrentDir()
+    setCurrentDir(testDir)
+    try:
+      let buf = newTextBuffer()
+      let loadResult = buf.loadFile("sub/deep/deep.txt")
+      check loadResult.isOk
+      check buf.filePath == some("sub/deep/deep.txt")
+
+      discard buf.insertText(BufferPosition(line: 1, column: 0), "modified ")
+
+      let startResult = startGitDiffFromBufferAsync(buf)
+      check startResult.isOk
+
+      let diffProc = startResult.get
+
+      var completed = false
+      var diffLineCount = -1
+      for _ in 0 ..< 200:
+        let checkResult = checkGitDiffComplete(diffProc)
+        if checkResult.isSome:
+          completed = true
+          check checkResult.get.isOk
+          diffLineCount = checkResult.get.get.lines.len
+          break
+        sleep(10)
+
+      check completed
+      check diffLineCount > 0
+    finally:
+      setCurrentDir(cwd)
+
+  test "startGitDiffFromBufferAsync with a file opened through a symlinked directory works":
+    # Regression: a buffer path crossing a symlinked directory lies outside the
+    # git root lexically, so the HEAD path must be reconciled against the real
+    # repo root reported by `rev-parse`.
+    createDir(testDir / "sub")
+    let testFile = testDir / "sub" / "file.txt"
+    writeFile(testFile, "line 1\nline 2\n")
+    discard execCmdEx("git add -A", workingDir = testDir)
+    discard execCmdEx("git commit -m 'add sub/file'", workingDir = testDir)
+
+    # The symlink must live outside the repo, like a user's ~/projects tree.
+    let linkPath = getTempDir() / ("moe_git_diff_link_" & $getCurrentProcessId())
+    if symlinkExists(linkPath):
+      removeFile(linkPath)
+    createSymlink(testDir, linkPath)
+    try:
+      let buf = newTextBuffer()
+      let loadResult = buf.loadFile(linkPath / "sub" / "file.txt")
+      check loadResult.isOk
+      check buf.filePath == some(linkPath / "sub" / "file.txt")
+
+      discard buf.insertText(BufferPosition(line: 1, column: 0), "modified ")
+
+      let startResult = startGitDiffFromBufferAsync(buf)
+      check startResult.isOk
+
+      let diffProc = startResult.get
+
+      var completed = false
+      var diffLineCount = -1
+      for _ in 0 ..< 200:
+        let checkResult = checkGitDiffComplete(diffProc)
+        if checkResult.isSome:
+          completed = true
+          check checkResult.get.isOk
+          diffLineCount = checkResult.get.get.lines.len
+          break
+        sleep(10)
+
+      check completed
+      check diffLineCount > 0
+    finally:
+      if symlinkExists(linkPath):
+        removeFile(linkPath)
+
   test "startGitDiffFromBufferAsync with untracked file returns error":
     discard
       execCmdEx("git commit --allow-empty -m 'Initial commit'", workingDir = testDir)
