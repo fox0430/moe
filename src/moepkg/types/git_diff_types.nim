@@ -55,3 +55,4 @@ type
     tempOriginal*: string
     tempModified*: string
     tempDiffOut*: string ## `git diff` stdout is redirected here (avoids pipe deadlock)
+    resolvedOutsideRepo*: bool ## Buffer's canonical path escapes the repo root
