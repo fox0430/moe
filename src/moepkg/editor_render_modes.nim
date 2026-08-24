@@ -21,7 +21,7 @@
 
 import std/[options, strutils]
 
-import pkg/celina
+import pkg/[celina, results]
 
 import
   types/editor_types,

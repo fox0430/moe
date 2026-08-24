@@ -24,7 +24,7 @@
 
 import std/[options, hashes, unicode]
 
-import pkg/celina
+import pkg/[celina, results]
 
 import color
 
