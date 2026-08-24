@@ -19,13 +19,44 @@
 
 ## Tests for editor_frame.nim
 
-import std/[unittest, os, monotimes]
+import std/[unittest, options, os, tables, monotimes]
 
 import pkg/celina
 
 import ../src/moepkg/[types, editor, config, message_log]
 import ../src/moepkg/[highlight, editor_frame, editor_window]
 import ../src/moepkg/buffer {.all.}
+
+suite "tick - frontend Git status subscription":
+  test "does not maintain Git status without a display or frontend consumer":
+    let
+      config = newEditorConfig()
+      e = newEditor(config)
+      activeBuffer = e.activeBuffer
+    e.config.standard.statusLine = false
+    e.config.git.showChangedLine = false
+    activeBuffer.filePath = some(getTempDir() / "moe-no-git-status-consumer.txt")
+
+    e.tick()
+
+    check not e.state.git.diffEntries.hasKey(activeBuffer.id)
+    check not e.state.git.branchEntries.hasKey(activeBuffer.id)
+
+  test "maintains active Git status for a frontend when TUI indicators are hidden":
+    let
+      config = newEditorConfig()
+      e = newEditor(config)
+      activeBuffer = e.activeBuffer
+    e.config.standard.statusLine = false
+    e.config.git.showChangedLine = false
+    activeBuffer.filePath = some(getTempDir() / "moe-frontend-git-status.txt")
+    e.setFrontendGitStatusEnabled(true)
+
+    e.tick()
+
+    check e.state.git.diffEntries.hasKey(activeBuffer.id)
+    check not e.state.git.diffEntries[activeBuffer.id].forced
+    check e.state.git.branchEntries.hasKey(activeBuffer.id)
 
 suite "notify - routing and logging":
   test "status line route sets the status message":

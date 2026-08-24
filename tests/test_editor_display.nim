@@ -90,6 +90,48 @@ suite "Editor display status queries":
 
     check e.activeGitStatus.branch == "active"
 
+  test "frontendStatus composes the host-facing status values":
+    let
+      e = createTestEditor()
+      activeBuffer = e.activeBuffer
+    e.setMode(EditorMode.Insert)
+    e.state.statusMessage = "Saved"
+    e.state.git.diffEntries[activeBuffer.id] =
+      GitDiffCacheEntry(counts: (added: 4, modified: 2, deleted: 1), populated: true)
+    e.state.git.branchEntries[activeBuffer.id] =
+      GitBranchCacheEntry(name: "feature/frontend-status", populated: true)
+
+    check e.frontendStatus ==
+      FrontendStatus(
+        modeLabel: "INSERT",
+        message: "Saved",
+        git: ActiveGitStatus(
+          branch: "feature/frontend-status", added: 4, modified: 2, deleted: 1
+        ),
+      )
+
+  test "frontend Git status subscription can be enabled and disabled":
+    let e = createTestEditor()
+
+    check not e.frontendGitStatusEnabled
+
+    e.setFrontendGitStatusEnabled(true)
+    check e.frontendGitStatusEnabled
+
+    e.setFrontendGitStatusEnabled(false)
+    check not e.frontendGitStatusEnabled
+
+  test "enabling frontend Git status requests an active-buffer refresh":
+    let
+      e = createTestEditor()
+      activeBuffer = e.activeBuffer
+    activeBuffer.filePath = some("moe-frontend-status.txt")
+    e.state.git.diffEntries[activeBuffer.id] = GitDiffCacheEntry(populated: true)
+
+    e.setFrontendGitStatusEnabled(true)
+
+    check e.state.git.diffEntries[activeBuffer.id].forced
+
 suite "editor_display - status line":
   test "toggleStatusLine flips the config flag":
     let e = createTestEditor()

@@ -24,9 +24,17 @@ import std/options
 
 import types/editor_types, status_line, git_cache
 
-type ActiveGitStatus* = object ## Cached Git information for the active editor buffer.
-  branch*: string
-  added*, modified*, deleted*: int
+type
+  ActiveGitStatus* = object
+    ## Cached Git information for the active editor buffer.
+    branch*: string
+    added*, modified*, deleted*: int
+
+  FrontendStatus* = object
+    ## Frontend-neutral status values for an embedding host to display.
+    modeLabel*: string
+    message*: string
+    git*: ActiveGitStatus
 
 proc statusModeLabel*(e: Editor): string =
   ## Return the mode label displayed by the status line.
@@ -52,6 +60,30 @@ proc activeGitStatus*(e: Editor): ActiveGitStatus =
     modified: counts.modified,
     deleted: counts.deleted,
   )
+
+proc frontendStatus*(e: Editor): FrontendStatus =
+  ## Return one consistent snapshot of the active editor status.
+  FrontendStatus(
+    modeLabel: e.statusModeLabel,
+    message: e.currentStatusMessage,
+    git: e.activeGitStatus,
+  )
+
+proc frontendGitStatusEnabled*(e: Editor): bool =
+  ## Whether the editor maintains Git status for an embedding frontend.
+  e.state.frontendSubscriptions.gitStatus
+
+proc setFrontendGitStatusEnabled*(e: Editor, enabled: bool) =
+  ## Enable or disable active-buffer Git status maintenance for a frontend.
+  ## Enabling forces the diff cache stale so the next frame refreshes it.
+  var subscriptions = e.state.frontendSubscriptions
+  if subscriptions.gitStatus == enabled:
+    return
+
+  subscriptions.gitStatus = enabled
+  e.state.frontendSubscriptions = subscriptions
+  if enabled:
+    e.state.git.requestGitRefresh(e.activeBuffer)
 
 proc toggleStatusLine*(e: Editor) =
   e.showStatusLine = not e.showStatusLine

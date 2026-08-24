@@ -789,6 +789,10 @@ type
     ## Frontends drain these requests from their own event/render loop.
     mouseCapture*: Option[bool]
 
+  FrontendSubscriptions* = object
+    ## Optional editor data maintained for an embedding frontend.
+    gitStatus*: bool
+
   UiState* = object ## Transient UI display state, refreshed by render/key events.
     substitutePreview*: SubstitutePreview
       # Live substitute preview (like Vim's inccommand)
@@ -871,6 +875,7 @@ type
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
     pending*: seq[PendingAsyncOp] # Async ops drained by the main event loop
     frontend*: FrontendRequests # Frontend-side effect requests
+    frontendSubscriptionsState: FrontendSubscriptions
     ui*: UiState # Transient UI display state (preview, progress, find char)
     windowDisplay*: WindowDisplayState
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
@@ -1072,6 +1077,16 @@ proc takeMouseCaptureRequest*(s: EditorState): Option[bool] =
   ## Return and clear the pending mouse-capture frontend request.
   result = s.frontend.mouseCapture
   s.frontend.mouseCapture = none(bool)
+
+proc frontendSubscriptions*(s: EditorState): FrontendSubscriptions =
+  ## Return the data subscriptions requested by an embedding frontend.
+  s.frontendSubscriptionsState
+
+proc `frontendSubscriptions=`*(
+    s: EditorState, subscriptions: FrontendSubscriptions
+) =
+  ## Replace the data subscriptions requested by an embedding frontend.
+  s.frontendSubscriptionsState = subscriptions
 
 proc `==`*(a, b: ViewPort): bool =
   ## Structural equality for ViewPort (ref object defaults to pointer comparison)
