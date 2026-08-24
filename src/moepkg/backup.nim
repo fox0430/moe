@@ -33,6 +33,7 @@ import config, logger
 const
   BackupJsonFilename = "backup.json"
   BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
+  NoChangesSinceLastBackupError* = "No changes since last backup"
   MaxBackupFiles* = 100 ## Maximum number of backup files per source file
 
 type BackupResult* = Result[string, string]
@@ -283,7 +284,7 @@ proc backupBuffer*(
   # Use *InDir version to avoid redundant getBackupDirForSource call
   let mostRecentContent = getMostRecentBackupInDir(backupDir)
   if mostRecentContent == currentContent:
-    return err("No changes since last backup")
+    return err(NoChangesSinceLastBackupError)
 
   # Generate backup filename and write
   let

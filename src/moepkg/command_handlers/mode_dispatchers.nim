@@ -36,7 +36,7 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, modes, key_bindings, keybind_config, string_builder, filer, filetree,
-    diff_viewer, recent_file_mode,
+    diff_viewer, recent_file_mode, terminal_mode,
   ]
 import ../lsp/protocol/types as lspTypes
 import ../types/editor_types
@@ -49,31 +49,50 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
   ## Extract net inserted text from a transaction
   ## Handles insertions and deletions (backspace during insert mode)
   ## Optimized with StringBuilder for O(n) instead of O(n²) performance
+  ##
+  ## Insert-mode backspace at a line start decomposes into ckDeleteLine plus
+  ## ckInsertText, where the insert payload is the pre-existing content of the
+  ## joined line — not user input. Skip that paired re-attach so it does not
+  ## leak into lastEditCommand and get replayed by `.` (dot-repeat).
   var sb = newStringBuilder()
+  var skipNextInsertText = false
   for change in transaction.changes:
     case change.kind
     of buffer.ckInsertText:
-      sb.add(change.insertText)
+      if skipNextInsertText:
+        skipNextInsertText = false
+      else:
+        sb.add(change.insertText)
     of buffer.ckDeleteText:
       # Backspace - remove from end of accumulated text
       sb.removeLast(change.deletedText.len)
+      skipNextInsertText = false
     of buffer.ckInsertLine:
       # Line insertion - add the line text
       sb.add(change.insertLineText)
       # Ensure it ends with newline if it doesn't already
       if change.insertLineText.len == 0 or change.insertLineText[^1] != '\n':
         sb.add("\n")
+      skipNextInsertText = false
     of buffer.ckDeleteLine:
-      # Line deletion during insert mode (rare, but handle it)
-      # We can't easily track which line was deleted, so clear accumulated text
+      # Line deletion during insert mode: the paired ckInsertText that follows
+      # is a line-join re-attach, not user input. Clear accumulated text and
+      # arm the skip for the immediate next ckInsertText — but only when the
+      # deleted line had content, since joining an empty line omits the
+      # re-attach entirely (insertText no-ops on ""), and the next
+      # ckInsertText would then be real typing.
       sb.clear()
+      skipNextInsertText = change.deletedLineText.len > 0
     of buffer.ckDeleteRange:
       # Range deletion - remove from end of accumulated text
       sb.removeLast(change.deletedRangeText.len)
+      skipNextInsertText = false
     of buffer.ckReplaceLine:
       discard # Line replacement doesn't contribute to inserted text tracking
+      skipNextInsertText = false
     of buffer.ckSnapshot:
       discard # Snapshots don't contribute to inserted text tracking
+      skipNextInsertText = false
     of buffer.ckTransaction:
       # Nested transaction - recursively extract text
       let nestedTransaction = buffer.BufferTransaction(
@@ -82,6 +101,7 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
         startSeq: 0,
       )
       sb.add(extractInsertedText(nestedTransaction))
+      skipNextInsertText = false
   return sb.toString()
 
 proc typedTextInRange(buffer: TextBuffer, startPos, endPos: BufferPosition): string =
@@ -146,14 +166,23 @@ proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
     cursor = advancePastText(cursor, unit)
   state.cursor = cursor
 
-proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, string] =
+proc finalizeInsertExit(
+    buffer: TextBuffer, state: EditorState
+): Result[string, string] =
   ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, `.`-repeat +
   ## `[count]i` bookkeeping, visual-block replication, insert-state reset, and
   ## transaction commit. Called by both the Escape path and the imap ->
   ## Command-mode alias bridge so the bridge does not skip the cleanup.
+  ##
+  ## ok carries a non-fatal warning to surface (empty when clean): the
+  ## transaction is committed at that point, so the message must not block the
+  ## mode transition or a pending aliased command. err is a fatal commit
+  ## failure.
   state.snippetSession.active = false
 
   clearAutoIndentIfUnedited(buffer, state)
+
+  var replicationError = ""
 
   if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
     let transaction = buffer.currentTransaction.get
@@ -167,11 +196,17 @@ proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, st
           let col = ctx.insertColumn
           if col > lineCharLen:
             let padding = ' '.repeat(col - lineCharLen)
-            discard buffer.insertText(
+            let padResult = buffer.insertText(
               BufferPosition(line: lineNum, column: lineCharLen), padding
             )
-          discard
+            if padResult.isErr:
+              replicationError = padResult.error
+              break
+          let replayResult =
             buffer.insertText(BufferPosition(line: lineNum, column: col), insertedText)
+          if replayResult.isErr:
+            replicationError = replayResult.error
+            break
       state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
 
     if insertedText.len > 0:
@@ -205,8 +240,15 @@ proc finalizeInsertExit(buffer: TextBuffer, state: EditorState): Result[void, st
   if buffer.inTransaction:
     let transactionResult = buffer.commitTransaction()
     if transactionResult.isErr:
-      return err(transactionResult.error)
-  ok()
+      return err("Failed to commit transaction: " & transactionResult.error)
+
+  if replicationError.len > 0:
+    # A replication edit failed partway; the transaction was still committed
+    # above (rolling the session back would also lose the user's typed text),
+    # so report the partial replication after the commit as a warning only.
+    return ok("Failed to replicate visual block insert: " & replicationError)
+
+  ok("")
 
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
@@ -227,13 +269,15 @@ proc handleInsertMode*(
         )
 
       let finalizeResult = finalizeInsertExit(buffer, state)
-      if finalizeResult.isErr:
-        # Even if commit fails, allow mode transition so user isn't stuck in Insert mode
-        return HandlerResult(
-          kind: hrHandled,
-          modeTransition: r.modeTransition,
-          statusMessage: "Failed to commit transaction: " & finalizeResult.error,
-        )
+      # Even on failure, allow mode transition so user isn't stuck in Insert
+      # mode. A committed replication warning (ok with a message) surfaces the
+      # same way.
+      return HandlerResult(
+        kind: hrHandled,
+        modeTransition: r.modeTransition,
+        statusMessage:
+          if finalizeResult.isErr: finalizeResult.error else: finalizeResult.get,
+      )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
@@ -245,10 +289,12 @@ proc handleInsertMode*(
     # cleanup all fire before the aliased command runs.
     let finalizeResult = finalizeInsertExit(buffer, state)
     if finalizeResult.isErr:
-      return HandlerResult(
-        kind: hrError,
-        errorMessage: "Failed to commit transaction: " & finalizeResult.error,
-      )
+      return HandlerResult(kind: hrError, errorMessage: finalizeResult.error)
+    if finalizeResult.get.len > 0:
+      # Committed with a partial-replication warning: surface it but run the
+      # alias anyway. The session is already finalized, and aborting here would
+      # leave Insert mode without a transaction.
+      state.statusMessage = finalizeResult.get
     return HandlerResult(
       kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
     )
@@ -467,9 +513,8 @@ proc handleFileTreeMode*(
   if fileTreeState.lastError.len > 0:
     state.statusMessage = fileTreeState.lastError
     fileTreeState.lastError = ""
-
-  # Display search prompt or status message
-  if fileTreeState.isSearching:
+  elif fileTreeState.isSearching:
+    # Display search prompt when there is no operation error to report.
     state.statusMessage = "/" & fileTreeState.searchText
   else:
     state.statusMessage = r.statusMessage
@@ -1100,9 +1145,8 @@ proc dispatchSubStateMode*(
     else:
       return
         HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
-  of EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug, EditorMode.QuickRun:
+  of EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug:
     # Command: handled via overlay in handler.nim.
     # RecentFile: requires its own state, handled at a higher level.
     # Debug: handled at a higher level in handler.nim.
-    # QuickRun: not interactive, handled through command mode.
     return HandlerResult(kind: hrUnhandled)

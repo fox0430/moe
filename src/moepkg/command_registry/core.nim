@@ -23,8 +23,8 @@ import std/[tables, options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, key_bindings, config, logger]
-import ../buffer/[core, edit]
+import ../[types, motion, key_bindings, config, logger, notification_popup]
+import ../buffer/[core, undo]
 
 type
   ## Built-in command identifiers
@@ -281,7 +281,13 @@ proc execute*(
     return Result[(), string].err "Too many arguments: expected at most " &
       $command.maxArgs & ", got " & $args.len
 
-  return command.handler(ctx, args)
+  return
+    try:
+      command.handler(ctx, args)
+    except TransactionRollbackError as exc:
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      Result[(), string].err(exc.msg & " (buffer state may be inconsistent)")
 
 proc execute*(
     registry: CommandRegistry,
@@ -302,7 +308,13 @@ proc execute*(
     return Result[(), string].err "Too many arguments: expected at most " &
       $command.maxArgs & ", got " & $args.len
 
-  return command.handler(ctx, args)
+  return
+    try:
+      command.handler(ctx, args)
+    except TransactionRollbackError as exc:
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      Result[(), string].err(exc.msg & " (buffer state may be inconsistent)")
 
 proc findAllCharPositions*(
     buffer: TextBuffer, line: int, targetChar: string
@@ -442,25 +454,3 @@ proc recordJump*(state: EditorState) =
 
   # Reset index to indicate we're not navigating the list
   state.jumpList.index = -1
-
-## Helper for clipboard operations
-proc getSelectedText*(state: EditorState, buffer: TextBuffer): string =
-  ## Get the currently selected text in visual mode
-  ## Returns empty string if no active selection
-  if not state.visualSelection.active:
-    return ""
-
-  # Normalize selection range (ensure start <= end)
-  let (selStart, selEnd) =
-    if state.visualSelection.start.line < state.visualSelection.current.line:
-      (state.visualSelection.start, state.visualSelection.current)
-    elif state.visualSelection.start.line > state.visualSelection.current.line:
-      (state.visualSelection.current, state.visualSelection.start)
-    else:
-      # Same line - compare columns
-      if state.visualSelection.start.column <= state.visualSelection.current.column:
-        (state.visualSelection.start, state.visualSelection.current)
-      else:
-        (state.visualSelection.current, state.visualSelection.start)
-
-  return buffer.getTextInRange(selStart, selEnd)

@@ -48,8 +48,8 @@ suite "KeybindConfig - parseModes":
   test "parse filer mode":
     check parseModes("filer") == @[EditorMode.Filer]
 
-  test "parse quickrun mode":
-    check parseModes("quickrun") == @[EditorMode.QuickRun]
+  test "parse quickrun mode maps to Normal (backward compat)":
+    check parseModes("quickrun") == @[EditorMode.Normal]
 
   test "parse logviewer mode":
     check parseModes("logviewer") == @[EditorMode.LogViewer]
@@ -89,12 +89,11 @@ suite "KeybindConfig - parseModes":
 
   test "parse all meta mode":
     let modes = parseModes("all")
-    check modes.len == 22 # All except CommandLine
+    check modes.len == 21 # All except CommandLine
     check EditorMode.Command notin modes
     check EditorMode.Normal in modes
     check EditorMode.Insert in modes
     check EditorMode.Visual in modes
-    check EditorMode.QuickRun in modes
     check EditorMode.Terminal in modes
 
   test "parse visualall meta mode":
@@ -108,7 +107,7 @@ suite "KeybindConfig - parseModes":
     check parseModes("NORMAL") == @[EditorMode.Normal]
     check parseModes("Normal") == @[EditorMode.Normal]
     check parseModes("INSERT") == @[EditorMode.Insert]
-    check parseModes("ALL").len == 22
+    check parseModes("ALL").len == 21
     check parseModes("VisualAll").len == 3
 
   test "parse unknown mode returns empty seq":

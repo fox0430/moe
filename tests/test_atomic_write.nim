@@ -108,6 +108,30 @@ suite "atomic_write - overwrite":
     check tmpFiles.len == 0
 
 when defined(posix):
+  suite "atomic_write - temp symlink attack resistance":
+    test "pre-planted temp symlinks are never followed":
+      let dir = mkTmpDir("plant")
+      defer:
+        rmTree(dir)
+      let target = dir / "a.txt"
+      let victim = dir / "victim.txt"
+      writeFile(target, "before")
+      writeFile(victim, "do not touch")
+
+      # Plant symlinks at the names the old predictable scheme could use
+      # (`.moe.tmp.<base>.<pid>.<n>`), plus a defensive bare `<n>` variant
+      # that the old code never generated, all pointing at the victim.
+      let pid = $getCurrentProcessId()
+      for i in 0 .. 32:
+        createSymlink(victim, dir / (".moe.tmp.a.txt." & pid & "." & $i))
+        createSymlink(victim, dir / (".moe.tmp.a.txt." & $i))
+
+      let r = writeAtomic(target, "after")
+      check r.isOk
+      check readFile(target) == "after"
+      # The temp write must never have resolved one of the planted links.
+      check readFile(victim) == "do not touch"
+
   suite "atomic_write - symlink preservation":
     test "writing through a symlink keeps the symlink":
       let dir = mkTmpDir("sym")

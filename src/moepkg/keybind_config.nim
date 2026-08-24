@@ -50,7 +50,9 @@ proc parseModes(s: string): seq[EditorMode] =
   of "filer":
     @[EditorMode.Filer]
   of "quickrun":
-    @[EditorMode.QuickRun]
+    # Backward compatibility: the QuickRun mode was removed, but existing
+    # configs may still name it; treat it as Normal mode.
+    @[EditorMode.Normal]
   of "logviewer":
     @[EditorMode.LogViewer]
   of "help":

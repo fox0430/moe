@@ -663,7 +663,10 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
       # Leave space for padding and prefix
 
     for rune in item.title.runes:
-      let runeW = runeWidth(rune)
+      # Never write C0 control characters to a terminal cell raw; the
+      # substitution preserves display width.
+      let cellRune = sanitizeCellRune(rune)
+      let runeW = runeWidth(cellRune)
       # Check if we need to truncate (leave space for ellipsis)
       if currentWidth + runeW > maxContentWidth - 1 and
           currentWidth + runeW < displayWidth(item.title):
@@ -673,7 +676,7 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
         break
 
       if textX + runeW <= maxTextX and textX < buffer.area.width:
-        buffer.setString(textX, y, $rune, style)
+        buffer.setString(textX, y, $cellRune, style)
         textX += runeW
         currentWidth += runeW
       else:

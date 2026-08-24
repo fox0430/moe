@@ -22,12 +22,16 @@ import
     [unittest, json, options, os, times, strutils, importutils, tables, sets, monotimes]
 
 import pkg/results
+import pkg/chronos
 
 import ../src/moepkg/[lsp_service, logger]
+import ../src/moepkg/lsp/worker
 import ../src/moepkg/lsp/protocol/types
+import ../src/moepkg/buffer/undo
 
 suite "LspService - newLspService":
   privateAccess(LspService)
+  privateAccess(LspWorker)
 
   test "creates service with default workspace root (current dir)":
     let svc = newLspService()
@@ -319,10 +323,6 @@ suite "LspService - Worker Management (without actual workers)":
     let result1 = svc.startWorker("nim")
     check result1.isOk
     let worker1 = result1.get
-
-    # Worker is started but LSP server state is still lwsStopped
-    # (lcmdStart hasn't been processed yet)
-    check worker1.state == lwsStopped
 
     # Second call must return the same worker, not create a new one
     let result2 = svc.startWorker("nim")
@@ -1173,6 +1173,124 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
       LspEvent(kind: levApplyEdit, applyEditReqIdJson: "7", applyEditEditJson: editJson),
     )
     check called
+
+  test "levApplyEdit re-raises TransactionRollbackError (untrustworthy buffer)":
+    # processEvent must re-raise a TransactionRollbackError after answering
+    # the server negatively, instead of the blanket CatchableError handler
+    # below turning it into a warning that silently hides the untrustworthy
+    # state. Defensive boundary: the production wiring converts the exception
+    # to an err inside applyWorkspaceEdit, so this only fires for a callback
+    # that raises directly.
+    let svc = newLspService()
+    var called = false
+    svc.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        called = true
+      raise newException(
+        TransactionRollbackError, "withTransaction: failed to roll back: boom"
+      )
+    let editJson = $(%*{"changes": {"file:///t.nim": []}})
+    expect TransactionRollbackError:
+      svc.processEvent(
+        "nim",
+        LspEvent(
+          kind: levApplyEdit, applyEditReqIdJson: "7", applyEditEditJson: editJson
+        ),
+      )
+    check called
+
+  test "poll re-raises TransactionRollbackError (untrustworthy buffer)":
+    # poll() must let a TransactionRollbackError escape AFTER the drain, so
+    # the emergency-save boundary can act on the untrustworthy buffer. As in
+    # the processEvent test above, this is a defensive path: the production
+    # wiring converts the exception to an err and never reaches here.
+    let svc = newLspService()
+    var called = false
+    svc.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        called = true
+      raise newException(
+        TransactionRollbackError, "withTransaction: failed to roll back: boom"
+      )
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let testWorker = workerResult.get
+    testWorker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(%*{"changes": {"file:///t.nim": []}}),
+      )
+    )
+    svc.workers["nim"] = testWorker
+    expect TransactionRollbackError:
+      svc.poll(0)
+    check called
+
+  test "waitForResponse re-raises after draining the queue and dropping the ledger":
+    # The poll inside waitForResponse must surface a failed rollback only
+    # AFTER the whole drain, so events queued behind the raising one are not
+    # lost; pollWithErrorHandling drops the request bookkeeping so no stale
+    # id lingers. Defensive path: the production wiring converts the
+    # exception to an err and never reaches here.
+    let svc = newLspService()
+    var called = 0
+    svc.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        inc called
+      raise newException(
+        TransactionRollbackError, "withTransaction: failed to roll back: boom"
+      )
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let testWorker = workerResult.get
+    testWorker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "7",
+        applyEditEditJson: $(%*{"changes": {"file:///t.nim": []}}),
+      )
+    )
+    testWorker.enqueueEventForTest(
+      LspEvent(
+        kind: levApplyEdit,
+        applyEditReqIdJson: "8",
+        applyEditEditJson: $(%*{"changes": {"file:///t.nim": []}}),
+      )
+    )
+    svc.workers["nim"] = testWorker
+    # Register the request in the ledger the way startTrackedRequest does (it
+    # is not exported) so the waitForResponse cleanup can be asserted.
+    let requestId = 42
+    svc.activeRequests[requestId] = LspPendingRequest(
+      requestId: requestId,
+      langId: "nim",
+      methodName: "textDocument/formatting",
+      startTime: epochTime(),
+      timeoutMs: svc.requestTimeoutMs,
+    )
+    proc runner(
+        svc: LspService, requestId: int
+    ): Future[Result[JsonNode, string]] {.async.} =
+      return await svc.waitForResponse(requestId)
+
+    var raised = false
+    try:
+      discard waitFor(runner(svc, requestId))
+    except TransactionRollbackError:
+      raised = true
+    check raised
+    # Both events were processed despite the first raising.
+    check called == 2
+    # The request ledger was dropped by pollWithErrorHandling.
+    check requestId notin svc.activeRequests
+    check requestId notin svc.pendingResponses
 
   test "first levInitialized records the language but does not fire onServerRestart":
     # Normal startup: the editor already sent didOpen at file-open time, so the

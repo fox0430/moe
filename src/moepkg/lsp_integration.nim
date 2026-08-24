@@ -25,7 +25,7 @@ from std/os import absolutePath, normalizedPath
 
 import pkg/[results, chronos]
 
-import buffer, types, lsp_service, message_log, unicode_utils, highlight
+import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger
 import lsp/protocol/types as lspTypes
 
 import types/lsp_integration_types
@@ -1019,7 +1019,44 @@ proc compareTextEditReverse(a, b: (int, TextEdit)): int =
     return eb.range.start.character - ea.range.start.character
   return b[0] - a[0]
 
-proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, string] =
+proc abortTextEditsOnException*(
+    buffer: TextBuffer,
+    ownTransaction: bool,
+    excMsg: string,
+    appliedEdits: var seq[TextEdit],
+    discloseJoined: bool = true,
+): Result[void, string] =
+  ## Exception-safety tail for applyTextEdits: roll back the transaction we
+  ## opened (`ownTransaction`), or disclose that a joined outer transaction
+  ## keeps the partial edits. `appliedEdits` is cleared only when the own
+  ## transaction rolled back successfully, so a failed rollback or a joined
+  ## transaction still reports the remaining edits. `discloseJoined` (same
+  ## semantics as in applyTextEdits) suppresses the note for callers that
+  ## roll the joined transaction back themselves.
+  if ownTransaction and buffer.inTransaction:
+    let rollbackResult = buffer.rollbackTransaction()
+    if rollbackResult.isErr:
+      logError "lsp", "Failed to rollback transaction: " & rollbackResult.error
+      return err(
+        "Failed to apply text edits: " & excMsg & " (rollback failed: " &
+          rollbackResult.error & "; some edits may remain applied)"
+      )
+    appliedEdits.setLen(0)
+  if not ownTransaction:
+    if discloseJoined:
+      return err(
+        "Failed to apply text edits: " & excMsg &
+          " (joined transaction: earlier edits may remain applied)"
+      )
+    return err("Failed to apply text edits: " & excMsg)
+  err("Failed to apply text edits: " & excMsg)
+
+proc applyTextEdits*(
+    buffer: TextBuffer,
+    edits: seq[TextEdit],
+    appliedEdits: var seq[TextEdit],
+    discloseJoined: bool = true,
+): Result[void, string] =
   ## Apply a sequence of TextEdits to the buffer
   ## Edits are applied in reverse order (back to front) to preserve positions
   ## Note: LSP TextEdit.range.end is exclusive, buffer.deleteRange is inclusive
@@ -1036,6 +1073,12 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   ##   rolling back — the outer transaction is left dirty with whichever inner
   ##   edits already applied. The caller is responsible for rollback because
   ##   it may want to keep earlier work in the same transaction.
+  ##
+  ## On err, `appliedEdits` lists the edits still applied (empty on success
+  ## or full rollback) so callers with a joined transaction can re-sync.
+  ## `discloseJoined` suppresses the joined-transaction note (see
+  ## abortTextEditsOnException).
+  appliedEdits.setLen(0)
   if edits.len == 0:
     return ok()
 
@@ -1057,91 +1100,135 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
 
   template failEdit(msg: string): untyped =
     if ownTransaction:
-      discard buffer.rollbackTransaction()
+      let rollbackResult = buffer.rollbackTransaction()
+      if rollbackResult.isErr:
+        logError "lsp", "Failed to rollback transaction: " & rollbackResult.error
+        return err(
+          msg & " (rollback failed: " & rollbackResult.error &
+            "; some edits may remain applied)"
+        )
+      appliedEdits.setLen(0)
+      return err(msg)
+    elif buffer.inTransaction:
+      # Joined an outer transaction: disclose the partial application.
+      if discloseJoined:
+        return err(msg & " (joined transaction: earlier edits may remain applied)")
+      return err(msg)
     return err(msg)
 
-  # Apply each edit
-  for edit in sortedEdits:
-    let startLine = edit.range.start.line
-    let lspEndPos = edit.range.`end`
+  try:
+    # Apply each edit
+    for edit in sortedEdits:
+      let startLine = edit.range.start.line
+      let lspEndPos = edit.range.`end`
 
-    # Convert UTF-16 character offset to rune index
-    let startLineText =
-      if startLine >= 0 and startLine < buffer.len:
-        buffer.getLine(startLine)
-      else:
-        ""
-    let startCol = utf16ToRuneIndex(startLineText, edit.range.start.character)
-    let startPos = BufferPosition(line: startLine, column: startCol)
-
-    # Check if range is empty (LSP exclusive end == start means empty range)
-    let isEmptyRange =
-      edit.range.start.line == lspEndPos.line and
-      edit.range.start.character == lspEndPos.character
-
-    # Malformed range where start > end (spec-compliant servers never send this).
-    # Treat as empty so we skip deletion but still honor the insert at startPos.
-    let isMalformedRange =
-      lspEndPos.line < edit.range.start.line or (
-        lspEndPos.line == edit.range.start.line and
-        lspEndPos.character < edit.range.start.character
-      )
-
-    # Delete the range if it's not empty
-    if not isEmptyRange and not isMalformedRange:
-      # Convert LSP exclusive end to buffer inclusive end
-      var adjustedEndPos: BufferPosition
-
-      # Get end line text for UTF-16 conversion
-      let endLineText =
-        if lspEndPos.line >= 0 and lspEndPos.line < buffer.len:
-          buffer.getLine(lspEndPos.line)
+      # Convert UTF-16 character offset to rune index; offsets past the
+      # line's end are rejected instead of silently clamped.
+      let startLineText =
+        if startLine >= 0 and startLine < buffer.len:
+          buffer.getLine(startLine)
         else:
           ""
+      let (startCol, startUtf16Walked) =
+        utf16OffsetToRune(startLineText, edit.range.start.character)
+      if startUtf16Walked < edit.range.start.character:
+        failEdit(
+          "Invalid edit range: start position (line " & $startLine & ", character " &
+            $edit.range.start.character & ") is past the end of its line"
+        )
+      let startPos = BufferPosition(line: startLine, column: startCol)
 
-      if lspEndPos.character > 0:
-        # Convert UTF-16 to a rune index and decrement by one rune for the
-        # inclusive end
-        if lspEndPos.line >= buffer.len:
-          # End points past EOF: clamp to end of last line
-          let last = buffer.len - 1
-          adjustedEndPos =
-            BufferPosition(line: last, column: buffer.getLine(last).charLen)
+      # Check if range is empty (LSP exclusive end == start means empty range)
+      let isEmptyRange =
+        edit.range.start.line == lspEndPos.line and
+        edit.range.start.character == lspEndPos.character
+
+      # Malformed range where start > end (spec-compliant servers never send this).
+      # Treat as empty so we skip deletion but still honor the insert at startPos.
+      let isMalformedRange =
+        lspEndPos.line < edit.range.start.line or (
+          lspEndPos.line == edit.range.start.line and
+          lspEndPos.character < edit.range.start.character
+        )
+
+      # Delete the range if it's not empty
+      if not isEmptyRange and not isMalformedRange:
+        # Convert LSP exclusive end to buffer inclusive end
+        var adjustedEndPos: BufferPosition
+
+        # Get end line text for UTF-16 conversion
+        let endLineText =
+          if lspEndPos.line >= 0 and lspEndPos.line < buffer.len:
+            buffer.getLine(lspEndPos.line)
+          else:
+            ""
+
+        if lspEndPos.character > 0:
+          # Convert UTF-16 to a rune index and decrement by one rune for the
+          # inclusive end
+          if lspEndPos.line >= buffer.len:
+            # End points past EOF: clamp to end of last line
+            let last = buffer.len - 1
+            adjustedEndPos =
+              BufferPosition(line: last, column: buffer.getLine(last).charLen)
+          else:
+            let (endRune, endUtf16Walked) =
+              utf16OffsetToRune(endLineText, lspEndPos.character)
+            if endUtf16Walked < lspEndPos.character:
+              failEdit(
+                "Invalid edit range: end position (line " & $lspEndPos.line &
+                  ", character " & $lspEndPos.character & ") is past the end of its line"
+              )
+            adjustedEndPos =
+              BufferPosition(line: lspEndPos.line, column: max(endRune - 1, 0))
         else:
-          let endRune = utf16ToRuneIndex(endLineText, lspEndPos.character)
+          # End is at start of a line (character == 0)
+          # Need to point to end of previous line to include the newline
+          # lspEndPos.line > 0 here: isMalformedRange rejected end at (0,0).
+          let prevIdx = min(lspEndPos.line - 1, buffer.len - 1)
           adjustedEndPos =
-            BufferPosition(line: lspEndPos.line, column: max(endRune - 1, 0))
-      else:
-        # End is at start of a line (character == 0)
-        # Need to point to end of previous line to include the newline
-        # lspEndPos.line > 0 here: isMalformedRange rejected end at (0,0).
-        let prevIdx = min(lspEndPos.line - 1, buffer.len - 1)
-        adjustedEndPos =
-          BufferPosition(line: prevIdx, column: buffer.getLine(prevIdx).charLen)
+            BufferPosition(line: prevIdx, column: buffer.getLine(prevIdx).charLen)
 
-      # Only delete if we have a valid range
-      if startPos.line < adjustedEndPos.line or (
-        startPos.line == adjustedEndPos.line and startPos.column <= adjustedEndPos.column
-      ):
-        let deleteResult = buffer.deleteRange(startPos, adjustedEndPos)
-        if deleteResult.isErr:
-          failEdit("Failed to delete range: " & deleteResult.error)
+        # Only delete if we have a valid range
+        if startPos.line < adjustedEndPos.line or (
+          startPos.line == adjustedEndPos.line and
+          startPos.column <= adjustedEndPos.column
+        ):
+          let deleteResult = buffer.deleteRange(startPos, adjustedEndPos)
+          if deleteResult.isErr:
+            failEdit("Failed to delete range: " & deleteResult.error)
 
-    # Insert the new text if not empty
-    if edit.newText.len > 0:
-      let insertResult = buffer.insertText(startPos, edit.newText)
-      if insertResult.isErr:
-        failEdit("Failed to insert text: " & insertResult.error)
+      # Insert the new text if not empty
+      if edit.newText.len > 0:
+        let insertResult = buffer.insertText(startPos, edit.newText)
+        if insertResult.isErr:
+          failEdit("Failed to insert text: " & insertResult.error)
 
-  if ownTransaction:
-    let cr = buffer.commitTransaction()
-    if cr.isErr:
-      # Commit failed but we own the transaction. Attempt to rollback so the
-      # buffer doesn't stay stuck in an in-progress transaction.
-      discard buffer.rollbackTransaction()
-      return err("Failed to commit transaction: " & cr.error)
+      appliedEdits.add(edit)
 
-  return ok()
+    if ownTransaction:
+      let cr = buffer.commitTransaction()
+      if cr.isErr:
+        return err("Failed to commit transaction: " & cr.error)
+
+    appliedEdits.setLen(0)
+    return ok()
+  except Exception as exc:
+    if exc of Defect:
+      # Defects stay fatal (codebase policy): roll back best-effort, then re-raise.
+      discard abortTextEditsOnException(
+        buffer, ownTransaction, exc.msg, appliedEdits, discloseJoined
+      )
+      raise
+    # Unexpected error: roll back what was applied and report the failure.
+    return abortTextEditsOnException(
+      buffer, ownTransaction, exc.msg, appliedEdits, discloseJoined
+    )
+
+proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, string] =
+  ## Backward-compatible convenience wrapper without applied-edits tracking.
+  var ignored: seq[TextEdit]
+  applyTextEdits(buffer, edits, appliedEdits = ignored)
 
 proc samePath(a, b: string): bool =
   ## Compare two file paths after normalizing to absolute form.
@@ -1246,15 +1333,26 @@ proc hasStaleServerEditTarget*(
 
   return false
 
+const BufferStateInconsistentSuffix* = " (buffer state may be inconsistent)"
+  ## Suffix appended to errors from a failed rollback (untrustworthy buffer).
+  ## applyWorkspaceEditFromServer (editor_lsp.nim) detects this same
+  ## constant, so the phrase must never be rewritten in only one place.
+
 proc applyWorkspaceEdit*(
     buffers: var seq[TextBuffer],
     edit: WorkspaceEdit,
     transactionName: string = "Rename",
+    allowUnopenedFileWrites: bool = true,
 ): Result[WorkspaceEditResult, string] =
   ## Apply a WorkspaceEdit to multiple buffers
   ## Returns which buffers/files were modified
   ## For open buffers: uses transactions for undo support
   ## For unopened files: loads, modifies, and saves directly
+  ##
+  ## `allowUnopenedFileWrites` is true for user-initiated flows (rename) and
+  ## false for server-initiated workspace/applyEdit: a server must not write
+  ## files the user has not opened, and refusing the whole edit avoids
+  ## half-applied outcomes.
   ##
   ## Note: Per LSP spec, documentChanges takes precedence over changes.
   ## If both are present, only documentChanges is used.
@@ -1262,11 +1360,12 @@ proc applyWorkspaceEdit*(
   ## File operations (create/rename/delete) are not supported. Applying only
   ## the text edits of such a WorkspaceEdit would leave the workspace in a
   ## broken half-applied state, so the whole edit is refused instead.
-  if edit.resourceOperations.len > 0:
-    return err(
-      "WorkspaceEdit contains unsupported file operations (" &
-        edit.resourceOperations.deduplicate().join(", ") & "); no edits applied"
-    )
+  ##
+  ## Malformed targets and file operations are refused before anything is
+  ## modified (see staticRejectionReason, shared with the service-layer gate).
+  let rejectReason = staticRejectionReason(edit)
+  if rejectReason.isSome:
+    return err(rejectReason.get & "; no edits applied")
   var modifiedCount = 0
   var openBuffersToModify: seq[tuple[bufferIdx: int, edits: seq[TextEdit]]] = @[]
   var unopenedFilesToModify: seq[tuple[path: string, edits: seq[TextEdit]]] = @[]
@@ -1275,20 +1374,36 @@ proc applyWorkspaceEdit*(
   if edit.documentChanges.isSome:
     # Handle documentChanges field (seq[TextDocumentEdit])
     for docEdit in edit.documentChanges.get:
-      let path = uriToPath(docEdit.textDocument.uri)
+      let pathRes = validateLocalFileUri(docEdit.textDocument.uri)
+      if pathRes.isErr:
+        return err(pathRes.error)
+      let path = pathRes.get
       let bufferIdxOpt = findBufferByPath(buffers, path)
       if bufferIdxOpt.isSome:
         openBuffersToModify.add((bufferIdxOpt.get, docEdit.edits))
       else:
+        if not allowUnopenedFileWrites:
+          return err(
+            "Server edit targets a file not open in the editor: " & path &
+              "; edit discarded"
+          )
         unopenedFilesToModify.add((path, docEdit.edits))
   elif edit.changes.isSome:
     # Handle changes field (uri -> seq[TextEdit]) only if documentChanges is absent
     for uri, edits in edit.changes.get:
-      let path = uriToPath(uri)
+      let pathRes = validateLocalFileUri(uri)
+      if pathRes.isErr:
+        return err(pathRes.error)
+      let path = pathRes.get
       let bufferIdxOpt = findBufferByPath(buffers, path)
       if bufferIdxOpt.isSome:
         openBuffersToModify.add((bufferIdxOpt.get, edits))
       else:
+        if not allowUnopenedFileWrites:
+          return err(
+            "Server edit targets a file not open in the editor: " & path &
+              "; edit discarded"
+          )
         unopenedFilesToModify.add((path, edits))
 
   # Track successfully modified files for error reporting
@@ -1300,16 +1415,31 @@ proc applyWorkspaceEdit*(
   for (bufferIdx, edits) in openBuffersToModify:
     let buffer = buffers[bufferIdx]
 
-    let txr = withTransaction(buffer, transactionName):
-      let applyResult = applyTextEdits(buffer, edits)
-      if applyResult.isErr:
-        if modifiedBufferPaths.len > 0:
-          return err(
-            "Failed to apply edits: " & applyResult.error & " (Warning: " &
-              $modifiedBufferPaths.len & " buffer(s) already modified: " &
-              modifiedBufferPaths.join(", ") & ")"
+    let txr =
+      try:
+        withTransaction(buffer, transactionName):
+          # withTransaction rolls back on error here: suppress the joined-transaction note.
+          var ignored: seq[TextEdit]
+          let applyResult = applyTextEdits(
+            buffer, edits, appliedEdits = ignored, discloseJoined = false
           )
-        return err("Failed to apply edits: " & applyResult.error)
+          if applyResult.isErr:
+            # Raise instead of returning so the original error is kept in
+            # the TransactionRollbackError message if the rollback fails
+            # (a return would exit before the template's finally runs).
+            if modifiedBufferPaths.len > 0:
+              raise newException(
+                ValueError,
+                "Failed to apply edits: " & applyResult.error & " (Warning: " &
+                  $modifiedBufferPaths.len & " buffer(s) already modified: " &
+                  modifiedBufferPaths.join(", ") & ")",
+              )
+            raise
+              newException(ValueError, "Failed to apply edits: " & applyResult.error)
+      except ValueError as exc:
+        if exc of TransactionRollbackError:
+          return err(exc.msg & BufferStateInconsistentSuffix)
+        return err(exc.msg)
     if txr.isErr:
       if modifiedBufferPaths.len > 0:
         return err(
@@ -1384,6 +1514,16 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
   # Store full diagnostics for hover display
   buffer.diagnostics.setLen(0)
   for diag in diagnostics:
+    let startLine = diag.range.start.line
+    # Match the marker pass above: a diagnostic whose start line is outside
+    # the buffer is not stored — it can never be shown or hovered, and an
+    # arbitrary line must not drive the highlight overlay loops.
+    if startLine < 0 or startLine >= buffer.len:
+      continue
+    # An end beyond the buffer is common (a diagnostic running to EOF); clamp
+    # it so the overlay rebuild stays bounded by the buffer size. A reversed
+    # range degenerates to a zero-width diagnostic at the start line.
+    let endLine = min(max(diag.range.`end`.line, startLine), buffer.len - 1)
     let severity =
       if diag.severity.isSome:
         case diag.severity.get
@@ -1394,24 +1534,14 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
       else:
         bdsError
     # LSP columns are UTF-16 code units; consumers (markers, highlights)
-    # expect rune indexes. Convert using the referenced line's text; lines
-    # outside the buffer fall back to "" so the columns clamp to 0.
-    let startLineText =
-      if diag.range.start.line >= 0 and diag.range.start.line < buffer.len:
-        buffer.getLine(diag.range.start.line)
-      else:
-        ""
-    let endLineText =
-      if diag.range.`end`.line >= 0 and diag.range.`end`.line < buffer.len:
-        buffer.getLine(diag.range.`end`.line)
-      else:
-        ""
+    # expect rune indexes. Convert using the referenced line's text.
     buffer.diagnostics.add(
       BufferDiagnostic(
-        startLine: diag.range.start.line,
-        startCol: utf16ToRuneIndex(startLineText, diag.range.start.character),
-        endLine: diag.range.`end`.line,
-        endCol: utf16ToRuneIndex(endLineText, diag.range.`end`.character),
+        startLine: startLine,
+        startCol:
+          utf16ToRuneIndex(buffer.getLine(startLine), diag.range.start.character),
+        endLine: endLine,
+        endCol: utf16ToRuneIndex(buffer.getLine(endLine), diag.range.`end`.character),
         severity: severity,
         message: diag.message,
       )
@@ -1620,7 +1750,9 @@ defineSupportCheck(hasCallHierarchySupport)
 
 proc requestCodeLensResolve*(
     lsp: LspIntegration, buffer: TextBuffer, lens: CodeLens
-): Future[Result[CodeLens, string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[CodeLens, string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Resolve a code lens to get its command
   ## Used when the initial codeLens response doesn't include the command
   let pathRes = resolveLspPathForRequest(lsp, buffer)
@@ -1633,7 +1765,9 @@ proc requestExecuteCommand*(
     buffer: TextBuffer,
     command: string,
     arguments: seq[JsonNode] = @[],
-): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[JsonNode, string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Execute a command on the LSP server (used for code lens commands)
   let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
@@ -1699,7 +1833,9 @@ proc shutdown*(lsp: LspIntegration) =
 
 proc requestFormatting*(
     lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
-): Future[Result[seq[TextEdit], string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[seq[TextEdit], string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Request formatting for a buffer
   let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:
@@ -1708,7 +1844,9 @@ proc requestFormatting*(
 
 proc requestRename*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
-): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[Option[WorkspaceEdit], string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Request rename at a position
   ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
   let pathRes = resolveLspPathForRequest(lsp, buffer)
@@ -1718,42 +1856,11 @@ proc requestRename*(
     pathRes.get, line, buffer.toUtf16Column(line, column), newName
   )
 
-proc requestDefinition*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
-  ## Request go to definition at a position
-  ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
-  if pathRes.isErr:
-    return err(pathRes.error)
-  return await lsp.service.requestDefinition(
-    pathRes.get, line, buffer.toUtf16Column(line, column)
-  )
-
-proc requestReferences*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
-  ## Request find references at a position
-  ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
-  if pathRes.isErr:
-    return err(pathRes.error)
-  return await lsp.service.requestReferences(
-    pathRes.get, line, buffer.toUtf16Column(line, column)
-  )
-
-proc requestDocumentSymbols*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Future[Result[DocumentSymbolResult, string]] {.async: (raises: [CancelledError]).} =
-  ## Request document symbols
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
-  if pathRes.isErr:
-    return err(pathRes.error)
-  return await lsp.service.requestDocumentSymbols(pathRes.get)
-
 proc requestFoldingRanges*(
     lsp: LspIntegration, buffer: TextBuffer
-): Future[Result[seq[FoldingRange], string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[seq[FoldingRange], string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Request folding ranges for a buffer
   let pathRes = resolveLspPathForRequest(lsp, buffer)
   if pathRes.isErr:

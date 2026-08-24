@@ -27,7 +27,7 @@ import
   types/registers_types,
   types/filer_types,
   types/filetree_types,
-  log_viewer,
+  types/log_viewer_types,
   types/help_viewer_types,
   types/command_completion_types,
   message_log,
@@ -41,24 +41,25 @@ import
   types/references_viewer_types,
   types/documentsymbol_viewer_types,
   types/callhierarchy_viewer_types,
-  hover_popup,
-  notification_popup,
+  types/hover_popup_types,
+  types/notification_popup_types,
   primitives,
   types/syntax_checker_types,
   types/recent_file_mode_types,
   types/git_cache_types,
-  terminal_mode,
+  types/terminal_mode_types,
   config
 
 from lsp/protocol/types import SemanticTokensLegend
 
 export
   buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
-  filetree_types, log_viewer, help_viewer_types, buffer_manager_types,
+  filetree_types, log_viewer_types, help_viewer_types, buffer_manager_types,
   bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
   config_mode_types, references_viewer_types, documentsymbol_viewer_types,
-  callhierarchy_viewer_types, hover_popup, notification_popup, primitives,
-  syntax_checker_types, recent_file_mode_types, terminal_mode, config.BracketSplitMode
+  callhierarchy_viewer_types, hover_popup_types, notification_popup_types, primitives,
+  syntax_checker_types, recent_file_mode_types, terminal_mode_types,
+  config.BracketSplitMode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -627,9 +628,17 @@ type
       # Current stop's default is untouched (= selected); the next typed
       # character or Backspace replaces/deletes the whole default range
 
+  ReplaceHistoryEntryKind* = enum
+    rheReplace # Character replacement (or end-of-line insertion)
+    rheNewline # Line split via Enter
+
   ReplaceHistoryEntry* = object ## Replace mode history entry for undo with Backspace
-    pos*: BufferPosition # Position where character was replaced
-    originalChar*: string # Original character before replacement
+    pos*: BufferPosition # Position anchoring the operation
+    case kind*: ReplaceHistoryEntryKind
+    of rheReplace:
+      originalChar*: string # Original char (empty when it was an end-of-line insert)
+    of rheNewline:
+      discard
 
   SubstituteKind* = enum
     ## Kind of substitute operation that led to Insert mode
@@ -865,6 +874,10 @@ type
     ui*: UiState # Transient UI display state (preview, progress, find char)
     windowDisplay*: WindowDisplayState
       # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
+    inactiveHighlightScanIndex*: int
+      # Round-robin start index for `updateForFrame`'s inactive-buffer
+      # highlight budget, so a buffer with sustained work cannot starve the
+      # buffers behind it.
 
   DebouncedLspPoll* = object
     ## Debounce + exponential backoff timer for a single LSP poll feature.
@@ -1186,7 +1199,7 @@ proc baseMode*(state: EditorState): EditorMode =
 proc modeStateKind*(mode: EditorMode): ModeStateKind =
   ## Map an `EditorMode` to the `ModeStateKind` it expects on `EditorWindow`.
   ## Modes that do not own per-window state (Normal/Insert/Visual/... and
-  ## the QuickRun/Command/Replace/Replace/Search overlay modes) return
+  ## the Command/Replace/Search overlay modes) return
   ## `mskNone`.
   case mode
   of EditorMode.Filer: mskFiler

@@ -31,6 +31,7 @@ import
   unicode_utils,
   lsp_request_context
 import lsp/rust_runnable
+import buffer/undo
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
@@ -145,6 +146,11 @@ proc processCodeLensResponse(
     # Note: the debounce timer is advanced at request initiation in
     # `doUpdateCodeLensCache`, not here. This handler runs async and can be
     # skipped, so it must not be relied on to gate the debounce.
+  except TransactionRollbackError as err:
+    # This future is asyncSpawned: surface the failed rollback (untrustworthy
+    # buffer) as a status message instead of dropping it.
+    logError "lsp", "CodeLens resolve aborted, buffer state untrustworthy: " & err.msg
+    e.state.statusMessage = "CodeLens error: buffer state may be inconsistent"
   except CancelledError:
     discard
 
@@ -317,6 +323,9 @@ proc executeCodeLensItem*(
     return ok()
   except CancelledError as err:
     raise err
+  except TransactionRollbackError as err:
+    logError "lsp", "CodeLens execute aborted, buffer state untrustworthy: " & err.msg
+    return err("Failed to execute CodeLens: buffer state may be inconsistent")
   except Exception as err:
     return err("Failed to execute CodeLens: " & err.msg)
 

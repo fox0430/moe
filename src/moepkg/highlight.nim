@@ -98,10 +98,47 @@ type
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
 
+  PendingReparse* = ref object
+    ## Progress of a budgeted re-parse that could not finish in one call.
+    ## Non-nil = in flight; nil on completion or restart.
+    anchor*: int
+      ## `changedStartLine` at start; a difference means a new edit arrived
+      ## mid-flight and the accumulation is stale.
+    lineCount*: int ## Buffer line count at start; a change invalidates it.
+    contentVersion*: int
+      ## Content version at start; catches edits that keep `anchor`/
+      ## `lineCount` the same.
+    reservedWords*: seq[ReservedWord]
+      ## Reserved words at start; a config change restarts the re-parse.
+    reparseStart*: int
+      ## First re-parsed row (segment trim point and URI-scan rewind target).
+    currentStart*: int ## Next chunk's first row (the frontier + 1).
+    currentState*: TokenizerState
+      ## Tokenizer state entering `currentStart`, captured at the frontier.
+    reparseEnd*: int ## Last row fully re-parsed so far (the frontier).
+    chunkLen*: int
+      ## Chunk window; doubles while it sits inside one multi-line construct,
+      ## reset after each accepted chunk.
+    allNewLineStates*: seq[TokenizerState]
+      ## One tokenizer state per re-parsed row, from `reparseStart`.
+    staleTail*: seq[ColorSegment]
+      ## Segments trimmed at `reparseStart`; spliced back if the re-parse
+      ## converges early, dropped at EOF or restart.
+    tailAligned*: bool
+      ## False after a line-count change mid-flight: the shifted tail no
+      ## longer aligns, so convergence stays disabled until EOF.
+    convergeBarrier*: int
+      ## Suppress convergence while `handoff - 1 <= convergeBarrier`: rows up
+      ## to this line have refreshed states but original tail segments. -1 for
+      ## fresh flights.
+
   IncrementalHighlight* = ref object ## Incremental highlighting information
     segments*: seq[ColorSegment]
     lineStates*: LineStateCache
     parsedUpTo*: int ## Last line parsed during initial load. -1 = not started.
+    pendingReparse*: PendingReparse
+      ## In-flight budgeted re-parse state (see `PendingReparse`); nil = none.
+    lastReparseStart*: int ## First row the last re-parse actually touched.
 
   Position = tuple[row, column: int]
     ## Module-private alias used by segment-splitting helpers (overwrite,
@@ -155,9 +192,32 @@ const
     ## `length`, so a pathological value (e.g. 2^31 from a buggy server) would
     ## otherwise walk every row of the buffer in a full-doc reply.
 
+  ChunkSize* = 100
+    ## Incremental re-parse chunk window; doubles while it sits inside one
+    ## multi-line construct. Exported so tests can place fixtures on a
+    ## boundary without hardcoding row alignment.
+
 let defaultStyle* =
   Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
   ## Default style for highlighting
+
+const NoContentVersion* = low(int)
+  ## Sentinel for callers without version tracking; `matches` skips the
+  ## version check when either side carries it. Real values (incl. `-1`)
+  ## still participate.
+
+proc matches*(
+    pr: PendingReparse,
+    anchor, lineCount, contentVersion: int,
+    reservedWords: seq[ReservedWord],
+): bool =
+  ## True when the live flight's saved inputs still match; a `false` result
+  ## means the flight is stale and must restart.
+  let versionMatches =
+    contentVersion == NoContentVersion or pr.contentVersion == NoContentVersion or
+    pr.contentVersion == contentVersion
+  pr.anchor == anchor and pr.lineCount == lineCount and versionMatches and
+    pr.reservedWords == reservedWords
 
 proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
   ## Capture tokenizer state at a line boundary.
@@ -1187,9 +1247,27 @@ proc initHighlightIncrementalFromStr*(
   # desynchronize `parsedUpTo` from the cache (see `continueInitialHighlight`).
   # The padded lines carry no segments (un-highlighted) and resume from the
   # stop state — degraded but stable, matching the break's intent.
-  while currentRow <= endLine:
-    lineStates.add(captureTokenizerState(token))
-    inc currentRow
+  #
+  # At a line-boundary stop, Markdown's newline handler resets to
+  # `gtWhitespace`; normalize to it or the next chunk mis-lexes line-start
+  # tokens (`---`, `#`, `- `). Fenced-code continuation states must NOT be
+  # normalized: the sub-tokenizer consumed the newline and resumes on exactly
+  # the states below. Every pad row must be resumable, not just the last.
+  const MarkdownResumableStates = {
+    gtDocLongComment, gtLongStringLit, gtLongComment, gtStringLit, gtCData, gtCharLit,
+    gtKey,
+  }
+  let normalizeMarkdown =
+    language == SourceLanguage.langMarkdown and token.state notin MarkdownResumableStates
+  if normalizeMarkdown:
+    let normalized = TokenizerState(state: gtWhitespace, lang: token.lang)
+    while currentRow <= endLine:
+      lineStates.add(normalized)
+      inc currentRow
+  else:
+    while currentRow <= endLine:
+      lineStates.add(captureTokenizerState(token))
+      inc currentRow
 
   when defined(debugHighlight):
     # The padding above only fixes the short direction; over-length would mean
@@ -1326,6 +1404,13 @@ proc segmentCutIndex*(segs: openArray[ColorSegment], row: int): int =
   segs.lowerBound(row) do(seg: ColorSegment, line: int) -> int:
     cmp(seg.firstRow, line)
 
+proc yamlLineKind(line: string): char =
+  ## First non-space character of `line`, `'\0'` for a blank line.
+  for ch in line:
+    if ch notin {' ', '\t'}:
+      return ch
+  '\0'
+
 proc yamlLineNeedsContextAbove(line: string): bool =
   ## A YAML block scalar's extent depends on lines BELOW its header but is
   ## resolved by scanning ABOVE it, which a saved state cannot express:
@@ -1334,13 +1419,8 @@ proc yamlLineNeedsContextAbove(line: string): bool =
   ##   * an alone header (`|`/`>` on its own line) takes its indentation from
   ##     the nearest non-blank line above, missing if a parse starts on the
   ##     header.
-  var firstNonSpace = '\0'
-  for ch in line:
-    if ch notin {' ', '\t'}:
-      firstNonSpace = ch
-      break
   # Blank line (no non-space char) or an alone block-scalar header.
-  firstNonSpace in {'\0', '|', '>'}
+  yamlLineKind(line) in {'\0', '|', '>'}
 
 proc chunkHandoffUnsafe*(
     language: SourceLanguage, state: TokenClass, nextLine: string
@@ -1353,14 +1433,17 @@ proc chunkHandoffUnsafe*(
   ## not a new predicate wired into each driver.
   case language
   of SourceLanguage.langYaml:
-    # YAML block scalars resume by re-reading the header and parent lines
-    # ABOVE the resume point — context a fresh buffer does not contain — so a
-    # handoff inside a scalar (gtLongStringLit), right after a header
-    # (gtCommand), or onto a line that itself resolves against lines above
-    # must rewind to a safe line instead. Quoted-string states are safe to
-    # hand off: their resume is position-independent (the state alone
-    # suffices).
-    state in {gtLongStringLit, gtCommand} or yamlLineNeedsContextAbove(nextLine)
+    # `gtLongStringLit` is mid scalar (`|`/`>` there is content, not a
+    # header); `gtCommand` (the header line) always needs context; other
+    # non-plain states only for blank / alone-header lines.
+    if state == gtCommand:
+      true
+    elif state == gtLongStringLit:
+      yamlLineKind(nextLine) == '\0'
+    elif state != gtOther:
+      yamlLineNeedsContextAbove(nextLine)
+    else:
+      yamlLineKind(nextLine) in {'|', '>'}
   else:
     false
 
@@ -1371,83 +1454,157 @@ proc updateHighlightIncremental*(
     changedStartLine: int,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
-    maxLineLen: int = 0,
-) =
-  ## Update highlighting incrementally for a changed region.
-  ## Re-parses from the changed line in chunks, stopping early when the
-  ## tokenizer state converges with the cached state (meaning all subsequent
-  ## lines would produce the same result as before). Falls back to parsing
-  ## the entire rest of the file when convergence cannot be detected (e.g.
-  ## when the line count has changed).
-
-  const ChunkSize = 100
+    maxLineLen: int,
+    budgetLines: int,
+    contentVersion: int,
+    parsedLines: var int,
+): bool =
+  ## Re-parse highlighting from `changedStartLine` in chunks, stopping when
+  ## the tokenizer state converges with the cached state; re-parses to EOF
+  ## otherwise (e.g. after a line-count change).
+  ##
+  ## `budgetLines` bounds per-call work (chunks are atomic, so one may
+  ## slightly exceed it); `<= 0` = unlimited. Returns true while the re-parse
+  ## is in flight (progress in `incrHighlight.pendingReparse`); call again to
+  ## resume, `false` once complete. `parsedLines` receives the actual lines
+  ## parsed. While in flight, segments from the re-parse start are trimmed
+  ## and re-appended chunk by chunk, so a render never shows stale colours.
 
   let lastLine = lineCount - 1
+  let budgeted = budgetLines > 0
+  var budgetRemaining = budgetLines
+  parsedLines = 0
 
-  # Start re-parsing from the changed line.
-  # A small backward margin accounts for tokens that may span the boundary.
-  var reparseStart = max(0, changedStartLine - 2)
+  # A new edit, size/version/reserved-word change invalidates an in-flight
+  # re-parse; restart from the new anchor.
+  var pr = incrHighlight.pendingReparse
+  var inheritedTail: seq[ColorSegment]
+  var oldReparseStart = -1
+  var oldFrontier = -1
+  var tailAligned = true
+  var convergeBarrier = -1
+  if pr != nil and
+      not pr.matches(changedStartLine, lineCount, contentVersion, reservedWords):
+    # Inherit the discarded flight's original tail so an early-converging
+    # restart can re-attach rows past its frontier. A line-count change
+    # misaligns it, so drop it and disable convergence until EOF.
+    if pr.lineCount == lineCount:
+      inheritedTail = pr.staleTail
+    tailAligned = pr.lineCount == lineCount and pr.tailAligned
+    oldReparseStart = pr.reparseStart
+    oldFrontier = pr.reparseEnd
+    # Suppress convergence where states are refreshed but the tail is
+    # original; take the max over restart chains.
+    convergeBarrier = max(oldFrontier, pr.convergeBarrier)
+    incrHighlight.pendingReparse = nil
+    pr = nil
 
-  # Get initial state for the re-parse range
-  var initialState: TokenizerState
-  if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-    initialState = incrHighlight.lineStates.states[reparseStart - 1]
+  var
+    reparseStart: int
+    initialState: TokenizerState
+    currentStart: int
+    currentState: TokenizerState
+    reparseEnd: int
+    chunkLen: int
+    allNewLineStates: seq[TokenizerState]
+    staleTail: seq[ColorSegment]
+
+  if pr != nil:
+    # Resume the in-flight re-parse from where the previous call stopped.
+    currentStart = pr.currentStart
+    currentState = pr.currentState
+    reparseStart = pr.reparseStart
+    reparseEnd = pr.reparseEnd
+    chunkLen = pr.chunkLen
+    allNewLineStates = pr.allNewLineStates
+    staleTail = pr.staleTail
+    tailAligned = pr.tailAligned
+    convergeBarrier = pr.convergeBarrier
   else:
-    initialState = TokenizerState()
+    # Fresh re-parse: trim cached segments from `reparseStart` on (stashing
+    # them for a possible early-convergence splice) so the display never
+    # shows un-re-parsed rows.
 
-  # Per-line state captures inside a single multi-line token (long comment or
-  # long string) all read the same `commentDepth` / hash count — the value at
-  # the moment the token completes, not the per-line value. Restarting parse
-  # from mid-token therefore restores a stale depth and can confuse nested
-  # constructs (Rust `/* /* */ */`, Nim `#[ #[ ]# ]#`). To stay correct,
-  # rewind to the line where the multi-line token actually opens, which is
-  # the first line whose preceding state is NOT a multi-line continuation.
-  #
-  # `gtStringLit`/`gtKey`/`gtCharLit` cover tokenizers whose string literals span
-  # lines and resume via these states (YAML `"..."` scalars/keys, its `'...'`
-  # scalars parked in `gtCharLit`, Lisp strings); a reparse starting mid-string
-  # must rewind to its opening line. Single-line strings never leave these states
-  # at a boundary, so the rewind never fires for them.
-  #
-  # `gtCData` (XML CDATA) is considered and deliberately excluded: CDATA
-  # carries no auxiliary per-line state, so resuming mid-section via the
-  # tokenizer's `g.state == gtCData` branch is always correct without a
-  # rewind. A future multi-line construct that parks `gtCData` AND needs
-  # auxiliary state (depth, delimiter length, ...) must be added here.
-  const MultiLineKinds =
-    {gtLongComment, gtDocLongComment, gtLongStringLit, gtStringLit, gtKey, gtCharLit}
+    # A small backward margin covers tokens spanning the boundary.
+    reparseStart = max(0, changedStartLine - 2)
 
-  # Also rewind across chunk-handoff hazards (YAML mid-scalar states, blank
-  # lines, alone headers — see chunkHandoffUnsafe). Rewinding too early is
-  # always safe: the reparse restarts from a cached, correct state.
-  while reparseStart > 0 and (
-    initialState.state in MultiLineKinds or
-    chunkHandoffUnsafe(language, initialState.state, getLine(reparseStart))
-  )
-  :
-    dec reparseStart
     if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
       initialState = incrHighlight.lineStates.states[reparseStart - 1]
     else:
       initialState = TokenizerState()
 
-  # State convergence detection is only valid when the line count has not
-  # changed; otherwise cached states at the same index refer to different lines.
-  let canConverge = lineCount == incrHighlight.lineStates.states.len
+    # Multi-line tokens record the depth at their completion, so restarting
+    # mid-token restores a stale depth (e.g. nested comments); rewind to the
+    # token's opening line. `gtStringLit`/`gtKey`/`gtCharLit` cover strings
+    # that span lines; `gtCData` is excluded (no auxiliary state).
+    const MultiLineKinds =
+      {gtLongComment, gtDocLongComment, gtLongStringLit, gtStringLit, gtKey, gtCharLit}
 
-  # Parse in chunks, checking for state convergence after each chunk
-  var
+    # Also rewind across chunk-handoff hazards (see `chunkHandoffUnsafe`);
+    # rewinding early is safe: the re-parse restarts from a cached state.
+    while reparseStart > 0 and (
+      initialState.state in MultiLineKinds or
+      chunkHandoffUnsafe(language, initialState.state, getLine(reparseStart))
+    )
+    :
+      dec reparseStart
+      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
+        initialState = incrHighlight.lineStates.states[reparseStart - 1]
+      else:
+        initialState = TokenizerState()
+
+    if oldFrontier >= 0 and reparseStart > oldFrontier:
+      # Rows between the old frontier and the new anchor were trimmed but
+      # never re-parsed; restart from the old start line instead.
+      reparseStart = oldReparseStart
+      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
+        initialState = incrHighlight.lineStates.states[reparseStart - 1]
+      else:
+        initialState = TokenizerState()
+    elif oldReparseStart >= 0 and reparseStart - 1 >= incrHighlight.lineStates.states.len:
+      # The discarded flight's trim left no seed state below the new anchor;
+      # restart from the top of the available cache (fresh flights always
+      # have `states.len >= reparseStart`).
+      reparseStart = incrHighlight.lineStates.states.len
+      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
+        initialState = incrHighlight.lineStates.states[reparseStart - 1]
+      else:
+        initialState = TokenizerState()
+
+    let trimIdx = incrHighlight.segments.segmentCutIndex(reparseStart)
+    if trimIdx < incrHighlight.segments.len:
+      staleTail = incrHighlight.segments[trimIdx .. ^1]
+    incrHighlight.segments.setLen(trimIdx)
+    if inheritedTail.len > 0:
+      # Drop the stale fresh chunks; the inherited tail covers every row from
+      # `oldReparseStart`.
+      staleTail.setLen(staleTail.segmentCutIndex(oldReparseStart))
+      staleTail.add(inheritedTail)
+
+    # Line-count change: the pre-edit tail states describe shifted rows, so
+    # drop them until `refreshStateCache` refills.
+    if incrHighlight.lineStates.states.len != lineCount and
+        incrHighlight.lineStates.states.len > reparseStart:
+      incrHighlight.lineStates.states.setLen(reparseStart)
+
     currentStart = reparseStart
     currentState = initialState
-    allNewSegments: seq[ColorSegment]
-    allNewLineStates: seq[TokenizerState]
     reparseEnd = reparseStart - 1
     chunkLen = ChunkSize
+
+  incrHighlight.lastReparseStart = reparseStart
+
+  # Convergence is only sound when the line count matches the cache; while a
+  # re-parse is in flight the cache only grows, so equality means no rows
+  # have shifted.
+  let canConverge = lineCount == incrHighlight.lineStates.states.len
+
+  var reparseDone = false
+  var convergedHandoff = -1
 
   while currentStart <= lastLine:
     let chunkEnd = min(currentStart + chunkLen - 1, lastLine)
 
-    # Build buffer string only for this chunk
     var chunkLines = newSeq[string](chunkEnd - currentStart + 1)
     for i in currentStart .. chunkEnd:
       chunkLines[i - currentStart] = getLine(i)
@@ -1458,15 +1615,15 @@ proc updateHighlightIncremental*(
       bufferStr, currentStart, chunkEnd, currentState, reservedWords, language, tails
     )
 
-    # `newLineStates[i]` is the state entering line `currentStart + i + 1`, so
-    # the last entry is what the next chunk would start with (the producer
-    # pads on early tokenizer stops, so the positional indexing never goes out
-    # of bounds). A handoff inside a YAML block scalar — or onto a line that
-    # resolves against lines above — must move back to a safe line: the
-    # rewound lines are re-parsed by the next iteration together with their
-    # context (the scalar's header and parent lines) in one buffer. The final
-    # chunk has no handoff to protect, so `handoff` stays past it and the
-    # slices below keep the whole chunk.
+    let attemptedLines = chunkEnd - currentStart + 1
+    parsedLines += attemptedLines
+    if budgeted:
+      budgetRemaining -= attemptedLines
+
+    # `newLineStates[i]` is the state entering line `currentStart + i + 1`
+    # (padded on early tokenizer stops). A handoff to an unsafe line (YAML
+    # block scalar) moves back so the rewound lines re-parse with their
+    # context; the final chunk keeps the whole window.
     var handoff = chunkEnd + 1
     if chunkEnd < lastLine:
       while handoff > currentStart and
@@ -1477,82 +1634,113 @@ proc updateHighlightIncremental*(
         dec handoff
 
       if handoff == currentStart:
-        # The whole chunk sits inside one construct. Re-parse it with a larger
-        # window until a safe handoff (or the end of the buffer) fits inside;
-        # geometric growth keeps the total re-parse cost linear.
+        # The whole window sits inside one construct: double it until a safe
+        # handoff (or EOF) fits. Exempt from the budget clamp (a clamped
+        # window could never reach the construct's end); refund
+        # `parsedLines` but keep `budgetRemaining` decremented so the retry
+        # still defers.
+        parsedLines -= attemptedLines
         chunkLen *= 2
+        if budgeted and budgetRemaining <= 0:
+          break
         continue
 
-    # Keep only lines currentStart .. handoff - 1.
-    allNewSegments.add(newSegments[0 ..< newSegments.segmentCutIndex(handoff)])
+    # Keep lines currentStart .. handoff - 1; the cache stays sorted.
+    let segCut = newSegments.segmentCutIndex(handoff)
+    incrHighlight.segments.add(newSegments[0 ..< segCut])
     allNewLineStates.add(newLineStates[0 ..< (handoff - currentStart)])
     reparseEnd = handoff - 1
 
+    # Keep the per-line state cache fresh up to the frontier for render-side
+    # consumers (e.g. Markdown `isCodeBlockLine`). When the flight starts
+    # above the load frontier, the gap is filled with default
+    # `TokenizerState()`; consumers in that band must gate on `parsedUpTo`.
+    template refreshStateCache() =
+      if incrHighlight.lineStates.states.len < handoff:
+        incrHighlight.lineStates.states.setLen(min(lineCount, handoff))
+      for i in currentStart ..< handoff:
+        incrHighlight.lineStates.states[i] = allNewLineStates[i - reparseStart]
+
     if chunkEnd >= lastLine:
+      refreshStateCache()
+      reparseDone = true
       break
 
     currentState = allNewLineStates[^1]
     chunkLen = ChunkSize
 
-    # Check for convergence: if the tokenizer state entering the next line
-    # matches the old cached state, all subsequent lines will produce the same
-    # segments as before — no need to continue parsing.
-    #
-    # Only sound once the reparse has passed the changed line: the
-    # MultiLineKinds rewind can move reparseStart more than a chunk above
-    # `changedStartLine` (a construct opening far above the edit). The first
-    # chunk then re-parses identical pre-edit content, so its end state
-    # always matches the cache and an unguarded break would stop BEFORE
-    # reaching the change, leaving stale segments at and below it.
-    if canConverge and reparseEnd >= changedStartLine and
+    # If the state entering the next line matches the cache, later lines
+    # re-parse identically — stop. Only sound once past `changedStartLine`
+    # (the rewind may start above it, where the pre-edit content always
+    # matches) and past the barrier holding original tail segments.
+    if canConverge and tailAligned and reparseEnd >= changedStartLine and
+        (convergeBarrier < 0 or handoff - 1 > convergeBarrier) and
         currentState == incrHighlight.lineStates.states[handoff - 1]:
+      convergedHandoff = handoff
+      refreshStateCache()
+      reparseDone = true
       break
 
+    refreshStateCache()
     currentStart = handoff
 
-  # Find the splice range in the sorted segments using binary search.
-  # Remove segments that overlap [reparseStart, reparseEnd] or exceed buffer,
-  # then insert new segments in place.
-  let spliceStart = incrHighlight.segments.lowerBound(reparseStart) do(
-    seg: ColorSegment, line: int
-  ) -> int:
-    cmp(seg.firstRow, line)
+    if budgeted and budgetRemaining <= 0:
+      break
 
-  var spliceEnd = spliceStart
-  while spliceEnd < incrHighlight.segments.len:
-    let seg = incrHighlight.segments[spliceEnd]
-    if seg.firstRow > reparseEnd:
-      # Also skip segments beyond buffer bounds
-      if seg.firstRow < lineCount and seg.lastRow < lineCount:
-        break
-    inc spliceEnd
+  if not reparseDone and currentStart <= lastLine:
+    # Budget exhausted: persist the progress for the next call.
+    incrHighlight.pendingReparse = PendingReparse(
+      anchor: changedStartLine,
+      lineCount: lineCount,
+      contentVersion: contentVersion,
+      reservedWords: reservedWords,
+      reparseStart: reparseStart,
+      currentStart: currentStart,
+      currentState: currentState,
+      reparseEnd: reparseEnd,
+      chunkLen: chunkLen,
+      allNewLineStates: allNewLineStates,
+      staleTail: staleTail,
+      tailAligned: tailAligned,
+      convergeBarrier: convergeBarrier,
+    )
+    return true
 
-  # Splice: replace [spliceStart..spliceEnd) with allNewSegments
-  let oldLen = incrHighlight.segments.len
-  let removeCount = spliceEnd - spliceStart
-  let newLen = oldLen - removeCount + allNewSegments.len
+  # Re-parse complete: on early convergence, re-attach the stashed tail (the
+  # un-re-parsed rows are unchanged).
+  if canConverge and convergedHandoff >= 0:
+    let tailStart = staleTail.segmentCutIndex(convergedHandoff)
+    for i in tailStart ..< staleTail.len:
+      incrHighlight.segments.add(staleTail[i])
 
-  if newLen != oldLen or removeCount > 0:
-    var result = newSeq[ColorSegment](newLen)
-    for i in 0 ..< spliceStart:
-      result[i] = incrHighlight.segments[i]
-    for i in 0 ..< allNewSegments.len:
-      result[spliceStart + i] = allNewSegments[i]
-    for i in spliceEnd ..< oldLen:
-      result[spliceStart + allNewSegments.len + i - spliceEnd] =
-        incrHighlight.segments[i]
-    incrHighlight.segments = result
-
-  # Update line state cache - resize to match buffer
   incrHighlight.lineStates.states.setLen(lineCount)
 
-  # Replace states for re-parsed lines only
-  if allNewLineStates.len > 0:
-    var stateIdx = 0
-    for lineIdx in reparseStart .. reparseEnd:
-      if stateIdx < allNewLineStates.len and lineIdx < lineCount:
-        incrHighlight.lineStates.states[lineIdx] = allNewLineStates[stateIdx]
-        inc stateIdx
+  # If the flight started at or before the load frontier, advance it (else an
+  # edit during an incomplete load would re-parse the tail twice); otherwise
+  # keep it so the load re-parses the uncovered band.
+  if reparseStart <= incrHighlight.parsedUpTo + 1:
+    incrHighlight.parsedUpTo = lineCount - 1
+
+  incrHighlight.pendingReparse = nil
+  return false
+
+proc updateHighlightIncremental*(
+    lineCount: int,
+    getLine: proc(i: int): string,
+    incrHighlight: var IncrementalHighlight,
+    changedStartLine: int,
+    reservedWords: seq[ReservedWord],
+    language: SourceLanguage,
+    maxLineLen: int = 0,
+    budgetLines: int = 0,
+    contentVersion: int = NoContentVersion,
+): bool {.discardable.} =
+  ## Overload without the parsed-line reporting.
+  var parsedLines: int
+  result = updateHighlightIncremental(
+    lineCount, getLine, incrHighlight, changedStartLine, reservedWords, language,
+    maxLineLen, budgetLines, contentVersion, parsedLines,
+  )
 
 proc detectLanguage*(filename: string): SourceLanguage =
   # Check basename for special files (no extension)

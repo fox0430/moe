@@ -535,12 +535,13 @@ proc appendEndOfLineVirtualText(
   for chunk in vt.endOfLine:
     let baseStyle = colorIndexToStyle(chunk.color)
     for rune in chunk.text.runes:
-      let w = runeWidth(rune)
+      let cellRune = sanitizeCellRune(rune)
+      let w = runeWidth(cellRune)
       if w == 0:
         # Zero-width rune: fold into the preceding base cell, no advance. Skip
         # a leading mark whose base would be the real text, not virtual text.
         if result > startDisplayX:
-          foldZeroWidthRune(buffer, screenX + result, screenY, rune)
+          foldZeroWidthRune(buffer, screenX + result, screenY, cellRune)
         continue
       if screenX + result + w > ctx.windowRightEdge:
         return result
@@ -552,7 +553,7 @@ proc appendEndOfLineVirtualText(
           baseStyle.merge(bgOnly(bgPatch.bg.get))
         else:
           baseStyle
-      buffer.setCell(screenX + result, screenY, rune, w, style)
+      buffer.setCell(screenX + result, screenY, cellRune, w, style)
       result += w
 
 proc renderLineSegmentWithSelection*(
@@ -583,8 +584,8 @@ proc renderLineSegmentWithSelection*(
       let p = precomputed.get
       (p.fullLine, p.indentInfo, p.lineCtx)
     else:
-      if e.hasSyntaxHighlight(textBuffer, ctx.windowMode):
-        textBuffer.updateHighlight()
+      # The highlight advancement budget is owned by `updateForFrame`; this
+      # per-line path must not advance it further.
       let fl = textBuffer.getLine(lineIndex)
       (
         fl,
@@ -617,23 +618,26 @@ proc renderLineSegmentWithSelection*(
       displayX += 1
 
   template renderNormalCell(rune: Rune, col: int, style: Style) =
-    let width = runeWidth(rune)
+    let cellRune = sanitizeCellRune(rune)
+    let width = runeWidth(cellRune)
     if width == 0:
       # Zero-width rune (combining mark / ZWJ / variation selector): fold it
       # into the preceding base cell rather than writing a standalone cell the
       # next glyph would overwrite. displayX does not advance. Skip when this
       # cell starts the segment — its base, if any, is on the previous row.
       if displayX > 0:
-        foldZeroWidthRune(buffer, screenX + displayX, screenY, rune)
-    elif rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
+        foldZeroWidthRune(buffer, screenX + displayX, screenY, cellRune)
+    elif cellRune == ' '.Rune and e.shouldShowIndentationGuide(
+      indentInfo, displayX, col
+    ):
       if screenX + displayX < ctx.windowRightEdge:
         let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
         buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
       displayX += 1
     else:
-      let renderStyle = style.merge(e.charOverridePatch(ctx, lineCtx, rune, col))
+      let renderStyle = style.merge(e.charOverridePatch(ctx, lineCtx, cellRune, col))
       if screenX + displayX < ctx.windowRightEdge:
-        buffer.setCell(screenX + displayX, screenY, rune, width, renderStyle)
+        buffer.setCell(screenX + displayX, screenY, cellRune, width, renderStyle)
       displayX += width
 
   template renderChar(rune: Rune, col: int, style: Style) =
@@ -793,8 +797,7 @@ proc renderWindowLineWrapped*(
   let tabStop = e.tabStop
 
   # Build per-logical-line state once so each wrap segment can reuse it.
-  if e.hasSyntaxHighlight(window.buffer, ctx.windowMode):
-    window.buffer.updateHighlight()
+  # The highlight was already advanced by `updateForFrame` before the draw.
   let precomputed = some(
     LinePrecomputed(
       fullLine: line,
@@ -1182,6 +1185,10 @@ proc renderWindow*(
       else:
         @[],
   )
+
+  # The frame budget for highlight advancement is owned solely by
+  # `updateForFrame`; the draw pass must not advance re-parses, or the
+  # per-window charges (N windows x 1000 lines) would bypass the budget.
 
   # Fold skipping and wrap-segment counting come from the shared row walk, so
   # the painted rows, the screen cursor and the mouse hit-test agree by

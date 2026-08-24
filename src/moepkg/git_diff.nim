@@ -28,40 +28,17 @@ import pkg/results
 
 import buffer/[core, file_io, markers], logger
 
+import types/git_diff_types
+export git_diff_types
+
 const
   DEFAULT_GIT_DIFF_TIMEOUT* = 5.0 ## Default timeout for git diff operations in seconds
   PROCESS_RUNNING = -1 ## Exit code value indicating process is still running
 
-type
-  GitDiffLineKind* = enum
-    ## Type of change in git diff
-    Added ## Line was added
-    Modified ## Line was modified
-    Deleted ## Line was deleted
-
-  GitDiffLine* = object ## Represents a single line change in git diff
-    lineNumber*: int ## Line number in the current file (0-based)
-    kind*: GitDiffLineKind ## Type of change
-
-  GitDiffInfo* = object ## Git diff information for a file
-    lines*: seq[GitDiffLine] ## Changed lines
-
-  GitDiffStage* = enum
-    ## Buffer-diff pipeline stage; advances on each `checkGitDiffComplete`.
-    gdsGitRoot ## `git rev-parse --show-toplevel`
-    gdsGitShow ## `git show HEAD:<relpath>`
-    gdsGitDiff ## `git diff --no-index <orig> <mod>`
-
-  GitDiffProcess* = ref object ## Background git diff pipeline
-    process: Process
-    stage: GitDiffStage
-    startTime: float ## Overall pipeline start (for timeout)
-    filePath: string
-    workingDir: string
-    bufferContent: string ## Held until tempModified is written
-    tempOriginal: string
-    tempModified: string
-    tempDiffOut: string ## `git diff` stdout is redirected here (avoids pipe deadlock)
+proc gitDiffTempDir(): string =
+  ## Scratch dir for the buffer-diff pipeline. Kept in the OS temp dir so a
+  ## defunct run can never leave `moe_*` files in the user's working tree.
+  getTempDir()
 
 proc removeTempFileSafely(filePath: string) =
   ## Safely remove a temporary file, ignoring errors
@@ -123,15 +100,41 @@ proc abandonGitDiffProcess*(diffProc: GitDiffProcess) =
   closeSafely(diffProc.process)
   cleanupTempFiles(diffProc)
 
+proc tryCanonicalPath(path: string): string =
+  ## Resolve symlinks, falling back to the original path. For missing files,
+  ## canonicalize the parent directory instead.
+  try:
+    return expandFilename(path)
+  except OSError, ValueError:
+    discard
+  let parent = path.parentDir
+  if parent.len > 0 and parent != path:
+    try:
+      let canonParent = expandFilename(parent)
+      let base = path.extractFilename
+      if base.len > 0:
+        return canonParent / base
+      else:
+        return canonParent
+    except OSError, ValueError:
+      discard
+  return path
+
 proc calculateRelativePath(filePath, gitRoot: string): string =
   ## Calculate relative path from git root to file
   ## Handles both absolute and relative paths
   if filePath.isAbsolute:
     # Absolute path: convert to relative
-    if filePath.startsWith(gitRoot & "/"):
+    if filePath == gitRoot:
+      return ""
+    # gitRoot "/": the generic prefix check would become "//" and fail.
+    if gitRoot == "/":
+      if filePath.len > 1:
+        return filePath[1 .. ^1]
+      else:
+        return ""
+    elif filePath.startsWith(gitRoot & "/"):
       return filePath[gitRoot.len + 1 .. ^1]
-    elif filePath.startsWith(gitRoot):
-      return filePath[gitRoot.len .. ^1]
     else:
       # File is outside git root, just use filename
       return filePath.extractFilename()
@@ -262,16 +265,55 @@ proc parseDiffOutput(output: string): GitDiffInfo =
 proc advanceToGitShow(
     diffProc: GitDiffProcess, gitRootOutput: string
 ): Option[Result[GitDiffInfo, string]] =
-  let gitRoot = gitRootOutput.strip()
+  var gitRoot = gitRootOutput.strip()
   if gitRoot.len == 0:
     return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
+  # Normalize trailing slash (e.g. "/home/x/proj/") except for root "/".
+  if gitRoot.len > 1 and gitRoot.endsWith("/"):
+    gitRoot = gitRoot[0 .. ^2]
 
-  let relativePath = calculateRelativePath(diffProc.filePath, gitRoot)
-  let fileDir = diffProc.filePath.parentDir()
+  let # git rev-parse returns the real path; canonicalize to match symlinked paths.
+    canonGitRoot = tryCanonicalPath(gitRoot)
+  # Relative buffer paths resolve against the process CWD, matching the
+  # directory where the rev-parse stage ran git.
+  let resolvedFilePath =
+    if diffProc.filePath.isAbsolute:
+      diffProc.filePath
+    else:
+      absolutePath(diffProc.filePath)
+  let canonFilePath = tryCanonicalPath(resolvedFilePath)
+  # Compare collapsed paths so a ".."-reached sibling is not mistaken for an
+  # in-repo file.
+  let canonGuardPath = normalizedPath(canonFilePath)
+  let isUnderCanonRoot =
+    if canonGitRoot == "/":
+      true
+    else:
+      canonGuardPath.startsWith(canonGitRoot & "/")
+  # Keep the original when resolution moves outside the root
+  # (in-repo symlink pointing outside).
+  let effectivePath = if isUnderCanonRoot: canonFilePath else: resolvedFilePath
+  # Collapse "." / ".." / duplicate separators for the guard and the
+  # `git show HEAD:<path>` argument (git rejects "..").
+  let guardEffectivePath = normalizedPath(effectivePath)
+  let relativePath = calculateRelativePath(guardEffectivePath, canonGitRoot)
+  # Reject paths at the git root itself or outside it (basename fallback).
+  if relativePath.len == 0:
+    return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
+  let isUnderRoot =
+    if canonGitRoot == "/":
+      true
+    else:
+      guardEffectivePath.startsWith(canonGitRoot & "/")
+  if not isUnderRoot:
+    return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
+  # Buffer behind a symlink pointing outside the repo: git show still serves
+  # as the track probe, and there is nothing to diff, so no markers (see
+  # checkGitDiffComplete).
 
   let tempOriginal =
     try:
-      genTempPath("moe_original_", ".tmp", fileDir)
+      genTempPath("moe_original_", ".tmp", gitDiffTempDir())
     except OSError as e:
       return some(
         Result[GitDiffInfo, string].err("Failed to create temp file path: " & e.msg)
@@ -287,7 +329,7 @@ proc advanceToGitShow(
     try:
       startProcess(
         "sh",
-        workingDir = gitRoot,
+        workingDir = canonGitRoot,
         args = ["-c", shellCmd, "sh", relativePath, tempOriginal],
         options = {poUsePath, poStdErrToStdOut},
       )
@@ -297,16 +339,15 @@ proc advanceToGitShow(
 
   diffProc.process = nextProc
   diffProc.stage = gdsGitShow
-  diffProc.workingDir = gitRoot
+  diffProc.workingDir = canonGitRoot
   diffProc.tempOriginal = tempOriginal
+  diffProc.resolvedOutsideRepo = not isUnderCanonRoot
   return none(Result[GitDiffInfo, string])
 
 proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, string]] =
-  let fileDir = diffProc.filePath.parentDir()
-
   let tempModified =
     try:
-      genTempPath("moe_modified_", ".tmp", fileDir)
+      genTempPath("moe_modified_", ".tmp", gitDiffTempDir())
     except OSError as e:
       removeTempFileSafely(diffProc.tempOriginal)
       return some(
@@ -327,7 +368,7 @@ proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, stri
 
   let tempDiffOut =
     try:
-      genTempPath("moe_diffout_", ".tmp", fileDir)
+      genTempPath("moe_diffout_", ".tmp", gitDiffTempDir())
     except OSError as e:
       cleanupTempFiles(diffProc)
       return some(
@@ -390,7 +431,12 @@ proc checkGitDiffComplete*(
   of gdsGitShow:
     if exitCode != 0:
       removeTempFileSafely(diffProc.tempOriginal)
-      return some(Result[GitDiffInfo, string].err("File is not in git repository"))
+      return some(Result[GitDiffInfo, string].err("File is not in a git repository"))
+    # Symlink points outside: HEAD holds the link blob, not the content, so no
+    # diff. Still counts as tracked (the symlink is in HEAD).
+    if diffProc.resolvedOutsideRepo:
+      removeTempFileSafely(diffProc.tempOriginal)
+      return some(Result[GitDiffInfo, string].ok(GitDiffInfo(lines: @[])))
     return advanceToGitDiff(diffProc)
   of gdsGitDiff:
     let diffOutput = readFileSafely(diffProc.tempDiffOut)

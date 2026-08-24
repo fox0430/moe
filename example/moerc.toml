@@ -325,7 +325,7 @@ enable = false                         # Open fileTree sidebar on startup
 # apply. See documents/configfile.md "Command mode command aliases" for the
 # full list.
 #
-# [KeyMapping.All] applies to all modes (except QuickRun).
+# [KeyMapping.All] applies to all modes (except CommandLine).
 # Mode-specific sections override All.
 #
 # [KeyMapping.All]

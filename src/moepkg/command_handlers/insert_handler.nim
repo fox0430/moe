@@ -121,13 +121,17 @@ proc handleCharacterInsertion*(
     let closeChar = getClosingChar(openChar)
 
     # Insert both opening and closing characters
-    discard buffer.insertText(pos, text & $closeChar)
+    let insertResult = buffer.insertText(pos, text & $closeChar)
+    if insertResult.isErr:
+      return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
 
     # Move cursor to position between the pair (after opening char)
     state.cursor.column += 1
   else:
     # Normal insertion
-    discard buffer.insertText(pos, text)
+    let insertResult = buffer.insertText(pos, text)
+    if insertResult.isErr:
+      return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
 
     # Move cursor right after insertion (by character count, not byte count)
     state.cursor.column += text.runeLen
@@ -149,9 +153,16 @@ proc handleBackspace*(
         # Auto-delete adjacent pairs only: cursor must be between open and close
         # e.g., (|), [|], {|}, "|", '|'
         if isAdjacentPair(currentLine, pos.column - 1):
+          # Delete the opening char first; the closing char then shifts into the
+          # same column. Move the cursor only after both edits succeed.
+          let pairPos = BufferPosition(line: pos.line, column: pos.column - 1)
+          let openResult = buffer.deleteChar(pairPos) # Delete opening char
+          if openResult.isErr:
+            return InsertModeResult(kind: imrError, errorMessage: openResult.error)
+          let closeResult = buffer.deleteChar(pairPos) # Delete closing char
+          if closeResult.isErr:
+            return InsertModeResult(kind: imrError, errorMessage: closeResult.error)
           state.cursor.column -= 1
-          discard buffer.deleteChar(state.cursor) # Delete opening char
-          discard buffer.deleteChar(state.cursor) # Delete closing char
           return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
       except IndexDefect, CatchableError:
         # If accessing rune fails, fall through to normal backspace
@@ -178,17 +189,28 @@ proc handleBackspace*(
         let remainder = pos.column mod tabWidth
         let deleteCount = if remainder == 0: tabWidth else: remainder
         let actualDelete = min(deleteCount, pos.column)
+        # Delete from the top down so each position is stable, and move the
+        # cursor only after each edit succeeds.
         for i in 0 ..< actualDelete:
+          let deletePos = BufferPosition(line: pos.line, column: pos.column - 1 - i)
+          let deleteResult = buffer.deleteChar(deletePos)
+          if deleteResult.isErr:
+            return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
           state.cursor.column -= 1
-          discard buffer.deleteChar(state.cursor)
       else:
-        # Normal backspace: move cursor back and delete
+        # Normal backspace: delete the char before the cursor, then move back
+        let deletePos = BufferPosition(line: pos.line, column: pos.column - 1)
+        let deleteResult = buffer.deleteChar(deletePos)
+        if deleteResult.isErr:
+          return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
         state.cursor.column -= 1
-        discard buffer.deleteChar(state.cursor)
     else:
-      # Normal backspace: move cursor back and delete
+      # Normal backspace: delete the char before the cursor, then move back
+      let deletePos = BufferPosition(line: pos.line, column: pos.column - 1)
+      let deleteResult = buffer.deleteChar(deletePos)
+      if deleteResult.isErr:
+        return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
       state.cursor.column -= 1
-      discard buffer.deleteChar(state.cursor)
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
@@ -196,12 +218,20 @@ proc handleBackspace*(
     let prevLineLen = prevLine.charLen
 
     # Delete the current line first
-    discard buffer.deleteLine(pos.line)
+    let deleteResult = buffer.deleteLine(pos.line)
+    if deleteResult.isErr:
+      return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
     # Append current line content to previous line
     if currentLine.len > 0:
-      discard buffer.insertText(
+      let insertResult = buffer.insertText(
         BufferPosition(line: pos.line - 1, column: prevLineLen), currentLine
       )
+      if insertResult.isErr:
+        # The current line is already deleted, so the cursor must still move to
+        # the join point to stay in bounds.
+        state.cursor.line -= 1
+        state.cursor.column = prevLineLen
+        return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
 
     # Move cursor to the join point
     state.cursor.line -= 1
@@ -213,7 +243,15 @@ proc handleDelete*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
   ## Handle delete key
-  discard buffer.deleteChar(state.cursor)
+  let pos = state.cursor
+  if pos.line >= 0 and pos.line < buffer.len and
+      pos.column >= buffer.getLine(pos.line).charLen:
+    # At end of line: nothing to delete (no-op)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  let deleteResult = buffer.deleteChar(pos)
+  if deleteResult.isErr:
+    return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
@@ -336,7 +374,7 @@ proc remapAfterEdit*(
         stop.pos.column += newEnd.column - oldEnd.column
       stop.pos.line += newEnd.line - oldEnd.line
 
-proc deletePendingDefault(buffer: TextBuffer, state: EditorState) =
+proc deletePendingDefault(buffer: TextBuffer, state: EditorState): Result[(), string] =
   ## Selection-delete the current stop's pending placeholder default: wipe the
   ## whole range, collapse the stop to zero length and clear the pending flag.
   ## A no-op when nothing is pending (the stop is already bare or was typed
@@ -345,17 +383,31 @@ proc deletePendingDefault(buffer: TextBuffer, state: EditorState) =
   let cur = state.snippetSession.stops[state.snippetSession.index]
   if state.snippetSession.defaultPending and cur.len > 0:
     state.cursor = cur.pos
+    var deleteError = ""
+    var deleted = 0
     for _ in 0 ..< cur.len:
-      discard buffer.deleteChar(state.cursor)
-    # The remap also collapses the stop itself to zero length: its range is
-    # exactly the deleted one.
-    remapAfterEdit(
-      state.snippetSession,
-      cur.pos,
-      BufferPosition(line: cur.pos.line, column: cur.pos.column + cur.len),
-      cur.pos,
-    )
+      let deleteResult = buffer.deleteChar(state.cursor)
+      if deleteResult.isErr:
+        deleteError = deleteResult.error
+        break
+      inc deleted
+    if deleted > 0:
+      # Remap with the range that actually went through so the stop
+      # coordinates stay in sync with the buffer on a partial failure too:
+      # the remap collapses the stop to zero length and the pending flag is
+      # cleared below, so the next keystroke cannot re-run the wholesale
+      # delete against stale coordinates and eat following text.
+      remapAfterEdit(
+        state.snippetSession,
+        cur.pos,
+        BufferPosition(line: cur.pos.line, column: cur.pos.column + deleted),
+        cur.pos,
+      )
+      state.snippetSession.defaultPending = false
+    if deleteError.len > 0:
+      return err(deleteError)
   state.snippetSession.defaultPending = false
+  ok(())
 
 proc insertCharInSession(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, text: string
@@ -366,7 +418,9 @@ proc insertCharInSession(
   ## both edits. Auto-close paren applies as in handleCharacterInsertion: the
   ## pair is still a single insertion at the cursor, so the remap covers both
   ## characters while the cursor lands between them.
-  deletePendingDefault(buffer, state)
+  let pendingResult = deletePendingDefault(buffer, state)
+  if pendingResult.isErr:
+    return InsertModeResult(kind: imrError, errorMessage: pendingResult.error)
 
   # Track paren depth for signature help (same as handleCharacterInsertion).
   if text.len == 1:
@@ -389,7 +443,9 @@ proc insertCharInSession(
   # shift it along with the later stops, so restore its start and extend its
   # length. Cycling back to it then re-selects exactly what was typed.
   let stopStartsHere = state.snippetSession.stops[idx].pos == before
-  discard buffer.insertText(before, toInsert)
+  let insertResult = buffer.insertText(before, toInsert)
+  if insertResult.isErr:
+    return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
   let inserted = toInsert.runeLen
   let insertEnd = BufferPosition(line: before.line, column: before.column + inserted)
   # The cursor sits between an auto-closed pair, after the text otherwise; the
@@ -417,7 +473,9 @@ proc backspaceInSession(
 
   let cur = session.stops[session.index]
   if session.defaultPending and cur.len > 0:
-    deletePendingDefault(buffer, state)
+    let pendingResult = deletePendingDefault(buffer, state)
+    if pendingResult.isErr:
+      return InsertModeResult(kind: imrError, errorMessage: pendingResult.error)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
   let before = state.cursor
   # Mirrors handleBackspace's own pair check so the remap knows the deleted
@@ -430,6 +488,10 @@ proc backspaceInSession(
         false
     )
   let res = handler.handleBackspace(buffer, state)
+  if res.kind != imrHandled:
+    # The edit did not land; remapping against a range that was never deleted
+    # would corrupt the stop coordinates.
+    return res
   let oldEnd =
     if pairDeleted:
       BufferPosition(line: before.line, column: before.column + 1)
@@ -558,19 +620,36 @@ proc commitCompletion*(
     # (imports), never edits that change columns on the completion's own line, so
     # an intra-line column shift is intentionally not handled here.
     let adds = entry.additionalTextEdits.get
-    if buffer.applyTextEdits(adds).isOk:
-      var lineShift = 0
-      for e in adds:
+    var appliedAdds: seq[TextEdit]
+    let addResult = buffer.applyTextEdits(adds, appliedEdits = appliedAdds)
+    if addResult.isErr:
+      # Some edits may have partially applied: shift tracked coordinates by
+      # the ones that DID apply, then abort the completion.
+      var appliedShift = 0
+      for e in appliedAdds:
         if e.range.start.line <= startLine:
-          lineShift += e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
-      startLine += lineShift
-      endLine += lineShift
-      state.cursor.line += lineShift
+          appliedShift +=
+            e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+      state.cursor.line += appliedShift
       if state.snippetSession.active:
-        # Session stops live at the completion site, below whole-line imports,
-        # so they shift down with it.
         for stop in state.snippetSession.stops.mitems:
-          stop.pos.line += lineShift
+          stop.pos.line += appliedShift
+      handler.completionManager.cancelCompletion()
+      return InsertModeResult(
+        kind: imrError, errorMessage: addResult.error & " (completion aborted)"
+      )
+    var lineShift = 0
+    for e in adds:
+      if e.range.start.line <= startLine:
+        lineShift += e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+    startLine += lineShift
+    endLine += lineShift
+    state.cursor.line += lineShift
+    if state.snippetSession.active:
+      # Session stops live at the completion site, below whole-line imports,
+      # so they shift down with it.
+      for stop in state.snippetSession.stops.mitems:
+        stop.pos.line += lineShift
 
   # Widen the deletion end to the cursor when it sits past the textEdit end
   # (characters typed after the request was sent). Positions are compared as
@@ -594,7 +673,9 @@ proc commitCompletion*(
     if delEndLine == startLine:
       state.cursor = BufferPosition(line: startLine, column: startCol)
       for _ in 0 ..< delEndCol - startCol:
-        discard buffer.deleteChar(state.cursor)
+        let deleteResult = buffer.deleteChar(state.cursor)
+        if deleteResult.isErr:
+          return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
     else:
       # Multi-line range: deleteRange's end is inclusive, so step the exclusive
       # end back one position (wrapping to the prior line's end, which also pulls
@@ -606,10 +687,12 @@ proc commitCompletion*(
       else:
         dec incLine
         incCol = buffer.getLine(incLine).runeLen
-      discard buffer.deleteRange(
+      let deleteResult = buffer.deleteRange(
         BufferPosition(line: startLine, column: startCol),
         BufferPosition(line: incLine, column: incCol),
       )
+      if deleteResult.isErr:
+        return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
       state.cursor = BufferPosition(line: startLine, column: startCol)
   else:
     # Inconsistent state (cursor before the start, or start past the end): fall
@@ -619,13 +702,21 @@ proc commitCompletion*(
     for _ in 0 ..< prefixLen:
       if state.cursor.column == 0:
         break
+      # Delete the char before the cursor, then move back, so a failure cannot
+      # desync cursor and buffer.
+      let deletePos =
+        BufferPosition(line: state.cursor.line, column: state.cursor.column - 1)
+      let deleteResult = buffer.deleteChar(deletePos)
+      if deleteResult.isErr:
+        return InsertModeResult(kind: imrError, errorMessage: deleteResult.error)
       state.cursor.column -= 1
-      discard buffer.deleteChar(state.cursor)
     startLine = state.cursor.line
     startCol = state.cursor.column
 
   # Insert the (expanded) text at the start position.
-  discard buffer.insertText(state.cursor, insertText)
+  let insertResult = buffer.insertText(state.cursor, insertText)
+  if insertResult.isErr:
+    return InsertModeResult(kind: imrError, errorMessage: insertResult.error)
 
   # Place the cursor at cursorRuneOffset within the inserted text, translating
   # the flat rune offset into a (line, column) delta to support multi-line text.
@@ -756,6 +847,8 @@ proc triggerLspCompletionRequest*(
       handler.completionManager.lastLspRequestTime = getMonoTime()
       handler.completionManager.lastLspPrefix = prefix
       handler.completionManager.setLspRequestPending(reqResult.get)
+    else:
+      logLspDegraded("Completion request failed", reqResult.error)
 
 proc pollLspCompletion*(handler: InsertModeHandler, state: EditorState) =
   ## Poll for pending LSP completion response
@@ -1020,15 +1113,20 @@ proc handleInsertModeKey*(
       if hasSelection and not wasPathCompletion:
         # Confirm the highlighted item, then type the new character after it.
         # Path completion keeps filtering as you type, so it is not committed.
-        discard handler.commitCompletion(buffer, state)
+        let commitResult = handler.commitCompletion(buffer, state)
+        if commitResult.kind != imrHandled:
+          return commitResult
 
       # Insert the new character. When a snippet session is active (possibly
       # just started by the commit above), the session insert replaces a
       # pending placeholder default and keeps the stops remapped.
-      if state.snippetSession.active:
-        discard handler.insertCharInSession(buffer, state, keyCombo.char)
-      else:
-        discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+      let insertResult =
+        if state.snippetSession.active:
+          handler.insertCharInSession(buffer, state, keyCombo.char)
+        else:
+          handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+      if insertResult.kind != imrHandled:
+        return insertResult
 
       # Re-trigger completion with new prefix
       let line = buffer.getLine(state.cursor.line)
@@ -1081,7 +1179,9 @@ proc handleInsertModeKey*(
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-      discard handler.insertCharInSession(buffer, state, keyCombo.char)
+      let insertResult = handler.insertCharInSession(buffer, state, keyCombo.char)
+      if insertResult.kind != imrHandled:
+        return insertResult
       # Mirror the normal character path's auto-completion trigger so the
       # popup keeps working inside placeholders.
       if state.config.autocomplete.enable:
@@ -1104,16 +1204,23 @@ proc handleInsertModeKey*(
       if session.defaultPending and session.stops[session.index].len > 0:
         # Selection-delete semantics: Delete on a pending default wipes it,
         # matching Backspace and the typed-char path.
-        deletePendingDefault(buffer, state)
+        let pendingResult = deletePendingDefault(buffer, state)
+        if pendingResult.isErr:
+          return InsertModeResult(kind: imrError, errorMessage: pendingResult.error)
+        return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+      if state.cursor.line < buffer.len and
+          state.cursor.column >= buffer.getLine(state.cursor.line).runeLen:
+        # At end of line handleDelete is a no-op (no line join), so there is
+        # nothing to delete and nothing to remap against.
         return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
       let oldEnd =
-        if state.cursor.column < buffer.getLine(state.cursor.line).runeLen:
-          BufferPosition(line: state.cursor.line, column: state.cursor.column + 1)
-        else:
-          # Deleting at end of line joins the next line up.
-          BufferPosition(line: state.cursor.line + 1, column: 0)
+        BufferPosition(line: state.cursor.line, column: state.cursor.column + 1)
       let curBefore = session.stops[session.index]
       let res = handler.handleDelete(buffer, state)
+      if res.kind != imrHandled:
+        # The edit did not land; remapping against a range that was never
+        # deleted would corrupt the stop coordinates.
+        return res
       remapAfterEdit(session, state.cursor, oldEnd, state.cursor)
       # Shrink the current stop if the deleted character sat inside it (see the
       # backspace path). handleDelete leaves the cursor in place, so the deleted
@@ -1131,7 +1238,9 @@ proc handleInsertModeKey*(
     if keyCombo.isSpecial and keyCombo.special == skEnter:
       # A pending default is selected, so Enter replaces it before splitting
       # the line (same selection semantics as typing or Backspace).
-      deletePendingDefault(buffer, state)
+      let pendingResult = deletePendingDefault(buffer, state)
+      if pendingResult.isErr:
+        return InsertModeResult(kind: imrError, errorMessage: pendingResult.error)
       let before = state.cursor
       let curBefore = session.stops[session.index]
       # Bracket-pair splitting inserts a second newline past the cursor plus
@@ -1292,7 +1401,9 @@ proc handleInsertModeKey*(
 
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     # Handle regular character insertion with auto-completion trigger
-    discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+    let insertResult = handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+    if insertResult.kind != imrHandled:
+      return insertResult
     # All auto-triggering (path and word completion alike) is gated on
     # autocomplete.enable so the flag governs both consistently.
     if state.config.autocomplete.enable:

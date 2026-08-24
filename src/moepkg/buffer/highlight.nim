@@ -29,6 +29,17 @@ import ../[highlight, uri_utils]
 import ../syntax/tokenizer
 import core, markers
 
+proc matches*(pr: PendingReparse, b: TextBuffer): bool =
+  ## TextBuffer-scoped overload of `PendingReparse.matches`.
+  pr.matches(b.lastChangedLines, b.len, b.contentVersion, b.reservedWords)
+
+proc rewindUriScan(b: TextBuffer, to: int) =
+  ## Move the URI-scan frontier back to `to` (clamped to -1); no-op if it is
+  ## already at or below `to`.
+  let target = max(-1, to)
+  if b.uriScanParsedUpTo > target:
+    b.uriScanParsedUpTo = target
+
 proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
   ## True if `line` sits inside a Markdown fenced code block or is one of its
   ## ``` fence lines. Consults the incremental highlight's per-line tokenizer
@@ -64,13 +75,64 @@ proc scanAndApplyUriUnderlines*(
   b.highlight.addUnderlineRanges(ranges)
   return true
 
-proc continueInitialHighlight*(b: TextBuffer): bool =
-  ## Continue progressive initial highlighting if incomplete.
-  ## Returns true if work was done (caller should update the display).
+proc continueIncrementalHighlight*(
+    b: TextBuffer, budgetLines: int, parsedLines: var int
+): bool =
+  ## Resume a budgeted re-parse started by `updateHighlight`; returns true
+  ## while work remains. `parsedLines` receives the actual lines consumed.
+  parsedLines = 0
+  let incr = b.incrementalHighlight
+  if b.isUtilityBuffer or incr == nil or incr.pendingReparse == nil:
+    return false
+  if b.highlight == nil:
+    b.highlight = Highlight(colorSegments: @[])
+  let pr = incr.pendingReparse
+  # A restart below rebuilds the segments without URI underlines, so rewind
+  # the URI scan as `updateHighlight` does.
+  let restarting = not pr.matches(b)
+  let buf = b
+  let ongoing = updateHighlightIncremental(
+    b.len,
+    proc(i: int): string =
+      buf.getLine(i),
+    b.incrementalHighlight,
+    b.lastChangedLines,
+    b.reservedWords,
+    b.language,
+    b.maxHighlightLineLength,
+    budgetLines,
+    b.contentVersion,
+    parsedLines,
+  )
+  b.highlight.colorSegments = b.incrementalHighlight.segments
+  if restarting:
+    let newPr = b.incrementalHighlight.pendingReparse
+    if newPr != nil:
+      b.rewindUriScan(newPr.reparseStart - 1)
+    else:
+      # Restart completed within this call: rewind to the actual reparseStart,
+      # clamped to the old flight's start.
+      b.rewindUriScan(
+        min(b.incrementalHighlight.lastReparseStart - 1, pr.reparseStart - 1)
+      )
+  ongoing
+
+proc continueInitialHighlight*(
+    b: TextBuffer, budgetLines: int, parsedLines: var int
+): bool =
+  ## Continue progressive initial highlighting if incomplete; returns true if
+  ## work was done. `parsedLines` receives the lines parsed; `budgetLines`
+  ## bounds the chunk (0 = default size).
+  ##
+  ## Advances a live re-parse flight instead of the initial load (a fresh
+  ## chunk would drop the flight's accumulation).
   const ChunkSize = 1000
 
+  parsedLines = 0
   if b.incrementalHighlight == nil or b.isUtilityBuffer:
     return false
+  if b.incrementalHighlight.pendingReparse != nil:
+    return b.continueIncrementalHighlight(budgetLines, parsedLines)
 
   let parsedUpTo = b.incrementalHighlight.parsedUpTo
   if parsedUpTo >= b.len - 1:
@@ -78,11 +140,9 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
 
   var startLine = parsedUpTo + 1
 
-  # The stored boundary state may sit inside a construct that cannot enter a
-  # fresh buffer (a YAML block scalar resumes by re-reading the header and
-  # parent lines above the resume point), or the next line may itself resolve
-  # against lines above (blank line, alone header). Rewind to a safe line and
-  # re-parse the tail of the previous chunk together with the new one.
+  # The boundary state may not resume in a fresh chunk (YAML block scalars,
+  # blank / alone-header lines), so rewind to a safe line and re-parse the
+  # previous chunk's tail together with the new one.
   while startLine > 0 and
       chunkHandoffUnsafe(
         b.language,
@@ -92,17 +152,17 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   :
     dec startLine
 
-  # Grow the window past the old frontier proportionally to the rewound
-  # prefix: inside a construct spanning many chunks every tick rewinds to its
-  # header, so a fixed window advances the frontier only ChunkSize per tick
-  # and re-parses the growing prefix every time — quadratic total. Doubling
-  # makes the construct converge in O(log) ticks (linear total), the same
-  # geometric idea as the `chunkLen *= 2` retry in
-  # `updateHighlightIncremental`; like there, the last tick still pays one
-  # near-construct-sized parse, which is what an edit inside the construct
-  # costs anyway.
+  # Double the window past the rewound prefix; a fixed window would re-parse
+  # the growing prefix every tick (quadratic total). Under a budget, cap the
+  # growth at 4x it, floored at the rewind depth + one budget.
   let reparsedLines = parsedUpTo + 1 - startLine
-  let endLine = min(startLine + max(ChunkSize, 2 * reparsedLines) - 1, b.len - 1)
+  let endLine =
+    if budgetLines > 0:
+      let target = max(budgetLines, 2 * reparsedLines)
+      let cap = max(budgetLines * 4, reparsedLines + budgetLines)
+      min(startLine + min(target, cap) - 1, b.len - 1)
+    else:
+      min(startLine + max(ChunkSize, 2 * reparsedLines) - 1, b.len - 1)
 
   var lastState = TokenizerState()
   if startLine > 0:
@@ -146,39 +206,73 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   # underlines) rather than rebuilding from incrementalHighlight.segments.
   b.highlight.colorSegments.add(newSegments)
 
+  parsedLines = endLine - startLine + 1
+
   return true
 
-proc continueUriScan*(b: TextBuffer): bool =
-  ## Continue progressive URI scanning if incomplete.
-  ## Works for all file types (plain text and syntax-highlighted).
-  ## Returns true if work was done (caller should update the display).
+proc continueInitialHighlight*(b: TextBuffer, budgetLines: int = 0): bool =
+  ## Overload without the parsed-line reporting.
+  var parsedLines: int
+  result = continueInitialHighlight(b, budgetLines, parsedLines)
+
+proc continueUriScan*(b: TextBuffer, budgetLines: int, scannedLines: var int): bool =
+  ## Continue progressive URI scanning if incomplete (all file types).
+  ## Returns true if any URI underlines were applied (the caller should
+  ## update the display then). `scannedLines` receives the number of lines
+  ## scanned — the frame driver charges its shared budget by this count.
+  ## `budgetLines` bounds the chunk (0 = the default chunk size).
   const ChunkSize = 1000
 
+  scannedLines = 0
   if b.isUtilityBuffer or b.uriScanParsedUpTo >= b.len - 1:
     return false
 
-  # For syntax-highlighted files, don't scan ahead of the syntax highlight
-  # progress — addModifier requires color segments to exist for the target
-  # lines.
-  if b.incrementalHighlight != nil and
-      b.uriScanParsedUpTo >= b.incrementalHighlight.parsedUpTo:
-    return false
-
   let startLine = b.uriScanParsedUpTo + 1
-  var endLine = min(startLine + ChunkSize - 1, b.len - 1)
+  let chunkEnd =
+    if budgetLines > 0:
+      startLine + budgetLines - 1
+    else:
+      startLine + ChunkSize - 1
+  var endLine = min(chunkEnd, b.len - 1)
 
-  # Clamp to syntax highlight progress.
+  # For syntax-highlighted files, don't scan past the highlight progress
+  # (addModifier needs segments on the target lines). While a re-parse is in
+  # flight, the frontier is `reparseEnd`; but if the flight started below the
+  # load frontier, the band between was never parsed, so clamp to
+  # `parsedUpTo` instead.
   if b.incrementalHighlight != nil:
-    endLine = min(endLine, b.incrementalHighlight.parsedUpTo)
+    let pr = b.incrementalHighlight.pendingReparse
+    let frontier =
+      if pr != nil:
+        if pr.reparseStart <= b.incrementalHighlight.parsedUpTo + 1:
+          pr.reparseEnd
+        else:
+          b.incrementalHighlight.parsedUpTo
+      else:
+        b.incrementalHighlight.parsedUpTo
+    if b.uriScanParsedUpTo >= frontier:
+      return false
+    endLine = min(endLine, frontier)
 
   let modified = scanAndApplyUriUnderlines(b, startLine, endLine)
   b.uriScanParsedUpTo = endLine
+  scannedLines = endLine - startLine + 1
 
   return modified
 
-proc updateHighlight*(b: TextBuffer) =
-  ## Update syntax highlighting if needed
-  ## This should be called before rendering
+proc continueUriScan*(b: TextBuffer, budgetLines: int = 0): bool =
+  ## Overload without the scanned-line reporting.
+  var scannedLines: int
+  result = continueUriScan(b, budgetLines, scannedLines)
+
+proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): bool =
+  ## Update syntax highlighting if needed; call before rendering.
+  ##
+  ## `reparseBudget` bounds the re-parse per call (0 = unlimited). Returns
+  ## true while a budgeted re-parse is in progress: resume it on later frames
+  ## via `continueIncrementalHighlight`. `parsedLines` receives the actual
+  ## lines consumed.
+  parsedLines = 0
   if b.highlightNeedsUpdate and not b.isUtilityBuffer:
     # Keep the Highlight ref alive across reparse so the LSP semantic overlay
     # (living in the same object) does not need saving. Only colorSegments
@@ -201,19 +295,27 @@ proc updateHighlight*(b: TextBuffer) =
     # and the progressive scan must restart from the beginning. When false
     # (incremental update), unchanged segments keep their URI modifiers.
     var highlightRebuilt = true
+    var reparseOngoing = false
+    # The pre-call flight; a restart inside clears `pendingReparse`, so the
+    # rewind below needs its start.
+    var prevPr: PendingReparse
 
     if b.language != SourceLanguage.langNone:
-      # Empty `segments` is a valid cached state (all-blank buffer). Gating on
-      # it would force a full rebuild every edit.
+      # An empty state cache is a valid transient flight state (a top
+      # line-count change trims it), so gate on the live flight too, or the
+      # next edit would fall back to a one-call full rebuild.
       let cacheValid =
-        b.incrementalHighlight != nil and
-        b.incrementalHighlight.lineStates.states.len > 0
+        b.incrementalHighlight != nil and (
+          b.incrementalHighlight.lineStates.states.len > 0 or
+          b.incrementalHighlight.pendingReparse != nil
+        )
 
       if cacheValid:
         # Use incremental highlighting for better performance.
         # Only fetches lines for the chunks that need re-parsing.
         let buf = b
-        updateHighlightIncremental(
+        prevPr = b.incrementalHighlight.pendingReparse
+        reparseOngoing = updateHighlightIncremental(
           b.len,
           proc(i: int): string =
             buf.getLine(i),
@@ -222,13 +324,27 @@ proc updateHighlight*(b: TextBuffer) =
           b.reservedWords,
           b.language,
           b.maxHighlightLineLength,
+          reparseBudget,
+          b.contentVersion,
+          parsedLines,
         )
 
         b.highlight.colorSegments = b.incrementalHighlight.segments
         highlightRebuilt = false
       else:
-        # Cache invalid or first time - parse once with incremental
-        if b.len > 0:
+        # Cache invalid or first time: with a budget, let
+        # `continueInitialHighlight` chunk the parse; unlimited stays
+        # synchronous for callers needing the whole file in one call.
+        if b.len == 0:
+          b.highlight.colorSegments = @[]
+          b.incrementalHighlight = nil
+        elif reparseBudget > 0:
+          b.highlight.colorSegments = @[]
+          b.incrementalHighlight = IncrementalHighlight(
+            segments: @[], lineStates: LineStateCache(states: @[]), parsedUpTo: -1
+          )
+          discard continueInitialHighlight(b, reparseBudget, parsedLines)
+        else:
           # Single backend traversal instead of b.len getLine calls, which
           # are O(n log n) total for tree-based backends.
           var lines = newSeqOfCap[string](b.len)
@@ -251,9 +367,8 @@ proc updateHighlight*(b: TextBuffer) =
             lineStates: LineStateCache(states: lineStates),
             parsedUpTo: b.len - 1,
           )
-        else:
-          b.highlight.colorSegments = @[]
-          b.incrementalHighlight = nil
+          # Charge the shared frame budget by the actual rebuild work.
+          parsedLines = b.len
     else:
       # Plain text - single default segment covering all lines
       if b.len > 0:
@@ -270,15 +385,19 @@ proc updateHighlight*(b: TextBuffer) =
       else:
         b.highlight.colorSegments = @[]
 
-    # URI underlines around the change point; the rest is handled progressively
-    # by continueUriScan. When the highlight was rebuilt from scratch the cache
-    # is fresh and `uriScanParsedUpTo` is reset below, so the progressive scan
-    # will re-cover this range — skip the cache mirror to avoid redundant work.
+    # URI underlines around the change point; the rest is handled by
+    # continueUriScan. During a flight, clamp to `reparseEnd`: rows past it
+    # have no segments, so addUnderlineRanges would silently drop them.
     let uriStart = max(0, b.lastChangedLines)
-    let uriEnd = min(uriStart + 1000, b.len) - 1
-    discard scanAndApplyUriUnderlines(
-      b, uriStart, uriEnd, applyToCache = not highlightRebuilt
-    )
+    var uriEnd = min(uriStart + 1000, b.len) - 1
+    if reparseOngoing:
+      let pr = b.incrementalHighlight.pendingReparse
+      if pr != nil and uriEnd > pr.reparseEnd:
+        uriEnd = pr.reparseEnd
+    if uriEnd >= uriStart:
+      discard scanAndApplyUriUnderlines(
+        b, uriStart, uriEnd, applyToCache = not highlightRebuilt
+      )
 
     # Diagnostics are only mutated by the LSP publish path / reset/clear paths;
     # a pure edit keeps them untouched, so the overlay rebuilt on the previous
@@ -294,18 +413,38 @@ proc updateHighlight*(b: TextBuffer) =
       # uriStart..uriEnd were lost. Reset progressive scan to re-cover the
       # full file from the beginning.
       b.uriScanParsedUpTo = -1
+    elif reparseOngoing:
+      # The re-parse trimmed the cached segments (URI underlines included)
+      # from `reparseStart` on; rewind the scan to re-cover them as chunks
+      # are appended. Only when THIS call trimmed — a plain resume touches
+      # no covered rows, so rewinding would re-crawl them on every trigger.
+      let trimmed = prevPr == nil or not prevPr.matches(b)
+      if trimmed:
+        b.rewindUriScan(b.incrementalHighlight.pendingReparse.reparseStart - 1)
     else:
-      # Incremental update: unchanged segments kept their URI modifiers. Only
-      # the re-parsed region (around lastChangedLines) lost them. Rewind just
-      # past the change point so the progressive scan re-covers that region,
-      # instead of re-scanning the entire file on every edit. The -3 margin
-      # matches updateHighlightIncremental's reparseStart backward margin (-2)
-      # plus one so lineIdx = uriScanParsedUpTo + 1 lands at reparseStart.
-      let rewindTo = max(-1, b.lastChangedLines - 3)
-      if b.uriScanParsedUpTo > rewindTo:
-        b.uriScanParsedUpTo = rewindTo
+      # Rewind to just before the actual reparseStart (clamped to the old
+      # flight's start); a plain resume-completion trimmed nothing, so skip
+      # the rewind — mirroring the branch above.
+      if prevPr == nil or not prevPr.matches(b):
+        var rewindTo = b.incrementalHighlight.lastReparseStart - 1
+        if prevPr != nil:
+          rewindTo = min(rewindTo, prevPr.reparseStart - 1)
+        b.rewindUriScan(rewindTo)
 
     b.highlightNeedsUpdate = false
+    return reparseOngoing
+
+  false
+
+proc updateHighlight*(b: TextBuffer, reparseBudget: int = 0): bool {.discardable.} =
+  ## Overload without the parsed-line reporting.
+  var parsedLines: int
+  result = updateHighlight(b, reparseBudget, parsedLines)
+
+proc continueIncrementalHighlight*(b: TextBuffer, budgetLines: int = 0): bool =
+  ## Overload without the parsed-line reporting.
+  var parsedLines: int
+  result = continueIncrementalHighlight(b, budgetLines, parsedLines)
 
 proc setReservedWords*(b: TextBuffer, words: seq[ReservedWord]) =
   ## Set reserved words for syntax highlighting (e.g., TODO, NOTE, FIXME)

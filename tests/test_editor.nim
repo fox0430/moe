@@ -25,7 +25,7 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
     render_utils, lsp_service, lsp_integration, diff_viewer, setting_options,
-    editor_init, command_config, command_registry, help_viewer,
+    editor_init, command_config, command_registry, help_viewer, logger, modes,
   ]
 import ../src/moepkg/buffer_backends/gap_buffer
 import
@@ -2457,6 +2457,256 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     check win.modeState.kind == mskNone
     check win.suspendedMode.isNone
 
+suite "Editor - BackupManager restore failure":
+  test "refuses a clean restore when the current file cannot be snapshotted":
+    let e = createTestEditor()
+    let
+      sourceFile = getTempDir() / "moe_test_backup_restore_clean_unreadable.txt"
+      backupFile = getTempDir() / "moe_test_backup_restore_clean_unreadable.bak"
+    if fileExists(sourceFile):
+      removeFile(sourceFile)
+    if fileExists(backupFile):
+      removeFile(backupFile)
+    writeFile(sourceFile, "original content")
+    writeFile(backupFile, "restored content")
+    defer:
+      setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
+      if fileExists(sourceFile):
+        removeFile(sourceFile)
+      if fileExists(backupFile):
+        removeFile(backupFile)
+
+    check e.editFile(sourceFile).isOk
+    e.config.autoBackup.dirToExclude = @[sourceFile.parentDir]
+    let sourceBuffer = e.activeBuffer()
+    let win = e.activeWindow
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+
+    # The buffer remains clean while the on-disk file is changed externally.
+    writeFile(sourceFile, "external content")
+    setFilePermissions(sourceFile, {fpUserWrite})
+    var canRead = true
+    try:
+      discard readFile(sourceFile)
+    except CatchableError:
+      canRead = false
+    if canRead:
+      setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
+      skip()
+    else:
+      win.buffer = newTextBuffer("backup list")
+      win.mode = EditorMode.BackupManager
+      e.setMode(EditorMode.BackupManager)
+      win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+      let result = e.processResult(
+        HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: 0),
+        e.activeBuffer(),
+      )
+
+      check result == true
+      check sourceBuffer.getTextString == "original content"
+      check e.state.statusMessage.contains("safely")
+
+      setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
+      check readFile(sourceFile) == "external content"
+
+  test "refuses a dirty restore when the current file cannot be snapshotted":
+    let e = createTestEditor()
+    let
+      sourceFile = getTempDir() / "moe_test_backup_restore_dirty_unreadable.txt"
+      backupFile = getTempDir() / "moe_test_backup_restore_dirty_unreadable.bak"
+    if fileExists(sourceFile):
+      removeFile(sourceFile)
+    if fileExists(backupFile):
+      removeFile(backupFile)
+    writeFile(sourceFile, "original content")
+    writeFile(backupFile, "restored content")
+    defer:
+      setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
+      if fileExists(sourceFile):
+        removeFile(sourceFile)
+      if fileExists(backupFile):
+        removeFile(backupFile)
+
+    check e.editFile(sourceFile).isOk
+    let sourceBuffer = e.activeBuffer()
+    discard sourceBuffer.insertText(BufferPosition(line: 0, column: 0), "unsaved ")
+    let win = e.activeWindow
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+
+    setFilePermissions(sourceFile, {fpUserWrite})
+    var canRead = true
+    try:
+      discard readFile(sourceFile)
+    except CatchableError:
+      canRead = false
+    if canRead:
+      setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
+      skip()
+    else:
+      win.buffer = newTextBuffer("backup list")
+      win.mode = EditorMode.BackupManager
+      e.setMode(EditorMode.BackupManager)
+      win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+      let result = e.processResult(
+        HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: 0),
+        e.activeBuffer(),
+      )
+
+      check result == true
+      check sourceBuffer.getTextString == "unsaved original content"
+      check e.state.statusMessage.contains("safely")
+
+      setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
+      check readFile(sourceFile) == "original content"
+
+  test "rolls back when a dirty buffer safety backup fails":
+    let e = createTestEditor()
+    let
+      sourceFile = getTempDir() / "moe_test_backup_restore_dirty_backup_failure.txt"
+      backupFile = getTempDir() / "moe_test_backup_restore_dirty_backup_failure.bak"
+    if fileExists(sourceFile):
+      removeFile(sourceFile)
+    if fileExists(backupFile):
+      removeFile(backupFile)
+    writeFile(sourceFile, "original content")
+    writeFile(backupFile, "restored content")
+    defer:
+      if fileExists(sourceFile):
+        removeFile(sourceFile)
+      if fileExists(backupFile):
+        removeFile(backupFile)
+
+    check e.editFile(sourceFile).isOk
+    e.config.autoBackup.dirToExclude = @[sourceFile.parentDir]
+    let sourceBuffer = e.activeBuffer()
+    discard sourceBuffer.insertText(BufferPosition(line: 0, column: 0), "unsaved ")
+    let win = e.activeWindow
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+
+    win.buffer = newTextBuffer("backup list")
+    win.mode = EditorMode.BackupManager
+    e.setMode(EditorMode.BackupManager)
+    win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+    let result = e.processResult(
+      HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: 0),
+      e.activeBuffer(),
+    )
+
+    check result == true
+    check sourceBuffer.getTextString == "unsaved original content"
+    check e.state.statusMessage.contains("preserve unsaved changes")
+    check readFile(sourceFile) == "original content"
+    check not sourceBuffer.isExternallyModified()
+
+  test "rolls back when a clean buffer safety backup fails":
+    let e = createTestEditor()
+    let
+      sourceFile = getTempDir() / "moe_test_backup_restore_clean_backup_failure.txt"
+      backupFile = getTempDir() / "moe_test_backup_restore_clean_backup_failure.bak"
+    if fileExists(sourceFile):
+      removeFile(sourceFile)
+    if fileExists(backupFile):
+      removeFile(backupFile)
+    writeFile(sourceFile, "original content")
+    writeFile(backupFile, "restored content")
+    defer:
+      if fileExists(sourceFile):
+        removeFile(sourceFile)
+      if fileExists(backupFile):
+        removeFile(backupFile)
+
+    check e.editFile(sourceFile).isOk
+    e.config.autoBackup.dirToExclude = @[sourceFile.parentDir]
+    let sourceBuffer = e.activeBuffer()
+    let win = e.activeWindow
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+
+    win.buffer = newTextBuffer("backup list")
+    win.mode = EditorMode.BackupManager
+    e.setMode(EditorMode.BackupManager)
+    win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+    let result = e.processResult(
+      HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: 0),
+      e.activeBuffer(),
+    )
+
+    check result == true
+    check sourceBuffer.getTextString == "original content"
+    check e.state.statusMessage.contains("create safety backup")
+    check readFile(sourceFile) == "original content"
+    check not sourceBuffer.isExternallyModified()
+
+  test "preserves external changes after clean rollback":
+    let e = createTestEditor()
+    let
+      sourceFile = getTempDir() / "moe_test_backup_restore_external_rollback.txt"
+      backupFile = getTempDir() / "moe_test_backup_restore_external_rollback.bak"
+    if fileExists(sourceFile):
+      removeFile(sourceFile)
+    if fileExists(backupFile):
+      removeFile(backupFile)
+    writeFile(sourceFile, "original content")
+    writeFile(backupFile, "restored content")
+    defer:
+      if fileExists(sourceFile):
+        removeFile(sourceFile)
+      if fileExists(backupFile):
+        removeFile(backupFile)
+
+    check e.editFile(sourceFile).isOk
+    e.config.autoBackup.dirToExclude = @[sourceFile.parentDir]
+    let sourceBuffer = e.activeBuffer()
+
+    # Keep the in-memory buffer clean while making the disk content external.
+    writeFile(sourceFile, "external content")
+    sourceBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    let win = e.activeWindow
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+
+    win.buffer = newTextBuffer("backup list")
+    win.mode = EditorMode.BackupManager
+    e.setMode(EditorMode.BackupManager)
+    win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+    let result = e.processResult(
+      HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: 0),
+      e.activeBuffer(),
+    )
+
+    check result == true
+    check sourceBuffer.getTextString == "original content"
+    check readFile(sourceFile) == "external content"
+    check sourceBuffer.isExternallyModified()
+
+    let saveResult = sourceBuffer.saveFile(sourceFile, checkExternalMod = true)
+    check saveResult.isErr
+    check readFile(sourceFile) == "external content"
+
 suite "Editor - list viewer quit restores origin cursor/viewport":
   # Regression: hrFilerQuit/hrBufferManagerQuit/hrBookmarkManagerQuit
   # used to restore the original buffer but leave the cursor/viewport wherever
@@ -2670,6 +2920,52 @@ suite "Editor - Command mode command alias bridge end-to-end (#2597)":
     check e.activeBuffer().id == f2Id # still focused on the dirty buffer
     check e.buffers.len == bufferCountBefore
     check "No write since last change" in e.state.statusMessage
+
+suite "Editor - unreachable kinds reaching processResult are loud":
+  ## Kinds whose real processing happens before processResult (folded by
+  ## handleCommandMode, handled by handler.handleRecentFileModeKeyCombo, or
+  ## intercepted by processReplayedResult) must not silently no-op if a
+  ## routing bug ever lets them through: log a warning instead (S9-style).
+  test "hrMapAdd / hrRecentFileOpenFile / hrPlaybackMacro log a warning":
+    let e = createTestEditor()
+    let oldLogger = getGlobalLogger()
+    let oldDir = getCurrentDir()
+    # Per-process temp dir so the test cannot clobber a real ./moe-debug.log
+    # or collide with parallel test processes.
+    let logDir = getTempDir() / "moe-result-processor-log-" & $getCurrentProcessId()
+    let logPath = logDir / "moe-debug.log"
+    createDir(logDir)
+    setCurrentDir(logDir)
+    let newLogger = initLogger(LogLevel.Warn, enabled = true, clearOnStart = true)
+    defer:
+      close(newLogger)
+      setGlobalLogger(oldLogger)
+      setCurrentDir(oldDir)
+      removeFile(logPath)
+      removeDir(logDir)
+    setGlobalLogger(newLogger)
+
+    let kinds = [
+      HandlerResult(
+        kind: hrMapAdd,
+        mapAddLhs: "x",
+        mapAddRhs: "y",
+        mapAddModes: @[EditorMode.Normal],
+        mapAddNoremap: false,
+      ),
+      HandlerResult(kind: hrRecentFileOpenFile, recentFilePath: "/tmp/nonexistent"),
+      HandlerResult(
+        kind: hrPlaybackMacro, playbackMacroKeys: @[], playbackMacroCount: 1
+      ),
+    ]
+    for r in kinds:
+      check e.processResult(r, e.activeBuffer())
+    let logContent = readFile(logPath)
+    check logContent.contains("unreachable kind reached processResult: hrMapAdd")
+    check logContent.contains(
+      "unreachable kind reached processResult: hrRecentFileOpenFile"
+    )
+    check logContent.contains("unreachable kind reached processResult: hrPlaybackMacro")
 
 suite "Editor - :theme routes through config so save/reload stay in sync":
   test ":theme default resets config.theme to tkDefault":

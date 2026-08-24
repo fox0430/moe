@@ -26,7 +26,9 @@
 import std/[options, sets, unittest]
 
 import ../tools/gen_howtouse_docs
-import ../src/moepkg/[command_line_commands, help_markdown]
+import ../src/moepkg/[command_line_commands]
+import ../src/moepkg/help_generator {.all.}
+import ../src/moepkg/help_markdown {.all.}
 
 suite "howtouse.md auto-gen sync":
   test "regenerating produces no diff":
@@ -103,3 +105,11 @@ suite "howtouse.md auto-gen sync":
         echo "  - ", n
     check unresolved.len == 0
     check empty.len == 0
+
+  test "TUI help and howtouse.md cover the same set of Exiting commands":
+    # The two lists may order commands differently, but the covered command
+    # set must match. An omission in one (e.g. `:qa` was previously absent
+    # from TUI help) would silently drop the command from that doc, and
+    # neither the diff test nor the coverage tests catch it.
+    check toHashSet(help_generator.ExitingHelpNames) ==
+      toHashSet(help_markdown.ExitingHelpNames)

@@ -1019,6 +1019,138 @@ proc runFuzz(
 
 # Test suite
 
+proc largeBudgetedBuffer(lang: SourceLanguage): seq[string] =
+  ## A straight-line buffer over `updateHighlightIncremental`'s ChunkSize
+  ## (100 lines); the fuzz corpora stay under 100 lines, so their walks
+  ## never exercise the budgeted machinery (multi-call flight, mid-flight
+  ## restart, inheritedTail). Plain lines keep the state neutral between
+  ## rows.
+  const Lines = 250
+  result = newSeq[string](Lines)
+  for i in 0 ..< Lines:
+    case lang
+    of SourceLanguage.langRust:
+      result[i] = "let value" & $i & " = " & $i & "; // note " & $i
+    of SourceLanguage.langNim:
+      result[i] = "let value" & $i & " = " & $i & " # note " & $i
+    of SourceLanguage.langJavaScript:
+      result[i] = "let value" & $i & " = " & $i & "; // note " & $i
+    of SourceLanguage.langMarkdown:
+      result[i] = "paragraph " & $i & " lorem ipsum"
+    of SourceLanguage.langPython:
+      result[i] = "value" & $i & " = " & $i & " # note " & $i
+    of SourceLanguage.langC:
+      result[i] = "int value" & $i & " = " & $i & "; /* note */"
+    of SourceLanguage.langYaml:
+      result[i] = "key" & $i & ": value " & $i
+    else:
+      result[i] = "text " & $i
+
+proc runFuzzBudgeted(
+    lang: SourceLanguage, corpus: seq[seq[string]], iters, baseSeed: int
+): bool =
+  ## Like `runFuzz`, but drives the budgeted path: a random per-call budget
+  ## and a synthetic content version per edit exercise the mid-flight
+  ## restart / inheritedTail / convergence-guard machinery the unlimited
+  ## calls never reach. A third of the iterations use a buffer larger than
+  ## one chunk, so the re-parse spans multiple calls. After each edit the
+  ## re-parse is either left in flight (the next edit restarts it) or
+  ## drained; the cached segments must match a full reparse whenever the
+  ## re-parse is complete.
+  const Budgets = [1, 2, 7, 37, 0]
+  for it in 0 ..< iters:
+    let seed = baseSeed + it
+    var rng = initRand(seed.int64 + 1) # +1 because initRand(0) is invalid
+    var buf =
+      if rng.rand(2) == 0:
+        largeBudgetedBuffer(lang)
+      else:
+        corpus[rng.rand(corpus.high)]
+
+    let (segs0, states0) =
+      initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
+    var ih =
+      IncrementalHighlight(segments: segs0, lineStates: LineStateCache(states: states0))
+
+    var history: seq[Edit]
+    var callLog: seq[string]
+    let nEdits = 5 + rng.rand(8) # 5..12 inclusive
+    var version = 0
+
+    try:
+      for ei in 0 ..< nEdits:
+        let e = pickEdit(buf, corpus, rng)
+        history.add e
+        let changedLine = applyEdit(buf, e)
+        inc version
+
+        let getLine = proc(i: int): string =
+          buf[i]
+        let budget = Budgets[rng.rand(Budgets.high)]
+        var ongoing = updateHighlightIncremental(
+          buf.len, getLine, ih, changedLine, @[], lang, 0, budget, version
+        )
+        callLog.add &"[{ei}] anchor={changedLine} budget={budget} v={version} ongoing={ongoing}"
+        # A flight left in flight after the previous edit is restarted here
+        # (the version always differs). Sometimes leave this edit's flight in
+        # flight for the next edit to restart instead of draining it now.
+        if ongoing and ei + 1 < nEdits and rng.rand(1) == 0:
+          continue
+
+        var guardCalls = 0
+        while ongoing:
+          inc guardCalls
+          if guardCalls > 10000:
+            echo "=== BUDGETED FUZZ NON-TERMINATION ==="
+            echo &"Language: {lang}"
+            echo &"Seed:     {seed}"
+            echo &"Iteration: {it}"
+            echo &"Version:  {version}"
+            echo &"Budget:   {budget}"
+            echo &"Buffer ({buf.len} lines):"
+            for i, line in buf:
+              echo &"  {i:>3}: {line}"
+            return false
+          ongoing = updateHighlightIncremental(
+            buf.len, getLine, ih, changedLine, @[], lang, 0, budget, version
+          )
+
+        let incr = Highlight(colorSegments: ih.segments)
+        let full = fullHighlight(buf, lang)
+        let (ok, r, c) = firstDivergence(buf, incr, full)
+        if not ok:
+          echo "=== CALL LOG ==="
+          for l in callLog:
+            echo "  ", l
+          echo "pr=",
+            if ih.pendingReparse != nil:
+              &"anchor={ih.pendingReparse.anchor} rs={ih.pendingReparse.reparseStart} " &
+                &"cs={ih.pendingReparse.currentStart} re={ih.pendingReparse.reparseEnd} " &
+                &"tail={ih.pendingReparse.staleTail.len}"
+            else:
+              "nil"
+          echo "segments=",
+            ih.segments.len, " states=", ih.lineStates.states.len, " buf=", buf.len
+          dumpFailure(lang, seed, it, history, buf, r, c, incr, full)
+          return false
+    except Exception as exc:
+      # Mirror runFuzz's crash diagnostics for the budgeted path.
+      echo "=== TOKENIZER CRASH (budgeted) ==="
+      echo &"Language:  {lang}"
+      echo &"Seed:      {seed}"
+      echo &"Iteration: {it}"
+      echo &"Reproduce: MOE_FUZZ_HIGHLIGHT_BUDGET_ITERS=1 MOE_FUZZ_HIGHLIGHT_SEED={seed}"
+      echo &"Edits ({history.len}):"
+      for i, e in history:
+        echo &"  [{i}] {editToString(e)}"
+      echo &"Buffer ({buf.len} lines):"
+      for i, line in buf:
+        echo &"  {i:>3}: {line}"
+      echo &"Exception: {exc.name}: {exc.msg}"
+      echo "======================"
+      raise
+  true
+
 suite "Incremental Highlight Fuzz":
   const DefaultIters = 100
   let iters = parseInt(getEnv("MOE_FUZZ_HIGHLIGHT_ITERS", $DefaultIters))
@@ -1096,6 +1228,46 @@ suite "Incremental Highlight Fuzz":
   test "CommitEditMsg: incremental output matches full reparse under random edits":
     check runFuzz(
       SourceLanguage.langCommitEditMsg, commitEditMsgCorpus(), iters, baseSeed
+    )
+
+suite "Incremental Highlight Fuzz (budgeted)":
+  # The budgeted path is language-independent machinery, so a representative
+  # subset of languages suffices; per-language state-capture is already
+  # pinned by the unlimited suite above.
+  const DefaultBudgetedIters = 25
+  let budgetedIters =
+    parseInt(getEnv("MOE_FUZZ_HIGHLIGHT_BUDGET_ITERS", $DefaultBudgetedIters))
+  let baseSeed = parseInt(getEnv("MOE_FUZZ_HIGHLIGHT_SEED", "0"))
+
+  test "Rust: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(
+      SourceLanguage.langRust, rustCorpus(), budgetedIters, baseSeed
+    )
+
+  test "Nim: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(SourceLanguage.langNim, nimCorpus(), budgetedIters, baseSeed)
+
+  test "JavaScript: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(
+      SourceLanguage.langJavaScript, javascriptCorpus(), budgetedIters, baseSeed
+    )
+
+  test "Markdown: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(
+      SourceLanguage.langMarkdown, markdownCorpus(), budgetedIters, baseSeed
+    )
+
+  test "Python: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(
+      SourceLanguage.langPython, pythonCorpus(), budgetedIters, baseSeed
+    )
+
+  test "C: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(SourceLanguage.langC, cCorpus(), budgetedIters, baseSeed)
+
+  test "YAML: budgeted re-parses match full reparse under random edits":
+    check runFuzzBudgeted(
+      SourceLanguage.langYaml, yamlCorpus(), budgetedIters, baseSeed
     )
 
 # Deterministic chunk-boundary tests

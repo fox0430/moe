@@ -21,7 +21,7 @@
 
 import pkg/results
 
-import ../[types, clipboard]
+import ../[types, clipboard, registers]
 import ../buffer/edit
 import ../command_handlers/visual_commands
 
@@ -32,13 +32,23 @@ proc handleClipboardCopy*(ctx: CommandContext): Result[(), string] =
   if not ctx.clipboardConfig.enable:
     return err("Clipboard integration is disabled")
 
-  # Get selected text
-  let selectedText = getSelectedText(ctx.state, ctx.buffer)
-  if selectedText.len == 0:
+  if not ctx.state.visualSelection.active:
     return err("No text selected")
 
-  # Write to clipboard (fire-and-forget)
-  writeToClipboardAsync(ctx.clipboardConfig.tool, selectedText)
+  # Respect selection kind so V-line / Ctrl-V-block cuts copy the same region
+  # the buffer-side visualDelete will remove.
+  let selectedText = getVisualSelectionText(ctx.buffer, ctx.state.visualSelection)
+  if selectedText.len == 0 and ctx.state.visualSelection.kind == vskChar:
+    return err("No text selected")
+
+  # Write synchronously so a following put reads the copied content.
+  let writeResult = writeToClipboardSync(ctx.clipboardConfig.tool, selectedText)
+  if writeResult.isErr:
+    return err(writeResult.error)
+
+  # Sync the unnamed register so the put keeps the linewise/characterwise type.
+  let isLine = ctx.state.visualSelection.kind == vskLine
+  ctx.state.registers.markClipboardWritten(selectedText, isLine, writeResult.get)
 
   return Result[(), string].ok ()
 
@@ -72,14 +82,13 @@ proc handleClipboardCut*(ctx: CommandContext): Result[(), string] =
   if not ctx.clipboardConfig.enable:
     return err("Clipboard integration is disabled")
 
-  # First, copy to clipboard
+  # Copy first; a copy failure must not cancel the delete half.
   let copyResult = handleClipboardCopy(ctx)
-  if copyResult.isErr:
-    return copyResult
-
-  # Then delete the selection
   if ctx.state.visualSelection.active:
     visualDelete(ctx.buffer, ctx.state)
+
+  if copyResult.isErr:
+    return copyResult
 
   return Result[(), string].ok ()
 

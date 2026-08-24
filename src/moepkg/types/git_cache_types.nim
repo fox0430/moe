@@ -22,7 +22,8 @@
 
 import std/[options, tables, monotimes]
 
-import ../git_diff
+import git_diff_types
+import ../buffer/core
 
 const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
 
@@ -50,6 +51,6 @@ type
   GitCacheState* = object
     ## Per-buffer git status owned by `EditorState`. Both refresh cycles are
     ## driven from the editor tick; the render path only reads.
-    diffEntries*: Table[pointer, GitDiffCacheEntry]
-    branchEntries*: Table[pointer, GitBranchCacheEntry]
+    diffEntries*: Table[BufferId, GitDiffCacheEntry]
+    branchEntries*: Table[BufferId, GitBranchCacheEntry]
     diffRefreshIntervalMs*: int64

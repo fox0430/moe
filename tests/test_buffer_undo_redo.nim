@@ -22,6 +22,7 @@ import std/[unittest, strutils, options, deques]
 import pkg/results
 
 import ../src/moepkg/buffer
+import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/syntax/tokenizer
 
 suite "Buffer - Undo/Redo Basic Operations":
@@ -84,6 +85,22 @@ suite "Buffer - Undo/Redo Basic Operations":
     let r = b.undo()
     check r.isOk
     check b.getLine(0) == "hello world"
+
+  test "undo of zero-width deleteRange on empty final line does not grow buffer":
+    # v-d on the empty final line touches nothing; undo must not resurrect a
+    # phantom empty line from a fabricated "\n" in the deleted-range text.
+    let b = newTextBuffer("Line1")
+    discard b.insert(1, "")
+    check b.len == 2
+    discard b.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 0)
+    )
+    check b.len == 2
+    let r = b.undo()
+    check r.isOk
+    check b.len == 2
+    check b.getLine(0) == "Line1"
+    check b.getLine(1) == ""
 
   test "undo deleteRange multi-line":
     let b = newTextBuffer("line1\nline2\nline3")
@@ -354,6 +371,194 @@ suite "Buffer - withTransaction scope guard":
     let u = b.undo()
     check u.isOk
     check u.value == anchor
+
+  test "partial edit before a failed edit is rolled back (no partial commit)":
+    # Class B regression: a successful deleteRange followed by a failed
+    # insertText must not commit the partial state. The early return from the
+    # enclosing proc triggers a rollback of every change made so far.
+    let b = newTextBuffer("abc")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      let r = withTransaction(b, "partial"):
+        let delResult = b.deleteRange(
+          BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)
+        )
+        if delResult.isErr:
+          return err(delResult.error)
+        # Line 5 does not exist, so this insert fails after the delete landed.
+        let insResult = b.insertText(BufferPosition(line: 5, column: 0), "x")
+        if insResult.isErr:
+          return err(insResult.error)
+      r
+
+    let outcome = runIt(b)
+    check outcome.isErr
+    check not b.inTransaction
+    check b.getLine(0) == "abc"
+    check b.undo().isErr
+
+  test "readOnly flip mid-transaction rolls back landed edits":
+    # A buffer that becomes read-only after a landed edit rejects the next one;
+    # the early return must roll the landed edit back as well.
+    let b = newTextBuffer("abc")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      let r = withTransaction(b, "flip"):
+        let insResult = b.insertText(BufferPosition(line: 0, column: 3), "d")
+        if insResult.isErr:
+          return err(insResult.error)
+        b.readOnly = true
+        let delResult = b.deleteChar(BufferPosition(line: 0, column: 0))
+        if delResult.isErr:
+          return err(delResult.error)
+      r
+
+    let outcome = runIt(b)
+    check outcome.isErr
+    check not b.inTransaction
+    check b.getLine(0) == "abc"
+    # Clear readOnly so the undo check is not satisfied by the readOnly guard:
+    # the rollback must have left nothing to undo.
+    b.readOnly = false
+    check b.undo().isErr
+
+  test "rollback failure raises instead of being silently logged":
+    # Regression: a failed rollback must surface as an exception (the buffer
+    # can no longer be trusted) — not a log line the caller never sees. The
+    # dedicated type lets blanket CatchableError handlers exclude it.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.insertText(BufferPosition(line: 0, column: 4), " x")
+        discard b.rollbackTransaction()
+        return err("boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except TransactionRollbackError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+    check not b.inTransaction
+    check b.getLine(0) == "test"
+    check b.undo().isErr
+
+  test "rollback failure raise preserves the original exception message":
+    # Regression: when a raise propagates through the failed rollback, the
+    # replacement raise must keep the original cause so the log and status
+    # message show why the edit failed, not only that the rollback failed.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        raise newException(ValueError, "original boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except TransactionRollbackError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+    check "original boom" in caught
+    check not b.inTransaction
+
+  test "rollback failure raise is a ValueError (catches as its base type)":
+    # The dedicated type must stay catchable as its documented base class so
+    # existing handlers that already excluded ValueError keep working.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        return err("boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except ValueError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+
+  test "rollback failure keeps an in-flight Defect fatal":
+    # Regression: when a Defect is in flight and the rollback fails, the
+    # finally must re-raise the Defect unchanged: demoting it to a catchable
+    # TransactionRollbackError would let blanket handlers swallow a fatal
+    # signal.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        raise newException(IndexDefect, "boom")
+
+    var caught: ref Defect = nil
+    try:
+      discard runIt(b)
+    except IndexDefect as e:
+      caught = e
+    check caught != nil
+    check caught.msg == "boom"
+    check not b.inTransaction
+    check b.getLine(0) == "test"
+
+  test "rollback failure keeps an in-flight Defect fatal via withTransaction":
+    # Same as above but routed through a catch-all handler that would swallow
+    # a CatchableError: the Defect must still escape it.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.rollbackTransaction()
+        raise newException(IndexDefect, "boom")
+
+    var caught: ref Defect = nil
+    try:
+      try:
+        discard runIt(b)
+      except TransactionRollbackError:
+        discard # must not be reached
+      except CatchableError:
+        discard # must not be reached
+    except Defect as e:
+      caught = e
+    check caught != nil
+    check caught.msg == "boom"
+    check not b.inTransaction
+
+  test "rollback failure on partial undo failure raises (real failure mode)":
+    # Unlike the tests above (which break the rollback by ending the
+    # transaction in the body), this exercises the real failure mode: an
+    # inner undoChange fails partway through the rollback, leaving the
+    # buffer partially reverted and raising TransactionRollbackError.
+    let b = newTextBuffer("test")
+
+    proc runIt(b: TextBuffer): Result[(), string] =
+      withTransaction(b, "broken rollback"):
+        discard b.insertText(BufferPosition(line: 0, column: 4), " x")
+        # Hand-craft a change undoChange cannot apply (out-of-range line) and
+        # clear the pending snapshot to force the per-change undo path.
+        b.currentTransaction.get.changes.add(
+          BufferChange(
+            startSeq: b.changeSeq,
+            endSeq: b.changeSeq + 1,
+            kind: ckInsertLine,
+            insertLineIdx: 999,
+            insertLineText: "x",
+          )
+        )
+        b.pendingSnapshot = none(PieceTableSnapshot)
+        return err("boom")
+
+    var caught = ""
+    try:
+      discard runIt(b)
+    except TransactionRollbackError as e:
+      caught = e.msg
+    check "failed to roll back" in caught
+    check "Failed to undo change" in caught
+    check not b.inTransaction
 
 suite "Buffer - Transaction lastChangedLines":
   test "commitTransaction updates lastChangedLines to minimum line":
@@ -1356,6 +1561,80 @@ suite "Buffer - Transaction Partial Failure Recovery":
     # Roll-back removed the "X" that inner[0] had inserted.
     check b.getLine(0) == preLine
     check b.redoStack.len == stackLenBefore
+
+suite "Buffer - Batch Partial Failure Recovery (count>1)":
+  # These tests exercise the roll-forward/roll-back path in undo(count)/redo(count)
+  # itself (not the inner ckTransaction recovery). We hand-craft one "bad" stack
+  # entry so exactly one iteration fails after some already succeeded, then
+  # verify the buffer is back to the pre-call state and the stacks are intact.
+
+  test "undo(count) rolls forward when a later iteration fails":
+    let b = newTextBuffer("abc")
+    # Legit change on top of the stack: insert " X" at end so undo removes it.
+    discard b.insertText(BufferPosition(line: 0, column: 3), " X")
+    check b.getLine(0) == "abc X"
+    let seqBefore = b.changeSeq
+    let idxBefore = b.changeListIndex
+    let preLine = b.getLine(0)
+    let redoLenBefore = b.redoStack.len
+
+    # Bad entry beneath it: undoChange calls backendDeleteLine(999) → raises.
+    let bad = BufferChange(
+      startSeq: b.changeSeq,
+      endSeq: b.changeSeq,
+      kind: ckInsertLine,
+      insertLineIdx: 999,
+      insertLineText: "x",
+    )
+    b.undoStack.addFirst(bad)
+    let undoLenBefore = b.undoStack.len
+
+    let r = b.undo(2)
+    check r.isErr
+    # Buffer content rolled forward to the pre-call state.
+    check b.getLine(0) == preLine
+    # Stacks unchanged; counters restored.
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore
+    check b.changeSeq == seqBefore
+    check b.changeListIndex == idxBefore
+    # The retry actually retries: a plain undo() now succeeds and pops " X".
+    let r2 = b.undo()
+    check r2.isOk
+    check b.getLine(0) == "abc"
+
+  test "redo(count) rolls back when a later iteration fails":
+    let b = newTextBuffer("abc")
+    discard b.insertText(BufferPosition(line: 0, column: 3), " X")
+    discard b.undo()
+    check b.getLine(0) == "abc"
+    check b.redoStack.len == 1
+    let seqBefore = b.changeSeq
+    let idxBefore = b.changeListIndex
+    let preLine = b.getLine(0)
+    let undoLenBefore = b.undoStack.len
+
+    # Bad entry beneath legit: popLast pops legit first (succeeds), then bad.
+    let bad = BufferChange(
+      startSeq: b.changeSeq,
+      endSeq: b.changeSeq,
+      kind: ckInsertLine,
+      insertLineIdx: 999,
+      insertLineText: "x",
+    )
+    b.redoStack.addFirst(bad)
+    let redoLenBefore = b.redoStack.len
+
+    let r = b.redo(2)
+    check r.isErr
+    check b.getLine(0) == preLine
+    check b.redoStack.len == redoLenBefore
+    check b.undoStack.len == undoLenBefore
+    check b.changeSeq == seqBefore
+    check b.changeListIndex == idxBefore
+    let r2 = b.redo()
+    check r2.isOk
+    check b.getLine(0) == "abc X"
 
 suite "Buffer - Transaction Cursor Cache Staleness":
   test "redo of a transaction does not reuse a stale char->byte cache":

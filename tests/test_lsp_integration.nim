@@ -26,6 +26,7 @@ import
 import pkg/results
 
 import ../src/moepkg/[lsp_integration, buffer, message_log, unicode_utils]
+import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/lsp/protocol/types
 
 let tmpDir = getTempDir()
@@ -763,6 +764,251 @@ suite "LspIntegration - applyTextEdits":
     check result.isOk
     check buffer.getLine(0) == "AbC"
 
+  test "applyTextEdits failure rolls back its own transaction":
+    # Edits apply back-to-front; the malformed one fails last, so the
+    # transaction applyTextEdits opened must be rolled back to the pre-call
+    # state.
+    let buffer = newTextBuffer("hello world")
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
+        ),
+        newText: "hi",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isErr
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "hello world"
+
+  test "applyTextEdits failure keeps partial edits in a joined session transaction":
+    # In a live session transaction applyTextEdits joins it: edits before the
+    # failing one stay in the session until its commit.
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    check buffer.beginTransaction("Insert mode edit").isOk
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 2, character: 0), `end`: Position(line: 2, character: 2)
+        ),
+        newText: "AB",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isErr
+    check "joined transaction" in result.error
+    check buffer.inTransaction
+    check buffer.getLine(2) == "ABne3"
+    check buffer.commitTransaction().isOk
+    check buffer.getLine(2) == "ABne3"
+
+  test "applyTextEdits failure reports the edits that remain applied":
+    # In a joined session the lower-line edit applies first and stays; the
+    # tracking list must report exactly that edit so callers can re-sync
+    # their own coordinates against the partial application.
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    check buffer.beginTransaction("Insert mode edit").isOk
+    var applied: seq[TextEdit]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 2, character: 0), `end`: Position(line: 2, character: 2)
+        ),
+        newText: "AB",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits, appliedEdits = applied)
+    check result.isErr
+    check applied.len == 1
+    check applied[0].newText == "AB"
+    check buffer.getLine(2) == "ABne3"
+    check buffer.commitTransaction().isOk
+
+  test "applyTextEdits clears appliedEdits when it rolls back its own transaction":
+    # Self-managed failure rolls everything back, so nothing remains applied
+    # and the tracking list must be empty.
+    let buffer = newTextBuffer("abc")
+    var applied: seq[TextEdit]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+        ),
+        newText: "A",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      ),
+    ]
+    let result = applyTextEdits(buffer, edits, appliedEdits = applied)
+    check result.isErr
+    check applied.len == 0
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "abc"
+
+  test "applyTextEdits can suppress the joined-transaction note":
+    # A caller that rolls the joined transaction back itself (withTransaction
+    # scope) must not see the "may remain applied" note: the edits are
+    # reverted by that scope, so the note would be wrong.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    var applied: seq[TextEdit]
+    let result = applyTextEdits(
+      buffer,
+      @[
+        TextEdit(
+          range: Range(
+            start: Position(line: -1, character: 0),
+            `end`: Position(line: -1, character: 0),
+          ),
+          newText: "x",
+        )
+      ],
+      appliedEdits = applied,
+      discloseJoined = false,
+    )
+    check result.isErr
+    check "joined transaction" notin result.error
+    check applied.len == 0
+    check buffer.inTransaction
+    check buffer.commitTransaction().isOk
+
+  test "abortTextEditsOnException rolls back its own transaction":
+    # Direct unit test of the exception tail.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    var applied: seq[TextEdit]
+    let result = abortTextEditsOnException(
+      buffer, ownTransaction = true, excMsg = "boom", appliedEdits = applied
+    )
+    check result.isErr
+    check "Failed to apply text edits: boom" in result.error
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "hello world"
+    # A successful rollback reverts everything: the tracking list is cleared.
+    check applied.len == 0
+
+  test "abortTextEditsOnException leaves a joined session transaction open":
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("Insert mode edit").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    # The caller's tracking list already reports the applied edit: the tail
+    # must leave it untouched when nothing was rolled back.
+    var applied = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let result = abortTextEditsOnException(
+      buffer, ownTransaction = false, excMsg = "boom", appliedEdits = applied
+    )
+    check result.isErr
+    check "joined transaction" in result.error
+    check "may remain applied" in result.error
+    check buffer.inTransaction
+    check buffer.getLine(0) == "hellox world"
+    check applied.len == 1
+    check buffer.commitTransaction().isOk
+    check buffer.getLine(0) == "hellox world"
+
+  test "abortTextEditsOnException can suppress the joined-transaction note":
+    # A caller that rolls the joined transaction back itself (withTransaction
+    # scope) suppresses the note on the exception path too, matching the
+    # failEdit path's discloseJoined handling.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    var applied = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let result = abortTextEditsOnException(
+      buffer,
+      ownTransaction = false,
+      excMsg = "boom",
+      appliedEdits = applied,
+      discloseJoined = false,
+    )
+    check result.isErr
+    check result.error == "Failed to apply text edits: boom"
+    check "joined transaction" notin result.error
+    check buffer.inTransaction
+    check buffer.getLine(0) == "hellox world"
+    check applied.len == 1
+    check buffer.commitTransaction().isOk
+    check buffer.getLine(0) == "hellox world"
+
+  test "abortTextEditsOnException discloses a failed rollback and keeps the applied list":
+    # A rollback that fails partway must disclose that edits may remain
+    # applied and must NOT clear the tracking list: the buffer state can no
+    # longer be trusted. A pending snapshot would give an O(1) rollback that
+    # cannot fail, so clear it to force the per-change undo path.
+    let buffer = newTextBuffer("hello world")
+    check buffer.beginTransaction("LSP TextEdits").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    buffer.currentTransaction.get.changes.add(
+      BufferChange(
+        startSeq: buffer.changeSeq,
+        endSeq: buffer.changeSeq + 1,
+        kind: ckInsertLine,
+        insertLineIdx: 999,
+        insertLineText: "x",
+      )
+    )
+    buffer.pendingSnapshot = none(PieceTableSnapshot)
+    var applied = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let result = abortTextEditsOnException(
+      buffer, ownTransaction = true, excMsg = "boom", appliedEdits = applied
+    )
+    check result.isErr
+    check "Failed to apply text edits: boom" in result.error
+    check "rollback failed" in result.error
+    check "some edits may remain applied" in result.error
+    check applied.len == 1
+    # The partial rollback cleaned up the transaction state.
+    check not buffer.inTransaction
+
   test "applyTextEdits with multiline buffer":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let edits = @[
@@ -948,6 +1194,37 @@ suite "LspIntegration - applyTextEdits":
     let result = applyTextEdits(buffer, @[edit])
     check result.isOk
     check buffer.getTextString() == "Q"
+
+  test "applyTextEdits rejects start position past the end of its line":
+    # A server position whose character exceeds the line's UTF-16 length
+    # must fail instead of silently clamping to the end of line.
+    let buffer = newTextBuffer("abc")
+    let edit = TextEdit(range: newRange(0, 5, 0, 5), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isErr
+    check "past the end of its line" in result.error
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "abc"
+
+  test "applyTextEdits rejects start past EOL after multibyte characters":
+    # "あいう" is 3 UTF-16 units; character 4 exceeds the line.
+    let buffer = newTextBuffer("あいう")
+    let edit = TextEdit(range: newRange(0, 4, 0, 4), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isErr
+    check "past the end of its line" in result.error
+    check buffer.getLine(0) == "あいう"
+
+  test "applyTextEdits rejects end position past the end of its line":
+    # Same rejection for the delete end. "def" is 3 UTF-16 units, so
+    # character 10 points past the end of line 1.
+    let buffer = newTextBuffer("abc\ndef")
+    let edit = TextEdit(range: newRange(0, 0, 1, 10), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isErr
+    check "past the end of its line" in result.error
+    check not buffer.inTransaction
+    check buffer.getTextString() == "abc\ndef"
 
 suite "LspIntegration - applyLspFoldingRanges":
   test "applyLspFoldingRanges with empty ranges":
@@ -1740,6 +2017,69 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.isOk
     check result.get.modifiedCount == 0
 
+  test "applyWorkspaceEdit surfaces an apply failure as an err":
+    # Regression: a failing edit (here an out-of-bounds line) must come back
+    # as an err through the raise-and-convert layer, not as an exception, and
+    # the transaction must be rolled back. The
+    # "(buffer state may be inconsistent)" suffix is reserved for the
+    # failed-rollback case, so it must not appear here.
+    let buffer = newTextBuffer("hello", some(tmpDir / "fail.txt"))
+    var buffers = @[buffer]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "fail.txt")] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: -1, character: 0),
+          `end`: Position(line: -1, character: 0),
+        ),
+        newText: "x",
+      )
+    ]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check "Failed to apply edits" in result.error
+    check "Failed to insert text" in result.error
+    check "buffer state may be inconsistent" notin result.error
+    check not buffer.inTransaction
+    check buffer.getLine(0) == "hello"
+
+  test "applyWorkspaceEdit failure reports already-modified buffers":
+    # One open buffer succeeds, then an unopened file fails to load: the err
+    # must disclose that earlier targets were already modified (the warning
+    # path rewritten to raise-and-convert).
+    let buffer = newTextBuffer("hello", some(tmpDir / "ok_modify.txt"))
+    var buffers = @[buffer]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "ok_modify.txt")] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
+        ),
+        newText: "HELLO",
+      )
+    ]
+    # Nonexistent directory: loadFile fails, so no file is ever created.
+    changes[pathToUri(tmpDir / "moe_nonexistent_dir" / "b.txt")] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "x",
+      )
+    ]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check "Failed to modify" in result.error
+    check "1 file(s) already modified" in result.error
+    check "ok_modify.txt" in result.error
+    check buffer.getLine(0) == "HELLO"
+
   test "applyWorkspaceEdit with changes field":
     var buffers = @[newTextBuffer("hello", some(tmpDir / "test.txt"))]
     var changes = initTable[string, seq[TextEdit]]()
@@ -1868,6 +2208,117 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "new text"
 
+  test "applyWorkspaceEdit writes unopened files when allowed (default)":
+    # User-initiated flows (rename) may still touch files the user has not
+    # opened: the default `allowUnopenedFileWrites = true` preserves that.
+    var buffers: seq[TextBuffer] = @[]
+    let targetPath = tmpDir / "unopened_default.txt"
+    writeFile(targetPath, "hello")
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(targetPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedFilePaths == @[targetPath]
+    check readFile(targetPath) == "world"
+
+  test "applyWorkspaceEdit refuses unopened files when disallowed":
+    # Server-initiated applyEdit must not write files the user has not opened:
+    # the whole edit is refused and nothing is modified.
+    var buffers: seq[TextBuffer] = @[]
+    let targetPath = tmpDir / "unopened_disallowed.txt"
+    writeFile(targetPath, "hello")
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(targetPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains("not open in the editor")
+    check result.error.contains(targetPath)
+    check readFile(targetPath) == "hello"
+
+  test "applyWorkspaceEdit refuses mixed targets when disallowed, nothing half-applied":
+    # An edit targeting both an open buffer and an unopened file must be
+    # refused whole: the open buffer is left untouched and the unopened file
+    # is not written.
+    let openPath = tmpDir / "mixed_open.txt"
+    let closedPath = tmpDir / "mixed_closed.txt"
+    writeFile(openPath, "aaa")
+    writeFile(closedPath, "bbb")
+    var buffers: seq[TextBuffer] = @[newTextBuffer("aaa", some(openPath))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(openPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "xxx")]
+    changes[pathToUri(closedPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "yyy")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains(closedPath)
+    check buffers[0].getTextString() == "aaa"
+    check readFile(closedPath) == "bbb"
+
+  test "applyWorkspaceEdit refuses unopened files via documentChanges when disallowed":
+    # The documentChanges branch must refuse an unopened target just like the
+    # changes branch: the whole edit is discarded and nothing is written.
+    var buffers: seq[TextBuffer] = @[]
+    let targetPath = tmpDir / "unopened_doc_disallowed.txt"
+    writeFile(targetPath, "hello")
+    let docEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: pathToUri(targetPath), version: some(1)
+      ),
+      edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")],
+    )
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(@[docEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains("not open in the editor")
+    check result.error.contains(targetPath)
+    check readFile(targetPath) == "hello"
+
+  test "applyWorkspaceEdit refuses mixed documentChanges targets when disallowed, nothing half-applied":
+    # An edit via documentChanges targeting both an open buffer and an unopened
+    # file must be refused whole: the open buffer is left untouched and the
+    # unopened file is not written.
+    let openPath = tmpDir / "mixed_doc_open.txt"
+    let closedPath = tmpDir / "mixed_doc_closed.txt"
+    writeFile(openPath, "aaa")
+    writeFile(closedPath, "bbb")
+    var buffers: seq[TextBuffer] = @[newTextBuffer("aaa", some(openPath))]
+    let docChanges = @[
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: pathToUri(openPath), version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 3), newText: "xxx")],
+      ),
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: pathToUri(closedPath), version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 3), newText: "yyy")],
+      ),
+    ]
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(docChanges)
+    )
+    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    check result.isErr
+    check result.error.contains(closedPath)
+    check buffers[0].getTextString() == "aaa"
+    check readFile(closedPath) == "bbb"
+
   test "applyWorkspaceEdit refuses file operations without applying edits":
     var buffers: seq[TextBuffer] = @[newTextBuffer("hello", some(tmpDir / "ro.txt"))]
     let edit = WorkspaceEdit(
@@ -1880,6 +2331,167 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.error.contains("file operations")
     check result.error.contains("rename")
     check buffers[0].getTextString() == "hello"
+
+  test "applyWorkspaceEdit refuses a non-file URI":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["http://example.com/file.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("only file:/// is allowed")
+    check result.error.contains("http://example.com/file.txt")
+
+  test "applyWorkspaceEdit refuses a file:// URI with a non-empty authority":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file://server/share/file.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("only file:/// is allowed")
+    check result.error.contains("file://server/share/file.txt")
+
+  test "applyWorkspaceEdit refuses a URI with a raw query or fragment":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "a.txt") & "?query=1"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("unsupported character")
+    check result.error.contains("?query=1")
+
+  test "applyWorkspaceEdit refuses an empty file:/// path":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///"] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("empty path")
+
+  test "applyWorkspaceEdit refuses a URI with an encoded NUL":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "a.txt").replace("a.txt", "a%00.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("unsupported character")
+    check result.error.contains("%00.txt")
+
+  test "applyWorkspaceEdit refuses a file:// URI with an extra leading slash":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:////tmp/x.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("extra leading slash")
+
+  test "applyWorkspaceEdit refuses an encoded extra leading slash":
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///%2Ftmp/x.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("extra leading slash")
+
+  test "applyWorkspaceEdit refuses a decoded empty path":
+    # "file:///%2F" decodes to "//", which is not a usable single-root path
+    var buffers: seq[TextBuffer] = @[]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///%2F"] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("extra leading slash")
+
+  test "applyWorkspaceEdit refuses short file:// URIs":
+    for uri in ["file://", "file://a"]:
+      var buffers: seq[TextBuffer] = @[]
+      var changes = initTable[string, seq[TextEdit]]()
+      changes[uri] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+      let edit = WorkspaceEdit(
+        changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+      )
+      let result = applyWorkspaceEdit(buffers, edit)
+      check result.isErr
+      check result.error.contains("only file:/// is allowed")
+
+  test "applyWorkspaceEdit refuses the whole documentChanges edit when a target is invalid":
+    var buffers = @[newTextBuffer("aaa", some(tmpDir / "ok.txt"))]
+    let docChanges = @[
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: pathToUri(tmpDir / "ok.txt"), version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")],
+      ),
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: "file:///tmp/bad%00.txt", version: some(1)
+        ),
+        edits: @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")],
+      ),
+    ]
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(docChanges)
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check buffers[0].getTextString() == "aaa"
+
+  test "applyWorkspaceEdit applies an edit to a URI with an encoded space":
+    var buffers = @[newTextBuffer("aaa", some(tmpDir / "my file.txt"))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "my file.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedCount == 1
+    check buffers[0].getTextString() == "AAA"
+
+  test "applyWorkspaceEdit refuses the whole edit when one of several targets is invalid":
+    var buffers: seq[TextBuffer] = @[newTextBuffer("aaa", some(tmpDir / "ok.txt"))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "ok.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]
+    changes["ftp://example.com/other.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check buffers[0].getTextString() == "aaa"
 
   test "parseWorkspaceEdit records resource operations":
     let node = %*{
@@ -2143,6 +2755,89 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
     check buffer.diagnostics[0].endCol == 7
     check buffer.diagnostics[1].startCol == 2 # a(0) 😀(1) b(2)
     check buffer.diagnostics[1].endCol == 4
+
+  test "applyDiagnosticsToBuffer does not store out-of-range start lines":
+    let buffer = newTextBuffer("line1\nline2")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(5, 0, 5, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "past EOF",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(-1, 0, -1, 3),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "negative line",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(0, 0, 0, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "valid",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    # Storage must match the marker pass: out-of-range start lines are skipped.
+    check buffer.diagnostics.len == 1
+    check buffer.diagnostics[0].startLine == 0
+    check buffer.diagnostics[0].message == "valid"
+
+  test "applyDiagnosticsToBuffer clamps an out-of-range end line":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(1, 0, 100, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "runs to EOF",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 1
+    check buffer.diagnostics[0].startLine == 1
+    check buffer.diagnostics[0].endLine == buffer.len - 1
+
+  test "applyDiagnosticsToBuffer degenerates a reversed range":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(2, 0, 0, 3),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "reversed",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 1
+    check buffer.diagnostics[0].startLine == 2
+    check buffer.diagnostics[0].endLine == 2
 
 suite "LspIntegration - Additional Request Methods (disabled)":
   test "startDeclarationRequest returns error when disabled":

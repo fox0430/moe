@@ -29,6 +29,11 @@ import ../[primitives, unicode_utils, logger]
 import ../buffer_backends/piece_table
 import core, internal_mutations
 
+type TransactionRollbackError* = object of ValueError
+  ## Raised by `withTransaction` when the rollback itself fails: the buffer
+  ## can no longer be trusted. Callers catching CatchableError broadly must
+  ## re-raise it (an in-flight Defect is re-raised unchanged).
+
 # Forward declaration: undoChange calls redoChange for ckTransaction
 # roll-forward on partial failure. The reverse direction (redoChange ->
 # undoChange) does not need one because undoChange is defined first.
@@ -250,18 +255,48 @@ template withTransaction*(
   ## `body` runs inside a `block`, so a bare `break` escapes the template rather
   ## than an enclosing loop and leaves the result uninitialized: every `break` in
   ## `body` must belong to a loop `body` itself owns.
+  ##
+  ## If the rollback itself fails, a TransactionRollbackError is raised:
+  ## the buffer can no longer be trusted, so the failure is converted to an
+  ## err / status message at each call boundary.
   block:
     let beginRes = b.beginTransaction(description, cursorPos)
     if beginRes.isErr:
       beginRes
     else:
       var completed = false
+      var inFlight: ref Exception = nil
       try:
         body
         completed = true
+      except Exception as exc:
+        # Capture the exception now: getCurrentException() inside finally
+        # would see a stale one left over from an earlier handler on this
+        # thread, and a rollback failure would then re-raise an unrelated
+        # Defect instead of the TransactionRollbackError.
+        inFlight = exc
+        raise
       finally:
         if not completed:
-          discard b.rollbackTransaction()
+          let rollbackResult = b.rollbackTransaction()
+          if rollbackResult.isErr:
+            # Keep an in-flight Defect a Defect: demoting it to a catchable
+            # TransactionRollbackError would let blanket handlers swallow a
+            # fatal signal. A body that returned err(...) has no in-flight
+            # exception to recover the message from.
+            let cause =
+              if inFlight != nil:
+                " (original error: " & inFlight.msg & ")"
+              else:
+                " (original error unavailable: body returned without raising)"
+            logError "buffer",
+              "withTransaction: failed to roll back: " & rollbackResult.error & cause
+            if inFlight != nil and inFlight of Defect:
+              raise inFlight
+            raise newException(
+              TransactionRollbackError,
+              "withTransaction: failed to roll back: " & rollbackResult.error & cause,
+            )
       b.commitTransaction()
 
 template withTransaction*(
@@ -286,9 +321,6 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.modifiedLines = b.pendingSnapshotModifiedLines
     b.foldState = b.pendingSnapshotFolds
     b.bookmarks = b.pendingSnapshotBookmarks
-    # Drop every pending-snapshot artifact, matching commit/push cleanup, so a
-    # later ckSnapshot delta is never computed against a rolled-back base.
-    b.discardPendingSnapshot()
   else:
     for i in countdown(transaction.changes.len - 1, 0):
       let r = b.undoChange(transaction.changes[i])
@@ -296,7 +328,15 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
         # Clean up transaction state even if rollback partially fails
         b.inTransaction = false
         b.currentTransaction = none(BufferTransaction)
+        b.discardPendingSnapshot()
         return err("Failed to rollback transaction: " & r.error)
+
+  # Drop every pending-snapshot artifact, matching the commit path, so a later
+  # capture/edit never reuses a stale pre-transaction base. Required for the
+  # non-PieceTable backends too: beginTransaction captured the hasPending*
+  # flags, and a zero-change rollback must clear them or the next
+  # pushUndoChange attaches a stale pre-mutation snapshot.
+  b.discardPendingSnapshot()
 
   # Restore changeSeq to its value at transaction start
   b.changeSeq = transaction.startSeq
@@ -326,6 +366,9 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     return Result[BufferPosition, string].err "Nothing to undo"
 
   var undoneChanges: seq[BufferChange] = @[]
+  var poppedOriginals: seq[BufferChange] = @[]
+  let initialChangeSeq = b.changeSeq
+  let initialChangeListIndex = b.changeListIndex
 
   # Undo 'count' changes
   for i in 0 ..< count:
@@ -349,14 +392,26 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let r = b.undoChange(change)
     if r.isErr:
-      # Restore the change to undo stack if undo failed
-      b.undoStack.addLast(change)
-      # Restore previously undone changes to undo stack
+      # Roll forward the already-undone changes so the buffer returns to the
+      # pre-call state, then restore the originals to undoStack. The in-flight
+      # redo entries carry post-mutation savedModifiedLines/savedLineMarkers,
+      # so they must not be reused as undoStack entries.
       for j in countdown(undoneChanges.len - 1, 0):
-        b.undoStack.addLast(undoneChanges[j])
+        let rr = b.redoChange(undoneChanges[j])
+        if rr.isErr:
+          logError(
+            "buffer", "Failed to roll forward after partial undo(count): " & rr.error
+          )
+      b.changeSeq = initialChangeSeq
+      b.advanceContentVersion()
+      b.changeListIndex = initialChangeListIndex
+      b.undoStack.addLast(change)
+      for j in countdown(poppedOriginals.len - 1, 0):
+        b.undoStack.addLast(poppedOriginals[j])
       return err("Undo failed: " & r.error)
 
     undoneChanges.add(redoEntry)
+    poppedOriginals.add(change)
 
     # Restore changeSeq to the pre-mutation value. For transactions this
     # collapses N inc'd changes back to the saved value in one step, fixing
@@ -402,6 +457,13 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     return ok(getChangePosition(undoneChanges[^1]))
   else:
     return ok(BufferPosition(line: 0, column: 0))
+
+proc discardRedoEntry*(b: TextBuffer, changeId: int64): bool =
+  ## Remove the newest redo entry when it matches changeId, without applying
+  ## it. Used to keep the user from redoing a rolled-back trim.
+  if b.redoStack.len > 0 and b.redoStack.peekLast.id == changeId:
+    discard b.redoStack.popLast()
+    return true
 
 proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Re-apply a single change (internal helper)
@@ -494,6 +556,9 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     return Result[BufferPosition, string].err "Nothing to redo"
 
   var redoneChanges: seq[BufferChange] = @[]
+  var poppedOriginals: seq[BufferChange] = @[]
+  let initialChangeSeq = b.changeSeq
+  let initialChangeListIndex = b.changeListIndex
 
   # Redo 'count' changes
   for i in 0 ..< count:
@@ -517,14 +582,26 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let r = b.redoChange(change)
     if r.isErr:
-      # Restore the change to redo stack if redo failed
-      b.redoStack.addLast(change)
-      # Restore previously redone changes to redo stack
+      # Roll back the already-redone changes so the buffer returns to the
+      # pre-call state, then restore the originals to redoStack. The in-flight
+      # undo entries carry pre-mutation savedModifiedLines/savedLineMarkers,
+      # so they must not be reused as redoStack entries.
       for j in countdown(redoneChanges.len - 1, 0):
-        b.redoStack.addLast(redoneChanges[j])
+        let rr = b.undoChange(redoneChanges[j])
+        if rr.isErr:
+          logError(
+            "buffer", "Failed to roll back after partial redo(count): " & rr.error
+          )
+      b.changeSeq = initialChangeSeq
+      b.advanceContentVersion()
+      b.changeListIndex = initialChangeListIndex
+      b.redoStack.addLast(change)
+      for j in countdown(poppedOriginals.len - 1, 0):
+        b.redoStack.addLast(poppedOriginals[j])
       return err("Redo failed: " & r.error)
 
     redoneChanges.add(undoEntry)
+    poppedOriginals.add(change)
 
     # Restore changeSeq to the post-mutation value (symmetric with undo()).
     b.changeSeq = change.endSeq

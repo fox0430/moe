@@ -22,6 +22,8 @@ import std/strformat
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
+import logger
+
 when defined(posix):
   import std/posix
 
@@ -118,8 +120,8 @@ proc readAllOutput*(
     while not stdout.atEof():
       let line = await stdout.readLine(sep = "\n")
       lines.add(line)
-  except AsyncStreamError:
-    discard
+  except AsyncStreamError as e:
+    logError "background_process", "Failed to read process output: " & e.msg
   except CancelledError:
     discard
 
@@ -184,9 +186,12 @@ proc waitForAsync*(
   # from under a live read would be a use-after-free.
   bp.kill()
   try:
+    # Wait for EOF or KillGrace, then finish any reader cancellation below.
     discard await reader.withTimeout(KillGrace)
   except CancelledError:
     discard
+  # Ensure the reader is stopped before closing the handle.
+  await reader.cancelAndWait()
   await bp.reapAsync()
   # `$Duration` keeps sub-second timeouts honest; `timeout.seconds` would
   # report "0" for anything shorter than a second.

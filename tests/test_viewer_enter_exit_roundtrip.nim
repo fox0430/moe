@@ -29,7 +29,7 @@
 ## LSP-driven viewers, the remaining split viewers, and nested entry.
 
 import std/[unittest, os, options, json, importutils, tables]
-from std/strutils import startsWith
+from std/strutils import contains, startsWith
 
 import
   ../src/moepkg/[
@@ -463,6 +463,27 @@ suite "Viewer round-trip - References":
     check e.state.jumpList.list[^1].line == 6
     check e.state.jumpList.list[^1].column == 1
 
+  test "hrReferencesJumpTo rejects an empty or NUL path":
+    # Defense-in-depth guard for server-sourced paths: refused before any
+    # viewer teardown, so neither the mode nor the jump list moves.
+    let e = createTestEditor()
+
+    discard e.processResult(
+      HandlerResult(kind: hrReferencesJumpTo, jumpToPath: "", jumpToLine: 0),
+      e.activeBuffer(),
+    )
+    check e.state.statusMessage == "Invalid reference target path"
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.state.jumpList.list.len == 0
+
+    discard e.processResult(
+      HandlerResult(kind: hrReferencesJumpTo, jumpToPath: "bad\0path", jumpToLine: 0),
+      e.activeBuffer(),
+    )
+    check e.state.statusMessage == "Invalid reference target path"
+    check e.activeWindow.mode == EditorMode.Normal
+    check e.state.jumpList.list.len == 0
+
 suite "Viewer round-trip - DocumentSymbol":
   test "poll entry + hrDocumentSymbolQuit restores cursor/viewport/buffer":
     let (e, path) = editorOnFile("moe_rt_symbols_quit.nim")
@@ -600,6 +621,85 @@ suite "Viewer round-trip - CallHierarchy":
     check win.cursor.column == 3
     check win.viewport.topLine == 4
     check win.viewport.leftColumn == 2
+
+  test "hrCallHierarchyJumpTo opens the target file URI":
+    # The item's URI drives the jump target: a well-formed file:// URI opens
+    # that file and anchors the jump list at the pre-viewer origin.
+    let (e, path) = editorOnFile("moe_rt_ch_jump.nim")
+    defer:
+      removeFile(path)
+    let targetPath = getTempDir() / "moe_rt_ch_jump_target.nim"
+    writeFile(targetPath, TestLines)
+    defer:
+      removeFile(targetPath)
+    e.lsp.enabled = true
+    let win = e.activeWindow
+    let origBuf = win.buffer
+    e.placeOrigin(line = 5, column = 3, topLine = 4, leftColumn = 2)
+
+    let reqId = 7104
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    e.injectLspResponse(
+      reqId,
+      incomingCallsResponseJson(
+        @[makeCallHierarchyItem("caller", "file://" & targetPath, 2)]
+      ),
+    )
+    e.pollLspCallHierarchy()
+    check win.mode == EditorMode.CallHierarchy
+
+    discard e.processResult(
+      HandlerResult(
+        kind: hrCallHierarchyJumpTo,
+        callHierarchyJumpUri: "file://" & targetPath,
+        callHierarchyJumpLine: 2,
+        callHierarchyJumpColumn: 0,
+      ),
+      e.activeBuffer(),
+    )
+    check win.mode == EditorMode.Normal
+    check win.modeState.kind == mskNone
+    check win.buffer != origBuf
+    check win.buffer.filePath.isSome
+    check win.buffer.filePath.get == targetPath
+    check win.cursor.line == 2
+    check e.state.jumpList.list.len > 0
+    check e.state.jumpList.list[^1].line == 5
+    check e.state.jumpList.list[^1].column == 3
+
+  test "hrCallHierarchyJumpTo rejects a non-file URI":
+    # Server-sourced URIs like "untitled:" must not open a buffer: the viewer
+    # stays put and the refusal is surfaced in the status line.
+    let (e, path) = editorOnFile("moe_rt_ch_jump_reject.nim")
+    defer:
+      removeFile(path)
+    e.lsp.enabled = true
+    let win = e.activeWindow
+    e.placeOrigin(line = 5, column = 3, topLine = 4, leftColumn = 2)
+
+    let reqId = 7105
+    e.injectPending(lrfCallHierarchyIncoming, reqId)
+    e.injectLspResponse(
+      reqId,
+      incomingCallsResponseJson(
+        @[makeCallHierarchyItem("caller", "untitled:Untitled-1", 0)]
+      ),
+    )
+    e.pollLspCallHierarchy()
+    check win.mode == EditorMode.CallHierarchy
+
+    discard e.processResult(
+      HandlerResult(
+        kind: hrCallHierarchyJumpTo,
+        callHierarchyJumpUri: "untitled:Untitled-1",
+        callHierarchyJumpLine: 0,
+        callHierarchyJumpColumn: 0,
+      ),
+      e.activeBuffer(),
+    )
+    check win.mode == EditorMode.CallHierarchy
+    check win.modeState.kind == mskCallHierarchy
+    check e.state.statusMessage.contains("non-file")
 
 suite "Viewer round-trip - split-window viewers":
   # These modes do not swap the window buffer, so the round-trip contract is

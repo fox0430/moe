@@ -20,12 +20,15 @@
 ## Integration tests for command_registry
 ## These tests cover executeCommand and executeOperatorOnRange
 
-import std/[unittest, options, strutils, tables, sets]
+import std/[options, os, sets, strutils, tables, unittest]
 
 import pkg/results
 
 import ../src/moepkg/[buffer, types, motion, key_bindings, config, modes, registers]
 import ../src/moepkg/command_registry {.all.}
+import ../src/moepkg/command_handlers/visual_commands
+
+import clipboard_test_helper
 
 proc createTestContext(buffer: TextBuffer): CommandContext =
   let state = EditorState(activeWindow: EditorWindow(), config: newEditorConfig())
@@ -925,7 +928,8 @@ suite "executeCommand - Edge cases":
     let result = registry.executeCommand(ctx, cmd)
 
     check result.isOk
-    check buffer.len == 0 or buffer[0] != "\n"
+    check buffer.len == 1
+    check buffer[0] == ""
 
   test "operator cancelled when motion fails":
     let buffer = newTextBuffer("hello")
@@ -963,6 +967,53 @@ suite "executeCommand - Edge cases":
 
     check result.isOk
     check ctx.keyBindingRegistry.sequenceState.keys.len == 0
+
+  test "execute converts TransactionRollbackError to err":
+    # Regression: every command path funnels through execute, so a
+    # TransactionRollbackError from a failed rollback must surface as an err
+    # status message, not escape to the crash handler.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    let cmdId = custom("test.raise.rollback")
+    registry.register(
+      cmdId,
+      "test.raise.rollback",
+      "test",
+      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+        raise newException(
+          TransactionRollbackError, "withTransaction: failed to roll back: boom"
+        ),
+    )
+
+    let result = registry.execute(ctx, cmdId)
+    check result.isErr
+    check "boom" in result.error
+    check "buffer state may be inconsistent" in result.error
+
+  test "execute by string ID converts TransactionRollbackError to err":
+    # The string-ID overload shares the same conversion: a command invoked
+    # from the Command line must not crash the editor either.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    let cmdId = custom("test.raise.rollback.str")
+    registry.register(
+      cmdId,
+      "test.raise.rollback.str",
+      "test",
+      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+        raise newException(
+          TransactionRollbackError, "withTransaction: failed to roll back: boom"
+        ),
+    )
+
+    let result = registry.execute(ctx, "test.raise.rollback.str")
+    check result.isErr
+    check "boom" in result.error
+    check "buffer state may be inconsistent" in result.error
 
 suite "Handler - Paste operations":
   test "paste after cursor (p) - characterwise":
@@ -1045,6 +1096,92 @@ suite "Handler - Paste operations":
     let result = registry.execute(ctx, custom("paste.after"))
     check result.isErr
     check "Nothing to paste" in result.error
+
+  test "paste failure keeps an outer session transaction open":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("X", false)
+    # Simulate a live Insert session: the paste must not roll it back.
+    check buffer.beginTransaction("Insert mode edit").isOk
+    let registry = createTestRegistry()
+
+    # Out-of-bounds cursor fails insertText with count == 1 (no transaction
+    # owned by the paste): the session transaction must stay open.
+    ctx.cursor = BufferPosition(line: 5, column: 0)
+    let result = registry.execute(ctx, custom("paste.after"))
+
+    check result.isErr
+    check buffer.inTransaction
+    check buffer[0] == "hello"
+    check buffer.commitTransaction().isOk
+
+  test "paste failure rolls back own transaction and restores cursor":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("X", false)
+    let registry = createTestRegistry()
+
+    # count = 2 opens the paste's own transaction; the out-of-bounds cursor
+    # fails insertText before any move, so the error path must roll back the
+    # transaction and leave the cursor where it was.
+    ctx.cursor = BufferPosition(line: 5, column: 0)
+    let result = registry.execute(ctx, custom("paste.after"), @["2"])
+
+    check result.isErr
+    check not buffer.inTransaction
+    check buffer[0] == "hello"
+    check ctx.cursor == BufferPosition(line: 5, column: 0)
+
+  test "paste exception rollback restores buffer and cursor (own transaction)":
+    # Direct unit test of the paste loops' exception tail.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    check buffer.beginTransaction("paste 2 times").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    let savedCursor = BufferPosition(line: 0, column: 0)
+    let result = rollbackPasteOnException(ctx, "boom", actualCount = 2, savedCursor)
+
+    check result.isErr
+    check "Paste failed: boom" in result.error
+    check not buffer.inTransaction
+    check buffer[0] == "hello"
+    check ctx.cursor == savedCursor
+
+  test "paste exception keeps a joined session transaction open":
+    # actualCount == 1 in a live session: the paste owns no transaction, so
+    # nothing is rolled back and the partial edit stays in the session.
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    check buffer.beginTransaction("Insert mode edit").isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 5), "x").isOk
+    let savedCursor = BufferPosition(line: 0, column: 5)
+    let result = rollbackPasteOnException(ctx, "boom", actualCount = 1, savedCursor)
+
+    check result.isErr
+    check "Paste failed: boom" in result.error
+    check "joined transaction" in result.error
+    check "may remain applied" in result.error
+    check buffer.inTransaction
+    check buffer[0] == "hellox"
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+    check buffer.commitTransaction().isOk
+    check buffer[0] == "hellox"
+
+  test "paste exception without any transaction reports a plain failure":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let result = rollbackPasteOnException(
+      ctx, "boom", actualCount = 1, BufferPosition(line: 0, column: 0)
+    )
+
+    check result.isErr
+    check result.error == "Paste failed: boom"
+    check not buffer.inTransaction
 
   test "paste before cursor (P) - characterwise":
     let buffer = newTextBuffer("hello world")
@@ -1783,7 +1920,7 @@ suite "Handler - Join lines":
 
     let result = registry.execute(ctx, custom("join.lines"))
     # Joining on last line returns an error because there's nothing to join
-    check result.isErr or buffer.len == 1
+    check result.isErr
 
 suite "Handler - Toggle case":
   test "toggle case (~)":
@@ -1793,7 +1930,7 @@ suite "Handler - Toggle case":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("toggle.case")).isOk
-    check buffer[0] == "hEllo" or buffer[0][0] == 'h' # First char toggled
+    check buffer[0] == "hello"
 
   test "toggle case multiple chars (3~)":
     let buffer = newTextBuffer("Hello")
@@ -2856,6 +2993,316 @@ suite "Handler - Clipboard operations":
     check result.isErr
     check "No text selected" in result.error
 
+  test "clipboard copy then unnamed paste picks up the copied content":
+    # The copy writes CLIPBOARD only and the unnamed put reads it, so the
+    # put returns the copied content instead of the previously yanked one.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.Visual, kind = vskChar)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        let registry = createTestRegistry()
+
+        # Simulate a prior yank: both selections hold the yanked content.
+        writeFile(clipboardFilePath(fakeDir), "yanked content")
+        writeFile(primaryFilePath(fakeDir), "yanked content")
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        ctx.state.registers.setYankedRegister("yanked content", false)
+
+        let selectedText = getVisualSelectionText(buffer, ctx.state.visualSelection)
+        check selectedText.len > 0
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # The copy writes CLIPBOARD only; verify the write landed.
+        check readFile(clipboardFilePath(fakeDir)) == selectedText
+        check readFile(primaryFilePath(fakeDir)) == "yanked content"
+
+        # Put picks up the copied content, not the yanked one.
+        check ctx.state.registers.getNoNamedRegister().getContent() == selectedText
+        check ctx.state.registers.getNoNamedRegister().isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy on V-line keeps the linewise type on unnamed put":
+    # Regression: a single-line linewise copy writes no trailing newline,
+    # so the read cannot tell linewise from characterwise by content alone;
+    # the copy must update the internal register to keep the linewise type.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        let registry = createTestRegistry()
+
+        # A prior yank leaves old content, so the read would differ from the
+        # internal register and re-infer the type from the newline alone.
+        writeFile(clipboardFilePath(fakeDir), "old yanked content")
+        writeFile(primaryFilePath(fakeDir), "old yanked content")
+        ctx.state.registers.setClipboardTool(cbtXclip)
+        ctx.state.registers.setYankedRegister("old yanked content", false)
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        check readFile(clipboardFilePath(fakeDir)) == "hello world"
+        check readFile(primaryFilePath(fakeDir)) == "old yanked content"
+
+        # The put returns the copied line and keeps the linewise type.
+        check ctx.state.registers.getNoNamedRegister().getContent() == "hello world"
+        check ctx.state.registers.getNoNamedRegister().isLine == true
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy then unnamed put keeps the copied content inside the wl claim window":
+    # A non-forking wl-copy cannot confirm the copy has landed, so a put
+    # shortly after reads the pre-copy content; the internal register must
+    # be kept instead.
+    let fakeDir = installFakeWlClipboardTool("old external content", stayRunning = true)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
+        let registry = createTestRegistry()
+        ctx.state.registers.setClipboardTool(cbtWlClipboard)
+
+        # The fake selection holds pre-copy content so the read differs
+        # from the copied content.
+        writeFile(clipboardFilePath(fakeDir), "old external content")
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # Wait for the fake wl-copy to record the copy before reading back.
+        waitForClipboardWrite(fakeDir, "hello world")
+
+        # Restart the claim window so the wait above cannot move the put
+        # past it.
+        restartClipboardClaimWindow(ctx.state.registers)
+
+        # The first read after a write returns the pre-copy content; the put
+        # keeps the internal register (the copied content with its type).
+        var reg = ctx.state.registers.getNoNamedRegister()
+        check reg.getContent() == "hello world"
+        check reg.isLine == true
+
+        # After the claim window has expired, an external change is picked
+        # up by the next put.
+        expireClipboardClaimWindow(ctx.state.registers)
+        writeFile(clipboardFilePath(fakeDir), "external copy")
+        reg = ctx.state.registers.getNoNamedRegister()
+        check reg.getContent() == "external copy"
+        check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy then unnamed put adopts an external change made right after the copy":
+    # A forking wl-copy confirms the copy, so no claim window opens and an
+    # external copy right after moe's copy is picked up by the next put.
+    let fakeDir = installFakeWlClipboardTool("old external content")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
+        let registry = createTestRegistry()
+        ctx.state.registers.setClipboardTool(cbtWlClipboard)
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # The write is confirmed (the fake exits right away), so the
+        # immediate external change is adopted by the next put.
+        writeFile(clipboardFilePath(fakeDir), "external copy")
+        let reg = ctx.state.registers.getNoNamedRegister()
+        check reg.getContent() == "external copy"
+        check reg.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy then + register put returns the copied content inside the wl claim window":
+    # Regression: `"+p` right after a copy must return the copied content,
+    # symmetric with the unnamed put.
+    let fakeDir = installFakeWlClipboardTool("old external content", stayRunning = true)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
+        let registry = createTestRegistry()
+        ctx.state.registers.setClipboardTool(cbtWlClipboard)
+
+        # Prime the `+` register with pre-copy content.
+        writeFile(clipboardFilePath(fakeDir), "old external content")
+        check ctx.state.registers.getClipboardRegister('+').getContent() ==
+          "old external content"
+
+        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+
+        # Wait for the fake wl-copy write to land.
+        waitForClipboardWrite(fakeDir, "hello world")
+
+        # Restart the claim window so the wait above cannot move the put
+        # past it.
+        restartClipboardClaimWindow(ctx.state.registers)
+
+        let reg = ctx.state.registers.getClipboardRegister('+')
+        check reg.getContent() == "hello world"
+        check reg.isLine == true
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard copy reports a failed CLIPBOARD write":
+    # A failed write must surface as an error, otherwise the following put
+    # would paste the pre-copy content instead of the selected text.
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.Visual, kind = vskChar)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+    let registry = createTestRegistry()
+
+    # An empty PATH makes the xclip write fail deterministically.
+    let originalPath = getEnv("PATH")
+    putEnv("PATH", "")
+    try:
+      check registry.execute(ctx, builtin(bcEditCopy)).isErr
+    finally:
+      putEnv("PATH", originalPath)
+
+  test "clipboard cut on V-line preserves full lines in the delete register":
+    # Regression: cut on V-mode used to write a char-range slice (missing
+    # head/tail bytes) while visualDelete removed whole lines; the copy step
+    # must respect the vskLine kind so the region matches the deletion.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world\nfoo bar baz\ntail")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 3, 1, 4, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+        let registry = createTestRegistry()
+
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+
+        # Full lines removed from buffer.
+        check buffer.len == 1
+        check buffer[0] == "tail"
+        # Delete register captured the full lines line-wise.
+        let noname = ctx.state.registers.getNoNamedRegister()
+        check noname.getContent() == "hello world\nfoo bar baz"
+        check noname.isLine == true
+        check ctx.state.visualSelection.active == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard cut on V-line captures both lines when kind is vskLine":
+    # A tighter version of the above: verify getVisualSelectionText (invoked
+    # by handleClipboardCopy) matches the deleted region, not the char span.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("first\nsecond")
+        let ctx = createTestContext(buffer)
+        # Deliberately place start.col past the end of "first" and current.col
+        # mid-way through "second" so a naive char-range would drop bytes on
+        # both ends.
+        ctx.setupVisual(0, 5, 1, 2, mode = EditorMode.VisualLine, kind = vskLine)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+
+        check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
+          "first\nsecond"
+
+        let registry = createTestRegistry()
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+        check buffer.len == 1
+        check buffer[0] == ""
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard cut on block selection captures rectangle":
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("abcdef\nghijkl\nmnopqr")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 1, 2, 3, mode = EditorMode.VisualBlock, kind = vskBlock)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+
+        check getVisualSelectionText(buffer, ctx.state.visualSelection) ==
+          "bcd\nhij\nnop"
+
+        let registry = createTestRegistry()
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+        check buffer[0] == "aef"
+        check buffer[1] == "gkl"
+        check buffer[2] == "mqr"
+        # Rectangle delete stores characterwise (isLine == false).
+        let noname = ctx.state.registers.getNoNamedRegister()
+        check noname.getContent() == "bcd\nhij\nnop"
+        check noname.isLine == false
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard cut on char selection unchanged":
+    # Regression guard: vskChar must still copy the char range only.
+    let fakeDir = installFakeClipboardTool(fakeClipboardContent)
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let buffer = newTextBuffer("hello world")
+        let ctx = createTestContext(buffer)
+        ctx.setupVisual(0, 2, 0, 6, mode = EditorMode.Visual, kind = vskChar)
+        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+
+        check getVisualSelectionText(buffer, ctx.state.visualSelection) == "llo w"
+
+        let registry = createTestRegistry()
+        check registry.execute(ctx, builtin(bcEditCut)).isOk
+        check buffer[0] == "heorld"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboard cut continues the delete when the CLIPBOARD write fails":
+    # A failed copy must not cancel the delete half.
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 2, 0, 6, mode = EditorMode.Visual, kind = vskChar)
+    ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtXclip)
+    let registry = createTestRegistry()
+
+    # An empty PATH makes the xclip write fail deterministically.
+    let originalPath = getEnv("PATH")
+    putEnv("PATH", "")
+    try:
+      check registry.execute(ctx, builtin(bcEditCut)).isErr
+    finally:
+      putEnv("PATH", originalPath)
+
+    check buffer[0] == "heorld"
+    check ctx.state.visualSelection.active == false
+
 suite "Handler - Visual Paragraph motion":
   test "visual move paragraph forward":
     let buffer = newTextBuffer("line1\nline2\n\nline4\nline5")
@@ -3382,9 +3829,11 @@ suite "Handler - Fold Operations":
     ctx.setupVisual(1, 0, 2, 0)
     let registry = createTestRegistry()
 
-    discard registry.execute(ctx, builtin(bcFoldCreate))
-    # Just check it doesn't crash
-    check true # Just verify no crash
+    check registry.execute(ctx, builtin(bcFoldCreate)).isOk
+    let fold = buffer.foldState.getFoldAt(1)
+    check fold.isSome
+    check fold.get.startLine == 1
+    check fold.get.endLine == 2
 
   test "fold delete":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -5375,6 +5824,31 @@ suite "Operator + Word End Backward (ge) motions":
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
 
+  test "ge with count across lines (2ge)":
+    # Second iteration must scan the line reached by the first iteration
+    let buffer = newTextBuffer("hello world\nfoo")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(1, 0) # on 'f' of "foo"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 2)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge with multibyte characters":
+    # Columns are rune indices, not byte offsets
+    let buffer = newTextBuffer("こんにちは 世界")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on '世'
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4)
+      # 'は' (end of "こんにちは")
+
   test "ge with count exceeding available words":
     # 10ge but only 2 word ends exist; should stop at the earliest one
     let buffer = newTextBuffer("hello world")
@@ -5842,6 +6316,20 @@ suite "executeCommand - auto-open folds on edit":
     check registry.executeCommand(ctx, cmd).isOk
     check not buffer.foldState.folds[0].collapsed
 
+  test "clipboard paste opens a collapsed fold at the cursor":
+    # edit.paste modifies the buffer at the cursor, so the fold auto-open must
+    # fire before the handler runs — even when the handler itself errors out
+    # (clipboard is disabled in the test context).
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(0, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0) # on the fold start line
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.paste", count: 1)
+    discard registry.executeCommand(ctx, cmd)
+    check not buffer.foldState.folds[0].collapsed
+
   test "operator delete opens a collapsed fold at the cursor":
     let buffer = newTextBuffer("hello world\n1\n2\n3")
     check buffer.foldState.addFold(0, 2, collapsed = true)
@@ -6005,6 +6493,77 @@ suite "executeCommand - fold auto-open allowlists stay in sync":
     for op in VisualEditOperatorTypes:
       check op in ops
 
+suite "executeCommand - count prefix respects handler maxArgs":
+  # executeCommand prepends an explicit count to the handler args so commands
+  # like `3x` reach the handler as args=["3"]. Handlers registered with
+  # maxArgs=0 (visual.yank, scroll.cursor.*, ...) reject that prefixed arg
+  # with "Too many arguments", so the prefix must only apply when the target
+  # handler accepts an argument. An explicitly typed count of 1 (hasCount)
+  # still counts: `1G` must reach the handler as count=1, not as "no count".
+
+  test "count is not prefixed for a maxArgs=0 handler (2y visual yank)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctCustom, commandId: "visual.yank", count: 2, hasCount: true)
+    check registry.executeCommand(ctx, cmd).isOk
+    check "hello" in ctx.state.registers.getNoNamedRegister().getContent()
+
+  test "count is not prefixed for a maxArgs=0 scroll handler (2zz)":
+    let buffer = newTextBuffer(
+      "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25"
+    )
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 12, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 0
+    ctx.motionController.viewportManager.viewport.height = 24
+    let registry = createTestRegistry()
+
+    let cmd = Command(
+      kind: ctCustom, commandId: "scroll.cursor.center", count: 2, hasCount: true
+    )
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.motionController.viewportManager.viewport.topLine > 0
+
+  test "count is still prefixed for a maxArgs>=1 handler (3x)":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctCustom, commandId: "delete.char", count: 3, hasCount: true)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "lo"
+
+  test "count 1 with hasCount is still prefixed for a maxArgs>=1 handler (1G)":
+    # Without the prefix, visual.move.lastline falls back to its no-arg
+    # default (last line), so this asserts the hasCount + count 1 branch.
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(2, 0, 2, 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(
+      kind: ctCustom, commandId: "visual.move.lastline", count: 1, hasCount: true
+    )
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.cursor.line == 0
+
+  test "count 1 with hasCount is not prefixed for a maxArgs=0 handler (1y)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    let registry = createTestRegistry()
+
+    let cmd =
+      Command(kind: ctCustom, commandId: "visual.yank", count: 1, hasCount: true)
+    check registry.executeCommand(ctx, cmd).isOk
+    check "hello" in ctx.state.registers.getNoNamedRegister().getContent()
+
 suite "Register/buffer atomicity - failed edits must not touch registers":
   # deleteRange/deleteLine reject writes on a read-only buffer, so a read-only
   # buffer is the reproducible failure path. Registers live outside the buffer
@@ -6126,3 +6685,87 @@ suite "Register/buffer atomicity - failed edits must not touch registers":
 
     check registry.execute(ctx, custom("delete.line")).isErr
     check ctx.state.registers.getNamedRegister('a').getContent() == "SEED_A"
+
+suite "Operator engine - read-only failure rolls back and reports":
+  test "OpIndent on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 1, column: 0),
+      isLinewise: true,
+    )
+    let r = executeOperatorOnRange(ctx, OpIndent, range, 1)
+    check r.isErr
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+    check not buffer.inTransaction
+
+  test "OpOutdent on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("    line1\n    line2")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 1, column: 0),
+      isLinewise: true,
+    )
+    let r = executeOperatorOnRange(ctx, OpOutdent, range, 1)
+    check r.isErr
+    check buffer[0] == "    line1"
+    check buffer[1] == "    line2"
+    check not buffer.inTransaction
+
+  test "OpLowerCase on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("HELLO WORLD")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    let r = executeOperatorOnRange(ctx, OpLowerCase, range, 1)
+    check r.isErr
+    check buffer[0] == "HELLO WORLD"
+    check not buffer.inTransaction
+
+  test "OpUpperCase on read-only buffer keeps text and returns error":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    let r = executeOperatorOnRange(ctx, OpUpperCase, range, 1)
+    check r.isErr
+    check buffer[0] == "hello world"
+    check not buffer.inTransaction
+
+  test "OpUpperCase linewise on read-only buffer keeps all lines":
+    let buffer = newTextBuffer("hello\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    buffer.readOnly = true
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 1, column: 4),
+      isLinewise: true,
+    )
+    let r = executeOperatorOnRange(ctx, OpUpperCase, range, 1)
+    check r.isErr
+    check buffer[0] == "hello"
+    check buffer[1] == "world"
+    check not buffer.inTransaction

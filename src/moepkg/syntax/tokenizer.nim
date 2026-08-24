@@ -123,6 +123,10 @@ type
     inJsxMode*: bool
     jsxTagDepth*: int
     commentDepth*: int
+    docBlockDepth*: int
+      ## Nesting depth of a `{...}` preprocessor block inside a doc comment
+      ## (e.g. JSDoc `@param {string} x`), persisted across chunk boundaries
+      ## so a resume continues the block. 0 = not inside a block.
 
   HtmlState* = object
     inComment*: bool
@@ -135,6 +139,25 @@ type
 
   YamlState* = object
     isKey*: bool
+    blockScalarActive*: bool
+      ## True while a block scalar is in flight: boundary captures carry its
+      ## context so a chunk cut inside it can resume without the header line
+      ## above. Cleared when the scalar ends (`gtOther`); only read in
+      ## `gtLongStringLit`.
+    blockScalarParentIndent*: int
+      ## Parent indentation of the key line the scalar belongs to (-1 = top
+      ## level), derived at the header; the content loop compares against it.
+      ## Meaningful only while `blockScalarActive` is set.
+    blockScalarMinIndent*: int
+      ## Minimum content indentation seen so far (`|2`-style indicators
+      ## included); the end checks compare against it. Monotone
+      ## non-increasing, so a mid-scalar capture carries the exact min a
+      ## resume needs. Meaningful only while `blockScalarMinIndentSet` is set.
+    blockScalarMinIndentSet*: bool
+      ## True once `blockScalarMinIndent` holds a real minimum (a content
+      ## line folded in, or an explicit indicator). A chunk cut right after
+      ## the header must not persist the empty scan's 0 as the minimum: the
+      ## end checks would then never fire.
 
   MarkdownState* = object
     ## Per-line transient `inIndentedCode` lives on `GeneralTokenizer`, not here.
@@ -175,6 +198,11 @@ type
     stringQuote*: char
       ## Quote that opened the single-line string parked on a backslash escape.
 
+  NimState* = object
+    commentDepth*: int
+      ## Nesting depth of an unclosed `#[` / `##[` block comment, persisted
+      ## across chunk boundaries so a resume closes at the right level.
+
   LangState* = object
     ## Per-language tokenizer state, captured/restored as a whole record.
     ## 8-aligned members first, then bool-only, to minimise padding.
@@ -184,6 +212,7 @@ type
     haskell*: HaskellState
     python*: PythonState
     lua*: LuaState
+    nim*: NimState
     html*: HtmlState
     astro*: AstroState
     yaml*: YamlState
@@ -506,53 +535,16 @@ proc scanRadixNumber*(g: var GeneralTokenizer, position: int): int =
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
-import
-  syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp, syntax_csharp,
-  syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_gitignore, syntax_go,
-  syntax_haskell, syntax_html, syntax_java, syntax_javascript, syntax_latex,
-  syntax_lisp, syntax_lua, syntax_markdown, syntax_nim, syntax_python, syntax_rust,
-  syntax_fish, syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml,
-  syntax_json, syntax_jsonc, syntax_typescript, syntax_log, syntax_xml, syntax_zsh
+import syntax_markdown
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   let
     startPos = g.pos
     startState = g.state
-  case lang
-  of langAstro: g.astroNextToken
-  of langC: g.cNextToken
-  of langCommitEditMsg: g.commitEditMsgNextToken
-  of langCpp: g.cppNextToken
-  of langCsharp: g.csharpNextToken
-  of langDiff: g.diffNextToken
-  of langDockerfile: g.dockerfileNextToken
-  of langFish: g.fishNextToken
-  of langGitRebaseTodo: g.gitRebaseTodoNextToken
-  of langGitignore: g.gitignoreNextToken
-  of langGo: g.goNextToken
-  of langHaskell: g.haskellNextToken
-  of langHtml: g.htmlNextToken
-  of langHyprland: g.hyprlandNextToken
-  of langJava: g.javaNextToken
-  of langJavaScript, langJsx: g.javaScriptNextToken
-  of langLatex: g.latexNextToken
-  of langLisp: g.lispNextToken
-  of langLog: g.logNextToken
-  of langLua: g.luaNextToken
-  of langMarkdown: g.markdownNextToken
-  of langNim: g.nimNextToken
-  of langPython: g.pythonNextToken
-  of langRust: g.rustNextToken
-  of langShell: g.shellNextToken
-  of langTcl: g.tclNextToken
-  of langToml: g.tomlNextToken
-  of langYaml: g.yamlNextToken
-  of langJson: g.jsonNextToken
-  of langJsonc: g.jsoncNextToken
-  of langTypeScript, langTsx: g.typescriptNextToken
-  of langXml: g.xmlNextToken
-  of langZsh: g.zshNextToken
-  of langNone: discard
+  if lang == langMarkdown:
+    g.markdownNextToken
+  else:
+    g.codeBlockNextToken(lang)
 
   if g.kind != gtEof and g.pos <= startPos and g.state == startState:
     # Monotonic-advance guard: a non-EOF token must make progress, by consuming

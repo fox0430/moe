@@ -27,6 +27,7 @@ import pkg/[results, chronos, jsony]
 
 import lsp/worker
 import lsp/protocol/types
+import buffer/undo
 import logger
 
 export worker, types
@@ -354,6 +355,43 @@ proc uriToPath*(uri: string): string =
     return decodeUrl(uri[7 ..^ 1], decodePlus = false)
   return uri
 
+proc validateLocalFileUri*(uri: string): Result[string, string] =
+  ## Reject URIs that cannot be safely treated as a local file path.
+  ## Returns the decoded local path on success.
+  if not uri.startsWith("file://") or uri.len < 8 or uri[7] != '/':
+    return err("unsupported URI (only file:/// is allowed): " & uri)
+  if '?' in uri or '#' in uri:
+    return err("unsupported character in URI: " & uri)
+  let path = uriToPath(uri)
+  if '\0' in path:
+    return err("unsupported character in URI: " & uri)
+  # Percent-encoded forms (e.g. %2F) must not bypass the raw checks.
+  if path.startsWith("//"):
+    return err("unsupported file:// URI with extra leading slash: " & uri)
+  if path == "/":
+    return err("unsupported file:// URI with empty path: " & uri)
+  ok(path)
+
+proc staticRejectionReason*(edit: WorkspaceEdit): Option[string] =
+  ## Static rejection reason for a WorkspaceEdit, shared by the applyEdit gate
+  ## and applyWorkspaceEdit so the two can never diverge.
+  if edit.resourceOperations.len > 0:
+    return some(
+      "WorkspaceEdit contains unsupported file operations (" &
+        edit.resourceOperations.join(", ") & ")"
+    )
+  if edit.documentChanges.isSome:
+    for docEdit in edit.documentChanges.get:
+      let pathRes = validateLocalFileUri(docEdit.textDocument.uri)
+      if pathRes.isErr:
+        return some(pathRes.error)
+  elif edit.changes.isSome:
+    for uri in edit.changes.get.keys:
+      let pathRes = validateLocalFileUri(uri)
+      if pathRes.isErr:
+        return some(pathRes.error)
+  none(string)
+
 proc getWorker*(svc: LspService, langId: string): Option[LspWorker] =
   ## Get existing worker for a language (running or starting)
   if langId in svc.workers:
@@ -668,13 +706,32 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
     # strand the server and reach emergencySaveAndQuit). A Defect is deliberately
     # NOT caught here: the apply path reports errors via Result rather than
     # raising, so a Defect signals a real bug and stays fatal, as elsewhere.
+    # TransactionRollbackError is the one deliberate exception: re-raise it
+    # so poll()'s callers surface the untrustworthy buffer at their boundary,
+    # after the server is answered (negative verdict) so it is not left
+    # blocked on the ApplyWorkspaceEditResponse.
     var applied = false
     var failureReason = ""
     try:
       let edit = parseWorkspaceEdit(parseJson(evt.applyEditEditJson))
-      let res = svc.onApplyWorkspaceEdit(edit)
-      applied = res.applied
-      failureReason = res.failureReason.get("")
+      # Service-layer gate: bad targets or file operations must not reach a
+      # callback that skips its own checks.
+      let invalidReason = staticRejectionReason(edit)
+      if invalidReason.isSome:
+        failureReason = "applyEdit rejected: " & invalidReason.get
+        svc.onLogMessage(langId, mtWarning, failureReason)
+      else:
+        let res = svc.onApplyWorkspaceEdit(edit)
+        applied = res.applied
+        failureReason = res.failureReason.get("")
+    except TransactionRollbackError as err:
+      let workerOpt = svc.getWorker(langId)
+      if workerOpt.isSome:
+        workerOpt.get.sendApplyEditResponse(
+          evt.applyEditReqIdJson, false,
+          "applyEdit failed: buffer state may be inconsistent", evt.applyEditGeneration,
+        )
+      raise
     except CatchableError as e:
       svc.onLogMessage(langId, mtWarning, "Failed to apply applyEdit: " & e.msg)
       failureReason = "applyEdit failed: " & e.msg
@@ -702,10 +759,21 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
   for langId, worker in svc.workers:
     snapshot.add((langId, worker))
 
+  # A TransactionRollbackError (untrustworthy buffer) raised by processEvent
+  # is re-raised AFTER the drain so the remaining queued events are not lost:
+  # the failed applyEdit already answered the server negatively, so the rest
+  # is safe to process.
+  var pendingRollbackError: ref TransactionRollbackError = nil
   for (langId, worker) in snapshot:
     # Get all pending events from this worker
     for evt in worker.pollEvents():
-      svc.processEvent(langId, evt)
+      try:
+        svc.processEvent(langId, evt)
+      except TransactionRollbackError as err:
+        if pendingRollbackError.isNil:
+          pendingRollbackError = err
+  if not pendingRollbackError.isNil:
+    raise pendingRollbackError
 
 # Non-blocking response checking
 proc checkResponse*(
@@ -815,26 +883,39 @@ proc cancelRequest*(svc: LspService, requestId: int) =
   svc.pendingResponses.del(requestId)
 
 # Request-response helper (async, non-blocking)
+#
+# Shared poll step for the waitForResponse* procs: defensively poll and drop
+# the request's bookkeeping on TransactionRollbackError before re-raising it.
+template pollWithErrorHandling(svc: LspService, requestId: int) =
+  {.cast(raises: []).}:
+    try:
+      svc.poll()
+    except TransactionRollbackError as e:
+      svc.onLogMessage("", mtError, "Transaction rollback failed: " & e.msg)
+      svc.activeRequests.del(requestId)
+      svc.pendingResponses.del(requestId)
+      raise
+    except CatchableError as e:
+      svc.onLogMessage("", mtError, "Unexpected error in poll: " & e.msg)
+    except Defect as e:
+      svc.onLogMessage("", mtError, "Defect in poll: " & e.msg)
+      raise
+
 proc waitForResponse*(
     svc: LspService, requestId: int, timeoutMs: int = 0
-): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[JsonNode, string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Wait for response asynchronously. timeoutMs <= 0 uses the service default.
+  ## A TransactionRollbackError raised while polling is re-raised after the
+  ## request bookkeeping is dropped (see pollWithErrorHandling).
   let startTime = epochTime()
   let effectiveMs = if timeoutMs > 0: timeoutMs else: svc.requestTimeoutMs
   let timeoutSec = effectiveMs.float / 1000.0
 
   while true:
-    # Poll for new events
-    # Note: poll() should not raise exceptions, but we handle them defensively
-    # and log any unexpected errors via the service's log callback
-    {.cast(raises: []).}:
-      try:
-        svc.poll()
-      except CatchableError as e:
-        svc.onLogMessage("", mtError, "Unexpected error in poll: " & e.msg)
-      except Defect as e:
-        svc.onLogMessage("", mtError, "Defect in poll: " & e.msg)
-        raise
+    # Poll for new events (see pollWithErrorHandling)
+    pollWithErrorHandling(svc, requestId)
 
     # Check if response has arrived
     {.cast(raises: []).}:
@@ -864,7 +945,9 @@ proc waitForResponse*(
 
 proc waitForResponseRaw*(
     svc: LspService, requestId: int, timeoutMs: int = 0
-): Future[Result[string, string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[string, string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Like waitForResponse but yields the unparsed result JSON string so a typed
   ## consumer can jsony fromJson it directly. A server result of null (or none)
   ## is returned as the literal "null".
@@ -873,14 +956,7 @@ proc waitForResponseRaw*(
   let timeoutSec = effectiveMs.float / 1000.0
 
   while true:
-    {.cast(raises: []).}:
-      try:
-        svc.poll()
-      except CatchableError as e:
-        svc.onLogMessage("", mtError, "Unexpected error in poll: " & e.msg)
-      except Defect as e:
-        svc.onLogMessage("", mtError, "Defect in poll: " & e.msg)
-        raise
+    pollWithErrorHandling(svc, requestId)
 
     {.cast(raises: []).}:
       if requestId in svc.pendingResponses:
@@ -1685,67 +1761,13 @@ proc documentSyncKind*(svc: LspService, path: string): TextDocumentSyncKind =
   else:
     return tdskFull
 
-proc requestCompletion*(
-    svc: LspService, path: string, line, character: int
-): Future[Result[seq[CompletionItem], string]] {.async: (raises: [CancelledError]).} =
-  ## Async version of requestCompletion
-  {.cast(raises: [CancelledError]).}:
-    let workerResult = svc.getWorkerForPath(path)
-    if workerResult.isErr:
-      return err(workerResult.error)
-
-    let worker = workerResult.get
-    if not worker.isRunning:
-      return err("Server not ready")
-
-    let uri = pathToUri(path)
-    let params = %*{
-      "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
-    }
-
-    let requestId = svc.startTrackedRequest(worker, "textDocument/completion", params)
-    let respResult = await svc.waitForResponseRaw(requestId)
-
-    if respResult.isErr:
-      return err(respResult.error)
-
-    return ok(parseCompletionResponse(respResult.get).items)
-
-proc requestHover*(
-    svc: LspService, path: string, line, character: int
-): Future[Result[Option[Hover], string]] {.async: (raises: [CancelledError]).} =
-  ## Async version of requestHover
-  {.cast(raises: [CancelledError]).}:
-    let workerResult = svc.getWorkerForPath(path)
-    if workerResult.isErr:
-      return err(workerResult.error)
-
-    let worker = workerResult.get
-    if not worker.isRunning:
-      return err("Server not ready")
-
-    let uri = pathToUri(path)
-    let params = %*{
-      "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
-    }
-
-    let requestId = svc.startTrackedRequest(worker, "textDocument/hover", params)
-    let respResult = await svc.waitForResponse(requestId)
-
-    if respResult.isErr:
-      return err(respResult.error)
-
-    let resp = respResult.get
-    if resp.kind == JNull:
-      return ok(none(Hover))
-
-    return ok(some(parseHover(resp)))
-
 proc requestFormatting*(
     svc: LspService, path: string, tabSize: int = 2, insertSpaces: bool = true
-): Future[Result[seq[TextEdit], string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[seq[TextEdit], string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Async version of requestFormatting
-  {.cast(raises: [CancelledError]).}:
+  {.cast(raises: [CancelledError, TransactionRollbackError]).}:
     let workerResult = svc.getWorkerForPath(path)
     if workerResult.isErr:
       return err(workerResult.error)
@@ -1776,9 +1798,11 @@ proc requestFormatting*(
 
 proc requestRename*(
     svc: LspService, path: string, line, character: int, newName: string
-): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[Option[WorkspaceEdit], string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Async version of requestRename
-  {.cast(raises: [CancelledError]).}:
+  {.cast(raises: [CancelledError, TransactionRollbackError]).}:
     let workerResult = svc.getWorkerForPath(path)
     if workerResult.isErr:
       return err(workerResult.error)
@@ -1806,90 +1830,13 @@ proc requestRename*(
 
     return ok(some(parseWorkspaceEdit(resp)))
 
-proc requestDefinition*(
-    svc: LspService, path: string, line, character: int
-): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
-  ## Async version of requestDefinition
-  {.cast(raises: [CancelledError]).}:
-    let workerResult = svc.getWorkerForPath(path)
-    if workerResult.isErr:
-      return err(workerResult.error)
-
-    let worker = workerResult.get
-    if not worker.isRunning:
-      return err("Server not ready")
-
-    let uri = pathToUri(path)
-    let params = %*{
-      "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
-    }
-
-    let requestId = svc.startTrackedRequest(worker, "textDocument/definition", params)
-    let respResult = await svc.waitForResponse(requestId)
-
-    if respResult.isErr:
-      return err(respResult.error)
-
-    return ok(parseLocations(respResult.get))
-
-proc requestReferences*(
-    svc: LspService, path: string, line, character: int, includeDeclaration: bool = true
-): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
-  ## Async version of requestReferences
-  {.cast(raises: [CancelledError]).}:
-    let workerResult = svc.getWorkerForPath(path)
-    if workerResult.isErr:
-      return err(workerResult.error)
-
-    let worker = workerResult.get
-    if not worker.isRunning:
-      return err("Server not ready")
-
-    let uri = pathToUri(path)
-    let params = %*{
-      "textDocument": {"uri": uri},
-      "position": {"line": line, "character": character},
-      "context": {"includeDeclaration": includeDeclaration},
-    }
-
-    let requestId = svc.startTrackedRequest(worker, "textDocument/references", params)
-    let respResult = await svc.waitForResponse(requestId)
-
-    if respResult.isErr:
-      return err(respResult.error)
-
-    return ok(parseLocations(respResult.get))
-
-proc requestDocumentSymbols*(
-    svc: LspService, path: string
-): Future[Result[DocumentSymbolResult, string]] {.async: (raises: [CancelledError]).} =
-  ## Async version of requestDocumentSymbols
-  {.cast(raises: [CancelledError]).}:
-    let workerResult = svc.getWorkerForPath(path)
-    if workerResult.isErr:
-      return err(workerResult.error)
-
-    let worker = workerResult.get
-    if not worker.isRunning:
-      return err("Server not ready")
-
-    let uri = pathToUri(path)
-    let params = %*{"textDocument": {"uri": uri}}
-
-    let requestId =
-      svc.startTrackedRequest(worker, "textDocument/documentSymbol", params)
-    let respResult = await svc.waitForResponse(requestId)
-
-    if respResult.isErr:
-      return err(respResult.error)
-
-    return ok(parseDocumentSymbolResult(respResult.get))
-
 proc requestFoldingRange*(
     svc: LspService, path: string
-): Future[Result[seq[FoldingRange], string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[seq[FoldingRange], string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Async version of requestFoldingRange
-  {.cast(raises: [CancelledError]).}:
+  {.cast(raises: [CancelledError, TransactionRollbackError]).}:
     let workerResult = svc.getWorkerForPath(path)
     if workerResult.isErr:
       return err(workerResult.error)
@@ -1917,9 +1864,11 @@ proc requestFoldingRange*(
 
 proc requestCodeLensResolve*(
     svc: LspService, path: string, lens: CodeLens
-): Future[Result[CodeLens, string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[CodeLens, string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Async version of requestCodeLensResolve
-  {.cast(raises: [CancelledError]).}:
+  {.cast(raises: [CancelledError, TransactionRollbackError]).}:
     let workerResult = svc.getWorkerForPath(path)
     if workerResult.isErr:
       return err(workerResult.error)
@@ -1940,9 +1889,11 @@ proc requestCodeLensResolve*(
 
 proc requestExecuteCommand*(
     svc: LspService, path: string, command: string, arguments: seq[JsonNode] = @[]
-): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
+): Future[Result[JsonNode, string]] {.
+    async: (raises: [CancelledError, TransactionRollbackError])
+.} =
   ## Async version of requestExecuteCommand
-  {.cast(raises: [CancelledError]).}:
+  {.cast(raises: [CancelledError, TransactionRollbackError]).}:
     let workerResult = svc.getWorkerForPath(path)
     if workerResult.isErr:
       return err(workerResult.error)

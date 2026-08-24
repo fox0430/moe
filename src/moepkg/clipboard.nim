@@ -22,12 +22,11 @@
 ## This module provides clipboard read/write functionality using external
 ## clipboard tools like xclip, xsel, wl-clipboard, etc.
 
-import std/[options, osproc, streams]
+import std/[options, os, osproc, streams]
 
 import pkg/results
-import pkg/chronos
 
-import config
+import config, encoding
 
 type
   ClipboardOperation = enum
@@ -35,6 +34,10 @@ type
     write
 
   ClipboardError* = object of CatchableError ## Error type for clipboard operations
+
+const WriteTimeoutMs = 10_000
+  ## Timeout for blocking on a hung clipboard tool. wl-copy is exempt:
+  ## it is polled briefly instead and may keep serving the selection.
 
 proc getClipboardCommand*(
     tool: ClipboardTool, operation: ClipboardOperation
@@ -106,7 +109,7 @@ proc readFromPrimarySelectionSync*(tool: ClipboardTool): Result[string, string] 
     let exitCode = process.waitForExit()
 
     if exitCode == 0:
-      return Result[string, string].ok(output)
+      return Result[string, string].ok(sanitizeInvalidUtf8(output))
     else:
       return Result[string, string].err(
         "Failed to read from primary selection: exit code " & $exitCode
@@ -133,40 +136,63 @@ proc getPrimarySelectionWriteCommand*(tool: ClipboardTool): Option[seq[string]] 
   of cbtWin32yank, cbtPbcopy:
     return getClipboardCommand(tool, write)
 
+proc wlCopyExitedEarly(process: Process): Option[int] =
+  ## Exit code if wl-copy exits right after startup, none if it keeps running.
+  ## On wl-clipboard 2.x the parent exits once the write landed and a
+  ## background child keeps serving the selection.
+  var i = 0
+  while i < 5:
+    let exitCode = process.peekExitCode()
+    if exitCode != -1:
+      return some(exitCode)
+    sleep(10)
+    inc i
+  return none(int)
+
 proc writeToPrimarySelectionSync*(
     tool: ClipboardTool, text: string
-): Result[void, string] =
+): Result[bool, string] =
   ## Write text to X11 PRIMARY selection synchronously.
+  ## ok(true) means the tool terminated (the write landed); ok(false) means
+  ## it keeps running (the write may not be reflected yet).
   let cmdOpt = getPrimarySelectionWriteCommand(tool)
   if cmdOpt.isNone:
-    return Result[void, string].err("Clipboard tool not available: " & $tool)
+    return Result[bool, string].err("Clipboard tool not available: " & $tool)
 
   let cmd = cmdOpt.get()
   var process: Process = nil
   try:
     if tool == cbtWlClipboard:
-      # wl-copy stays running to serve the selection content, so we must not
-      # call waitForExit (it would block forever). Pass text via stdin and
-      # close the handle; wl-copy will keep running in the background.
+      # wl-copy's parent exits once the write landed; an early non-zero exit
+      # means the write failed, no observed exit that it is unconfirmed.
       process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
-      # Don't waitForExit — wl-copy exits automatically when another
-      # wl-copy instance claims the selection.
-      return Result[void, string].ok()
+      let earlyExit = process.wlCopyExitedEarly()
+      if earlyExit.isSome and earlyExit.get != 0:
+        return Result[bool, string].err(
+          "Failed to write to primary selection: exit code " & $earlyExit.get
+        )
+      return Result[bool, string].ok(earlyExit.isSome)
     else:
       process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
-      let exitCode = process.waitForExit()
+      let exitCode = process.waitForExit(WriteTimeoutMs)
       if exitCode == 0:
-        return Result[void, string].ok()
+        return Result[bool, string].ok(true)
+      elif exitCode == 128 + 9:
+        # 128 + SIGKILL: the WriteTimeoutMs timeout terminated the tool
+        return Result[bool, string].err(
+          "Failed to write to primary selection: the tool did not exit within " &
+            $WriteTimeoutMs & "ms and was killed"
+        )
       else:
-        return Result[void, string].err(
+        return Result[bool, string].err(
           "Failed to write to primary selection: exit code " & $exitCode
         )
   except CatchableError as e:
-    return Result[void, string].err("Failed to write to primary selection: " & e.msg)
+    return Result[bool, string].err("Failed to write to primary selection: " & e.msg)
   finally:
     if not process.isNil:
       try:
@@ -190,7 +216,7 @@ proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
     let exitCode = process.waitForExit()
 
     if exitCode == 0:
-      return Result[string, string].ok(output)
+      return Result[string, string].ok(sanitizeInvalidUtf8(output))
     else:
       return Result[string, string].err(
         "Failed to read from clipboard: exit code " & $exitCode
@@ -204,86 +230,53 @@ proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
       except CatchableError:
         discard
 
-proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, string] =
-  ## Write text to system clipboard synchronously using osproc
-  ## Returns ok() on success, or an error message
+proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[bool, string] =
+  ## Write text to system clipboard synchronously.
+  ## ok(true) means the tool terminated (the write landed); ok(false) means
+  ## it keeps running (the write may not be reflected yet).
   let cmdOpt = getClipboardCommand(tool, write)
   if cmdOpt.isNone:
-    return Result[void, string].err("Clipboard tool not available: " & $tool)
+    return Result[bool, string].err("Clipboard tool not available: " & $tool)
 
   let cmd = cmdOpt.get()
   var process: Process = nil
   try:
     if tool == cbtWlClipboard:
-      # wl-copy stays running to serve the clipboard content, so we must not
-      # call waitForExit (it would block forever and freeze the editor).
-      # Pass text via stdin and close the handle; wl-copy will keep running
-      # in the background and exit automatically when another wl-copy
-      # instance claims the clipboard.
+      # wl-copy's parent exits once the write landed; an early non-zero exit
+      # means the write failed, no observed exit that it is unconfirmed.
       process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
-      return Result[void, string].ok()
+      let earlyExit = process.wlCopyExitedEarly()
+      if earlyExit.isSome and earlyExit.get != 0:
+        return Result[bool, string].err(
+          "Failed to write to clipboard: exit code " & $earlyExit.get
+        )
+      return Result[bool, string].ok(earlyExit.isSome)
     else:
       # Other tools (xclip, xsel, pbcopy, win32yank) use stdin
       process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
-      let exitCode = process.waitForExit()
+      let exitCode = process.waitForExit(WriteTimeoutMs)
 
       if exitCode == 0:
-        return Result[void, string].ok()
+        return Result[bool, string].ok(true)
+      elif exitCode == 128 + 9:
+        # 128 + SIGKILL: the WriteTimeoutMs timeout terminated the tool
+        return Result[bool, string].err(
+          "Failed to write to clipboard: the tool did not exit within " & $WriteTimeoutMs &
+            "ms and was killed"
+        )
       else:
-        return Result[void, string].err(
+        return Result[bool, string].err(
           "Failed to write to clipboard: exit code " & $exitCode
         )
   except CatchableError as e:
-    return Result[void, string].err("Failed to write to clipboard: " & e.msg)
+    return Result[bool, string].err("Failed to write to clipboard: " & e.msg)
   finally:
     if not process.isNil:
       try:
         process.close()
       except CatchableError:
         discard
-
-proc readFromClipboard*(
-    tool: ClipboardTool
-): Future[Result[string, string]] {.async: (raises: []).} =
-  ## Read text from system clipboard (async wrapper)
-  return readFromClipboardSync(tool)
-
-proc writeToClipboard*(
-    tool: ClipboardTool, text: string
-): Future[Result[void, string]] {.async: (raises: []).} =
-  ## Write text to system clipboard (async wrapper)
-  return writeToClipboardSync(tool, text)
-
-# Internal async wrapper that discards the result
-proc writeToClipboardInternal(
-    tool: ClipboardTool, text: string
-): Future[void] {.async: (raises: []).} =
-  discard await writeToClipboard(tool, text)
-
-# Fire-and-forget wrapper for clipboard write
-proc writeToClipboardAsync*(tool: ClipboardTool, text: string) =
-  ## Write text to clipboard in the background (fire-and-forget)
-  ## This does not block and errors are silently ignored
-  asyncSpawn writeToClipboardInternal(tool, text)
-
-proc writeToPrimarySelection*(
-    tool: ClipboardTool, text: string
-): Future[Result[void, string]] {.async: (raises: []).} =
-  ## Write text to X11 PRIMARY selection (async wrapper)
-  return writeToPrimarySelectionSync(tool, text)
-
-# Internal async wrapper that discards the result
-proc writeToPrimarySelectionInternal(
-    tool: ClipboardTool, text: string
-): Future[void] {.async: (raises: []).} =
-  discard await writeToPrimarySelection(tool, text)
-
-# Fire-and-forget wrapper for primary selection write
-proc writeToPrimarySelectionAsync*(tool: ClipboardTool, text: string) =
-  ## Write text to X11 PRIMARY selection in the background (fire-and-forget)
-  ## This does not block and errors are silently ignored
-  asyncSpawn writeToPrimarySelectionInternal(tool, text)

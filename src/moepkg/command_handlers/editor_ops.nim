@@ -17,12 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-## Editor operations shared by Command mode handler and result processor.
-##
-## Contains editor-level helpers (mode entry, viewport updates, file save)
-## invoked by both `handleCommandModeKeyCombo` and `processResult`. Kept in
-## a separate module so both consumers can share the code without pulling
-## in a circular import.
+## Editor helpers shared by the Command mode handler and result processor
+## without a circular import.
 
 import std/[options, os, times, strutils, tables]
 
@@ -35,12 +31,11 @@ import
     syntax_checker, render_utils, motion, viewer_mode,
   ]
 
-import ./handler_result
+import handler_result
 
 proc trySaveLogViewerBuffer*(e: Editor): string =
-  ## When the active window is showing the log viewer, persist its content
-  ## to a timestamped file in the current directory. Returns a status message
-  ## describing the outcome, or an empty string when not in LogViewer mode.
+  ## Save the log viewer's content to a timestamped file in the current
+  ## directory; returns the status message or "" outside LogViewer mode.
   let activeWin = e.activeWindow
   if e.state.mode != EditorMode.LogViewer or activeWin.modeState.kind != mskLogViewer:
     return ""
@@ -80,8 +75,7 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
   )
 
 proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
-  ## Process hrSaveAndQuit: save file and return false (quit) on success,
-  ## true (continue) on failure.
+  ## Save and quit: return false on success, true on failure.
   let saveResult = e.saveFile(r.saveAndQuitFilename, r.forceQuitAfterSave)
   if saveResult.isErr:
     logError("handler", "Save and quit failed: " & saveResult.error)
@@ -119,14 +113,11 @@ proc saveAllStatusMessage(saveResult: SaveAllBuffersResult): string =
   msg
 
 proc processSaveAllResult*(e: Editor, r: HandlerResult) =
-  ## Process hrSaveAll: save every modified buffer and report the outcome.
-  ## Note: buildOnSave / syntaxCheckOnSave are intentionally not run here —
-  ## :wa is a batch operation and triggering them per buffer would fan out
-  ## N builds for N saved files.
+  ## Save all modified buffers and report the outcome.
+  ## buildOnSave / syntaxCheckOnSave are skipped: :wa is a batch operation.
   let saveResult = e.saveAllBuffers(r.forceSaveAll)
   let msg = saveAllStatusMessage(saveResult)
-  # Always surface failures / skips / no-op; gate the success summary on
-  # saveScreenNotify to match single-file :w behavior.
+  # Surface failures / skips / no-op; gate the success summary on saveScreenNotify.
   if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0 or
       saveResult.savedCount == 0:
     e.state.statusMessage = msg
@@ -141,9 +132,8 @@ proc processSaveAllResult*(e: Editor, r: HandlerResult) =
       logInfo("handler", "Saved " & $saveResult.savedCount & " files via :wa")
 
 proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
-  ## Process hrSaveAllAndQuit: save every modified buffer and return false
-  ## (quit) on full success, true (continue) when any save failed or any
-  ## buffer was skipped due to external modification without force.
+  ## Save all and quit: false on full success, true if any save failed or
+  ## was skipped for external modification without force.
   let saveResult = e.saveAllBuffers(r.forceSaveAllAndQuitAfter)
   if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0:
     e.state.statusMessage = saveAllStatusMessage(saveResult)
@@ -153,8 +143,8 @@ proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
   false
 
 proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
-  ## Process hrSave: save active buffer (or LogViewer/Config content) and
-  ## trigger buildOnSave / syntaxCheckOnSave side effects.
+  ## Save the active buffer (or LogViewer/Config content) and run the
+  ## buildOnSave / syntaxCheckOnSave side effects.
   if e.state.mode == EditorMode.LogViewer:
     let msg = e.trySaveLogViewerBuffer()
     if msg.len > 0:
@@ -223,7 +213,7 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
         )
 
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
-  ## Process hrGotoLine: move cursor to the specified line number.
+  ## Move the cursor to the specified line number.
   let lineNum = r.lineNumber
   if lineNum > 0:
     # Clamp to last line if lineNum exceeds buffer length
@@ -241,9 +231,8 @@ proc enterFilerInActiveWindow*(e: Editor, path: string) =
   )
 
 proc focusFileTreeWindow*(e: Editor): bool =
-  ## Focus the fileTree sidebar; false when none is open. Used by
-  ## `mode_switch filetree` so it does not go through `toggleFileTree` (which
-  ## would close the sidebar).
+  ## Focus the fileTree sidebar, or return false if none is open. Unlike
+  ## `toggleFileTree`, it never closes the sidebar.
   for i, win in e.windowManager.windows:
     if win.mode == EditorMode.FileTree:
       e.windowManager.activateWindow(i)
@@ -252,8 +241,7 @@ proc focusFileTreeWindow*(e: Editor): bool =
   false
 
 proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffer) =
-  ## Toggle the fileTree sidebar. If one already exists, close it.
-  ## If none exists, open one.
+  ## Toggle the fileTree sidebar (open if absent, close if present).
   var existingIdx = -1
   for i, win in e.windowManager.windows:
     if win.mode == EditorMode.FileTree:
@@ -334,9 +322,8 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
   e.syncActiveWindow()
 
 proc enterTerminalInActiveWindow*(e: Editor, command: string) =
-  ## Open a new Terminal session as its own tab in the active window.
-  ## The session is tracked in `e.terminalStates` keyed by the buffer id
-  ## so the user can move between tabs without tearing down the PTY.
+  ## Open a new Terminal session as a tab in the active window; the PTY is
+  ## tracked in `e.terminalStates` by buffer id so tabs survive switching.
   let activeWin = e.activeWindow
   let (cols, rows) = e.calculateTerminalAreaDimensions(activeWin)
   let termResult = newTerminalState(command, cols, rows)
@@ -360,10 +347,8 @@ proc enterTerminalInActiveWindow*(e: Editor, command: string) =
   e.setMode(EditorMode.Terminal)
 
 proc applyThemeCommand*(e: Editor, themeName: string) =
-  ## Route a `:theme` selection through `e.config.theme` + `initTheme` so
-  ## `themeColorsFromFile` and `config.theme.{kind,path}` stay in sync with
-  ## `themeColors`. Otherwise a later `saveConfigToToml` would stamp the
-  ## newly loaded colors over the previously configured theme file.
+  ## Apply a `:theme` selection via `initTheme` so `config.theme` and
+  ## `themeColors` stay in sync before saveConfigToToml.
   if themeName == "default":
     e.config.theme.kind = tkDefault
     e.config.theme.path = ""

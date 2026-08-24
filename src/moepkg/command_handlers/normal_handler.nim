@@ -279,10 +279,18 @@ proc searchMatchAndOperate(
   of OpDelete, OpChange:
     let transactionName =
       if op.operatorType == OpDelete: "Delete search match" else: "Change search match"
-    let txr = withTransaction(buffer, transactionName):
-      let deleteResult = buffer.deleteRange(pos, matchEnd)
-      if deleteResult.isErr:
-        return NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
+    let txr =
+      try:
+        withTransaction(buffer, transactionName):
+          let deleteResult = buffer.deleteRange(pos, matchEnd)
+          if deleteResult.isErr:
+            return
+              NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
+      except TransactionRollbackError as exc:
+        # Surface a failed rollback (untrustworthy buffer) as a status message.
+        return NormalModeResult(
+          kind: nmrError, errorMessage: exc.msg & " (buffer state may be inconsistent)"
+        )
     if txr.isErr:
       return NormalModeResult(
         kind: nmrError, errorMessage: "Transaction failed: " & txr.error
@@ -385,8 +393,6 @@ proc handleModeSwitch*(
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Replace))
   of EditorMode.Filer:
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Filer))
-  of EditorMode.QuickRun:
-    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.QuickRun))
   of EditorMode.LogViewer:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.LogViewer))
@@ -471,19 +477,37 @@ proc handleInsertModeEntry*(
     let lineContent = buffer.getLine(state.cursor.line)
     state.cursor.column = lineContent.charLen
   of "open-below":
-    if not buffer.inTransaction:
+    let beganTransactionHere = not buffer.inTransaction
+    if beganTransactionHere:
       let txResult =
         buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
       if txResult.isErr:
         return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
-    insertLineBelow(buffer, state)
+    let openResult = insertLineBelow(buffer, state)
+    if openResult.isErr:
+      var errorMessage = openResult.error
+      if beganTransactionHere:
+        let rollbackResult = buffer.rollbackTransaction()
+        if rollbackResult.isErr:
+          errorMessage =
+            errorMessage & " (rollback failed: " & rollbackResult.error & ")"
+      return NormalModeResult(kind: nmrError, errorMessage: errorMessage)
   of "open-above":
-    if not buffer.inTransaction:
+    let beganTransactionHere = not buffer.inTransaction
+    if beganTransactionHere:
       let txResult =
         buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
       if txResult.isErr:
         return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
-    insertLineAbove(buffer, state)
+    let openResult = insertLineAbove(buffer, state)
+    if openResult.isErr:
+      var errorMessage = openResult.error
+      if beganTransactionHere:
+        let rollbackResult = buffer.rollbackTransaction()
+        if rollbackResult.isErr:
+          errorMessage =
+            errorMessage & " (rollback failed: " & rollbackResult.error & ")"
+      return NormalModeResult(kind: nmrError, errorMessage: errorMessage)
   else:
     return NormalModeResult(
       kind: nmrError, errorMessage: "Unknown insert type: " & insertType

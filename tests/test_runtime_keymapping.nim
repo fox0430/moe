@@ -35,6 +35,11 @@ from ../src/moepkg/types/editor_types import Editor
 
 import editor_test_helper
 
+const AllEditModes = {
+  EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
+  EditorMode.VisualLine, EditorMode.Replace,
+}
+
 suite "parseKeyString":
   test "Single character key":
     let keys = parseKeyString("a")
@@ -894,7 +899,7 @@ suite "CommandModeHandler - map commands":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":map C-s file.save")
     check result.kind == hrMapAdd
-    check result.mapAddModes.len == 6
+    check result.mapAddModes.len == AllEditModes.len
 
   test "handleCommandModeInput :nunmap returns hrMapRemove":
     let buffer = newTextBuffer()
@@ -921,7 +926,7 @@ suite "CommandModeHandler - map commands":
     let result = handler.handleCommandModeInput(buffer, ":unmap C-s")
     check result.kind == hrMapRemove
     check result.mapRemoveLhs == "C-s"
-    check result.mapRemoveModes.len == 6
+    check result.mapRemoveModes.len == AllEditModes.len
 
   test "handleCommandModeInput :iunmap returns hrMapRemove for Insert":
     let buffer = newTextBuffer()
@@ -942,7 +947,7 @@ suite "CommandModeHandler - map commands":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":mapclear")
     check result.kind == hrMapClear
-    check result.mapClearModes.len == 6
+    check result.mapClearModes.len == AllEditModes.len
 
   test "handleCommandModeInput :imapclear returns hrMapClear for Insert":
     let buffer = newTextBuffer()
@@ -1474,6 +1479,8 @@ suite "Integration - mapping removal and clear":
     let r = manager.runKeyCombo(editor, x)
     check r.kind == hrHandled
     check editor.keyRouter.dispatchState.keys.len == 0
+    let line = buffer.getLine(0)
+    check $line == "jxhello"
 
 suite "Timeout flush - exact match with longer match pending":
   test "Exact match and longer match: keys accumulate (wait state)":
@@ -1500,9 +1507,6 @@ suite "Timeout flush - exact match with longer match pending":
     check editor.keyRouter.dispatchState.keys.len == 1
 
   test "Timeout flush finds exact match for accumulated keys":
-    ## Simulate what handleKeyMappingTimeout does:
-    ## accumulated keys = ["j"], mappings include "j" → "a"
-    ## → exact match should be found and executed
     let manager = createTestManager()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
@@ -1517,35 +1521,20 @@ suite "Timeout flush - exact match with longer match pending":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    # Simulate accumulated state (as if 'j' was pressed and we're waiting)
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
     editor.keyRouter.dispatchState.keys = @[j]
 
-    # Simulate timeout flush logic: find exact match
-    let accKeys = editor.keyRouter.dispatchState.keys
-    let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
-    var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
-    for m in mappings:
-      if m.triggerKeys == accKeys:
-        exactMatch = some(m)
-        break
+    let rr = editor.keyRouter.flushTimeout(state.mode)
+    check rr.kind == rrExecuteRuntimeKeySequence
+    check rr.targetKeys == @[toKeyCombo('a')]
 
-    check exactMatch.isSome
-    check exactMatch.get.targetKeys.len == 1
-    check exactMatch.get.targetKeys[0] == toKeyCombo('a')
-
-    # Execute the exact match via playbackKeyCombos
-    clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
-    let r = playbackKeyCombos(editor, exactMatch.get.targetKeys)
+    let r = playbackKeyCombos(editor, rr.targetKeys)
     manager.keyBindingRegistry.isReplayingMapping = false
     check r.kind == hrHandled
-    # Should still be in Insert mode (mapping target was 'a', not Escape)
     check state.mode == EditorMode.Insert
 
   test "Timeout flush executes exact match that causes mode transition":
-    ## accumulated keys = ["j"], mappings include "j" → Escape
-    ## → exact match executes Escape, causing Insert → Normal transition
     let manager = createTestManager()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
@@ -1560,33 +1549,19 @@ suite "Timeout flush - exact match with longer match pending":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    # Simulate accumulated state
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
     editor.keyRouter.dispatchState.keys = @[j]
 
-    # Find exact match
-    let accKeys = editor.keyRouter.dispatchState.keys
-    let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
-    var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
-    for m in mappings:
-      if m.triggerKeys == accKeys:
-        exactMatch = some(m)
-        break
+    let rr = editor.keyRouter.flushTimeout(state.mode)
+    check rr.kind == rrExecuteRuntimeKeySequence
 
-    check exactMatch.isSome
-
-    # Execute via playbackKeyCombos (mirrors handleKeyMappingTimeout logic)
-    clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
-    discard playbackKeyCombos(editor, exactMatch.get.targetKeys)
+    discard playbackKeyCombos(editor, rr.targetKeys)
     manager.keyBindingRegistry.isReplayingMapping = false
 
-    # playbackMacro applies mode transitions internally
     check state.mode == EditorMode.Normal
 
   test "Timeout flush replays keys when no exact match":
-    ## accumulated keys = ["j"], but only "jj" → Escape is mapped (no "j" mapping)
-    ## → no exact match, replay 'j' as literal key
     let manager = createTestManager()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
@@ -1599,32 +1574,20 @@ suite "Timeout flush - exact match with longer match pending":
     let editor =
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
 
-    # Simulate accumulated state
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
     editor.keyRouter.dispatchState.keys = @[j]
 
-    # Simulate timeout flush logic: find exact match
-    let accKeys = editor.keyRouter.dispatchState.keys
-    let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
-    var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
-    for m in mappings:
-      if m.triggerKeys == accKeys:
-        exactMatch = some(m)
-        break
+    let rr = editor.keyRouter.flushTimeout(state.mode)
+    check rr.kind == rrUnhandledBatch
+    check rr.keys == @[j]
 
-    check exactMatch.isNone
-
-    # No exact match: replay keys individually
-    clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
-    for k in accKeys:
+    for k in rr.keys:
       let r = manager.runKeyCombo(editor, k)
       check r.kind == hrHandled
     manager.keyBindingRegistry.isReplayingMapping = false
 
-    # Should still be in Insert mode (j was inserted as text, not expanded)
     check state.mode == EditorMode.Insert
-    # 'j' should have been inserted into the buffer
     let line = buffer.getLine(0)
     check $line == "jhello"
 
@@ -1633,9 +1596,9 @@ suite "Timeout flush - exact match with longer match pending":
     let router = newKeyRouter(
       manager.keyBindingRegistry, TimeoutPolicy(timeoutlen: 1000, enabled: true)
     )
-    # No keys accumulated
     check router.dispatchState.keys.len == 0
-    # Nothing to flush - this is the guard check in handleKeyMappingTimeout
+    let rr = router.flushTimeout(EditorMode.Insert)
+    check rr.kind == rrCancelled
 
 suite "Nested playback mini processor":
   test "processReplayedResult on hrError sets statusMessage and returns roAbort":

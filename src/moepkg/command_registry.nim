@@ -39,10 +39,10 @@ export core, operator_engine, clipboard, motion_scroll, visual, edit, misc
 const EditCommandIds = [
   "delete.char", "delete.char.before", "delete.line", "delete.word",
   "operator.delete.to.end", "operator.change.to.end", "paste.after", "paste.before",
-  "join.lines", "substitute.char", "substitute.line", "toggle.case", "operator.delete",
-  "operator.change", "operator.indent", "operator.outdent", "operator.lowercase",
-  "operator.uppercase", "autoindent.line", "edit.increment", "edit.decrement",
-  "edit.repeat",
+  "edit.paste", "join.lines", "substitute.char", "substitute.line", "toggle.case",
+  "operator.delete", "operator.change", "operator.indent", "operator.outdent",
+  "operator.lowercase", "operator.uppercase", "autoindent.line", "edit.increment",
+  "edit.decrement", "edit.repeat",
 ]
   ## Built-in command ids (dotted form, as carried by Command.commandId) that
   ## modify the buffer at the cursor. Used to expand a collapsed fold before the
@@ -259,10 +259,10 @@ proc executeCommand*(
     discard ctx.buffer.foldState.openFoldsInRange(selLo, selHi)
 
   # Primitive-level checks in moepkg/buffer/edit.nim reject writes on readOnly
-  # buffers at the choke point, but several operators (indent, outdent, case
-  # conversion, visual replace/surround) discard the primitive results so the
-  # user would never see the rejection. Keep this gate as defense-in-depth to
-  # surface a status message and cancel any visual selection or pending operator.
+  # buffers at the choke point, and the operators now propagate those results.
+  # Keep this gate as defense-in-depth: it centralizes the status message and
+  # cancels any visual selection or pending operator in one place, instead of
+  # leaving each handler to unwind its own state after a rejected edit.
   if (isEditCommand or isVisualEditCommand) and ctx.buffer.readOnly:
     if isVisualEditCommand:
       ctx.state.visualSelection.active = false
@@ -493,17 +493,23 @@ proc executeCommand*(
       let charsAvailable = lineContent.charLen - ctx.cursor.column
       let charsToReplace = min(actualCount, charsAvailable)
 
-      let txr = withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
-        for i in 0 ..< charsToReplace:
-          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
+      let txr =
+        try:
+          withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
+            for i in 0 ..< charsToReplace:
+              let pos =
+                BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
-          let delResult = ctx.buffer.deleteRange(pos, pos)
-          if delResult.isErr:
-            return err(delResult.error)
+              let delResult = ctx.buffer.deleteRange(pos, pos)
+              if delResult.isErr:
+                return err(delResult.error)
 
-          let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
-          if insResult.isErr:
-            return err(insResult.error)
+              let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
+              if insResult.isErr:
+                return err(insResult.error)
+        except TransactionRollbackError as exc:
+          # Surface a failed rollback (untrustworthy buffer) as a status message.
+          return err(exc.msg & " (buffer state may be inconsistent)")
       if txr.isErr:
         return err(txr.error)
 
@@ -529,8 +535,12 @@ proc executeCommand*(
       if not ctx.state.visualSelection.active:
         return err("No visual selection active")
 
-      # Call visualReplace with the target character
-      visualReplace(ctx.buffer, ctx.state, cmd.targetChar[0])
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      try:
+        visualReplace(ctx.buffer, ctx.state, cmd.targetChar[0])
+      except TransactionRollbackError as exc:
+        return err(exc.msg & " (buffer state may be inconsistent)")
 
       return ok(())
     of "visual-surround":
@@ -541,7 +551,12 @@ proc executeCommand*(
       if not ctx.state.visualSelection.active:
         return err("No visual selection active")
 
-      visualSurround(ctx.buffer, ctx.state, cmd.targetChar[0])
+      # Surface a failed rollback (untrustworthy buffer) as a status message
+      # instead of letting it escape to the crash handler.
+      try:
+        visualSurround(ctx.buffer, ctx.state, cmd.targetChar[0])
+      except TransactionRollbackError as exc:
+        return err(exc.msg & " (buffer state may be inconsistent)")
 
       return ok(())
     else:
@@ -554,15 +569,20 @@ proc executeCommand*(
     # Debug: log the count
     logDebug("command", "Executing " & cmd.commandId & " with count=" & $count)
 
+    # First try as alias, then as custom command
+    let cmdResult = registry.findCommand(cmd.commandId)
+
     # Pass count as arg when explicitly typed, so `1G` (visual) reaches the
     # handler as count=1 instead of falling back to the "no count" default.
+    # Only prepend for handlers that accept an argument (maxArgs >= 1);
+    # maxArgs=0 handlers (e.g. visual.yank, scroll.cursor.*) reject the
+    # prefixed count with "Too many arguments".
     var finalArgs = cmd.args
-    if count > 1 or (cmd.hasCount and count > 0):
+    if cmdResult.isSome and cmdResult.get.maxArgs >= 1 and
+        (count > 1 or (cmd.hasCount and count > 0)):
       finalArgs = @[$count] & cmd.args
     logDebug("command", "finalArgs (count=" & $count & "): " & $finalArgs)
 
-    # First try as alias, then as custom command
-    let cmdResult = registry.findCommand(cmd.commandId)
     if cmdResult.isSome:
       # Found via alias or existing command
       return registry.execute(ctx, cmdResult.get.id, finalArgs)

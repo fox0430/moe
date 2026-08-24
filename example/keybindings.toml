@@ -24,7 +24,7 @@
 # noremap defaults to true (replay the target verbatim, like Vim :noremap).
 #
 # Mode sections: All, Normal, Insert, Visual, VisualAll, VisualLine, VisualBlock,
-#   Replace, Command, Filer, QuickRun, LogViewer, Help, BufferManager,
+#   Replace, Command, Filer, LogViewer, Help, BufferManager,
 #   BookmarkManager, BackupManager, DiffViewer, Config, References,
 #   DocumentSymbol, CallHierarchy, RecentFile, Debug, Terminal, FileTree.
 #   "All" applies to every mode except Command; "VisualAll" applies to Visual,

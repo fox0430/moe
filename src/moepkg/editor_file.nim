@@ -201,13 +201,134 @@ proc savePersistData*(e: Editor) =
         except CatchableError as ex:
           logError("editor", "Failed to remove empty bookmark file: " & ex.msg)
 
-proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer) =
-  if shouldTrimTrailingWhitespace(buffer):
+proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] =
+  # Read-only buffers cannot be edited, so skip trimming and save as-is.
+  # Otherwise a trim failure would permanently block saving the file.
+  if buffer.readOnly or not shouldTrimTrailingWhitespace(buffer):
+    return ok(())
+
+  # Skip trim while in a transaction; retried on the next save.
+  if buffer.inTransaction:
+    logDebug("editor", "Skipping trim: buffer in transaction")
+    return ok(())
+
+  # Fast check: skip transaction if nothing to trim.
+  var hasTrailing = false
+  for i in 0 ..< buffer.len:
+    let line = buffer.getLine(i)
+    if line.strip(leading = false, trailing = true).len != line.len:
+      hasTrailing = true
+      break
+
+  if not hasTrailing:
+    return ok(())
+
+  let beginRes = buffer.beginTransaction("trim trailing whitespace")
+  if beginRes.isErr:
+    return err(beginRes.error)
+  var trimErr = ""
+  var failed = false
+  try:
     for i in 0 ..< buffer.len:
       let line = buffer.getLine(i)
       let trimmed = line.strip(leading = false, trailing = true)
       if trimmed.len != line.len:
-        discard buffer.replaceLine(i, trimmed)
+        let replaceResult = buffer.replaceLine(i, trimmed)
+        if replaceResult.isErr:
+          trimErr = replaceResult.error
+          failed = true
+          break
+  except CatchableError, Defect:
+    # Roll back so inTransaction does not leak after the exception.
+    let e = getCurrentException()
+    let rollbackRes = buffer.rollbackTransaction()
+    if rollbackRes.isErr:
+      logError(
+        "editor",
+        "Failed to rollback trim transaction after exception: " & rollbackRes.error &
+          " (original: " & e.msg & ")",
+      )
+
+      if e of Defect:
+        # Re-raise so the crash-rescue boundary sees the Defect, not a
+        # benign save failure; fold in the rollback failure if present.
+        e.msg = e.msg & " (rollback also failed: " & rollbackRes.error & ")"
+        # NOTE: untestable (no API/hook injects Defects). Deliberate: a
+        # Defect must reach the crash-rescue boundary, never err().
+        raise e
+
+      return err(
+        "Failed to rollback trim transaction: " & rollbackRes.error & " (original: " &
+          e.msg & ")"
+      )
+    if e of Defect:
+      # Buffer state is unknown after a Defect; re-raise to crash-rescue.
+      logError("editor", "Trim transaction rolled back after Defect: " & e.msg)
+      raise e
+
+    return err("Failed to trim trailing whitespace: " & e.msg)
+  if failed:
+    let rollbackRes = buffer.rollbackTransaction()
+    if rollbackRes.isErr:
+      logError("editor", "Failed to rollback trim transaction: " & rollbackRes.error)
+      return err(
+        "Failed to rollback trim transaction: " & rollbackRes.error &
+          " (original trim error: " & trimErr & ")"
+      )
+    return err(trimErr)
+  let commitRes = buffer.commitTransaction()
+  if commitRes.isErr:
+    return err(commitRes.error)
+  ok(())
+
+proc trimTrailingWhitespaceTracked(
+    buffer: TextBuffer
+): Result[
+    tuple[didTrim: bool, changeList: seq[BufferPosition], changeListIndex: int], string
+] =
+  ## Trim and report whether anything changed plus a pre-trim snapshot of the
+  ## changelist, for exact revert on save failure.
+  let prevChangeId = buffer.currentChangeId
+  let changeListBefore = buffer.changeList
+  let changeListIndexBefore = buffer.changeListIndex
+  let trimResult = trimTrailingWhitespaceIfConfigured(buffer)
+  if trimResult.isErr:
+    return err(trimResult.error)
+  ok(
+    (
+      didTrim: buffer.currentChangeId != prevChangeId,
+      changeList: changeListBefore,
+      changeListIndex: changeListIndexBefore,
+    )
+  )
+
+proc revertTrimIfNeeded(
+    buffer: TextBuffer,
+    didTrim: bool,
+    changeListBefore: seq[BufferPosition],
+    changeListIndexBefore: int,
+): Result[(), string] =
+  ## Undo the trim after a failed save. No-op when nothing was trimmed.
+  if not didTrim:
+    return ok(())
+  # Drop undo()'s redo entry so the user cannot redo the rolled-back trim.
+  let trimChangeId = buffer.currentChangeId
+  let undoRes = buffer.undo()
+  if undoRes.isErr:
+    return err(undoRes.error)
+  # The newest redo entry must be the trim's inverse; surface a mismatch.
+  if not buffer.discardRedoEntry(trimChangeId):
+    logError(
+      "editor",
+      "Failed to discard the reverted trim's redo entry (changeId " & $trimChangeId &
+        "); the trim may be re-appliable via redo",
+    )
+  # Restore the pre-trim changelist wholesale. Recomputing the trim's footprint
+  # from the current length/index would miss entries the trim's own commit
+  # evicted at the ChangeListMaxLen cap, so an exact snapshot is required.
+  buffer.changeList = changeListBefore
+  buffer.changeListIndex = changeListIndexBefore
+  ok(())
 
 proc saveFile*(
     e: Editor, path: Option[string] = none(string), force: bool = false
@@ -235,13 +356,30 @@ proc saveFile*(
     logError("editor", "Save failed: File was modified externally: " & savePath)
     return err(ExternalModErrorMsg)
 
-  # Trim trailing whitespace if EditorConfig says so
-  trimTrailingWhitespaceIfConfigured(activeBuffer)
+  # Trim trailing whitespace if EditorConfig says so; reverted on save failure.
+  let didTrimRes = trimTrailingWhitespaceTracked(activeBuffer)
+  if didTrimRes.isErr:
+    logError(
+      "editor",
+      "Failed to trim trailing whitespace for " & savePath & ": " & didTrimRes.error,
+    )
+    return err("Failed to trim trailing whitespace: " & didTrimRes.error)
+  let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)
   let saveResult = activeBuffer.saveFile(savePath, checkExternalMod = not force)
   if saveResult.isErr:
+    let revertRes =
+      revertTrimIfNeeded(activeBuffer, didTrim, changeListBefore, changeListIndexBefore)
+    if revertRes.isErr:
+      logError(
+        "editor",
+        "Failed to revert trim after save failure for " & savePath & ": " &
+          revertRes.error,
+      )
+      logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
+      return err(saveResult.error & " (failed to revert trim: " & revertRes.error & ")")
     logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
     return err(saveResult.error)
 
@@ -276,11 +414,35 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
       result.skippedExternal.add(savePath)
       continue
 
-    # Mirror saveFile: honor EditorConfig trim_trailing_whitespace per buffer.
-    trimTrailingWhitespaceIfConfigured(buffer)
+    # Mirror saveFile: trim per buffer, reverted on save failure.
+    let didTrimRes = trimTrailingWhitespaceTracked(buffer)
+    if didTrimRes.isErr:
+      logError(
+        "editor", "Save all trim failed for " & savePath & ": " & didTrimRes.error
+      )
+      result.failures.add((path: savePath, error: didTrimRes.error))
+      continue
+    let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
 
     let saveResult = buffer.saveFile(savePath, checkExternalMod = not force)
     if saveResult.isErr:
+      let revertRes =
+        revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
+      if revertRes.isErr:
+        logError(
+          "editor",
+          "Failed to revert trim after save failure for " & savePath & ": " &
+            revertRes.error,
+        )
+        logError("editor", "Save all failed for " & savePath & ": " & saveResult.error)
+        result.failures.add(
+          (
+            path: savePath,
+            error:
+              saveResult.error & " (failed to revert trim: " & revertRes.error & ")",
+          )
+        )
+        continue
       logError("editor", "Save all failed for " & savePath & ": " & saveResult.error)
       result.failures.add((path: savePath, error: saveResult.error))
       continue
@@ -337,7 +499,34 @@ proc autoSave*(e: Editor) =
         )
         continue
 
+      # Mirror saveFile: trim per buffer, reverted on save failure.
+      let didTrimRes = trimTrailingWhitespaceTracked(buffer)
+      if didTrimRes.isErr:
+        logError(
+          "editor", "Auto save trim failed for " & savePath & ": " & didTrimRes.error
+        )
+        continue
+      let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
+
       let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
+      if saveResult.isErr:
+        let revertRes =
+          revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
+        if revertRes.isErr:
+          logError(
+            "editor",
+            "Failed to revert trim after auto save failure for " & savePath & ": " &
+              revertRes.error,
+          )
+          logError(
+            "editor",
+            "Auto save failed for " & savePath & ": " & saveResult.error &
+              " (failed to revert trim: " & revertRes.error & ")",
+          )
+        else:
+          logError(
+            "editor", "Auto save failed for " & savePath & ": " & saveResult.error
+          )
 
       if saveResult.isOk:
         savedCount += 1
@@ -351,8 +540,6 @@ proc autoSave*(e: Editor) =
           let lspResult = e.lsp.onBufferSave(buffer)
           if lspResult.isErr:
             logLspDegraded("didSave", lspResult.error & " (" & savePath & ")")
-      else:
-        logError("editor", "Auto save failed for " & savePath & ": " & saveResult.error)
 
   # Update last auto save time
   e.state.timing.lastAutoSave = now
@@ -410,6 +597,7 @@ proc autoBackup*(e: Editor) =
   # so background-tab buffers would silently miss auto backup.
   var backupCount = 0
   var backupPaths: seq[string] = @[]
+  var backupFailures: seq[string] = @[]
 
   for buffer in e.buffers:
     # Only backup modified buffers with a file path
@@ -420,9 +608,21 @@ proc autoBackup*(e: Editor) =
       if backupResult.isOk:
         backupCount += 1
         backupPaths.add(backupResult.get)
+      else:
+        # "No changes since last backup" is a normal skip, not a failure
+        if NoChangesSinceLastBackupError notin backupResult.error:
+          backupFailures.add(buffer.filePath.get & ": " & backupResult.error)
 
   # Always update last backup time to prevent repeated checks every frame
   e.state.timing.lastAutoBackup = now
+
+  # Report failures: backup is the user's safety net, a silent miss means
+  # work is only one crash away from being lost.
+  for failure in backupFailures:
+    logError "editor", "Auto backup failed for " & failure
+  if backupFailures.len > 0 and e.config.notification.screenNotifications and
+      e.config.notification.autoBackupScreenNotify:
+    e.state.statusMessage = "Auto backup failed for " & $backupFailures.len & " file(s)"
 
   # Show notification if any files were backed up
   if backupCount > 0:

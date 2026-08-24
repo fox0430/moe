@@ -25,6 +25,8 @@ import pkg/[chronos, results]
 
 import types/editor_types, lsp_integration, motion, editor_codelens, lsp_request_context
 import command_handlers/[handler_manager, insert_handler]
+import buffer/undo
+import logger
 
 export lsp_request_context
 
@@ -212,19 +214,24 @@ proc applyWorkspaceEditFromServer*(
       return
         (applied: false, failureReason: some("buffer changed since last didChange"))
 
-    let applyResult = applyWorkspaceEdit(e.buffers, edit, "LSP Edit")
+    let applyResult =
+      applyWorkspaceEdit(e.buffers, edit, "LSP Edit", allowUnopenedFileWrites = false)
     if applyResult.isErr:
       # applyWorkspaceEdit commits each open buffer as it goes, so a failure
       # partway through can leave earlier buffers already modified. Re-sync every
       # target buffer (best effort) so those committed changes don't silently
       # diverge from the server's copy — an unmodified/rolled-back buffer's
-      # didChange just resends identical text.
-      for path in collectWorkspaceEditPaths(edit):
-        let absPath = normalizedPath(absolutePath(path))
-        for buf in e.buffers:
-          if buf.filePath.isSome and
-              normalizedPath(absolutePath(buf.filePath.get)) == absPath:
-            e.syncBufferAfterEdit(buf, "applyEdit")
+      # didChange just resends identical text. A failed rollback is
+      # different: the partially reverted text must not become the server's
+      # new baseline, so skip the sync (staleness is caught on the next
+      # server edit instead of being silently overwritten).
+      if BufferStateInconsistentSuffix notin applyResult.error:
+        for path in collectWorkspaceEditPaths(edit):
+          let absPath = normalizedPath(absolutePath(path))
+          for buf in e.buffers:
+            if buf.filePath.isSome and
+                normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+              e.syncBufferAfterEdit(buf, "applyEdit")
       # A partial apply may have shrunk already-committed buffers.
       e.clampAllWindowCursors()
       e.state.statusMessage = "Failed to apply server edit: " & applyResult.error
@@ -325,6 +332,10 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       return true
     except CancelledError as err:
       raise err
+    except TransactionRollbackError as err:
+      logError "lsp", "Format aborted, buffer state untrustworthy: " & err.msg
+      e.state.statusMessage = "LSP format error: buffer state may be inconsistent"
+      return false
     except Exception as err:
       e.state.statusMessage = "LSP format error: " & err.msg
       return false
@@ -371,6 +382,12 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
         "Folded " & $count & " region(s)"
       else:
         "No foldable regions"
+  except TransactionRollbackError as err:
+    # This proc is asyncSpawned with raises: [], so an unhandled exception
+    # would surface only as an unobserved future failure: surface the failed
+    # rollback (untrustworthy buffer) as a status message instead.
+    logError "lsp", "Folds aborted, buffer state untrustworthy: " & err.msg
+    e.state.statusMessage = "LSP fold error: buffer state may be inconsistent"
   except CancelledError:
     discard
 
@@ -441,6 +458,10 @@ proc requestLspRename*(
         $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
     except CancelledError:
       discard
+    except TransactionRollbackError as err:
+      # asyncSpawn only logs future failures: surface the untrustworthy state explicitly.
+      logError "lsp", "Rename aborted, buffer state untrustworthy: " & err.msg
+      e.state.statusMessage = "LSP rename error: buffer state may be inconsistent"
     except Exception as err:
       e.state.statusMessage = "LSP rename error: " & err.msg
 
@@ -567,6 +588,10 @@ proc requestLspExecuteCommand*(
         e.state.statusMessage = "Executed: " & command & " -> " & $response
     except CancelledError:
       discard
+    except TransactionRollbackError as err:
+      logError "lsp", "Execute command aborted, buffer state untrustworthy: " & err.msg
+      e.state.statusMessage =
+        "LSP executeCommand error: buffer state may be inconsistent"
     except Exception as err:
       e.state.statusMessage = "LSP executeCommand error: " & err.msg
 

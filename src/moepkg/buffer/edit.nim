@@ -256,11 +256,13 @@ proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
       endCol = min(endPos.column, lineLen)
 
     if endCol >= lineLen:
-      # Selection extends to/past line end - include newline
+      # Include the trailing newline only if a next line exists — otherwise
+      # undo would insert a phantom byte that was never actually deleted.
+      let tail = if startPos.line < b.len - 1: "\n" else: ""
       if startCol >= lineLen:
-        result = "\n"
+        result = tail
       else:
-        result = line.runeSubStr(startCol) & "\n"
+        result = line.runeSubStr(startCol) & tail
     else:
       # Selection within line
       if startCol >= lineLen:
@@ -284,10 +286,12 @@ proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
         else:
           result &= line.runeSubStr(startCol) & "\n"
       elif lineIdx == endPos.line:
-        # Last line: from beginning to endPos.column
+        # Skip the trailing "\n" when no next line exists, to avoid a phantom
+        # empty line on undo.
         let endCol = min(endPos.column, lineLen)
+        let tail = if lineIdx < b.len - 1: "\n" else: ""
         if endCol >= lineLen:
-          result &= line & "\n"
+          result &= line & tail
         else:
           result &= line.runeSubStr(0, endCol + 1)
       else:

@@ -36,7 +36,8 @@ import
   logger,
   buffer,
   window_manager,
-  lsp_integration
+  lsp_integration,
+  terminal_mode
 
 proc deleteBufferAt*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from
@@ -239,9 +240,9 @@ proc cleanupAllTerminals*(e: Editor) =
   ## own process group survives as an orphan, and the fd/zombie linger.
   ##
   ## `cleanup()` closes each PTY's master fd and sends SIGTERM to (and reaps)
-  ## the shell deterministically. Unlike `closeTerminalBuffer` this does not
-  ## rewire windows or buffer lists: the editor is exiting, so only the OS
-  ## resources need releasing. Idempotent and safe on an empty map.
+  ## the shell's process group deterministically. Unlike `closeTerminalBuffer`,
+  ## this does not rewire windows or buffer lists: the editor is exiting, so
+  ## only the OS resources need releasing. Idempotent and safe on an empty map.
   for termState in e.terminalStates.values:
     termState.cleanup()
   e.terminalStates.clear()

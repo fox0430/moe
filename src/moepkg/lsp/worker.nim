@@ -1739,6 +1739,12 @@ proc pollEvents*(worker: LspWorker): seq[LspEvent] =
   ## Poll for events from the worker (non-blocking)
   result = worker.eventQueue.popAll()
 
+proc enqueueEventForTest*(worker: LspWorker, evt: LspEvent) =
+  ## Test hook: inject an event as if it arrived from the server process.
+  ## Deliberately compiled into release builds so the test suite (which has no
+  ## `testing` define) can call it.
+  push(worker.eventQueue, evt)
+
 proc state*(worker: LspWorker): LspWorkerState =
   ## Get the current worker state (thread-safe)
   LspWorkerState(worker.sharedState.stateVal.load(moAcquire))
@@ -1764,6 +1770,17 @@ proc hasPendingCommands*(worker: LspWorker): bool =
   ## was dequeued before asserting on the worker's subsequent behavior.
   withLock(worker.commandQueue.lock):
     result = worker.commandQueue.queue.len > 0
+
+proc pendingCommandsForTest*(worker: LspWorker): seq[LspCommand] =
+  ## Snapshot queued commands without dequeuing them (test hook).
+  withLock(worker.commandQueue.lock):
+    for cmd in worker.commandQueue.queue:
+      result.add(cmd)
+
+proc setStateForTest*(worker: LspWorker, state: LspWorkerState) =
+  ## Force the worker state without starting the thread (test hook).
+  worker.sharedState.running.store(true, moRelease)
+  worker.sharedState.stateVal.store(state.ord, moRelease)
 
 proc isThreadAlive*(worker: LspWorker): bool =
   ## Check if the worker thread itself is still running its main loop

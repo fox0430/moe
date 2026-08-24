@@ -75,9 +75,11 @@ proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
 
   let target = link.target.get
 
-  # Check if the target is a file:// URI
-  if target.startsWith("file://"):
-    let path = lsp_service.uriToPath(target)
+  # The target is LSP-server-sourced: only a well-formed local file URI may
+  # open a buffer, so anything else falls through to the scheme display.
+  let pathRes = lsp_service.validateLocalFileUri(target)
+  if pathRes.isOk:
+    let path = pathRes.get
     let activeBuffer = e.activeBuffer()
 
     # Add current position to jump list before jumping

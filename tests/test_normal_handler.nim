@@ -258,7 +258,7 @@ suite "NormalModeHandler - Insert Mode Entry":
     check result.kind == nmrHandled
     check result.modeTransition.isSome
     check result.modeTransition.get == EditorMode.Insert
-    # Cursor moves to first non-blank character
+    check state.cursor.column == 3
 
   test "Open line below (o)":
     let buf = newTextBuffer()
@@ -676,17 +676,6 @@ suite "NormalModeHandler - All Mode Switches":
     check result.modeTransition.isSome
     check result.modeTransition.get == EditorMode.Filer
 
-  test "Switch to QuickRun mode":
-    let buf = newTextBuffer()
-    let handler = createTestHandler(buf)
-    let state = createTestState()
-
-    let result = handler.handleModeSwitch(EditorMode.QuickRun, state, buf)
-
-    check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.QuickRun
-
   test "Switch to LogViewer mode":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
@@ -1059,11 +1048,9 @@ suite "NormalModeHandler - Undo/Redo":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    # Try undo - may succeed or fail depending on undo history
     let result = handler.executeCommand(buf, state, viewport, "edit.undo")
 
-    # Either succeeds or returns error (both are valid outcomes)
-    check result.kind == nmrHandled or result.kind == nmrError
+    check result.kind == nmrHandled
 
   test "Redo command executes":
     let buf = newTextBuffer()
@@ -1072,11 +1059,9 @@ suite "NormalModeHandler - Undo/Redo":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    # Try redo - may succeed or fail depending on redo history
     let result = handler.executeCommand(buf, state, viewport, "edit.redo")
 
-    # Either succeeds or returns error (both are valid outcomes)
-    check result.kind == nmrHandled or result.kind == nmrError
+    check result.kind == nmrError
 
   test "Undo clamps cursor to valid buffer range":
     let buf = newTextBuffer()
@@ -1156,7 +1141,9 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "w", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == " world"
+    check state.cursor == BufferPosition(line: 0, column: 0)
 
   test "Text object wide word (W) with pending operator":
     let buf = newTextBuffer()
@@ -1178,7 +1165,10 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "W", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "hello-world test"
+    check state.cursor == BufferPosition(line: 0, column: 0)
+    check state.registers.getNoNamedRegister().getContent() == "hello-world "
 
   test "Text object double quote with pending operator":
     let buf = newTextBuffer()
@@ -1201,7 +1191,10 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "say \"\" world"
+    check state.cursor == BufferPosition(line: 0, column: 5)
+    check state.activeWindow.mode == EditorMode.Insert
 
   test "Text object single quote":
     let buf = newTextBuffer()
@@ -1224,7 +1217,9 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "'", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "say '' world"
+    check state.cursor == BufferPosition(line: 0, column: 5)
 
   test "Text object parenthesis":
     let buf = newTextBuffer()
@@ -1247,7 +1242,9 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "(", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "func()"
+    check state.cursor == BufferPosition(line: 0, column: 5)
 
   test "Text object bracket":
     let buf = newTextBuffer()
@@ -1270,7 +1267,10 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "[", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "arr[0, 1, 2]"
+    check state.cursor == BufferPosition(line: 0, column: 5)
+    check state.registers.getNoNamedRegister().getContent() == "[0, 1, 2]"
 
   test "Text object brace":
     let buf = newTextBuffer()
@@ -1293,7 +1293,9 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "{", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "obj{}"
+    check state.cursor == BufferPosition(line: 0, column: 4)
 
   test "Text object angle bracket":
     let buf = newTextBuffer()
@@ -1316,7 +1318,10 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "<", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "<tag>content</tag>"
+    check state.cursor == BufferPosition(line: 0, column: 1)
+    check state.registers.getNoNamedRegister().getContent() == "tag"
 
   test "Text object backtick":
     let buf = newTextBuffer()
@@ -1339,7 +1344,9 @@ suite "NormalModeHandler - Text Object Handling":
     let keyCombo = KeyCombo(isSpecial: false, char: "`", modifiers: {})
     let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check r.kind == nmrHandled or r.kind == nmrError
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "say `` world"
+    check state.cursor == BufferPosition(line: 0, column: 5)
 
   test "Unknown text object key cancels pending state":
     let buf = newTextBuffer()
@@ -1578,18 +1585,17 @@ suite "NormalModeHandler - Command Types":
 
     check r.kind == nmrHandled
 
-  test "Motion command failure returns error":
+  test "Motion.Up at first line clamps and succeeds":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    # Try to move up from first line - should fail
     let result = handler.handleMotionCommand(buf, state, Motion.Up, 1)
 
-    # Motion may or may not error depending on implementation
-    check result.isOk or result.isErr
+    check result.isOk
+    check state.cursor.line == 0
 
 suite "NormalModeHandler - File operation commands":
   test "file-new returns ptNewFile":

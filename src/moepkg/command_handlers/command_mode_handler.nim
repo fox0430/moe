@@ -29,7 +29,7 @@ import pkg/[celina, chronos]
 import
   ../[
     editor, key_bindings, modes, buffer, types, command_line, command_completion,
-    unicode_utils, key_router,
+    unicode_utils, key_router, logger,
   ]
 import handler_manager
 import ./editor_ops
@@ -306,7 +306,12 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         let activeBuffer = e.activeBuffer()
         if activeBuffer.inTransaction:
           clearAutoIndentIfUnedited(activeBuffer, e.state)
-          discard activeBuffer.commitTransaction()
+          let commitResult = activeBuffer.commitTransaction()
+          if commitResult.isErr:
+            logError "command_mode_handler",
+              "Failed to commit transaction: " & commitResult.error
+            e.state.statusMessage =
+              "Failed to commit transaction: " & commitResult.error
         e.state.editState.insertModeStartPos = none(BufferPosition)
         e.state.editState.substituteContext = none(types.SubstituteContext)
     return true
@@ -434,7 +439,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.state.input.commandText =
       e.state.input.commandText[0 ..< bytePos] & keyCombo.char &
       e.state.input.commandText[bytePos ..^ 1]
-    e.state.input.commandCursor += 1
+    e.state.input.commandCursor += keyCombo.char.runeLen
     # Handle completion
     let mgr = e.state.commandCompletionManager
     let hasSpace = ' ' in e.state.input.commandText

@@ -1257,6 +1257,30 @@ suite "ConfigMode - applyChange":
     # The value should have changed in the config
     check $cfg.standard.colorMode == state.items[colorModeIndex].enumValue
 
+  test "applyChange re-anchors within same section when edited item is hidden by rebuild":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var pathIndex = -1
+    for i, item in state.items:
+      if item.section == "Theme" and item.displayName == "path":
+        pathIndex = i
+        break
+    check pathIndex >= 0
+
+    cfg.theme.kind = tkDefault
+    state.items[pathIndex].stringValue = "some/new/path"
+    state.selectedIndex = pathIndex
+
+    applyChange(state, testEditorState(cfg), pathIndex)
+
+    for item in state.items:
+      check not (item.section == "Theme" and item.displayName == "path")
+
+    check state.selectedIndex >= 0
+    check state.selectedIndex < state.items.len
+    check state.items[state.selectedIndex].section == "Theme"
+
 suite "ConfigMode - pendingApply":
   test "pendingApply defaults to false":
     let cfg = newEditorConfig()
@@ -2503,36 +2527,3 @@ suite "ConfigMode - Theme Colors":
     for item in state.items:
       check item.kind != cvkColor
     check state.selectedIndex == clamp(idx, 0, max(0, state.items.len - 1))
-
-suite "ConfigMode - applyChange hidden recovery":
-  test "selection snaps to itemIndex when the edited item becomes hidden":
-    # Regression: if the item being edited is hidden by the post-edit rebuild
-    # (e.g. its visibleWhen predicate now returns false), the recovery loop
-    # cannot find its descriptor. Selection must fall back to the neighborhood
-    # of the edited slot, not the stale selectedIndex.
-    let cfg = newEditorConfig()
-    cfg.theme.kind = tkConfig
-    cfg.theme.path = "somepath"
-    let state = newConfigModeState(cfg)
-
-    var pathIdx = -1
-    for i, item in state.items:
-      if item.kind == cvkString and item.section == "Theme" and
-          item.displayName == "path":
-        pathIdx = i
-        break
-    check pathIdx > 0
-
-    # Preload the rebuild so Theme.path (visibleWhen kind == tkConfig) is hidden,
-    # and stage a real value change so applyChange doesn't early-return.
-    cfg.theme.kind = tkDefault
-    state.items[pathIdx].stringValue = "newpath"
-    state.selectedIndex = 0
-
-    state.applyChange(testEditorState(cfg), pathIdx)
-
-    for item in state.items:
-      check not (
-        item.kind == cvkString and item.section == "Theme" and item.displayName == "path"
-      )
-    check state.selectedIndex == clamp(pathIdx, 0, max(0, state.items.len - 1))

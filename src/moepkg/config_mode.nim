@@ -301,7 +301,9 @@ proc applyChange*(state: ConfigModeState, editorState: EditorState, itemIndex: i
   state.pendingApply = true
 
   # Rebuild to update conditional visibility
-  let savedDescIdx = item.descriptorIndex
+  let
+    savedDescIdx = item.descriptorIndex
+    savedSection = item.section
   state.buildItemList()
   var found = false
   for i, newItem in state.items:
@@ -310,8 +312,18 @@ proc applyChange*(state: ConfigModeState, editorState: EditorState, itemIndex: i
       found = true
       break
   if not found:
-    # Item hidden by rebuild; anchor near its old slot instead of stale index.
-    state.selectedIndex = clamp(itemIndex, 0, max(0, state.items.len - 1))
+    # Hidden by rebuild: pick a surviving neighbor in the same section rather
+    # than reusing the stale positional index (which points at an unrelated row
+    # once earlier items have shifted visibility).
+    var best = -1
+    for i, newItem in state.items:
+      if newItem.section == savedSection:
+        best = i
+        if newItem.descriptorIndex >= savedDescIdx:
+          break
+    if best < 0:
+      best = clamp(itemIndex, 0, max(0, state.items.len - 1))
+    state.selectedIndex = best
 
 proc applyColorChange*(
     state: ConfigModeState, editorState: EditorState, itemIndex: int

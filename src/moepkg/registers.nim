@@ -22,15 +22,16 @@
 ## This module provides a comprehensive register system similar to Vim:
 ## - Unnamed register ("): The default register for all operations
 ## - Numbered registers (0-9): 0 for yank, 1-9 for delete history
+##   (linewise/multiline deletes only; shorter deletions go to `-`)
 ## - Named registers (a-z, A-Z): User-defined registers (uppercase appends)
 ## - Small delete register (-): For deletions less than one line
 ## - Clipboard registers (*, +): System clipboard integration
 
-import std/[options, strutils, tables]
+import std/[monotimes, options, strutils, tables, times]
 
 import pkg/results
 
-import config, clipboard
+import config, clipboard, logger
 import types/registers_types
 
 export registers_types
@@ -43,6 +44,7 @@ proc initRegisters*(): Registers =
     named: initTable[char, Register](),
     primarySelection: Register(isLine: false, buffer: @[]),
     clipboardSelection: Register(isLine: false, buffer: @[]),
+    lastClipboardWriteTime: MonoTime(),
   )
 
   # Initialize number registers
@@ -130,17 +132,29 @@ proc appendRegister(r: var Register, content: string, isLine: bool) =
   else:
     r.buffer[^1].add(content)
 
-# Clipboard integration (uses async clipboard module)
+# Clipboard integration (synchronous so that put-time reads see the writes)
 
-proc sendToClipboard(r: Registers, content: string) =
-  ## Send content to system CLIPBOARD selection if available (fire-and-forget)
+proc sendToClipboard(r: Registers, content: string, isLine: bool) =
+  ## Send content to the system CLIPBOARD synchronously, keeping the `+`
+  ## cache in sync so a put returns the written content even inside the
+  ## wl-copy claim window.
   if r.clipboardTool.isSome:
-    writeToClipboardAsync(r.clipboardTool.get, content)
+    let writeResult = writeToClipboardSync(r.clipboardTool.get, content)
+    if writeResult.isErr:
+      logError "registers", "Failed to write to CLIPBOARD: " & writeResult.error
+    else:
+      r.clipboardSelection.setRegister(content, isLine)
+      if not writeResult.get:
+        # The write is unconfirmed: open the claim window so a stale read
+        # is not adopted.
+        r.lastClipboardWriteTime = getMonoTime()
 
 proc sendToPrimarySelection(r: Registers, content: string) =
-  ## Send content to X11 PRIMARY selection if available (fire-and-forget)
+  ## Send content to X11 PRIMARY selection if available (synchronous)
   if r.clipboardTool.isSome:
-    writeToPrimarySelectionAsync(r.clipboardTool.get, content)
+    let writeResult = writeToPrimarySelectionSync(r.clipboardTool.get, content)
+    if writeResult.isErr:
+      logError "registers", "Failed to write to PRIMARY: " & writeResult.error
 
 proc getFromClipboard(r: Registers): Result[string, string] =
   ## Get content from system CLIPBOARD selection if available
@@ -154,19 +168,30 @@ proc getFromPrimarySelection(r: Registers): Result[string, string] =
     return err("No clipboard tool configured")
   return readFromPrimarySelectionSync(r.clipboardTool.get)
 
+proc markClipboardWritten*(
+    r: Registers, content: string, isLine: bool, writeConfirmed: bool
+) =
+  ## Record a successful CLIPBOARD write from copy: sync the unnamed and `+`
+  ## registers, opening the wl-copy claim window when the write is unconfirmed.
+  r.noNamed.setRegister(content, isLine)
+  r.clipboardSelection.setRegister(content, isLine)
+  if not writeConfirmed:
+    r.lastClipboardWriteTime = getMonoTime()
+
 # Public API for setting registers
 
 proc setNoNamedRegister*(r: Registers, content: string, isLine: bool) =
   ## Set the unnamed register (") and sync to clipboard and primary selection
   r.noNamed.setRegister(content, isLine)
-  r.sendToClipboard(content)
+  r.sendToClipboard(content, isLine)
   r.sendToPrimarySelection(content)
 
 proc setNoNamedRegister*(r: Registers, lines: seq[string], isLine: bool) =
   ## Set the unnamed register from lines
   r.noNamed.setRegister(lines, isLine)
+  # Send line-joined text so line boundaries survive.
   let joined = lines.join("\n")
-  r.sendToClipboard(joined)
+  r.sendToClipboard(joined, isLine)
   r.sendToPrimarySelection(joined)
 
 proc setSmallDeleteRegister*(r: Registers, content: string) =
@@ -256,7 +281,7 @@ proc setClipboardRegister*(r: Registers, name: char, content: string, isLine: bo
     r.sendToPrimarySelection(content)
   else:
     r.clipboardSelection.setRegister(content, isLine)
-    r.sendToClipboard(content)
+    r.sendToClipboard(content, isLine)
   r.noNamed.setRegister(content, isLine)
 
 proc setClipboardRegister*(r: Registers, content: string, isLine: bool) =
@@ -292,6 +317,26 @@ proc setRegister*(
   else:
     err("Invalid register name: " & $name)
 
+proc isWithinClipboardClaimWindow(r: Registers): bool =
+  ## True while the wl-copy claim may still serve the pre-write content.
+  ## The zero write-time (no write yet) must not open the window.
+  r.clipboardTool == some(cbtWlClipboard) and r.lastClipboardWriteTime != MonoTime() and
+    getMonoTime() - r.lastClipboardWriteTime < initDuration(milliseconds = 500)
+
+proc restartClipboardClaimWindow*(r: Registers) =
+  ## Restart the wl-copy claim window from now (test seam).
+  r.lastClipboardWriteTime = getMonoTime()
+
+proc expireClipboardClaimWindow*(r: Registers) =
+  ## Expire the claim window by zeroing the write time (test seam).
+  r.lastClipboardWriteTime = MonoTime()
+
+proc setClipboardWriteAgo*(r: Registers, millisecondsAgo: int) =
+  ## Test seam: place the last CLIPBOARD write `millisecondsAgo` in the past
+  ## to pin the claim window to either side of its boundary.
+  r.lastClipboardWriteTime =
+    getMonoTime() - initDuration(milliseconds = millisecondsAgo)
+
 # Public API for getting registers
 
 proc tryUpdateClipboardSelectionRegister(r: Registers) =
@@ -300,8 +345,13 @@ proc tryUpdateClipboardSelectionRegister(r: Registers) =
   if clipResult.isOk:
     let content = clipResult.get
     if content.len > 0 and content != r.clipboardSelection.getContent:
-      let hasNewline = content.contains('\n')
-      r.clipboardSelection.setRegister(content, hasNewline)
+      if not r.isWithinClipboardClaimWindow:
+        let hasNewline = content.contains('\n')
+        r.clipboardSelection.setRegister(content, hasNewline)
+    elif content.len > 0 and r.isWithinClipboardClaimWindow:
+      # The write has landed: close the claim window so external changes
+      # are adopted again.
+      r.lastClipboardWriteTime = MonoTime()
 
 proc tryUpdatePrimarySelectionRegister(r: Registers) =
   ## Try to update primary selection register from system PRIMARY selection
@@ -313,51 +363,26 @@ proc tryUpdatePrimarySelectionRegister(r: Registers) =
       r.primarySelection.setRegister(content, hasNewline)
 
 proc getNoNamedRegister*(r: Registers): Register =
-  ## Get the unnamed register, syncing with system clipboard and primary selection.
-  ## Behaves like Vim's clipboard=unnamed,unnamedplus:
-  ## moe writes to both CLIPBOARD and PRIMARY on yank/delete, so if they differ,
-  ## an external app changed one of them. Use the externally changed one.
-  ## If both differ from internal, prefer PRIMARY (mouse selection is more recent).
-  var clipContent = ""
-  var primaryContent = ""
-
+  ## Get the unnamed register, syncing with the system CLIPBOARD so
+  ## external changes are picked up by the next put. A read matching moe's
+  ## own write keeps the internal type; inside the wl-copy claim window the
+  ## internal register is kept because the write may not have landed yet.
   let clipResult = r.getFromClipboard()
   if clipResult.isOk:
-    clipContent = clipResult.get
-
-  let primaryResult = r.getFromPrimarySelection()
-  if primaryResult.isOk:
-    primaryContent = primaryResult.get
-
-  let current = r.noNamed.getContent
-  let clipChanged = clipContent.len > 0 and clipContent != current
-  let primaryChanged = primaryContent.len > 0 and primaryContent != current
-
-  # TODO: Cache the last written value to avoid spawning external processes on
-  # every paste when the clipboard hasn't changed.
-
-  if primaryChanged and clipChanged:
-    # Both differ from internal register. If CLIPBOARD == PRIMARY, an external
-    # app set both (e.g. Ctrl+C). Otherwise, they diverged: prefer the one
-    # that differs from the other (i.e. the more recently changed one).
-    # Since moe sets both to the same value, if PRIMARY != CLIPBOARD,
-    # it means an external app changed one after moe's last write.
-    if primaryContent != clipContent:
-      # PRIMARY was changed independently (mouse selection) — prefer it
-      let hasNewline = primaryContent.contains('\n')
-      r.noNamed.setRegister(primaryContent, hasNewline)
-    else:
-      # Both changed to the same value (external Ctrl+C) — use either
-      let hasNewline = clipContent.contains('\n')
-      r.noNamed.setRegister(clipContent, hasNewline)
-  elif primaryChanged:
-    # Only PRIMARY changed (mouse selection in external app)
-    let hasNewline = primaryContent.contains('\n')
-    r.noNamed.setRegister(primaryContent, hasNewline)
-  elif clipChanged:
-    # Only CLIPBOARD changed (Ctrl+C in external app)
-    let hasNewline = clipContent.contains('\n')
-    r.noNamed.setRegister(clipContent, hasNewline)
+    let clipContent = clipResult.get
+    if clipContent.len > 0 and clipContent != r.noNamed.getContent:
+      # Inside the claim window a differing read may be stale pre-write
+      # content; keep the internal register.
+      if not r.isWithinClipboardClaimWindow:
+        let hasNewline = clipContent.contains('\n')
+        r.noNamed.setRegister(clipContent, hasNewline)
+    elif clipContent.len > 0 and r.isWithinClipboardClaimWindow:
+      # The write has landed: close the claim window so external changes
+      # are adopted again.
+      r.lastClipboardWriteTime = MonoTime()
+  else:
+    logDebug "registers",
+      "Clipboard read failed, falling back to internal register: " & clipResult.error
 
   r.noNamed
 

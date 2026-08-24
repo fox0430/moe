@@ -1,8 +1,27 @@
-import std/unittest
+## GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+import std/[unittest, strutils]
 
 import pkg/results
 
-import ../src/moepkg/encoding
+import ../src/moepkg/encoding {.all.}
 
 suite "Encoding Detection":
   test "Detect UTF-8 from ASCII text":
@@ -79,6 +98,108 @@ suite "Encoding Detection":
     # Invalid byte sequence that doesn't match any encoding
     # Odd length prevents UTF-16/32 validation
     let text = "\x80\x81\x82"
+    check detectCharacterEncoding(text) == CharacterEncoding.unknown
+
+  test "Lone high surrogate at end does not crash UTF-16 validation":
+    # Regression: validateUtf16Be/Le read past the end when the input ends
+    # with a lone high surrogate (previously raised IndexDefect)
+    let inputs = ["\x00\xD8", "\x00\x00\x00\xD8", "\xD8\x00", "\xD8\x00\x00\x00"]
+    for text in inputs:
+      var crashed = false
+      try:
+        discard detectCharacterEncoding(text)
+      except Defect:
+        crashed = true
+      check not crashed
+
+  test "Lone low surrogate at end does not crash UTF-16 validation":
+    # Regression: same class of defect as the high surrogate case
+    let inputs = ["\x00\xDC", "\x00\x00\x00\xDC", "\xDC\x00", "\xDC\x00\x00\x00"]
+    for text in inputs:
+      var crashed = false
+      try:
+        discard detectCharacterEncoding(text)
+      except Defect:
+        crashed = true
+      check not crashed
+
+  test "Lone high surrogate at end is rejected by UTF-16 validators":
+    check not validateUtf16Be("\xD8\x00")
+    check not validateUtf16Be("\xD8\x00\x00\x00")
+    check not validateUtf16Le("\x00\xD8")
+    check not validateUtf16Le("\x00\x00\x00\xD8")
+
+  test "Lone low surrogate at end is rejected by UTF-16 validators":
+    check not validateUtf16Be("\xDC\x00")
+    check not validateUtf16Be("\xDC\x00\x00\x00")
+    check not validateUtf16Le("\x00\xDC")
+    check not validateUtf16Le("\x00\x00\x00\xDC")
+
+  test "Valid surrogate pair at end is accepted by UTF-16 validators":
+    # U+20000 (0xD840 / 0xDC00)
+    check validateUtf16Be("\xD8\x40\xDC\x00")
+    check validateUtf16Le("\x40\xD8\x00\xDC")
+    # U+1F600 (0xD83D / 0xDE00)
+    check validateUtf16Be("\xD8\x3D\xDE\x00")
+    check validateUtf16Le("\x3D\xD8\x00\xDE")
+
+  test "UTF-16BE detection survives surrogate pair at sample boundary":
+    # Regression: the sample cut used to split the surrogate pair
+    let text =
+      repeat("\x00A", EncodingDetectionSampleSize div 2 - 2) & "\x00\xD8" &
+      "\xD8\x40\xDC\x00"
+    check detectCharacterEncoding(text) == CharacterEncoding.utf16Be
+
+  test "UTF-16LE detection survives surrogate pair at sample boundary":
+    let text =
+      repeat("\x41\x00", EncodingDetectionSampleSize div 2 - 2) & "\xD8\x00" &
+      "\x40\xD8\x00\xDC"
+    check detectCharacterEncoding(text) == CharacterEncoding.utf16Le
+
+  test "Sample cut with 3 bytes remaining extends by 2 (s.len = 8195)":
+    # Regression: the +2 extension branch fires when 3 bytes remain past
+    # the cut. The extended sample completes the cut pair, keeping the LE
+    # detection alive; without the extension the sample would end on a
+    # lone high surrogate and UTF-16 detection would fail outright.
+    let text =
+      repeat("\x41\x00", EncodingDetectionSampleSize div 2 - 1) & "\xD8\x41" & "\x41\x41" &
+      "\x00"
+    check detectCharacterEncoding(text) == CharacterEncoding.utf16Le
+
+  test "Sample cut with 1 byte remaining skips extension (s.len = 8193)":
+    # Regression: the extension gate `sampleLen + 2 <= s.len` skips the
+    # extension when only 1 byte remains. The full re-validation then
+    # rejects UTF-16 (odd length) and the sample is ambiguous UTF-32.
+    let text =
+      repeat("\x41\x00", EncodingDetectionSampleSize div 2 - 1) & "\xD8\x41" & "\x41"
+    check detectCharacterEncoding(text) == CharacterEncoding.unknown
+
+  test "UTF-32BE detection survives surrogate-like code point at sample boundary":
+    # Regression: the surrogate-pair guard used to extend the sample by 2
+    # bytes, misaligning it for the UTF-32 validators when the code point
+    # at the cut has low 16 bits in the high surrogate range.
+    # U+2D800 (CJK Ext E) has low 16 bits 0xD800.
+    let text =
+      repeat("\x00\x00\x91\xE3", EncodingDetectionSampleSize div 4 - 1) &
+      "\x00\x02\xD8\x00" & "\x00\x00\x91\xE3"
+    check detectCharacterEncoding(text) == CharacterEncoding.utf32Be
+
+  test "UTF-16BE detection does not flip to LE when the sample cut splits a pair":
+    # Regression: when surrogate pairs surround the cut, the 4-byte
+    # extension still leaves a lone high surrogate at the sample end. The
+    # BE validation of the sample then fails while the LE validation
+    # passes, misdetecting a BE file as LE. The UTF-16 re-validation
+    # against the full content must not guess between two valid byte
+    # orders.
+    let text =
+      repeat("\x00A", EncodingDetectionSampleSize div 2 - 1) &
+      repeat("\xD8\x3D\xDE\x00", 20)
+    check detectCharacterEncoding(text) == CharacterEncoding.unknown
+
+  test "UTF-16LE detection does not flip to BE when the sample cut splits a pair":
+    let text =
+      repeat("\x41\x00", EncodingDetectionSampleSize div 2 - 1) &
+      repeat("\x3D\xD8\x00\xDE", 20)
     check detectCharacterEncoding(text) == CharacterEncoding.unknown
 
   test "Detect UTF-8 with multi-byte characters":
@@ -161,3 +282,45 @@ suite "Encoding Transcoding":
     check bomBytes(CharacterEncoding.utf32Le) == "\xFF\xFE\x00\x00"
     check bomBytes(CharacterEncoding.utf32Be) == "\x00\x00\xFE\xFF"
     check bomBytes(CharacterEncoding.unknown) == ""
+
+suite "sanitizeInvalidUtf8":
+  test "valid UTF-8 passes through unchanged":
+    check sanitizeInvalidUtf8("hello") == "hello"
+    check sanitizeInvalidUtf8("こんにちは") == "こんにちは"
+    check sanitizeInvalidUtf8("héllo") == "héllo"
+    check sanitizeInvalidUtf8("a😀b") == "a😀b"
+
+  test "invalid leading byte becomes U+FFFD":
+    check sanitizeInvalidUtf8("\xC0\x41") == "\xEF\xBF\xBD" & "A"
+    # 0xF5-0xF7 are invalid 4-byte leading bytes (code point > U+10FFFF);
+    # the trailing continuation bytes are each substituted too.
+    check sanitizeInvalidUtf8("\xF5\x80\x80\x80") ==
+      "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "truncated sequence becomes U+FFFD per byte":
+    check sanitizeInvalidUtf8("\xE3\x81") == "\xEF\xBF\xBD\xEF\xBF\xBD"
+    check sanitizeInvalidUtf8("\xF0\x9F") == "\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "bad continuation byte splits the sequence":
+    # 0xE3 0x28 (ASCII '(') is not a valid continuation
+    check sanitizeInvalidUtf8("\xE3\x28") == "\xEF\xBF\xBD" & "("
+    check sanitizeInvalidUtf8("\xE3\x81\x28") == "\xEF\xBF\xBD\xEF\xBF\xBD" & "("
+
+  test "overlong encoding becomes U+FFFD per byte":
+    # 0xC0 0x80 encodes NUL overlong; 0x80 alone is also invalid
+    check sanitizeInvalidUtf8("\xC0\x80") == "\xEF\xBF\xBD\xEF\xBF\xBD"
+    # 0xE0 0x80 0x80 encodes NUL overlong in 3 bytes
+    check sanitizeInvalidUtf8("\xE0\x80\x80") == "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "surrogate code point becomes U+FFFD per byte":
+    # 0xED 0xA0 0x80 is a UTF-8-encoded surrogate
+    check sanitizeInvalidUtf8("\xED\xA0\x80") == "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "code point above U+10FFFF becomes U+FFFD per byte":
+    # 0xF4 0x90 0x80 0x80 encodes U+110000
+    check sanitizeInvalidUtf8("\xF4\x90\x80\x80") ==
+      "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD"
+
+  test "mixed valid and invalid text":
+    check sanitizeInvalidUtf8("ok\xC0\x41ok") == "ok" & "\xEF\xBF\xBD" & "Aok"
+    check sanitizeInvalidUtf8("a\xE3\x81\x82b") == "aあb"

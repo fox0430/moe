@@ -349,3 +349,48 @@ suite "playbackMacro - insert-normal (Ctrl-O) return-to-Insert":
     check state.mode == EditorMode.Normal
     check state.insertNormalMode
     check manager.keyBindingRegistry.isWaitingForChar()
+
+suite "withPlaybackGuard - exception safety":
+  test "playback state is restored when the body raises":
+    # The try/finally wiring itself: a raising body must restore both
+    # isRecording and playbackDepth before the exception escapes, or the
+    # next replay starts from a corrupted depth.
+    let manager = newTestManager()
+    let buffer = newTextBuffer()
+    let state = newTestState()
+    state.pendingInput.macroState.playbackDepth = 1
+    state.pendingInput.macroState.isRecording = true
+    let viewport = newTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    var raised = false
+    try:
+      discard withPlaybackGuard(editor):
+        outcome = roContinue
+        raise newException(ValueError, "boom")
+    except ValueError:
+      raised = true
+    check raised
+    check state.pendingInput.macroState.playbackDepth == 1
+    check state.pendingInput.macroState.isRecording
+
+  test "recursion limit guard still applies before the body runs":
+    let manager = newTestManager()
+    let buffer = newTextBuffer()
+    let state = newTestState()
+    state.pendingInput.macroState.playbackDepth = MaxMacroRecursionDepth
+    state.pendingInput.macroState.isRecording = true
+    let viewport = newTestViewport()
+    let editor =
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry, manager)
+
+    var bodyRan = false
+    let outcome = withPlaybackGuard(editor):
+      bodyRan = true
+      outcome = roContinue
+
+    check outcome == roAbort
+    check not bodyRan
+    check state.pendingInput.macroState.playbackDepth == MaxMacroRecursionDepth
+    check state.pendingInput.macroState.isRecording

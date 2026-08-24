@@ -74,15 +74,11 @@ proc validateUtf16Be(s: string): bool =
     let curr = advance()
     if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
       continue
+    if i >= s.len:
+      return false
     let next = advance()
     if (not (0xD800 <= curr and curr <= 0xDBFF)) or
         (not (0xDC00 <= next and next <= 0xDFFF)):
-      return false
-    let
-      higher = (curr and 0b11_1111_1111) shl 10
-      lower = (next and 0b11_1111_1111)
-      point = higher or lower
-    if point < 0x10000:
       return false
 
   return true
@@ -102,15 +98,11 @@ proc validateUtf16Le(s: string): bool =
     let curr = advance()
     if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
       continue
+    if i >= s.len:
+      return false
     let next = advance()
     if (not (0xD800 <= curr and curr <= 0xDBFF)) or
         (not (0xDC00 <= next and next <= 0xDFFF)):
-      return false
-    let
-      higher = (curr and 0b11_1111_1111) shl 10
-      lower = (next and 0b11_1111_1111)
-      point = higher or lower
-    if point < 0x10000:
       return false
 
   return true
@@ -166,6 +158,65 @@ const EncodingDetectionSampleSize* = 8 * 1024
   ## detection. 8 KB is enough to reliably detect BOM markers and encoding
   ## patterns while avoiding full-file scans on large files.
 
+proc sanitizeInvalidUtf8*(s: string): string =
+  ## Replace invalid UTF-8 sequences with U+FFFD. Applied at input boundaries
+  ## (paste, clipboard, PTY) where untrusted text enters the editor.
+  result = newStringOfCap(s.len)
+  var i = 0
+  while i < s.len:
+    let b = ord(s[i])
+    if b < 0x80:
+      result.add(s[i])
+      inc i
+      continue
+    # Expected length from the leading byte
+    var byteLen = 0
+    if (b and 0xE0) == 0xC0:
+      byteLen = 2
+    elif (b and 0xF0) == 0xE0:
+      byteLen = 3
+    elif (b and 0xF8) == 0xF0:
+      byteLen = 4
+    if byteLen == 0 or i + byteLen > s.len:
+      # Invalid leading byte or truncated sequence
+      result.add("\xEF\xBF\xBD")
+      inc i
+      continue
+    # Validate continuation bytes and the decoded code point
+    var valid = true
+    var cp: uint32 = 0
+    case byteLen
+    of 2:
+      cp = uint32(b and 0x1F)
+    of 3:
+      cp = uint32(b and 0x0F)
+    of 4:
+      cp = uint32(b and 0x07)
+    else:
+      discard
+    for j in 1 ..< byteLen:
+      let cb = ord(s[i + j])
+      if (cb and 0xC0) != 0x80:
+        valid = false
+        break
+      cp = (cp shl 6) or uint32(cb and 0x3F)
+    if valid:
+      # Reject overlong encodings, surrogates, and code points above U+10FFFF
+      if byteLen == 2 and cp < 0x80:
+        valid = false
+      elif byteLen == 3 and (cp < 0x800 or cp in 0xD800'u32 .. 0xDFFF'u32):
+        valid = false
+      elif byteLen == 4 and (cp < 0x10000'u32 or cp > 0x10FFFF'u32):
+        valid = false
+    if valid:
+      result.add(s[i ..< i + byteLen])
+      inc i, byteLen
+    else:
+      # Invalid sequence: substitute U+FFFD for the leading byte only, so a
+      # stray continuation byte is not consumed along with a valid one.
+      result.add("\xEF\xBF\xBD")
+      inc i
+
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
   ## Detect character encoding from raw file content
   ##
@@ -198,25 +249,50 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
       return CharacterEncoding.utf16
 
   # Use a sample of the file for encoding validation to avoid O(n) scans.
-  # Only truncate when the string is larger than the sample size.
-  # When truncating, align to 4 bytes so UTF-16/UTF-32 validators don't
-  # reject the sample due to misalignment.
+  # Align to 4 bytes so the UTF-16/UTF-32 validators don't reject the sample
+  # due to misalignment. Extend the sample if the last two bytes form a high
+  # surrogate in either byte order, so a surrogate pair is not split at the
+  # cut. The extension is best-effort; residual cut-surrogate cases are
+  # covered by the full re-validation below.
   let sample =
     if s.len > EncodingDetectionSampleSize:
-      let sampleLen = EncodingDetectionSampleSize div 4 * 4
+      var sampleLen = EncodingDetectionSampleSize div 4 * 4
+      if sampleLen + 2 <= s.len:
+        let
+          be = 256 * ord(s[sampleLen - 2]) + ord(s[sampleLen - 1])
+          le = ord(s[sampleLen - 2]) + 256 * ord(s[sampleLen - 1])
+        if (0xD800 <= be and be <= 0xDBFF) or (0xD800 <= le and le <= 0xDBFF):
+          if sampleLen + 4 <= s.len:
+            sampleLen += 4
+          else:
+            sampleLen += 2
       s[0 ..< sampleLen]
     else:
       s
 
-  # Try UTF-8 validation first (most common)
-  if sample.validateUtf8 == -1:
+  # Try UTF-8 validation first (most common). Uses the full validation
+  # (overlongs, surrogates, > U+10FFFF rejected) shared with input sanitizing.
+  if sample.sanitizeInvalidUtf8 == sample:
     return CharacterEncoding.utf8
+
+  # A surrogate code unit at the end of the sample means the cut can still
+  # split a surrogate pair, so the sample verdict may disagree with the full
+  # content (e.g. a valid BE file failing BE validation). Re-validate UTF-16
+  # against the full string in that case. UTF-8/UTF-32 are unaffected:
+  # their code units never straddle the cut.
+  var utf16Sample = sample
+  if s.len > EncodingDetectionSampleSize:
+    let
+      be = 256 * ord(sample[sample.len - 2]) + ord(sample[sample.len - 1])
+      le = ord(sample[sample.len - 2]) + 256 * ord(sample[sample.len - 1])
+    if (0xD800 <= be and be <= 0xDBFF) or (0xD800 <= le and le <= 0xDBFF):
+      utf16Sample = s
 
   # Try other Unicode encodings
   var validEncodings: seq[CharacterEncoding]
-  if sample.validateUtf16Be:
+  if utf16Sample.validateUtf16Be:
     validEncodings.add(CharacterEncoding.utf16Be)
-  if sample.validateUtf16Le:
+  if utf16Sample.validateUtf16Le:
     validEncodings.add(CharacterEncoding.utf16Le)
   if sample.validateUtf32Be:
     validEncodings.add(CharacterEncoding.utf32Be)

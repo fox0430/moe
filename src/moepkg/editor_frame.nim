@@ -45,8 +45,8 @@ import
 
 import
   git_cache, render_utils, logger, message_log, debug_viewer, completion,
-  signature_help, hover_popup, unicode_utils, motion, buffer, lsp_integration,
-  editor_window_layout
+  signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
+  lsp_integration, editor_window_layout
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
@@ -405,27 +405,111 @@ proc updateForFrame*(e: Editor, buffer: Buffer): bool =
   else:
     e.state.currentWord = ""
 
-  # Update syntax highlight before rendering (so semantic tokens can be applied on top)
+  # Update syntax highlight before rendering (so semantic tokens can be applied
+  # on top). The debug buffer is skipped below; the sweep after it still runs.
+  let activeBuffer = e.activeBuffer()
   if not isDebugBuffer:
-    let activeBuffer = e.activeBuffer()
-    var highlightChanged = activeBuffer.highlightNeedsUpdate
-    activeBuffer.updateHighlight()
-    # Continue progressive initial highlighting if not yet complete
-    if activeBuffer.continueInitialHighlight():
-      highlightChanged = true
+    # Budgeted re-parse per frame: a line-count change re-parses to EOF,
+    # which on a large file must not block the frame; unfinished flights
+    # resume below on later frames. Invalidate the LSP overlay caches only
+    # on a fresh trigger (a completed flight changes no content).
+    var contentChanged = false
+    let hadFlight =
+      activeBuffer.incrementalHighlight != nil and
+      activeBuffer.incrementalHighlight.pendingReparse != nil
+    # Captured before `updateHighlight` clears it.
+    let hadEdit = activeBuffer.highlightNeedsUpdate
+    # Per-frame budget for the active buffer's ops (the inactive-buffer
+    # sweep below has its own cap), charged by the ACTUAL lines each call
+    # consumed.
+    const ActiveFrameBudget = 4000
+    var activeBudget = ActiveFrameBudget
+    var consumed = 0
+    let reparseOngoing = activeBuffer.updateHighlight(min(1000, activeBudget), consumed)
+    activeBudget -= consumed
+    if hadEdit:
+      contentChanged = true
+    # Continue a budgeted re-parse left in flight; completion must not
+    # invalidate the LSP overlay caches (content is unchanged, and cancelling
+    # the pending request would re-fetch the same content).
+    if not reparseOngoing and hadFlight and activeBudget > 0:
+      consumed = 0
+      discard
+        activeBuffer.continueIncrementalHighlight(min(1000, activeBudget), consumed)
+      activeBudget -= consumed
+    # Continue progressive initial highlighting. Skipped while a re-parse is
+    # in flight: the delegation inside would advance it twice this frame.
+    if activeBudget > 0 and (
+      activeBuffer.incrementalHighlight == nil or
+      activeBuffer.incrementalHighlight.pendingReparse == nil
+    ):
+      consumed = 0
+      discard activeBuffer.continueInitialHighlight(min(1000, activeBudget), consumed)
+      activeBudget -= consumed
     # Continue progressive URI scanning for all file types
-    if activeBuffer.continueUriScan():
-      highlightChanged = true
-    # If highlight was modified, we need to re-apply semantic tokens
-    if highlightChanged:
+    if activeBudget > 0:
+      consumed = 0
+      discard activeBuffer.continueUriScan(min(1000, activeBudget), consumed)
+      activeBudget -= consumed
+    # If the content changed, re-apply semantic tokens
+    if contentChanged:
       invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
       # Inlay hints are keyed by absolute line number and rendered straight from
-      # the cache, so an edit (highlightChanged) would otherwise leave stale
-      # hints on now-shifted lines until the next debounced response. Drop the
-      # cache and cancel any in-flight request, matching semantic tokens.
+      # the cache, so an edit would otherwise leave stale hints on now-shifted
+      # lines until the next debounced response. Drop the cache and cancel any
+      # in-flight request, matching semantic tokens.
       invalidateInlayHintCache(e.lsp, e.state.lspCache)
     # Apply semantic tokens after local highlight is ready
     e.updateSemanticTokensCache()
+
+  # Also advance re-parses, initial loads and URI scans of the other open
+  # buffers: they have no frame of their own, and a stale load frontier
+  # would freeze tail rows' underlines until the buffer reactivates. The
+  # rotating start index serves every buffer at least once per
+  # `e.buffers.len` frames. Runs even while the debug viewer is active.
+  const InactiveFrameBudget = 2000
+  var frameBudget = InactiveFrameBudget
+  let bufCount = e.buffers.len
+  if bufCount > 0:
+    let startIdx = e.state.inactiveHighlightScanIndex mod bufCount
+    e.state.inactiveHighlightScanIndex =
+      (e.state.inactiveHighlightScanIndex + 1) mod bufCount
+    for offset in 0 ..< bufCount:
+      let buf = e.buffers[(startIdx + offset) mod bufCount]
+      if buf.id == activeBuffer.id or buf.isUtilityBuffer:
+        continue
+      if frameBudget <= 0:
+        break
+      # Charge by the ACTUAL lines consumed (lookahead growth, rewinds and
+      # clamps make nominal chunks differ).
+      var consumed = 0
+      # Run on a live flight or any flag-only edit (LSP diagnostics,
+      # setReservedWords, etc.); gating on `pendingReparse` alone would
+      # leave those unprocessed until the buffer reactivates.
+      let hasFlight =
+        buf.incrementalHighlight != nil and
+        buf.incrementalHighlight.pendingReparse != nil
+      if hasFlight or buf.highlightNeedsUpdate:
+        let reparseOngoing = buf.updateHighlight(min(1000, frameBudget), consumed)
+        # Only continue when the trigger left work behind; else the
+        # continuation resets `consumed` to 0 and under-charges the budget.
+        if not reparseOngoing and buf.incrementalHighlight != nil and
+            buf.incrementalHighlight.pendingReparse != nil:
+          discard buf.continueIncrementalHighlight(min(1000, frameBudget), consumed)
+      frameBudget -= consumed
+      if frameBudget <= 0:
+        break
+      var loadLines = 0
+      # Skip while a flight is pending (mirrors the active-buffer branch).
+      if buf.incrementalHighlight == nil or
+          buf.incrementalHighlight.pendingReparse == nil:
+        discard buf.continueInitialHighlight(min(1000, frameBudget), loadLines)
+        frameBudget -= loadLines
+      if frameBudget <= 0:
+        break
+      var uriLines = 0
+      discard buf.continueUriScan(min(1000, frameBudget), uriLines)
+      frameBudget -= uriLines
 
   result = e.updateViewportSize(buffer)
   e.advanceLayoutForFrame(buffer, result)

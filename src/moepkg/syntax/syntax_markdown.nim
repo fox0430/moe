@@ -25,7 +25,9 @@ import
   syntax_python, syntax_rust, syntax_shell, syntax_tcl, syntax_toml, syntax_yaml,
   syntax_json, syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
 
-proc codeBlockNextToken(g: var GeneralTokenizer, lang: SourceLanguage) =
+proc codeBlockNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
+  ## The single language dispatch, shared with `getNextToken` in
+  ## tokenizer.nim. langMarkdown/langNone have no tokenizer here.
   case lang
   of langAstro: g.astroNextToken
   of langC: g.cNextToken

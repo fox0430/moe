@@ -114,6 +114,20 @@ proc jsLikeGetKeyword*(id: string, tsMode: bool): TokenClass =
 
 # Template literal depth and brace depth are tracked in GeneralTokenizer.
 
+proc jsLikeDocBlockScan(g: var GeneralTokenizer, pos: var int) =
+  ## Scan a `{...}` preprocessor block inside a doc comment, maintaining the
+  ## nesting in `g.lang.jslike.docBlockDepth` (seeded by the caller). Stops
+  ## at the matching `}` (consumed), at `*/` (not consumed), or at buffer end.
+  while g.buf[pos] != '\0' and not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
+    if g.buf[pos] == '{':
+      inc(g.lang.jslike.docBlockDepth)
+    elif g.buf[pos] == '}':
+      dec(g.lang.jslike.docBlockDepth)
+      if g.lang.jslike.docBlockDepth == 0:
+        inc(pos)
+        break
+    inc(pos)
+
 proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
   ## Shared JavaScript/TypeScript tokenizer. `tsMode` enables the
   ## TypeScript-only lexing rules: the TypeScript keyword set, generic `<T>`
@@ -156,6 +170,21 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
       g.kind = gtEof
       g.length = 0
       return
+    if g.lang.jslike.commentDepth == 1 and g.lang.jslike.docBlockDepth > 0:
+      # Resume a `{...}` preprocessor block opened in a previous chunk.
+      g.kind = gtPreprocessor
+      jsLikeDocBlockScan(g, pos)
+      if g.buf[pos] != '\0' and g.buf[pos] == '*' and g.buf[pos + 1] == '/':
+        # Defensive reset: the comment closes while the block is still open;
+        # without it the next call would stop at the `*/` with a zero-length
+        # token before reaching the comment-body loop.
+        g.lang.jslike.docBlockDepth = 0
+      g.length = pos - g.pos
+      if g.length > 0:
+        g.pos = pos
+        return
+      # The `*/` is at this chunk's start: fall through to the comment-body
+      # loop, which closes the comment.
     g.kind = g.state
     while true:
       case g.buf[pos]
@@ -165,6 +194,7 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
           inc(pos)
           g.state = gtNone
           g.lang.jslike.commentDepth = 0
+          g.lang.jslike.docBlockDepth = 0
           break
       of '@':
         if g.lang.jslike.commentDepth == 1 and g.buf[pos + 1] in {
@@ -185,16 +215,11 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
           break
         elif g.lang.jslike.commentDepth == 1:
           g.kind = gtPreprocessor
-          var braceNest = 0
-          while g.buf[pos] != '\0' and not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
-            if g.buf[pos] == '{':
-              inc(braceNest)
-            elif g.buf[pos] == '}':
-              dec(braceNest)
-              if braceNest == 0:
-                inc(pos)
-                break
-            inc(pos)
+          # Maintain the nesting in the persisted field (not a local) so
+          # boundary captures inside the block carry the true depth for the
+          # resume branch and the convergence check.
+          g.lang.jslike.docBlockDepth = 0
+          jsLikeDocBlockScan(g, pos)
           break
         else:
           inc(pos)
@@ -339,6 +364,7 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
           if g.buf[pos] == '/':
             inc(pos)
             g.lang.jslike.commentDepth = 0
+            g.lang.jslike.docBlockDepth = 0
             break
         of '@':
           if g.lang.jslike.commentDepth == 1 and
@@ -362,17 +388,10 @@ proc jsLikeNextToken*(g: var GeneralTokenizer, tsMode: bool) =
           elif g.lang.jslike.commentDepth == 1:
             g.kind = gtPreprocessor
             g.state = gtDocLongComment
-            var braceNest = 0
-            while g.buf[pos] != '\0' and
-                not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
-              if g.buf[pos] == '{':
-                inc(braceNest)
-              elif g.buf[pos] == '}':
-                dec(braceNest)
-                if braceNest == 0:
-                  inc(pos)
-                  break
-              inc(pos)
+            # Maintain the nesting in the persisted field (not a local); see
+            # the comment at the other `of '{'` branch above.
+            g.lang.jslike.docBlockDepth = 0
+            jsLikeDocBlockScan(g, pos)
             break
           else:
             inc(pos)
