@@ -1368,7 +1368,7 @@ suite "frontend-neutral pointer and scroll input":
     check e.windowManager.windows[0].viewport.topLine == 1
     check e.windowManager.windows[0].cursor.line == 3
 
-  test "scroll clamps the cursor only after its row leaves the viewport":
+  test "scroll preserves the cursor after its row leaves the viewport":
     let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5")
     e.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 40, height: 3, topLine: 0, leftColumn: 0)
@@ -1378,7 +1378,11 @@ suite "frontend-neutral pointer and scroll input":
 
     check outcome.appliedRows == 3
     check e.windowManager.windows[0].viewport.topLine == 3
-    check e.windowManager.windows[0].cursor == BufferPosition(line: 3, column: 2)
+    check e.windowManager.windows[0].viewport.detachedFromCursor
+    check e.windowManager.windows[0].cursor == BufferPosition(line: 1, column: 2)
+
+    check e.handleTextInput("j")
+    check not e.windowManager.windows[0].viewport.detachedFromCursor
 
   test "outcome identifies the scrollable region and viewport movement":
     let e =
@@ -1488,7 +1492,7 @@ suite "frontend-neutral pointer and scroll input":
     check outcome.region == initGridRegion(0, 40, 23, 40)
     check outcome.appliedRows == 3
     check e.windowManager.windows[0].cursor.line == 0
-    check e.windowManager.windows[1].cursor.line == 3
+    check e.windowManager.windows[1].cursor.line == 0
     check e.windowManager.windows[1].viewport.topLine == 3
 
   test "primary press uses rendered grid coordinates":
@@ -1520,7 +1524,7 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 3
+    check e.windowManager.windows[0].cursor.line == 0
     check e.windowManager.windows[0].viewport.topLine == 3
 
   test "WheelUp at the buffer top leaves the viewport and cursor unchanged":
@@ -1558,7 +1562,7 @@ suite "handleMouseEvent - Wheel Scroll":
     check e.windowManager.windows[0].cursor.line == 3
     check e.windowManager.windows[0].viewport.topLine == 3
 
-  test "WheelDown clamps column to line length":
+  test "WheelDown preserves the cursor column across shorter lines":
     let e = createTestEditorWithBuffer("long line here\nhi\nshort\nanother\nmore\nend")
     # Start on long line with column beyond short line's length
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 10)
@@ -1567,13 +1571,10 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 3
-    # "another" has len 7, so max column is 6
-    check e.windowManager.windows[0].cursor.column <= 6
+    check e.windowManager.windows[0].cursor == BufferPosition(line: 0, column: 10)
+    check e.windowManager.windows[0].viewport.topLine == 3
 
-  test "WheelDown clamps column to character count for multibyte":
-    # "あいうえお" is 5 chars (15 bytes). After scrolling to "ab" (2 chars),
-    # column should clamp to 1, not stay at 4.
+  test "WheelDown preserves a multibyte cursor column":
     let e = createTestEditorWithBuffer("あいうえお\nxx\nxx\nab")
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 4)
 
@@ -1581,9 +1582,8 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 3
-    # "ab" has 2 chars, so max column is 1
-    check e.windowManager.windows[0].cursor.column == 1
+    check e.windowManager.windows[0].cursor == BufferPosition(line: 0, column: 4)
+    check e.windowManager.windows[0].viewport.topLine == 3
 
   test "WheelDown moves the viewport while preserving a visible cursor":
     # Create a buffer with many lines and a small viewport (height=5)
@@ -1604,7 +1604,7 @@ suite "handleMouseEvent - Wheel Scroll":
     check e.windowManager.windows[0].cursor.line == 3
     check e.windowManager.windows[0].viewport.topLine == 3
 
-  test "WheelUp moves the viewport and clamps a cursor below the visible rows":
+  test "WheelUp moves the viewport without moving a cursor below the visible rows":
     var lines: string
     for i in 0 ..< 30:
       if i > 0:
@@ -1620,10 +1620,10 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 9
+    check e.windowManager.windows[0].cursor.line == 11
     check e.windowManager.windows[0].viewport.topLine == 7
 
-  test "WheelDown moves the viewport and clamps a cursor above the visible rows":
+  test "WheelDown moves the viewport without moving a cursor above the visible rows":
     var lines: string
     for i in 0 ..< 30:
       if i > 0:
@@ -1638,7 +1638,7 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 3
+    check e.windowManager.windows[0].cursor.line == 0
     check e.windowManager.windows[0].viewport.topLine == 3
 
   test "Non-press mouse event is ignored":
@@ -1694,7 +1694,8 @@ suite "handleMouseEvent - Wheel Scroll Multi-Window":
 
     check handled == true
     # Second window should scroll, not first
-    check e.windowManager.windows[1].cursor.line == 3
+    check e.windowManager.windows[1].cursor.line == 0
+    check e.windowManager.windows[1].viewport.topLine == 3
     check e.windowManager.windows[0].cursor.line == 0
 
 suite "handleMouseEvent - Wheel Scroll Filer Mode":

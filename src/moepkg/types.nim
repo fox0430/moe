@@ -81,6 +81,9 @@ type
       ## `0 <= topWrapOffset < wrapCount(topLine)`. The authoritative
       ## `adjustViewportForCursor` recomputes it every frame; every other writer
       ## just resets it to 0 via `resetViewportTop` (next frame re-derives it).
+    detachedFromCursor*: bool
+      ## True while pointer scrolling controls the viewport independently of
+      ## the logical cursor. Cursor or programmatic viewport movement clears it.
     leftColumn*: int
     width*: int
     height*: int
@@ -1082,9 +1085,7 @@ proc frontendSubscriptions*(s: EditorState): FrontendSubscriptions =
   ## Return the data subscriptions requested by an embedding frontend.
   s.frontendSubscriptionsState
 
-proc `frontendSubscriptions=`*(
-    s: EditorState, subscriptions: FrontendSubscriptions
-) =
+proc `frontendSubscriptions=`*(s: EditorState, subscriptions: FrontendSubscriptions) =
   ## Replace the data subscriptions requested by an embedding frontend.
   s.frontendSubscriptionsState = subscriptions
 
@@ -1095,8 +1096,8 @@ proc `==`*(a, b: ViewPort): bool =
   if a.isNil or b.isNil:
     return false
   a.topLine == b.topLine and a.topWrapOffset == b.topWrapOffset and
-    a.leftColumn == b.leftColumn and a.width == b.width and a.height == b.height and
-    a.x == b.x and a.y == b.y
+    a.detachedFromCursor == b.detachedFromCursor and a.leftColumn == b.leftColumn and
+    a.width == b.width and a.height == b.height and a.x == b.x and a.y == b.y
 
 proc resetViewportTop*(v: ViewPort, line = 0) =
   ## Move the viewport to `line` and clear the wrap-segment offset. Used by
@@ -1106,12 +1107,14 @@ proc resetViewportTop*(v: ViewPort, line = 0) =
   ## enough to avoid starting a fresh top line mid wrap segment.
   v.topLine = line
   v.topWrapOffset = 0
+  v.detachedFromCursor = false
 
 proc restoreViewportTop*(v: ViewPort, line, wrapOffset: int) =
   ## Restore a snapshotted top position, preserving the wrap sub-line offset
   ## (unlike `resetViewportTop`, which drops it to 0).
   v.topLine = line
   v.topWrapOffset = wrapOffset
+  v.detachedFromCursor = false
 
 proc statusMessage*(state: EditorState): string =
   ## Get the current status message

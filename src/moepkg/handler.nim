@@ -541,55 +541,7 @@ proc scrollRegion(e: Editor, window: EditorWindow): GridRegion =
     vp.y + tabLineOffset, vp.x, vp.height - tabLineOffset - reservedLines, vp.width
   )
 
-func rowPositionAbove(aLine, aSegment, bLine, bSegment: int): bool {.inline.} =
-  aLine < bLine or (aLine == bLine and aSegment < bSegment)
-
-proc clampCursorToScrolledViewport(
-    e: Editor, window: EditorWindow, layout: RowLayout, visibleHeight: int
-) =
-  ## Keep Moe's cursor invariant without treating every wheel step as a motion.
-  let
-    viewport = window.viewport
-    (cursorSegment, _) = layout.cursorCell(window.cursor.line, window.cursor.column)
-    cursorAbove = rowPositionAbove(
-      window.cursor.line, cursorSegment, viewport.topLine, viewport.topWrapOffset
-    )
-    cursorRow =
-      if cursorAbove:
-        -1
-      else:
-        layout.rowOfLine(
-          viewport.topLine, viewport.topWrapOffset, window.cursor.line, visibleHeight
-        ) + cursorSegment
-  if cursorRow >= 0 and cursorRow < visibleHeight:
-    return
-
-  var edgeRow =
-    if cursorAbove:
-      0
-    else:
-      visibleHeight - 1
-  var visible = layout.rowAt(viewport.topLine, viewport.topWrapOffset, edgeRow)
-  while visible.isNone and edgeRow > 0:
-    dec edgeRow
-    visible = layout.rowAt(viewport.topLine, viewport.topWrapOffset, edgeRow)
-  if visible.isNone:
-    return
-
-  let target = visible.get
-  window.cursor.line = target.line
-  if e.lineWrap and target.wrapSeg > 0:
-    window.cursor.column = layout.segmentStartColumn(target.line, target.wrapSeg)
-  let lineLength = window.buffer[target.line].charLen
-  window.cursor.column =
-    if lineLength > 0:
-      min(window.cursor.column, lineLength - 1)
-    else:
-      0
-
-proc scrollTextViewport(
-    e: Editor, window: EditorWindow, deltaPhysicalRows, visibleHeight: int
-): int =
+proc scrollTextViewport(e: Editor, window: EditorWindow, deltaPhysicalRows: int): int =
   ## Move a text viewport by rendered rows, including wrapped segments and folds.
   let layout = e.rowLayoutFor(
     window.buffer,
@@ -619,7 +571,8 @@ proc scrollTextViewport(
     inc remaining
 
   window.viewport.restoreViewportTop(topLine, topWrapOffset)
-  e.clampCursorToScrolledViewport(window, layout, max(visibleHeight, 1))
+  if result != 0:
+    window.viewport.detachedFromCursor = true
 
 proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Apply a frontend-neutral physical-line scroll and describe the affected
@@ -657,8 +610,7 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
     let window = e.windowManager.windows[targetIdx]
     result.handled = true
     result.region = e.scrollRegion(window)
-    result.appliedRows =
-      e.scrollTextViewport(window, input.deltaPhysicalRows, result.region.rows)
+    result.appliedRows = e.scrollTextViewport(window, input.deltaPhysicalRows)
     result.viewportPhysicalRowsMoved = result.appliedRows
     return
 
@@ -737,6 +689,7 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
               w.active = (j == i)
             e.syncActiveWindow()
 
+          e.activeWindow.viewport.detachedFromCursor = false
           e.cursor = pos
           return true
 
@@ -783,6 +736,7 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
 
     let pos = posOpt.get
     # e.cursor= sets both state.cursor and activeWindow.cursor
+    e.activeWindow.viewport.detachedFromCursor = false
     e.cursor = pos
     return true
 
@@ -844,9 +798,12 @@ proc prepareForInput(e: Editor, isKeyInput: bool) =
   # Update last input time for auto backup idle detection
   e.updateInputTime()
 
-  # Cancel smooth scroll animation on any key press
-  if isKeyInput and e.state.windowDisplay.scrollAnimation.active:
-    cancelScrollAnimation(e.state.windowDisplay.scrollAnimation)
+  # Resume cursor-following and cancel smooth scroll animation on any key press.
+  if isKeyInput:
+    if e.windowManager.windows.len > 0:
+      e.activeWindow.viewport.detachedFromCursor = false
+    if e.state.windowDisplay.scrollAnimation.active:
+      cancelScrollAnimation(e.state.windowDisplay.scrollAnimation)
 
 proc prepareForKeyCombo(e: Editor) =
   ## Per-input setup for frontend-neutral key handling.
@@ -855,6 +812,8 @@ proc prepareForKeyCombo(e: Editor) =
 proc handlePaste*(e: Editor, text: string): bool =
   ## Handle pasted text supplied by any frontend.
   e.prepareForInput(false)
+  if e.windowManager.windows.len > 0:
+    e.activeWindow.viewport.detachedFromCursor = false
   e.handlePasteText(text)
 
 proc handlePasteEvent*(e: Editor, event: Event): bool =
