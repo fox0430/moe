@@ -541,6 +541,86 @@ proc scrollRegion(e: Editor, window: EditorWindow): GridRegion =
     vp.y + tabLineOffset, vp.x, vp.height - tabLineOffset - reservedLines, vp.width
   )
 
+func rowPositionAbove(aLine, aSegment, bLine, bSegment: int): bool {.inline.} =
+  aLine < bLine or (aLine == bLine and aSegment < bSegment)
+
+proc clampCursorToScrolledViewport(
+    e: Editor, window: EditorWindow, layout: RowLayout, visibleHeight: int
+) =
+  ## Keep Moe's cursor invariant without treating every wheel step as a motion.
+  let
+    viewport = window.viewport
+    (cursorSegment, _) = layout.cursorCell(window.cursor.line, window.cursor.column)
+    cursorAbove = rowPositionAbove(
+      window.cursor.line, cursorSegment, viewport.topLine, viewport.topWrapOffset
+    )
+    cursorRow =
+      if cursorAbove:
+        -1
+      else:
+        layout.rowOfLine(
+          viewport.topLine, viewport.topWrapOffset, window.cursor.line, visibleHeight
+        ) + cursorSegment
+  if cursorRow >= 0 and cursorRow < visibleHeight:
+    return
+
+  var edgeRow =
+    if cursorAbove:
+      0
+    else:
+      visibleHeight - 1
+  var visible = layout.rowAt(viewport.topLine, viewport.topWrapOffset, edgeRow)
+  while visible.isNone and edgeRow > 0:
+    dec edgeRow
+    visible = layout.rowAt(viewport.topLine, viewport.topWrapOffset, edgeRow)
+  if visible.isNone:
+    return
+
+  let target = visible.get
+  window.cursor.line = target.line
+  if e.lineWrap and target.wrapSeg > 0:
+    window.cursor.column = layout.segmentStartColumn(target.line, target.wrapSeg)
+  let lineLength = window.buffer[target.line].charLen
+  window.cursor.column =
+    if lineLength > 0:
+      min(window.cursor.column, lineLength - 1)
+    else:
+      0
+
+proc scrollTextViewport(
+    e: Editor, window: EditorWindow, deltaPhysicalRows, visibleHeight: int
+): int =
+  ## Move a text viewport by rendered rows, including wrapped segments and folds.
+  let layout = e.rowLayoutFor(
+    window.buffer,
+    window.viewport.width,
+    e.viewportOffsetFor(window),
+    window.wrapCountCache,
+  )
+  var
+    topLine = window.viewport.topLine
+    topWrapOffset = window.viewport.topWrapOffset
+  var remaining = deltaPhysicalRows
+  while remaining > 0:
+    let next = layout.rowAt(topLine, topWrapOffset, 1)
+    if next.isNone:
+      break
+    topLine = next.get.line
+    topWrapOffset = next.get.wrapSeg
+    inc result
+    dec remaining
+  while remaining < 0:
+    let previous = layout.walkBackRows(topLine, topWrapOffset, 1)
+    if previous == (line: topLine, offset: topWrapOffset):
+      break
+    topLine = previous.line
+    topWrapOffset = previous.offset
+    dec result
+    inc remaining
+
+  window.viewport.restoreViewportTop(topLine, topWrapOffset)
+  e.clampCursorToScrolledViewport(window, layout, max(visibleHeight, 1))
+
 proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Apply a frontend-neutral physical-line scroll and describe the affected
   ## rendered region for GUI repainting.
@@ -575,32 +655,11 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
   }:
     let targetIdx = e.scrollTargetIndex(input)
     let window = e.windowManager.windows[targetIdx]
-    let curLine = window.cursor.line
-    let previousTopLine = window.viewport.topLine
-    let maxLine = window.buffer.len - 1
-    let newLine = clamp(curLine + input.deltaPhysicalRows, 0, maxLine)
-
-    if newLine != curLine:
-      window.cursor = BufferPosition(line: newLine, column: window.cursor.column)
-      # Clamp column to line length.
-      let lineLen = window.buffer[newLine].charLen
-      if lineLen > 0:
-        window.cursor.column = min(window.cursor.column, lineLen - 1)
-      else:
-        window.cursor.column = 0
-
-      # Update viewport topLine to keep cursor visible.
-      let viewportHeight = window.viewport.height
-      if viewportHeight > 0:
-        if newLine < window.viewport.topLine:
-          window.viewport.resetViewportTop(newLine)
-        elif newLine >= window.viewport.topLine + viewportHeight:
-          window.viewport.resetViewportTop(newLine - viewportHeight + 1)
-
     result.handled = true
     result.region = e.scrollRegion(window)
-    result.appliedRows = newLine - curLine
-    result.viewportPhysicalRowsMoved = window.viewport.topLine - previousTopLine
+    result.appliedRows =
+      e.scrollTextViewport(window, input.deltaPhysicalRows, result.region.rows)
+    result.viewportPhysicalRowsMoved = result.appliedRows
     return
 
 proc handlePointerInputCore(e: Editor, input: PointerInput): bool =

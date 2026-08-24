@@ -1345,24 +1345,40 @@ suite "handleMouseEvent - Mouse Disabled":
     check e.windowManager.windows[0].cursor.line == 0
 
 suite "frontend-neutral pointer and scroll input":
-  test "signed row delta controls scroll distance":
+  test "signed row delta scrolls the viewport without moving a visible cursor":
     let e =
       createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
-    e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 40, height: 5, topLine: 0, leftColumn: 0)
+    e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 0)
 
-    let down = e.handleScrollInput(initScrollInput(2, 10, 4))
+    let down = e.handleScrollInput(initScrollInput(2, 10, 2))
     check down.handled
-    check down.requestedRows == 4
-    check down.appliedRows == 4
-    check down.viewportPhysicalRowsMoved == 0
-    check e.windowManager.windows[0].cursor.line == 5
-
-    let up = e.handleScrollInput(initScrollInput(2, 10, -2))
-    check up.handled
-    check up.requestedRows == -2
-    check up.appliedRows == -2
-    check up.viewportPhysicalRowsMoved == 0
+    check down.requestedRows == 2
+    check down.appliedRows == 2
+    check down.viewportPhysicalRowsMoved == 2
+    check e.windowManager.windows[0].viewport.topLine == 2
     check e.windowManager.windows[0].cursor.line == 3
+
+    let up = e.handleScrollInput(initScrollInput(2, 10, -1))
+    check up.handled
+    check up.requestedRows == -1
+    check up.appliedRows == -1
+    check up.viewportPhysicalRowsMoved == -1
+    check e.windowManager.windows[0].viewport.topLine == 1
+    check e.windowManager.windows[0].cursor.line == 3
+
+  test "scroll clamps the cursor only after its row leaves the viewport":
+    let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5")
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 40, height: 3, topLine: 0, leftColumn: 0)
+    e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 2)
+
+    let outcome = e.handleScrollInput(initScrollInput(1, 10, 3))
+
+    check outcome.appliedRows == 3
+    check e.windowManager.windows[0].viewport.topLine == 3
+    check e.windowManager.windows[0].cursor == BufferPosition(line: 3, column: 2)
 
   test "outcome identifies the scrollable region and viewport movement":
     let e =
@@ -1380,7 +1396,8 @@ suite "frontend-neutral pointer and scroll input":
     check outcome.region == initGridRegion(4, 2, 6, 40)
     check outcome.requestedRows == 4
     check outcome.appliedRows == 4
-    check outcome.viewportPhysicalRowsMoved == 3
+    check outcome.viewportPhysicalRowsMoved == 4
+    check e.windowManager.windows[0].cursor.line == 6
 
   test "outcome reports the movement actually applied at a buffer edge":
     let e = createTestEditorWithBuffer("0\n1\n2")
@@ -1390,8 +1407,8 @@ suite "frontend-neutral pointer and scroll input":
 
     check outcome.handled
     check outcome.requestedRows == 8
-    check outcome.appliedRows == 1
-    check outcome.viewportPhysicalRowsMoved == 0
+    check outcome.appliedRows == 2
+    check outcome.viewportPhysicalRowsMoved == 2
 
   test "zero row input produces an unhandled outcome":
     let e = createTestEditorWithBuffer("0\n1\n2")
@@ -1426,8 +1443,10 @@ suite "frontend-neutral pointer and scroll input":
 
     check outcome.handled
     check outcome.appliedRows == 1
-    check outcome.viewportPhysicalRowsMoved == 0
-    check e.cursor.line == 1
+    check outcome.viewportPhysicalRowsMoved == 1
+    check e.viewport.topLine == 0
+    check e.viewport.topWrapOffset == 1
+    check e.cursor.line == 0
 
   test "Filer outcome reports selection movement before layout":
     let e = createTestEditorWithBuffer("")
@@ -1470,6 +1489,7 @@ suite "frontend-neutral pointer and scroll input":
     check outcome.appliedRows == 3
     check e.windowManager.windows[0].cursor.line == 0
     check e.windowManager.windows[1].cursor.line == 3
+    check e.windowManager.windows[1].viewport.topLine == 3
 
   test "primary press uses rendered grid coordinates":
     let e = createTestEditorWithBuffer("zero\none\ntwo\nthree")
@@ -1490,7 +1510,7 @@ suite "frontend-neutral pointer and scroll input":
     check e.cursor.line == 0
 
 suite "handleMouseEvent - Wheel Scroll":
-  test "WheelDown scrolls cursor down by 3 lines":
+  test "WheelDown scrolls the viewport down by 3 lines":
     let e = createTestEditorWithBuffer(
       "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
     )
@@ -1501,8 +1521,9 @@ suite "handleMouseEvent - Wheel Scroll":
 
     check handled == true
     check e.windowManager.windows[0].cursor.line == 3
+    check e.windowManager.windows[0].viewport.topLine == 3
 
-  test "WheelUp scrolls cursor up by 3 lines":
+  test "WheelUp at the buffer top leaves the viewport and cursor unchanged":
     let e = createTestEditorWithBuffer(
       "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
     )
@@ -1512,9 +1533,10 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 3
+    check e.windowManager.windows[0].cursor.line == 6
+    check e.windowManager.windows[0].viewport.topLine == 0
 
-  test "WheelUp clamps to line 0":
+  test "WheelUp clamps the viewport to line 0":
     let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4")
     e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
 
@@ -1522,9 +1544,10 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 0
+    check e.windowManager.windows[0].cursor.line == 1
+    check e.windowManager.windows[0].viewport.topLine == 0
 
-  test "WheelDown clamps to last line":
+  test "WheelDown moves the viewport by the requested rows near the end":
     let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4")
     e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 0)
 
@@ -1532,7 +1555,8 @@ suite "handleMouseEvent - Wheel Scroll":
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 4
+    check e.windowManager.windows[0].cursor.line == 3
+    check e.windowManager.windows[0].viewport.topLine == 3
 
   test "WheelDown clamps column to line length":
     let e = createTestEditorWithBuffer("long line here\nhi\nshort\nanother\nmore\nend")
@@ -1561,7 +1585,7 @@ suite "handleMouseEvent - Wheel Scroll":
     # "ab" has 2 chars, so max column is 1
     check e.windowManager.windows[0].cursor.column == 1
 
-  test "WheelDown updates viewport topLine when cursor goes below viewport":
+  test "WheelDown moves the viewport while preserving a visible cursor":
     # Create a buffer with many lines and a small viewport (height=5)
     var lines: string
     for i in 0 ..< 30:
@@ -1573,16 +1597,14 @@ suite "handleMouseEvent - Wheel Scroll":
       ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 0, leftColumn: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 0)
 
-    # Scroll down: cursor moves to line 6, which is outside viewport [0..4]
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 2)
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 6
-    # topLine should adjust so cursor is visible (line 6 at bottom: topLine = 6-5+1 = 2)
-    check e.windowManager.windows[0].viewport.topLine == 2
+    check e.windowManager.windows[0].cursor.line == 3
+    check e.windowManager.windows[0].viewport.topLine == 3
 
-  test "WheelUp updates viewport topLine when cursor goes above viewport":
+  test "WheelUp moves the viewport and clamps a cursor below the visible rows":
     var lines: string
     for i in 0 ..< 30:
       if i > 0:
@@ -1594,15 +1616,14 @@ suite "handleMouseEvent - Wheel Scroll":
       ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 10, leftColumn: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 11, column: 0)
 
-    # Scroll up: cursor moves to line 8, which is above viewport topLine=10
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 2)
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].cursor.line == 8
-    check e.windowManager.windows[0].viewport.topLine == 8
+    check e.windowManager.windows[0].cursor.line == 9
+    check e.windowManager.windows[0].viewport.topLine == 7
 
-  test "WheelDown keeps viewport unchanged when cursor stays visible":
+  test "WheelDown moves the viewport and clamps a cursor above the visible rows":
     var lines: string
     for i in 0 ..< 30:
       if i > 0:
@@ -1613,14 +1634,12 @@ suite "handleMouseEvent - Wheel Scroll":
       ViewPort(x: 0, y: 0, width: 80, height: 10, topLine: 0, leftColumn: 0)
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
 
-    # Scroll down: cursor moves to line 3, still within viewport [0..9]
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 2)
     let handled = e.handleMouseEvent(event)
 
     check handled == true
     check e.windowManager.windows[0].cursor.line == 3
-    # topLine should remain 0 since cursor is still visible
-    check e.windowManager.windows[0].viewport.topLine == 0
+    check e.windowManager.windows[0].viewport.topLine == 3
 
   test "Non-press mouse event is ignored":
     let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3")
