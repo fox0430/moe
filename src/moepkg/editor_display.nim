@@ -20,7 +20,38 @@
 ## Display toggle commands. Config-backed read accessors live in
 ## types/editor_types.nim.
 
+import std/options
+
 import types/editor_types, status_line, git_cache
+
+type ActiveGitStatus* = object ## Cached Git information for the active editor buffer.
+  branch*: string
+  added*, modified*, deleted*: int
+
+proc statusModeLabel*(e: Editor): string =
+  ## Return the mode label displayed by the status line.
+  ## An active command, search, or rename overlay takes precedence over the
+  ## editor's underlying mode.
+  if e.state.overlay.isSome:
+    overlayLabel(e.state.overlay.get)
+  else:
+    modeLabel(e.currentMode, e.state.insertNormalMode)
+
+proc currentStatusMessage*(e: Editor): string =
+  ## Return the current transient status message.
+  e.state.statusMessage
+
+proc activeGitStatus*(e: Editor): ActiveGitStatus =
+  ## Return cached Git information for the active buffer without refreshing it.
+  let
+    buffer = e.activeBuffer
+    counts = e.state.git.gitDiffCounts(buffer)
+  ActiveGitStatus(
+    branch: e.state.git.gitBranchName(buffer),
+    added: counts.added,
+    modified: counts.modified,
+    deleted: counts.deleted,
+  )
 
 proc toggleStatusLine*(e: Editor) =
   e.showStatusLine = not e.showStatusLine
