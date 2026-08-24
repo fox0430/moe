@@ -317,11 +317,10 @@ proc tickGitCache(e: Editor) =
     frontendWantsGit = e.state.frontendSubscriptions.gitStatus
   let setup = if e.showStatusLine: sl.setupText else: ""
   let wantsDiff =
-    frontendWantsGit or e.showGitDiff or
-    (e.showStatusLine and sl.gitChangedLines) or "{gitChanges}" in setup
+    frontendWantsGit or e.showGitDiff or (e.showStatusLine and sl.gitChangedLines) or
+    "{gitChanges}" in setup
   let wantsBranch =
-    frontendWantsGit or (e.showStatusLine and sl.gitBranchName) or
-    "{gitBranch}" in setup
+    frontendWantsGit or (e.showStatusLine and sl.gitBranchName) or "{gitBranch}" in setup
 
   for i, window in e.windowManager.windows:
     # Inactive windows show git info only under showGitInactive — except

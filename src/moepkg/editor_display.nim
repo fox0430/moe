@@ -25,8 +25,7 @@ import std/options
 import types/editor_types, status_line, git_cache
 
 type
-  ActiveGitStatus* = object
-    ## Cached Git information for the active editor buffer.
+  ActiveGitStatus* = object ## Cached Git information for the active editor buffer.
     branch*: string
     added*, modified*, deleted*: int
 

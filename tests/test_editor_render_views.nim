@@ -664,11 +664,10 @@ suite "renderTempMessages - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.ui.tempMessages =
-      @[
-        " jump line  col file/text", "   1    10    5 /path/to/file1.nim",
-        "   2    20   10 /path/to/file2.nim", "   3    30   15 /path/to/file3.nim",
-      ]
+    e.state.ui.tempMessages = @[
+      " jump line  col file/text", "   1    10    5 /path/to/file1.nim",
+      "   2    20   10 /path/to/file2.nim", "   3    30   15 /path/to/file3.nim",
+    ]
 
     e.advanceLayoutForFrame(buffer, false)
     e.renderTempMessages(buffer)
@@ -1845,11 +1844,10 @@ suite "renderCodeLensPicker":
     e.viewport.height = 24
     e.state.screenCursor = CursorPosition(x: 10, y: 5)
     e.state.lspCache.codeLensPicker = CodeLensPicker(
-      items:
-        @[
-          CodeLensItem(line: 0, column: 0, title: "Run Test", command: "test.run"),
-          CodeLensItem(line: 0, column: 0, title: "Debug Test", command: "test.debug"),
-        ],
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run Test", command: "test.run"),
+        CodeLensItem(line: 0, column: 0, title: "Debug Test", command: "test.debug"),
+      ],
       selectedIndex: 0,
       scrollOffset: 0,
       maxVisibleItems: 2,
@@ -1910,11 +1908,10 @@ suite "renderCodeLensPicker":
     e.viewport.height = 10
     e.state.screenCursor = CursorPosition(x: 75, y: 8)
     e.state.lspCache.codeLensPicker = CodeLensPicker(
-      items:
-        @[
-          CodeLensItem(line: 0, column: 0, title: "Run Test Long", command: "cmd"),
-          CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
-        ],
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run Test Long", command: "cmd"),
+        CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
+      ],
       selectedIndex: 0,
       scrollOffset: 0,
       maxVisibleItems: 2,
@@ -1929,11 +1926,10 @@ suite "renderCodeLensPicker":
     e.viewport.height = 24
     e.state.screenCursor = CursorPosition(x: 10, y: 5)
     e.state.lspCache.codeLensPicker = CodeLensPicker(
-      items:
-        @[
-          CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd"),
-          CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
-        ],
+      items: @[
+        CodeLensItem(line: 0, column: 0, title: "Run", command: "cmd"),
+        CodeLensItem(line: 0, column: 0, title: "Debug", command: "cmd"),
+      ],
       selectedIndex: 0,
       scrollOffset: 0,
       maxVisibleItems: 2,
