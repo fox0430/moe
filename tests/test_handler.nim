@@ -1413,6 +1413,16 @@ suite "frontend-neutral pointer and scroll input":
     check outcome.requestedRows == 8
     check outcome.appliedRows == 2
     check outcome.viewportPhysicalRowsMoved == 2
+    check e.viewport.topLine == 2
+    check e.viewport.detachedFromCursor
+
+    let beyondEdge = e.handleScrollInput(initScrollInput(2, 10, 1))
+
+    check beyondEdge.handled
+    check beyondEdge.appliedRows == 0
+    check beyondEdge.viewportPhysicalRowsMoved == 0
+    check e.viewport.topLine == 2
+    check e.viewport.detachedFromCursor
 
   test "zero row input produces an unhandled outcome":
     let e = createTestEditorWithBuffer("0\n1\n2")

@@ -570,8 +570,8 @@ proc scrollTextViewport(e: Editor, window: EditorWindow, deltaPhysicalRows: int)
     dec result
     inc remaining
 
-  window.viewport.restoreViewportTop(topLine, topWrapOffset)
   if result != 0:
+    window.viewport.restoreViewportTop(topLine, topWrapOffset)
     window.viewport.detachedFromCursor = true
 
 proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
