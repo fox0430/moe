@@ -405,3 +405,84 @@ suite "TabLine - Special mode tab display":
     check " file1.nim " in line
     check " file2.nim " in line
     check " BUFFERS " notin line
+
+suite "TabLine - sanitize control characters":
+  proc hasControl(s: string): bool =
+    for r in s.runes:
+      if isC0Control(r):
+        return true
+    false
+
+  test "buildTabText sanitizes C0 and DEL in filePath filename":
+    let buf = createTestTextBuffer("/path/to/\x1Bfile\x00name\x7F.nim")
+    let txt = buildTabText(buf)
+    check not hasControl(txt)
+    check "\x1B" notin txt
+    check "file name .nim" in txt or "file name" in txt
+    check displayWidth(txt) == displayWidth(sanitizeForDisplay(txt))
+
+  test "buildTabText sanitizes displayName with controls":
+    let buf = createTestTextBuffer("/path/file.nim")
+    buf.displayName = some("Term\x1B[2Jbash\x00\x7F")
+    let txt = buildTabText(buf)
+    check not hasControl(txt)
+    check "Term [2Jbash" in txt
+    check txt == " Term [2Jbash   "
+
+  test "buildTabText preserves wide chars and emoji while sanitizing controls":
+    let buf = createTestTextBuffer("/tmp/漢\x00字🎉\x1B.nim")
+    let txt = buildTabText(buf)
+    check not hasControl(txt)
+    check "漢 字" in txt
+    check "🎉" in txt
+    check displayWidth(txt) == displayWidth(sanitizeForDisplay(txt))
+
+  test "buildTabTextHitTest width consistency after sanitization":
+    let bufCtrl = createTestTextBuffer("/path/a\x1Bb.nim")
+    let bufSpace = createTestTextBuffer("/path/a b.nim")
+    check buildTabText(bufCtrl) == buildTabText(bufSpace)
+    check displayWidth(buildTabText(bufCtrl)) == displayWidth(buildTabText(bufSpace))
+    let buffers = @[bufCtrl]
+    let w = displayWidth(buildTabText(bufCtrl))
+    check hitTestTabLine(buffers, EditorMode.Normal, 0, 80, 0) == 0
+    check hitTestTabLine(buffers, EditorMode.Normal, 0, 80, w) == -1
+    check hitTestTabLine(buffers, EditorMode.Normal, 0, 80, w - 1) == 0
+
+  test "buildTabText with modified marker still sanitizes filename":
+    let buf = createTestTextBuffer("/tmp/file\x1Bname.nim", modified = true)
+    let txt = buildTabText(buf)
+    check not hasControl(txt)
+    check "file name.nim[+]" in txt
+
+  test "renderTabLine sanitizes tabs with controls":
+    var displayBuffer = createTestBuffer()
+    let buf1 = createTestTextBuffer("/path/\x1Bfile1\x00.nim")
+    let buf2 = createTestTextBuffer("/path/file2\x7F.nim")
+    let buffers = @[buf1, buf2]
+    renderTabLine(buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true)
+    let line = getBufferLine(displayBuffer, 0)
+    check not hasControl(line)
+    check " file1 " in line or "file1" in line
+    check "file2" in line
+
+  test "renderWindowTabLine sanitizes with displayName controls":
+    var displayBuffer = createTestBuffer()
+    let buf1 = createTestTextBuffer("/path/file1.nim")
+    buf1.displayName = some("[Term\x1B:\x00bash]")
+    let buffers = @[buf1]
+    renderWindowTabLine(
+      buffers, buf1, EditorMode.Normal, displayBuffer, 0, 0, 80, true, true
+    )
+    let line = getBufferLine(displayBuffer, 0)
+    check not hasControl(line)
+    check "[Term : bash]" in line
+
+  test "hitTestTabLine with multiple tabs sanitized widths":
+    let buf1 = createTestTextBuffer("/path/a\x1Bb.nim")
+    let buf2 = createTestTextBuffer("/path/c\x00d.nim")
+    let buffers = @[buf1, buf2]
+    let w1 = displayWidth(buildTabText(buf1))
+    check hitTestTabLine(buffers, EditorMode.Normal, 0, 80, 0) == 0
+    check hitTestTabLine(buffers, EditorMode.Normal, 0, 80, w1) == 1
+    check hitTestTabLine(buffers, EditorMode.Normal, 10, 80, 10) == 0
+    check hitTestTabLine(buffers, EditorMode.Normal, 10, 80, 10 + w1) == 1

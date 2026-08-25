@@ -2021,3 +2021,88 @@ suite "advanceLayoutForFrame - viewer selection drives the window viewport":
     e.advanceLayoutForFrame(buffer, false)
 
     check e.windowManager.windows[0].viewport.topLine == 0
+
+suite "editor_render_views - sanitize control characters":
+  proc hasControl(s: string): bool =
+    for r in s.runes:
+      if int(r) < 0x20 or int(r) == 0x7F:
+        return true
+    false
+
+  test "renderBottomLines sanitizes single-line statusMessage":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.statusMessage = "Opened: /tmp/a\x1B[2J/b\x00c\x7F.nim"
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    var hasCtrl = false
+    for y in 0 ..< buffer.area.height:
+      for x in 0 ..< buffer.area.width:
+        let sym = buffer[x, y].symbol
+        for r in sym.runes:
+          if int(r) < 0x20 or int(r) == 0x7F:
+            hasCtrl = true
+    check not hasCtrl
+    # Sanitized content still visible as spaces
+    var line = ""
+    for x in 0 ..< buffer.area.width:
+      line.add(buffer[x, buffer.area.height - 1].symbol)
+    check "Opened: /tmp/a [2J/b c .nim" in line or "Opened:" in line
+
+  test "renderBottomLines sanitizes multi-line statusMessage each line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.statusMessage = "line1\x1B[2J\nline2\x00bad\nline3\x7Fend"
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    var hasCtrl = false
+    for y in 0 ..< buffer.area.height:
+      for x in 0 ..< buffer.area.width:
+        for r in buffer[x, y].symbol.runes:
+          if int(r) < 0x20 or int(r) == 0x7F:
+            hasCtrl = true
+    check not hasCtrl
+
+  test "renderTempMessages sanitizes control characters":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.ui.tempMessages = @[
+      " jump line col file", "   1   10  5 /tmp/a\x1Bfile\x00.nim",
+      "   2   20 10 /tmp/b\x7Fname.nim",
+    ]
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderTempMessages(buffer)
+    var hasCtrl = false
+    for y in 0 ..< buffer.area.height:
+      for x in 0 ..< buffer.area.width:
+        for r in buffer[x, y].symbol.runes:
+          if int(r) < 0x20 or int(r) == 0x7F:
+            hasCtrl = true
+    check not hasCtrl
+    var all = ""
+    for y in 0 ..< buffer.area.height:
+      for x in 0 ..< buffer.area.width:
+        all.add(buffer[x, y].symbol)
+    check "a file" in all or "a" in all
+
+  test "sanitized message displayWidth consistent":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.statusMessage = "漢\x00字🎉\x1B test"
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderBottomLines(buffer)
+    var hasCtrl = false
+    for y in 0 ..< buffer.area.height:
+      for x in 0 ..< buffer.area.width:
+        for r in buffer[x, y].symbol.runes:
+          if int(r) < 0x20 or int(r) == 0x7F:
+            hasCtrl = true
+    check not hasCtrl

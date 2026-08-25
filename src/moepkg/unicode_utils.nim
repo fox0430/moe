@@ -38,6 +38,16 @@ proc sanitizeCellRune*(r: Rune): Rune =
   ## never reach a terminal cell as raw control sequences.
   if isC0Control(r): ' '.Rune else: r
 
+proc sanitizeForDisplay*(s: string): string =
+  ## Replace C0 controls and DEL with spaces so arbitrary metadata (file
+  ## names, branch names, user-configured `setupText` interpolations) cannot
+  ## inject terminal sequences via the status/tab lines. Mirrors
+  ## `sanitizeCellRune` at the string level so `displayWidth` stays consistent
+  ## with the rendered cells.
+  result = newStringOfCap(s.len)
+  for r in s.runes:
+    result.add($sanitizeCellRune(r))
+
 proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
   ## Write a single rune at (x, y), returning its display width so callers can
   ## advance the cursor. Wide chars (width 2) get an empty continuation cell so
