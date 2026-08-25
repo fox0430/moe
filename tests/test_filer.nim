@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, times, options, strutils]
+import std/[unittest, os, times, options, strutils, unicode]
 import ../src/moepkg/filer {.all.}
 import ../src/moepkg/[buffer, highlight, color]
 
@@ -1045,6 +1045,135 @@ suite "Filer - createFilerTextBuffer":
     )
     let buf = state.createFilerTextBuffer(false)
     check buf.getLine(0).endsWith("linkdir/")
+
+suite "Filer - createFilerTextBuffer highlight width unicode":
+  test "Highlight lastColumn uses rune length not byte length for emoji icon":
+    let entries = @[
+      FileEntry(
+        name: "test.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
+    let state = FilerState(
+      currentPath: "/tmp", entries: entries, selectedIndex: 0, showHidden: false
+    )
+    let buf = state.createFilerTextBuffer(true)
+    let line = buf.getLine(0)
+    # Line contains emoji icon (📝 for .txt is 4 bytes, 1 rune)
+    check line.toRunes.len < line.len
+    check buf.highlight.colorSegments[0].lastColumn == max(0, line.toRunes.high)
+    check buf.highlight.colorSegments[0].lastColumn == line.toRunes.len - 1
+    # Old buggy code would have produced byte-based high
+    check buf.highlight.colorSegments[0].lastColumn != line.high
+
+  test "Highlight width correct for multibyte filename without icons":
+    let entries = @[
+      FileEntry(
+        name: "日本語.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
+    let state = FilerState(
+      currentPath: "/tmp", entries: entries, selectedIndex: 0, showHidden: false
+    )
+    let buf = state.createFilerTextBuffer(false)
+    let line = buf.getLine(0)
+    check line.toRunes.len < line.len
+    check buf.highlight.colorSegments[0].lastColumn == max(0, line.toRunes.high)
+
+  test "Highlight width correct for directory with emoji icon":
+    let entries = @[
+      FileEntry(
+        name: "mydir",
+        kind: fekDirectory,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      )
+    ]
+    let state = FilerState(
+      currentPath: "/tmp", entries: entries, selectedIndex: 0, showHidden: false
+    )
+    let buf = state.createFilerTextBuffer(true)
+    let line = buf.getLine(0)
+    check line.contains("📁")
+    check buf.highlight.colorSegments[0].lastColumn == max(0, line.toRunes.high)
+    check buf.highlight.colorSegments[0].lastColumn == line.toRunes.len - 1
+
+  test "Highlight width correct for multiple entries with mixed unicode":
+    let entries = @[
+      FileEntry(
+        name: "a.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      ),
+      FileEntry(
+        name: "日本語.nim",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      ),
+      FileEntry(
+        name: "dir",
+        kind: fekDirectory,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      ),
+    ]
+    let state = FilerState(
+      currentPath: "/tmp", entries: entries, selectedIndex: 0, showHidden: false
+    )
+    let buf = state.createFilerTextBuffer(true)
+    check buf.highlight.colorSegments.len == entries.len
+    for i in 0 ..< entries.len:
+      let line = buf.getLine(i)
+      check buf.highlight.colorSegments[i].lastColumn == max(0, line.toRunes.high)
+      check buf.highlight.colorSegments[i].firstRow == i
+      check buf.highlight.colorSegments[i].lastRow == i
+
+  test "Highlight width for ascii only matches both byte and rune length":
+    let entries = @[
+      FileEntry(
+        name: "a.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
+    let state = FilerState(
+      currentPath: "/tmp", entries: entries, selectedIndex: 0, showHidden: false
+    )
+    let buf = state.createFilerTextBuffer(false)
+    let line = buf.getLine(0)
+    # Without icons and ascii-only, byte and rune lengths coincide except for marker
+    check line.toRunes.len == line.len
+    check buf.highlight.colorSegments[0].lastColumn == max(0, line.toRunes.high)
+    check buf.highlight.colorSegments[0].lastColumn == max(0, line.high)
 
 suite "Filer - pathToIcon additional":
   test "Symlink to directory icon":
