@@ -1408,7 +1408,7 @@ suite "Visual Commands - visualPaste":
       kind: vskChar,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.getLine(0) == "REPLACED world"
     check state.visualSelection.active == false
@@ -1426,7 +1426,7 @@ suite "Visual Commands - visualPaste":
       kind: vskChar,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.getLine(0) == "hello world" # unchanged
     check state.visualSelection.active == false
@@ -1444,7 +1444,7 @@ suite "Visual Commands - visualPaste":
       kind: vskChar,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.getLine(0) == "NAMED world"
     check state.pendingInput.pendingRegister.isNone
@@ -1465,7 +1465,7 @@ suite "Visual Commands - visualPaste":
       kind: vskBlock,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     # Bug: deleteBlockSelection must NOT overwrite named register 'a'
     # with the deleted block text.
@@ -1488,7 +1488,7 @@ suite "Visual Commands - visualPaste":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.getLine(0) == "line1"
     check buf.getLine(1) == ""
@@ -1509,7 +1509,7 @@ suite "Visual Commands - visualPaste":
       kind: vskChar,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.getLine(0) == "hello world" # unchanged
     check state.visualSelection.active == false
@@ -1537,12 +1537,32 @@ suite "Visual Commands - visualPaste":
       )
 
       let cfg = ClipboardConfig(enable: true, tool: tool)
-      visualPaste(buf, state, cfg)
+      discard visualPaste(buf, state, cfg)
 
       check buf.getLine(0) == "FROM_CLIPBOARD world"
       check state.visualSelection.active == false
 
       cleanupClipboardProcs(tool)
+
+  test "visualPaste reports clipboard read failure and leaves buffer unchanged":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.registers.setClipboardTool(cbtWin32yank)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let cfg = ClipboardConfig(enable: true, tool: cbtWin32yank)
+    let r = visualPaste(buf, state, cfg)
+
+    check r.isErr
+    check r.error.contains("Failed to read from clipboard")
+    check buf.getLine(0) == "hello world"
+    check not state.visualSelection.active
+    check state.mode == EditorMode.Normal
 
 suite "Visual Commands - Block Selection":
   test "Delete block selection":
@@ -1694,7 +1714,7 @@ suite "Visual Commands - Block Selection":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.len == 2
     check buf.getLine(0) == "REPLACED"
@@ -1715,7 +1735,7 @@ suite "Visual Commands - Block Selection":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.len == 4
     check buf.getLine(0) == "new line A"
@@ -1735,7 +1755,7 @@ suite "Visual Commands - Block Selection":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.len == 3
     check buf.getLine(0) == "new line A"
@@ -1761,7 +1781,7 @@ suite "Visual Commands - Block Selection":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.len == 4
     check buf.getLine(0) == "new line A"
@@ -1784,7 +1804,7 @@ suite "Visual Commands - Block Selection":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.len == 2
     check buf.getLine(0) == "foo"
@@ -1805,7 +1825,7 @@ suite "Visual Commands - Block Selection":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.len == 3
     check buf.getLine(0) == "frag A"
@@ -2006,7 +2026,7 @@ suite "Visual Commands - Edge Cases":
     state.registers.setYankedRegister("REPLACED", false)
     state.visualSelection.active = false
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check buf.getLine(0) == "hello"
 
@@ -2589,6 +2609,56 @@ suite "Visual Commands - fold-aware movement":
     visualMoveDown(buf, state)
     check state.cursor.line == 2
 
+suite "Visual paste - cursor on a rolled-back paste":
+  # The paste moves the cursor to the paste anchor before the edit that can
+  # fail. A read-only buffer rejects that edit, so the rollback must leave the
+  # cursor where the user had it instead of at the vanished anchor.
+
+  proc newReadOnlyPasteState(): (TextBuffer, EditorState) =
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    state.registers.setYankedRegister("REPLACED", false)
+    buf.readOnly = true
+    (buf, state)
+
+  test "charwise paste failure keeps the cursor":
+    let (buf, state) = newReadOnlyPasteState()
+    state.mode = EditorMode.Visual
+    state.cursor = BufferPosition(line: 1, column: 5)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    let r = visualPaste(buf, state)
+
+    check r.isErr
+    check buf.getLine(0) == "hello world"
+    check state.cursor.line == 1
+    check state.cursor.column == 5
+
+  test "blockwise paste failure keeps the cursor":
+    let (buf, state) = newReadOnlyPasteState()
+    state.mode = EditorMode.VisualBlock
+    state.cursor = BufferPosition(line: 1, column: 5)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskBlock,
+    )
+
+    let r = visualPaste(buf, state)
+
+    check r.isErr
+    check buf.getLine(0) == "hello world"
+    check state.cursor.line == 1
+    check state.cursor.column == 5
+
 suite "Visual delete - register/buffer atomicity":
   # A read-only buffer rejects the delete, so nothing was removed: the registers
   # must keep their previous content (they are outside the buffer transaction
@@ -2695,7 +2765,7 @@ suite "Visual delete - register/buffer atomicity":
       kind: vskChar,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check state.registers.getSmallDeleteRegister().getContent() == "SEED"
     check buf.getLine(0) == "hello world"
@@ -2711,7 +2781,7 @@ suite "Visual delete - register/buffer atomicity":
       kind: vskLine,
     )
 
-    visualPaste(buf, state)
+    discard visualPaste(buf, state)
 
     check state.registers.getNumberRegister(1).getContent() == "SEED_LINE\n"
     check buf.getLine(0) == "hello world"
@@ -2805,10 +2875,11 @@ suite "Visual edit commands - read-only failure rolls back and reports":
       kind: vskChar,
     )
 
-    visualPaste(buf, state)
+    let r = visualPaste(buf, state)
 
+    check r.isErr
+    check r.error.len > 0
     check buf.getLine(0) == "Hello World"
-    check state.statusMessage.len > 0
     check not state.visualSelection.active
     check state.mode == EditorMode.Normal
 

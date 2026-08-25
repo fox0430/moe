@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, osproc, strutils, unittest]
+import std/[monotimes, os, osproc, strutils, tempfiles, times, unittest]
 
 import pkg/results
 
@@ -585,6 +585,183 @@ suite "Registers":
         check reg.isLine == false
       finally:
         removeFakeClipboardTool(fakeDir)
+
+  test "clipboardFallbackRead reports content the claim window suppressed":
+    # Inside the claim window a successful read is deliberately not adopted
+    # into the register. A paste falling back to the clipboard must still see
+    # what that read returned instead of concluding the clipboard is empty.
+    let fakeDir = installFakeWlClipboardTool("external content")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtWlClipboard)
+        restartClipboardClaimWindow(r)
+
+        check r.getNoNamedRegister().getContent() == ""
+
+        let fallback = r.clipboardFallbackRead(cbtWlClipboard, '"')
+        check fallback.isOk
+        check fallback.get() == "external content"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboardFallbackRead reuses the read the register resolution just did":
+    # Resolving the register already ran the tool, so the fallback reuses that
+    # read instead of spawning it again. The cache is consumed, so a second
+    # fallback with no register read in between goes back to the tool.
+    let fakeDir = installFakeClipboardTool("first content")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        # Populate `clipboardReadOutcome=croSucceeded` with "first content".
+        check r.getNoNamedRegister().getContent() == "first content"
+        check r.clipboardReadOutcome == croSucceeded
+        writeFile(clipboardFilePath(fakeDir), "second content")
+        let fb = r.clipboardFallbackRead(cbtXclip, '"')
+        check fb.isOk
+        check fb.get() == "first content"
+        # Cache consumed: the next fallback runs the tool again.
+        check r.clipboardReadOutcome == croNotAttempted
+        let fb2 = r.clipboardFallbackRead(cbtXclip, '"')
+        check fb2.isOk
+        check fb2.get() == "second content"
+        # Non-clipboard register must always re-read, never hit the cache.
+        writeFile(clipboardFilePath(fakeDir), "third content")
+        let fb3 = r.clipboardFallbackRead(cbtXclip, 'a')
+        check fb3.isOk
+        check fb3.get() == "third content"
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "an empty-clipboard paste runs the clipboard tool only once":
+    # The ordinary "nothing yanked, empty clipboard" paste resolves the unnamed
+    # register and then falls back. Both steps used to run the tool, doubling
+    # the synchronous stall - and the bounded timeout - on every such paste.
+    when defined(posix):
+      let fakeDir = createTempDir("moe-registers-test-count-", "")
+      let origPath = getEnv("PATH")
+      let counter = fakeDir / "runs"
+      let fakeTool = fakeDir / "xclip"
+      writeFile(fakeTool, "#!/bin/sh\nprintf x >>\"" & counter & "\"\n")
+      setFilePermissions(fakeTool, {fpUserRead, fpUserWrite, fpUserExec})
+      writeFile(counter, "")
+      putEnv("PATH", fakeDir & ":" & origPath)
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        check r.getNoNamedRegister().getContent() == ""
+        let fb = r.clipboardFallbackRead(cbtXclip, '"')
+        check fb.isOk
+        check fb.get() == ""
+        check readFile(counter).len == 1
+      finally:
+        putEnv("PATH", origPath)
+        removeDir(fakeDir)
+
+  test "clipboardFallbackRead on `*` reads PRIMARY, not CLIPBOARD":
+    # `*` names the PRIMARY selection. Falling back to CLIPBOARD would paste
+    # the other selection's content whenever PRIMARY is empty.
+    let fakeDir = installFakeClipboardTool("")
+    if fakeDir.len == 0:
+      skip()
+    else:
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        writeFile(clipboardFilePath(fakeDir), "clipboard content")
+        writeFile(primaryFilePath(fakeDir), "primary content")
+        let fb = r.clipboardFallbackRead(cbtXclip, '*')
+        check fb.isOk
+        check fb.get() == "primary content"
+        # An empty PRIMARY stays empty instead of borrowing CLIPBOARD.
+        writeFile(primaryFilePath(fakeDir), "")
+        let fbEmpty = r.clipboardFallbackRead(cbtXclip, '*')
+        check fbEmpty.isOk
+        check fbEmpty.get() == ""
+      finally:
+        removeFakeClipboardTool(fakeDir)
+
+  test "clipboardFallbackRead on failed read does not double the timeout":
+    # The hung/oversized case must not cost a second bounded read. A failed
+    # getRegister read is cached and the fallback returns the cached error
+    # without re-invoking the tool, so the second call is near-instant.
+    when defined(posix):
+      let fakeDir = createTempDir("moe-registers-test-hang-", "")
+      let origPath = getEnv("PATH")
+      let fakeTool = fakeDir / "xclip"
+      # Hanging tool for reads: sleep longer than ReadTimeoutMs.
+      writeFile(fakeTool, "#!/bin/sh\nsleep 10\n")
+      setFilePermissions(fakeTool, {fpUserRead, fpUserWrite, fpUserExec})
+      putEnv("PATH", fakeDir & ":" & origPath)
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        let start1 = getMonoTime()
+        discard r.getNoNamedRegister()
+        let elapsed1 = (getMonoTime() - start1).inMilliseconds
+        check r.clipboardReadOutcome == croFailed
+        # Second call must not re-invoke the hanging tool: should be fast.
+        let start2 = getMonoTime()
+        let fb = r.clipboardFallbackRead(cbtXclip, '"')
+        let elapsed2 = (getMonoTime() - start2).inMilliseconds
+        check fb.isErr
+        # First read took the bounded timeout (~ReadTimeoutMs=2000); fallback must
+        # not add a second one. Upper bound is generous for loaded CI.
+        check elapsed1 >= 1500 and elapsed1 < 5000
+        check elapsed2 < 500
+        # Total must be ~one timeout, not two.
+        check (elapsed1 + elapsed2) < 3500
+        # Non-clipboard register must still re-read (even if it hangs).
+        # We only check it is attempted, not timing, to avoid double hang.
+        r.clipboardReadOutcome = croSucceeded
+          # reset to verify non-cache path would re-read
+        # Restore PATH before checking non-clipboard path to avoid hanging again
+        # on cleanup; use a fast fake for the second probe.
+        writeFile(fakeTool, "#!/bin/sh\ncat \"" & fakeDir & "/clipboard.txt\"\n")
+        writeFile(fakeDir / "clipboard.txt", "third content")
+        let fb2 = r.clipboardFallbackRead(cbtXclip, 'a')
+        check fb2.isOk
+      finally:
+        putEnv("PATH", origPath)
+        removeDir(fakeDir)
+    else:
+      skip()
+
+  test "clipboardFallbackRead on `*` does not double the timeout":
+    # `"*p` reads PRIMARY through the register, then falls back for an empty
+    # register. A hung tool must not be spawned a second time for a second
+    # bounded read: PRIMARY keeps its own cached outcome.
+    when defined(posix):
+      let fakeDir = createTempDir("moe-registers-test-primary-hang-", "")
+      let origPath = getEnv("PATH")
+      let fakeTool = fakeDir / "xclip"
+      writeFile(fakeTool, "#!/bin/sh\nsleep 10\n")
+      setFilePermissions(fakeTool, {fpUserRead, fpUserWrite, fpUserExec})
+      putEnv("PATH", fakeDir & ":" & origPath)
+      try:
+        let r = initRegisters()
+        r.setClipboardTool(cbtXclip)
+        let start1 = getMonoTime()
+        discard r.getRegister('*')
+        let elapsed1 = (getMonoTime() - start1).inMilliseconds
+        check r.primaryReadOutcome == croFailed
+        let start2 = getMonoTime()
+        let fb = r.clipboardFallbackRead(cbtXclip, '*')
+        let elapsed2 = (getMonoTime() - start2).inMilliseconds
+        check fb.isErr
+        check elapsed1 >= 1500 and elapsed1 < 5000
+        check elapsed2 < 500
+        check (elapsed1 + elapsed2) < 3500
+      finally:
+        putEnv("PATH", origPath)
+        removeDir(fakeDir)
+    else:
+      skip()
 
   test "unnamed put adopts an external change made right after moe's own write":
     # A forking wl-copy confirms the write, so no claim window opens and an
