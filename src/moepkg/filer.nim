@@ -21,7 +21,7 @@
 ##
 ## This module provides the data structures and operations for the file explorer mode.
 
-import std/[os, options, times, strutils]
+import std/[os, options, times, strutils, unicode]
 
 import pkg/celina
 
@@ -343,7 +343,7 @@ proc createFilerTextBuffer*(state: FilerState, showIcons: bool): TextBuffer =
   # Entry styles
   for i, entry in state.entries:
     let row = i
-    let lineLen = max(0, lines[row].high)
+    let lineLen = max(0, lines[row].toRunes().high)
     let (colorIdx, style) =
       if entry.kind == fekDirectory:
         (

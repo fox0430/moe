@@ -386,6 +386,101 @@ suite "StatusLine - buildFileDisplay":
 
     check result == ""
 
+  test "Display empty when both directory and filename disabled, not modified":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " "
+    check "file.nim" notin result
+    check "/path/to" notin result
+
+  test "Display only space when both directory and filename disabled, bug fix regression":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    # Before fix, else branch incorrectly did extractFilename() so result was " file.nim"
+    check result != " file.nim"
+    check result == " "
+
+  test "Display only changed mark when both directory and filename disabled but modified":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim", modified = true)
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = true
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " [+]"
+    check "file.nim" notin result
+
+  test "No changed mark when both disabled and changedMark disabled even if modified":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim", modified = true)
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " "
+    check "[+]" notin result
+
+  test "Directory takes precedence over filename flag":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = true
+    config.filename = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " /path/to/file.nim"
+
+  test "Directory enabled ignores filename false vs true":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config1 = createTestStatusLineConfig()
+    config1.directory = true
+    config1.filename = true
+    var config2 = createTestStatusLineConfig()
+    config2.directory = true
+    config2.filename = false
+
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config1) ==
+      buildFileDisplay(textBuffer, EditorMode.Normal, config2)
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config1) ==
+      " /path/to/file.nim"
+
+  test "All combinations of directory/filename for Normal mode":
+    let textBuffer = createTestTextBuffer("/a/b/c.nim")
+    var config = createTestStatusLineConfig()
+    config.changedMark = false
+    # directory=true, filename=true -> full path
+    config.directory = true
+    config.filename = true
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " /a/b/c.nim"
+    # directory=true, filename=false -> still full path
+    config.directory = true
+    config.filename = false
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " /a/b/c.nim"
+    # directory=false, filename=true -> filename only
+    config.directory = false
+    config.filename = true
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " c.nim"
+    # directory=false, filename=false -> space only
+    config.directory = false
+    config.filename = false
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " "
+
 suite "StatusLine - parseSetupText":
   test "Parse lineNumber placeholder":
     var state = createTestState()

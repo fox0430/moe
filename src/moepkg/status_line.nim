@@ -21,7 +21,7 @@ import std/[strformat, options, strutils, os, unicode]
 
 import pkg/celina
 
-import types, buffer/core, modes, color, config, git_cache, unicode_utils, highlight
+import types, buffer/core, modes, color, config, git_cache, unicode_utils
 import syntax/tokenizer
 
 proc toggleStatusLine*(state: var EditorState) =
@@ -179,11 +179,14 @@ proc buildFileDisplay(
     if config.filename:
       displayText &= filePath.extractFilename()
     else:
-      displayText &= filePath.extractFilename()
+      discard
 
   # Add changed mark if enabled and buffer is modified
   if config.changedMark and textBuffer.isModified:
-    displayText &= " [+]"
+    if displayText == " ":
+      displayText = " [+]"
+    else:
+      displayText &= " [+]"
 
   return displayText
 
