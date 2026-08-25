@@ -500,7 +500,10 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     if lineCount == 1:
       # Single line: overwrite the status line on the shared row
       buffer.setString(
-        buffer.area.x, screenBottomY, e.state.statusMessage, commandStyle()
+        buffer.area.x,
+        screenBottomY,
+        sanitizeForDisplay(e.state.statusMessage),
+        commandStyle(),
       )
     elif lineCount > 1:
       # Multi-line: render the last areaH message lines into the grown area
@@ -516,7 +519,9 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
         cell(" ", commandStyle()),
       )
       for i, line in lines:
-        buffer.setString(buffer.area.x, areaTopY + i, line, commandStyle())
+        buffer.setString(
+          buffer.area.x, areaTopY + i, sanitizeForDisplay(line), commandStyle()
+        )
 
 proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   ## Render temporary messages at the bottom of screen (like Vim's :jumps output)
@@ -545,7 +550,7 @@ proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   for i, msg in e.state.ui.tempMessages:
     let y = startY + 1 + i # +1 to skip border
     if y < buffer.area.height - 1: # Leave last line for prompt
-      buffer.setString(buffer.area.x, y, msg, theNormalStyle)
+      buffer.setString(buffer.area.x, y, sanitizeForDisplay(msg), theNormalStyle)
 
   # Render the prompt on the last line
   let promptY = buffer.area.height - 1
