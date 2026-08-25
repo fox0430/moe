@@ -19,7 +19,7 @@
 
 ## Tests for editor_frame.nim
 
-import std/[unittest, os, monotimes]
+import std/[unittest, options, os, monotimes]
 
 import pkg/celina
 
@@ -66,6 +66,37 @@ suite "notify - routing and logging":
 
       check getMessageLog().len == 1
       check getMessageLog()[0] == "QuickRun error: boom"
+
+  test "an overlay does not override the status line preference":
+    # An open command / search line must not turn every background
+    # notification into a popup for a user who asked for the status line.
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    e.state.overlay = some(okCommand)
+    clearMessageLog()
+
+    e.notify("LSP: server ready")
+
+    check e.state.statusMessage == "LSP: server ready"
+    check e.state.notificationPopup.queue.len == 0
+
+  test "notifyPopup uses the popup even with popups disabled":
+    # For a caller whose message would land on a row an overlay owns.
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    e.state.overlay = some(okCommand)
+    e.state.setStatusQuiet("")
+    clearMessageLog()
+
+    e.notifyPopup("Paste failed: boom", nlError)
+
+    check e.state.notificationPopup.queue.len == 1
+    check e.state.notificationPopup.queue[0].message == "Paste failed: boom"
+    check e.state.notificationPopup.queue[0].level == nlError
+    check e.state.statusMessage.len == 0
+    check getMessageLog().len == 1
 
   test "empty message is not logged":
     let config = newEditorConfig()

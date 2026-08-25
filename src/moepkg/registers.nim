@@ -44,6 +44,10 @@ proc initRegisters*(): Registers =
     named: initTable[char, Register](),
     primarySelection: Register(isLine: false, buffer: @[]),
     clipboardSelection: Register(isLine: false, buffer: @[]),
+    clipboardReadOutcome: croNotAttempted,
+    clipboardReadError: "",
+    primaryReadOutcome: croNotAttempted,
+    primaryReadError: "",
     lastClipboardWriteTime: MonoTime(),
   )
 
@@ -58,6 +62,12 @@ proc initRegisters*(): Registers =
 proc setClipboardTool*(r: Registers, tool: ClipboardTool) =
   ## Set the clipboard tool for system clipboard integration
   r.clipboardTool = some(tool)
+  r.clipboardReadOutcome = croNotAttempted
+  r.clipboardReadError = ""
+  r.clipboardReadValue = ""
+  r.primaryReadOutcome = croNotAttempted
+  r.primaryReadError = ""
+  r.primaryReadValue = ""
 
 proc isNamedRegisterName*(c: char): bool =
   ## Check if character is a valid named register name (a-z or A-Z)
@@ -135,9 +145,7 @@ proc appendRegister(r: var Register, content: string, isLine: bool) =
 # Clipboard integration (synchronous so that put-time reads see the writes)
 
 proc sendToClipboard(r: Registers, content: string, isLine: bool) =
-  ## Send content to the system CLIPBOARD synchronously, keeping the `+`
-  ## cache in sync so a put returns the written content even inside the
-  ## wl-copy claim window.
+  ## Send to system CLIPBOARD and sync `+` cache.
   if r.clipboardTool.isSome:
     let writeResult = writeToClipboardSync(r.clipboardTool.get, content)
     if writeResult.isErr:
@@ -145,8 +153,6 @@ proc sendToClipboard(r: Registers, content: string, isLine: bool) =
     else:
       r.clipboardSelection.setRegister(content, isLine)
       if not writeResult.get:
-        # The write is unconfirmed: open the claim window so a stale read
-        # is not adopted.
         r.lastClipboardWriteTime = getMonoTime()
 
 proc sendToPrimarySelection(r: Registers, content: string) =
@@ -157,22 +163,43 @@ proc sendToPrimarySelection(r: Registers, content: string) =
       logError "registers", "Failed to write to PRIMARY: " & writeResult.error
 
 proc getFromClipboard(r: Registers): Result[string, string] =
-  ## Get content from system CLIPBOARD selection if available
+  ## Get CLIPBOARD content. Records outcome for fallback reuse.
   if r.clipboardTool.isNone:
+    r.clipboardReadOutcome = croNotAttempted
+    r.clipboardReadError = ""
+    r.clipboardReadValue = ""
     return err("No clipboard tool configured")
-  return readFromClipboardSync(r.clipboardTool.get)
+  result = readFromClipboardSync(r.clipboardTool.get)
+  if result.isOk:
+    r.clipboardReadOutcome = croSucceeded
+    r.clipboardReadError = ""
+    r.clipboardReadValue = result.get
+  else:
+    r.clipboardReadOutcome = croFailed
+    r.clipboardReadError = result.error
+    r.clipboardReadValue = ""
 
 proc getFromPrimarySelection(r: Registers): Result[string, string] =
-  ## Get content from X11 PRIMARY selection if available
+  ## Get PRIMARY content. Records outcome for fallback reuse.
   if r.clipboardTool.isNone:
+    r.primaryReadOutcome = croNotAttempted
+    r.primaryReadError = ""
+    r.primaryReadValue = ""
     return err("No clipboard tool configured")
-  return readFromPrimarySelectionSync(r.clipboardTool.get)
+  result = readFromPrimarySelectionSync(r.clipboardTool.get)
+  if result.isOk:
+    r.primaryReadOutcome = croSucceeded
+    r.primaryReadError = ""
+    r.primaryReadValue = result.get
+  else:
+    r.primaryReadOutcome = croFailed
+    r.primaryReadError = result.error
+    r.primaryReadValue = ""
 
 proc markClipboardWritten*(
     r: Registers, content: string, isLine: bool, writeConfirmed: bool
 ) =
-  ## Record a successful CLIPBOARD write from copy: sync the unnamed and `+`
-  ## registers, opening the wl-copy claim window when the write is unconfirmed.
+  ## Record CLIPBOARD write and sync registers.
   r.noNamed.setRegister(content, isLine)
   r.clipboardSelection.setRegister(content, isLine)
   if not writeConfirmed:
@@ -363,22 +390,15 @@ proc tryUpdatePrimarySelectionRegister(r: Registers) =
       r.primarySelection.setRegister(content, hasNewline)
 
 proc getNoNamedRegister*(r: Registers): Register =
-  ## Get the unnamed register, syncing with the system CLIPBOARD so
-  ## external changes are picked up by the next put. A read matching moe's
-  ## own write keeps the internal type; inside the wl-copy claim window the
-  ## internal register is kept because the write may not have landed yet.
+  ## Get unnamed register, syncing with system CLIPBOARD.
   let clipResult = r.getFromClipboard()
   if clipResult.isOk:
     let clipContent = clipResult.get
     if clipContent.len > 0 and clipContent != r.noNamed.getContent:
-      # Inside the claim window a differing read may be stale pre-write
-      # content; keep the internal register.
       if not r.isWithinClipboardClaimWindow:
         let hasNewline = clipContent.contains('\n')
         r.noNamed.setRegister(clipContent, hasNewline)
     elif clipContent.len > 0 and r.isWithinClipboardClaimWindow:
-      # The write has landed: close the claim window so external changes
-      # are adopted again.
       r.lastClipboardWriteTime = MonoTime()
   else:
     logDebug "registers",
@@ -440,6 +460,29 @@ proc getRegister*(r: Registers, name: char): Register =
     r.getClipboardRegister(name)
   else:
     Register(isLine: false, buffer: @[])
+
+proc clipboardFallbackRead*(
+    r: Registers, tool: ClipboardTool, registerName: char
+): Result[string, string] =
+  ## Fallback for empty paste; reuses cached read to avoid second tool spawn.
+  let cacheApplies = r.clipboardTool.isSome and r.clipboardTool.get == tool
+  if registerName.isPrimarySelectionRegisterName:
+    # PRIMARY only reuses PRIMARY outcome.
+    if cacheApplies and r.primaryReadOutcome != croNotAttempted:
+      let outcome = r.primaryReadOutcome
+      r.primaryReadOutcome = croNotAttempted
+      if outcome == croFailed:
+        return err(r.primaryReadError)
+      return ok(r.primaryReadValue)
+    return readFromPrimarySelectionSync(tool)
+  if cacheApplies and r.clipboardReadOutcome != croNotAttempted and
+      (registerName == '"' or registerName.isClipboardSelectionRegisterName):
+    let outcome = r.clipboardReadOutcome
+    r.clipboardReadOutcome = croNotAttempted
+    if outcome == croFailed:
+      return err(r.clipboardReadError)
+    return ok(r.clipboardReadValue)
+  return readFromClipboardSync(tool)
 
 proc getRegisterContent*(r: Registers, name: char): string =
   ## Get register content as string

@@ -24,7 +24,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, modes, registers, logger, clipboard, unicode_utils]
+import ../[types, motion, modes, registers, logger, unicode_utils]
 import ../buffer/[core, edit, undo]
 
 import core, operator_engine
@@ -51,22 +51,20 @@ proc pasteEndPos(startPos: BufferPosition, pasteText: string): BufferPosition =
     BufferPosition(line: startPos.line + nlCount, column: lastSeg.charLen)
 
 proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Paste text from internal register or system clipboard after cursor (p command)
-  ## Mimics Vim's 'p' behavior
-  ## count: number of times to paste (default: 1)
-
+  ## Paste after cursor (p). Uses register or clipboard fallback.
   logDebug("paste", "handlePasteAfter called with count=" & $count)
   let actualCount = max(1, count)
 
-  # Get content from register system
   var pasteText: string
   var isFullLine: bool
   var registerEmpty: bool
+  var usedRegister = '"' # Track register for fallback cache.
 
   if ctx.state.pendingInput.pendingRegister.isSome and
       ctx.state.pendingInput.pendingRegister.get != '\0':
     # User specified a register with "
     let regName = ctx.state.pendingInput.pendingRegister.get
+    usedRegister = regName
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
@@ -86,23 +84,21 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
     "paste", "Paste content length: " & $pasteText.len & ", isLine=" & $isFullLine
   )
 
-  # If register is truly empty, try system clipboard (if enabled).
-  # A linewise register with a single empty line ([""]) is not empty — it
-  # represents one empty line and must not trigger the clipboard fallback.
+  # Fallback to clipboard if register empty; empty linewise is valid.
   if registerEmpty and ctx.clipboardConfig.enable:
     logDebug("paste", "Register empty, trying clipboard")
-    let readResult = readFromClipboardSync(ctx.clipboardConfig.tool)
+    let readResult =
+      ctx.state.registers.clipboardFallbackRead(ctx.clipboardConfig.tool, usedRegister)
     if readResult.isErr:
       return err(
-        "Nothing to paste (register empty and clipboard error: " & readResult.error & ")"
+        # `readResult.error` already reads "Failed to read from clipboard: ...".
+        "Nothing to paste: " & readResult.error
       )
 
     pasteText = readResult.value
-    # Detect if it's a full line from clipboard
     isFullLine = pasteText.len > 0 and pasteText[^1] == '\n'
     logDebug("paste", "Got from clipboard, length: " & $pasteText.len)
 
-  # Linewise paste of an empty line is legitimate (Vim inserts a blank line).
   if pasteText.len == 0 and not isFullLine:
     return err("Nothing to paste")
 
@@ -187,22 +183,21 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
   return Result[(), string].ok ()
 
 proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Paste text from internal register or system clipboard before cursor (P command)
-  ## Mimics Vim's 'P' behavior
-  ## count: number of times to paste (default: 1)
+  ## Paste before cursor (P). Uses register or clipboard fallback.
 
   logDebug("paste", "handlePasteBefore called with count=" & $count)
   let actualCount = max(1, count)
 
-  # Get content from register system
   var pasteText: string
   var isFullLine: bool
   var registerEmpty: bool
+  var usedRegister = '"' # Track register for fallback cache.
 
   if ctx.state.pendingInput.pendingRegister.isSome and
       ctx.state.pendingInput.pendingRegister.get != '\0':
     # User specified a register with "
     let regName = ctx.state.pendingInput.pendingRegister.get
+    usedRegister = regName
     let reg = ctx.state.registers.getRegister(regName)
     pasteText = reg.getContent()
     isFullLine = reg.isLine
@@ -222,23 +217,21 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
     "paste", "Paste content length: " & $pasteText.len & ", isLine=" & $isFullLine
   )
 
-  # If register is truly empty, try system clipboard (if enabled).
-  # A linewise register with a single empty line ([""]) is not empty — it
-  # represents one empty line and must not trigger the clipboard fallback.
+  # Fallback to clipboard if register empty; empty linewise is valid.
   if registerEmpty and ctx.clipboardConfig.enable:
     logDebug("paste", "Register empty, trying clipboard")
-    let readResult = readFromClipboardSync(ctx.clipboardConfig.tool)
+    let readResult =
+      ctx.state.registers.clipboardFallbackRead(ctx.clipboardConfig.tool, usedRegister)
     if readResult.isErr:
       return err(
-        "Nothing to paste (register empty and clipboard error: " & readResult.error & ")"
+        # `readResult.error` already reads "Failed to read from clipboard: ...".
+        "Nothing to paste: " & readResult.error
       )
 
     pasteText = readResult.value
-    # Detect if it's a full line from clipboard
     isFullLine = pasteText.len > 0 and pasteText[^1] == '\n'
     logDebug("paste", "Got from clipboard, length: " & $pasteText.len)
 
-  # Linewise paste of an empty line is legitimate (Vim inserts a blank line).
   if pasteText.len == 0 and not isFullLine:
     return err("Nothing to paste")
 
