@@ -74,6 +74,10 @@ proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
   else:
     b.lineEnding = LF
 
+proc loadFileWithContent*(
+  b: TextBuffer, path: string, content: string, fileSize: int64 = -1
+): Result[(), string]
+
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   var content: string
   var fileSize: int64 = 0
@@ -92,26 +96,29 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
-  # Detect the encoding on the RAW bytes, before any line-ending rewrite:
-  # in UTF-16/32 a \r byte is only part of a wider code unit, so normalizing
-  # first would rewrite code units (e.g. UTF-16LE CRLF `0D 00 0A 00` read as
-  # a lone \r) and corrupt the file on save. Decode to UTF-8 for internal
-  # storage, then normalize line endings on the decoded text.
-  var encoding = detectCharacterEncoding(content)
+  return b.loadFileWithContent(path, content, fileSize)
+
+proc loadFileWithContent*(
+    b: TextBuffer, path: string, content: string, fileSize: int64 = -1
+): Result[(), string] =
+  ## Init buffer from pre-read content; avoids extra read and keeps
+  ## backup/edit consistency in LSP `applyEditsToFile`.
+  var contentMut = content
+  let effFileSize = if fileSize >= 0: fileSize else: contentMut.len.int64
+
+  var encoding = detectCharacterEncoding(contentMut)
   var hasBom = false
   var bomLen = 0
   case encoding
   of CharacterEncoding.utf8:
-    # detectCharacterEncoding returns utf8 for BOM-tagged and plain alike.
-    if content.startsWith("\xEF\xBB\xBF"):
+    if contentMut.startsWith("\xEF\xBB\xBF"):
       hasBom = true
-      content = content[3 .. ^1]
+      contentMut = contentMut[3 .. ^1]
   of CharacterEncoding.utf16:
-    # BOM present; resolve the endianness it encodes
     hasBom = true
     bomLen = 2
     encoding =
-      if content.startsWith("\xFF\xFE"):
+      if contentMut.startsWith("\xFF\xFE"):
         CharacterEncoding.utf16Le
       else:
         CharacterEncoding.utf16Be
@@ -119,7 +126,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     hasBom = true
     bomLen = 4
     encoding =
-      if content.startsWith("\xFF\xFE"):
+      if contentMut.startsWith("\xFF\xFE"):
         CharacterEncoding.utf32Le
       else:
         CharacterEncoding.utf32Be
@@ -130,11 +137,9 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
     CharacterEncoding.utf32Be,
   }:
-    # Detection only samples the head of the file, so decoding can still fail;
-    # fall back to raw bytes then (the pre-transcoding behavior).
-    let decoded = decodeToUtf8(content[bomLen .. ^1], encoding)
+    let decoded = decodeToUtf8(contentMut[bomLen .. ^1], encoding)
     if decoded.isOk:
-      content = decoded.get
+      contentMut = decoded.get
     else:
       logWarn(
         "buffer",
@@ -146,20 +151,14 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   b.encoding = encoding
   b.hasBom = hasBom
-  b.detectAndNormalizeLineEnding(content)
+  b.detectAndNormalizeLineEnding(contentMut)
 
-  # Reassign only the backend storage. Because the backend variant lives in the
-  # embedded `storage` field (not as a discriminant on TextBuffer), this single
-  # statement serves BOTH a same-backend reload and a backend swap: it resets the
-  # backend in place and leaves every other field untouched, so the reload's
-  # result never depends on whether the file size crossed the swap threshold.
-  let newBackend = chooseBackendForFile(fileSize)
-  b.storage = newBufferStorage(newBackend, move content)
-  b.advanceContentVersion() # keep the monotonic content version climbing
+  let newBackend = chooseBackendForFile(effFileSize)
+  b.storage = newBufferStorage(newBackend, move contentMut)
+  b.advanceContentVersion()
 
   b.filePath = some(path)
 
-  # Record file modification time for external change detection
   if fileExists(path):
     try:
       b.lastFileModTime = some(getFileInfo(path).lastWriteTime)
@@ -169,41 +168,24 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     b.lastFileModTime = none(Time)
   b.externalModWarned = false
 
-  # Reset change tracking - file was just loaded
   b.changeSeq = 0
   b.savedSeq = 0
 
-  # A reload replaces the content, so state keyed on the OLD content is stale and
-  # must be dropped here on loadFile's single reload path, or it would point into
-  # content that no longer exists:
-  #   - undo/redo history would replay changes against mismatched content,
-  #   - LSP diagnostics would render at stale line positions (reload sends no
-  #     didChange, so the server never re-publishes against the new content),
-  #   - conflict-marker ranges would point into the replaced content,
-  #   - lastChangedLines would seed the next incremental-highlight pass from a
-  #     line that no longer maps to the same content, and
-  #   - the changelist would point g;/g, at positions in the replaced content
-  #     (vim drops the changelist on :e! too), now stale since undo was cleared.
   b.clearUndoRedoState()
-  b.diagnostics.setLen(0) # diagnostic line markers go via the lineMarkers reset below
+  b.diagnostics.setLen(0)
   b.diagnosticsDirty = true
-  b.conflictBlocks.setLen(0) # stale ranges into the old content; reload re-scans
+  b.conflictBlocks.setLen(0)
   b.lastChangedLines = 0
   b.changeList.setLen(0)
-  b.changeListIndex = 0 # matches a fresh load (newTextBuffer default)
+  b.changeListIndex = 0
 
-  # Folds and bookmarks survive a reload (identity), but a shrinking reload can
-  # leave them referencing lines that no longer exist; clamp to the new content.
-  # bookmarks are sorted ascending, so the out-of-range ones are a trailing run.
   b.foldState.clampFoldsToLineCount(b.len)
   while b.bookmarks.len > 0 and b.bookmarks[^1] >= b.len:
     b.bookmarks.setLen(b.bookmarks.len - 1)
 
-  # Reset markers and modification tracking for new file content
   b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.len)
   b.modifiedLines = newSeq[LineModificationKind](b.len)
 
-  # Initialize syntax highlighting based on file extension
   b.language = detectLanguage(path)
 
   if b.language != SourceLanguage.langNone:
@@ -216,13 +198,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
         lines[i] = b.getLine(i)
 
       let (segments, lineStates) = initHighlightIncremental(
-        lines,
-        0,
-        chunkEnd,
-        TokenizerState(), # Default initial state
-        @[],
-        b.language,
-        b.maxHighlightLineLength,
+        lines, 0, chunkEnd, TokenizerState(), @[], b.language, b.maxHighlightLineLength
       )
 
       b.highlight = Highlight(colorSegments: segments)
@@ -235,7 +211,6 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.highlight = Highlight(colorSegments: @[])
       b.incrementalHighlight = nil
   else:
-    # Plain text - single default segment covering all lines
     if b.len > 0:
       b.highlight = Highlight(
         colorSegments: @[
@@ -253,8 +228,6 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.highlight = Highlight(colorSegments: @[])
     b.incrementalHighlight = nil
 
-  # URI underlines for the initial chunk; the rest is handled progressively
-  # by continueUriScan.
   let uriChunkEnd = min(999, b.len - 1)
   discard buffer_highlight.scanAndApplyUriUnderlines(b, 0, uriChunkEnd)
   b.uriScanParsedUpTo = uriChunkEnd

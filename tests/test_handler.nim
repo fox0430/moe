@@ -34,7 +34,7 @@ import config_test_helper
 import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
-    render_utils, clipboard,
+    render_utils, clipboard, message_log,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/command_handlers/result_processor
@@ -3059,6 +3059,8 @@ suite "middleClickPaste":
 
   test "Read-only buffer in Normal mode does not enter Insert or move cursor":
     let e = createTestEditorForMiddleClick("hello")
+    # Reported via notify, so pin the route this test asserts on.
+    e.config.notification.popupNotifications = false
     e.state.mode = EditorMode.Normal
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
     e.activeBuffer.readOnly = true
@@ -3076,14 +3078,63 @@ suite "middleClickPaste":
     let e = createTestEditorForMiddleClick("hello")
     # win32yank.exe does not exist here, so the primary selection read fails.
     e.config.clipboard.tool = cbtWin32yank
+    e.config.notification.popupNotifications = false
     e.state.mode = EditorMode.Normal
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.state.notificationPopup.queue = @[]
+    e.state.setStatusQuiet("")
+    clearMessageLog()
 
     e.middleClickPaste()
 
     check e.state.mode == EditorMode.Normal
     check not e.activeBuffer.inTransaction
     check e.activeBuffer.getLine(0) == "hello"
+    # notify() routes by config, so assert the exact route for each value
+    # instead of a disjunction that holds whichever one fired.
+    check e.state.statusMessage.contains("Paste failed")
+    check e.state.notificationPopup.queue.len == 0
+
+  test "Normal mode - failed primary selection read routes to popup when enabled":
+    let e = createTestEditorForMiddleClick("hello")
+    e.config.clipboard.tool = cbtWin32yank
+    e.config.notification.popupNotifications = true
+    e.state.mode = EditorMode.Normal
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.state.notificationPopup.queue = @[]
+    e.state.setStatusQuiet("")
+    clearMessageLog()
+
+    e.middleClickPaste()
+
+    check e.state.notificationPopup.queue.len == 1
+    check e.state.notificationPopup.queue[0].message.contains("Paste failed")
+    check e.state.notificationPopup.queue[0].level == nlError
+    check not e.state.statusMessage.contains("Paste failed")
+
+  test "Normal mode - failed primary selection read with overlay uses the popup":
+    # The overlay draws over the status row, so the configured route has nowhere
+    # to put the message: routing it to the popup is what makes the failure
+    # visible at all, instead of a paste that silently does nothing.
+    let e = createTestEditorForMiddleClick("hello")
+    e.config.clipboard.tool = cbtWin32yank
+    e.config.notification.popupNotifications = false
+    e.state.overlay = some(okCommand)
+    e.state.mode = EditorMode.Normal
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.state.notificationPopup.queue = @[]
+    e.state.setStatusQuiet("")
+    clearMessageLog()
+
+    e.middleClickPaste()
+
+    check e.state.mode == EditorMode.Normal
+    check not e.activeBuffer.inTransaction
+    check e.state.notificationPopup.queue.len == 1
+    check e.state.notificationPopup.queue[0].message.contains("Paste failed")
+    check not e.state.statusMessage.contains("Paste failed")
+    check getMessageLog().len == 1
+    check getMessageLog()[0].contains("Paste failed")
 
   test "Insert mode - paste from clipboard":
     if not isClipboardToolAvailable():
@@ -3168,6 +3219,33 @@ suite "middleClickPaste":
       check e.activeBuffer.len == 1
       check e.windowManager.windows[0].cursor.line == 5
       check e.state.statusMessage == "Paste failed: Line position out of bounds: 5"
+
+  test "Normal mode - failed insert clears the Insert indicator with popups on":
+    # The paste puts "-- INSERT --" on the status row before inserting. With
+    # popups enabled the failure never overwrites it, so the row would keep
+    # advertising Insert while the editor is back in Normal.
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let writeResult = writeToPrimarySelectionSync(tool, "indicator_paste")
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.config.notification.popupNotifications = true
+      e.state.mode = EditorMode.Normal
+      e.state.notificationPopup.queue = @[]
+      e.state.setStatusQuiet("")
+      # Out-of-bounds line makes insertText fail, hitting the rollback path
+      e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
+
+      e.middleClickPaste()
+
+      check e.state.mode == EditorMode.Normal
+      check e.state.statusMessage == ""
+      check e.state.notificationPopup.queue.len == 1
+      check e.state.notificationPopup.queue[0].message.contains("Paste failed")
 
   test "Insert mode - failed insert leaves joined session transaction open":
     if not isClipboardToolAvailable():

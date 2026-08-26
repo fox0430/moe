@@ -53,9 +53,9 @@ proc buildTabText(buf: TextBuffer): string =
   let
     name =
       if buf.displayName.isSome:
-        buf.displayName.get
+        sanitizeForDisplay(buf.displayName.get)
       elif buf.filePath.isSome:
-        buf.filePath.get.extractFilename
+        sanitizeForDisplay(buf.filePath.get.extractFilename)
       else:
         "No Name"
     modMark =
@@ -66,7 +66,7 @@ proc buildTabText(buf: TextBuffer): string =
       else:
         ""
 
-  return " " & name & modMark & " "
+  return sanitizeForDisplay(" " & name & modMark & " ")
 
 proc renderTabLine*(
     buffers: seq[TextBuffer],

@@ -371,14 +371,14 @@ proc middleClickPaste(e: Editor) =
   if not e.config.clipboard.enable:
     return
 
-  # Command / Search overlay: paste into the command / search line instead
-  # of the buffer. Only the first line is inserted since both are single-line.
+  # Overlay: paste into command/search line.
   if e.state.isCommandOverlay or e.state.isSearchOverlay:
     let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
     if readResult.isErr:
+      # The overlay draws over the status row, so the message must go to the popup.
+      e.notifyPopup("Paste failed: " & readResult.error, nlError)
       return
-    # Normalize so an embedded CR-only break can't leak a raw \r into the
-    # single-line command / search field (matching the bracketed-paste path).
+    # Normalize for single-line field.
     let pastedText = readResult.get().normalizeNewlines()
     if pastedText.len == 0:
       return
@@ -388,27 +388,22 @@ proc middleClickPaste(e: Editor) =
       e.insertPastedTextInSearch(pastedText)
     return
 
-  # A read-only active buffer must not slip into Insert mode via middle-click:
-  # the Insert-entry gate lives in normal_handler, which mouse events bypass.
+  # Prevent Insert entry via middle-click on read-only buffer.
   if e.activeBuffer().readOnly:
-    e.state.statusMessage = "Buffer is read-only"
+    e.notify("Buffer is read-only", nlError)
     return
 
   if e.state.mode != EditorMode.Normal and e.state.mode != EditorMode.Insert:
     return
 
-  # Middle-click uses X11 PRIMARY selection (text selected by mouse),
-  # not CLIPBOARD selection (Ctrl+C).
-  # Read before any mode / transaction change: a failed or empty read must not
-  # leave the editor stranded in Insert mode with an open transaction.
+  # Use PRIMARY selection; read before mode change to avoid stray Insert state.
   let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
   if readResult.isErr:
+    e.notify("Paste failed: " & readResult.error, nlError)
     return
 
-  # Normalize CRLF / lone CR to LF (matching loadFile) before insert and the
-  # cursor advance below, so embedded \r never corrupts line content.
-  # Sanitize invalid UTF-8 so byte/rune conversions stay consistent.
-  let pastedText = readResult.get().sanitizeInvalidUtf8().normalizeNewlines()
+  # Normalize line endings.
+  let pastedText = readResult.get().normalizeNewlines()
   if pastedText.len == 0:
     return
 
@@ -421,20 +416,17 @@ proc middleClickPaste(e: Editor) =
       "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
     )
     if insertTransaction.isErr:
-      # Entering Insert mode without its transaction would leave the buffer in
-      # an inconsistent undo state, so stay in Normal mode.
-      e.state.statusMessage = "Paste failed: " & insertTransaction.error
+      e.notify("Paste failed: " & insertTransaction.error, nlError)
       return
     e.setMode(EditorMode.Insert)
     e.state.statusMessage = "-- INSERT --"
 
-  # In Insert mode, a transaction is already active. Use it directly
-  # instead of starting a new one.
+  # Reuse existing Insert transaction if any.
   let ownTransaction = not activeBuffer.inTransaction
   if ownTransaction:
     let transactionResult = activeBuffer.beginTransaction("Middle-click paste")
     if transactionResult.isErr:
-      e.state.statusMessage = "Paste failed: " & transactionResult.error
+      e.notify("Paste failed: " & transactionResult.error, nlError)
       return
 
   let pos = e.cursor
@@ -450,9 +442,11 @@ proc middleClickPaste(e: Editor) =
           "Failed to rollback paste transaction: " & rollbackResult.error
         msg &= " (rollback failed: " & rollbackResult.error & ")"
       if enteringInsertFromNormal:
-        # The Insert session never started: return to Normal mode.
+        # The Insert session never started: return to Normal mode and drop the
+        # "-- INSERT --" indicator this paste put on the status row.
         e.setMode(EditorMode.Normal)
-    e.state.statusMessage = msg
+        e.state.statusMessage = ""
+    e.notify(msg, nlError)
     return
 
   e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
@@ -461,7 +455,7 @@ proc middleClickPaste(e: Editor) =
     let commitResult = activeBuffer.commitTransaction()
     if commitResult.isErr:
       logError "handler", "Failed to commit paste transaction: " & commitResult.error
-      e.state.statusMessage = "Paste failed: " & commitResult.error
+      e.notify("Paste failed: " & commitResult.error, nlError)
 
 proc finalizeCurrentWindowForMouseJump(e: Editor) =
   ## Exit the current mode before a mouse click hands focus to another window.

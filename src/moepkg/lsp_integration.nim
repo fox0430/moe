@@ -21,15 +21,70 @@
 ## Connects LspService to Editor, TextBuffer, and UI components
 
 import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
-from std/os import absolutePath, normalizedPath
+from std/os import absolutePath, normalizedPath, fileExists
 
 import pkg/[results, chronos]
 
-import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger
+import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger, backup
 import lsp/protocol/types as lspTypes
 
-import types/lsp_integration_types
+import types/lsp_integration_types, types/config_types
 export lsp_integration_types
+
+const MaxEditPathDisplayCount* = 10
+  ## Max paths shown in edit error messages; excess collapsed to "and N more".
+
+const MaxEditPathListChars* = 800
+  ## Max chars for the joined path list to avoid unbounded error messages.
+
+proc sanitizeEditPath*(s: string): string =
+  ## Replace C0 controls and DEL with '?' to prevent log injection.
+  result = newStringOfCap(s.len)
+  for r in s.runes:
+    if r.int < 0x20 or r.int == 0x7F:
+      result.add('?')
+    else:
+      result.add($r)
+
+proc formatEditPathList*(paths: seq[string]): string =
+  ## Sanitize and truncate path list for error display. Ensures the
+  ## " and N more" suffix is never lost to char truncation.
+  if paths.len == 0:
+    return ""
+  let displayCount = min(paths.len, MaxEditPathDisplayCount)
+  var sanitized = newSeq[string](displayCount)
+  for i in 0 ..< displayCount:
+    sanitized[i] = sanitizeEditPath(paths[i])
+  var suffix = ""
+  if paths.len > MaxEditPathDisplayCount:
+    suffix = " and " & $(paths.len - MaxEditPathDisplayCount) & " more"
+  var list = sanitized.join(", ")
+  let suffixRuneLen = suffix.runeLen
+  let combinedRuneLen = list.runeLen + suffixRuneLen
+  if combinedRuneLen > MaxEditPathListChars:
+    if suffixRuneLen >= MaxEditPathListChars - 3:
+      # Degenerate suffix; truncate combined string.
+      var combined = list & suffix
+      var truncated = newStringOfCap(MaxEditPathListChars * 4)
+      var count = 0
+      for r in combined.runes:
+        if count >= MaxEditPathListChars - 3:
+          break
+        truncated.add($r)
+        inc count
+      return truncated & "..."
+    let availableForList = MaxEditPathListChars - suffixRuneLen - 3
+    var truncated = newStringOfCap(availableForList * 4)
+    var count = 0
+    for r in list.runes:
+      if count >= availableForList:
+        break
+      truncated.add($r)
+      inc count
+    return truncated & "..." & suffix
+  if suffix.len > 0:
+    list &= suffix
+  return list
 
 export lsp_service
 export lspTypes.WorkDoneProgress, lspTypes.WorkDoneProgressKind
@@ -1246,17 +1301,71 @@ proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
       return some(i)
   return none(int)
 
-proc applyEditsToFile(path: string, edits: seq[TextEdit]): Result[void, string] =
+proc applyEditsToFile(
+    path: string,
+    edits: seq[TextEdit],
+    backupConfig: Option[AutoBackupConfig] = none(AutoBackupConfig),
+): Result[void, string] =
   ## Apply edits to a file that is not currently open
   ## Loads the file, applies edits, and saves it back
+  var needsBackup = false
+  var originalContent = ""
+  var fileExistedForBackup = false
+  if backupConfig.isSome:
+    if not backupConfig.get.enable:
+      needsBackup = false
+    else:
+      # Single read captures content+existence atomically (avoids TOCTOU and
+      # empty-file "\n" normalization); no backup needed if file absent.
+      try:
+        originalContent = readFile(path)
+        needsBackup = true
+        fileExistedForBackup = true
+      except CatchableError as e:
+        if fileExists(path):
+          # Unreadable but exists — abort to preserve original
+          return err(
+            "Failed to backup " & sanitizeEditPath(path) & ": " & sanitizeEditPath(
+              e.msg
+            ) & " (overwrite aborted to preserve original)"
+          )
+        else:
+          needsBackup = false
+          fileExistedForBackup = false
+
   let tempBuffer = newTextBuffer()
-  let loadResult = tempBuffer.loadFile(path)
+  var loadResult: Result[(), string]
+  if fileExistedForBackup:
+    # Reuse backed-up content to avoid second read (TOCTOU) and keep consistency.
+    loadResult = tempBuffer.loadFileWithContent(path, originalContent)
+  else:
+    loadResult = tempBuffer.loadFile(path)
   if loadResult.isErr:
     return err("Failed to load file: " & loadResult.error)
 
   let applyResult = applyTextEdits(tempBuffer, edits)
   if applyResult.isErr:
     return err(applyResult.error)
+
+  if needsBackup:
+    let backupRes = backupBuffer(some(path), originalContent, backupConfig.get)
+    if backupRes.isErr:
+      if backupRes.error == NoChangesSinceLastBackupError:
+        discard
+      elif backupRes.error == DirExcludedFromBackupError:
+        logWarn("lsp", "Skipped backup for excluded path " & sanitizeEditPath(path))
+        return err(
+          "Failed to backup " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(backupRes.error) &
+            " (overwrite aborted to preserve original)"
+        )
+      else:
+        # Abort to keep original recoverable.
+        return err(
+          "Failed to backup " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(backupRes.error) &
+            " (overwrite aborted to preserve original)"
+        )
 
   let saveResult = tempBuffer.saveFile(path)
   if saveResult.isErr:
@@ -1343,6 +1452,7 @@ proc applyWorkspaceEdit*(
     edit: WorkspaceEdit,
     transactionName: string = "Rename",
     allowUnopenedFileWrites: bool = true,
+    backupConfig: Option[AutoBackupConfig] = none(AutoBackupConfig),
 ): Result[WorkspaceEditResult, string] =
   ## Apply a WorkspaceEdit to multiple buffers
   ## Returns which buffers/files were modified
@@ -1365,7 +1475,7 @@ proc applyWorkspaceEdit*(
   ## modified (see staticRejectionReason, shared with the service-layer gate).
   let rejectReason = staticRejectionReason(edit)
   if rejectReason.isSome:
-    return err(rejectReason.get & "; no edits applied")
+    return err(sanitizeEditPath(rejectReason.get) & "; no edits applied")
   var modifiedCount = 0
   var openBuffersToModify: seq[tuple[bufferIdx: int, edits: seq[TextEdit]]] = @[]
   var unopenedFilesToModify: seq[tuple[path: string, edits: seq[TextEdit]]] = @[]
@@ -1376,7 +1486,7 @@ proc applyWorkspaceEdit*(
     for docEdit in edit.documentChanges.get:
       let pathRes = validateLocalFileUri(docEdit.textDocument.uri)
       if pathRes.isErr:
-        return err(pathRes.error)
+        return err(sanitizeEditPath(pathRes.error))
       let path = pathRes.get
       let bufferIdxOpt = findBufferByPath(buffers, path)
       if bufferIdxOpt.isSome:
@@ -1384,8 +1494,8 @@ proc applyWorkspaceEdit*(
       else:
         if not allowUnopenedFileWrites:
           return err(
-            "Server edit targets a file not open in the editor: " & path &
-              "; edit discarded"
+            "Server edit targets a file not open in the editor: " &
+              sanitizeEditPath(path) & "; edit discarded"
           )
         unopenedFilesToModify.add((path, docEdit.edits))
   elif edit.changes.isSome:
@@ -1393,7 +1503,7 @@ proc applyWorkspaceEdit*(
     for uri, edits in edit.changes.get:
       let pathRes = validateLocalFileUri(uri)
       if pathRes.isErr:
-        return err(pathRes.error)
+        return err(sanitizeEditPath(pathRes.error))
       let path = pathRes.get
       let bufferIdxOpt = findBufferByPath(buffers, path)
       if bufferIdxOpt.isSome:
@@ -1401,8 +1511,8 @@ proc applyWorkspaceEdit*(
       else:
         if not allowUnopenedFileWrites:
           return err(
-            "Server edit targets a file not open in the editor: " & path &
-              "; edit discarded"
+            "Server edit targets a file not open in the editor: " &
+              sanitizeEditPath(path) & "; edit discarded"
           )
         unopenedFilesToModify.add((path, edits))
 
@@ -1430,12 +1540,15 @@ proc applyWorkspaceEdit*(
             if modifiedBufferPaths.len > 0:
               raise newException(
                 ValueError,
-                "Failed to apply edits: " & applyResult.error & " (Warning: " &
-                  $modifiedBufferPaths.len & " buffer(s) already modified: " &
-                  modifiedBufferPaths.join(", ") & ")",
+                "Failed to apply edits: " & sanitizeEditPath(applyResult.error) &
+                  " (Warning: " & $modifiedBufferPaths.len &
+                  " buffer(s) already modified: " &
+                  formatEditPathList(modifiedBufferPaths) & ")",
               )
-            raise
-              newException(ValueError, "Failed to apply edits: " & applyResult.error)
+            raise newException(
+              ValueError,
+              "Failed to apply edits: " & sanitizeEditPath(applyResult.error),
+            )
       except ValueError as exc:
         if exc of TransactionRollbackError:
           return err(exc.msg & BufferStateInconsistentSuffix)
@@ -1443,10 +1556,11 @@ proc applyWorkspaceEdit*(
     if txr.isErr:
       if modifiedBufferPaths.len > 0:
         return err(
-          "Transaction failed: " & txr.error & " (Warning: " & $modifiedBufferPaths.len &
-            " buffer(s) already modified: " & modifiedBufferPaths.join(", ") & ")"
+          "Transaction failed: " & sanitizeEditPath(txr.error) & " (Warning: " &
+            $modifiedBufferPaths.len & " buffer(s) already modified: " &
+            formatEditPathList(modifiedBufferPaths) & ")"
         )
-      return err("Transaction failed: " & txr.error)
+      return err("Transaction failed: " & sanitizeEditPath(txr.error))
 
     modifiedCount += 1
     modifiedBufferIndexes.add(bufferIdx)
@@ -1455,17 +1569,30 @@ proc applyWorkspaceEdit*(
 
   # Apply edits to unopened files (load, modify, save)
   for (path, edits) in unopenedFilesToModify:
-    let applyResult = applyEditsToFile(path, edits)
+    # Require backupConfig for unopened writes; fail fast if missing.
+    let applyResult: Result[void, string] =
+      if backupConfig.isNone:
+        Result[void, string].err(
+          "backupConfig required for unopened file writes: " & sanitizeEditPath(path) &
+            " (overwrite aborted to preserve original)"
+        )
+      else:
+        applyEditsToFile(path, edits, backupConfig)
     if applyResult.isErr:
       let alreadyModified = modifiedBufferPaths.len + modifiedFilePaths.len
-      if alreadyModified > 0:
-        var modifiedList = modifiedBufferPaths & modifiedFilePaths
-        return err(
-          "Failed to modify " & path & ": " & applyResult.error & " (Warning: " &
-            $alreadyModified & " file(s) already modified: " & modifiedList.join(", ") &
-            ")"
-        )
-      return err("Failed to modify " & path & ": " & applyResult.error)
+      let errMsg =
+        if alreadyModified > 0:
+          var modifiedList = modifiedBufferPaths & modifiedFilePaths
+          "Failed to modify " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(applyResult.error) & " (Warning: " & $alreadyModified &
+            " file(s) already modified: " & formatEditPathList(modifiedList) &
+            "; restore unopened files from backup and open buffers via undo if needed)"
+        else:
+          "Failed to modify " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(applyResult.error)
+      logError("lsp", errMsg)
+      return err(errMsg)
+    logInfo("lsp", "Modified unopened file: " & sanitizeEditPath(path))
     modifiedCount += 1
     modifiedFilePaths.add(path)
 

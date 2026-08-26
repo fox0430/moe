@@ -18,22 +18,19 @@
 #[############################################################################]#
 
 ## Lightweight type definitions for the register system.
-##
-## Split out from `registers` so modules that only need the `Register` and
-## `Registers` types (notably `types` and its ~60 importers) do not transitively
-## pull in the full register implementation, which imports `clipboard` (and thus
-## `osproc`, `streams`). The clipboard-syncing logic and the
-## public accessor procs stay in `registers`.
-##
-## The `Registers` fields are exported so the procs in `registers` can operate
-## on them from the implementation module; they are not part of the intended
-## public API.
+## Split from `registers` to avoid pulling clipboard dependencies into many importers.
 
 import std/[monotimes, options, tables]
 
 import ../config
 
 type
+  ClipboardReadOutcome* = enum
+    ## Result of last CLIPBOARD read.
+    croNotAttempted
+    croSucceeded
+    croFailed
+
   Register* = object ## A single register containing text
     isLine*: bool ## Whether the content is linewise (vs characterwise)
     buffer*: seq[string] ## Content lines
@@ -41,24 +38,28 @@ type
   Registers* = ref object ## Container for all register types
     clipboardTool*: Option[ClipboardTool]
 
+    clipboardReadOutcome*: ClipboardReadOutcome ## Outcome of last CLIPBOARD read.
+    clipboardReadError*: string ## Error when `croFailed`.
+    clipboardReadValue*: string ## Content when `croSucceeded`.
+
+    primaryReadOutcome*: ClipboardReadOutcome ## Outcome of last PRIMARY read.
+    primaryReadError*: string ## Error when `croFailed`.
+    primaryReadValue*: string ## Content when `croSucceeded`.
+
     lastClipboardWriteTime*: MonoTime
-      ## Time of the last CLIPBOARD write; used to tolerate the wl-copy
-      ## claim window. The zero value (no write yet) reads as expired.
+      ## Last CLIPBOARD write time, for the wl-copy claim window.
+      ## The zero value means "never written" and must not open the window.
 
     noNamed*: Register ## The unnamed register (") - latest yank/delete content
 
     smallDelete*: Register ## Small delete register (-) - deleted text less than one line
 
     number*: array[10, Register]
-      ## Numbered registers (0-9)
-      ## 0: Most recent yank
-      ## 1-9: Delete history (1 is most recent, shifts on new delete).
-      ## Only linewise/multiline deletes are recorded; shorter deletions
-      ## go to the small delete register (-).
+      ## Numbered registers. 0 is the latest yank; 1-9 are the delete history,
+      ## newest first. Only linewise or multiline deletes enter 1 (shifting 1-8
+      ## down); characterwise single-line deletes go to `smallDelete`.
 
-    named*: Table[char, Register]
-      ## Named registers (a-z)
-      ## Lowercase overwrites, uppercase appends
+    named*: Table[char, Register] ## Named registers (a-z).
 
     primarySelection*: Register ## Primary selection register (*) - X11 PRIMARY
     clipboardSelection*: Register ## Clipboard selection register (+, ~) - CLIPBOARD

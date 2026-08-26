@@ -21,7 +21,7 @@ import std/[strformat, options, strutils, os, unicode]
 
 import pkg/celina
 
-import types, buffer/core, modes, color, config, git_cache, unicode_utils, highlight
+import types, buffer/core, modes, color, config, git_cache, unicode_utils
 import syntax/tokenizer
 
 proc toggleStatusLine*(state: var EditorState) =
@@ -154,8 +154,8 @@ proc buildFileDisplay(
   # Filer mode: show directory path
   if mode == EditorMode.Filer:
     if textBuffer.filePath.isSome:
-      let path = textBuffer.filePath.get()
-      if dirExists(path):
+      let path = sanitizeForDisplay(textBuffer.filePath.get())
+      if dirExists(textBuffer.filePath.get()):
         return " " & path & "/"
       return " " & path
     return ""
@@ -167,7 +167,7 @@ proc buildFileDisplay(
   if textBuffer.filePath.isNone:
     return " [No Name]"
 
-  let filePath = textBuffer.filePath.get()
+  let filePath = sanitizeForDisplay(textBuffer.filePath.get())
 
   var displayText = " "
 
@@ -179,13 +179,16 @@ proc buildFileDisplay(
     if config.filename:
       displayText &= filePath.extractFilename()
     else:
-      displayText &= filePath.extractFilename()
+      discard
 
   # Add changed mark if enabled and buffer is modified
   if config.changedMark and textBuffer.isModified:
-    displayText &= " [+]"
+    if displayText == " ":
+      displayText = " [+]"
+    else:
+      displayText &= " [+]"
 
-  return displayText
+  return sanitizeForDisplay(displayText)
 
 proc buildGitInfo(
     gc: GitCacheState,
@@ -211,7 +214,7 @@ proc buildGitInfo(
   # Git branch name (if enabled and active window or showGitInactive)
   if config.gitBranchName and (isActiveWindow or config.showGitInactive):
     if textBuffer.filePath.isSome:
-      let branch = gc.gitBranchName(textBuffer)
+      let branch = sanitizeForDisplay(gc.gitBranchName(textBuffer))
       if branch.len > 0:
         parts.add("ᚠ " & branch)
 
@@ -266,7 +269,7 @@ proc parseSetupText(
         modeLabel(state.mode, state.insertNormalMode)
     filePath =
       if textBuffer.filePath.isSome:
-        textBuffer.filePath.get()
+        sanitizeForDisplay(textBuffer.filePath.get())
       else:
         ""
     filename =
@@ -284,7 +287,7 @@ proc parseSetupText(
   var gitBranch = ""
   var gitChanges = ""
   if textBuffer.filePath.isSome:
-    gitBranch = state.git.gitBranchName(textBuffer)
+    gitBranch = sanitizeForDisplay(state.git.gitBranchName(textBuffer))
     let counts = state.git.gitDiffCounts(textBuffer)
     gitChanges = "+" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted
 
@@ -303,6 +306,7 @@ proc parseSetupText(
   result = result.replace("{filePath}", filePath)
   result = result.replace("{gitBranch}", gitBranch)
   result = result.replace("{gitChanges}", gitChanges)
+  result = sanitizeForDisplay(result)
 
 proc buildRightSideInfo(
     state: EditorState,
@@ -430,7 +434,7 @@ proc renderStatusLine*(
   # Build LSP progress text (displayed in the middle section)
   let progressText =
     if state.ui.lspProgressText.len > 0:
-      " " & state.ui.lspProgressText & " "
+      " " & sanitizeForDisplay(state.ui.lspProgressText) & " "
     else:
       ""
   let progressWidth = displayWidth(progressText)
@@ -543,7 +547,7 @@ proc renderWindowStatusLine*(
   # Build LSP progress text (displayed in the middle section, only for active window)
   let progressText =
     if isActiveWindow and state.ui.lspProgressText.len > 0:
-      " " & state.ui.lspProgressText & " "
+      " " & sanitizeForDisplay(state.ui.lspProgressText) & " "
     else:
       ""
   let progressWidth = displayWidth(progressText)

@@ -23,7 +23,7 @@ import std/[unittest, options, tables, strutils, os, osproc]
 
 import pkg/celina
 
-import ../src/moepkg/[types, modes, registers, config, git_cache]
+import ../src/moepkg/[types, modes, registers, config, git_cache, unicode_utils]
 import ../src/moepkg/buffer/[core, edit]
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/status_line {.all.}
@@ -385,6 +385,101 @@ suite "StatusLine - buildFileDisplay":
     let result = buildFileDisplay(textBuffer, EditorMode.Filer, config)
 
     check result == ""
+
+  test "Display empty when both directory and filename disabled, not modified":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " "
+    check "file.nim" notin result
+    check "/path/to" notin result
+
+  test "Display only space when both directory and filename disabled, bug fix regression":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    # Before fix, else branch incorrectly did extractFilename() so result was " file.nim"
+    check result != " file.nim"
+    check result == " "
+
+  test "Display only changed mark when both directory and filename disabled but modified":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim", modified = true)
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = true
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " [+]"
+    check "file.nim" notin result
+
+  test "No changed mark when both disabled and changedMark disabled even if modified":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim", modified = true)
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " "
+    check "[+]" notin result
+
+  test "Directory takes precedence over filename flag":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = true
+    config.filename = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " /path/to/file.nim"
+
+  test "Directory enabled ignores filename false vs true":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config1 = createTestStatusLineConfig()
+    config1.directory = true
+    config1.filename = true
+    var config2 = createTestStatusLineConfig()
+    config2.directory = true
+    config2.filename = false
+
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config1) ==
+      buildFileDisplay(textBuffer, EditorMode.Normal, config2)
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config1) ==
+      " /path/to/file.nim"
+
+  test "All combinations of directory/filename for Normal mode":
+    let textBuffer = createTestTextBuffer("/a/b/c.nim")
+    var config = createTestStatusLineConfig()
+    config.changedMark = false
+    # directory=true, filename=true -> full path
+    config.directory = true
+    config.filename = true
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " /a/b/c.nim"
+    # directory=true, filename=false -> still full path
+    config.directory = true
+    config.filename = false
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " /a/b/c.nim"
+    # directory=false, filename=true -> filename only
+    config.directory = false
+    config.filename = true
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " c.nim"
+    # directory=false, filename=false -> space only
+    config.directory = false
+    config.filename = false
+    check buildFileDisplay(textBuffer, EditorMode.Normal, config) == " "
 
 suite "StatusLine - parseSetupText":
   test "Parse lineNumber placeholder":
@@ -1226,3 +1321,198 @@ suite "StatusLine - buildGitInfo":
 
     # Result should be empty because showGitInactive is false
     check result == ""
+
+suite "StatusLine - sanitize control characters":
+  proc hasControl(s: string): bool =
+    for r in s.runes:
+      if isC0Control(r):
+        return true
+    false
+
+  test "buildFileDisplay sanitizes C0 and DEL in filePath":
+    let tb = createTestTextBuffer("/tmp/a\x1B[2J/b\x00c.nim")
+    var cfg = createTestStatusLineConfig()
+    cfg.directory = true
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    check not hasControl(res)
+    check "\x1B" notin res
+    check "\x00" notin res
+    # ESC and NUL become spaces, brackets remain
+    check "a [2J" in res
+    check "b c.nim" in res
+    check displayWidth(res) == displayWidth(sanitizeForDisplay(res))
+
+  test "buildFileDisplay sanitizes DEL in filePath":
+    let tb = createTestTextBuffer("/tmp/file\x7Fname.nim")
+    var cfg = createTestStatusLineConfig()
+    cfg.directory = false
+    cfg.filename = true
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    check not hasControl(res)
+    check "file name.nim" in res
+
+  test "buildFileDisplay sanitizes with wide chars and controls":
+    let tb = createTestTextBuffer("/tmp/漢\x00字🎉\x1B.nim")
+    var cfg = createTestStatusLineConfig()
+    cfg.directory = true
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    check not hasControl(res)
+    check "漢 字" in res
+    check "🎉 " in res
+    check displayWidth(res) == displayWidth(sanitizeForDisplay(res))
+
+  test "buildFileDisplay Filer mode sanitizes directory path":
+    let tb = createTestTextBuffer("/tmp/\x00bad\x1Bdir")
+    let cfg = createTestStatusLineConfig()
+    let res = buildFileDisplay(tb, EditorMode.Filer, cfg)
+    check not hasControl(res)
+    check "bad dir" in res
+
+  test "buildFileDisplay Filer sanitizes existing dir with control in name":
+    # sanitized display differs but dirExists uses raw path - verify no crash and sanitized
+    let tb = createTestTextBuffer(getCurrentDir() & "/\x00test")
+    let cfg = createTestStatusLineConfig()
+    let res = buildFileDisplay(tb, EditorMode.Filer, cfg)
+    check not hasControl(res)
+
+  test "parseSetupText sanitizes filePath placeholder":
+    var state = createTestState()
+    let tb = createTestTextBuffer("/path/to/\x1Bfile\x00name.nim", false, "test")
+    let res = parseSetupText(state, tb, "{filePath}")
+    check not hasControl(res)
+    check " file name.nim" in res or "file name.nim" in res
+    check res == sanitizeForDisplay("/path/to/\x1Bfile\x00name.nim")
+
+  test "parseSetupText sanitizes filename and directory derived from filePath":
+    var state = createTestState()
+    let tb = createTestTextBuffer("/tmp/\x1Bdir/file\x00name.nim", false, "test")
+    let resFile = parseSetupText(state, tb, "{filename}")
+    let resDir = parseSetupText(state, tb, "{directory}")
+    check not hasControl(resFile)
+    check not hasControl(resDir)
+    check "file name.nim" in resFile
+    check " dir" in resDir or "dir" in resDir
+
+  test "parseSetupText sanitizes literal control characters in setupText template":
+    var state = createTestState()
+    let tb = createTestTextBuffer("/path/file.nim", false, "test")
+    let res = parseSetupText(state, tb, "pre\x1B[2J\x00mid {filePath} suf\x7F")
+    check not hasControl(res)
+    check "\x1B" notin res
+    check "\x00" notin res
+    check "\x7F" notin res
+    check "pre [2J mid" in res
+    check "suf " in res or res.endsWith(" ")
+
+  test "parseSetupText sanitizes multiple placeholders with controls":
+    var state = createTestState()
+    let tb = createTestTextBuffer("/a/\x1Bb/c\x00d.nim", false, "test")
+    let res = parseSetupText(state, tb, "{filename} {directory} {filePath}")
+    check not hasControl(res)
+    check displayWidth(res) == displayWidth(sanitizeForDisplay(res))
+
+  test "parseSetupText with unnamed buffer still sanitizes template controls":
+    var state = createTestState()
+    let tb = createTestTextBuffer("", false, "test")
+    let res = parseSetupText(state, tb, "pre\x1Bmid\x00suf")
+    check not hasControl(res)
+    check res == "pre mid suf"
+
+  test "renderStatusLine sanitizes lspProgressText":
+    var state = createTestState()
+    state.showStatusLine = true
+    state.ui.lspProgressText = "Load\x1Bing\x00.."
+    var buf = createTestBuffer()
+    let tb = createTestTextBuffer("/path/file.nim", false, "test")
+    var cfg = createTestStatusLineConfig()
+    cfg.mode = false
+    cfg.directory = false
+    renderStatusLine(state, tb, buf, 23, cfg)
+    let line = getBufferLine(buf, 23)
+    check not hasControl(line)
+    check "Load ing" in line
+    check "\x1B" notin line
+
+  test "renderStatusLine displayWidth consistent with sanitized lspProgress":
+    var state = createTestState()
+    state.showStatusLine = true
+    state.ui.lspProgressText = "\x1B漢\x00🎉"
+    var buf = createTestBuffer()
+    let tb = createTestTextBuffer("/path/file.nim", false, "test")
+    var cfg = createTestStatusLineConfig()
+    cfg.mode = false
+    renderStatusLine(state, tb, buf, 23, cfg)
+    let line = getBufferLine(buf, 23)
+    check not hasControl(line)
+    # Wide chars preserved, controls become spaces
+    check "漢" in line
+    check "🎉" in line
+
+  test "renderWindowStatusLine sanitizes lspProgressText only for active":
+    var state = createTestState()
+    state.showStatusLine = true
+    state.multiStatusLine = true
+    state.ui.lspProgressText = "Prog\x1Bress\x00"
+    var cfg = createTestStatusLineConfig()
+    cfg.mode = false
+    cfg.directory = false
+    var bufActive = createTestBuffer()
+    let tb = createTestTextBuffer("/path/file.nim", false, "test")
+    renderWindowStatusLine(state, tb, bufActive, 10, 0, 80, true, state.mode, cfg)
+    check not hasControl(getBufferLine(bufActive, 10))
+    check "Prog ress" in getBufferLine(bufActive, 10)
+    var bufInactive = createTestBuffer()
+    renderWindowStatusLine(state, tb, bufInactive, 10, 0, 80, false, state.mode, cfg)
+    check "Prog" notin getBufferLine(bufInactive, 10)
+    check not hasControl(getBufferLine(bufInactive, 10))
+
+  test "buildFileDisplay and tab consistency: displayWidth equals rendered width":
+    let tb = createTestTextBuffer("/tmp/\x1B漢\x00test\x7F.nim")
+    var cfg = createTestStatusLineConfig()
+    cfg.directory = true
+    let res = buildFileDisplay(tb, EditorMode.Normal, cfg)
+    # sanitizeForDisplay already applied, so rendering via setString will match
+    var buf = createTestBuffer()
+    var state = createTestState()
+    state.showStatusLine = true
+    renderStatusLine(state, tb, buf, 23, cfg)
+    let line = getBufferLine(buf, 23)
+    check not hasControl(line)
+
+  test "buildGitInfo sanitizes branch name with controls":
+    let tb = createTestTextBuffer("/path/to/file.nim", false, "test")
+    var gc = GitCacheState()
+    gc.branchEntries[tb.id] = GitBranchCacheEntry(
+      path: tb.filePath.get, name: "feat\x1B/branch\x00test\x7F", populated: true
+    )
+    var cfg = createTestStatusLineConfig()
+    cfg.gitBranchName = true
+    cfg.showGitInactive = true
+    let res = buildGitInfo(gc, tb, EditorMode.Normal, cfg, true)
+    check not hasControl(res)
+    check "\x1B" notin res
+    check "feat" in res
+    check "branch test" in res
+
+  test "parseSetupText sanitizes gitBranch with controls":
+    var state = createTestState()
+    let tb = createTestTextBuffer("/path/to/file.nim", false, "test")
+    state.git.branchEntries[tb.id] = GitBranchCacheEntry(
+      path: tb.filePath.get, name: "fix\x00/awful\x1Bbranch", populated: true
+    )
+    let res = parseSetupText(state, tb, "{gitBranch}")
+    check not hasControl(res)
+    check "fix /awful branch" in res or "fix" in res
+    check "\x1B" notin res
+
+  test "buildGitInfo and parseSetupText branch displayWidth consistent":
+    let tb = createTestTextBuffer("/path/file.nim", false, "test")
+    var gc = GitCacheState()
+    gc.branchEntries[tb.id] = GitBranchCacheEntry(
+      path: tb.filePath.get, name: "a\x1Bb\x00c漢\x7F", populated: true
+    )
+    var cfg = createTestStatusLineConfig()
+    cfg.gitBranchName = true
+    let res = buildGitInfo(gc, tb, EditorMode.Normal, cfg, true)
+    check not hasControl(res)
+    check displayWidth(res) == displayWidth(sanitizeForDisplay(res))

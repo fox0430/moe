@@ -1126,6 +1126,17 @@ suite "Editor - Edge cases with single buffer":
     e.switchToPrevBuffer()
     check "E88" in e.state.statusMessage
 
+suite "Editor - clipboard tool wiring":
+  test "newEditor wires the configured clipboard tool into the registers":
+    # `initRegisters` leaves the tool unset; newEditor's applyConfigSettings
+    # call is what makes the register clipboard paths usable before any reload.
+    let config = newEditorConfig()
+    config.clipboard.enable = true
+    config.clipboard.tool = cbtXsel
+    let e = newEditor(config, newValidationResult())
+
+    check e.state.registers.clipboardTool == some(cbtXsel)
+
 suite "Editor - applyConfigSettings syncs display state":
   test "Syncs showLineNumbers from config.standard.number":
     let e = createTestEditor()

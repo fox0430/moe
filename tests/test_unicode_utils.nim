@@ -947,6 +947,66 @@ suite "unicode_utils - setRuneCell":
     check buf[0, 0].symbol == "e" & $Rune(0x0301)
     check buf[1, 0].symbol == "X"
 
+suite "unicode_utils - sanitizeForDisplay":
+  test "Empty string":
+    check sanitizeForDisplay("") == ""
+
+  test "C0 range and DEL are substituted with a single space":
+    for i in 0x00 .. 0x1F:
+      let s = $Rune(i)
+      check sanitizeForDisplay(s) == " "
+    check sanitizeForDisplay($Rune(0x7F)) == " "
+    # Tab, LF, CR, ESC are all C0 controls
+    check sanitizeForDisplay("\t") == " "
+    check sanitizeForDisplay("\n") == " "
+    check sanitizeForDisplay("\r") == " "
+    check sanitizeForDisplay("\x1B") == " "
+
+  test "Printable ASCII is preserved":
+    check sanitizeForDisplay("ABCaz09!@#") == "ABCaz09!@#"
+    check sanitizeForDisplay("Hello, World!") == "Hello, World!"
+    check sanitizeForDisplay(" ") == " "
+    check sanitizeForDisplay("~") == "~"
+
+  test "C1 range 0x80 is not substituted":
+    check sanitizeForDisplay($Rune(0x80)) == $Rune(0x80)
+    check not isC0Control(Rune(0x80))
+
+  test "Mixed C0 controls with normal text":
+    check sanitizeForDisplay("a\x00b\x1B c\x7Fd") == "a b  c d"
+    check sanitizeForDisplay("\x1B[2J") == " [2J"
+    check sanitizeForDisplay("pre\x1Bpost") == "pre post"
+
+  test "Preserves wide characters and emoji while sanitizing controls":
+    check sanitizeForDisplay("漢字") == "漢字"
+    check sanitizeForDisplay("👋🌍") == "👋🌍"
+    check sanitizeForDisplay("漢\x00字🎉\x1B👋") == "漢 字🎉 👋"
+    check sanitizeForDisplay("日\x00本\x1F語") == "日 本 語"
+
+  test "displayWidth stays consistent after sanitization":
+    # Controls have displayWidth 1 via runeWidth fast path, same as space
+    for s in ["a\x00b", "a\x1Bb", "\x1B[2J", "漢\x00字", "a\tb"]:
+      check displayWidth(sanitizeForDisplay(s)) == displayWidth(s)
+    # Mixed wide + control keeps width: each wide 2, control->space 1
+    let mixed = "漢\x00🎉\x1B"
+    check displayWidth(sanitizeForDisplay(mixed)) == 2 + 1 + 2 + 1
+
+  test "Idempotent double sanitization":
+    let s = "a\x00b\x1B漢\x7F字"
+    let once = sanitizeForDisplay(s)
+    check sanitizeForDisplay(once) == once
+
+  test "Combining marks are not sanitized":
+    let eAcute = "e" & $Rune(0x0301)
+    check sanitizeForDisplay(eAcute) == eAcute
+    let zwjSeq = "👨" & $Rune(0x200D) & "👩"
+    check sanitizeForDisplay(zwjSeq) == zwjSeq
+
+  test "Null and DEL interleaved":
+    check sanitizeForDisplay("\x00\x00") == "  "
+    check sanitizeForDisplay("\x7F\x7F") == "  "
+    check sanitizeForDisplay("\x00a\x7F") == " a "
+
 suite "truncateToWidthWithSuffix":
   test "returns empty string when maxWidth <= 0":
     check truncateToWidthWithSuffix("hello", 0) == ""

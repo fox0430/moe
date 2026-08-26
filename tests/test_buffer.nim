@@ -3178,3 +3178,120 @@ suite "Buffer - Backend selection":
     check chooseBackendForFile(AutoBackendLargeFileThreshold + 1) == PieceTable
     # Without size context, assume a small buffer.
     check chooseBackend() == GapBuffer
+
+suite "Buffer - loadFileWithContent equivalence":
+  test "loadFileWithContent matches loadFile for plain UTF-8":
+    let path = getTempDir() / "moe_test_lfwc_plain.txt"
+    let content = "hello\nworld\n"
+    writeFile(path, content)
+    defer:
+      removeFile(path)
+    let buf1 = newTextBuffer()
+    check buf1.loadFile(path).isOk
+    let raw = readFile(path)
+    let fileSize = getFileSize(path)
+    let buf2 = newTextBuffer()
+    check buf2.loadFileWithContent(path, raw, fileSize).isOk
+    check buf1.getTextString == buf2.getTextString
+    check buf1.encoding == buf2.encoding
+    check buf1.hasBom == buf2.hasBom
+    check buf1.lineEnding == buf2.lineEnding
+    check buf1.backendKind == buf2.backendKind
+
+  test "loadFileWithContent preserves empty file without spurious newline":
+    let path = getTempDir() / "moe_test_lfwc_empty.txt"
+    writeFile(path, "")
+    defer:
+      removeFile(path)
+    let buf1 = newTextBuffer()
+    check buf1.loadFile(path).isOk
+    let raw = readFile(path)
+    let buf2 = newTextBuffer()
+    check buf2.loadFileWithContent(path, raw).isOk
+    check buf1.len == 1
+    check buf1[0] == ""
+    check buf2.len == buf1.len
+    check buf2.getTextString == buf1.getTextString
+    check buf2.encoding == buf1.encoding
+    # Direct empty content without file on disk
+    let buf3 = newTextBuffer()
+    check buf3.loadFileWithContent(path & "_nonexist", "", -1).isOk
+    check buf3.len == 1
+    check buf3[0] == ""
+
+  test "loadFileWithContent handles UTF-8 BOM correctly":
+    let path = getTempDir() / "moe_test_lfwc_utf8bom.txt"
+    let original = "\xEF\xBB\xBF" & "ab\ncd\n"
+    writeFile(path, original)
+    defer:
+      removeFile(path)
+    let buf1 = newTextBuffer()
+    check buf1.loadFile(path).isOk
+    let raw = readFile(path)
+    let buf2 = newTextBuffer()
+    check buf2.loadFileWithContent(path, raw, raw.len.int64).isOk
+    check buf1.encoding == CharacterEncoding.utf8
+    check buf1.hasBom
+    check buf2.encoding == buf1.encoding
+    check buf2.hasBom == buf1.hasBom
+    check buf2.getTextString == buf1.getTextString
+    check buf2.getFileContent == original
+
+  test "loadFileWithContent handles UTF-16LE BOM correctly":
+    let path = getTempDir() / "moe_test_lfwc_utf16le.txt"
+    # "a\nb\n" encoded as UTF-16LE with BOM (internal getTextString is "a\nb")
+    let original = "\xFF\xFE" & "a\x00\x0A\x00\x62\x00\x0A\x00"
+    writeFile(path, original)
+    defer:
+      removeFile(path)
+    let buf1 = newTextBuffer()
+    check buf1.loadFile(path).isOk
+    let raw = readFile(path)
+    let buf2 = newTextBuffer()
+    check buf2.loadFileWithContent(path, raw).isOk
+    check buf1.encoding == CharacterEncoding.utf16Le
+    check buf1.hasBom
+    check buf2.encoding == buf1.encoding
+    check buf2.hasBom == buf1.hasBom
+    check buf2.getTextString == buf1.getTextString
+    check buf2.getTextString == "a\nb"
+    check buf2.getFileContent == original
+
+  test "loadFileWithContent handles UTF-16BE BOM correctly":
+    let path = getTempDir() / "moe_test_lfwc_utf16be.txt"
+    let original = "\xFE\xFF" & "\x00\x61\x00\x0A\x00\x62\x00\x0A"
+    writeFile(path, original)
+    defer:
+      removeFile(path)
+    let buf1 = newTextBuffer()
+    check buf1.loadFile(path).isOk
+    let raw = readFile(path)
+    let buf2 = newTextBuffer()
+    check buf2.loadFileWithContent(path, raw).isOk
+    check buf1.encoding == CharacterEncoding.utf16Be
+    check buf2.encoding == buf1.encoding
+    check buf2.getTextString == buf1.getTextString
+    check buf2.getTextString == "a\nb"
+    check buf2.getFileContent == original
+
+  test "loadFileWithContent backend selection respects explicit fileSize vs inferred len":
+    setAutoBackendMode(true)
+    defer:
+      setAutoBackendMode(false)
+      setConfiguredBackend(GapBuffer)
+    let path = getTempDir() / "moe_test_lfwc_backend.txt"
+    let smallContent = "hi"
+    # Inferred len (2) -> GapBuffer
+    let buf1 = newTextBuffer()
+    check buf1.loadFileWithContent(path, smallContent).isOk
+    check buf1.backendKind == GapBuffer
+    # Explicit large fileSize forces PieceTable even with small content
+    let buf2 = newTextBuffer()
+    check buf2.loadFileWithContent(path, smallContent, AutoBackendLargeFileThreshold).isOk
+    check buf2.backendKind == PieceTable
+    # Explicit small fileSize keeps GapBuffer
+    let buf3 = newTextBuffer()
+    check buf3.loadFileWithContent(
+      path, smallContent, AutoBackendLargeFileThreshold - 1
+    ).isOk
+    check buf3.backendKind == GapBuffer
