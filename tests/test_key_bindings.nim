@@ -1441,6 +1441,10 @@ suite "Default bindings coverage":
       registry.findSingleBinding(EditorMode.Normal, toKeyCombo('u', ctrl = true))
     let ctrlD =
       registry.findSingleBinding(EditorMode.Normal, toKeyCombo('d', ctrl = true))
+    let ctrlE =
+      registry.findSingleBinding(EditorMode.Normal, toKeyCombo('e', ctrl = true))
+    let ctrlY =
+      registry.findSingleBinding(EditorMode.Normal, toKeyCombo('y', ctrl = true))
 
     check ctrlB.isSome
     check ctrlB.get.name == "page-up"
@@ -1450,6 +1454,10 @@ suite "Default bindings coverage":
     check ctrlU.get.name == "half-page-up"
     check ctrlD.isSome
     check ctrlD.get.name == "half-page-down"
+    check ctrlE.isSome
+    check ctrlE.get.name == "scroll-line-down"
+    check ctrlY.isSome
+    check ctrlY.get.name == "scroll-line-up"
 
   test "Word motion bindings":
     let registry = newKeyBindingRegistry()

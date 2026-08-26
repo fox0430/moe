@@ -2050,6 +2050,72 @@ suite "Handler - Scroll operations":
 
     check registry.execute(ctx, builtin(bcScrollCursorBottom)).isOk
 
+  test "scroll line down keeps a visible cursor in place (Ctrl-E)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 1
+    check ctx.cursor.line == 2
+
+  test "scroll line down moves cursor when it leaves the viewport (Ctrl-E)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 1
+    check ctx.cursor.line == 1
+
+  test "scroll line up keeps a visible cursor in place (Ctrl-Y)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 5, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 4
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineUp)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 3
+    check ctx.cursor.line == 5
+
+  test "scroll line up moves cursor when it leaves the viewport (Ctrl-Y)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 8, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 4
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineUp)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 3
+    check ctx.cursor.line == 7
+
+  test "scroll line commands accept a count and clamp at buffer edges":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown), @["20"]).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 5
+    check ctx.cursor.line == 5
+
+    check registry.execute(ctx, builtin(bcScrollLineUp), @["20"]).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 0
+    check ctx.cursor.line == 4
+
 suite "Handler - Visual mode operations":
   test "visual delete":
     let buffer = newTextBuffer("hello world")

@@ -100,6 +100,8 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "Ctrl-f", description: "Page Down"),
     HelpEntry(syntax: "Ctrl-u", description: "Half Page Up"),
     HelpEntry(syntax: "Ctrl-d", description: "Half Page Down"),
+    HelpEntry(syntax: "Ctrl-e", description: "Scroll one line down"),
+    HelpEntry(syntax: "Ctrl-y", description: "Scroll one line up"),
     HelpEntry(syntax: "%", description: "Move to matching pair of paren"),
     HelpEntry(syntax: "d$ or D", description: "Delete until the end of the line"),
     HelpEntry(syntax: "C", description: "Change until the end of the line"),

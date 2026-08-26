@@ -118,6 +118,46 @@ proc handleScrollCursorBottom*(
 
   return ok(())
 
+proc scrollVisibleHeight(ctx: CommandContext): int =
+  let reservedLines =
+    if ctx.state.windowDisplay.viewportReservedLines >= 0:
+      ctx.state.windowDisplay.viewportReservedLines
+    else:
+      steadyBottomAreaHeight()
+  max(1, ctx.motionController.viewportManager.viewport.height - reservedLines)
+
+proc handleScrollLines(
+    ctx: CommandContext, args: seq[string], direction: int
+): Result[(), string] =
+  let
+    count = parseCount(args)
+    visibleHeight = ctx.scrollVisibleHeight()
+    viewport = ctx.motionController.viewportManager.viewport
+    maxTopLine = max(0, ctx.buffer.len - visibleHeight)
+    targetTopLine = clamp(viewport.topLine + direction * count, 0, maxTopLine)
+    targetCursorLine = clamp(
+      ctx.cursor.line,
+      targetTopLine,
+      min(ctx.buffer.len - 1, targetTopLine + visibleHeight - 1),
+    )
+
+  viewport.resetViewportTop(targetTopLine)
+  if targetCursorLine != ctx.cursor.line:
+    let cursor = ctx.motionController.cursorManager.clampPosition(
+      CursorPosition(x: ctx.cursor.column, y: targetCursorLine), ctx.buffer
+    )
+    ctx.cursor = BufferPosition(line: cursor.y, column: cursor.x)
+
+  return ok(())
+
+proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Scroll the viewport down by buffer lines (Ctrl-E).
+  ctx.handleScrollLines(args, 1)
+
+proc handleScrollLineUp*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Scroll the viewport up by buffer lines (Ctrl-Y).
+  ctx.handleScrollLines(args, -1)
+
 ## Fold commands
 
 proc handleFoldOpen*(ctx: CommandContext, args: seq[string]): Result[(), string] =
@@ -337,6 +377,24 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollCursorBottom,
     0,
     0,
+  )
+
+  registry.register(
+    builtin(bcScrollLineDown),
+    "Scroll Line Down",
+    "Scroll viewport one line down (Ctrl-E)",
+    handleScrollLineDown,
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcScrollLineUp),
+    "Scroll Line Up",
+    "Scroll viewport one line up (Ctrl-Y)",
+    handleScrollLineUp,
+    0,
+    1,
   )
 
   # Fold commands

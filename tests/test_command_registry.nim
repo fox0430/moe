@@ -351,6 +351,8 @@ suite "CommandRegistry - BuiltinCommandId":
     check $bcScrollCursorTop == "scroll.cursor.top"
     check $bcScrollCursorCenter == "scroll.cursor.center"
     check $bcScrollCursorBottom == "scroll.cursor.bottom"
+    check $bcScrollLineDown == "scroll.line.down"
+    check $bcScrollLineUp == "scroll.line.up"
 
   test "fold commands have correct string values":
     check $bcFoldOpen == "fold.open"
@@ -432,6 +434,8 @@ suite "CommandRegistry - registerBuiltinCommands":
     check registry.findCommand(builtin(bcScrollCursorTop)).isSome
     check registry.findCommand(builtin(bcScrollCursorCenter)).isSome
     check registry.findCommand(builtin(bcScrollCursorBottom)).isSome
+    check registry.findCommand(builtin(bcScrollLineDown)).isSome
+    check registry.findCommand(builtin(bcScrollLineUp)).isSome
 
   test "registers all fold commands":
     let registry = newCommandRegistry()
