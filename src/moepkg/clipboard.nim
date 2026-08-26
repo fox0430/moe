@@ -24,9 +24,7 @@
 
 import std/[monotimes, options, os, osproc, streams, strutils, times]
 
-when not defined(posix):
-  {.error: "moe supports POSIX platforms only".}
-
+# POSIX-only: process groups, non-blocking fds, `waitid`. Gate is in moe.nim.
 import std/posix
 
 import pkg/results
@@ -41,11 +39,6 @@ type
 
   ClipboardError* = object of CatchableError ## Error type for clipboard operations
 
-  ClipboardWriteError* = object
-    ## Bounded stdin write failure. Branch on `timedOut`, not `msg`.
-    timedOut*: bool
-    msg*: string
-
 const
   WriteTimeoutMs = 10_000 ## Timeout for clipboard writes (wl-copy: briefly polled).
   ReadTimeoutMs = 2_000 ## Idle timeout between reads; INCR transfers continue.
@@ -54,6 +47,7 @@ const
   MaxStderrCapture = 4 * 1024 ## Max stderr bytes kept for errors.
   MaxDiagnosticBytes = 200 ## Max diagnostic bytes shown in status line.
   MaxStderrDrainPerCall = 64 * 1024 ## Max stderr bytes drained per call.
+  DrainReadBufSize = 4096 ## Reused per-read buffer for the stderr drain.
   DrainGraceMs = 200 ## Grace for post-deadline drain.
   ReapTimeoutMs = 200 ## Timeout to reap killed child.
   ExitGraceMs = 200 ## Grace for tool to exit after input.
@@ -184,9 +178,11 @@ proc cleanupClipboardProcess(p: Process): bool {.discardable.} =
   return false
 
 type ToolDiagnostics = object
-  ## Bounded head/tail of stderr for empty-selection detection.
+  ## Bounded stderr capture. `head` feeds `exitCodeDetail`, `tail` decides
+  ## empty-selection. Every drained byte reaches `tail`.
   head: string
   tail: string
+  readBuf: string ## Reused drain buffer.
 
 proc add(d: var ToolDiagnostics, s: string) =
   if d.head.len < MaxStderrCapture:
@@ -213,13 +209,16 @@ proc drainDiagnostics(fd: cint, dst: var ToolDiagnostics) =
   ## Non-blocking stderr drain.
   if fd < 0:
     return
-  var buf = newString(4096)
+  if dst.readBuf.len == 0:
+    dst.readBuf = newString(DrainReadBufSize)
   var drained = 0
   while drained < MaxStderrDrainPerCall:
-    let r = read(fd, addr buf[0], min(buf.len, MaxStderrDrainPerCall - drained))
+    let r = read(
+      fd, addr dst.readBuf[0], min(dst.readBuf.len, MaxStderrDrainPerCall - drained)
+    )
     if r > 0:
       drained += r
-      dst.add(buf[0 ..< r])
+      dst.add(dst.readBuf[0 ..< r])
       continue
     if r == 0:
       return
@@ -287,11 +286,8 @@ proc looksLikeEmptySelection(s: string): bool =
   return false
 
 proc finalDiagnostic(d: ToolDiagnostics): string =
-  ## Last tool message; prefers tail when available.
-  if d.tail.len > 0:
-    lastLine(d.tail)
-  else:
-    lastLine(d.head)
+  ## Last tool message.
+  lastLine(d.tail)
 
 proc looksLikeEmptySelection(d: ToolDiagnostics): bool =
   ## Only final message decides; marker + failure = failure.
@@ -426,14 +422,6 @@ proc dataDespiteDeadline(
   logWarn("clipboard", note & " (" & $output.len & " bytes)")
   return Result[string, string].ok(sanitizeInvalidUtf8(output))
 
-proc waitForExitBounded(p: Process, deadline: MonoTime): int =
-  ## Bounded wait for exit. Returns code, -1 on timeout, -2 on error.
-  if p.isNil:
-    return -2
-  result = pollExitUntil(p, deadline)
-  if result == -1:
-    cleanupClipboardProcess(p)
-
 proc waitForExitBounded(
     p: Process, deadline: MonoTime, errFd: cint, diag: var ToolDiagnostics
 ): int =
@@ -444,18 +432,12 @@ proc waitForExitBounded(
   if result == -1:
     cleanupClipboardProcess(p)
 
-proc waitForExitBounded(p: Process, timeoutMs: int): int =
-  waitForExitBounded(p, getMonoTime() + initDuration(milliseconds = timeoutMs))
-
-proc writeFailed(msg: string): Result[void, ClipboardWriteError] =
-  Result[void, ClipboardWriteError].err(ClipboardWriteError(timedOut: false, msg: msg))
-
-proc writeTimedOut(msg: string): Result[void, ClipboardWriteError] =
-  Result[void, ClipboardWriteError].err(ClipboardWriteError(timedOut: true, msg: msg))
+proc writeFailed(msg: string): Result[void, string] =
+  Result[void, string].err(msg)
 
 proc toolGoneWrite(
     p: Process, fallbackMsg: string, errFd: cint, diag: var ToolDiagnostics
-): Result[void, ClipboardWriteError] =
+): Result[void, string] =
   ## Report write failure from exited tool, preferring exit code.
   let exitCode = pollExitDraining(
     p, getMonoTime() + initDuration(milliseconds = ExitGraceMs), errFd, diag
@@ -467,18 +449,18 @@ proc toolGoneWrite(
     return writeFailed("The clipboard tool closed its input before the write completed")
   writeFailed(fallbackMsg)
 
-proc closeToolInput(p: Process): Result[void, ClipboardWriteError] =
+proc closeToolInput(p: Process): Result[void, string] =
   ## Close tool stdin to signal EOF.
   try:
     p.inputStream.close()
   except CatchableError as e:
     cleanupClipboardProcess(p)
     return writeFailed("Failed to close the clipboard tool input: " & e.msg)
-  return Result[void, ClipboardWriteError].ok()
+  return Result[void, string].ok()
 
 proc writeAllBounded(
     p: Process, text: string, deadline: MonoTime, errFd: cint, diag: var ToolDiagnostics
-): Result[void, ClipboardWriteError] =
+): Result[void, string] =
   ## Bounded non-blocking write to stdin.
   if p.isNil:
     return writeFailed("Failed to write to the clipboard tool: process is nil")
@@ -503,7 +485,7 @@ proc writeAllBounded(
     let remaining = deadline - getMonoTime()
     if remaining <= initDuration(milliseconds = 0):
       cleanupClipboardProcess(p)
-      return writeTimedOut(
+      return writeFailed(
         "Timed out sending the text to the clipboard tool; it was killed before " &
           "the whole input was accepted"
       )
@@ -549,7 +531,7 @@ proc writeAllBounded(
 
 proc writeAllBounded(
     p: Process, text: string, deadline: MonoTime
-): Result[void, ClipboardWriteError] =
+): Result[void, string] =
   ## Overload without caller diagnostics.
   var diag = ToolDiagnostics()
   writeAllBounded(p, text, deadline, p.diagnosticsFd(), diag)
@@ -914,7 +896,7 @@ proc runClipboardWrite(
     let errFd = process.diagnosticsFd()
     let writeRes = writeAllBounded(process, text, deadline, errFd, toolStderr)
     if writeRes.isErr:
-      return Result[bool, string].err(prefix & writeRes.error.msg)
+      return Result[bool, string].err(prefix & writeRes.error)
     drainDiagnostics(errFd, toolStderr)
     if tool == cbtWlClipboard:
       let earlyExit = process.wlCopyExitedEarly()

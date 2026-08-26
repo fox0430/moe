@@ -17,6 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
+when not defined(posix):
+  {.error: "moe supports POSIX platforms only".}
+
 import std/[strformat, os, options]
 
 import pkg/[celina, results, chronos]
