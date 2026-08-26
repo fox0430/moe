@@ -31,6 +31,61 @@ import lsp/protocol/types as lspTypes
 import types/lsp_integration_types
 export lsp_integration_types
 
+const MaxEditPathDisplayCount* = 10
+  ## Max paths shown in edit error messages; excess collapsed to "and N more".
+
+const MaxEditPathListChars* = 800
+  ## Max chars for the joined path list to avoid unbounded error messages.
+
+proc sanitizeEditPath*(s: string): string =
+  ## Replace C0 controls and DEL with '?' to prevent log injection.
+  result = newStringOfCap(s.len)
+  for r in s.runes:
+    if r.int < 0x20 or r.int == 0x7F:
+      result.add('?')
+    else:
+      result.add($r)
+
+proc formatEditPathList*(paths: seq[string]): string =
+  ## Sanitize and truncate path list for error display. Ensures the
+  ## " and N more" suffix is never lost to char truncation.
+  if paths.len == 0:
+    return ""
+  let displayCount = min(paths.len, MaxEditPathDisplayCount)
+  var sanitized = newSeq[string](displayCount)
+  for i in 0 ..< displayCount:
+    sanitized[i] = sanitizeEditPath(paths[i])
+  var suffix = ""
+  if paths.len > MaxEditPathDisplayCount:
+    suffix = " and " & $(paths.len - MaxEditPathDisplayCount) & " more"
+  var list = sanitized.join(", ")
+  let suffixRuneLen = suffix.runeLen
+  let combinedRuneLen = list.runeLen + suffixRuneLen
+  if combinedRuneLen > MaxEditPathListChars:
+    if suffixRuneLen >= MaxEditPathListChars - 3:
+      # Degenerate suffix; truncate combined string.
+      var combined = list & suffix
+      var truncated = newStringOfCap(MaxEditPathListChars * 4)
+      var count = 0
+      for r in combined.runes:
+        if count >= MaxEditPathListChars - 3:
+          break
+        truncated.add($r)
+        inc count
+      return truncated & "..."
+    let availableForList = MaxEditPathListChars - suffixRuneLen - 3
+    var truncated = newStringOfCap(availableForList * 4)
+    var count = 0
+    for r in list.runes:
+      if count >= availableForList:
+        break
+      truncated.add($r)
+      inc count
+    return truncated & "..." & suffix
+  if suffix.len > 0:
+    list &= suffix
+  return list
+
 export lsp_service
 export lspTypes.WorkDoneProgress, lspTypes.WorkDoneProgressKind
 export lspTypes.WorkDoneProgressBegin, lspTypes.WorkDoneProgressReport
@@ -1365,7 +1420,7 @@ proc applyWorkspaceEdit*(
   ## modified (see staticRejectionReason, shared with the service-layer gate).
   let rejectReason = staticRejectionReason(edit)
   if rejectReason.isSome:
-    return err(rejectReason.get & "; no edits applied")
+    return err(sanitizeEditPath(rejectReason.get) & "; no edits applied")
   var modifiedCount = 0
   var openBuffersToModify: seq[tuple[bufferIdx: int, edits: seq[TextEdit]]] = @[]
   var unopenedFilesToModify: seq[tuple[path: string, edits: seq[TextEdit]]] = @[]
@@ -1376,7 +1431,7 @@ proc applyWorkspaceEdit*(
     for docEdit in edit.documentChanges.get:
       let pathRes = validateLocalFileUri(docEdit.textDocument.uri)
       if pathRes.isErr:
-        return err(pathRes.error)
+        return err(sanitizeEditPath(pathRes.error))
       let path = pathRes.get
       let bufferIdxOpt = findBufferByPath(buffers, path)
       if bufferIdxOpt.isSome:
@@ -1384,8 +1439,8 @@ proc applyWorkspaceEdit*(
       else:
         if not allowUnopenedFileWrites:
           return err(
-            "Server edit targets a file not open in the editor: " & path &
-              "; edit discarded"
+            "Server edit targets a file not open in the editor: " &
+              sanitizeEditPath(path) & "; edit discarded"
           )
         unopenedFilesToModify.add((path, docEdit.edits))
   elif edit.changes.isSome:
@@ -1393,7 +1448,7 @@ proc applyWorkspaceEdit*(
     for uri, edits in edit.changes.get:
       let pathRes = validateLocalFileUri(uri)
       if pathRes.isErr:
-        return err(pathRes.error)
+        return err(sanitizeEditPath(pathRes.error))
       let path = pathRes.get
       let bufferIdxOpt = findBufferByPath(buffers, path)
       if bufferIdxOpt.isSome:
@@ -1401,8 +1456,8 @@ proc applyWorkspaceEdit*(
       else:
         if not allowUnopenedFileWrites:
           return err(
-            "Server edit targets a file not open in the editor: " & path &
-              "; edit discarded"
+            "Server edit targets a file not open in the editor: " &
+              sanitizeEditPath(path) & "; edit discarded"
           )
         unopenedFilesToModify.add((path, edits))
 
@@ -1430,12 +1485,15 @@ proc applyWorkspaceEdit*(
             if modifiedBufferPaths.len > 0:
               raise newException(
                 ValueError,
-                "Failed to apply edits: " & applyResult.error & " (Warning: " &
-                  $modifiedBufferPaths.len & " buffer(s) already modified: " &
-                  modifiedBufferPaths.join(", ") & ")",
+                "Failed to apply edits: " & sanitizeEditPath(applyResult.error) &
+                  " (Warning: " & $modifiedBufferPaths.len &
+                  " buffer(s) already modified: " &
+                  formatEditPathList(modifiedBufferPaths) & ")",
               )
-            raise
-              newException(ValueError, "Failed to apply edits: " & applyResult.error)
+            raise newException(
+              ValueError,
+              "Failed to apply edits: " & sanitizeEditPath(applyResult.error),
+            )
       except ValueError as exc:
         if exc of TransactionRollbackError:
           return err(exc.msg & BufferStateInconsistentSuffix)
@@ -1443,10 +1501,11 @@ proc applyWorkspaceEdit*(
     if txr.isErr:
       if modifiedBufferPaths.len > 0:
         return err(
-          "Transaction failed: " & txr.error & " (Warning: " & $modifiedBufferPaths.len &
-            " buffer(s) already modified: " & modifiedBufferPaths.join(", ") & ")"
+          "Transaction failed: " & sanitizeEditPath(txr.error) & " (Warning: " &
+            $modifiedBufferPaths.len & " buffer(s) already modified: " &
+            formatEditPathList(modifiedBufferPaths) & ")"
         )
-      return err("Transaction failed: " & txr.error)
+      return err("Transaction failed: " & sanitizeEditPath(txr.error))
 
     modifiedCount += 1
     modifiedBufferIndexes.add(bufferIdx)
@@ -1461,11 +1520,14 @@ proc applyWorkspaceEdit*(
       if alreadyModified > 0:
         var modifiedList = modifiedBufferPaths & modifiedFilePaths
         return err(
-          "Failed to modify " & path & ": " & applyResult.error & " (Warning: " &
-            $alreadyModified & " file(s) already modified: " & modifiedList.join(", ") &
-            ")"
+          "Failed to modify " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(applyResult.error) & " (Warning: " & $alreadyModified &
+            " file(s) already modified: " & formatEditPathList(modifiedList) & ")"
         )
-      return err("Failed to modify " & path & ": " & applyResult.error)
+      return err(
+        "Failed to modify " & sanitizeEditPath(path) & ": " &
+          sanitizeEditPath(applyResult.error)
+      )
     modifiedCount += 1
     modifiedFilePaths.add(path)
 
