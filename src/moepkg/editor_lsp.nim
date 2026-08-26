@@ -26,9 +26,42 @@ import pkg/[chronos, results]
 import types/editor_types, lsp_integration, motion, editor_codelens, lsp_request_context
 import command_handlers/[handler_manager, insert_handler]
 import buffer/undo
-import logger
+import logger, message_log
 
 export lsp_request_context
+
+const MaxRenamePathDisplayCount* = MaxEditPathDisplayCount
+  ## Alias for shared constant; canonical definition is
+  ## lsp_integration.MaxEditPathDisplayCount (kept for compatibility).
+
+const MaxRenamePathListChars* = MaxEditPathListChars
+  ## Alias for shared constant; canonical definition is
+  ## lsp_integration.MaxEditPathListChars (kept for compatibility).
+
+proc sanitizeForLog*(s: string): string =
+  ## Alias for lsp_integration.sanitizeEditPath to keep a single implementation.
+  ## Canonical: lsp_integration.sanitizeEditPath.
+  sanitizeEditPath(s)
+
+proc formatPathList*(paths: seq[string]): string =
+  ## Alias for lsp_integration.formatEditPathList to keep a single implementation.
+  ## Canonical: lsp_integration.formatEditPathList.
+  formatEditPathList(paths)
+
+proc buildModifiedPathSuffix*(e: Editor, res: WorkspaceEditResult): string =
+  ## Collect modified buffer/file paths from a WorkspaceEditResult and format
+  ## them with truncation/sanitization (single place for rename and serverEdit).
+  if res.modifiedBufferIndexes.len == 0 and res.modifiedFilePaths.len == 0:
+    return ""
+  var allPaths: seq[string] = @[]
+  for idx in res.modifiedBufferIndexes:
+    if idx >= 0 and idx < e.buffers.len and e.buffers[idx].filePath.isSome:
+      allPaths.add(e.buffers[idx].filePath.get)
+  for p in res.modifiedFilePaths:
+    allPaths.add(p)
+  let pathList = formatPathList(allPaths)
+  if pathList.len > 0:
+    result = ": " & pathList
 
 proc launchAffectingFields(c: LanguageServerConfig): (string, seq[string], string) =
   (c.command, c.args, c.initializationOptions)
@@ -234,8 +267,12 @@ proc applyWorkspaceEditFromServer*(
               e.syncBufferAfterEdit(buf, "applyEdit")
       # A partial apply may have shrunk already-committed buffers.
       e.clampAllWindowCursors()
-      e.state.statusMessage = "Failed to apply server edit: " & applyResult.error
-      return (applied: false, failureReason: some(applyResult.error))
+      let sanitizedErr = sanitizeForLog(applyResult.error)
+      let failMsg = "Failed to apply server edit: " & sanitizedErr
+      e.state.statusMessage = failMsg
+      logInfo("lsp", failMsg)
+      addLspMessageLog(failMsg)
+      return (applied: false, failureReason: some(sanitizedErr))
 
     # Sync the server with every buffer we just rewrote.
     for bufferIdx in applyResult.get.modifiedBufferIndexes:
@@ -243,9 +280,13 @@ proc applyWorkspaceEditFromServer*(
 
     e.clampAllWindowCursors()
     let modifiedCount = applyResult.get.modifiedCount
-    e.state.statusMessage =
+    var serverMsg =
       "Applied server edit (" & $modifiedCount & " file" &
       (if modifiedCount == 1: "" else: "s") & " modified)"
+    serverMsg &= e.buildModifiedPathSuffix(applyResult.get)
+    logInfo("lsp", serverMsg)
+    addLspMessageLog(serverMsg)
+    e.state.statusMessage = serverMsg
     return (applied: true, failureReason: none(string))
 
 proc maybeUpdateLsp*(e: Editor) =
@@ -309,7 +350,8 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       # Get formatting result from LSP
       let formatResult = await e.lsp.requestFormatting(activeBuffer)
       if formatResult.isErr:
-        e.state.statusMessage = "LSP format failed: " & formatResult.error
+        e.state.statusMessage =
+          "LSP format failed: " & sanitizeForLog(formatResult.error)
         return false
 
       let edits = formatResult.get
@@ -324,7 +366,8 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       # Apply the text edits to the buffer
       let applyResult = applyTextEdits(activeBuffer, edits)
       if applyResult.isErr:
-        e.state.statusMessage = "Failed to apply edits: " & applyResult.error
+        e.state.statusMessage =
+          "Failed to apply edits: " & sanitizeForLog(applyResult.error)
         return false
 
       e.state.statusMessage =
@@ -337,7 +380,7 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       e.state.statusMessage = "LSP format error: buffer state may be inconsistent"
       return false
     except Exception as err:
-      e.state.statusMessage = "LSP format error: " & err.msg
+      e.state.statusMessage = "LSP format error: " & sanitizeForLog(err.msg)
       return false
 
 proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
@@ -371,7 +414,7 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
     let foldResult =
       await lsp_integration.refreshLspFolds(e.lsp, activeBuffer, startCollapsed = true)
     if foldResult.isErr:
-      e.state.statusMessage = "LSP fold failed: " & foldResult.error
+      e.state.statusMessage = "LSP fold failed: " & sanitizeForLog(foldResult.error)
       return
 
     # The cursor may now sit inside a collapsed fold; updateForFrame normalizes
@@ -424,7 +467,10 @@ proc requestLspRename*(
       # Get rename result from LSP
       let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
       if renameResult.isErr:
-        e.state.statusMessage = "LSP rename failed: " & renameResult.error
+        let msg = "LSP rename failed: " & sanitizeForLog(renameResult.error)
+        e.state.statusMessage = msg
+        logInfo("lsp", msg)
+        addLspMessageLog(msg)
         return
 
       let workspaceEditOpt = renameResult.get
@@ -443,7 +489,10 @@ proc requestLspRename*(
       # Apply the workspace edits to all affected buffers
       let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
       if applyResult.isErr:
-        e.state.statusMessage = "Failed to apply rename: " & applyResult.error
+        let msg = "Failed to apply rename: " & sanitizeForLog(applyResult.error)
+        e.state.statusMessage = msg
+        logInfo("lsp", msg)
+        addLspMessageLog(msg)
         return
 
       # Sync the server with every buffer we just rewrote. maybeUpdateLsp
@@ -453,9 +502,15 @@ proc requestLspRename*(
         e.syncBufferAfterEdit(e.buffers[bufferIdx], "rename")
 
       let modifiedCount = applyResult.get.modifiedCount
-      e.state.statusMessage =
-        "Renamed '" & e.state.renameState.originalWord & "' to '" & newName & "' (" &
-        $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
+      var renameMsg =
+        "Renamed '" & sanitizeForLog(e.state.renameState.originalWord) & "' to '" &
+        sanitizeForLog(newName) & "' (" & $modifiedCount & " file" &
+        (if modifiedCount > 1: "s" else: "") & " modified)"
+      renameMsg &= e.buildModifiedPathSuffix(applyResult.get)
+      # Always log for traceability.
+      logInfo("lsp", renameMsg)
+      addLspMessageLog(renameMsg)
+      e.state.statusMessage = renameMsg
     except CancelledError:
       discard
     except TransactionRollbackError as err:
@@ -463,7 +518,7 @@ proc requestLspRename*(
       logError "lsp", "Rename aborted, buffer state untrustworthy: " & err.msg
       e.state.statusMessage = "LSP rename error: buffer state may be inconsistent"
     except Exception as err:
-      e.state.statusMessage = "LSP rename error: " & err.msg
+      e.state.statusMessage = "LSP rename error: " & sanitizeForLog(err.msg)
 
 proc renotifyOpenBuffers(e: Editor, langId: string): int =
   ## (Re-)send didOpen for every open buffer whose language is `langId` and
@@ -532,7 +587,8 @@ proc restartLspServer*(e: Editor): bool =
   # Start the worker
   let startResult = e.lsp.service.startWorker(langId)
   if startResult.isErr:
-    e.state.statusMessage = "Failed to start LSP server: " & startResult.error
+    e.state.statusMessage =
+      "Failed to start LSP server: " & sanitizeForLog(startResult.error)
     return false
 
   # Re-notify about open buffers for this language. A re-open failure leaves that
@@ -578,7 +634,8 @@ proc requestLspExecuteCommand*(
       let execResult =
         await e.lsp.requestExecuteCommand(activeBuffer, command, jsonArgs)
       if execResult.isErr:
-        e.state.statusMessage = "LSP executeCommand failed: " & execResult.error
+        e.state.statusMessage =
+          "LSP executeCommand failed: " & sanitizeForLog(execResult.error)
         return
 
       let response = execResult.get
@@ -593,7 +650,7 @@ proc requestLspExecuteCommand*(
       e.state.statusMessage =
         "LSP executeCommand error: buffer state may be inconsistent"
     except Exception as err:
-      e.state.statusMessage = "LSP executeCommand error: " & err.msg
+      e.state.statusMessage = "LSP executeCommand error: " & sanitizeForLog(err.msg)
 
 # LSP request-context helpers live in `lsp_request_context` (Phase A);
 # re-exported above so existing callers keep working.
