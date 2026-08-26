@@ -710,12 +710,14 @@ suite "Registers":
         let fb = r.clipboardFallbackRead(cbtXclip, '"')
         let elapsed2 = (getMonoTime() - start2).inMilliseconds
         check fb.isErr
-        # First read took the bounded timeout (~ReadTimeoutMs=2000); fallback must
-        # not add a second one. Upper bound is generous for loaded CI.
-        check elapsed1 >= 1500 and elapsed1 < 5000
+        # First read took the bounded timeout (ReadTimeoutMs); fallback must not
+        # add a second one. Upper bound is generous for loaded CI.
+        check elapsed1 >= ReadTimeoutMs div 2
+        check elapsed1 < ReadTimeoutMs + 3_000
         check elapsed2 < 500
-        # Total must be ~one timeout, not two.
-        check (elapsed1 + elapsed2) < 3500
+        # Total must be ~one timeout, not two. Primary detector is elapsed2 <500;
+        # total is a sanity bound (generous for CI, not for double detection).
+        check (elapsed1 + elapsed2) < ReadTimeoutMs + 3_000
         # Non-clipboard register must still re-read (even if it hangs).
         # We only check it is attempted, not timing, to avoid double hang.
         r.clipboardReadOutcome = croSucceeded
@@ -754,9 +756,10 @@ suite "Registers":
         let fb = r.clipboardFallbackRead(cbtXclip, '*')
         let elapsed2 = (getMonoTime() - start2).inMilliseconds
         check fb.isErr
-        check elapsed1 >= 1500 and elapsed1 < 5000
+        check elapsed1 >= ReadTimeoutMs div 2
+        check elapsed1 < ReadTimeoutMs + 3_000
         check elapsed2 < 500
-        check (elapsed1 + elapsed2) < 3500
+        check (elapsed1 + elapsed2) < ReadTimeoutMs + 3_000
       finally:
         putEnv("PATH", origPath)
         removeDir(fakeDir)

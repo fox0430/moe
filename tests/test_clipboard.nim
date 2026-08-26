@@ -1003,7 +1003,9 @@ suite "clipboard: public API integration (covers helpers via public path)":
         let elapsed = (getMonoTime() - start).inMilliseconds
         check r.isErr
         check r.error.contains("timed out") or r.error.contains("Timed out")
-        check elapsed >= 1500 and elapsed < 5000
+        # Bounded by ReadTimeoutMs, not by the tool's own sleep.
+        check elapsed >= ReadTimeoutMs div 2
+        check elapsed < ReadTimeoutMs + 3_000
       finally:
         putEnv("PATH", origPath)
         removeDir(fakeDir)
@@ -1022,6 +1024,12 @@ suite "clipboard: public API integration (covers helpers via public path)":
       finally:
         putEnv("PATH", origPath)
         removeDir(fakeDir)
+
+    test "ReadTimeoutMs is 500ms (TUI stall bound)":
+      # Fixed-value guard: the 2000→500 shortening is intentional (TUI stalls
+      # synchronously). If the constant drifts, the tautological
+      # `elapsed < ReadTimeoutMs+3000` checks would still pass.
+      check ReadTimeoutMs == 500
 
 suite "clipboard: fcntl/poll error path coverage (regression for Medium)":
   when defined(posix):

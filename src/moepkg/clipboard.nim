@@ -48,7 +48,9 @@ type
 
 const
   WriteTimeoutMs = 10_000 ## Timeout for clipboard writes (wl-copy: briefly polled).
-  ReadTimeoutMs = 2_000 ## Idle timeout between reads; INCR transfers continue.
+  ReadTimeoutMs = 500
+    ## Idle timeout between reads; INCR transfers continue. The read is
+    ## synchronous, so this is how long the TUI stalls on a hung tool.
   MaxTotalReadMs = 10_000 ## Total read timeout; partial data discarded.
   MaxReadSize = 16 * 1024 * 1024 ## Max clipboard output size.
   MaxStderrCapture = 4 * 1024 ## Max stderr bytes kept for errors.
