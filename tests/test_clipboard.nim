@@ -861,11 +861,18 @@ suite "clipboard: reap and diagnostics contracts":
     check r.get == ""
 
 suite "clipboard: waitForExitBounded coverage":
+  proc waitBounded(p: Process, timeoutMs: int): int =
+    ## The production wait, with its own diagnostics sink.
+    var diag: ToolDiagnostics
+    waitForExitBounded(
+      p, getMonoTime() + initDuration(milliseconds = timeoutMs), p.diagnosticsFd(), diag
+    )
+
   test "waitForExitBounded returns 0 for quick exit":
     var p: Process = nil
     try:
       p = startProcess("true", options = {poUsePath})
-      let code = waitForExitBounded(p, 1000)
+      let code = waitBounded(p, 1000)
       check code == 0
       check not p.running()
     except CatchableError:
@@ -879,7 +886,7 @@ suite "clipboard: waitForExitBounded coverage":
     try:
       p = startProcess("sleep", args = @["30"], options = {poUsePath})
       let start = getMonoTime()
-      let code = waitForExitBounded(p, 300)
+      let code = waitBounded(p, 300)
       let elapsed = (getMonoTime() - start).inMilliseconds
       check code == -1
       check elapsed >= 200
@@ -893,13 +900,13 @@ suite "clipboard: waitForExitBounded coverage":
         p.close()
 
   test "waitForExitBounded returns -2 for nil process":
-    check waitForExitBounded(nil, 100) == -2
+    check waitBounded(nil, 100) == -2
 
   test "waitForExitBounded returns non-zero for failing tool":
     var p: Process = nil
     try:
       p = startProcess("sh", args = @["-c", "exit 7"], options = {poUsePath})
-      let code = waitForExitBounded(p, 1000)
+      let code = waitBounded(p, 1000)
       check code == 7
     except CatchableError:
       check false
@@ -1029,8 +1036,8 @@ suite "clipboard: fcntl/poll error path coverage (regression for Medium)":
       let deadline = getMonoTime() + initDuration(milliseconds = 500)
       let r = writeAllBounded(nil, "hello", deadline)
       check r.isErr
-      check not r.error.timedOut
-      check r.error.msg.contains("process is nil")
+      check not r.error.contains("Timed out")
+      check r.error.contains("process is nil")
 
     test "writeAllBounded returns err for closed fd (fcntl/poll branch)":
       var p: Process = nil
@@ -1050,8 +1057,8 @@ suite "clipboard: fcntl/poll error path coverage (regression for Medium)":
         let r = writeAllBounded(p, "hello", deadline)
         check r.isErr
         # Should be one of the fcntl/poll error messages, all contain "Failed to"
-        check not r.error.timedOut
-        check r.error.msg.contains("Failed to")
+        check not r.error.contains("Timed out")
+        check r.error.contains("Failed to")
         # Strict: must be reaped and not running; OR would hide a zombie leak.
         check isProcessReaped(p, 500)
         check not p.running()
@@ -1139,7 +1146,7 @@ suite "clipboard: fcntl/poll error path coverage (regression for Medium)":
         let r = writeAllBounded(p, largeText, deadline)
         let elapsed = (getMonoTime() - start).inMilliseconds
         check r.isErr
-        check r.error.timedOut
+        check r.error.contains("Timed out")
         check elapsed >= 100
         check elapsed < 4000
         check isProcessReaped(p, 500)

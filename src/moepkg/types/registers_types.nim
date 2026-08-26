@@ -46,13 +46,18 @@ type
     primaryReadError*: string ## Error when `croFailed`.
     primaryReadValue*: string ## Content when `croSucceeded`.
 
-    lastClipboardWriteTime*: MonoTime ## Last CLIPBOARD write time, for wl-copy window.
+    lastClipboardWriteTime*: MonoTime
+      ## Last CLIPBOARD write time, for the wl-copy claim window.
+      ## The zero value means "never written" and must not open the window.
 
     noNamed*: Register ## The unnamed register (") - latest yank/delete content
 
     smallDelete*: Register ## Small delete register (-) - deleted text less than one line
 
-    number*: array[10, Register] ## Numbered registers (0-9).
+    number*: array[10, Register]
+      ## Numbered registers. 0 is the latest yank; 1-9 are the delete history,
+      ## newest first. Only linewise or multiline deletes enter 1 (shifting 1-8
+      ## down); characterwise single-line deletes go to `smallDelete`.
 
     named*: Table[char, Register] ## Named registers (a-z).
 
