@@ -487,7 +487,9 @@ proc requestLspRename*(
         return
 
       # Apply the workspace edits to all affected buffers
-      let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
+      let applyResult = applyWorkspaceEdit(
+        e.buffers, workspaceEdit, backupConfig = some(e.config.autoBackup)
+      )
       if applyResult.isErr:
         let msg = "Failed to apply rename: " & sanitizeForLog(applyResult.error)
         e.state.statusMessage = msg

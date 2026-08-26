@@ -21,14 +21,14 @@
 ## Connects LspService to Editor, TextBuffer, and UI components
 
 import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
-from std/os import absolutePath, normalizedPath
+from std/os import absolutePath, normalizedPath, fileExists
 
 import pkg/[results, chronos]
 
-import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger
+import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger, backup
 import lsp/protocol/types as lspTypes
 
-import types/lsp_integration_types
+import types/lsp_integration_types, types/config_types
 export lsp_integration_types
 
 const MaxEditPathDisplayCount* = 10
@@ -1301,17 +1301,71 @@ proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
       return some(i)
   return none(int)
 
-proc applyEditsToFile(path: string, edits: seq[TextEdit]): Result[void, string] =
+proc applyEditsToFile(
+    path: string,
+    edits: seq[TextEdit],
+    backupConfig: Option[AutoBackupConfig] = none(AutoBackupConfig),
+): Result[void, string] =
   ## Apply edits to a file that is not currently open
   ## Loads the file, applies edits, and saves it back
+  var needsBackup = false
+  var originalContent = ""
+  var fileExistedForBackup = false
+  if backupConfig.isSome:
+    if not backupConfig.get.enable:
+      needsBackup = false
+    else:
+      # Single read captures content+existence atomically (avoids TOCTOU and
+      # empty-file "\n" normalization); no backup needed if file absent.
+      try:
+        originalContent = readFile(path)
+        needsBackup = true
+        fileExistedForBackup = true
+      except CatchableError as e:
+        if fileExists(path):
+          # Unreadable but exists — abort to preserve original
+          return err(
+            "Failed to backup " & sanitizeEditPath(path) & ": " & sanitizeEditPath(
+              e.msg
+            ) & " (overwrite aborted to preserve original)"
+          )
+        else:
+          needsBackup = false
+          fileExistedForBackup = false
+
   let tempBuffer = newTextBuffer()
-  let loadResult = tempBuffer.loadFile(path)
+  var loadResult: Result[(), string]
+  if fileExistedForBackup:
+    # Reuse backed-up content to avoid second read (TOCTOU) and keep consistency.
+    loadResult = tempBuffer.loadFileWithContent(path, originalContent)
+  else:
+    loadResult = tempBuffer.loadFile(path)
   if loadResult.isErr:
     return err("Failed to load file: " & loadResult.error)
 
   let applyResult = applyTextEdits(tempBuffer, edits)
   if applyResult.isErr:
     return err(applyResult.error)
+
+  if needsBackup:
+    let backupRes = backupBuffer(some(path), originalContent, backupConfig.get)
+    if backupRes.isErr:
+      if backupRes.error == NoChangesSinceLastBackupError:
+        discard
+      elif backupRes.error == DirExcludedFromBackupError:
+        logWarn("lsp", "Skipped backup for excluded path " & sanitizeEditPath(path))
+        return err(
+          "Failed to backup " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(backupRes.error) &
+            " (overwrite aborted to preserve original)"
+        )
+      else:
+        # Abort to keep original recoverable.
+        return err(
+          "Failed to backup " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(backupRes.error) &
+            " (overwrite aborted to preserve original)"
+        )
 
   let saveResult = tempBuffer.saveFile(path)
   if saveResult.isErr:
@@ -1398,6 +1452,7 @@ proc applyWorkspaceEdit*(
     edit: WorkspaceEdit,
     transactionName: string = "Rename",
     allowUnopenedFileWrites: bool = true,
+    backupConfig: Option[AutoBackupConfig] = none(AutoBackupConfig),
 ): Result[WorkspaceEditResult, string] =
   ## Apply a WorkspaceEdit to multiple buffers
   ## Returns which buffers/files were modified
@@ -1514,20 +1569,30 @@ proc applyWorkspaceEdit*(
 
   # Apply edits to unopened files (load, modify, save)
   for (path, edits) in unopenedFilesToModify:
-    let applyResult = applyEditsToFile(path, edits)
+    # Require backupConfig for unopened writes; fail fast if missing.
+    let applyResult: Result[void, string] =
+      if backupConfig.isNone:
+        Result[void, string].err(
+          "backupConfig required for unopened file writes: " & sanitizeEditPath(path) &
+            " (overwrite aborted to preserve original)"
+        )
+      else:
+        applyEditsToFile(path, edits, backupConfig)
     if applyResult.isErr:
       let alreadyModified = modifiedBufferPaths.len + modifiedFilePaths.len
-      if alreadyModified > 0:
-        var modifiedList = modifiedBufferPaths & modifiedFilePaths
-        return err(
+      let errMsg =
+        if alreadyModified > 0:
+          var modifiedList = modifiedBufferPaths & modifiedFilePaths
           "Failed to modify " & sanitizeEditPath(path) & ": " &
             sanitizeEditPath(applyResult.error) & " (Warning: " & $alreadyModified &
-            " file(s) already modified: " & formatEditPathList(modifiedList) & ")"
-        )
-      return err(
-        "Failed to modify " & sanitizeEditPath(path) & ": " &
-          sanitizeEditPath(applyResult.error)
-      )
+            " file(s) already modified: " & formatEditPathList(modifiedList) &
+            "; restore unopened files from backup and open buffers via undo if needed)"
+        else:
+          "Failed to modify " & sanitizeEditPath(path) & ": " &
+            sanitizeEditPath(applyResult.error)
+      logError("lsp", errMsg)
+      return err(errMsg)
+    logInfo("lsp", "Modified unopened file: " & sanitizeEditPath(path))
     modifiedCount += 1
     modifiedFilePaths.add(path)
 

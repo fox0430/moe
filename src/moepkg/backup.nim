@@ -34,6 +34,7 @@ const
   BackupJsonFilename = "backup.json"
   BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
   NoChangesSinceLastBackupError* = "No changes since last backup"
+  DirExcludedFromBackupError* = "Directory excluded from backup"
   MaxBackupFiles* = 100 ## Maximum number of backup files per source file
 
 type BackupResult* = Result[string, string]
@@ -262,15 +263,15 @@ proc backupBuffer*(
   for excludeDir in config.dirToExclude:
     if sourceFileDir == excludeDir:
       # Exact match
-      return err("Directory excluded from backup")
+      return err(DirExcludedFromBackupError)
     elif excludeDir.endsWith("/"):
       # excludeDir already has trailing slash
       if sourceFileDir.startsWith(excludeDir):
-        return err("Directory excluded from backup")
+        return err(DirExcludedFromBackupError)
     else:
       # Add trailing slash for proper prefix matching
       if sourceFileDir.startsWith(excludeDir & "/"):
-        return err("Directory excluded from backup")
+        return err(DirExcludedFromBackupError)
 
   # Initialize backup directory (this is the only call to getBackupDirForSource)
   let backupDir = initBackupDir(baseBackupDir, sourceFilePath)
@@ -280,11 +281,13 @@ proc backupBuffer*(
   # Use provided content
   let currentContent = content
 
-  # Check if content is different from most recent backup
-  # Use *InDir version to avoid redundant getBackupDirForSource call
-  let mostRecentContent = getMostRecentBackupInDir(backupDir)
-  if mostRecentContent == currentContent:
-    return err(NoChangesSinceLastBackupError)
+  # Skip if unchanged; "" means both no backup and empty backup, so check
+  # file count first. Use *InDir to avoid extra lookup.
+  let backupFiles = getBackupFilesInDir(backupDir)
+  if backupFiles.len > 0:
+    let mostRecentContent = getMostRecentBackupInDir(backupDir)
+    if mostRecentContent == currentContent:
+      return err(NoChangesSinceLastBackupError)
 
   # Generate backup filename and write
   let
