@@ -194,6 +194,8 @@ proc keepCursorInScrolledViewport(
 
 proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Scroll the viewport down by screen rows (Ctrl-E).
+  ## Wrapped segments and collapsed folds each count as visible rows; the cursor
+  ## moves only when scrolling would leave it outside the viewport.
   let
     count = parseCount(args)
     visibleHeight = ctx.scrollVisibleHeight()
@@ -222,6 +224,8 @@ proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), s
 
 proc handleScrollLineUp*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Scroll the viewport up by screen rows (Ctrl-Y).
+  ## Wrapped segments and collapsed folds each count as visible rows; the cursor
+  ## moves only when scrolling would leave it outside the viewport.
   let
     count = parseCount(args)
     visibleHeight = ctx.scrollVisibleHeight()
