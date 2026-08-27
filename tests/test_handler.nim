@@ -3392,6 +3392,15 @@ suite "middleClickPaste":
       let line = e.activeBuffer.getLine(0)
       check ($line).len > 5 # Text was inserted
 
+  test "handleEvent reattaches the viewport before middle-click paste":
+    let e = createTestEditorForMiddleClick("hello")
+    e.config.clipboard.enable = false
+    e.viewport.detachedFromCursor = true
+
+    discard e.handleEvent(makeMiddleClickEvent(0, 0))
+
+    check not e.viewport.detachedFromCursor
+
 suite "handlePasteEvent":
   proc createTestEditorForPaste(content: string): Editor =
     let config = newEditorConfig()

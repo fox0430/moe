@@ -1258,6 +1258,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if event.mouse.button == mouse_logic.MouseButton.Middle and
         event.mouse.kind == celina.MouseEventKind.Press:
       e.prepareForInput(false)
+      if e.windowManager.windows.len > 0:
+        e.activeWindow.viewport.detachedFromCursor = false
       e.middleClickPaste()
       return true
     discard e.handleMouseEvent(event)
