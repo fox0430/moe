@@ -167,6 +167,36 @@ suite "CommandModeHandler - executeSaveAndQuit":
     check result.saveAndQuitFilename.get == "test.txt"
     check result.forceQuitAfterSave == true
 
+suite "CommandModeHandler - executeSaveIfModifiedAndQuit":
+  test "Clean buffer quits without entering the save path":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Hello"])
+
+    let result =
+      handler.executeSaveIfModifiedAndQuit(buffer, none(string), force = false)
+
+    check result.kind == hrQuit
+
+  test "Modified buffer uses the existing save-and-quit path":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Hello"])
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), "!")
+
+    let result =
+      handler.executeSaveIfModifiedAndQuit(buffer, some("test.txt"), force = true)
+
+    check result.kind == hrSaveAndQuit
+    check result.saveAndQuitFilename == some("test.txt")
+    check result.forceQuitAfterSave == true
+
+  test "Clean :wq still enters the save path":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Hello"])
+
+    let result = handler.executeSaveAndQuit(buffer, none(string), force = false)
+
+    check result.kind == hrSaveAndQuit
+
 suite "CommandModeHandler - executeQuitAll":
   test "Quit all with unmodified buffer":
     let handler = setupHandler()
@@ -1393,6 +1423,22 @@ suite "CommandModeHandler - handleCommandModeInput":
     let buffer = setupBuffer()
 
     let result = handler.handleCommandModeInput(buffer, ":wq")
+    check result.kind == hrSaveAndQuit
+
+  test "Handle :x and :xit on a clean buffer":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    check handler.handleCommandModeInput(buffer, ":x").kind == hrQuit
+    check handler.handleCommandModeInput(buffer, ":xit").kind == hrQuit
+
+  test "Handle :x on a modified buffer":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Hello"])
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), "!")
+
+    let result = handler.handleCommandModeInput(buffer, ":x")
+
     check result.kind == hrSaveAndQuit
 
   test "Handle :wa command":

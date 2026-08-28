@@ -55,6 +55,16 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
           none(string),
       forceSaveAndQuit: "force" in cmd.flags,
     )
+  of claSaveIfModifiedAndQuit:
+    return CommandLineResult(
+      kind: claSaveIfModifiedAndQuit,
+      saveFilename:
+        if cmd.args.len > 0:
+          some(cmd.args[0])
+        else:
+          none(string),
+      forceSaveAndQuit: "force" in cmd.flags,
+    )
   of claSaveAllAndQuit:
     return CommandLineResult(
       kind: claSaveAllAndQuit, forceSaveAllAndQuit: "force" in cmd.flags

@@ -102,10 +102,21 @@ proc executeSaveAndQuit*(
     filename: Option[string],
     force: bool,
 ): HandlerResult =
-  ## Execute save and quit command (:wq, :x)
+  ## Execute save and quit command (:wq)
   HandlerResult(
     kind: hrSaveAndQuit, saveAndQuitFilename: filename, forceQuitAfterSave: force
   )
+
+proc executeSaveIfModifiedAndQuit*(
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    filename: Option[string],
+    force: bool,
+): HandlerResult =
+  ## Execute :x/:xit, writing only when the buffer is modified.
+  if not buffer.isModified:
+    return HandlerResult(kind: hrQuit)
+  handler.executeSaveAndQuit(buffer, filename, force)
 
 proc executeSaveAllAndQuit*(handler: CommandModeHandler, force: bool): HandlerResult =
   ## Execute save all and quit command (:wqa, :xa, :wqa!)
@@ -523,6 +534,10 @@ proc handleCommandModeInput*(
     handler.executeSaveAll(cmdResult.forceSaveAll)
   of claSaveAndQuit:
     handler.executeSaveAndQuit(
+      buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit
+    )
+  of claSaveIfModifiedAndQuit:
+    handler.executeSaveIfModifiedAndQuit(
       buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit
     )
   of claSaveAllAndQuit:
