@@ -37,11 +37,7 @@ suite "frontend embedding facade":
     let
       e = newEditor(newEditorConfig())
       pointer = PointerInput(
-        row: 2,
-        column: 3,
-        button: pbPrimary,
-        action: paPress,
-        clickCount: 1,
+        row: 2, column: 3, button: pbPrimary, action: paPress, clickCount: 1
       )
 
     check pointer.row == 2
