@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Compile-time and behavioral coverage for the frontend embedding facade.
+## Behavioral coverage for the frontend embedding facade.
 
 import std/unittest
 
@@ -36,7 +36,13 @@ suite "frontend embedding facade":
   test "exposes frontend-neutral input values and handlers":
     let
       e = newEditor(newEditorConfig())
-      pointer = initPointerInput(2, 3)
+      pointer = PointerInput(
+        row: 2,
+        column: 3,
+        button: pbPrimary,
+        action: paPress,
+        clickCount: 1,
+      )
 
     check pointer.row == 2
     check pointer.column == 3

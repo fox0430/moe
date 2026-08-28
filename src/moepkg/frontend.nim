@@ -26,6 +26,28 @@
 ## Call `setFrontendGitStatusEnabled(true)` once when the host displays Git
 ## status, then call `tick` each frame before reading `frontendStatus`.
 
-import config, editor, frontend_input, handler
+import
+  config,
+  editor,
+  editor_frame,
+  editor_display,
+  editor_buffers,
+  frontend_input,
+  handler
 
-export config, editor, frontend_input, handler
+export config.EditorConfig, config.newEditorConfig
+export editor.Editor, editor.newEditor
+export editor_frame.tick
+export
+  editor_display.FrontendStatus, editor_display.ActiveGitStatus,
+  editor_display.frontendStatus, editor_display.frontendGitStatusEnabled,
+  editor_display.setFrontendGitStatusEnabled
+export
+  editor_buffers.OpenBufferInfo, editor_buffers.activeWindowBuffers,
+  editor_buffers.activateBuffer, editor_buffers.closeBuffer,
+  editor_buffers.moveBuffer, editor_buffers.deleteCurrentBuffer
+export
+  frontend_input.GridRegion, frontend_input.PointerButton,
+  frontend_input.PointerAction, frontend_input.PointerInput,
+  frontend_input.ScrollInput, frontend_input.ScrollOutcome
+export handler.handleTextInput, handler.handleEvent
