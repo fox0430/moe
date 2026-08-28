@@ -2050,6 +2050,139 @@ suite "Handler - Scroll operations":
 
     check registry.execute(ctx, builtin(bcScrollCursorBottom)).isOk
 
+  test "scroll line down keeps a visible cursor in place (Ctrl-E)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 1
+    check ctx.cursor.line == 2
+
+  test "scroll line down moves cursor when it leaves the viewport (Ctrl-E)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 1
+    check ctx.cursor.line == 1
+
+  test "scroll line up keeps a visible cursor in place (Ctrl-Y)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 5, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 4
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineUp)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 3
+    check ctx.cursor.line == 5
+
+  test "scroll line up moves cursor when it leaves the viewport (Ctrl-Y)":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 8, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 4
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineUp)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 3
+    check ctx.cursor.line == 7
+
+  test "scroll line commands accept a count and clamp at buffer edges":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    ctx.motionController.viewportManager.viewport.height = 5
+    ctx.state.windowDisplay.viewportReservedLines = 0
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown), @["20"]).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 5
+    check ctx.cursor.line == 5
+
+    check registry.execute(ctx, builtin(bcScrollLineUp), @["20"]).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 0
+    check ctx.cursor.line == 4
+
+  test "scroll line down keeps a visible cursor out of a collapsed fold (Ctrl-E)":
+    # Screen shows 0, 1, [fold 2..90], 91, 92 -- the cursor is already visible,
+    # so scrolling by one row must not move it at all.
+    var lines: seq[string] = @[]
+    for i in 0 ..< 100:
+      lines.add($i)
+    let buffer = newTextBuffer(lines.join("\n"))
+    check buffer.foldState.addFold(2, 90, collapsed = true)
+
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 92, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 0
+    ctx.motionController.viewportManager.viewport.height = 7
+    ctx.state.windowDisplay.viewportReservedLines = 2
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check ctx.cursor.line == 92
+
+  test "scroll line down steps over a collapsed fold in one press (Ctrl-E)":
+    # A collapsed fold occupies a single screen row, so three presses from the
+    # top reach line 91: 0 -> 1 -> [fold] -> 91.
+    var lines: seq[string] = @[]
+    for i in 0 ..< 100:
+      lines.add($i)
+    let buffer = newTextBuffer(lines.join("\n"))
+    check buffer.foldState.addFold(2, 90, collapsed = true)
+
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 92, column: 0)
+    let viewport = ctx.motionController.viewportManager.viewport
+    viewport.topLine = 0
+    viewport.height = 7
+    ctx.state.windowDisplay.viewportReservedLines = 2
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check viewport.topLine == 1
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check viewport.topLine == 2
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check viewport.topLine == 91
+
+  test "scroll line down never moves the top backwards under lineWrap (Ctrl-E)":
+    # 10 lines of 30 columns at width 10 wrap to 3 rows each, so the top may
+    # legitimately sit below `buffer.len - visibleHeight` on a wrap segment.
+    var lines: seq[string] = @[]
+    for i in 0 ..< 10:
+      lines.add("x".repeat(30))
+    let buffer = newTextBuffer(lines.join("\n"))
+
+    let ctx = createTestContext(buffer)
+    ctx.state.config.standard.lineWrap = true
+    ctx.cursor = BufferPosition(line: 9, column: 0)
+    let viewport = ctx.motionController.viewportManager.viewport
+    viewport.topLine = 4
+    viewport.topWrapOffset = 2
+    viewport.width = 10
+    viewport.height = 8
+    ctx.state.windowDisplay.viewportReservedLines = 2
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollLineDown)).isOk
+    check (
+      viewport.topLine > 4 or (viewport.topLine == 4 and viewport.topWrapOffset >= 2)
+    )
+
 suite "Handler - Visual mode operations":
   test "visual delete":
     let buffer = newTextBuffer("hello world")

@@ -223,6 +223,8 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("scroll-cursor-top", "Scroll cursor to top of screen", "scroll.cursor.top"),
   ("scroll-cursor-center", "Scroll cursor to center of screen", "scroll.cursor.center"),
   ("scroll-cursor-bottom", "Scroll cursor to bottom of screen", "scroll.cursor.bottom"),
+  ("scroll-line-down", "Scroll viewport one line down", "scroll.line.down"),
+  ("scroll-line-up", "Scroll viewport one line up", "scroll.line.up"),
   ("fold-open", "Open fold at cursor", "fold.open"),
   ("fold-close", "Close fold at cursor", "fold.close"),
   ("fold-toggle", "Toggle fold at cursor", "fold.toggle"),

@@ -23,7 +23,7 @@ import std/options
 
 import pkg/results
 
-import ../[types, motion, modes, render_utils]
+import ../[types, motion, modes, render_utils, visible_rows]
 import ../buffer/[core, fold]
 
 import core
@@ -115,6 +115,134 @@ proc handleScrollCursorBottom*(
 
   # Clamp to valid range
   ctx.motionController.viewportManager.viewport.resetViewportTop(max(0, targetTopLine))
+
+  return ok(())
+
+proc scrollVisibleHeight(ctx: CommandContext): int =
+  let reservedLines =
+    if ctx.state.windowDisplay.viewportReservedLines >= 0:
+      ctx.state.windowDisplay.viewportReservedLines
+    else:
+      steadyBottomAreaHeight()
+  max(1, ctx.motionController.viewportManager.viewport.height - reservedLines)
+
+proc scrollRowLayout(ctx: CommandContext): RowLayout =
+  let
+    viewport = ctx.motionController.viewportManager.viewport
+    viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
+  initRowLayout(
+    ctx.buffer,
+    ctx.motionController.viewportManager.wrapCountCache,
+    ctx.state.lineWrap,
+    wrapWidthFor(viewport.width, viewportOffset),
+    ctx.state.tabStop,
+  )
+
+func scrollPositionAbove(a, b: tuple[line, offset: int]): bool {.inline.} =
+  a.line < b.line or (a.line == b.line and a.offset < b.offset)
+
+proc maxScrollTop(
+    ctx: CommandContext, layout: RowLayout, visibleHeight: int
+): tuple[line, offset: int] =
+  let
+    lastLine = ctx.buffer.len - 1
+    collapsedFold = ctx.buffer.foldState.getCollapsedFoldAt(lastLine)
+    bottomLine = if collapsedFold.isSome: collapsedFold.get.startLine else: lastLine
+    bottomOffset =
+      if collapsedFold.isSome:
+        0
+      else:
+        layout.lineRows(bottomLine) - 1
+  layout.walkBackRows(bottomLine, bottomOffset, visibleHeight - 1)
+
+proc moveCursorToRow(ctx: CommandContext, layout: RowLayout, row: VisibleRow) =
+  let
+    viewport = ctx.motionController.viewportManager.viewport
+    (_, cursorCellX) =
+      layout.cursorCell(ctx.cursor.line, ctx.cursor.column, viewport.leftColumn)
+  ctx.cursor.line = row.line
+  ctx.cursor.column =
+    if row.fold.isSome:
+      0
+    else:
+      layout.cellToColumn(row.line, row.wrapSeg, cursorCellX, viewport.leftColumn)
+
+proc keepCursorInScrolledViewport(
+    ctx: CommandContext, layout: RowLayout, visibleHeight: int
+) =
+  let
+    viewport = ctx.motionController.viewportManager.viewport
+    (cursorOffset, _) =
+      layout.cursorCell(ctx.cursor.line, ctx.cursor.column, viewport.leftColumn)
+    cursorPosition = (line: ctx.cursor.line, offset: cursorOffset)
+    topPosition = (line: viewport.topLine, offset: viewport.topWrapOffset)
+
+  if scrollPositionAbove(cursorPosition, topPosition):
+    let topRow = layout.rowAt(viewport.topLine, viewport.topWrapOffset, 0)
+    if topRow.isSome:
+      ctx.moveCursorToRow(layout, topRow.get)
+  else:
+    let cursorRow =
+      layout.rowOfLine(
+        viewport.topLine, viewport.topWrapOffset, ctx.cursor.line, visibleHeight
+      ) + cursorOffset
+    if cursorRow >= visibleHeight:
+      let bottomRow =
+        layout.rowAt(viewport.topLine, viewport.topWrapOffset, visibleHeight - 1)
+      if bottomRow.isSome:
+        ctx.moveCursorToRow(layout, bottomRow.get)
+
+proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Scroll the viewport down by screen rows (Ctrl-E).
+  ## Wrapped segments and collapsed folds each count as visible rows; the cursor
+  ## moves only when scrolling would leave it outside the viewport.
+  let
+    count = parseCount(args)
+    visibleHeight = ctx.scrollVisibleHeight()
+    layout = ctx.scrollRowLayout()
+    viewport = ctx.motionController.viewportManager.viewport
+    maxTop = ctx.maxScrollTop(layout, visibleHeight)
+    currentTop =
+      if scrollPositionAbove(
+        maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset)
+      ):
+        maxTop
+      else:
+        (line: viewport.topLine, offset: viewport.topWrapOffset)
+    row = layout.rowAt(currentTop.line, currentTop.offset, count)
+    candidate =
+      if row.isSome:
+        (line: row.get.line, offset: row.get.wrapSeg)
+      else:
+        maxTop
+    targetTop = if scrollPositionAbove(maxTop, candidate): maxTop else: candidate
+
+  viewport.restoreViewportTop(targetTop.line, targetTop.offset)
+  ctx.keepCursorInScrolledViewport(layout, visibleHeight)
+
+  return ok(())
+
+proc handleScrollLineUp*(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Scroll the viewport up by screen rows (Ctrl-Y).
+  ## Wrapped segments and collapsed folds each count as visible rows; the cursor
+  ## moves only when scrolling would leave it outside the viewport.
+  let
+    count = parseCount(args)
+    visibleHeight = ctx.scrollVisibleHeight()
+    layout = ctx.scrollRowLayout()
+    viewport = ctx.motionController.viewportManager.viewport
+    maxTop = ctx.maxScrollTop(layout, visibleHeight)
+    currentTop =
+      if scrollPositionAbove(
+        maxTop, (line: viewport.topLine, offset: viewport.topWrapOffset)
+      ):
+        maxTop
+      else:
+        (line: viewport.topLine, offset: viewport.topWrapOffset)
+    targetTop = layout.walkBackRows(currentTop.line, currentTop.offset, count)
+
+  viewport.restoreViewportTop(targetTop.line, targetTop.offset)
+  ctx.keepCursorInScrolledViewport(layout, visibleHeight)
 
   return ok(())
 
@@ -337,6 +465,24 @@ proc registerMotionAndScrollCommands*(registry: CommandRegistry) =
     handleScrollCursorBottom,
     0,
     0,
+  )
+
+  registry.register(
+    builtin(bcScrollLineDown),
+    "Scroll Line Down",
+    "Scroll viewport one line down (Ctrl-E)",
+    handleScrollLineDown,
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcScrollLineUp),
+    "Scroll Line Up",
+    "Scroll viewport one line up (Ctrl-Y)",
+    handleScrollLineUp,
+    0,
+    1,
   )
 
   # Fold commands
