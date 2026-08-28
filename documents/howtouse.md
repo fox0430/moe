@@ -87,6 +87,8 @@
 | <kbd>**Ctrl**</kbd> <kbd>**f**</kbd> | Page Down |
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half Page Up |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half Page Down |
+| <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> | Scroll one line down |
+| <kbd>**Ctrl**</kbd> <kbd>**y**</kbd> | Scroll one line up |
 | <kbd>**%**</kbd> | Move to matching pair of paren |
 | <kbd>**d**</kbd> <kbd>**$**</kbd> OR <kbd>**D**</kbd> | Delete until the end of the line |
 | <kbd>**C**</kbd> | Change until the end of the line |
