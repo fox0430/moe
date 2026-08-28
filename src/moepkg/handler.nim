@@ -608,130 +608,288 @@ proc handleScrollInputCore(e: Editor, input: ScrollInput): ScrollOutcome =
     result.viewportPhysicalRowsMoved = result.appliedRows
     return
 
-proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
-  ## Apply a frontend-neutral pointer event expressed in rendered grid cells.
-  if not e.config.standard.mouse:
+type PointerTextHit = object
+  windowIndex: int
+  position: BufferPosition
+
+proc activatePointerWindow(e: Editor, windowIndex: int) =
+  if windowIndex == e.windowManager.activeWindowIndex:
+    return
+  e.finalizeCurrentWindowForMouseJump()
+  e.windowManager.activeWindowIndex = windowIndex
+  for i, window in e.windowManager.windows.mpairs:
+    window.active = (i == windowIndex)
+  e.syncActiveWindow()
+
+proc pointerTabPress(e: Editor, input: PointerInput): bool =
+  ## Switch a tab hit by a primary press. Drags and releases never switch tabs.
+  if not e.showTabLine:
     return false
-  if input.action != paPress or input.button != pbPrimary:
-    return false
 
-  # Handle pointer click in text editing modes.
-  if e.state.mode in {
-    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
-    EditorMode.VisualBlock, EditorMode.Replace,
-  }:
-    # Multiple windows mode
-    if e.windowManager.windows.len > 1:
-      # Check tab line click first
-      if e.showTabLine:
-        for i, window in e.windowManager.windows:
-          let vp = window.viewport
-          if input.row == vp.y and input.column >= vp.x and
-              input.column < vp.x + vp.width:
-            # Resolve this window's per-window tab list to TextBuffer refs.
-            var buffersToShow: seq[TextBuffer] = @[]
-            for id in window.bufferIds:
-              let bufOpt = e.bufferById(id)
-              if bufOpt.isSome:
-                buffersToShow.add(bufOpt.get)
-            if buffersToShow.len == 0:
-              buffersToShow = @[window.buffer]
-            let tabIdx =
-              hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, input.column)
-            if tabIdx >= 0:
-              if i != e.windowManager.activeWindowIndex:
-                e.finalizeCurrentWindowForMouseJump()
-                e.windowManager.activeWindowIndex = i
-                for j, w in e.windowManager.windows.mpairs:
-                  w.active = (j == i)
-                e.syncActiveWindow()
-              e.switchToWindowBuffer(tabIdx)
-              return true
-
-      let maxBottomY = findMaxBottomY(e.windowManager.windows)
-      for i, window in e.windowManager.windows:
-        let vp = window.viewport
-        # Check if click is within this window's viewport
-        if input.column >= vp.x and input.column < vp.x + vp.width and input.row >= vp.y and
-            input.row < vp.y + vp.height:
-          let
-            # Same reserve the renderer uses, so the hit test cannot claim the
-            # shared status/command row nor drop a real text row.
-            reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
-            posOpt = screenToBufferPosition(
-              vp,
-              window.buffer,
-              input.column,
-              input.row,
-              e.gutterWidth(window),
-              reservedLines,
-              e.lineWrap,
-              e.tabStop,
-              e.wrapWidth(window),
-              window.wrapCountCache,
-            )
-
-          if posOpt.isNone:
-            return false
-
-          let pos = posOpt.get
-
-          if i != e.windowManager.activeWindowIndex:
-            e.finalizeCurrentWindowForMouseJump()
-            e.windowManager.activeWindowIndex = i
-            for j, w in e.windowManager.windows.mpairs:
-              w.active = (j == i)
-            e.syncActiveWindow()
-
-          e.activeWindow.viewport.detachedFromCursor = false
-          e.cursor = pos
-          return true
-
+  if e.windowManager.windows.len == 1:
+    if input.row != 0:
       return false
+    let window = e.activeWindow
+    var buffersToShow: seq[TextBuffer] = @[]
+    for id in window.bufferIds:
+      let bufOpt = e.bufferById(id)
+      if bufOpt.isSome:
+        buffersToShow.add(bufOpt.get)
+    if buffersToShow.len == 0:
+      buffersToShow = @[window.buffer]
+    let tabIdx = hitTestTabLine(
+      buffersToShow, window.mode, 0, window.viewport.width, input.column
+    )
+    if tabIdx >= 0:
+      e.switchToWindowBuffer(tabIdx)
+      return true
+    return false
 
-    # Single window mode
-    # Check tab line click first
-    if e.showTabLine and input.row == 0:
+  for i, window in e.windowManager.windows:
+    let vp = window.viewport
+    if input.row == vp.y and input.column >= vp.x and input.column < vp.x + vp.width:
       var buffersToShow: seq[TextBuffer] = @[]
-      for id in e.activeWindow.bufferIds:
+      for id in window.bufferIds:
         let bufOpt = e.bufferById(id)
         if bufOpt.isSome:
           buffersToShow.add(bufOpt.get)
       if buffersToShow.len == 0:
-        buffersToShow = @[e.activeBuffer()]
+        buffersToShow = @[window.buffer]
       let tabIdx =
-        hitTestTabLine(buffersToShow, e.state.mode, 0, e.viewport.width, input.column)
+        hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, input.column)
       if tabIdx >= 0:
+        e.activatePointerWindow(i)
         e.switchToWindowBuffer(tabIdx)
         return true
 
+proc pointerPositionInWindow(
+    e: Editor, input: PointerInput, windowIndex: int
+): Option[BufferPosition] =
+  if windowIndex < 0 or windowIndex >= e.windowManager.windows.len:
+    return none(BufferPosition)
+
+  let
+    window = e.windowManager.windows[windowIndex]
+    vp = window.viewport
+  if input.column < vp.x or input.column >= vp.x + vp.width:
+    return none(BufferPosition)
+
+  if e.windowManager.windows.len > 1:
+    if input.row < vp.y or input.row >= vp.y + vp.height:
+      return none(BufferPosition)
     let
-      activeBuffer = e.activeBuffer()
-      # Status line + command line (shared row)
-      reservedLines = steadyBottomAreaHeight()
-      # Account for tab line offset
-      tabLineOffset = if e.showTabLine: TabLineHeight else: 0
-      adjustedMouseY = input.row - tabLineOffset
-      posOpt = screenToBufferPosition(
-        e.viewport,
-        activeBuffer,
-        input.column,
-        adjustedMouseY,
-        e.gutterWidth(e.activeWindow),
-        reservedLines,
-        e.lineWrap,
-        e.tabStop,
-        e.wrapWidth(e.activeWindow),
-        e.activeWindow.wrapCountCache,
-      )
+      maxBottomY = findMaxBottomY(e.windowManager.windows)
+      reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
+    return screenToBufferPosition(
+      vp,
+      window.buffer,
+      input.column,
+      input.row,
+      e.gutterWidth(window),
+      reservedLines,
+      e.lineWrap,
+      e.tabStop,
+      e.wrapWidth(window),
+      window.wrapCountCache,
+    )
 
-    if posOpt.isNone:
-      return false
+  let
+    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+    adjustedRow = input.row - tabLineOffset
+  screenToBufferPosition(
+    vp,
+    window.buffer,
+    input.column,
+    adjustedRow,
+    e.gutterWidth(window),
+    steadyBottomAreaHeight(),
+    e.lineWrap,
+    e.tabStop,
+    e.wrapWidth(window),
+    window.wrapCountCache,
+  )
 
-    let pos = posOpt.get
-    # e.cursor= sets both state.cursor and activeWindow.cursor
+proc pointerTextHit(e: Editor, input: PointerInput): Option[PointerTextHit] =
+  for i in 0 ..< e.windowManager.windows.len:
+    let position = e.pointerPositionInWindow(input, i)
+    if position.isSome:
+      return some(PointerTextHit(windowIndex: i, position: position.get))
+  none(PointerTextHit)
+
+func pointerGranularity(
+    input: PointerInput, selection: VisualSelection
+): PointerSelectionGranularity =
+  if input.clickCount >= 3:
+    psgLine
+  elif input.clickCount == 2:
+    psgWord
+  elif kmShift in input.modifiers and selection.active:
+    case selection.kind
+    of vskChar: psgCharacter
+    of vskBlock: psgBlock
+    of vskLine: psgLine
+  else:
+    psgCharacter
+
+proc pointerRange(
+    buffer: TextBuffer, position: BufferPosition, granularity: PointerSelectionGranularity
+): tuple[first, last: BufferPosition] =
+  case granularity
+  of psgWord:
+    let wordRange = calculateTextObjectRange(buffer, position, toWord, tomInner)
+    if wordRange.isOk:
+      (wordRange.get.start, wordRange.get.endPos)
+    else:
+      (position, position)
+  of psgLine:
+    let lineStart = BufferPosition(line: position.line, column: 0)
+    (lineStart, lineStart)
+  of psgCharacter, psgBlock:
+    (position, position)
+
+func visualKind(granularity: PointerSelectionGranularity): VisualSelectionKind =
+  case granularity
+  of psgLine: vskLine
+  of psgBlock: vskBlock
+  of psgCharacter, psgWord: vskChar
+
+func visualMode(granularity: PointerSelectionGranularity): EditorMode =
+  case granularity
+  of psgLine: EditorMode.VisualLine
+  of psgBlock: EditorMode.VisualBlock
+  of psgCharacter, psgWord: EditorMode.Visual
+
+proc enterPointerVisualMode(e: Editor, granularity: PointerSelectionGranularity) =
+  if not e.state.mode.isVisualAllMode:
+    let previousMode = e.state.mode
+    if previousMode in {EditorMode.Insert, EditorMode.Replace}:
+      e.finalizeCurrentWindowForMouseJump()
+      e.state.previousMode = EditorMode.Normal
+    else:
+      e.state.previousMode = previousMode
+  e.setMode(granularity.visualMode)
+
+proc updatePointerSelection(e: Editor, position: BufferPosition) =
+  let
+    gesture = e.state.pointerSelection
+    target = e.activeBuffer.pointerRange(position, gesture.granularity)
+  var
+    anchor = gesture.anchorFirst
+    focus = target.last
+
+  if gesture.granularity == psgWord:
+    if target.last < gesture.anchorFirst:
+      anchor = gesture.anchorLast
+      focus = target.first
+    elif target.first <= gesture.anchorLast:
+      focus = gesture.anchorLast
+  elif gesture.granularity == psgLine:
+    focus = target.first
+
+  if not gesture.selectionStarted:
+    e.enterPointerVisualMode(gesture.granularity)
+    e.state.pointerSelection.selectionStarted = true
+
+  e.state.visualSelection = VisualSelection(
+    start: anchor,
+    current: focus,
+    active: true,
+    kind: gesture.granularity.visualKind,
+  )
+  e.cursor = focus
+  e.activeWindow.viewport.detachedFromCursor = false
+
+proc collapseVisualSelectionForPointer(e: Editor) =
+  e.state.visualSelection.active = false
+  if e.state.mode.isVisualAllMode:
+    let returnMode = e.state.previousMode
+    if returnMode.isVisualAllMode:
+      e.setMode(EditorMode.Normal)
+    else:
+      e.setMode(returnMode)
+
+proc beginPointerSelection(
+    e: Editor, input: PointerInput, hit: PointerTextHit
+) =
+  e.activatePointerWindow(hit.windowIndex)
+
+  let
+    oldCursor = e.cursor
+    oldSelection = e.state.visualSelection
+    extendSelection = kmShift in input.modifiers
+    granularity = input.pointerGranularity(oldSelection)
+    pressedRange = e.activeBuffer.pointerRange(hit.position, granularity)
+
+  if not extendSelection:
+    e.collapseVisualSelectionForPointer()
+
+  let anchor =
+    if extendSelection:
+      if oldSelection.active: oldSelection.start else: oldCursor
+    else:
+      pressedRange.first
+
+  e.state.pointerSelection = PointerSelectionGesture(
+    active: true,
+    windowIndex: hit.windowIndex,
+    bufferId: e.activeBuffer.id,
+    anchorFirst: anchor,
+    anchorLast: if extendSelection: anchor else: pressedRange.last,
+    granularity: granularity,
+  )
+
+  if extendSelection or granularity in {psgWord, psgLine}:
+    e.updatePointerSelection(hit.position)
+  else:
+    e.state.visualSelection.active = false
+    e.cursor = hit.position
     e.activeWindow.viewport.detachedFromCursor = false
-    e.cursor = pos
+
+proc updatePointerGesture(e: Editor, input: PointerInput): bool =
+  if not e.state.pointerSelection.active:
+    return false
+
+  let gesture = e.state.pointerSelection
+  if gesture.windowIndex != e.windowManager.activeWindowIndex or
+      gesture.windowIndex < 0 or gesture.windowIndex >= e.windowManager.windows.len or
+      e.activeBuffer.id != gesture.bufferId:
+    e.state.pointerSelection.active = false
+    return false
+
+  let position = e.pointerPositionInWindow(input, gesture.windowIndex)
+  if position.isSome:
+    let moved = position.get != gesture.anchorFirst or gesture.anchorFirst != gesture.anchorLast
+    if gesture.selectionStarted or input.action == paDrag or moved:
+      e.updatePointerSelection(position.get)
+  true
+
+proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
+  ## Apply a frontend-neutral pointer event expressed in rendered grid cells.
+  if not e.config.standard.mouse or input.button != pbPrimary:
+    return false
+
+  if input.action in {paDrag, paRelease}:
+    result = e.updatePointerGesture(input)
+    if input.action == paRelease:
+      e.state.pointerSelection.active = false
+    return
+  if input.action != paPress:
+    return false
+
+  e.state.pointerSelection.active = false
+
+  # Handle pointer selection in text editing modes.
+  if e.state.mode in {
+    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
+    EditorMode.VisualBlock, EditorMode.Replace,
+  }:
+    if e.pointerTabPress(input):
+      return true
+
+    let hit = e.pointerTextHit(input)
+    if hit.isNone:
+      return false
+    e.beginPointerSelection(input, hit.get)
     return true
 
   # Handle mouse click in Filer mode
@@ -794,6 +952,7 @@ proc prepareForInput(e: Editor, isKeyInput: bool) =
 
   # Resume cursor-following and cancel smooth scroll animation on any key press.
   if isKeyInput:
+    e.state.pointerSelection.active = false
     if e.windowManager.windows.len > 0:
       e.activeWindow.viewport.detachedFromCursor = false
     if e.state.windowDisplay.scrollAnimation.active:

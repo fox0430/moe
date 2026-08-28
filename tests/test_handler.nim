@@ -34,7 +34,7 @@ import config_test_helper
 import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
-    render_utils, clipboard, message_log,
+    render_utils, clipboard, message_log, frontend_input,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/command_handlers/result_processor
@@ -1522,6 +1522,176 @@ suite "frontend-neutral pointer and scroll input":
 
     check not handled
     check e.cursor.line == 0
+
+  test "primary click remains a caret and finalizes its gesture on release":
+    let e = createTestEditorWithBuffer("alpha beta")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+
+    check e.handlePointerInput(initPointerInput(0, 3))
+    check e.cursor == BufferPosition(line: 0, column: 3)
+    check e.state.mode == EditorMode.Normal
+    check not e.state.visualSelection.active
+    check e.state.pointerSelection.active
+
+    check e.handlePointerInput(initPointerInput(0, 3, action = paRelease))
+    check not e.state.pointerSelection.active
+    check not e.state.visualSelection.active
+
+  test "primary drag creates and release updates a character selection":
+    let e = createTestEditorWithBuffer("alpha beta\nsecond line")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+
+    check e.handlePointerInput(initPointerInput(0, 1))
+    check e.handlePointerInput(initPointerInput(1, 3, action = paDrag))
+    check e.state.mode == EditorMode.Visual
+    check e.state.previousMode == EditorMode.Normal
+    check e.state.visualSelection == VisualSelection(
+      start: BufferPosition(line: 0, column: 1),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskChar,
+    )
+
+    check e.handlePointerInput(initPointerInput(1, 5, action = paRelease))
+    check e.state.visualSelection.current == BufferPosition(line: 1, column: 5)
+    check e.cursor == BufferPosition(line: 1, column: 5)
+    check not e.state.pointerSelection.active
+
+  test "double-click selects a word and word drag keeps the press granularity":
+    let e = createTestEditorWithBuffer("alpha beta gamma")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+
+    check e.handlePointerInput(initPointerInput(0, 7, clickCount = 2))
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 6)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 9)
+
+    # GUI drag events commonly report clickCount=0/1. Moe retains the
+    # double-click granularity established by the press.
+    check e.handlePointerInput(initPointerInput(0, 1, action = paDrag))
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 9)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 0)
+    check e.selectedText() == "alpha beta"
+
+    check e.handlePointerInput(initPointerInput(0, 1, action = paRelease))
+    check not e.state.pointerSelection.active
+
+  test "triple-click and drag creates a line selection":
+    let e = createTestEditorWithBuffer("zero\none\ntwo")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+
+    check e.handlePointerInput(initPointerInput(1, 2, clickCount = 3))
+    check e.state.mode == EditorMode.VisualLine
+    check e.state.visualSelection.start == BufferPosition(line: 1, column: 0)
+    check e.state.visualSelection.current == BufferPosition(line: 1, column: 0)
+
+    check e.handlePointerInput(initPointerInput(2, 2, action = paDrag))
+    check e.state.visualSelection.current == BufferPosition(line: 2, column: 0)
+    check e.selectedText() == "one\ntwo"
+
+  test "Shift-primary press extends from the existing caret":
+    let e = createTestEditorWithBuffer("alpha beta")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.cursor = BufferPosition(line: 0, column: 2)
+
+    check e.handlePointerInput(
+      initPointerInput(0, 7, modifiers = {frontend_input.kmShift})
+    )
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
+
+  test "Shift-primary press preserves an existing block selection kind":
+    let e = createTestEditorWithBuffer("alpha\nbeta\ngamma")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.state.mode = EditorMode.VisualBlock
+    e.state.previousMode = EditorMode.Normal
+    e.state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 1),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    check e.handlePointerInput(
+      initPointerInput(2, 4, modifiers = {frontend_input.kmShift})
+    )
+    check e.state.mode == EditorMode.VisualBlock
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 1)
+    check e.state.visualSelection.current == BufferPosition(line: 2, column: 4)
+
+  test "dragging from Insert mode commits the edit transaction before Visual mode":
+    let e = createTestEditorWithBuffer("alpha beta")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.state.mode = EditorMode.Insert
+    discard e.activeBuffer.beginTransaction("Insert mode edit")
+
+    check e.handlePointerInput(initPointerInput(0, 1))
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.inTransaction
+    check e.handlePointerInput(initPointerInput(0, 4, action = paDrag))
+    check e.state.mode == EditorMode.Visual
+    check e.state.previousMode == EditorMode.Normal
+    check not e.activeBuffer.inTransaction
+    check e.state.visualSelection.active
+
+  test "drag remains bound to the split where its press began":
+    let e = createTestEditorWithBuffer("left")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
+    let rightBuffer = newTextBuffer("right side")
+    let rightWindow = EditorWindow(
+      buffer: rightBuffer,
+      bufferIds: @[rightBuffer.id],
+      viewport: ViewPort(
+        x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0
+      ),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+    e.windowManager.windows.add(rightWindow)
+
+    check e.handlePointerInput(initPointerInput(0, 22))
+    check e.windowManager.activeWindowIndex == 1
+    check e.handlePointerInput(initPointerInput(0, 25, action = paDrag))
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 5)
+
+    check e.handlePointerInput(initPointerInput(0, 2, action = paDrag))
+    check e.windowManager.activeWindowIndex == 1
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 5)
+    check e.handlePointerInput(initPointerInput(0, 2, action = paRelease))
+    check not e.state.pointerSelection.active
+
+  test "key input cancels an unfinished pointer gesture":
+    let e = createTestEditorWithBuffer("alpha beta")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+
+    check e.handlePointerInput(initPointerInput(0, 1))
+    check e.state.pointerSelection.active
+    check e.handleTextInput("l")
+    check not e.state.pointerSelection.active
+    check not e.handlePointerInput(initPointerInput(0, 5, action = paDrag))
 
 suite "handleMouseEvent - Wheel Scroll":
   test "WheelDown scrolls the viewport down by 3 lines":

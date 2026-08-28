@@ -618,6 +618,24 @@ type
     active*: bool # Whether selection is currently active
     kind*: VisualSelectionKind # Type of selection (char, block, line)
 
+  PointerSelectionGranularity* = enum
+    ## Unit established by the primary-button press for the rest of a gesture.
+    psgCharacter
+    psgWord
+    psgLine
+    psgBlock
+
+  PointerSelectionGesture* = object
+    ## Transient pointer-selection state. The buffer identity prevents a drag
+    ## from applying an anchor to another split or a newly switched tab.
+    active*: bool
+    windowIndex*: int
+    bufferId*: BufferId
+    anchorFirst*: BufferPosition
+    anchorLast*: BufferPosition
+    granularity*: PointerSelectionGranularity
+    selectionStarted*: bool
+
   SnippetStop* = object ## A tabstop of an active snippet, in buffer coordinates
     num*: int # Tabstop number; 0 is the final stop
     pos*: BufferPosition # Start of the placeholder default range
@@ -840,6 +858,8 @@ type
     statusMessageStr: string # Internal - use statusMessage getter/setter
     editState*: EditState # Edit operation state (motions, repeat, etc.)
     visualSelection*: VisualSelection # Visual mode selection state
+    pointerSelection*: PointerSelectionGesture
+      ## Primary-button gesture currently owned by the editor.
     snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
     display*: DisplaySettings
     config*: EditorConfig
