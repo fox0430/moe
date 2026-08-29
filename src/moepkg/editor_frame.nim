@@ -311,14 +311,18 @@ proc tickGitCache(e: Editor) =
   ## to the sidebar gutter. Rendering only reads the cache.
   e.state.git.reapGitPipelines()
 
-  # Refresh only what is actually displayed: a diff spawns a subprocess and a
-  # branch lookup blocks on `git rev-parse`, so neither may run for a readout
-  # the user has turned off.
-  let sl = e.config.statusLine
+  # Refresh only what is displayed or explicitly requested by an embedding
+  # frontend: a diff spawns a subprocess and a branch lookup blocks on
+  # `git rev-parse`, so neither should run without a consumer.
+  let
+    sl = e.config.statusLine
+    frontendWantsGit = e.state.frontendSubscriptions.gitStatus
   let setup = if e.showStatusLine: sl.setupText else: ""
   let wantsDiff =
-    e.showGitDiff or (e.showStatusLine and sl.gitChangedLines) or "{gitChanges}" in setup
-  let wantsBranch = (e.showStatusLine and sl.gitBranchName) or "{gitBranch}" in setup
+    frontendWantsGit or e.showGitDiff or (e.showStatusLine and sl.gitChangedLines) or
+    "{gitChanges}" in setup
+  let wantsBranch =
+    frontendWantsGit or (e.showStatusLine and sl.gitBranchName) or "{gitBranch}" in setup
 
   for i, window in e.windowManager.windows:
     # Inactive windows show git info only under showGitInactive — except

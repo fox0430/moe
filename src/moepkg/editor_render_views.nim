@@ -72,6 +72,49 @@ proc wrapPosAbove(aLine, aSeg, bLine, bSeg: int): bool {.inline.} =
   ## in the wrapped layout (line-major, then wrap-segment within a line).
   aLine < bLine or (aLine == bLine and aSeg < bSeg)
 
+proc cursorIsInViewport(e: Editor, window: EditorWindow, layout: WindowLayout): bool =
+  if window.buffer.isNil or window.buffer.len == 0:
+    return
+  let
+    rowLayout = e.rowLayoutFor(
+      window.buffer,
+      window.viewport.width,
+      e.viewportOffsetFor(window),
+      window.wrapCountCache,
+    )
+    cursorLine = max(0, min(window.cursor.line, window.buffer.len - 1))
+    cursorSegment = rowLayout.cursorCell(cursorLine, window.cursor.column).wrapSeg
+  if wrapPosAbove(
+    cursorLine, cursorSegment, window.viewport.topLine, window.viewport.topWrapOffset
+  ):
+    return
+  let cursorRow =
+    rowLayout.rowOfLine(
+      window.viewport.topLine, window.viewport.topWrapOffset, cursorLine,
+      layout.adjustHeight,
+    ) + cursorSegment
+  cursorRow in 0 ..< layout.adjustHeight
+
+proc clampDetachedViewport(e: Editor, window: EditorWindow, layout: WindowLayout) =
+  ## Preserve detached scrolling while keeping its top position valid after
+  ## buffer edits, wrap changes, or window resizing.
+  let textBuffer = window.buffer
+  if textBuffer.isNil or textBuffer.len == 0:
+    window.viewport.topLine = 0
+    window.viewport.topWrapOffset = 0
+    return
+
+  window.viewport.topLine = clamp(window.viewport.topLine, 0, textBuffer.len - 1)
+  if layout.effectiveLineWrap:
+    let rowLayout = initRowLayout(
+      textBuffer, window.wrapCountCache, true, layout.textAreaWidth, e.tabStop
+    )
+    window.viewport.topWrapOffset = clamp(
+      window.viewport.topWrapOffset, 0, rowLayout.lineRows(window.viewport.topLine) - 1
+    )
+  else:
+    window.viewport.topWrapOffset = 0
+
 proc adjustViewportForCursor(
     viewport: ViewPort,
     cursor: BufferPosition,
@@ -227,6 +270,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
   let
     maxBottomY = findMaxBottomY(e.windowManager.windows)
     tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+  var activeCursorInViewport = true
 
   for i, window in e.windowManager.windows:
     let layout = e.computeWindowLayout(window, i, maxBottomY, tabLineOffset)
@@ -253,6 +297,10 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
         window.viewport.topLine = selected - visible + 1
       if window.viewport.topLine < 0:
         window.viewport.topLine = 0
+    elif window.viewport.detachedFromCursor:
+      e.clampDetachedViewport(window, layout)
+      if layout.isActiveWindow:
+        activeCursorInViewport = e.cursorIsInViewport(window, layout)
     else:
       adjustViewportForCursor(
         window.viewport, window.cursor, layout.adjustHeight, layout.textAreaWidth,
@@ -291,7 +339,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       discard
     else:
       # Normal, Insert, Visual, etc. - cursor should be visible
-      e.state.cursorVisible = true
+      e.state.cursorVisible = e.state.hasOverlay or activeCursorInViewport
 
   # Screen-cursor override. Higher-priority owners set the cursor last, so the
   # final precedence is tempMessage > overlay > window (matching the former

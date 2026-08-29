@@ -19,15 +19,118 @@
 
 ## Tests for editor_display.nim
 
-import std/unittest
+import std/[options, tables, unittest]
 
-import ../src/moepkg/[editor, config, config_loader]
-import ../src/moepkg/types/editor_types
+import ../src/moepkg/[buffer, config, editor, git_cache]
 
 proc createTestEditor(): Editor =
-  let config = newEditorConfig()
-  let vr = newValidationResult()
-  result = newEditor(config, vr)
+  newEditor(newEditorConfig())
+
+suite "Editor display status queries":
+  test "statusModeLabel returns the active editor mode":
+    let e = createTestEditor()
+
+    check e.statusModeLabel == "NORMAL"
+
+    e.setMode(EditorMode.Insert)
+    check e.statusModeLabel == "INSERT"
+
+  test "statusModeLabel preserves the insert-normal label":
+    let e = createTestEditor()
+    e.setMode(EditorMode.Normal)
+    e.state.insertNormalMode = true
+
+    check e.statusModeLabel == "(insert) NORMAL"
+
+  test "statusModeLabel gives an overlay precedence over the editor mode":
+    let e = createTestEditor()
+    e.setMode(EditorMode.Insert)
+    e.state.overlay = some(OverlayKind.okSearch)
+
+    check e.statusModeLabel == "SEARCH"
+
+  test "currentStatusMessage returns the editor status message":
+    let e = createTestEditor()
+    e.state.statusMessage = "Saved"
+
+    check e.currentStatusMessage == "Saved"
+
+  test "activeGitStatus returns empty values without cached Git information":
+    let e = createTestEditor()
+
+    check e.activeGitStatus == ActiveGitStatus()
+    check e.state.git.diffEntries.len == 0
+    check e.state.git.branchEntries.len == 0
+
+  test "activeGitStatus returns cached information for the active buffer":
+    let
+      e = createTestEditor()
+      activeBuffer = e.activeBuffer
+      key = activeBuffer.id
+    e.state.git.diffEntries[key] =
+      GitDiffCacheEntry(counts: (added: 3, modified: 2, deleted: 1), populated: true)
+    e.state.git.branchEntries[key] =
+      GitBranchCacheEntry(name: "feature/native-status", populated: true)
+
+    check e.activeGitStatus ==
+      ActiveGitStatus(
+        branch: "feature/native-status", added: 3, modified: 2, deleted: 1
+      )
+
+  test "activeGitStatus follows the active buffer":
+    let
+      e = createTestEditor()
+      inactiveBuffer = e.activeBuffer
+      activeBuffer = newTextBuffer()
+    e.state.git.branchEntries[inactiveBuffer.id] =
+      GitBranchCacheEntry(name: "inactive", populated: true)
+    e.state.git.branchEntries[activeBuffer.id] =
+      GitBranchCacheEntry(name: "active", populated: true)
+    e.activeWindow.buffer = activeBuffer
+
+    check e.activeGitStatus.branch == "active"
+
+  test "frontendStatus composes the host-facing status values":
+    let
+      e = createTestEditor()
+      activeBuffer = e.activeBuffer
+    e.setMode(EditorMode.Insert)
+    e.state.statusMessage = "Saved"
+    e.state.git.diffEntries[activeBuffer.id] =
+      GitDiffCacheEntry(counts: (added: 4, modified: 2, deleted: 1), populated: true)
+    e.state.git.branchEntries[activeBuffer.id] =
+      GitBranchCacheEntry(name: "feature/frontend-status", populated: true)
+
+    check e.frontendStatus ==
+      FrontendStatus(
+        modeLabel: "INSERT",
+        message: "Saved",
+        git: ActiveGitStatus(
+          branch: "feature/frontend-status", added: 4, modified: 2, deleted: 1
+        ),
+      )
+
+  test "frontend Git status subscription can be enabled and disabled":
+    let e = createTestEditor()
+
+    check not e.frontendGitStatusEnabled
+
+    e.setFrontendGitStatusEnabled(true)
+    check e.frontendGitStatusEnabled
+
+    e.setFrontendGitStatusEnabled(false)
+    check not e.frontendGitStatusEnabled
+
+  test "enabling frontend Git status requests an active-buffer refresh":
+    let
+      e = createTestEditor()
+      activeBuffer = e.activeBuffer
+    activeBuffer.filePath = some("moe-frontend-status.txt")
+    e.state.git.diffEntries[activeBuffer.id] = GitDiffCacheEntry(populated: true)
+
+    e.setFrontendGitStatusEnabled(true)
+
+    check e.state.git.diffEntries[activeBuffer.id].forced
 
 suite "editor_display - status line":
   test "toggleStatusLine flips the config flag":

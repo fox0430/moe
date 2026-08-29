@@ -39,6 +39,47 @@ import
   lsp_integration,
   terminal_mode
 
+type OpenBufferInfo* = object
+  ## Frontend-neutral information about a buffer in the active window.
+  id*: BufferId
+  title*: string
+  filePath*: Option[string]
+  modified*: bool
+  readOnly*: bool
+  active*: bool
+
+proc bufferTitle(buffer: TextBuffer): string =
+  if buffer.displayName.isSome:
+    buffer.displayName.get
+  elif buffer.filePath.isSome:
+    buffer.filePath.get.extractFilename
+  else:
+    "No Name"
+
+proc toOpenBufferInfo(buffer, activeBuffer: TextBuffer): OpenBufferInfo =
+  OpenBufferInfo(
+    id: buffer.id,
+    title: buffer.bufferTitle,
+    filePath: buffer.filePath,
+    modified: buffer.isModified,
+    readOnly: buffer.readOnly,
+    active: buffer == activeBuffer,
+  )
+
+proc activeWindowBuffers*(e: Editor): seq[OpenBufferInfo] =
+  ## Return ordered buffer snapshots for the active window.
+  ## Stale ids are ignored. The active buffer is appended when it has not yet
+  ## been registered in the window's buffer list.
+  let activeBuffer = e.activeBuffer
+  var includesActiveBuffer = false
+  for id in e.activeWindow.bufferIds:
+    let buffer = e.bufferById(id)
+    if buffer.isSome:
+      includesActiveBuffer = includesActiveBuffer or buffer.get == activeBuffer
+      result.add buffer.get.toOpenBufferInfo(activeBuffer)
+  if not includesActiveBuffer:
+    result.add activeBuffer.toOpenBufferInfo(activeBuffer)
+
 proc deleteBufferAt*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from
   ## `bufferIdIndex`. Use this instead of `e.buffers.delete`.
@@ -132,6 +173,14 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
   e.addBufferToWindowList(targetBuffer)
 
   e.activateBufferInWindow(targetBuffer)
+
+proc activateBuffer*(e: Editor, id: BufferId): bool =
+  ## Activate a buffer by stable id and register it with the active window.
+  let index = e.bufferIndexById(id)
+  if index < 0:
+    return false
+  e.switchToBufferByIndex(index)
+  true
 
 proc currentBufferIndex*(e: Editor): int =
   ## Get the position of the active buffer in e.buffers.
@@ -415,24 +464,16 @@ proc redirectWindowsFromBuffer*(
       window.viewport.resetViewportTop()
       window.viewport.leftColumn = 0
 
-proc deleteCurrentBuffer*(e: Editor) =
-  ## Delete the active buffer from the buffer list (Vim `:bd` semantics).
-  ## Every window that was showing it switches to another buffer — windows
-  ## themselves stay open. If this was the only buffer, a fresh empty
-  ## `[No Name]` buffer takes its place.
-  ##
-  ## The modified-buffer check is the caller's responsibility (handled in
-  ## `executeBufferDelete`).
-  let activeBufId = e.activeBuffer().id
-  if e.terminalStates.hasKey(activeBufId):
+proc deleteBufferById(e: Editor, id: BufferId): Result[(), string] =
+  if e.terminalStates.hasKey(id):
     # Terminal sessions need PTY cleanup; delegate to the dedicated path
     # so the state map stays in sync.
-    e.closeTerminalBuffer(activeBufId)
-    return
+    e.closeTerminalBuffer(id)
+    return ok(())
 
-  let bufferIndex = e.bufferIndexById(activeBufId)
+  let bufferIndex = e.bufferIndexById(id)
   if bufferIndex < 0:
-    return
+    return err("Buffer does not exist")
   let deletedBuffer = e.removeBufferAt(bufferIndex)
 
   let newBuf =
@@ -445,8 +486,7 @@ proc deleteCurrentBuffer*(e: Editor) =
       let enewResult = e.enew()
       if enewResult.isErr:
         logError("editor", "Enew failed after buffer delete: " & enewResult.error)
-        e.state.statusMessage = "Error: " & enewResult.error
-        return
+        return err(enewResult.error)
       # `enew` has already pointed the active window at the new buffer, so the
       # redirect below is a no-op for it but still catches any other windows
       # that were on the deleted buffer.
@@ -460,6 +500,50 @@ proc deleteCurrentBuffer*(e: Editor) =
   # buffer, so no explicit currentBufferId reassignment is needed here.
   e.syncActiveWindow()
   e.setActiveWindowScreenCursor(e.activeWindow)
+  ok(())
+
+proc closeBuffer*(e: Editor, id: BufferId): Result[(), string] =
+  ## Close a buffer by stable id while preserving editor lifecycle invariants.
+  ## Modified buffers are rejected; terminal buffers use terminal teardown.
+  let buffer = e.bufferById(id)
+  if buffer.isNone:
+    return err("Buffer does not exist")
+  if id notin e.terminalStates and buffer.get.isModified:
+    return err("No write since last change (add ! to override)")
+  e.deleteBufferById(id)
+
+proc moveBuffer*(e: Editor, id: BufferId, destination: Natural): bool =
+  ## Move a buffer to a zero-based position in the active window's ordering.
+  ## Returns false when the id or destination is not in that ordering.
+  let destinationIndex = destination.int
+  if destinationIndex >= e.activeWindow.bufferIds.len:
+    return false
+
+  var source = -1
+  for index, bufferId in e.activeWindow.bufferIds:
+    if bufferId == id:
+      source = index
+      break
+  if source < 0:
+    return false
+  if source == destinationIndex:
+    return true
+
+  e.activeWindow.bufferIds.delete(source)
+  e.activeWindow.bufferIds.insert(id, destinationIndex)
+  true
+
+proc deleteCurrentBuffer*(e: Editor) =
+  ## Delete the active buffer from the buffer list (Vim `:bd` semantics).
+  ## Every window that was showing it switches to another buffer — windows
+  ## themselves stay open. If this was the only buffer, a fresh empty
+  ## `[No Name]` buffer takes its place.
+  ##
+  ## The modified-buffer check is the caller's responsibility (handled in
+  ## `executeBufferDelete`).
+  let deleteResult = e.deleteBufferById(e.activeBuffer().id)
+  if deleteResult.isErr:
+    e.state.statusMessage = "Error: " & deleteResult.error
 
 const MinNewWindowWidth* = 10
   ## Minimum width (in columns) required when spawning a new split window.
