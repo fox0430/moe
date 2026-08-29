@@ -2332,6 +2332,31 @@ suite "handleCommandModeEvent - all command mode commands execute":
     check not e.state.isCommandOverlay
     check e.state.input.commandText == ""
 
+  test ":x on a clean unnamed buffer quits without trying to save":
+    let e = createTestEditorWithBuffer("hello")
+    e.activeBuffer.markSaved()
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = ":x"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    # A save attempt would fail for this unnamed buffer and return true.
+    check cont == false
+
+  test ":x on a modified unnamed buffer preserves save failure behavior":
+    let e = createTestEditorWithBuffer("hello")
+    e.activeBuffer.markSaved()
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 5), "!")
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = ":x"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check e.activeBuffer.isModified
+    check not e.state.isCommandOverlay
+    check e.state.input.commandText == ""
+
   test ":b 0 switch to buffer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()

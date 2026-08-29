@@ -568,13 +568,14 @@ suite "HelpViewer - Mode sections (snapshot)":
   ## or column-width changes in the underlying `*Commands` tables fail the
   ## build. Update literals deliberately when content is intentionally changed.
 
-  test "# Exiting section is aligned to width 5":
+  test "# Exiting section is aligned to width 10":
     let state = newHelpViewerState()
     check state.items.contains("# Exiting")
-    check state.items.contains(":w    - Write file")
-    check state.items.contains(":q    - Quit")
-    check state.items.contains(":wqa! - Force write and quit all windows")
-    check state.items.contains(":cq   - Quit with non-zero exit code")
+    check state.items.contains(":w         - Write file")
+    check state.items.contains(":q         - Quit")
+    check state.items.contains(":x or :xit - Write if modified and quit")
+    check state.items.contains(":wqa!      - Force write and quit all windows")
+    check state.items.contains(":cq        - Quit with non-zero exit code")
 
   test "# Changing modes section is aligned to width 6":
     let state = newHelpViewerState()

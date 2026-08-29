@@ -114,6 +114,9 @@ suite "CommandConfig - canonicalCommandName":
     check name.isSome
     check resolveCommandName(name.get) == some(claSaveAndQuit)
 
+  test "Maps the semantic save-if-modified action to :xit":
+    check canonicalCommandName(claSaveIfModifiedAndQuit) == some("xit")
+
 suite "CommandConfig - addShellCommand":
   test "Adds a shell command":
     let config = newCommandConfig()
@@ -298,6 +301,8 @@ suite "CommandConfig - applyToParser":
     check parser.aliases["q"] == claQuit
     check parser.aliases["w"] == claSave
     check parser.aliases["wq"] == claSaveAndQuit
+    check parser.aliases["x"] == claSaveIfModifiedAndQuit
+    check parser.aliases["xit"] == claSaveIfModifiedAndQuit
 
   test "Applies shell commands to parser":
     let config = newCommandConfig()
@@ -363,6 +368,7 @@ suite "resolveCommandName":
     check resolveCommandName("quit") == some(claQuit)
     check resolveCommandName("save") == some(claSave)
     check resolveCommandName("saveandquit") == some(claSaveAndQuit)
+    check resolveCommandName("xit") == some(claSaveIfModifiedAndQuit)
     check resolveCommandName("terminal") == some(claTerminal)
 
   test "Case-insensitive resolution":

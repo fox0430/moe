@@ -30,7 +30,8 @@ type
     claQuitAll # :qa (quit all)
     claSave # :w
     claSaveAll # :wa (write all)
-    claSaveAndQuit # :wq, :x
+    claSaveAndQuit # :wq
+    claSaveIfModifiedAndQuit # :x, :xit
     claSaveAllAndQuit # :wqa, :xa (save all and quit)
     claEdit # :e
     claEnew # :ene, :enew (new empty buffer)
@@ -134,9 +135,9 @@ type
       forceSave*: bool # true for :w!
     of claSaveAll:
       forceSaveAll*: bool # true for :wa!
-    of claSaveAndQuit:
+    of claSaveAndQuit, claSaveIfModifiedAndQuit:
       saveFilename*: Option[string]
-      forceSaveAndQuit*: bool # true for :wq!
+      forceSaveAndQuit*: bool # true for :wq! or :x!
     of claSaveAllAndQuit:
       forceSaveAllAndQuit*: bool # true for :wqa!
     of claEdit:
