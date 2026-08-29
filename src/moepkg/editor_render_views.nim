@@ -95,6 +95,26 @@ proc cursorIsInViewport(e: Editor, window: EditorWindow, layout: WindowLayout): 
     ) + cursorSegment
   cursorRow in 0 ..< layout.adjustHeight
 
+proc clampDetachedViewport(e: Editor, window: EditorWindow, layout: WindowLayout) =
+  ## Preserve detached scrolling while keeping its top position valid after
+  ## buffer edits, wrap changes, or window resizing.
+  let textBuffer = window.buffer
+  if textBuffer.isNil or textBuffer.len == 0:
+    window.viewport.topLine = 0
+    window.viewport.topWrapOffset = 0
+    return
+
+  window.viewport.topLine = clamp(window.viewport.topLine, 0, textBuffer.len - 1)
+  if layout.effectiveLineWrap:
+    let rowLayout = initRowLayout(
+      textBuffer, window.wrapCountCache, true, layout.textAreaWidth, e.tabStop
+    )
+    window.viewport.topWrapOffset = clamp(
+      window.viewport.topWrapOffset, 0, rowLayout.lineRows(window.viewport.topLine) - 1
+    )
+  else:
+    window.viewport.topWrapOffset = 0
+
 proc adjustViewportForCursor(
     viewport: ViewPort,
     cursor: BufferPosition,
@@ -278,6 +298,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
       if window.viewport.topLine < 0:
         window.viewport.topLine = 0
     elif window.viewport.detachedFromCursor:
+      e.clampDetachedViewport(window, layout)
       if layout.isActiveWindow:
         activeCursorInViewport = e.cursorIsInViewport(window, layout)
     else:

@@ -24,8 +24,10 @@ import std/[unittest, strutils]
 import pkg/celina
 
 import
-  ../src/moepkg/
-    [editor, config, config_loader, modes, types, buffer, render_utils, editor_window]
+  ../src/moepkg/[
+    editor, config, config_loader, modes, types, buffer, render_utils, editor_window,
+    editor_window_layout,
+  ]
 import ../src/moepkg/editor_render_views {.all.}
 
 proc createTestEditor(): Editor =
@@ -725,6 +727,43 @@ suite "renderSplitView - Viewport adjustment":
     check e.viewport.topLine == 20
     check e.cursor == BufferPosition(line: 2, column: 0)
     check not e.state.cursorVisible
+
+  test "Detached background viewport is clamped after its buffer shrinks":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    var lines: seq[string]
+    e.state.lineWrap = true
+    for i in 0 ..< 100:
+      lines.add(
+        if i == 5:
+          "x".repeat(200)
+        else:
+          "Line " & $i
+      )
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), lines.join("\n"))
+
+    discard e.vsplit()
+    let
+      backgroundIndex = if e.windowManager.activeWindowIndex == 0: 1 else: 0
+      backgroundWindow = e.windowManager.windows[backgroundIndex]
+    backgroundWindow.viewport.topLine = 60
+    backgroundWindow.viewport.topWrapOffset = 12
+    backgroundWindow.viewport.detachedFromCursor = true
+
+    while e.activeBuffer.len > 6:
+      discard e.activeBuffer.deleteLine(e.activeBuffer.len - 1)
+    let lastWrapOffset =
+      calculateWrapCount(
+        $backgroundWindow.buffer.getLine(5), e.wrapWidth(backgroundWindow), e.tabStop
+      ) - 1
+    check lastWrapOffset > 0
+
+    e.advanceLayoutForFrame(buffer, false)
+
+    check backgroundWindow.viewport.detachedFromCursor
+    check backgroundWindow.viewport.topLine == 5
+    check backgroundWindow.viewport.topWrapOffset == lastWrapOffset
 
   test "Viewport follows cursor down":
     let e = createTestEditor()
