@@ -675,6 +675,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | find-char-backward | Find character backward |
 | till-char | Till character forward |
 | till-char-backward | Till character backward |
+| repeat-find | Repeat last f/F/t/T |
+| repeat-find-reverse | Repeat last f/F/t/T reversed |
 
 ##### Scroll
 
@@ -683,6 +685,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | scroll-cursor-top | Scroll cursor to top of screen |
 | scroll-cursor-center | Scroll cursor to center of screen |
 | scroll-cursor-bottom | Scroll cursor to bottom of screen |
+| scroll-line-down | Scroll viewport one line down |
+| scroll-line-up | Scroll viewport one line up |
 
 ##### Editing
 
@@ -878,9 +882,10 @@ modified-buffer guard for `:bdelete` / `:quit` apply automatically.
 | bd / bdelete | Delete current buffer |
 | q / quit | Quit |
 | qa / quitall | Quit all |
-| w / save | Save current buffer |
+| w | Save current buffer |
 | wa / saveall | Save all buffers |
 | wq | Save and quit |
+| x / xit | Save if modified and quit |
 | wqa | Save all and quit |
 
 Example:
