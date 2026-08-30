@@ -685,6 +685,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | scroll-cursor-top | Scroll cursor to top of screen |
 | scroll-cursor-center | Scroll cursor to center of screen |
 | scroll-cursor-bottom | Scroll cursor to bottom of screen |
+| scroll-line-down | Scroll viewport one line down |
+| scroll-line-up | Scroll viewport one line up |
 
 ##### Editing
 
@@ -883,6 +885,7 @@ modified-buffer guard for `:bdelete` / `:quit` apply automatically.
 | w | Save current buffer |
 | wa / saveall | Save all buffers |
 | wq | Save and quit |
+| x / xit | Save if modified and quit |
 | wqa | Save all and quit |
 
 Example:
