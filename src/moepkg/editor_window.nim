@@ -31,7 +31,7 @@ import
   highlight_config,
   editor_window_layout,
   editor_lsp,
-  message_log,
+  editor_notify,
   git_cache,
   git_conflict,
   window_manager,
@@ -141,11 +141,11 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
   # unchanged), but say so: line-oriented editing on it will not do what the
   # user expects, and nothing else on screen makes that obvious.
   if buf.hasBinaryContent:
-    let msg =
+    e.notify(
       (if buf.filePath.isSome: buf.filePath.get else: "Buffer") &
-      ": binary content (NUL bytes); bytes are preserved on save"
-    e.state.statusMessage = msg
-    addMessageLog(msg)
+        ": binary content (NUL bytes); bytes are preserved on save",
+      nlWarning,
+    )
   # Scan conflict markers regardless of the highlight config (like loadFile) so
   # conflict-navigation works as soon as this buffer becomes active.
   buf.refreshConflicts()

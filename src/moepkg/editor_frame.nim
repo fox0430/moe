@@ -46,7 +46,9 @@ import
 import
   git_cache, render_utils, logger, message_log, debug_viewer, completion,
   signature_help, hover_popup, notification_popup, unicode_utils, motion, buffer,
-  lsp_integration, editor_window_layout
+  lsp_integration, editor_window_layout, editor_notify
+
+export editor_notify
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
@@ -194,18 +196,6 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     # Update the reference in state
     e.state.windowDisplay.debugBuffer = newDebugBuffer
   e.state.timing.lastDebugUpdate = now
-
-proc notifyPopup*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
-  ## Notify via popup, always logged to message log.
-  e.state.notificationPopup.addNotification(msg, level)
-  addMessageLog(msg)
-
-proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
-  ## Notify via popup or status line based on config. Always logged.
-  if e.config.notification.popupNotifications:
-    e.notifyPopup(msg, level)
-  else:
-    e.state.statusMessage = msg
 
 proc maybeCleanupTimedOutLspRequests(e: Editor) =
   ## Sweep timed-out LSP requests whose consumer stopped polling (e.g. a
