@@ -24,6 +24,8 @@ import types/editor_types, message_log, notification_popup
 
 proc notifyPopup*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   ## Notify via popup, always logged to message log.
+  if msg.len == 0:
+    return
   e.state.notificationPopup.addNotification(msg, level)
   addMessageLog(msg)
 
@@ -33,4 +35,3 @@ proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
     e.notifyPopup(msg, level)
   else:
     e.state.statusMessage = msg
-    addMessageLog(msg)
