@@ -36,7 +36,8 @@ import
   highlight_config,
   persist,
   buffer,
-  lsp_integration
+  lsp_integration,
+  editor_lsp
 
 type SaveAllBuffersResult* = object
   savedCount*: int
@@ -114,12 +115,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   e.invalidateAllLspCaches()
 
   # LSP initialization - non-blocking, will start in background
-  if e.lsp.enabled:
-    let lspResult = e.lsp.onBufferOpen(e.activeBuffer)
-    if lspResult.isErr:
-      logLspDegraded("didOpen", lspResult.error & " (" & path & ")")
-    else:
-      e.lastLspContentVersions[e.activeBuffer.id] = e.activeBuffer.contentVersion
+  e.noteLspOpen(e.activeBuffer, e.lsp.onBufferOpen(e.activeBuffer), "open")
 
   ok(())
 

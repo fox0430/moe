@@ -21,7 +21,7 @@
 
 import std/[unittest, os, options, strutils, tables, importutils, json, unicode]
 
-import pkg/chronos
+import pkg/[chronos, results]
 
 import ../src/moepkg/[editor, buffer, config, config_loader, message_log, types]
 import ../src/moepkg/editor_lsp {.all.}
@@ -99,6 +99,8 @@ suite "editor_lsp - maybeUpdateLsp":
     buf.filePath = some(path)
     e.openBufferWithLsp(buf)
     check e.lsp.sentDocumentVersion(path) == some(1)
+    # No real worker, so didOpen was not delivered; mark delivered to test steady state.
+    e.lsp.documents[path].delivered = true
 
     check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
     e.maybeUpdateLsp()
@@ -311,7 +313,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     let activeBuffer = e.activeBuffer()
     activeBuffer.filePath = some(path)
     # Simulate the server-side wire state: we've sent up to version 2.
-    e.lsp.documents[path] = (version: 2, shadow: "")
+    e.lsp.documents[path] = (version: 2, shadow: "", delivered: true)
 
     # An in-flight publish tagged with version=1 arrives after we've already
     # sent version=2. It must be dropped.
@@ -324,7 +326,7 @@ suite "editor_lsp - applyDiagnosticsForUri":
     let path = normalizedPath(absolutePath(getTempDir() / "moe_test_diag_current.nim"))
     let activeBuffer = e.activeBuffer()
     activeBuffer.filePath = some(path)
-    e.lsp.documents[path] = (version: 1, shadow: "")
+    e.lsp.documents[path] = (version: 1, shadow: "", delivered: true)
 
     e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("current"), some(1))
     check activeBuffer.diagnostics.len == 1
@@ -390,12 +392,47 @@ suite "editor_lsp - pollLspCompletion":
     e.pollLspCompletion()
     # No crash means success
 
+suite "editor_lsp - noteLspOpen":
+  test "Failed didOpen leaves no baseline":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_note_open_fail.nim")
+    doAssert buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
+    e.noteLspOpen(buf, Result[void, string].err("worker not writable"), "re-open")
+    check not e.lastLspContentVersions.hasKey(buf.id)
+
+  test "Pathless buffer records no baseline even on ok":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let buf = e.activeBuffer()
+    buf.filePath = none(string)
+    e.noteLspOpen(buf, Result[void, string].ok(), "open")
+    check not e.lastLspContentVersions.hasKey(buf.id)
+
+  test "Disabled integration records no baseline even on ok":
+    let e = createTestEditor()
+    e.lsp.enabled = false
+    let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_note_open_disabled.nim")
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
+    e.noteLspOpen(buf, Result[void, string].ok(), "open")
+    check not e.lastLspContentVersions.hasKey(buf.id)
+
+  test "Successful didOpen records version":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_note_open_ok.nim")
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+    e.noteLspOpen(buf, Result[void, string].ok(), "open")
+    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+
 suite "editor_lsp - renotifyOpenBuffers":
-  # onBufferOpen short-circuits to ok() while LSP is disabled, so the success
-  # branch is reachable without a live server. That branch used to leave
-  # lastLspContentVersions on the pre-restart baseline, which made the
-  # applyWorkspaceEdit staleness guard reject every server-initiated edit.
-  test "Records the version the re-open just sent":
+  # Pre-restart baseline must not survive re-open; otherwise staleness guard
+  # rejects every future server edit.
+  test "Never leaves the pre-restart baseline behind":
     let e = createTestEditor()
     e.lsp.enabled = false
 
@@ -406,7 +443,8 @@ suite "editor_lsp - renotifyOpenBuffers":
     e.lastLspContentVersions[buf.id] = buf.contentVersion - 1
 
     check e.renotifyOpenBuffers("nim") == 0
-    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+    # Nothing was sent with LSP off, so no baseline should remain.
+    check not e.lastLspContentVersions.hasKey(buf.id)
 
   test "Leaves buffers of other languages untouched":
     let e = createTestEditor()
@@ -578,6 +616,8 @@ suite "editor_lsp - applyWorkspaceEditFromServer staleness":
     check buf.insertText(BufferPosition(line: 0, column: 0), "aaa").isOk
     e.openBufferWithLsp(buf)
     e.maybeUpdateLsp()
+    # Mark the didOpen delivered (no real worker in tests).
+    e.lsp.documents[path].delivered = true
 
     let res = e.applyWorkspaceEditFromServer(replaceFirstThree(path))
 
@@ -915,6 +955,8 @@ suite "editor_lsp - applyWorkspaceEditFromServer logging":
     check buf.insertText(BufferPosition(line: 0, column: 0), "aaa").isOk
     e.openBufferWithLsp(buf)
     e.maybeUpdateLsp()
+    # Mark the didOpen delivered (no real worker in tests).
+    e.lsp.documents[path].delivered = true
 
     var changes = initTable[string, seq[lspTypes.TextEdit]]()
     changes[pathToUri(path)] =

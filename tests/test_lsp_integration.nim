@@ -1989,7 +1989,7 @@ suite "LspIntegration - Shutdown":
 
   test "shutdown clears all state":
     let lsp = newLspIntegration()
-    lsp.documents[tmpDir / "test.nim"] = (version: 1, shadow: "code")
+    lsp.documents[tmpDir / "test.nim"] = (version: 1, shadow: "code", delivered: true)
     lsp.activeProgress["token1"] = LspProgressState(
       token: "token1",
       langId: "nim",
@@ -3515,6 +3515,37 @@ suite "LspIntegration - incremental didChange":
       check lsp.onBufferChange(buf).isOk
       check lsp.documents[Path].shadow == buf.getTextString()
 
+  test "undelivered didOpen is retried on next change":
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    # Simulate failed delivery.
+    lsp.documents[Path].delivered = false
+    lsp.markReady()
+    check lsp.onBufferChange(newTextBuffer("abcd", some(Path))).isOk
+    check lsp.documents[Path].delivered
+    check lsp.documents[Path].version == 1
+    check lsp.documents[Path].shadow == "abcd"
+
+  test "onBufferClose is no-op when not tracked":
+    # didClose gate: a buffer the server never saw must not send didClose.
+    let untracked = tmpDir / "untracked.nim"
+    check untracked notin lsp.documents
+    check lsp.onBufferClose(newTextBuffer("x", some(untracked))).isOk
+    check untracked notin lsp.documents
+
+  test "onBufferClose drops an undelivered entry without sending didClose":
+    let badPath = tmpDir / "no_lsp.unknownlspext"
+    discard lsp.onBufferOpen(newTextBuffer("hi", some(badPath)))
+    check not lsp.documents[badPath].delivered
+    check lsp.onBufferClose(newTextBuffer("hi", some(badPath))).isOk
+    check badPath notin lsp.documents
+
+  test "failed didOpen leaves delivered false":
+    let badPath = tmpDir / "no_lsp.unknownlspext"
+    let res = lsp.onBufferOpen(newTextBuffer("hi", some(badPath)))
+    check res.isErr
+    check badPath in lsp.documents
+    check not lsp.documents[badPath].delivered
+
 suite "LspIntegration - getDiagnosticsAt":
   test "returns diagnostics at cursor position":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -3827,6 +3858,21 @@ suite "LspIntegration - hasStaleServerEditTarget":
 
     discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
     check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), noBaseline)
+
+  test "undelivered didOpen falls back to the disk comparison despite a baseline":
+    # maybeUpdateLsp advances the baseline even when a sync is dropped for
+    # want of a worker, so a baseline alone must not prove the server holds
+    # the text; the delivered flag decides.
+    lsp.setLiveWorkers(true)
+    let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
+    let synced = syncedAt(buf)
+    lsp.documents[canonicalPath(tmpDir / "a.nim")] =
+      (version: 1, shadow: "aaa", delivered: false)
+
+    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), synced)
+
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), synced)
 
   test "a buffer outside the edit's targets is ignored":
     lsp.setLiveWorkers(false)

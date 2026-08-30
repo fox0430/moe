@@ -165,6 +165,25 @@ proc clearAllDiagnostics*(e: Editor) =
   for buf in e.buffers:
     applyDiagnosticsToBuffer(buf, @[])
 
+proc dropLspBaseline(e: Editor, buf: TextBuffer) =
+  ## Forget sync baseline for a buffer.
+  e.lastLspContentVersions.del(buf.id)
+
+proc noteLspOpen*(
+    e: Editor, buf: TextBuffer, openResult: Result[void, string], context: string
+) =
+  ## Update baseline only if didOpen was actually sent.
+  if buf.filePath.isNone:
+    e.dropLspBaseline(buf)
+    return
+  let sent = e.lsp.enabled and openResult.isOk
+  if sent:
+    e.lastLspContentVersions[buf.id] = buf.contentVersion
+  else:
+    e.dropLspBaseline(buf)
+  if openResult.isErr:
+    logLspDegraded(context & ": didOpen " & buf.filePath.get, openResult.error)
+
 proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
   ## didChange a buffer we just rewrote so the server's copy doesn't go stale.
   ## maybeUpdateLsp only covers the active buffer, so non-active buffers would
@@ -186,11 +205,7 @@ proc resyncBufferAfterReload*(e: Editor, buf: TextBuffer) =
   if not e.lsp.enabled or buf.filePath.isNone:
     return
   discard e.lsp.onBufferClose(buf) # best effort; re-opened next regardless
-  let openResult = e.lsp.onBufferOpen(buf)
-  if openResult.isOk:
-    e.lastLspContentVersions[buf.id] = buf.contentVersion
-  else:
-    logLspDegraded("reload: didOpen " & buf.filePath.get, openResult.error)
+  e.noteLspOpen(buf, e.lsp.onBufferOpen(buf), "reload")
 
 proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
   ## didOpen a freshly registered buffer and record its synced contentVersion so
@@ -200,11 +215,7 @@ proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
   ## must call this, otherwise the server never learns about the document.
   if not e.lsp.enabled:
     return
-  let openResult = e.lsp.onBufferOpen(buf)
-  if openResult.isOk:
-    e.lastLspContentVersions[buf.id] = buf.contentVersion
-  elif buf.filePath.isSome:
-    logLspDegraded("didOpen " & buf.filePath.get, openResult.error)
+  e.noteLspOpen(buf, e.lsp.onBufferOpen(buf), "open")
 
 proc clampAllWindowCursors*(e: Editor) =
   ## Re-clamp every window's cursor to its buffer's bounds. A server-initiated
@@ -531,16 +542,11 @@ proc renotifyOpenBuffers(e: Editor, langId: string): int =
     if buf.filePath.isSome:
       let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
       if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
+        # Old baseline would cause staleness guard to reject future edits.
         let openResult = e.lsp.onBufferOpen(buf, serverIsFresh = true)
-        if openResult.isOk:
-          # Record what the didOpen just sent. A leftover pre-restart baseline
-          # would make the applyWorkspaceEdit staleness guard reject every
-          # server-initiated edit — forever for non-active buffers, which
-          # maybeUpdateLsp never repairs.
-          e.lastLspContentVersions[buf.id] = buf.contentVersion
-        else:
+        if openResult.isErr:
           inc result
-          logLspDegraded("re-open " & buf.filePath.get, openResult.error)
+        e.noteLspOpen(buf, openResult, "re-open")
 
 proc onLspServerRestart*(e: Editor, langId: string) =
   ## Crash-recovery hook: a language server re-initialized after crashing, so
