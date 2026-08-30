@@ -224,7 +224,8 @@ proc continueUriScan*(b: TextBuffer, budgetLines: int, scannedLines: var int): b
   const ChunkSize = 1000
 
   scannedLines = 0
-  if b.isUtilityBuffer or b.uriScanParsedUpTo >= b.len - 1:
+  # Skip raw buffers: URI scan would parse binary.
+  if b.isUtilityBuffer or not b.allowsTextTransforms or b.uriScanParsedUpTo >= b.len - 1:
     return false
 
   let startLine = b.uriScanParsedUpTo + 1
@@ -388,16 +389,18 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
     # URI underlines around the change point; the rest is handled by
     # continueUriScan. During a flight, clamp to `reparseEnd`: rows past it
     # have no segments, so addUnderlineRanges would silently drop them.
-    let uriStart = max(0, b.lastChangedLines)
-    var uriEnd = min(uriStart + 1000, b.len) - 1
-    if reparseOngoing:
-      let pr = b.incrementalHighlight.pendingReparse
-      if pr != nil and uriEnd > pr.reparseEnd:
-        uriEnd = pr.reparseEnd
-    if uriEnd >= uriStart:
-      discard scanAndApplyUriUnderlines(
-        b, uriStart, uriEnd, applyToCache = not highlightRebuilt
-      )
+    # Skip for raw buffers.
+    if b.allowsTextTransforms:
+      let uriStart = max(0, b.lastChangedLines)
+      var uriEnd = min(uriStart + 1000, b.len) - 1
+      if reparseOngoing:
+        let pr = b.incrementalHighlight.pendingReparse
+        if pr != nil and uriEnd > pr.reparseEnd:
+          uriEnd = pr.reparseEnd
+      if uriEnd >= uriStart:
+        discard scanAndApplyUriUnderlines(
+          b, uriStart, uriEnd, applyToCache = not highlightRebuilt
+        )
 
     # Diagnostics are only mutated by the LSP publish path / reset/clear paths;
     # a pure edit keeps them untouched, so the overlay rebuilt on the previous

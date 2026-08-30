@@ -281,10 +281,16 @@ type
       ## are kept and saved back verbatim, but line-oriented editing will not
       ## do what the user expects, so the open is announced.
     endOfLine*: bool # Whether file should end with newline
+    keepRaw*: bool
+      ## Raw bytes kept after UTF-16/32 decode failure; no transforms allowed.
+      ## Volatile; re-derived on every load.
     lastFileModTime*: Option[Time]
       # File modification time when loaded (for external change detection)
     externalModWarned*: bool
       # Whether the user has been warned about external modification (reset on load/save)
+    rawWarned*: bool
+      ## Whether the raw-bytes warning was shown. Latched to avoid repeat on
+      ## auto-reload; cleared when a later load decodes.
 
     # Undo/Redo stacks (using Deque for O(1) operations at both ends)
     undoStack*: Deque[BufferChange]
@@ -390,6 +396,15 @@ var nextBufferId = 1
 
 var configuredBackend: BufferBackend = GapBuffer
 var autoBackendMode: bool = false
+
+proc allowsTextTransforms*(b: TextBuffer): bool =
+  ## Whether text transforms are safe. False for raw buffers.
+  ## Use this instead of checking `keepRaw` directly.
+  not b.keepRaw
+
+proc rawBytesRejection*(action: string): string =
+  ## Rejection message for `action` on a raw buffer.
+  "Cannot " & action & ": buffer holds raw undecodable bytes"
 
 proc `==`*(a, b: BufferId): bool {.borrow.}
 proc `$`*(id: BufferId): string {.borrow.}

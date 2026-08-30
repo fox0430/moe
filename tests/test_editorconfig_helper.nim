@@ -19,6 +19,8 @@
 
 import std/[unittest, options, tables, os]
 
+import pkg/results
+
 import ../src/moepkg/[buffer, config, types]
 
 import ../src/moepkg/editorconfig_helper {.all.}
@@ -502,3 +504,44 @@ indent_style = space
     check buf.editorConfig.get.shiftWidth.isNone
     # Negative indent_size should not set tabStop either
     check buf.editorConfig.get.tabStop.isNone
+
+  # Raw buffers: text-transform overrides must not apply, or saving would
+  # corrupt the undecodable bytes kept verbatim.
+
+  test "applyEditorConfig skips text transforms for a raw buffer":
+    # UTF-16 BOM with an odd byte count: decoding fails, buffer keeps raw bytes.
+    var buf = newTextBuffer()
+    discard buf.loadFileWithContent("/tmp/moe_raw_probe.bin", "\xFF\xFE\x41\x00\x0A")
+    check buf.keepRaw
+
+    var props = initTable[string, string]()
+    props["insert_final_newline"] = "false"
+    props["end_of_line"] = "crlf"
+    props["charset"] = "utf-16le"
+    props["trim_trailing_whitespace"] = "true"
+    applyEditorConfig(buf, props)
+
+    # Load values must survive: endOfLine=true (trailing \n), lineEnding=LF
+    # placeholder, encoding=unknown, no trim override stored.
+    check buf.endOfLine
+    check buf.lineEnding == LF
+    check buf.encoding == CharacterEncoding.unknown
+    check buf.editorConfig.get.trimTrailingWhitespace.isNone
+
+  test "raw buffer save is not corrupted by insert_final_newline":
+    let content = "\xFF\xFE\x41\x00\x0A"
+    let testFile = getTempDir() / "moe_raw_ec_save.bin"
+    writeFile(testFile, content)
+    defer:
+      removeFile(testFile)
+
+    var buf = newTextBuffer()
+    discard buf.loadFile(testFile)
+    check buf.keepRaw
+
+    var props = initTable[string, string]()
+    props["insert_final_newline"] = "false"
+    applyEditorConfig(buf, props)
+
+    check buf.saveFile(testFile).isOk
+    check readFile(testFile) == content

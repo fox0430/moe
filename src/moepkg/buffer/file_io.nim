@@ -31,8 +31,26 @@ import ../[encoding, highlight, logger]
 import core, atomic_write
 import highlight as buffer_highlight
 
+type DecodedFileContent = object ## Result of `decodeFileContent`.
+  text: string ## Decoded UTF-8, or the original bytes when decoding failed.
+  encoding: CharacterEncoding
+  hasBom: bool
+  decodeFailed: bool
+  decodeError: string ## Only set when `decodeFailed`.
+  attemptedEncoding: CharacterEncoding
+    ## Encoding attempted; `encoding` is reset to unknown on failure.
+
 const ExternalModErrorMsg* =
   "File was modified externally. Use :w! to force save, or :e! to reload."
+
+const TranscodedEncodings = {
+  CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
+  CharacterEncoding.utf32Be,
+} ## Encodings that `decodeFileContent` decodes; only these can fail.
+
+const TranscodeCandidates =
+  TranscodedEncodings + {CharacterEncoding.utf16, CharacterEncoding.utf32}
+  ## Like `TranscodedEncodings` plus BOM forms that `decodeFileContent` narrows.
 
 proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
   ## Detect line ending style and normalize to \n in a single pass.
@@ -74,6 +92,47 @@ proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
   else:
     b.lineEnding = LF
 
+proc decodeFileContent(content: string): DecodedFileContent =
+  ## Strip BOM and decode `content` to UTF-8. On failure, return raw bytes
+  ## with `decodeFailed` set and the reason in `decodeError`.
+  result.text = content
+  result.encoding = detectCharacterEncoding(result.text)
+  var bomLen = 0
+  case result.encoding
+  of CharacterEncoding.utf8:
+    if result.text.startsWith("\xEF\xBB\xBF"):
+      result.hasBom = true
+      result.text = result.text[3 .. ^1]
+  of CharacterEncoding.utf16:
+    result.hasBom = true
+    bomLen = 2
+    result.encoding =
+      if result.text.startsWith("\xFF\xFE"):
+        CharacterEncoding.utf16Le
+      else:
+        CharacterEncoding.utf16Be
+  of CharacterEncoding.utf32:
+    result.hasBom = true
+    bomLen = 4
+    result.encoding =
+      if result.text.startsWith("\xFF\xFE"):
+        CharacterEncoding.utf32Le
+      else:
+        CharacterEncoding.utf32Be
+  else:
+    discard
+
+  if result.encoding in TranscodedEncodings:
+    result.attemptedEncoding = result.encoding
+    let decoded = decodeToUtf8(result.text[bomLen .. ^1], result.encoding)
+    if decoded.isOk:
+      result.text = decoded.get
+    else:
+      result.decodeError = decoded.error
+      result.decodeFailed = true
+      result.encoding = CharacterEncoding.unknown
+      result.hasBom = false
+
 proc loadFileWithContent*(
   b: TextBuffer, path: string, content: string, fileSize: int64 = -1
 ): Result[(), string]
@@ -103,61 +162,34 @@ proc loadFileWithContent*(
 ): Result[(), string] =
   ## Init buffer from pre-read content; avoids extra read and keeps
   ## backup/edit consistency in LSP `applyEditsToFile`.
-  var contentMut = content
-  let effFileSize = if fileSize >= 0: fileSize else: contentMut.len.int64
+  let effFileSize = if fileSize >= 0: fileSize else: content.len.int64
 
-  var encoding = detectCharacterEncoding(contentMut)
-  var hasBom = false
-  var bomLen = 0
-  case encoding
-  of CharacterEncoding.utf8:
-    if contentMut.startsWith("\xEF\xBB\xBF"):
-      hasBom = true
-      contentMut = contentMut[3 .. ^1]
-  of CharacterEncoding.utf16:
-    hasBom = true
-    bomLen = 2
-    encoding =
-      if contentMut.startsWith("\xFF\xFE"):
-        CharacterEncoding.utf16Le
-      else:
-        CharacterEncoding.utf16Be
-  of CharacterEncoding.utf32:
-    hasBom = true
-    bomLen = 4
-    encoding =
-      if contentMut.startsWith("\xFF\xFE"):
-        CharacterEncoding.utf32Le
-      else:
-        CharacterEncoding.utf32Be
-  else:
-    discard
+  var decoded = decodeFileContent(content)
+  if decoded.decodeFailed:
+    logWarn(
+      "buffer",
+      "Failed to decode " & path & " as " & encodingToString(decoded.attemptedEncoding) &
+        ": " & decoded.decodeError & "; keeping raw bytes",
+    )
+  var contentMut = move decoded.text
 
-  if encoding in {
-    CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
-    CharacterEncoding.utf32Be,
-  }:
-    let decoded = decodeToUtf8(contentMut[bomLen .. ^1], encoding)
-    if decoded.isOk:
-      contentMut = decoded.get
-    else:
-      logWarn(
-        "buffer",
-        "Failed to decode " & path & " as " & encodingToString(encoding) & ": " &
-          decoded.error & "; keeping raw bytes",
-      )
-      encoding = CharacterEncoding.unknown
-      hasBom = false
-
-  b.encoding = encoding
-  b.hasBom = hasBom
-  # A NUL near the start is the standard "this is not text" tell (git, grep
-  # and vim all use it). The bytes are kept and saved back verbatim; the flag
-  # only lets the open be announced.
+  b.encoding = decoded.encoding
+  b.hasBom = decoded.hasBom
+  b.keepRaw = decoded.decodeFailed
+  # Latch raw warning per file; clear when file changes or decodes.
+  if not decoded.decodeFailed or b.filePath != some(path):
+    b.rawWarned = false
+  # NUL near start indicates binary (git/grep/vim convention).
   b.hasBinaryContent =
     '\0' in
     contentMut.toOpenArray(0, min(contentMut.high, EncodingDetectionSampleSize - 1))
-  b.detectAndNormalizeLineEnding(contentMut)
+  if decoded.decodeFailed:
+    # Raw bytes: keep verbatim. `lineEnding` is unused (shows RAW);
+    # `endOfLine` is preserved for round-trip.
+    b.lineEnding = LF
+    b.endOfLine = contentMut.len > 0 and contentMut[^1] == '\n'
+  else:
+    b.detectAndNormalizeLineEnding(contentMut)
 
   let newBackend = chooseBackendForFile(effFileSize)
   b.storage = newBufferStorage(newBackend, move contentMut)
@@ -192,7 +224,12 @@ proc loadFileWithContent*(
   b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.len)
   b.modifiedLines = newSeq[LineModificationKind](b.len)
 
-  b.language = detectLanguage(path)
+  # Raw buffer: skip highlighting.
+  b.language =
+    if not b.allowsTextTransforms:
+      SourceLanguage.langNone
+    else:
+      detectLanguage(path)
 
   if b.language != SourceLanguage.langNone:
     if b.len > 0:
@@ -234,9 +271,12 @@ proc loadFileWithContent*(
       b.highlight = Highlight(colorSegments: @[])
     b.incrementalHighlight = nil
 
-  let uriChunkEnd = min(999, b.len - 1)
-  discard buffer_highlight.scanAndApplyUriUnderlines(b, 0, uriChunkEnd)
-  b.uriScanParsedUpTo = uriChunkEnd
+  # Raw buffer: skip URI scan. Reset frontier regardless.
+  b.uriScanParsedUpTo = -1
+  if b.allowsTextTransforms:
+    let uriChunkEnd = min(999, b.len - 1)
+    discard buffer_highlight.scanAndApplyUriUnderlines(b, 0, uriChunkEnd)
+    b.uriScanParsedUpTo = uriChunkEnd
 
   b.highlightNeedsUpdate = false
 
@@ -247,6 +287,16 @@ proc getFileContent*(buffer: TextBuffer): string =
   ## with proper trailing newline handling based on endOfLine setting.
   ## Internal \n line endings are restored to the original line ending style
   ## and internal UTF-8 is encoded back to the buffer's on-disk encoding.
+  if not buffer.allowsTextTransforms:
+    # Raw buffer: return bytes verbatim.
+    result = buffer.getTextString
+    # Restore trailing newline from `endOfLine`.
+    if buffer.endOfLine:
+      if not result.endsWith("\n"):
+        result.add('\n')
+    elif result.endsWith("\n"):
+      result.setLen(result.len - 1)
+    return result
   result = buffer.getTextString
 
   # Restore original line ending style (internal representation uses \n only)
@@ -285,10 +335,7 @@ proc getFileContent*(buffer: TextBuffer): string =
         result.setLen(result.len - 1)
 
   # Restore the on-disk encoding (internal representation is UTF-8).
-  if buffer.encoding in {
-    CharacterEncoding.utf16, CharacterEncoding.utf16Le, CharacterEncoding.utf16Be,
-    CharacterEncoding.utf32, CharacterEncoding.utf32Le, CharacterEncoding.utf32Be,
-  }:
+  if buffer.encoding in TranscodeCandidates:
     result = encodeFromUtf8(result, buffer.encoding)
   if buffer.hasBom:
     result = bomBytes(buffer.encoding) & result
@@ -320,6 +367,13 @@ proc saveFile*(
 ): Result[(), string] =
   case buffer.backendKind
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
+    # Use debug to avoid spam from autoSave; decode failure already warned at load.
+    if not buffer.allowsTextTransforms:
+      logDebug("buffer", "Saving raw bytes verbatim (undecodable encoding): " & path)
+    elif buffer.encoding == CharacterEncoding.unknown:
+      # Routine for latin-1 and other unclassifiable text.
+      logDebug("buffer", "Saving file with unknown encoding: " & path)
+
     let content = buffer.getFileContent
 
     # Re-check external modification right before writing to shrink the
