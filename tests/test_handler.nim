@@ -1515,6 +1515,31 @@ suite "frontend-neutral pointer and scroll input":
     check handled
     check e.cursor.line == 2
 
+  test "empty split tab-line area does not move the cursor":
+    let e = createTestEditorWithBuffer("left window text")
+    e.state.showTabLine = true
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
+    let rightBuffer = newTextBuffer("right window text")
+    let rightWindow = EditorWindow(
+      buffer: rightBuffer,
+      bufferIds: @[rightBuffer.id],
+      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+    e.windowManager.windows.add(rightWindow)
+    e.cursor = BufferPosition(line: 0, column: 1)
+
+    let handled = e.handlePointerInput(initPointerInput(0, 18))
+
+    check not handled
+    check e.windowManager.activeWindowIndex == 0
+    check e.cursor == BufferPosition(line: 0, column: 1)
+
   test "non-primary pointer input remains available to the host":
     let e = createTestEditorWithBuffer("zero\none")
 
@@ -1612,6 +1637,46 @@ suite "frontend-neutral pointer and scroll input":
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
 
+  test "Shift-double-click expands the word containing the caret":
+    let e = createTestEditorWithBuffer("alpha beta gamma")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.cursor = BufferPosition(line: 0, column: 8)
+
+    check e.handlePointerInput(
+      initPointerInput(0, 7, clickCount = 2, modifiers = {frontend_input.kmShift})
+    )
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 6)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 9)
+    check e.selectedText() == "beta"
+
+  test "Shift-double-click extends forward from the caret through a word":
+    let e = createTestEditorWithBuffer("alpha beta gamma")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.cursor = BufferPosition(line: 0, column: 2)
+
+    check e.handlePointerInput(
+      initPointerInput(0, 7, clickCount = 2, modifiers = {frontend_input.kmShift})
+    )
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 9)
+
+  test "Shift-double-click extends backward from the caret through a word":
+    let e = createTestEditorWithBuffer("alpha beta gamma")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.cursor = BufferPosition(line: 0, column: 13)
+
+    check e.handlePointerInput(
+      initPointerInput(0, 7, clickCount = 2, modifiers = {frontend_input.kmShift})
+    )
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 13)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 6)
+
   test "Shift-primary press preserves an existing block selection kind":
     let e = createTestEditorWithBuffer("alpha\nbeta\ngamma")
     e.state.showTabLine = false
@@ -1649,6 +1714,26 @@ suite "frontend-neutral pointer and scroll input":
     check e.state.previousMode == EditorMode.Normal
     check not e.activeBuffer.inTransaction
     check e.state.visualSelection.active
+
+  test "dragging from Insert-normal commits the Insert transaction":
+    let e = createTestEditorWithBuffer("alpha beta")
+    e.state.showTabLine = false
+    e.state.showLineNumbers = false
+    e.state.showSidebar = false
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    check e.activeBuffer.beginTransaction("Insert mode edit").isOk
+
+    check e.handlePointerInput(initPointerInput(0, 1))
+    check e.activeBuffer.inTransaction
+    check e.handlePointerInput(initPointerInput(0, 4, action = paDrag))
+
+    check e.state.mode == EditorMode.Visual
+    check e.state.previousMode == EditorMode.Normal
+    check not e.state.insertNormalMode
+    check not e.activeBuffer.inTransaction
+    check e.state.editState.insertModeStartPos.isNone
 
   test "drag remains bound to the split where its press began":
     let e = createTestEditorWithBuffer("left")

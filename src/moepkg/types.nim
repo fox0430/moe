@@ -634,6 +634,7 @@ type
     anchorFirst*: BufferPosition
     anchorLast*: BufferPosition
     granularity*: PointerSelectionGranularity
+    extendMode*: bool
     selectionStarted*: bool
 
   SnippetStop* = object ## A tabstop of an active snippet, in buffer coordinates

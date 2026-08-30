@@ -660,6 +660,7 @@ proc pointerTabPress(e: Editor, input: PointerInput): bool =
         e.activatePointerWindow(i)
         e.switchToWindowBuffer(tabIdx)
         return true
+  return false
 
 proc pointerPositionInWindow(
     e: Editor, input: PointerInput, windowIndex: int
@@ -679,11 +680,13 @@ proc pointerPositionInWindow(
     let
       maxBottomY = findMaxBottomY(e.windowManager.windows)
       reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
+      tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+      adjustedRow = input.row - tabLineOffset
     return screenToBufferPosition(
       vp,
       window.buffer,
       input.column,
-      input.row,
+      adjustedRow,
       e.gutterWidth(window),
       reservedLines,
       e.lineWrap,
@@ -763,7 +766,8 @@ func visualMode(granularity: PointerSelectionGranularity): EditorMode =
 proc enterPointerVisualMode(e: Editor, granularity: PointerSelectionGranularity) =
   if not e.state.mode.isVisualAllMode:
     let previousMode = e.state.mode
-    if previousMode in {EditorMode.Insert, EditorMode.Replace}:
+    if previousMode in {EditorMode.Insert, EditorMode.Replace} or
+        e.state.insertNormalMode:
       e.finalizeCurrentWindowForMouseJump()
       e.state.previousMode = EditorMode.Normal
     else:
@@ -779,11 +783,20 @@ proc updatePointerSelection(e: Editor, position: BufferPosition) =
     focus = target.last
 
   if gesture.granularity == psgWord:
-    if target.last < gesture.anchorFirst:
-      anchor = gesture.anchorLast
-      focus = target.first
-    elif target.first <= gesture.anchorLast:
-      focus = gesture.anchorLast
+    if gesture.extendMode:
+      if target.first <= gesture.anchorFirst and gesture.anchorFirst <= target.last:
+        anchor = target.first
+        focus = target.last
+      elif target.first >= gesture.anchorFirst:
+        focus = target.last
+      else:
+        focus = target.first
+    else:
+      if target.last < gesture.anchorFirst:
+        anchor = gesture.anchorLast
+        focus = target.first
+      elif target.first <= gesture.anchorLast:
+        focus = gesture.anchorLast
   elif gesture.granularity == psgLine:
     focus = target.first
 
@@ -832,6 +845,7 @@ proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) 
     anchorFirst: anchor,
     anchorLast: if extendSelection: anchor else: pressedRange.last,
     granularity: granularity,
+    extendMode: extendSelection,
   )
 
   if extendSelection or granularity in {psgWord, psgLine}:
