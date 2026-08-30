@@ -54,14 +54,10 @@ type
   LspIntegration* = ref object ## Integration layer between LSP and Editor
     service*: LspService
     enabled*: bool
-    # Open document tracking: path -> per-document sync state, inserted and
-    # removed atomically so version and shadow can never drift apart.
-    #   version: last version sent to the server. LSP requires didChange versions
-    #     to increase monotonically, so this is a dedicated counter;
-    #     buffer.changeSeq cannot be used because undo rolls it back.
-    #   shadow: last full text sent. Invariant: equals the text the server
-    #     currently holds. Used to diff for incremental didChange.
-    documents*: Table[string, tuple[version: int, shadow: string]]
+    # Open document tracking: path -> sync state.
+    # version: monotonic counter for didChange, shadow: last sent text,
+    # delivered: whether didOpen reached the server.
+    documents*: Table[string, tuple[version: int, shadow: string, delivered: bool]]
     # Pending status messages to display in the editor
     pendingMessages*: seq[string]
     # Active progress operations (token -> state)

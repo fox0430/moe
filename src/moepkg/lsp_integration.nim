@@ -133,7 +133,7 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   result = LspIntegration(
     service: svc,
     enabled: true,
-    documents: initTable[string, tuple[version: int, shadow: string]](),
+    documents: initTable[string, tuple[version: int, shadow: string, delivered: bool]](),
     pendingMessages: @[],
     activeProgress: initTable[string, LspProgressState](),
     lastProgressCleanupTime: 0.0,
@@ -382,12 +382,15 @@ proc onBufferOpen*(
   if path in lsp.documents and not serverIsFresh:
     discard lsp.service.notifyDocumentClosed(path)
 
-  lsp.documents[path] = (version: 1, shadow: text)
+  # Record before notify so onBufferClose knows if didClose is needed.
+  lsp.documents[path] = (version: 1, shadow: text, delivered: false)
 
-  return lsp.service.notifyDocumentOpened(path, text)
+  let openResult = lsp.service.notifyDocumentOpened(path, text)
+  lsp.documents[path].delivered = openResult.isOk
+  openResult
 
 proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
-  ## Called when a buffer is closed
+  ## Called when a buffer is closed. Only send didClose if didOpen was delivered.
   if not lsp.enabled:
     return ok()
 
@@ -396,8 +399,14 @@ proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, strin
 
   let path = canonicalPath(buffer.filePath.get)
 
-  # Remove from tracking
+  if path notin lsp.documents:
+    return ok()
+
+  let delivered = lsp.documents[path].delivered
   lsp.documents.del(path)
+
+  if not delivered:
+    return ok()
 
   return lsp.service.notifyDocumentClosed(path)
 
@@ -695,18 +704,25 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
   let path = canonicalPath(buffer.filePath.get)
   let text = buffer.getTextString()
 
-  # Untracked -> didOpen fallback (version 1), seed shadow.
+  # Untracked -> try didOpen.
   if path notin lsp.documents:
-    lsp.documents[path] = (version: 1, shadow: text)
+    lsp.documents[path] = (version: 1, shadow: text, delivered: false)
     let openResult = lsp.service.notifyDocumentOpened(path, text)
     if openResult.isErr:
       lsp.documents.del(path)
       return openResult
+    lsp.documents[path].delivered = true
     return ok()
 
-  # no-op: server already holds this exact text (insert+delete bumped changeSeq).
-  # The path is present here (the untracked branch above already returned).
-  if lsp.documents[path].shadow == text:
+  if lsp.documents[path].delivered and lsp.documents[path].shadow == text:
+    return ok()
+
+  # Undelivered: retry didOpen instead of didChange.
+  if not lsp.documents[path].delivered:
+    let openResult = lsp.service.notifyDocumentOpened(path, text)
+    if openResult.isErr:
+      return openResult
+    lsp.documents[path] = (version: 1, shadow: text, delivered: true)
     return ok()
 
   let kind = lsp.service.documentSyncKind(path)
@@ -744,12 +760,12 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
     let changes = computeIncrementalChange(lsp.documents[path].shadow, text)
     if changes.isSome:
       discard lsp.service.notifyDocumentChangedIncremental(path, version, $changes.get)
-      lsp.documents[path].shadow = text
+      lsp.documents[path] = (version: version, shadow: text, delivered: true)
       return ok()
 
   # Full sync (tdskFull / diff fallback / starting worker).
   discard lsp.service.notifyDocumentChanged(path, version, text)
-  lsp.documents[path].shadow = text
+  lsp.documents[path] = (version: version, shadow: text, delivered: true)
   return ok()
 
 proc flushPendingBufferChange*(lsp: LspIntegration, buffer: TextBuffer) {.raises: [].} =
@@ -1421,8 +1437,8 @@ proc hasStaleServerEditTarget*(
   ##
   ## Which text that is depends on whether the server holds the document:
   ##
-  ## * Held (live worker + a recorded sync baseline): it sees what we last
-  ##   sent, so compare contentVersion against `syncedVersions`.
+  ## * Held (live worker + delivered didOpen + a recorded sync baseline): it
+  ##   sees what we last sent, so compare contentVersion against `syncedVersions`.
   ## * Not held (no worker for this file type, or didOpen never succeeded): it
   ##   read the file from disk, so `isModified` is the test. contentVersion is
   ##   actively wrong here — maybeUpdateLsp records a baseline even when the
@@ -1433,9 +1449,12 @@ proc hasStaleServerEditTarget*(
     for buf in buffers:
       if buf.filePath.isSome and
           normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+        let canonPath = canonicalPath(buf.filePath.get)
+        # A baseline alone does not prove delivery: maybeUpdateLsp advances it
+        # even when the sync was dropped for want of a worker.
         let serverHolds =
-          syncedVersions.hasKey(buf.id) and
-          lsp.service.hasLiveWorkerForPath(canonicalPath(buf.filePath.get))
+          syncedVersions.hasKey(buf.id) and lsp.service.hasLiveWorkerForPath(canonPath) and
+          canonPath in lsp.documents and lsp.documents[canonPath].delivered
 
         if serverHolds:
           if buf.contentVersion != syncedVersions[buf.id]:
