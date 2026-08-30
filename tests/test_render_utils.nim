@@ -22,7 +22,7 @@ import std/[unittest, strutils, unicode]
 import pkg/results
 
 import ../src/moepkg/render_utils {.all.}
-import ../src/moepkg/[types, config, primitives]
+import ../src/moepkg/[types, config, primitives, unicode_utils]
 import ../src/moepkg/buffer/[core, edit]
 
 suite "formatLineNumber":
@@ -695,6 +695,9 @@ suite "wrap walkers - shared grid":
       ":a\tb\tc".repeat(10), # tabs
       ":éaaa".repeat(20), # combining (zero-width) runes
       "x", # single char
+      ":ab\xE0cd".repeat(9), # a lead byte the following bytes never complete
+      "ab\xE0", # ... and one at the very end, where a lenient walk overruns
+      "\xF0\x9F\x98".repeat(7), # a truncated emoji: three standalone bytes
     ]
     for text in Texts:
       for width in [1, 4, 10, 80]:
@@ -702,13 +705,28 @@ suite "wrap walkers - shared grid":
           calculateWrapCount(text, width, InputWrapTabStop)
 
   test "cursor row never exceeds the drawn grid":
-    let text = "/wide日本語and\ttábs".repeat(10)
-    for width in [4, 10, 80]:
-      let rows = segmentRows(text, width, InputWrapTabStop)
-      for cursorChar in 0 .. text.runeLen:
-        let (row, col) = cursorWrapPosition(text, cursorChar, width, InputWrapTabStop)
-        check row < rows
-        check col <= max(1, width)
+    # `charLen`, not `runeLen`: the cursor walks the same characters the grid
+    # is drawn from, and the two disagree on a line holding a broken byte.
+    let texts =
+      ["/wide日本語and\ttábs".repeat(10), "/wide\xE0and\tt\xF0\x9Fbs".repeat(6)]
+    for text in texts:
+      for width in [4, 10, 80]:
+        let rows = segmentRows(text, width, InputWrapTabStop)
+        for cursorChar in 0 .. text.charLen:
+          let (row, col) = cursorWrapPosition(text, cursorChar, width, InputWrapTabStop)
+          check row < rows
+          check col <= max(1, width)
+
+  test "a segment never ends past the text":
+    # `runeLenAt` reports the length the lead byte advertised, so a truncated
+    # tail walked that way returns a byte offset past the end and the caller
+    # slices out of bounds on the per-frame render path.
+    for text in ["ab\xE0", "\xF0", "a\xE0\x80", "\xFF"]:
+      for width in [1, 2, 4, 80]:
+        let (charCount, _, endByte) =
+          displayWidthSubstrFromByte(text, 0, width, InputWrapTabStop)
+        check endByte <= text.len
+        check charCount <= text.charLen
 
 suite "overlayInput":
   test "command overlay includes the ':' prefix":

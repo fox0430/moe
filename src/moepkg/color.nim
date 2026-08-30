@@ -370,6 +370,9 @@ type
     # Indentation guide
     indentationLine
 
+    # Byte that does not decode, drawn as <e3>
+    invalidByte
+
     # Scroll bar
     scrollBarThumb
     scrollBarTrack
@@ -686,6 +689,7 @@ const
     EditorColorPairIndex.callHierarchyViewerHeader: "Call hierarchy viewer: header",
     EditorColorPairIndex.helpViewerSectionHeader: "Help viewer: section header",
     EditorColorPairIndex.indentationLine: "Indentation guide line",
+    EditorColorPairIndex.invalidByte: "Byte that does not decode, shown as <e3>",
     EditorColorPairIndex.scrollBarThumb: "Scroll bar thumb (handle)",
     EditorColorPairIndex.scrollBarTrack: "Scroll bar track (background)",
     EditorColorPairIndex.documentHighlightText:

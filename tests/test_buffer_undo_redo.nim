@@ -242,6 +242,83 @@ suite "Buffer - Unicode Undo/Redo":
     check r.isOk
     check b.getLine(0) == "こんにちは"
 
+  test "undo insert that completed a split character":
+    # The pasted bytes give 0xF0 what it was waiting for, so the line collapses
+    # to one column. Locating the inserted bytes by walking columns then lands
+    # past them and the undo removes nothing.
+    let b = newTextBuffer("\xF0")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "\x9F\x98\x81")
+    check b.getLine(0) == "\xF0\x9F\x98\x81"
+    check b.getLine(0).charLen == 1
+
+    check b.undo().isOk
+    check b.getLine(0) == "\xF0"
+
+    check b.redo().isOk
+    check b.getLine(0) == "\xF0\x9F\x98\x81"
+
+  test "undo delete that completed a split character":
+    # Removing the 'a' lets 0xF0 complete over the bytes that followed the
+    # hole, collapsing five columns into one. Locating the hole by walking
+    # columns then lands past it and the undo puts the byte back in the wrong
+    # place.
+    let b = newTextBuffer("\xF0a\x9F\x98\x81")
+    check b.getLine(0).charLen == 5
+
+    discard b.deleteChar(BufferPosition(line: 0, column: 1))
+    check b.getLine(0) == "\xF0\x9F\x98\x81"
+    check b.getLine(0).charLen == 1
+
+    check b.undo().isOk
+    check b.getLine(0) == "\xF0a\x9F\x98\x81"
+
+    check b.redo().isOk
+    check b.getLine(0) == "\xF0\x9F\x98\x81"
+
+  test "undo deleteRange that completed a split character":
+    # Same seam as the single-character case, on the range path: removing "ab"
+    # lets 0xF0 complete over the bytes that followed the hole, so the merged
+    # line no longer walks to it by column.
+    let b = newTextBuffer("\xF0ab\x9F\x98\x81")
+    check b.getLine(0).charLen == 6
+
+    discard b.deleteRange(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 2)
+    )
+    check b.getLine(0) == "\xF0\x9F\x98\x81"
+    check b.getLine(0).charLen == 1
+
+    check b.undo().isOk
+    check b.getLine(0) == "\xF0ab\x9F\x98\x81"
+
+    check b.redo().isOk
+    check b.getLine(0) == "\xF0\x9F\x98\x81"
+
+  test "undo a joining deleteRange that completed a split character":
+    # The range takes the newline too, so undo goes through the multi-line
+    # branch and has to split the merged line at the recorded byte rather than
+    # at a column: the join let 0xF0 complete over the next line's first bytes.
+    let b = newTextBuffer("\xF0a\n\x9F\x98\x81x")
+    check b.getLine(0).charLen == 2
+    check b.getLine(1).charLen == 4
+
+    discard b.deleteRange(
+      BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 2)
+    )
+    check b.len == 1
+    check b.getLine(0) == "\xF0\x9F\x98\x81x"
+    check b.getLine(0).charLen == 2
+
+    check b.undo().isOk
+    check b.len == 2
+    check b.getLine(0) == "\xF0a"
+    check b.getLine(1) == "\x9F\x98\x81x"
+
+    check b.redo().isOk
+    check b.len == 1
+    check b.getLine(0) == "\xF0\x9F\x98\x81x"
+    check b.getLine(0).charLen == 2
+
   test "undo deleteRange with unicode":
     let b = newTextBuffer("Hello世界World")
     discard b.deleteRange(

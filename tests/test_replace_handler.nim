@@ -131,6 +131,23 @@ suite "ReplaceModeHandler - Character Replacement":
     check state.cursor.column == 6
     check state.editState.replaceHistory[0].originalChar == ""
 
+  test "Replace next to a lead byte left short of its bytes":
+    # The replaced character is gone by the time the cursor moves, so the
+    # column has to come from the line as it now stands: "\xF0ab" -> "\xF0Zb".
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\xF0ab")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+    check buf.getLine(0).charLen == 3
+
+    let result = handler.handleCharacterReplacement(buf, state, "Z")
+
+    check result.kind == rmrHandled
+    check buf.getLine(0) == "\xF0Zb"
+    check buf.getLine(0).charLen == 3
+    check state.cursor.column == 2
+
   test "Replace with multibyte character":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")

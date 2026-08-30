@@ -135,7 +135,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
 
   # Split bracket pair onto three lines when cursor sits between () [] {}
   if state.bracketSplit != bsmDisable and pos.column > 0 and
-      pos.column < currentLineText.runeLen and
+      pos.column < currentLineText.charLen and
       isAdjacentBracketPair(currentLineText, pos.column - 1):
     let indented = state.bracketSplit == bsmIndent
     let baseIndent =
@@ -155,7 +155,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
       state.statusMessage = insertResult.error
       return
     state.cursor.line += 1
-    state.cursor.column = middleIndent.runeLen
+    state.cursor.column = middleIndent.charLen
     # Register the middle line for auto-indent cleanup on Esc — if the user
     # leaves Insert mode without typing anything, the whitespace we just
     # inserted is removed (the bracket pair itself stays intact).
@@ -377,9 +377,9 @@ proc deleteWordBackward*(buffer: TextBuffer, state: EditorState) =
     # At start of line, do nothing (Vim behavior)
     return
 
-  # Get current line as runes
+  # `pos.column` is a buffer column, so the runes must be counted the same way.
   let line = buffer.getLine(pos.line)
-  let runes = line.toRunes()
+  let runes = line.toCharRunes()
 
   # Clamp column to valid range
   var newCol = min(pos.column, runes.len)
@@ -421,7 +421,7 @@ proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
 
   # Get line length to clamp column
   let line = buffer.getLine(pos.line)
-  let lineLen = line.toRunes().len
+  let lineLen = line.charLen
 
   # Delete all characters from column 0 to cursor position. Repeatedly delete
   # at column 0 (each removal shifts the next character down), and derive the
@@ -453,17 +453,17 @@ proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
       aboveLine[0 ..< ^1]
     else:
       aboveLine
-  let aboveRunes = lineContent.toRunes()
-
-  if pos.column >= aboveRunes.len:
+  if pos.column >= lineContent.charLen:
     return false # No character at this column in the line above
 
-  let ch = $aboveRunes[pos.column]
-  let insertResult = buffer.insertText(pos, ch)
+  # Sliced, not re-encoded: an undecodable byte would widen into the
+  # replacement character and copy something the line above lacks.
+  let ch = lineContent.charSubStr(pos.column, 1)
+  let insertResult = buffer.insertTextEnd(pos, ch)
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return false
-  state.cursor.column += 1
+  state.cursor = insertResult.get.cursor
   return true
 
 proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
@@ -481,17 +481,15 @@ proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
       belowLine[0 ..< ^1]
     else:
       belowLine
-  let belowRunes = lineContent.toRunes()
-
-  if pos.column >= belowRunes.len:
+  if pos.column >= lineContent.charLen:
     return false # No character at this column in the line below
 
-  let ch = $belowRunes[pos.column]
-  let insertResult = buffer.insertText(pos, ch)
+  let ch = lineContent.charSubStr(pos.column, 1)
+  let insertResult = buffer.insertTextEnd(pos, ch)
   if insertResult.isErr:
     state.statusMessage = insertResult.error
     return false
-  state.cursor.column += 1
+  state.cursor = insertResult.get.cursor
   return true
 
 proc clearAutoIndentIfUnedited*(buffer: TextBuffer, state: EditorState) =

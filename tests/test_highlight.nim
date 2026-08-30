@@ -28,12 +28,12 @@ import ../src/moepkg/lsp/protocol/types as lspTypes
 
 suite "Highlight - Basic Initialization":
   test "initHighlight with empty buffer":
-    let buffer: seq[Runes] = @[]
+    let buffer: seq[string] = @[]
     let h = initHighlight(buffer)
     check h.colorSegments.len == 0
 
   test "initHighlight with single line":
-    let buffer = @["hello".toRunes]
+    let buffer = @["hello"]
     let h = initHighlight(buffer)
     check h.colorSegments.len == 1
     check h[0].firstRow == 0
@@ -41,7 +41,7 @@ suite "Highlight - Basic Initialization":
     check h[0].color == EditorColorPairIndex.default
 
   test "initHighlight with multiple lines":
-    let buffer = @["line1".toRunes, "line2".toRunes, "line3".toRunes]
+    let buffer = @["line1", "line2", "line3"]
     let h = initHighlight(buffer)
     check h.colorSegments.len == 3
     check h[0].firstRow == 0
@@ -49,7 +49,7 @@ suite "Highlight - Basic Initialization":
     check h[2].firstRow == 2
 
   test "initHighlight with empty line":
-    let buffer = @["line1".toRunes, "".toRunes, "line3".toRunes]
+    let buffer = @["line1", "", "line3"]
     let h = initHighlight(buffer)
     check h.colorSegments.len == 3
     check h[1].firstRow == 1
@@ -260,7 +260,7 @@ suite "Highlight - Incremental Update":
 
 suite "Highlight - Rust Language Specific":
   test "Rust keywords highlighted correctly":
-    let buffer = @["fn main let mut const".toRunes]
+    let buffer = @["fn main let mut const"]
     let h = initHighlight(buffer, @[], SourceLanguage.langRust)
 
     # Should have multiple segments for different keywords
@@ -275,7 +275,7 @@ suite "Highlight - Rust Language Specific":
     check foundKeyword
 
   test "Rust comments highlighted":
-    let buffer = @["// This is a comment".toRunes]
+    let buffer = @["// This is a comment"]
     let h = initHighlight(buffer, @[], SourceLanguage.langRust)
 
     var foundComment = false
@@ -286,7 +286,7 @@ suite "Highlight - Rust Language Specific":
     check foundComment
 
   test "Rust string literals highlighted":
-    let buffer = @["let s = \"hello\";".toRunes]
+    let buffer = @["let s = \"hello\";"]
     let h = initHighlight(buffer, @[], SourceLanguage.langRust)
 
     var foundString = false
@@ -297,7 +297,7 @@ suite "Highlight - Rust Language Specific":
     check foundString
 
   test "Rust numbers highlighted":
-    let buffer = @["let x = 42;".toRunes]
+    let buffer = @["let x = 42;"]
     let h = initHighlight(buffer, @[], SourceLanguage.langRust)
 
     var foundNumber = false
@@ -312,19 +312,19 @@ suite "Highlight - Rust Language Specific":
 
 suite "Highlight - Edge Cases":
   test "getColorPair with empty highlight":
-    let buffer: seq[Runes] = @[]
+    let buffer: seq[string] = @[]
     let h = initHighlight(buffer)
     let color = h.getColorPair(0, 0)
     check color == EditorColorPairIndex.default
 
   test "getColorPair out of bounds":
-    let buffer = @["test".toRunes]
+    let buffer = @["test"]
     let h = initHighlight(buffer)
     let color = h.getColorPair(10, 10)
     check color == EditorColorPairIndex.default
 
   test "getColorPair valid position":
-    let buffer = @["test".toRunes]
+    let buffer = @["test"]
     let h = initHighlight(buffer)
     let color = h.getColorPair(0, 0)
     check color == EditorColorPairIndex.default
@@ -378,7 +378,7 @@ suite "Highlight - Multi-line Constructs":
     check foundKeywordInLine3
 
   test "String literal across token boundaries":
-    let buffer = @["let s = \"hello world this is a long string\";".toRunes]
+    let buffer = @["let s = \"hello world this is a long string\";"]
     let h = initHighlight(buffer, @[], SourceLanguage.langRust)
 
     # Should have string literal segment
@@ -391,7 +391,7 @@ suite "Highlight - Multi-line Constructs":
 
 suite "Highlight - Segment Operations":
   test "indexOf finds correct segment":
-    let buffer = @["hello world".toRunes]
+    let buffer = @["hello world"]
     let h = initHighlight(buffer)
 
     let idx = h.indexOf(0, 5)
@@ -431,7 +431,7 @@ suite "Highlight - Segment Operations":
     check h.colorSegments[1].lastColumn == 10
 
   test "highlight length and high":
-    let buffer = @["line1".toRunes, "line2".toRunes]
+    let buffer = @["line1", "line2"]
     let h = initHighlight(buffer)
 
     check h.len == h.colorSegments.len
@@ -506,10 +506,7 @@ suite "Highlight - Incremental Update After Edit":
     let incrResult = Highlight(colorSegments: incrHighlight.segments)
 
     # Do a full parse of the same buffer
-    var runesBuffer: seq[Runes]
-    for line in buffer:
-      runesBuffer.add(line.toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    let fullResult = initHighlight(buffer, @[], SourceLanguage.langRust)
 
     # Colors should match at every position
     for row in 0 ..< buffer.len:
@@ -547,10 +544,7 @@ suite "Highlight - Incremental Update After Edit":
     )
 
     let incrResult = Highlight(colorSegments: incrHighlight.segments)
-    var runesBuffer: seq[Runes]
-    for line in buffer:
-      runesBuffer.add(line.toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langAstro)
+    let fullResult = initHighlight(buffer, @[], SourceLanguage.langAstro)
 
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
@@ -592,10 +586,7 @@ suite "Highlight - Incremental Update After Edit":
     # After the edit, all remaining lines should be inside the comment.
     # Line 3 should no longer have keyword highlighting.
     let incrResult = Highlight(colorSegments: incrHighlight.segments)
-    var runesBuffer: seq[Runes]
-    for line in buffer:
-      runesBuffer.add(line.toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    let fullResult = initHighlight(buffer, @[], SourceLanguage.langRust)
 
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
@@ -633,10 +624,7 @@ suite "Highlight - Incremental Update After Edit":
 
     # Result must match full parse
     let incrResult = Highlight(colorSegments: incrHighlight.segments)
-    var runesBuffer: seq[Runes]
-    for line in buffer:
-      runesBuffer.add(line.toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    let fullResult = initHighlight(buffer, @[], SourceLanguage.langRust)
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
@@ -647,10 +635,7 @@ proc checkMatchesFullParse(
     buffer: seq[string], ih: IncrementalHighlight, lang: SourceLanguage
 ) =
   let incrResult = Highlight(colorSegments: ih.segments)
-  var runesBuffer: seq[Runes]
-  for line in buffer:
-    runesBuffer.add(line.toRunes)
-  let fullResult = initHighlight(runesBuffer, @[], lang)
+  let fullResult = initHighlight(buffer, @[], lang)
   for row in 0 ..< buffer.len:
     for col in 0 ..< buffer[row].len:
       check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
@@ -1457,12 +1442,10 @@ suite "Highlight - budgeted incremental update":
     check buf.incrementalHighlight.parsedUpTo == buf.len - 1
 
     let incrResult = Highlight(colorSegments: buf.incrementalHighlight.segments)
-    var runesBuffer: seq[Runes]
     var lines = newSeq[string](buf.len)
     for i in 0 ..< buf.len:
       lines[i] = buf.getLine(i)
-      runesBuffer.add(lines[i].toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    let fullResult = initHighlight(lines, @[], SourceLanguage.langRust)
     for row in 0 ..< buf.len:
       for col in 0 ..< lines[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
@@ -1508,12 +1491,10 @@ suite "Highlight - budgeted incremental update":
       discard
 
     let incrResult = Highlight(colorSegments: buf.incrementalHighlight.segments)
-    var runesBuffer: seq[Runes]
     var lines = newSeq[string](buf.len)
     for i in 0 ..< buf.len:
       lines[i] = buf.getLine(i)
-      runesBuffer.add(lines[i].toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    let fullResult = initHighlight(lines, @[], SourceLanguage.langRust)
     for row in 0 ..< buf.len:
       for col in 0 ..< lines[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
@@ -1623,10 +1604,7 @@ suite "Highlight - budgeted incremental update":
     # a helper proc does not fail the test in std/unittest, so the checks
     # must live in the test body.
     let incrResult = Highlight(colorSegments: ih.segments)
-    var runesBuffer: seq[Runes]
-    for line in buffer:
-      runesBuffer.add(line.toRunes)
-    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
+    let fullResult = initHighlight(buffer, @[], SourceLanguage.langRust)
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
@@ -1825,10 +1803,7 @@ suite "Highlight - budgeted incremental update":
     # Every row must match a full parse with the new words: the restart
     # re-parsed the chunks the old words had already colored.
     let incrResult = Highlight(colorSegments: ih.segments)
-    var runesBuffer: seq[Runes]
-    for line in buffer:
-      runesBuffer.add(line.toRunes)
-    let fullResult = initHighlight(runesBuffer, newWords, SourceLanguage.langRust)
+    let fullResult = initHighlight(buffer, newWords, SourceLanguage.langRust)
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
@@ -3652,10 +3627,7 @@ suite "Highlight - Progressive Initial Highlighting":
     # Compare against a full one-shot parse. Whitespace columns are exempt
     # for the same reason as in the incremental fuzz: tokenizers may differ
     # on which adjacent token absorbs spaces, with no visible effect.
-    var runes: seq[Runes]
-    for line in lines:
-      runes.add(line.toRunes)
-    let full = initHighlight(runes, @[], SourceLanguage.langXml)
+    let full = initHighlight(lines, @[], SourceLanguage.langXml)
 
     var firstMismatch = (row: -1, col: -1)
     block compare:

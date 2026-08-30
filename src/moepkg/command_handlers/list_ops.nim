@@ -22,7 +22,7 @@
 
 import std/[os, unicode]
 
-import ../[buffer, editor, git_conflict, types]
+import ../[buffer, editor, git_conflict, types, unicode_utils]
 
 import editor_ops, handler_result
 
@@ -73,11 +73,7 @@ proc processChangeResult*(e: Editor, r: HandlerResult): bool =
         let marker = if i == buf.changeListIndex + 1: ">" else: " "
         let text =
           if pos.line < buf.len:
-            let line = buf.getLine(pos.line)
-            if line.runeLen > 40:
-              line.runeSubStr(0, 40) & "..."
-            else:
-              line
+            buf.getLine(pos.line).truncateToCharsWithSuffix(40)
           else:
             ""
         let changeNum = buf.changeList.len - i

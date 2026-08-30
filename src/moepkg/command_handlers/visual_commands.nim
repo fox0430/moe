@@ -22,11 +22,11 @@
 ## This module provides Visual mode specific command implementations
 ## that are independent of CommandContext for better testability
 
-import std/[options, strutils, unicode]
+import std/[options, strutils]
 
 import pkg/results
 
-import ../[types, registers, motion, modes, config]
+import ../[types, registers, motion, modes, config, unicode_utils]
 import ../buffer/[core, edit, fold, undo]
 import insert_commands
 
@@ -133,10 +133,10 @@ proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
       lines.add("")
     elif endCol >= lineLen:
       # Line is shorter than end column, take from start to end of line
-      lines.add($line.runeSubStr(startCol))
+      lines.add(line.charSubStr(startCol))
     else:
       # Normal case
-      lines.add($line.runeSubStr(startCol, endCol - startCol + 1))
+      lines.add(line.charSubStr(startCol, endCol - startCol + 1))
   result = lines.join("\n")
 
 proc getLineText(buffer: TextBuffer, selection: VisualSelection): string =
@@ -465,20 +465,9 @@ proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
   ## Convert visual selection to uppercase and return to previous mode
   applyVisualTextTransform(buffer, state, "Visual uppercase", toUpperAscii)
 
-proc toggleCase(s: string): string =
-  ## Toggle case of each character in the string
-  result = ""
-  for c in s:
-    if c.isUpperAscii:
-      result.add(c.toLowerAscii)
-    elif c.isLowerAscii:
-      result.add(c.toUpperAscii)
-    else:
-      result.add(c)
-
 proc visualToggleCase*(buffer: TextBuffer, state: EditorState) =
   ## Toggle case of visual selection and return to previous mode
-  applyVisualTextTransform(buffer, state, "Visual toggle case", toggleCase)
+  applyVisualTextTransform(buffer, state, "Visual toggle case", toggleAsciiCase)
 
 proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
   ## Replace all characters in visual selection with specified character

@@ -23,7 +23,11 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, buffer, motion, modes, search_utils, git_conflict, render_utils]
+import
+  ../[
+    types, buffer, motion, modes, search_utils, git_conflict, render_utils,
+    unicode_utils,
+  ]
 import ../command_handlers/[insert_commands, normal_commands]
 
 import core, operator_engine
@@ -409,7 +413,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     if line.len == 0 or cursor.column >= line.charLen:
       return none(WordInfo)
 
-    let runes = line.toRunes()
+    let runes = line.toCharRunes()
     if cursor.column >= runes.len:
       return none(WordInfo)
 
@@ -434,10 +438,9 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         break
       endCol.inc
 
-    # Extract word
-    var word = ""
-    for i in startCol ..< endCol:
-      word.add($runes[i])
+    # Sliced out of the line rather than re-encoded: a byte that does not decode
+    # would come back as the replacement character.
+    let word = line.charSubStr(startCol, endCol - startCol)
 
     return some(WordInfo(word: word, startCol: startCol, endCol: endCol))
 
@@ -452,7 +455,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       return false
 
     let line = buffer.getLine(pos.line)
-    let runes = line.toRunes()
+    let runes = line.toCharRunes()
 
     # Check bounds
     if pos.column < 0 or pos.column >= runes.len:
@@ -482,7 +485,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     if line.len == 0 or cursor.column >= line.charLen:
       return err("No bracket at cursor")
 
-    let runes = line.toRunes()
+    let runes = line.toCharRunes()
     if cursor.column >= runes.len:
       return err("No bracket at cursor")
 
@@ -566,7 +569,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         return err("No word under cursor")
 
       let info = wordInfo.get
-      let wordLen = info.word.runeLen
+      let wordLen = info.word.charLen
 
       # Record jump before searching
       recordJump(ctx.state)
@@ -646,7 +649,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         return err("No word under cursor")
 
       let info = wordInfo.get
-      let wordLen = info.word.runeLen
+      let wordLen = info.word.charLen
 
       # Record jump before searching
       recordJump(ctx.state)

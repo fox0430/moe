@@ -29,7 +29,7 @@
 ## dispatchSubStateMode is also kept here because it only forwards to the
 ## sub-state-mode dispatchers in this file.
 
-import std/[options, strutils, unicode]
+import std/[options, strutils]
 
 import pkg/[results, celina]
 
@@ -123,16 +123,6 @@ proc typedTextInRange(buffer: TextBuffer, startPos, endPos: BufferPosition): str
       )
   buffer.getTextInRange(startPos, endIncl)
 
-proc advancePastText(pos: BufferPosition, text: string): BufferPosition =
-  ## Cursor position after inserting `text` at `pos` (column is a rune index).
-  result = pos
-  for r in text.runes:
-    if r == Rune('\n'):
-      result.line.inc
-      result.column = 0
-    else:
-      result.column.inc
-
 proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
   ## Replay the just-typed text (count - 1) more times for [count]i/a/I/A/o/O,
   ## matching Vim. Runs while the Insert transaction is still open so every
@@ -158,12 +148,15 @@ proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
     # carries the entry line's indentation.
     let entryLine = buffer.getLine(startPos.line)
     let indentLen = min(startPos.column, entryLine.charLen)
-    unit = "\n" & entryLine.runeSubStr(0, indentLen) & typed
+    unit = "\n" & entryLine.charSubStr(0, indentLen) & typed
 
   for _ in 1 ..< count:
-    if buffer.insertText(cursor, unit).isErr:
+    # Take the next position from the insertion itself: counting `unit` on its
+    # own would miscount a character completed over the seam.
+    let inserted = buffer.insertTextEnd(cursor, unit)
+    if inserted.isErr:
       break
-    cursor = advancePastText(cursor, unit)
+    cursor = inserted.get.cursor
   state.cursor = cursor
 
 proc finalizeInsertExit(
@@ -192,7 +185,7 @@ proc finalizeInsertExit(
       if insertedText.len > 0:
         let ctx = state.editState.visualBlockInsertContext.get
         for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
-          let lineCharLen = buffer.getLine(lineNum).runeLen
+          let lineCharLen = buffer.getLine(lineNum).charLen
           let col = ctx.insertColumn
           if col > lineCharLen:
             let padding = ' '.repeat(col - lineCharLen)

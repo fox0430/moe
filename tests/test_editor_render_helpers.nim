@@ -25,6 +25,7 @@ import pkg/celina
 
 import ../src/moepkg/[editor, config, config_loader, modes, types, color]
 import ../src/moepkg/buffer/core
+import ../src/moepkg/unicode_utils
 import ../src/moepkg/editor_render_helpers as renderHelpers
 
 proc createTestEditor(): Editor =
@@ -276,6 +277,27 @@ suite "bufferColToDisplayCol":
     # startCol skips initial characters
     check bufferColToDisplayCol("hello", 3, 4, startCol = 1) == 2 # "el" = 2
     check bufferColToDisplayCol("hello", 5, 4, startCol = 2) == 3 # "llo" = 3
+
+  test "an undecodable byte takes the four cells it is drawn in":
+    # The renderer draws it as `<e3>`; a measurement that still counted it as
+    # one cell would put the cursor block and the selection edge four columns
+    # off the glyph for every character after it on the line.
+    check bufferColToDisplayCol("\xE3ab", 1, 4) == 4
+    check bufferColToDisplayCol("\xE3ab", 2, 4) == 5
+    check bufferColToDisplayCol("\xE3ab", 3, 4) == 6
+
+  test "display columns accumulate exactly the widths the line is drawn with":
+    # Pins the invariant the whole model rests on: the column-to-cell walk and
+    # the per-character widths the renderer uses must never drift apart.
+    for text in ["hello", "日本語abc", "\xE3ab", "a\xF0\x9F\x98b", "\xFF\xFF"]:
+      var expected = 0
+      var col = 0
+      for (rune, _) in text.chars:
+        check bufferColToDisplayCol(text, col, 4) == expected
+        expected += rune.charWidth
+        col += 1
+      check bufferColToDisplayCol(text, col, 4) == expected
+      check expected == text.charDisplayWidth
 
   test "bufferCol before startCol returns -1":
     check bufferColToDisplayCol("hello", 1, 4, startCol = 3) == -1

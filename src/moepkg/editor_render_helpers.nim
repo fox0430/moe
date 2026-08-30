@@ -48,14 +48,14 @@ proc bufferColToDisplayCol*(
   if bufferCol < startCol:
     return -1
   var currentChar = 0
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     if currentChar >= bufferCol:
       break
     if currentChar >= startCol:
       if rune == TAB_CHAR:
         result += tabAdvance(result, tabStop)
       else:
-        result += runeWidth(rune)
+        result += charWidth(rune)
     currentChar.inc
 
 proc analyzeIndentation*(lineText: string): IndentInfo =
@@ -65,7 +65,7 @@ proc analyzeIndentation*(lineText: string): IndentInfo =
   result.hasContent = false
 
   var charIdx = 0
-  for rune in lineText.runes:
+  for (rune, _) in lineText.chars:
     if rune != ' '.Rune and rune != TAB_CHAR:
       # Found first non-whitespace character
       result.leadingWhitespaceEnd = charIdx - 1

@@ -37,8 +37,8 @@ import std/[unittest, os, strutils, sets, options]
 const
   ## Buffer-edit / transaction APIs whose Result must not be discarded.
   TargetApis = [
-    "insertText", "deleteChar", "insert", "deleteLine", "deleteRange", "replaceLine",
-    "splitLine", "joinLines", "beginTransaction", "commitTransaction",
+    "insertText", "insertTextEnd", "deleteChar", "insert", "deleteLine", "deleteRange",
+    "replaceLine", "splitLine", "joinLines", "beginTransaction", "commitTransaction",
     "rollbackTransaction", "withTransaction", "deleteBlockSelection",
     "deleteLineSelection", "undo", "redo",
   ].toHashSet

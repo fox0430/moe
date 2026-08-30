@@ -21,7 +21,7 @@
 
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
-import ../[encoding, highlight, logger, primitives]
+import ../[encoding, highlight, logger, primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta
 
@@ -30,6 +30,11 @@ export cow_seq, seq_delta
 export
   CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition,
   ColumnRange
+
+# The character model buffer columns are indexed with. Exported so
+# `line.charLen` and `line.charSubStr` resolve through the same import.
+export runeSizeAt, charLen, charSubStr, charToBytePos, byteToCharPos
+export mayAbsorbAtSeam
 
 type
   BufferId* = distinct int
@@ -152,9 +157,24 @@ type
     of ckInsertText:
       insertPos*: BufferPosition
       insertText*: string
+      insertColDelta*: int
+        ## Columns the line gained, recorded at edit time where the line before
+        ## the insertion is in hand: a lead byte completed over the insertion
+        ## cannot be re-derived from `insertText` alone. 0 for a multi-line
+        ## insert, where subscribers move whole rows instead.
+      insertByteOffset*: int
+        ## Byte in the line the text was written at; after the insertion,
+        ## walking `insertPos.column` characters no longer lands on it.
     of ckDeleteText:
       deletePos*: BufferPosition
       deletedText*: string
+      deleteColDelta*: int
+        ## Columns the line lost, recorded at edit time where both the line
+        ## before and after the deletion are in hand; `deletedText` alone
+        ## cannot account for a lead byte that completed over the hole.
+      deleteByteOffset*: int
+        ## Byte in the line the text was removed from, recorded because the
+        ## merged line may count its columns differently.
     of ckInsertLine:
       insertLineIdx*: int
       insertLineText*: string
@@ -168,6 +188,9 @@ type
       deleteJoinedNextLine*: bool
         ## True when the range consumed `deleteEndPos.line + 1`. Subscribers
         ## shift side arrays by `(endLine - startLine + 1)` in that case.
+      deleteRangeByteOffset*: int
+        ## Byte on `deleteStartPos.line` the range started at, recorded like
+        ## `deleteByteOffset`: the deletion can change how columns count.
     of ckReplaceLine:
       replaceLineIdx*: int
       replaceLineOldText*: string
@@ -191,6 +214,12 @@ type
         ## Restored wholesale like snapshotLineMarkers / snapshotFoldState;
         ## the non-snapshot line-op branches shift via adjustBookmarksFor*.
 
+  InsertOutcome* = object ## What an insertion did to the line it landed on.
+    insertEnd*: BufferPosition ## Just past everything that was written.
+    cursor*: BufferPosition ## Where a cursor following the insertion belongs.
+    colDelta*: int ## Columns the line gained (0 for a multi-line insert).
+    byteOffset*: int ## Byte in the line the text was written at.
+
   RowColRemapEventKind* = enum
     rrekSingleLine
     rrekMultiLine
@@ -199,7 +228,7 @@ type
   RowColRemapEvent* = object
     case kind*: RowColRemapEventKind
     of rrekSingleLine:
-      row*, editCol*, colDelta*, lineRuneLenAfter*: int
+      row*, editCol*, colDelta*, lineCharLenAfter*: int
     of rrekMultiLine:
       firstAffectedRow*, lastAffectedRowBefore*, lastAffectedRowAfter*: int
       preservesFirstRow*: bool
@@ -247,6 +276,10 @@ type
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
     hasBom*: bool # BOM stripped on load, re-emitted on save (UTF-8/16/32)
+    hasBinaryContent*: bool
+      ## A NUL byte was found near the start of the file on load. The bytes
+      ## are kept and saved back verbatim, but line-oriented editing will not
+      ## do what the user expects, so the open is announced.
     endOfLine*: bool # Whether file should end with newline
     lastFileModTime*: Option[Time]
       # File modification time when loaded (for external change detection)
@@ -564,10 +597,6 @@ proc len*(b: TextBuffer): int =
   of Rope: b.storage.rope.len
   of PieceTable: b.storage.pieceTable.len
 
-proc charLen*(text: string): int =
-  ## Get character length (not byte length)
-  text.runeLen
-
 proc getLine*(b: TextBuffer, lineIndex: int): string =
   case b.backendKind
   of GapBuffer:
@@ -643,10 +672,12 @@ proc newTextBuffer*(
   result.editorConfig = none(BufferEditorConfig)
 
   # Build initial plain-text highlight from the freshly constructed backend.
-  var runesBuffer = newSeqOfCap[Runes](lineCount)
+  # Lines are handed over as strings: `initHighlight` counts columns with
+  # `charLen`, the same rule the renderer steps cells with.
+  var initialLines = newSeqOfCap[string](lineCount)
   for line in result.lines:
-    runesBuffer.add(line.toRunes())
-  result.highlight = initHighlight(runesBuffer)
+    initialLines.add(line)
+  result.highlight = initHighlight(initialLines)
 
   result.remapCallbacks = @[]
   result.remapCallbacks.add(semanticRemapCallback)
@@ -683,9 +714,9 @@ proc getWordAtPosition*(b: TextBuffer, pos: BufferPosition): string =
     return ""
 
   let line = b.getLine(pos.line)
-  var runes: seq[Rune] = @[]
-  for r in line.runes:
-    runes.add(r)
+  # `pos.column` is a `charLen` column, so the characters have to be indexed in
+  # the same model; `runes` steps by a different rule.
+  let runes = line.toCharRunes()
 
   if runes.len == 0 or pos.column < 0 or pos.column >= runes.len:
     return ""
@@ -704,10 +735,10 @@ proc getWordAtPosition*(b: TextBuffer, pos: BufferPosition): string =
   while endCol < runes.len - 1 and isWordChar(runes[endCol + 1]):
     inc endCol
 
-  # Build the word string
-  result = ""
-  for i in startCol .. endCol:
-    result.add($runes[i])
+  # Slice the source bytes rather than re-encoding the runes: a byte that does
+  # not decode would come back as the replacement character, and the byte-wise
+  # comparison in `findWordMatchRanges` would then never match it.
+  line.charSubStr(startCol, endCol - startCol + 1)
 
 proc isPositionInWord*(b: TextBuffer, pos: BufferPosition, word: string): bool =
   ## Check if the position is part of a word that matches the given word.
@@ -721,9 +752,7 @@ proc isPositionInWord*(b: TextBuffer, pos: BufferPosition, word: string): bool =
     return false
 
   let line = b.getLine(pos.line)
-  var runes: seq[Rune] = @[]
-  for r in line.runes:
-    runes.add(r)
+  let runes = line.toCharRunes()
 
   if runes.len == 0 or pos.column < 0 or pos.column >= runes.len:
     return false
@@ -741,13 +770,9 @@ proc isPositionInWord*(b: TextBuffer, pos: BufferPosition, word: string): bool =
   while endCol < runes.len - 1 and isWordChar(runes[endCol + 1]):
     inc endCol
 
-  # Build the word at this position
-  var wordAtPos = ""
-  for i in startCol .. endCol:
-    wordAtPos.add($runes[i])
-
-  # Check if it matches
-  return wordAtPos == word
+  # Compared byte for byte against the word the cursor produced, so the slice
+  # must keep the source bytes rather than re-encode them.
+  return line.charSubStr(startCol, endCol - startCol + 1) == word
 
 proc `[][]`*(b: TextBuffer, lineIndex, colIndex: int): char =
   ## Bracket operator for accessing character at (line, column)
@@ -794,7 +819,7 @@ proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent) =
   case event.kind
   of rrekSingleLine:
     b.highlight.semanticShiftForSingleLineEdit(
-      event.row, event.editCol, event.colDelta, event.lineRuneLenAfter
+      event.row, event.editCol, event.colDelta, event.lineCharLenAfter
     )
   of rrekMultiLine:
     b.highlight.semanticShiftForMultiLineEdit(
@@ -873,7 +898,7 @@ proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
   shiftPerLineArray(b.modifiedLines, lmkInserted, event)
 
 proc reversed(event: RowColRemapEvent): RowColRemapEvent =
-  ## Flip a forward event into its inverse. `lineRuneLenAfter` is preserved:
+  ## Flip a forward event into its inverse. `lineCharLenAfter` is preserved:
   ## emitRowColRemapEvents recomputes it via `getLine` at reverse dispatch time
   ## (after the backend undo), so it already matches the post-reverse state.
   case event.kind
@@ -891,7 +916,7 @@ proc reversed(event: RowColRemapEvent): RowColRemapEvent =
       row: event.row,
       editCol: event.editCol,
       colDelta: -event.colDelta,
-      lineRuneLenAfter: event.lineRuneLenAfter,
+      lineCharLenAfter: event.lineCharLenAfter,
     )
   of rrekClear:
     event
@@ -946,15 +971,27 @@ proc emitRowColRemapEvents*(
   of ckInsertText:
     let nl = countNewlines(change.insertText)
     if nl == 0:
-      let colDelta = change.insertText.runeLen
+      if change.insertColDelta != change.insertText.charLen:
+        # The seam changed a column before the edit position, so the row no
+        # longer maps by a column shift; report it wholesale.
+        dispatch(
+          RowColRemapEvent(
+            kind: rrekMultiLine,
+            firstAffectedRow: change.insertPos.line,
+            lastAffectedRowBefore: change.insertPos.line,
+            lastAffectedRowAfter: change.insertPos.line,
+            preservesFirstRow: false,
+          )
+        )
+        return
       let newLen = b.getLine(change.insertPos.line).charLen
       dispatch(
         RowColRemapEvent(
           kind: rrekSingleLine,
           row: change.insertPos.line,
           editCol: change.insertPos.column,
-          colDelta: colDelta,
-          lineRuneLenAfter: newLen,
+          colDelta: change.insertColDelta,
+          lineCharLenAfter: newLen,
         )
       )
     else:
@@ -970,15 +1007,27 @@ proc emitRowColRemapEvents*(
   of ckDeleteText:
     let nl = countNewlines(change.deletedText)
     if nl == 0:
-      let colDelta = -change.deletedText.runeLen
+      if change.deleteColDelta != -change.deletedText.charLen:
+        # A lead byte completed over the hole, so a column before the deletion
+        # changed; report the row wholesale.
+        dispatch(
+          RowColRemapEvent(
+            kind: rrekMultiLine,
+            firstAffectedRow: change.deletePos.line,
+            lastAffectedRowBefore: change.deletePos.line,
+            lastAffectedRowAfter: change.deletePos.line,
+            preservesFirstRow: false,
+          )
+        )
+        return
       let newLen = b.getLine(change.deletePos.line).charLen
       dispatch(
         RowColRemapEvent(
           kind: rrekSingleLine,
           row: change.deletePos.line,
           editCol: change.deletePos.column,
-          colDelta: colDelta,
-          lineRuneLenAfter: newLen,
+          colDelta: change.deleteColDelta,
+          lineCharLenAfter: newLen,
         )
       )
     else:

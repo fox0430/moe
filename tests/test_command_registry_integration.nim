@@ -20,7 +20,7 @@
 ## Integration tests for command_registry
 ## These tests cover executeCommand and executeOperatorOnRange
 
-import std/[options, os, sets, strutils, tables, unittest]
+import std/[deques, options, os, sets, strutils, tables, unittest]
 
 import pkg/results
 
@@ -1943,6 +1943,88 @@ suite "Handler - Toggle case":
     check buffer[0][0] == 'h'
     check buffer[0][1] == 'E'
     check buffer[0][2] == 'L'
+
+suite "Edit commands - undecodable bytes keep their own bytes":
+  # 0xE9 advertises three bytes but only two follow it, so it stands for one
+  # column of one byte. Re-encoding it through a Rune would widen it to the
+  # three bytes of U+FFFD, which is neither what was deleted nor what the line
+  # held.
+  # It has to sit near the end: with three bytes left after it, 0xE9 takes them
+  # and is one ordinary character.
+  const Line = "caf\xE9x"
+
+  test "the byte is one column of one byte":
+    check Line.charLen == 5
+    check Line.charSubStr(3, 1) == "\xE9"
+
+  test "x puts the deleted bytes in the register unchanged":
+    let buffer = newTextBuffer(Line)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "\xE9"
+    check buffer[0] == "cafx"
+
+  test "3x round-trips through the register byte for byte":
+    let buffer = newTextBuffer(Line)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char"), @["3"]).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "f\xE9x"
+    check buffer[0] == "ca"
+
+  test "X before the cursor keeps the bytes too":
+    let buffer = newTextBuffer(Line)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "\xE9"
+    check buffer[0] == "cafx"
+
+  test "s keeps the substituted bytes":
+    let buffer = newTextBuffer(Line)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("substitute.char")).isOk
+    check ctx.state.registers.getNoNamedRegister().getContent() == "\xE9"
+
+  test "~ leaves an undecodable byte and its neighbours intact":
+    let buffer = newTextBuffer(Line)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("toggle.case"), @["5"]).isOk
+    check buffer[0] == "CAF\xE9X"
+
+  test "~ does not rewrite the middle of a multi-byte character":
+    # The bytes of "\u00e9" are 0xC3 0xA9; 0xA9 is not ASCII, but a per-byte
+    # toggle over its lead would still be a rewrite of one character's inside.
+    let buffer = newTextBuffer("caf\u00e9")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("toggle.case"), @["4"]).isOk
+    check buffer[0] == "CAF\u00e9"
+
+  test "~ over a span with no case leaves the line and the undo stack alone":
+    let buffer = newTextBuffer("123")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("toggle.case"), @["3"]).isOk
+    check buffer[0] == "123"
+    check buffer.undoStack.len == 0
 
 suite "Handler - Replace char (r)":
   test "replace single char":

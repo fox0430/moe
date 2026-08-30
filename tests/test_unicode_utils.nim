@@ -142,6 +142,68 @@ suite "Unicode Position Conversion":
     check byteToCharPos(text, 6) == 2 # Byte 6 -> char 2
     check byteToCharPos(text, 15) == 5 # Byte 15 -> char 5
 
+  test "Byte positions follow consumed bytes, not re-encoded size":
+    # A stray 0xFF decodes to Rune(0xFF) from one byte but re-encodes to two.
+    # Walking by the encoded size would drift past every such byte.
+    let text = "a\xFFb"
+    check charToBytePos(text, 0) == 0
+    check charToBytePos(text, 1) == 1
+    check charToBytePos(text, 2) == 2
+    check charToBytePos(text, 3) == 3
+    check byteToCharPos(text, 2) == 2
+    check byteToCharPos(text, 3) == 3
+    check getCharAtPos(text, 1)[1] == 1
+    check deleteCharAt(text, 1) == "ab"
+
+  test "Byte positions clamp a truncated multi-byte tail":
+    # 0xE3 advertises a 3-byte sequence but only one byte is left. runeLen
+    # counts it as one character, so the byte walk must stop at the end of the
+    # string instead of running past it.
+    let text = "a\xE3"
+    check text.runeLen == 2
+    check runeSizeAt(text, 1) == 1
+    check charToBytePos(text, 2) == text.len
+    check byteToCharPos(text, text.len) == 2
+    check getCharAtPos(text, 1)[1] == 1
+    check deleteCharAt(text, 1) == "a"
+
+  test "A truncated lead byte mid-string is one character, not a swallowed tail":
+    # 0xE3 advertises three bytes and the byte after it is not a continuation
+    # byte, so it stands alone: otherwise deleting that one cell would take the
+    # visible "b" with it.
+    let text = "a\xE3b"
+    check text.toRunes.len == 3
+    check runeSizeAt(text, 1) == 1
+    check charToBytePos(text, 2) == 2
+    check byteToCharPos(text, 2) == 2
+    check deleteCharAt(text, 1) == "ab"
+
+  test "charSubStr copies the source bytes":
+    # `runeSubStr` walks with `runeLenAt` and gives up on the truncated tail,
+    # returning "". These are the bytes that were actually there.
+    let text = "a\xE3b"
+    check text.charSubStr(1, 1) == "\xE3"
+    check text.charSubStr(1) == "\xE3b"
+    check text.charSubStr(0, 2) == "a\xE3"
+    check text.charSubStr(0) == text
+    check text.charSubStr(3) == ""
+    check text.charSubStr(1, 0) == ""
+    check "ab\u6F22cd".charSubStr(1, 3) == "b\u6F22c"
+
+  test "charSubStr and charLen tile the text exactly":
+    # The invariant the column model rests on: every byte belongs to exactly one
+    # column, undecodable bytes included. `runeSubStr`/`runeLen` break it - they
+    # step by the width a lead byte advertises, so a truncated tail hands back
+    # bytes that belong to the next column.
+    for text in [
+      "", "abc", "ab\u6F22cd", "a\xE3b", "\xFF\xFE\xFFab", "\xE3", "a\xF0\x9Fb"
+    ]:
+      var rebuilt = ""
+      for col in 0 ..< text.charLen:
+        rebuilt.add text.charSubStr(col, 1)
+      check rebuilt == text
+      check text.charSubStr(0) == text
+
   test "Extract substring using character positions":
     let text = "ab漢cd"
     # Extract using charToBytePos
@@ -719,78 +781,6 @@ suite "Robustness Tests - Edge Cases and Invalid Input":
       check rune == "ト".runeAt(0)
       check size == 3
 
-suite "findMatchingCloseOnLine":
-  test "Simple paren":
-    check findMatchingCloseOnLine("(hello)", 0) == 6
-
-  test "Simple bracket":
-    check findMatchingCloseOnLine("[hello]", 0) == 6
-
-  test "Simple brace":
-    check findMatchingCloseOnLine("{hello}", 0) == 6
-
-  test "Nested parens":
-    # ((hello))
-    check findMatchingCloseOnLine("((hello))", 0) == 8 # outer
-    check findMatchingCloseOnLine("((hello))", 1) == 7 # inner
-
-  test "Mixed nested brackets":
-    # (a[b{c}d]e)
-    check findMatchingCloseOnLine("(a[b{c}d]e)", 0) == 10 # outer (
-    check findMatchingCloseOnLine("(a[b{c}d]e)", 2) == 8 # [
-    check findMatchingCloseOnLine("(a[b{c}d]e)", 4) == 6 # {
-
-  test "No matching close":
-    check findMatchingCloseOnLine("(hello", 0) == -1
-
-  test "Not an opening bracket":
-    check findMatchingCloseOnLine("hello)", 0) == -1
-
-  test "Quote is not handled":
-    check findMatchingCloseOnLine("\"hello\"", 0) == -1
-
-  test "Empty parens":
-    check findMatchingCloseOnLine("()", 0) == 1
-
-  test "With prefix":
-    check findMatchingCloseOnLine("func(args)", 4) == 9
-
-suite "findMatchingOpenOnLine":
-  test "Simple paren":
-    check findMatchingOpenOnLine("(hello)", 6) == 0
-
-  test "Simple bracket":
-    check findMatchingOpenOnLine("[hello]", 6) == 0
-
-  test "Simple brace":
-    check findMatchingOpenOnLine("{hello}", 6) == 0
-
-  test "Nested parens":
-    # ((hello))
-    check findMatchingOpenOnLine("((hello))", 8) == 0 # outer
-    check findMatchingOpenOnLine("((hello))", 7) == 1 # inner
-
-  test "Mixed nested brackets":
-    # (a[b{c}d]e)
-    check findMatchingOpenOnLine("(a[b{c}d]e)", 10) == 0 # outer )
-    check findMatchingOpenOnLine("(a[b{c}d]e)", 8) == 2 # ]
-    check findMatchingOpenOnLine("(a[b{c}d]e)", 6) == 4 # }
-
-  test "No matching open":
-    check findMatchingOpenOnLine("hello)", 5) == -1
-
-  test "Not a closing bracket":
-    check findMatchingOpenOnLine("(hello", 4) == -1
-
-  test "Quote is not handled":
-    check findMatchingOpenOnLine("\"hello\"", 6) == -1
-
-  test "Empty parens":
-    check findMatchingOpenOnLine("()", 1) == 0
-
-  test "With prefix":
-    check findMatchingOpenOnLine("func(args)", 9) == 4
-
 suite "isAdjacentPair":
   test "Empty parens":
     check isAdjacentPair("()", 0) == true
@@ -827,6 +817,152 @@ suite "isAdjacentPair":
   test "With spaces inside":
     check isAdjacentPair("[   ]", 0) == false
     check isAdjacentPair("( )", 0) == false
+
+  test "Truncated lead byte: the pair is still found at its character column":
+    # charLen counts the bytes after a truncated lead byte as characters of
+    # their own, so a column past one exceeds runeLen. Bounds-checking with
+    # runeLen used to make the pair invisible here.
+    let line = "x\xF0()"
+    check line.charLen == 4
+    check line.charLen > line.runeLen
+    check isAdjacentPair(line, 2) == true
+    check isAdjacentBracketPair(line, 2) == true
+
+suite "unicode_utils - char metric on undecodable bytes":
+  test "truncateToCharsWithSuffix cuts at the character the caller asked for":
+    check "abc".truncateToCharsWithSuffix(5) == "abc"
+    check "abcdef".truncateToCharsWithSuffix(3) == "abc..."
+    check "\u6F22\u5B57abc".truncateToCharsWithSuffix(2) == "\u6F22\u5B57..."
+    check "abcdef".truncateToCharsWithSuffix(3, "~") == "abc~"
+
+  test "truncateToCharsWithSuffix keeps a truncated lead byte addressable":
+    # `runeSubStr` cannot address past a truncated lead byte and falls back to
+    # returning the whole string, which turned the preview into the full line.
+    # 0xF0 advertises four bytes but only three remain, so it is one character.
+    let line = "abc\xF0de"
+    check line.charLen == 6
+    check line.truncateToCharsWithSuffix(4) == "abc\xF0..."
+    check line.truncateToCharsWithSuffix(6) == line
+
+  test "truncateToCharsWithSuffix decides on the boundary character alone":
+    # The cut is inferred from the kept slice being shorter than the source
+    # rather than from a length of the whole string, so the exact-fit and
+    # one-over cases must still differ.
+    check "abcd".truncateToCharsWithSuffix(4) == "abcd"
+    check "abcde".truncateToCharsWithSuffix(4) == "abcd..."
+    check "".truncateToCharsWithSuffix(3) == ""
+    # A budget of nothing yields nothing, as truncateToWidthWithSuffix does:
+    # the suffix would overflow the space the caller measured as empty.
+    check "a".truncateToCharsWithSuffix(0) == ""
+    check "".truncateToCharsWithSuffix(0) == ""
+
+  test "truncateToWidthWithSuffix slices instead of re-encoding":
+    # `$rune` turns an undecodable byte into a three-byte replacement, so the
+    # result grew past the width just measured. The kept part is a slice of the
+    # input, so every original byte survives verbatim.
+    let line = "ab\xFFcdef"
+    # 0xFF is drawn as `<ff>`: four cells, so keeping it needs 2 + 4 + 3.
+    check line.truncateToWidthWithSuffix(9) == "ab\xFF..."
+    check line.truncateToWidthWithSuffix(6) == "ab..."
+    check line.truncateToWidthWithSuffix(99) == line
+    check "abcdef".truncateToWidthWithSuffix(4) == "a..."
+    check "abcdef".truncateToWidthWithSuffix(2) == ""
+    check "abcdef".truncateToWidthWithSuffix(0) == ""
+
+  test "an undecodable byte keeps its identity and is drawn as <e3>":
+    # It must be distinguishable from a U+FFFD the file itself holds, and the
+    # byte has to be recoverable, or the user cannot see what they are editing.
+    let (broken, size) = "\xE3ab".charAtByte(0)
+    check size == 1
+    check broken.isInvalidByteRune
+    check broken.invalidByteValue == 0xE3'u8
+    check broken.invalidByteText == "<e3>"
+    check broken.charWidth == 4
+
+    let (real, realSize) = "\uFFFDx".charAtByte(0)
+    check realSize == 3
+    check not real.isInvalidByteRune
+    check real.charWidth == 1
+    check broken != real
+
+  test "runeSizeAt admits exactly the well-formed sequences":
+    # Unicode Table 3-7, row by row, each paired with the byte just outside the
+    # range it allows. This table is the definition of a character for every
+    # column index in the editor, so it is pinned rather than sampled.
+    const cases = [
+      ("\xC2\x80", 2), # U+0080, shortest two-byte form
+      ("\xC1\xBF", 1), # overlong: C0/C1 lead nothing
+      ("\xDF\xBF", 2), # U+07FF
+      ("\xE0\xA0\x80", 3), # U+0800
+      ("\xE0\x9F\xBF", 1), # overlong three-byte form
+      ("\xE1\x80\x80", 3),
+      ("\xEC\xBF\xBF", 3),
+      ("\xED\x9F\xBF", 3), # U+D7FF, just below the surrogates
+      ("\xED\xA0\x80", 1), # U+D800 written as three bytes
+      ("\xEE\x80\x80", 3),
+      ("\xEF\xBF\xBF", 3), # U+FFFF
+      ("\xF0\x90\x80\x80", 4), # U+10000
+      ("\xF0\x8F\xBF\xBF", 1), # overlong four-byte form
+      ("\xF1\x80\x80\x80", 4),
+      ("\xF3\xBF\xBF\xBF", 4),
+      ("\xF4\x8F\xBF\xBF", 4), # U+10FFFF, the last code point
+      ("\xF4\x90\x80\x80", 1), # one past U+10FFFF
+      ("\xF5\x80\x80\x80", 1), # F5..FF lead nothing
+      ("\xF0\x90\x41\x80", 1), # third byte is not a continuation byte
+      ("\xF0\x90\x80\x41", 1), # fourth byte is not a continuation byte
+      ("\xE3\x81", 1), # truncated: the bytes are simply not there yet
+      ("\x80", 1), # a continuation byte with nothing leading it
+    ]
+    for (text, want) in cases:
+      check text.runeSizeAt(0) == want
+
+  test "a sequence that is not a character stands byte by byte":
+    # These all have the continuation-byte shape a lead byte asks for, so the
+    # advertised length alone accepts them: an overlong `/`, a surrogate written
+    # as three bytes, and a code point above U+10FFFF. Decoded, they would be
+    # drawn as an ordinary `/`, a replacement char and an out-of-range rune --
+    # the screen would say something the bytes do not.
+    for text in ["\xE0\x80\xAF", "\xED\xB2\x80", "\xF5\x80\x80\x80", "\xC0\x80"]:
+      check text.charLen == text.len
+      for i in 0 ..< text.len:
+        let (r, size) = text.charAtByte(i)
+        check size == 1
+        check r.isInvalidByteRune
+        check r.invalidByteValue == text[i].uint8
+
+  test "the characters either side of the excluded ranges still decode":
+    # U+D7FF sits just below the surrogate block and U+10FFFF is the last code
+    # point; rejecting their neighbours must not reject them.
+    for text in ["\xED\x9F\xBF", "\xF4\x8F\xBF\xBF", "\xE3\x81\x82", "\xC2\x80"]:
+      check text.charLen == 1
+      let (r, size) = text.charAtByte(0)
+      check size == text.len
+      check not r.isInvalidByteRune
+
+  test "an undecodable byte never reaches a cell as a lone surrogate":
+    # `$` on the carrier rune emits bytes no UTF-8 reader accepts, so the cell
+    # sanitiser has to catch any that get past the renderer.
+    let (broken, _) = "\xFF".charAtByte(0)
+    check sanitizeCellRune(broken) == Rune(0xFFFD)
+
+  test "charDisplayWidth counts the cells an undecodable byte takes":
+    check "ab".charDisplayWidth == 2
+    check "a\xE3b".charDisplayWidth == 6
+
+  test "charSubStr takes the whole tail for any count past the end":
+    # A count at least as large as the remaining bytes cannot end before the
+    # text does, so it must behave like the omitted-count form.
+    let text = "a\xE3b"
+    check text.charSubStr(0, int.high) == text
+    check text.charSubStr(0, 99) == text
+    check text.charSubStr(0, text.len) == text
+    check text.charSubStr(1, 99) == "\xE3b"
+
+  test "runeSizeAt outside the text yields 0 instead of reading out of bounds":
+    check "ab".runeSizeAt(2) == 0
+    check "ab".runeSizeAt(99) == 0
+    check "ab".runeSizeAt(-1) == 0
+    check "".runeSizeAt(0) == 0
 
 suite "unicode_utils - setRuneCell":
   test "ASCII rune writes only the main cell, returns width 1":
@@ -1048,3 +1184,44 @@ suite "truncateToWidthWithSuffix":
     let result = truncateToWidthWithSuffix("日本", 3, "~")
     check result == "日~"
     check displayWidth(result) <= 3
+
+suite "mayAbsorbAtSeam":
+  test "false for text whose bytes all stand on their own":
+    check not "hello".mayAbsorbAtSeam
+    check not "".mayAbsorbAtSeam
+    check not "\u65e5\u672c\u8a9e".mayAbsorbAtSeam
+
+  test "true when a lead byte was left without the bytes it advertised":
+    check "x\xF0".mayAbsorbAtSeam
+    check "caf\xE9".mayAbsorbAtSeam
+    check "\xF0\x9F".mayAbsorbAtSeam
+
+  test "false for a lead byte no character can start with":
+    # 0xF8 announced a five-byte form, which left UTF-8 in RFC 3629. Nothing
+    # written after it can make those bytes a character, so the seam cannot
+    # move and each byte keeps its own column however much follows.
+    let text = "A\xF8\x80\x80\x80"
+    check text.charLen == 5
+    check not text.mayAbsorbAtSeam
+    check (text & "\x80").charLen == 6
+
+  test "true only while a real lead byte is still short of its bytes":
+    # 0xF0 leads a four-byte character: truncated to three it can still absorb,
+    # and the window has to look three bytes back to see it.
+    let text = "A\xF0\x9F\x98"
+    check text.mayAbsorbAtSeam
+    check (text & "\x81").charLen == 2
+
+  test "seam is measured against a given byte, not only the end":
+    # A lead byte left truncated part-way through a line takes what is written
+    # next to it just as one at the end does.
+    let line = "\xF0a"
+    check line.charLen == 2
+    check line.mayAbsorbAtSeam(1)
+    check not line.mayAbsorbAtSeam(0)
+
+  test "false when the advertised bytes are not continuation bytes":
+    # 0xF0 has four bytes here but they do not belong to it, so it stands alone
+    # and nothing written next to this text changes how it counts.
+    check "x\xF0abc".charLen == 5
+    check not "x\xF0abc".mayAbsorbAtSeam

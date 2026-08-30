@@ -147,6 +147,56 @@ suite "InsertModeHandler - Character Insertion":
     check buf.getLine(0) == "func()"
     check state.cursor.column == 5 # Between parens
 
+  test "Typing next to a broken byte leaves it standing alone":
+    # 0xF0 keeps its four bytes only if they are all continuation bytes, so
+    # typing beside it cannot be swallowed: every column stays where it was.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\xF0a")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+    check buf.getLine(0).charLen == 2
+
+    let result = handler.handleCharacterInsertion(buf, state, "bc")
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "\xF0bca"
+    check buf.getLine(0).charLen == 4
+    check state.cursor.column == 3
+
+  test "Pasting the rest of a split character reassembles it":
+    # The one seam that still merges: a lead byte waiting on its continuation
+    # bytes meets them. The four columns become one and the cursor belongs at
+    # its end, not at the three columns counted apart.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\xF0")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+    check buf.getLine(0).charLen == 1
+
+    let result = handler.handleCharacterInsertion(buf, state, "\x9F\x98\x81")
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "\xF0\x9F\x98\x81"
+    check buf.getLine(0).charLen == 1
+    check state.cursor.column == 1
+
+  test "Auto-close beside a broken byte writes the pair as two columns":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\xF0a")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.autoCloseParen = true
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    let result = handler.handleCharacterInsertion(buf, state, "(")
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "\xF0()a"
+    check buf.getLine(0).charLen == 4
+    check state.cursor.column == 2
+
   test "Insert opening bracket with auto-close":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "arr")
@@ -2066,12 +2116,12 @@ suite "InsertModeHandler - completion commit":
     check state.cursor.column == 8
     check not handler.completionManager.isActive()
 
-  test "Commit with textEdit uses rune indexes on surrogate pair line":
+  test "Commit with textEdit uses character indexes on surrogate pair line":
     # Regression: before the fix, utf16OffsetToUtf8 (byte offset) was used
-    # instead of utf16ToRuneIndex (rune index) to compute the cursor column
-    # after commit. On a line with a surrogate-pair emoji the byte offset
-    # for 'b' in "a😀b" is 5 while the correct rune index is 2, so the
-    # cursor would be placed 3 columns too far right.
+    # instead of utf16ToCharIndex (character index) to compute the cursor
+    # column after commit. On a line with a surrogate-pair emoji the byte
+    # offset for 'b' in "a😀b" is 5 while the correct character index is 2,
+    # so the cursor would be placed 3 columns too far right.
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a😀b")
     # Rune indexes:  a=0, 😀=1, b=2

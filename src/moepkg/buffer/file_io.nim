@@ -151,6 +151,12 @@ proc loadFileWithContent*(
 
   b.encoding = encoding
   b.hasBom = hasBom
+  # A NUL near the start is the standard "this is not text" tell (git, grep
+  # and vim all use it). The bytes are kept and saved back verbatim; the flag
+  # only lets the open be announced.
+  b.hasBinaryContent =
+    '\0' in
+    contentMut.toOpenArray(0, min(contentMut.high, EncodingDetectionSampleSize - 1))
   b.detectAndNormalizeLineEnding(contentMut)
 
   let newBackend = chooseBackendForFile(effFileSize)

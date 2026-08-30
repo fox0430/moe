@@ -779,12 +779,9 @@ proc pickEdit(buf: seq[string], corpus: seq[seq[string]], rng: var Rand): Edit =
   ## DeleteChar on an empty line); falls back to InsertChar as a guaranteed
   ## productive edit.
   ##
-  ## Char edit columns are RUNE positions, not byte positions. The real
-  ## editor's buffer is `seq[Runes]`, so lines reaching the highlighter are
-  ## always valid UTF-8; byte-positioned edits could split a multibyte
-  ## sequence and create invalid UTF-8 that the editor cannot produce
-  ## (and that the full-reparse path, which round-trips through `toRunes`,
-  ## would see as a *different* string than the incremental path).
+  ## Char edit columns are RUNE positions, not byte positions: byte-positioned
+  ## edits could split a multibyte sequence, and the fuzz compares the
+  ## incremental and full parses of well-formed text only.
   ## For pure-ASCII lines `runeLen == len`, so existing seeds reproduce
   ## identically.
   for _ in 0 .. 9:
@@ -870,10 +867,7 @@ proc applyEdit(buf: var seq[string], e: Edit): int =
 # Comparison
 
 proc fullHighlight(buf: seq[string], lang: SourceLanguage): Highlight =
-  var runes: seq[Runes]
-  for line in buf:
-    runes.add(line.toRunes)
-  initHighlight(runes, @[], lang)
+  initHighlight(buf, @[], lang)
 
 proc firstDivergence(
     buf: seq[string], incr, full: Highlight

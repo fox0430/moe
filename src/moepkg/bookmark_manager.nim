@@ -20,9 +20,9 @@
 ## Bookmark Manager module
 ## Provides a UI for viewing and managing bookmarks across all open buffers
 
-import std/[options, unicode]
+import std/options
 
-import buffer/core, list_viewer
+import buffer/core, list_viewer, unicode_utils
 import types/bookmark_manager_types
 
 export bookmark_manager_types
@@ -39,11 +39,7 @@ proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
     for bline in buf.bookmarks:
       let text =
         if bline < buf.len:
-          let line = buf.getLine(bline)
-          if line.runeLen > 50:
-            line.runeSubStr(0, 50) & "..."
-          else:
-            line
+          buf.getLine(bline).truncateToCharsWithSuffix(50)
         else:
           ""
       state.items.add(

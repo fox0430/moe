@@ -159,7 +159,7 @@ proc newLineStyleContext*(
     if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
       let cap = if textBuffer != nil: textBuffer.maxHighlightLineLength else: 0
       if cap > 0 and fullLine.len > cap:
-        scanLineForColorCodes(fullLine.runeSubStr(0, cap))
+        scanLineForColorCodes(fullLine.charSubStr(0, cap))
       else:
         scanLineForColorCodes(fullLine)
     else:
@@ -534,7 +534,7 @@ proc appendEndOfLineVirtualText(
     return
   for chunk in vt.endOfLine:
     let baseStyle = colorIndexToStyle(chunk.color)
-    for rune in chunk.text.runes:
+    for (rune, _) in chunk.text.chars:
       let cellRune = sanitizeCellRune(rune)
       let w = runeWidth(cellRune)
       if w == 0:
@@ -617,9 +617,21 @@ proc renderLineSegmentWithSelection*(
           buffer.setCell(screenX + displayX, screenY, " ", 1, tabStyle)
       displayX += 1
 
+  template renderInvalidByteCell(rune: Rune, col: int, style: Style) =
+    # Undecodable bytes are drawn as `<e3>` (the way vim shows them) so the
+    # user can see which byte is there, not a replacement character
+    # indistinguishable from one the file really holds.
+    # The byte's own foreground over the line's background, the way the
+    # indentation guide is drawn, so selection and cursor-line stay visible.
+    let byteStyle = invalidByteStyle().merge(bgOnly(style.bg))
+    for ch in invalidByteText(rune):
+      if screenX + displayX < ctx.windowRightEdge:
+        buffer.setCell(screenX + displayX, screenY, $ch, 1, byteStyle)
+      displayX += 1
+
   template renderNormalCell(rune: Rune, col: int, style: Style) =
     let cellRune = sanitizeCellRune(rune)
-    let width = runeWidth(cellRune)
+    let width = charWidth(cellRune)
     if width == 0:
       # Zero-width rune (combining mark / ZWJ / variation selector): fold it
       # into the preceding base cell rather than writing a standalone cell the
@@ -643,13 +655,15 @@ proc renderLineSegmentWithSelection*(
   template renderChar(rune: Rune, col: int, style: Style) =
     if rune == TAB_CHAR:
       renderTabCell(col, style)
+    elif rune.isInvalidByteRune:
+      renderInvalidByteCell(rune, col, style)
     else:
       renderNormalCell(rune, col, style)
 
   if useRunes:
     # Character-based rendering (for wrapped mode)
     var charIdx = startColumn
-    for rune in displayLine.runes:
+    for (rune, _) in displayLine.chars:
       let
         pos = BufferPosition(line: lineIndex, column: charIdx)
         style = e.getSelectionStyle(
@@ -667,7 +681,7 @@ proc renderLineSegmentWithSelection*(
   else:
     # Byte-based rendering (for non-wrapped mode)
     var charIdx = 0
-    for rune in displayLine.runes:
+    for (rune, _) in displayLine.chars:
       let
         col = startColumn + charIdx
         pos = BufferPosition(line: lineIndex, column: col)
@@ -907,7 +921,7 @@ proc renderWindowLineNoWrap*(
   let
     displayLine =
       if window.viewport.leftColumn < line.charLen:
-        line.runeSubStr(window.viewport.leftColumn)
+        line.charSubStr(window.viewport.leftColumn)
       else:
         ""
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
@@ -1030,7 +1044,7 @@ proc renderFoldLine*(
         ""
       elif foldText.displayWidth > maxWidth:
         let (fitChars, _) = foldText.displayWidthSubstr(0, maxWidth)
-        foldText.runeSubStr(0, fitChars)
+        foldText.charSubStr(0, fitChars)
       else:
         foldText
     buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())

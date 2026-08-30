@@ -59,7 +59,7 @@ proc toRuneRange(e: Editor, r: Range): tuple[first, last: BufferPosition] =
     else:
       ""
   let first = BufferPosition(
-    line: startLine, column: utf16ToRuneIndex(startText, r.start.character)
+    line: startLine, column: utf16ToCharIndex(startText, r.start.character)
   )
 
   if buf.len == 0:
@@ -78,7 +78,7 @@ proc toRuneRange(e: Editor, r: Range): tuple[first, last: BufferPosition] =
         buf.getLine(endLine)
       else:
         ""
-    endColExcl = utf16ToRuneIndex(endText, r.`end`.character)
+    endColExcl = utf16ToCharIndex(endText, r.`end`.character)
 
   var last: BufferPosition
   if endColExcl > 0:

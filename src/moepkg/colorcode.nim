@@ -22,11 +22,12 @@
 ## Detects #RRGGBB and #RGB color codes in text and provides styles
 ## for rendering them with their actual color as background.
 
-import std/[options, hashes, unicode]
+import std/[options, hashes]
 
 import pkg/[celina, results]
 
 import color
+import unicode_utils
 
 type
   ColorCodeMatch* = object
@@ -85,14 +86,16 @@ proc scanLineForColorCodes*(line: string): seq[ColorCodeMatch] =
 
   byteToRune.setLen(line.len)
   var byteOff = 0
-  for rune in line.runes:
-    let runeLen = rune.size
-    for j in 0 ..< runeLen:
-      if byteOff + j < line.len:
-        byteToRune[byteOff + j] = runeIndex
-    if rune == '#'.Rune:
+  while byteOff < line.len:
+    # Stepped by the bytes the character actually occupies, not by the width it
+    # would re-encode to: an undecodable byte is wider as a Rune than it is in
+    # the line, and the mapping would slide out from under every column after.
+    let charLen = line.runeSizeAt(byteOff)
+    for j in 0 ..< charLen:
+      byteToRune[byteOff + j] = runeIndex
+    if line[byteOff] == '#':
       hashPositions.add(byteOff)
-    byteOff += runeLen
+    byteOff += charLen
     runeIndex += 1
 
   for hashBytePos in hashPositions:

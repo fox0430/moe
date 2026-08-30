@@ -157,7 +157,7 @@ proc pollLspDocumentLinks*(e: Editor) =
         else:
           ""
       let linkOpt =
-        findDocumentLinkAtCursor(links, curLine, runeIndexToUtf16(lineText, curCol))
+        findDocumentLinkAtCursor(links, curLine, charIndexToUtf16(lineText, curCol))
 
       if linkOpt.isNone:
         e.state.statusMessage =

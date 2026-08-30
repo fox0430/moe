@@ -200,11 +200,11 @@ suite "editor_documentlink - findDocumentLinkAtCursor":
 # failure side effect that no longer exists: `startContextualRequest` skips
 # populating `pending[lrfDocumentLink]` when the underlying request errors.
 # The pure UTF-16 conversion is still covered by
-# `test_lsp_integration.nim` (`runeIndexToUtf16 with ...`).
+# `test_lsp_integration.nim` (`charIndexToUtf16 with ...`).
 
 suite "editor_documentlink - UTF-16 cursor conversion":
   test "pollLspDocumentLinks converts cursor to UTF-16 before matching link":
-    # Regression guard for `pollLspDocumentLinks` -> `runeIndexToUtf16` ->
+    # Regression guard for `pollLspDocumentLinks` -> `charIndexToUtf16` ->
     # `findDocumentLinkAtCursor` wiring. If the conversion is missing, the
     # rune index passed directly to `findDocumentLinkAtCursor` cannot align
     # with an LSP range (UTF-16 code units) past an astral rune.

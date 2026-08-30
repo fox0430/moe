@@ -81,7 +81,7 @@ proc processCodeLensResponse(
           activeBuffer.getLine(line)
         else:
           ""
-      let col = utf16ToRuneIndex(lineText, lens.range.start.character)
+      let col = utf16ToCharIndex(lineText, lens.range.start.character)
       var item = CodeLensItem(line: line, column: col)
 
       if lens.command.isSome:
@@ -375,8 +375,8 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
           activeBuffer.getLine(startLine)
         else:
           ""
-      let startCol = utf16ToRuneIndex(lineText, highlight.range.start.character)
-      let endCol = utf16ToRuneIndex(lineText, highlight.range.`end`.character)
+      let startCol = utf16ToCharIndex(lineText, highlight.range.start.character)
+      let endCol = utf16ToCharIndex(lineText, highlight.range.`end`.character)
       let item = DocumentHighlightItem(
         line: startLine, startColumn: startCol, endColumn: endCol, kind: kind
       )
@@ -393,14 +393,14 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
             ""
         let startCol =
           if line == startLine:
-            utf16ToRuneIndex(lineText, highlight.range.start.character)
+            utf16ToCharIndex(lineText, highlight.range.start.character)
           else:
             0
         # For end column, use a large value for middle lines
         # (will be clamped during rendering)
         let endCol =
           if line == endLine:
-            utf16ToRuneIndex(lineText, highlight.range.`end`.character)
+            utf16ToCharIndex(lineText, highlight.range.`end`.character)
           else:
             int.high
         let item = DocumentHighlightItem(
@@ -808,7 +808,7 @@ proc processInlayHintResponse(e: Editor, hints: seq[InlayHint]) =
     if line < 0 or line >= activeBuffer.len:
       continue
     let lineText = activeBuffer.getLine(line)
-    let col = utf16ToRuneIndex(lineText, hint.position.character)
+    let col = utf16ToCharIndex(lineText, hint.position.character)
     let label = getInlayHintLabel(hint)
     if label.len == 0:
       continue
