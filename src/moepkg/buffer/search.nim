@@ -58,6 +58,41 @@ proc compileSearchRegex*(pattern: string, ignorecase: bool): Option[Regex2] =
   except RegexError:
     return none(Regex2)
 
+proc hasInvalidUtf8*(line: string): bool =
+  ## Check if `line` has invalid UTF-8 per `runeSizeAt`/`charLen` model.
+  ## Invalid lines must not be passed to `regex` (asserts in debug, UB in release).
+  var i = 0
+  while i < line.len:
+    let sz = line.runeSizeAt(i)
+    if sz == 0:
+      # Defensive: unreachable while `i < line.len`.
+      return true
+    if sz == 1 and line[i].uint8 >= 0x80'u8:
+      return true
+    i += sz
+  false
+
+proc toValidUtf8(line: string): string =
+  ## Return `line` with undecodable bytes replaced by U+FFFD so the result is
+  ## valid UTF-8 for `regex`. Each undecodable byte becomes one character, so
+  ## character indices (`charLen`, `byteToCharPos`) agree between `line` and
+  ## the result; regex matches on the result translate back by character.
+  if not line.hasInvalidUtf8:
+    return line
+  result = newStringOfCap(line.len)
+  var i = 0
+  while i < line.len:
+    let sz = line.runeSizeAt(i)
+    if sz == 0:
+      # Defensive: a zero step would loop forever.
+      break
+    if sz == 1 and line[i].uint8 >= 0x80'u8:
+      result.add("\uFFFD")
+      inc i
+    else:
+      result.add(line[i ..< i + sz])
+      i += sz
+
 proc findNext*(
     b: TextBuffer, searchText: string, startPos: BufferPosition, ignorecase = false
 ): Option[BufferPosition] =
@@ -80,8 +115,8 @@ proc findNext*(
     return none(BufferPosition)
   let re = compiled.get
 
-  # Helper: find first regex match in line at or after startByteCol.
-  # Returns character position or -1.
+  # Find first match in `line` at or after startCharCol, or -1.
+  # Undecodable bytes are replaced with U+FFFD so `regex` only sees valid UTF-8.
   proc searchLine(line: string, startCharCol = 0): int =
     if line.len == 0:
       return -1
@@ -89,12 +124,13 @@ proc findNext*(
     if startCharCol >= lineCharLen:
       return -1
     let clampedStartCol = max(0, min(startCharCol, lineCharLen))
-    let startByteCol = charToBytePos(line, clampedStartCol)
-    if startByteCol > line.len:
+    let searchable = line.toValidUtf8
+    let startByteCol = charToBytePos(searchable, clampedStartCol)
+    if startByteCol > searchable.len:
       return -1
     var m = RegexMatch2()
-    if find(line, re, m, startByteCol):
-      return byteToCharPos(line, m.boundaries.a)
+    if find(searchable, re, m, startByteCol):
+      return byteToCharPos(searchable, m.boundaries.a)
     return -1
 
   # Search rest of current line
@@ -159,12 +195,12 @@ proc findPrev*(
     return none(BufferPosition)
   let re = compiled.get
 
-  # Find last regex match in line where match start char < maxCharCol.
-  # maxCharCol < 0 means no limit.
+  # Find last match with start < maxCharCol (<0 = no limit).
   proc findLastInLine(line: string, maxCharCol = -1): int =
     if line.len == 0:
       return -1
-    let lineCharLen = line.charLen
+    let searchable = line.toValidUtf8
+    let lineCharLen = searchable.charLen
     let searchCharLimit =
       if maxCharCol < 0:
         lineCharLen
@@ -176,14 +212,14 @@ proc findPrev*(
     var lastCharIdx = -1
     var searchBytePos = 0
     var m = RegexMatch2()
-    while searchBytePos <= line.len:
-      if not find(line, re, m, searchBytePos):
+    while searchBytePos <= searchable.len:
+      if not find(searchable, re, m, searchBytePos):
         break
-      let charIdx = byteToCharPos(line, m.boundaries.a)
+      let charIdx = byteToCharPos(searchable, m.boundaries.a)
       if maxCharCol >= 0 and charIdx >= searchCharLimit:
         break
       lastCharIdx = charIdx
-      # Advance past this match (at least 1 byte to avoid infinite loop on zero-width)
+      # Advance past match (avoid infinite loop on zero-width)
       searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
     return lastCharIdx
 
@@ -223,14 +259,15 @@ proc findPrev*(
         continue
 
       # Find last match after searchStartCharCol
-      let startByteCol = charToBytePos(line, searchStartCharCol)
+      let searchable = line.toValidUtf8
+      let startByteCol = charToBytePos(searchable, searchStartCharCol)
       var lastCharIdx = -1
       var searchBytePos = startByteCol
       var m = RegexMatch2()
-      while searchBytePos <= line.len:
-        if not find(line, re, m, searchBytePos):
+      while searchBytePos <= searchable.len:
+        if not find(searchable, re, m, searchBytePos):
           break
-        let charIdx = byteToCharPos(line, m.boundaries.a)
+        let charIdx = byteToCharPos(searchable, m.boundaries.a)
         lastCharIdx = charIdx
         searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
 
@@ -303,21 +340,22 @@ proc findSearchMatchRanges*(
         result.add(ColumnRange(startCol: charIdx, endCol: charIdx + searchTextCharLen))
       searchCharPos = charIdx + 1
   else:
-    # Regex matching
+    # Regex matching (undecodable bytes replaced for `regex` safety)
     let compiled = compileSearchRegex(searchText, ignorecase)
     if compiled.isNone:
       return @[]
     let re = compiled.get
 
+    let searchable = line.toValidUtf8
     var searchBytePos = 0
     var m = RegexMatch2()
-    while searchBytePos <= line.len:
-      if not find(line, re, m, searchBytePos):
+    while searchBytePos <= searchable.len:
+      if not find(searchable, re, m, searchBytePos):
         break
-      let startChar = byteToCharPos(line, m.boundaries.a)
-      let endChar = byteToCharPos(line, m.boundaries.b + 1)
+      let startChar = byteToCharPos(searchable, m.boundaries.a)
+      let endChar = byteToCharPos(searchable, m.boundaries.b + 1)
       result.add(ColumnRange(startCol: startChar, endCol: endChar))
-      # Advance past this match (at least 1 byte to avoid infinite loop on zero-width)
+      # Advance past match (avoid infinite loop on zero-width)
       searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
 
 proc isPositionInSearchMatch*(
@@ -345,14 +383,9 @@ proc isPositionInSearchMatch*(
 template byteSliceEqualsWord(
     line: string, startByte, endByte: int, word: string
 ): bool =
-  ## Compare `line[startByte ..< endByte]` to `word` without allocating a
-  ## substring. UTF-8 byte equality is exact string equality, so this stays
-  ## correct for multibyte and is allocation-free on the render hot path.
-  ##
-  ## Expression-bodied (a `block` that yields its last value, no `return`) so it
-  ## composes inside the larger boolean expressions at the call sites. Arguments
-  ## are substituted, not bound, so pass only side-effect-free expressions — the
-  ## call sites pass plain locals.
+  ## Compare `line[startByte..<endByte]` to `word` without allocation.
+  ## Byte equality holds for UTF-8; allocation-free for render hot path.
+  ## `block` expression (no `return`) — pass side-effect-free args only.
   block:
     var eq = endByte - startByte == word.len
     if eq:
@@ -379,11 +412,8 @@ proc findWordMatchRanges*(
   if line.len == 0:
     return @[]
 
-  # Scan characters left-to-right, tracking each maximal word run by its column
-  # span [runStartCol, col) and byte span [runStartByte, bytePos). Comparing the
-  # byte slice against `word` avoids materializing the line into a seq[Rune] and
-  # building a fresh string for every candidate word — both of which the old
-  # implementation allocated for every visible line, every frame.
+  # Scan word runs by column [runStartCol, col) and bytes [runStartByte, bytePos).
+  # Byte-slice compare avoids allocating seq[Rune]/strings per frame.
   var
     col = 0
     bytePos = 0
@@ -391,9 +421,7 @@ proc findWordMatchRanges*(
     runStartByte = 0
 
   while bytePos < line.len:
-    # `charAtByte` steps by the bytes the character actually occupies, so `col`
-    # is the same column the buffer and the renderer count (`fastRuneAt` can
-    # drift on a line holding a byte that does not decode).
+    # `charAtByte` keeps `col` in sync with buffer/renderer.
     let charStartByte = bytePos
     let (r, size) = line.charAtByte(bytePos)
     bytePos += size
@@ -402,14 +430,14 @@ proc findWordMatchRanges*(
         runStartCol = col
         runStartByte = charStartByte
     elif runStartCol >= 0:
-      # Word run [runStartCol, col) ends here; emit it when it matches.
+      # Word run ends; emit if matches.
       if byteSliceEqualsWord(line, runStartByte, charStartByte, word) and
           not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
         result.add(ColumnRange(startCol: runStartCol, endCol: col))
       runStartCol = -1
     inc col
 
-  # A word run reaching end-of-line is not closed by the loop above.
+  # Emit trailing word run at EOL.
   if runStartCol >= 0 and byteSliceEqualsWord(line, runStartByte, bytePos, word) and
       not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
     result.add(ColumnRange(startCol: runStartCol, endCol: col))
