@@ -909,3 +909,125 @@ suite "Buffer Search - Regex edge cases":
     # \\b is zero-width; findPrev should not infinite loop
     let result = buf.findPrev("\\b", BufferPosition(line: 0, column: 5))
     check result.isSome # Should find a word boundary before position
+
+suite "Buffer Search - invalid UTF-8 lines":
+  # Undecodable bytes are replaced with U+FFFD before regex matching, so
+  # searches must not crash and character columns must match the editor model
+  # (each undecodable byte counts as one character).
+
+  test "findNext on line with leading invalid byte":
+    let buf = newTextBuffer("\xFFab cd")
+    let result = buf.findNext("cd", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 4
+
+  test "findNext dollar anchor on line ending with invalid byte":
+    let buf = newTextBuffer("ab\xFF")
+    let result = buf.findNext("$", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 3
+
+  test "findNext dollar anchored literal does not match before trailing invalid byte":
+    let buf = newTextBuffer("ab\xFF")
+    # "b" is not at EOL (the invalid byte occupies the last column)
+    let result = buf.findNext("b$", BufferPosition(line: 0, column: -1))
+    check result.isNone
+
+  test "findNext caret anchor on line starting with invalid byte":
+    let buf = newTextBuffer("\xFFab")
+    let result = buf.findNext("^", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+  test "findNext caret anchored literal does not match when not at line start":
+    let buf = newTextBuffer("\xFFab")
+    # "a" is not at the line start (the invalid byte occupies column 0)
+    let result = buf.findNext("^a", BufferPosition(line: 0, column: -1))
+    check result.isNone
+
+  test "findNext dot spans undecodable byte":
+    let buf = newTextBuffer("a\xFFb")
+    let result = buf.findNext("a.b", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+  test "findNext dollar anchored pattern does not match before trailing invalid byte":
+    let buf = newTextBuffer("foo\xFF")
+    let result = buf.findNext("foo$", BufferPosition(line: 0, column: -1))
+    check result.isNone
+
+  test "findNext dollar anchored pattern matches at end after leading invalid byte":
+    let buf = newTextBuffer("\xFFfoo")
+    let result = buf.findNext("foo$", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 1
+
+  test "findNext any-char-and-dollar pattern covers trailing invalid byte":
+    let buf = newTextBuffer("ab\xFF")
+    let result = buf.findNext(".*$", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+  test "findNext word boundary at undecodable byte":
+    let buf = newTextBuffer("ab\xFFcd")
+    let result = buf.findNext("\\b", BufferPosition(line: 0, column: 1))
+    check result.isSome
+    check result.get.column == 2
+
+  test "findNext across lines with invalid byte":
+    let buf = newTextBuffer("ab\xFF\ncd")
+    let result = buf.findNext("cd", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.line == 1
+    check result.get.column == 0
+
+  test "findPrev on line with leading invalid byte":
+    let buf = newTextBuffer("\xFFab cd")
+    let result = buf.findPrev("a", BufferPosition(line: 0, column: 3))
+    check result.isSome
+    check result.get.column == 1
+
+  test "findPrev dollar anchor on line ending with invalid byte":
+    let buf = newTextBuffer("ab\xFF")
+    let result = buf.findPrev("$", BufferPosition(line: 0, column: 0))
+    check result.isSome
+    check result.get.column == 3
+
+  test "findSearchMatchRanges spans undecodable byte":
+    let buf = newTextBuffer("a\xFFb")
+    let ranges = buf.findSearchMatchRanges(0, "a.b")
+    check ranges == @[ColumnRange(startCol: 0, endCol: 3)]
+
+  test "findSearchMatchRanges dollar anchored on invalid byte line":
+    let buf = newTextBuffer("x\xFFfoo")
+    let ranges = buf.findSearchMatchRanges(0, "foo$")
+    check ranges == @[ColumnRange(startCol: 2, endCol: 5)]
+
+  test "findSearchMatchRanges any-char-and-dollar on invalid byte line":
+    let buf = newTextBuffer("ab\xFF")
+    # The trailing zero-width match at EOL is pre-existing behavior
+    let ranges = buf.findSearchMatchRanges(0, ".*$")
+    check ranges ==
+      @[ColumnRange(startCol: 0, endCol: 3), ColumnRange(startCol: 3, endCol: 3)]
+
+  test "findNext wraps around to earlier line with invalid byte":
+    let buf = newTextBuffer("\xFFab\ncd")
+    let result = buf.findNext("a", BufferPosition(line: 1, column: 0))
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 1
+
+  test "findNext wraps within same line with invalid byte":
+    let buf = newTextBuffer("a\xFFb")
+    let result = buf.findNext("a", BufferPosition(line: 0, column: 2))
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 0
+
+  test "findPrev searches earlier line with invalid byte":
+    let buf = newTextBuffer("\xFFab\ncd")
+    let result = buf.findPrev("a", BufferPosition(line: 1, column: 1))
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 1
