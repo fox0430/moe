@@ -1253,3 +1253,140 @@ suite "Editor - highlight line-length cap on load":
       check e.activeBuffer.maxHighlightLineLength == 500
       check e.activeBuffer.incrementalHighlight != nil
       check e.activeBuffer.incrementalHighlight.parsedUpTo < e.activeBuffer.len - 1
+
+suite "Editor - invalid bytes roundtrip":
+  template invalidByteRoundtripScenario(makeEditor: untyped, tag: string) =
+    test "Basic 7 contamination patterns roundtrip" & tag:
+      let raws = @[
+        "\xE3", "\xFF\xFE", "a\xE3b", "ab\xFF\ncd", "a\xF0abc", "\xE3\n", "foo\xFF bar"
+      ]
+      for idx, raw in raws:
+        let src = getTempDir() / ("moe_test_invalid_basic_" & $idx & ".bin")
+        let dst = src & ".out"
+        writeFile(src, raw)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check not e.activeBuffer.hasBom
+        check e.activeBuffer.getFileContent() == raw
+        # First line must preserve bytes; splitLines()[0] mirrors the
+        # spec's suggested check for single- and multi-line raws.
+        check e.activeBuffer.getLine(0) == raw.splitLines()[0]
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == raw
+        # Overwrite via saveFile() to the buffer's own path (now dst, since
+        # the save-as above re-pointed filePath) must also be exact.
+        check e.saveFile().isOk
+        check readFile(dst) == raw
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+
+    test "CRLF with invalid bytes roundtrip" & tag:
+      let raws = @["a\xE3\r\n", "a\xE3\r\nb\xFF\r\n", "foo\xFF\r\nbar\xE3\r\n"]
+      for idx, raw in raws:
+        let src = getTempDir() / ("moe_test_invalid_crlf_" & $idx & ".bin")
+        let dst = src & ".out"
+        writeFile(src, raw)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.lineEnding == CRLF
+        check e.activeBuffer.getFileContent() == raw
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == raw
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+
+    test "CR with invalid bytes roundtrip" & tag:
+      let raws = @["a\xE3\rb\xFF\r", "foo\xFF\rbaz\xE3\r"]
+      for idx, raw in raws:
+        let src = getTempDir() / ("moe_test_invalid_cr_" & $idx & ".bin")
+        let dst = src & ".out"
+        writeFile(src, raw)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.lineEnding == CR
+        check e.activeBuffer.getFileContent() == raw
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == raw
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+
+    test "NUL with invalid bytes roundtrip" & tag:
+      let raws = @["a\x00b\xE3c", "ab\xFF\x00\ncd", "\x00\xE3\n"]
+      for idx, raw in raws:
+        let src = getTempDir() / ("moe_test_invalid_nul_" & $idx & ".bin")
+        let dst = src & ".out"
+        writeFile(src, raw)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.hasBinaryContent
+        check e.activeBuffer.getFileContent() == raw
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == raw
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+
+    test "Invalid bytes preserved after insertion and save" & tag:
+      block lfCase:
+        let raw = "a\xE3b\nc\xFFd"
+        let src = getTempDir() / "moe_test_invalid_insert_lf.bin"
+        let dst = src & ".out"
+        writeFile(src, raw)
+        defer:
+          removeFile(src)
+          if fileExists(dst):
+            removeFile(dst)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.insertText(BufferPosition(line: 0, column: 1), "X").isOk
+        check e.activeBuffer.getLine(0) == "aX\xE3b"
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.getFileContent() == "aX\xE3b\nc\xFFd"
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == "aX\xE3b\nc\xFFd"
+
+      block crlfCase:
+        let raw = "a\xE3\r\nb\xFF\r\n"
+        let src = getTempDir() / "moe_test_invalid_insert_crlf.bin"
+        let dst = src & ".out"
+        writeFile(src, raw)
+        defer:
+          removeFile(src)
+          if fileExists(dst):
+            removeFile(dst)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check e.activeBuffer.lineEnding == CRLF
+        check e.activeBuffer.insertText(BufferPosition(line: 0, column: 1), "X").isOk
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == "aX\xE3\r\nb\xFF\r\n"
+
+      block nulCase:
+        let raw = "a\x00b\xE3c"
+        let src = getTempDir() / "moe_test_invalid_insert_nul.bin"
+        let dst = src & ".out"
+        writeFile(src, raw)
+        defer:
+          removeFile(src)
+          if fileExists(dst):
+            removeFile(dst)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.hasBinaryContent
+        check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Z").isOk
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == "Za\x00b\xE3c"
+
+  invalidByteRoundtripScenario(createTestEditor(), " [GapBuffer]")
+  invalidByteRoundtripScenario(
+    createTestEditorWithBackend(bbcPieceTable), " [PieceTable]"
+  )
