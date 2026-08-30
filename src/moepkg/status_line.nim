@@ -223,6 +223,13 @@ proc buildGitInfo(
   else:
     return ""
 
+proc lineEndingLabel(textBuffer: TextBuffer): string =
+  ## Raw buffer: `lineEnding` is unused; report RAW.
+  if not textBuffer.allowsTextTransforms:
+    "RAW"
+  else:
+    $textBuffer.lineEnding
+
 proc parseSetupText(
     state: EditorState, textBuffer: TextBuffer, setupText: string
 ): string =
@@ -239,7 +246,7 @@ proc parseSetupText(
   ##   {filename}      - Filename only
   ##   {directory}     - Directory path
   ##   {filePath}      - Full file path
-  ##   {lineEnding}    - Line ending (LF, CRLF, CR)
+  ##   {lineEnding}    - Line ending (LF, CRLF, CR, or RAW for undecoded bytes)
   ##   {gitBranch}     - Git branch name
   ##   {gitChanges}    - Git changes (+N ~N -N)
   let
@@ -297,7 +304,7 @@ proc parseSetupText(
   result = result.replace("{columnNumber}", $currentCol)
   result = result.replace("{totalColumns}", $totalCols)
   result = result.replace("{encoding}", encoding)
-  result = result.replace("{lineEnding}", $textBuffer.lineEnding)
+  result = result.replace("{lineEnding}", lineEndingLabel(textBuffer))
   result = result.replace("{fileType}", fileType)
   result = result.replace("{percentage}", $percentage & "%")
   result = result.replace("{mode}", modeStr)
@@ -343,7 +350,7 @@ proc buildRightSideInfo(
 
   # Line ending
   if state.display.showLineEnding:
-    parts.add($textBuffer.lineEnding)
+    parts.add(lineEndingLabel(textBuffer))
 
   # Line percentage
   if state.display.showLinePercentage:

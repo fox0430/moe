@@ -95,7 +95,8 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
         discard
 
   # trim_trailing_whitespace
-  if props.hasKey("trim_trailing_whitespace"):
+  # Skip for raw buffers: trimming would corrupt raw bytes.
+  if buffer.allowsTextTransforms and props.hasKey("trim_trailing_whitespace"):
     let val = props["trim_trailing_whitespace"]
     if val == "true":
       bufEc.trimTrailingWhitespace = some(true)
@@ -105,7 +106,8 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
   buffer.editorConfig = some(bufEc)
 
   # end_of_line -> lineEnding (set directly on buffer)
-  if props.hasKey("end_of_line"):
+  # Skip for raw buffers: `lineEnding` is unused (shows RAW).
+  if buffer.allowsTextTransforms and props.hasKey("end_of_line"):
     let eol = props["end_of_line"]
     case eol
     of "lf":
@@ -118,7 +120,8 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
       discard
 
   # charset -> encoding (set directly on buffer)
-  if props.hasKey("charset"):
+  # Skip for raw buffers: encoding is unknown.
+  if buffer.allowsTextTransforms and props.hasKey("charset"):
     let cs = props["charset"]
     case cs
     of "utf-8":
@@ -140,7 +143,8 @@ proc applyEditorConfig*(buffer: TextBuffer, props: Table[string, string]) =
       discard
 
   # insert_final_newline -> endOfLine (set directly on buffer)
-  if props.hasKey("insert_final_newline"):
+  # Skip for raw buffers: would corrupt raw bytes on save.
+  if buffer.allowsTextTransforms and props.hasKey("insert_final_newline"):
     let val = props["insert_final_newline"]
     if val == "true":
       buffer.endOfLine = true

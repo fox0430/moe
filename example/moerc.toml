@@ -125,8 +125,7 @@ showModeInactive = false               # Show mode in inactive windows
 #   {directory}     - Directory path
 #   {filePath}      - Full file path
 #   {gitBranch}     - Git branch name
-#   {lineEnding}    - Line ending (LF, CRLF, CR)
-#   {gitBranch}     - Git branch name
+#   {lineEnding}    - Line ending (LF, CRLF, CR, or RAW for undecoded bytes)
 #   {gitChanges}    - Git changes (+N ~N -N)
 setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}"
 
