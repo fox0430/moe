@@ -217,6 +217,23 @@ proc sanitizeInvalidUtf8*(s: string): string =
       result.add("\xEF\xBF\xBD")
       inc i
 
+const EncodingDetectionSampleLen = EncodingDetectionSampleSize div 4 * 4
+  ## Sample length for `detectCharacterEncoding`, 4-byte aligned.
+
+proc endsInHighSurrogateAt(s: string, endByte: int): bool =
+  ## True if the two bytes before `endByte` form a high surrogate in BE or LE.
+  ## Such a cut can split a surrogate pair.
+  if endByte < 2 or endByte > s.len:
+    return false
+  let
+    be = 256 * ord(s[endByte - 2]) + ord(s[endByte - 1])
+    le = ord(s[endByte - 2]) + 256 * ord(s[endByte - 1])
+  (0xD800 <= be and be <= 0xDBFF) or (0xD800 <= le and le <= 0xDBFF)
+
+proc endsInHighSurrogate(s: string): bool =
+  ## `endsInHighSurrogateAt` for the end of `s`.
+  s.endsInHighSurrogateAt(s.len)
+
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
   ## Detect character encoding from raw file content
   ##
@@ -248,24 +265,16 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
     if s[0 .. 1] == "\xFE\xFF" or s[0 .. 1] == "\xFF\xFE":
       return CharacterEncoding.utf16
 
-  # Use a sample of the file for encoding validation to avoid O(n) scans.
-  # Align to 4 bytes so the UTF-16/UTF-32 validators don't reject the sample
-  # due to misalignment. Extend the sample if the last two bytes form a high
-  # surrogate in either byte order, so a surrogate pair is not split at the
-  # cut. The extension is best-effort; residual cut-surrogate cases are
-  # covered by the full re-validation below.
+  # Validate only a prefix to avoid O(n) scans. Extend it if it ends on a
+  # high surrogate so a surrogate pair is not split at the cut.
   let sample =
     if s.len > EncodingDetectionSampleSize:
-      var sampleLen = EncodingDetectionSampleSize div 4 * 4
-      if sampleLen + 2 <= s.len:
-        let
-          be = 256 * ord(s[sampleLen - 2]) + ord(s[sampleLen - 1])
-          le = ord(s[sampleLen - 2]) + 256 * ord(s[sampleLen - 1])
-        if (0xD800 <= be and be <= 0xDBFF) or (0xD800 <= le and le <= 0xDBFF):
-          if sampleLen + 4 <= s.len:
-            sampleLen += 4
-          else:
-            sampleLen += 2
+      var sampleLen = EncodingDetectionSampleLen
+      if sampleLen + 2 <= s.len and s.endsInHighSurrogateAt(sampleLen):
+        if sampleLen + 4 <= s.len:
+          sampleLen += 4
+        else:
+          sampleLen += 2
       s[0 ..< sampleLen]
     else:
       s
@@ -275,18 +284,11 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
   if sample.sanitizeInvalidUtf8 == sample:
     return CharacterEncoding.utf8
 
-  # A surrogate code unit at the end of the sample means the cut can still
-  # split a surrogate pair, so the sample verdict may disagree with the full
-  # content (e.g. a valid BE file failing BE validation). Re-validate UTF-16
-  # against the full string in that case. UTF-8/UTF-32 are unaffected:
-  # their code units never straddle the cut.
+  # If the sample ends on a high surrogate, re-validate UTF-16 on the full
+  # string; UTF-8/UTF-32 are unaffected.
   var utf16Sample = sample
-  if s.len > EncodingDetectionSampleSize:
-    let
-      be = 256 * ord(sample[sample.len - 2]) + ord(sample[sample.len - 1])
-      le = ord(sample[sample.len - 2]) + 256 * ord(sample[sample.len - 1])
-    if (0xD800 <= be and be <= 0xDBFF) or (0xD800 <= le and le <= 0xDBFF):
-      utf16Sample = s
+  if s.len > EncodingDetectionSampleSize and sample.endsInHighSurrogate:
+    utf16Sample = s
 
   # Try other Unicode encodings
   var validEncodings: seq[CharacterEncoding]
