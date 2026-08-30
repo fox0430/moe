@@ -27,6 +27,7 @@ import
   editor_file,
   editor_lsp,
   editor_codelens,
+  editor_selection,
   editor_selectionrange,
   editor_documentsymbol,
   editor_documentlink,
@@ -55,7 +56,7 @@ import command_handlers/handler_manager
 
 export
   editor_types, editor_window, editor_file, editor_lsp, editor_codelens,
-  editor_selectionrange, editor_documentsymbol, editor_documentlink,
+  editor_selection, editor_selectionrange, editor_documentsymbol, editor_documentlink,
   editor_signaturehelp, editor_hover, editor_callhierarchy, editor_navigation,
   editor_render, editor_display, editor_substitute, editor_buffers, editor_reload,
   editor_config_reload, editor_frame

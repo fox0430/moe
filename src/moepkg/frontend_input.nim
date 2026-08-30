@@ -22,7 +22,9 @@
 ## Coordinates are cells in Moe's rendered grid. A GUI frontend should convert
 ## view coordinates before constructing these values. Positive
 ## `deltaPhysicalRows` scrolls toward later buffer lines; negative values scroll
-## toward earlier lines.
+## toward earlier lines. A primary-button drag creates a character selection;
+## double- and triple-click gestures select by word and line. Shift-primary
+## extends from the existing selection anchor or caret.
 
 import key_bindings/registry
 export registry.KeyModifier
