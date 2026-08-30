@@ -944,6 +944,7 @@ proc prepareForInput(e: Editor, isKeyInput: bool) =
   # Clear status message from previous event cycle:
   # messages persist for one render frame, then clear on next input)
   e.state.statusMessage = ""
+  e.enforceModePolicy()
 
   # Update last input time for auto backup idle detection
   e.updateInputTime()
@@ -978,7 +979,8 @@ proc handlePointerInput*(e: Editor, input: PointerInput): bool =
   ## Middle-click paste is intentionally a host policy: GUI frontends should
   ## obtain the selection text and pass it to `handlePaste`.
   e.prepareForInput(false)
-  e.handlePointerInputCore(input)
+  result = e.handlePointerInputCore(input)
+  e.enforceModePolicy()
 
 proc handleScrollInput*(e: Editor, input: ScrollInput): ScrollOutcome =
   ## Handle a vertical scroll expressed as a signed number of physical lines
@@ -1009,13 +1011,18 @@ proc handleMouseEvent*(e: Editor, event: Event): bool =
   let modifiers = celinaMouseModifiers(mouse.modifiers)
   case mouse.button
   of mouse_logic.MouseButton.WheelUp:
-    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, -3, modifiers)).handled
+    result =
+      e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, -3, modifiers)).handled
   of mouse_logic.MouseButton.WheelDown:
-    e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, 3, modifiers)).handled
+    result =
+      e.handleScrollInputCore(initScrollInput(mouse.y, mouse.x, 3, modifiers)).handled
   of mouse_logic.MouseButton.Left:
-    e.handlePointerInputCore(initPointerInput(mouse.y, mouse.x, modifiers = modifiers))
+    result = e.handlePointerInputCore(
+      initPointerInput(mouse.y, mouse.x, modifiers = modifiers)
+    )
   else:
-    false
+    result = false
+  e.enforceModePolicy()
 
 proc handleInterruptCore(e: Editor): bool =
   ## Handle Ctrl-C. Behaviour depends on the
@@ -1077,25 +1084,32 @@ proc handleInterruptCore(e: Editor): bool =
     # Other file edit modes (Insert, Visual, Replace, etc.): switch to Normal mode
     let activeBuffer = e.activeBuffer()
 
-    # Commit transaction when leaving Insert or Replace mode
-    if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
+    # Finalize the complete Insert session so replay/snippet/block state cannot
+    # leak across Ctrl-C. Replace mode only owns a transaction and history.
+    if e.state.mode == EditorMode.Insert:
+      let finalizeResult = finalizeInsertExit(activeBuffer, e.state)
+      if finalizeResult.isErr:
+        e.state.statusMessage = finalizeResult.error
+      elif finalizeResult.get.len > 0:
+        e.state.statusMessage = finalizeResult.get
+    elif e.state.mode == EditorMode.Replace:
       if activeBuffer.inTransaction:
         clearAutoIndentIfUnedited(activeBuffer, e.state)
         let commitResult = activeBuffer.commitTransaction()
         if commitResult.isErr:
           logError "handler", "Failed to commit transaction: " & commitResult.error
           e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
-      # Clear insert mode tracking state
-      e.state.editState.insertModeStartPos = none(BufferPosition)
-      e.state.editState.substituteContext = none(types.SubstituteContext)
       e.state.editState.replaceHistory = @[]
 
     e.state.previousMode = e.state.mode
     e.setMode(EditorMode.Normal)
+    e.enforceModePolicy()
 
-    # Adjust cursor: move one position left when exiting Insert mode
-    let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
-    adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+    # Adjust the cursor only when the transition really entered Normal mode.
+    # Forced Insert mode redirects it into a fresh Insert session instead.
+    if e.state.mode == EditorMode.Normal:
+      let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
+      adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
 
   return true
 

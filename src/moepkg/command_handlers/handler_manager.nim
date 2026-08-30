@@ -240,21 +240,14 @@ proc handleNormalMode*(
     if r.modeTransition.isSome:
       let targetMode = r.modeTransition.get
       if targetMode == EditorMode.Insert:
-        if not buffer.inTransaction:
-          let transactionResult =
-            buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
-          if transactionResult.isErr:
-            return HandlerResult(
-              kind: hrError,
-              errorMessage: "Failed to begin transaction: " & transactionResult.error,
-            )
-        # Record insert start position for text tracking
-        # Don't reset if transaction is already active (e.g. returning from insert-normal)
-        if state.editState.insertModeStartPos.isNone:
-          state.editState.insertModeStartPos = some(state.cursor)
-          # Carry the [count]i/a/o/O replay request onto the Insert session.
-          state.editState.insertReplayCount = r.insertReplayCount
-          state.editState.insertReplayLineEntry = r.insertReplayLineEntry
+        let transactionResult = beginInsertModeSession(
+          buffer, state, r.insertReplayCount, r.insertReplayLineEntry
+        )
+        if transactionResult.isErr:
+          return HandlerResult(
+            kind: hrError,
+            errorMessage: "Failed to begin transaction: " & transactionResult.error,
+          )
       elif targetMode == EditorMode.Replace:
         # Reveal a collapsed fold at the cursor so Replace never overtypes text
         # hidden behind a fold marker (mirrors the Insert-mode entry behaviour).

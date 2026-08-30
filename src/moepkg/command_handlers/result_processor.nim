@@ -232,7 +232,7 @@ proc processResultEpilogue(
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
     let oldMode = e.state.mode
-    let newMode = modeTransition.get
+    let newMode = e.effectiveMode(modeTransition.get)
 
     # Replay a `mode_switch`-named viewer's real entry result so it never
     # goes live without its state — but only if not already live (Escape back
@@ -490,8 +490,11 @@ proc runNestedKeyCombo*(
     let expand = checkRuntimeKeySeqMapping(manager, e, keyCombo)
     if expand.isSome:
       return expand.get
-  let r = manager.handleKeyCombo(e, keyCombo)
-  processReplayedResult(e, r, e.activeBuffer)
+  let
+    r = manager.handleKeyCombo(e, keyCombo)
+    outcome = processReplayedResult(e, r, e.activeBuffer)
+  e.enforceModePolicy()
+  outcome
 
 proc outcomeToHandlerResult(e: Editor, outcome: ReplayOutcome): HandlerResult =
   ## Fold a ReplayOutcome into the HandlerResult shape test-facing wrappers

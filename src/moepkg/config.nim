@@ -81,6 +81,7 @@ proc newEditorConfig*(): EditorConfig =
       smartIndent: false,
       ignorecase: true,
       smartcase: true,
+      forceInsertMode: false,
       disableChangeCursor: false,
       defaultCursor: ctTerminalDefault,
       normalModeCursor: ctBlinkBlock,

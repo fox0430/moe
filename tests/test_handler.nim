@@ -4045,6 +4045,76 @@ suite "handleKeyCombo - frontend-neutral input":
     check e.state.input.commandText == ":λx"
     check e.state.input.commandCursor == 2
 
+suite "forced Insert mode":
+  let
+    escapeKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    ctrlOKey = KeyCombo(isSpecial: false, char: "o", modifiers: {key_bindings.kmCtrl})
+
+  proc createForcedInsertEditor(): Editor =
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    newEditor(config)
+
+  test "editor starts with a valid Insert session":
+    let e = createForcedInsertEditor()
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.inTransaction
+    check e.state.editState.insertModeStartPos ==
+      some(BufferPosition(line: 0, column: 0))
+
+  test "committed GUI text inserts without a Normal-mode command":
+    let e = createForcedInsertEditor()
+
+    check e.handleTextInput("hello")
+
+    check $e.activeBuffer.getLine(0) == "hello"
+    check e.cursor == BufferPosition(line: 0, column: 5)
+    check e.state.mode == EditorMode.Insert
+
+  test "Escape commits the edit boundary and remains in Insert mode":
+    let e = createForcedInsertEditor()
+    check e.handleTextInput("a")
+
+    check e.handleKeyCombo(escapeKey)
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.inTransaction
+    check e.activeBuffer.undoStack.len == 1
+    check e.activeBuffer.currentTransaction.get.changes.len == 0
+
+  test "Ctrl-C commits the edit boundary and remains in Insert mode":
+    let e = createForcedInsertEditor()
+    check e.handleTextInput("a")
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.Insert
+    check e.cursor == BufferPosition(line: 0, column: 1)
+    check e.activeBuffer.inTransaction
+    check e.activeBuffer.undoStack.len == 1
+    check e.activeBuffer.currentTransaction.get.changes.len == 0
+
+  test "Ctrl-O cannot expose a one-shot Normal command":
+    let e = createForcedInsertEditor()
+
+    check e.handleKeyCombo(ctrlOKey)
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check e.activeBuffer.inTransaction
+
+    check e.handleTextInput("x")
+    check $e.activeBuffer.getLine(0) == "x"
+
+  test "policy restores a directly assigned Normal mode":
+    let e = createForcedInsertEditor()
+
+    e.setMode(EditorMode.Normal)
+    e.enforceModePolicy()
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.inTransaction
+
 suite "Macro recording - Command / Search overlay keys":
   # Regression: overlay dispatch used to bypass macro recording, so `qa:s/foo/bar/<CR>q`
   # would capture only ":" and lose the rest of the command line (same for `/pattern<CR>`).
@@ -4188,6 +4258,23 @@ proc addSecondWindow(e: Editor, buf2: TextBuffer, vpx: int = 40) =
   e.windowManager.windows.add(win2)
 
 suite "handleMouseEvent - Cross-window jump finalizes stale state":
+  test "Forced Insert mode survives a jump to a Normal-mode window":
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.config.standard.forceInsertMode = true
+    e.state.config.standard.forceInsertMode = true
+    e.enforceModePolicy()
+    e.state.showTabLine = false
+    e.state.showStatusLine = true
+    let buf2 = newTextBuffer("xxx\nyyy\nzzz")
+    e.addSecondWindow(buf2)
+
+    let handled = e.handleMouseEvent(makeLeftClickEvent(50, 1))
+
+    check handled
+    check e.windowManager.activeWindowIndex == 1
+    check e.state.mode == EditorMode.Insert
+    check buf2.inTransaction
+
   test "Insert-mode transaction on old buffer is committed":
     # Without the finalize hook, bufA's open transaction leaks past the jump.
     let e = createTestEditorWithBuffer("aaa\nbbb\nccc")

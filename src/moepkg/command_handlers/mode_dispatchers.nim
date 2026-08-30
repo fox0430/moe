@@ -159,7 +159,26 @@ proc replayCountedInsert(buffer: TextBuffer, state: EditorState) =
     cursor = inserted.get.cursor
   state.cursor = cursor
 
-proc finalizeInsertExit(
+proc beginInsertModeSession*(
+    buffer: TextBuffer, state: EditorState, replayCount = 0, replayLineEntry = false
+): Result[void, string] =
+  ## Begin the transaction and tracking shared by all ordinary Insert entries.
+  ## An existing transaction belongs to Insert-Normal or an entry command that
+  ## edited the buffer before returning its mode transition.
+  if not buffer.inTransaction:
+    let transactionResult =
+      buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
+    if transactionResult.isErr:
+      return err(transactionResult.error)
+
+  if state.editState.insertModeStartPos.isNone:
+    state.editState.insertModeStartPos = some(state.cursor)
+    state.editState.insertReplayCount = replayCount
+    state.editState.insertReplayLineEntry = replayLineEntry
+
+  ok()
+
+proc finalizeInsertExit*(
     buffer: TextBuffer, state: EditorState
 ): Result[string, string] =
   ## Shared leaving-Insert cleanup: snippet/auto-indent teardown, `.`-repeat +
@@ -254,6 +273,15 @@ proc handleInsertMode*(
   of imrHandled:
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
+      # Forced Insert mode disables Ctrl-o's one-shot Normal command. Keep the
+      # current transaction open so the key is a true no-op.
+      if state.config.standard.forceInsertMode and state.insertNormalMode and
+          r.modeTransition.get == EditorMode.Normal:
+        state.insertNormalMode = false
+        return HandlerResult(
+          kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+        )
+
       # Ctrl-o (insert-normal mode): skip transaction commit/cleanup,
       # keep insert state intact so we can resume after one Normal command
       if state.insertNormalMode:

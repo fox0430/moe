@@ -113,6 +113,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | smartIndent | bool | false | Language-aware extra indent on Enter (Nim: var/let/const/type, trailing or/and/object/tuple/enum, trailing `:` or `=`, unclosed brackets) |
 | ignorecase | bool | true | Enable ignorecase when searching |
 | smartcase | bool | true | Enable smartcase when searching |
+| forceInsertMode | bool | false | Keep editable buffers in Insert mode and disable Normal-mode commands |
 | disableChangeCursor | bool | false | Disable change of the cursor shape |
 | defaultCursor | string (enum: terminalDefault, blinkBlock, blinkIbeam, nonBlinkBlock, nonBlinkIbeam) | terminalDefault | The cursor shape of the terminal emulator you are using |
 | normalModeCursor | string (enum: terminalDefault, blinkBlock, blinkIbeam, nonBlinkBlock, nonBlinkIbeam) | blinkBlock | The cursor shape in Normal mode |

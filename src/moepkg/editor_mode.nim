@@ -17,37 +17,33 @@
 #                                                                              #
 #[############################################################################]#
 
-## Behavioral coverage for the frontend embedding facade.
+## Configuration-driven editor mode policy.
 
-import std/unittest
+import pkg/results
 
-import ../src/moepkg/frontend
+import types/editor_types
+import command_handlers/mode_dispatchers
 
-suite "frontend embedding facade":
-  test "constructs and queries an editor through one import":
-    let e = newEditor(newEditorConfig())
+func forceInsertMode(e: Editor): bool =
+  not e.isNil and not e.config.isNil and e.config.standard.forceInsertMode
 
-    e.setFrontendGitStatusEnabled(true)
-    let status: FrontendStatus = e.frontendStatus
+func effectiveMode*(e: Editor, requestedMode: EditorMode): EditorMode =
+  ## Resolve a requested mode through the configured editing policy.
+  if e.forceInsertMode and requestedMode == EditorMode.Normal:
+    EditorMode.Insert
+  else:
+    requestedMode
 
-    check status.modeLabel == "NORMAL"
-    check e.frontendGitStatusEnabled
+proc enforceModePolicy*(e: Editor) =
+  ## Keep an editable window in a valid Insert session when Normal mode is
+  ## disabled. Special and Visual modes remain available.
+  if not e.forceInsertMode or e.currentMode notin {EditorMode.Normal, EditorMode.Insert}:
+    return
 
-  test "exposes frontend-neutral input values and handlers":
-    let
-      e = newEditor(newEditorConfig())
-      pointer = PointerInput(
-        row: 2, column: 3, button: pbPrimary, action: paPress, clickCount: 1
-      )
+  let transactionResult = beginInsertModeSession(e.activeBuffer, e.state)
+  if transactionResult.isErr:
+    e.state.statusMessage = "Failed to begin transaction: " & transactionResult.error
+    return
 
-    check pointer.row == 2
-    check pointer.column == 3
-    check e.handleTextInput("")
-
-  test "can disable Normal mode through the public config":
-    let config = newEditorConfig()
-    config.standard.forceInsertMode = true
-    let e = newEditor(config)
-
-    check e.frontendStatus.modeLabel == "INSERT"
-    check e.handleTextInput("x")
+  if e.currentMode == EditorMode.Normal:
+    e.setMode(EditorMode.Insert)

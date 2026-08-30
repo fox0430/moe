@@ -38,6 +38,8 @@ ignorecase = true                      # Search case insensitive
 
 smartcase = true                       # Smart case search
 
+forceInsertMode = false                # Keep editable buffers in Insert mode and disable Normal-mode commands
+
 disableChangeCursor = false            # Disable cursor shape changes
 
 defaultCursor = "terminalDefault"      # Default cursor style - restored on exit

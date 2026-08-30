@@ -39,6 +39,7 @@ import
   editor_display,
   editor_substitute,
   editor_buffers,
+  editor_mode,
   viewer_mode,
   editor_reload,
   editor_config_reload,
@@ -59,7 +60,7 @@ export
   editor_selection, editor_selectionrange, editor_documentsymbol, editor_documentlink,
   editor_signaturehelp, editor_hover, editor_callhierarchy, editor_navigation,
   editor_render, editor_display, editor_substitute, editor_buffers, editor_reload,
-  editor_config_reload, editor_frame
+  editor_config_reload, editor_frame, editor_mode
 
 proc addCommandAlias*(
     e: Editor, alias: string, action: CommandLineAction

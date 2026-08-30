@@ -87,6 +87,7 @@ autoCloseParen = true
 autoIndent = true
 ignorecase = true
 smartcase = true
+forceInsertMode = false
 disableChangeCursor = false
 defaultCursor = "terminalDefault"
 normalModeCursor = "blinkBlock"
@@ -126,6 +127,7 @@ timeoutlen = 1000
     config.standard.autoIndent = false
     config.standard.ignorecase = false
     config.standard.smartcase = false
+    config.standard.forceInsertMode = true
     config.standard.disableChangeCursor = true
     config.standard.liveReloadOfConf = true
     config.standard.incrementalSearch = false
@@ -159,6 +161,7 @@ timeoutlen = 1000
     check loaded.standard.autoIndent == false
     check loaded.standard.ignorecase == false
     check loaded.standard.smartcase == false
+    check loaded.standard.forceInsertMode == true
     check loaded.standard.disableChangeCursor == true
     check loaded.standard.liveReloadOfConf == true
     check loaded.standard.incrementalSearch == false

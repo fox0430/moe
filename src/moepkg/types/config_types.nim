@@ -128,6 +128,11 @@ type
     .}: bool
     ignorecase* {.cfg, cfgDocDescription: "Enable ignorecase when searching".}: bool
     smartcase* {.cfg, cfgDocDescription: "Enable smartcase when searching".}: bool
+    forceInsertMode* {.
+      cfg,
+      cfgDocDescription:
+        "Keep editable buffers in Insert mode and disable Normal-mode commands"
+    .}: bool
     disableChangeCursor* {.
       cfg, cfgDocDescription: "Disable change of the cursor shape"
     .}: bool
