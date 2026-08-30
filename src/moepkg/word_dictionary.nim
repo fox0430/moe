@@ -27,6 +27,8 @@ import std/[algorithm, critbits, sequtils, unicode]
 
 import pkg/unicodedb/properties
 
+import unicode_utils
+
 import
   syntax/[
     tokenizer, syntax_c, syntax_cpp, syntax_csharp, syntax_fish, syntax_go,
@@ -232,7 +234,7 @@ iterator enumerateWords*(text: string): string =
   var word = ""
   var inWord = false
 
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     let cat = rune.unicodeCategory
     if cat in SucceedingCharacter:
       if not inWord:
