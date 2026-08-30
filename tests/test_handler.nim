@@ -1549,12 +1549,13 @@ suite "frontend-neutral pointer and scroll input":
     check e.handlePointerInput(initPointerInput(1, 3, action = paDrag))
     check e.state.mode == EditorMode.Visual
     check e.state.previousMode == EditorMode.Normal
-    check e.state.visualSelection == VisualSelection(
-      start: BufferPosition(line: 0, column: 1),
-      current: BufferPosition(line: 1, column: 3),
-      active: true,
-      kind: vskChar,
-    )
+    check e.state.visualSelection ==
+      VisualSelection(
+        start: BufferPosition(line: 0, column: 1),
+        current: BufferPosition(line: 1, column: 3),
+        active: true,
+        kind: vskChar,
+      )
 
     check e.handlePointerInput(initPointerInput(1, 5, action = paRelease))
     check e.state.visualSelection.current == BufferPosition(line: 1, column: 5)
@@ -1660,9 +1661,7 @@ suite "frontend-neutral pointer and scroll input":
     let rightWindow = EditorWindow(
       buffer: rightBuffer,
       bufferIds: @[rightBuffer.id],
-      viewport: ViewPort(
-        x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0
-      ),
+      viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
       mode: EditorMode.Normal,

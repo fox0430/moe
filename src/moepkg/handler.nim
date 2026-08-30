@@ -637,9 +637,8 @@ proc pointerTabPress(e: Editor, input: PointerInput): bool =
         buffersToShow.add(bufOpt.get)
     if buffersToShow.len == 0:
       buffersToShow = @[window.buffer]
-    let tabIdx = hitTestTabLine(
-      buffersToShow, window.mode, 0, window.viewport.width, input.column
-    )
+    let tabIdx =
+      hitTestTabLine(buffersToShow, window.mode, 0, window.viewport.width, input.column)
     if tabIdx >= 0:
       e.switchToWindowBuffer(tabIdx)
       return true
@@ -732,7 +731,9 @@ func pointerGranularity(
     psgCharacter
 
 proc pointerRange(
-    buffer: TextBuffer, position: BufferPosition, granularity: PointerSelectionGranularity
+    buffer: TextBuffer,
+    position: BufferPosition,
+    granularity: PointerSelectionGranularity,
 ): tuple[first, last: BufferPosition] =
   case granularity
   of psgWord:
@@ -791,10 +792,7 @@ proc updatePointerSelection(e: Editor, position: BufferPosition) =
     e.state.pointerSelection.selectionStarted = true
 
   e.state.visualSelection = VisualSelection(
-    start: anchor,
-    current: focus,
-    active: true,
-    kind: gesture.granularity.visualKind,
+    start: anchor, current: focus, active: true, kind: gesture.granularity.visualKind
   )
   e.cursor = focus
   e.activeWindow.viewport.detachedFromCursor = false
@@ -808,9 +806,7 @@ proc collapseVisualSelectionForPointer(e: Editor) =
     else:
       e.setMode(returnMode)
 
-proc beginPointerSelection(
-    e: Editor, input: PointerInput, hit: PointerTextHit
-) =
+proc beginPointerSelection(e: Editor, input: PointerInput, hit: PointerTextHit) =
   e.activatePointerWindow(hit.windowIndex)
 
   let
@@ -850,15 +846,16 @@ proc updatePointerGesture(e: Editor, input: PointerInput): bool =
     return false
 
   let gesture = e.state.pointerSelection
-  if gesture.windowIndex != e.windowManager.activeWindowIndex or
-      gesture.windowIndex < 0 or gesture.windowIndex >= e.windowManager.windows.len or
+  if gesture.windowIndex != e.windowManager.activeWindowIndex or gesture.windowIndex < 0 or
+      gesture.windowIndex >= e.windowManager.windows.len or
       e.activeBuffer.id != gesture.bufferId:
     e.state.pointerSelection.active = false
     return false
 
   let position = e.pointerPositionInWindow(input, gesture.windowIndex)
   if position.isSome:
-    let moved = position.get != gesture.anchorFirst or gesture.anchorFirst != gesture.anchorLast
+    let moved =
+      position.get != gesture.anchorFirst or gesture.anchorFirst != gesture.anchorLast
     if gesture.selectionStarted or input.action == paDrag or moved:
       e.updatePointerSelection(position.get)
   true
