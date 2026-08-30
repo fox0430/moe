@@ -1224,7 +1224,7 @@ Built-in aliases can be overridden.
 Example:
 ```toml
 [CommandAliases]
-x = { command = "quit" }
+qq = { command = "quit" }
 ww = { command = "saveall", description = "Save all buffers" }
 fmt = { command = "lspformat", description = "Format code with LSP" }
 ```

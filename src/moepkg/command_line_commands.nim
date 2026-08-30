@@ -208,6 +208,31 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: false,
   ),
   CommandLineCommandSpec(
+    name: "x",
+    completionDescription: "Write if modified and quit",
+    helpEntries:
+      @[HelpEntry(syntax: ":x or :xit", description: "Write if modified and quit")],
+    action: some(claSaveIfModifiedAndQuit),
+    isCanonicalLong: false,
+    keymapBaseDescription: "Save if modified and quit",
+  ),
+  CommandLineCommandSpec(
+    name: "xit",
+    completionDescription: "Write if modified and quit",
+    helpEntries: @[],
+    action: some(claSaveIfModifiedAndQuit),
+    isCanonicalLong: true,
+    keymapBaseDescription: "Save if modified and quit",
+  ),
+  CommandLineCommandSpec(
+    name: "x!",
+    completionDescription: "",
+    helpEntries:
+      @[HelpEntry(syntax: ":x!", description: "Force write if modified and quit")],
+    action: none(CommandLineAction),
+    isCanonicalLong: false,
+  ),
+  CommandLineCommandSpec(
     name: "wqa",
     completionDescription: "Write and quit all windows",
     helpEntries: @[HelpEntry(syntax: ":wqa", description: "Write and quit all windows")],

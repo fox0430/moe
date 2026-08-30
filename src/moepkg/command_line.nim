@@ -42,8 +42,12 @@ proc parseAndExecute*(parser: CommandLineParser, input: string): CommandLineResu
 
 proc isQuitCommand*(cmdResult: CommandLineResult): bool =
   ## Check if the result is a quit command
-  cmdResult.kind in {claQuit, claQuitAll, claSaveAndQuit, claSaveAllAndQuit, claCquit}
+  cmdResult.kind in {
+    claQuit, claQuitAll, claSaveAndQuit, claSaveIfModifiedAndQuit, claSaveAllAndQuit,
+    claCquit,
+  }
 
 proc isSaveCommand*(cmdResult: CommandLineResult): bool =
-  ## Check if the result requires saving
-  cmdResult.kind in {claSave, claSaveAll, claSaveAndQuit, claSaveAllAndQuit}
+  ## Check if the result belongs to the save-command family.
+  cmdResult.kind in
+    {claSave, claSaveAll, claSaveAndQuit, claSaveIfModifiedAndQuit, claSaveAllAndQuit}

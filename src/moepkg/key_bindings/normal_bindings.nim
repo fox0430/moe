@@ -39,6 +39,8 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("C-u", "half-page-up"),
   ("C-d", "half-page-down"),
   ("C-f", "page-down"),
+  ("C-e", "scroll-line-down"),
+  ("C-y", "scroll-line-up"),
   # Edit history
   ("u", "undo"),
   ("C-r", "redo"),

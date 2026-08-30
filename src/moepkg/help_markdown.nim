@@ -51,7 +51,7 @@ const
   CommandTableHeader = "| Command | Description |\n|:---|:---|\n"
 
   ExitingHelpNames =
-    @["w", "q", "wq", "q!", "qa", "wqa", "qa!", "w!", "wq!", "wqa!", "cq"]
+    @["w", "q", "wq", "x", "q!", "qa", "wqa", "qa!", "w!", "wq!", "x!", "wqa!", "cq"]
   ## Hand-curated order matching the existing howtouse.md row sequence.
   ## `help_generator.nim` ships a slightly different list for TUI help; the
   ## divergence is intentional — TUI help groups by action, the markdown

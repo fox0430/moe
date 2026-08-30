@@ -37,12 +37,14 @@
 | <kbd>**:**</kbd> <kbd>**w**</kbd> | Write file |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> | Quit |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> | Write and quit |
+| <kbd>**:**</kbd> <kbd>**x**</kbd> OR <kbd>**:**</kbd> <kbd>**x**</kbd> <kbd>**i**</kbd> <kbd>**t**</kbd> | Write if modified and quit |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> | Force quit |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> | Quit all windows |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> | Write and quit all windows |
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> | Force quit all windows |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**!**</kbd> | Force write |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> | Force write and quit window |
+| <kbd>**:**</kbd> <kbd>**x**</kbd> <kbd>**!**</kbd> | Force write if modified and quit |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> | Force write and quit all windows |
 | <kbd>**:**</kbd> <kbd>**c**</kbd> <kbd>**q**</kbd> | Quit with non-zero exit code |
 <!-- AUTO-GEN:end Exiting -->
@@ -87,6 +89,8 @@
 | <kbd>**Ctrl**</kbd> <kbd>**f**</kbd> | Page Down |
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd> | Half Page Up |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd> | Half Page Down |
+| <kbd>**Ctrl**</kbd> <kbd>**e**</kbd> | Scroll one line down |
+| <kbd>**Ctrl**</kbd> <kbd>**y**</kbd> | Scroll one line up |
 | <kbd>**%**</kbd> | Move to matching pair of paren |
 | <kbd>**d**</kbd> <kbd>**$**</kbd> OR <kbd>**D**</kbd> | Delete until the end of the line |
 | <kbd>**C**</kbd> | Change until the end of the line |

@@ -609,10 +609,10 @@ rustAnalyzerDebugSingle = true         # rust-analyzer specific: debug single
 # [CommandAliases]
 # Define custom command aliases for built-in editor commands.
 # Each key is the alias name, value is a table with "command" and optional "description".
-# Usage: :x => quit, :ww => saveall
+# Usage: :qq => quit, :ww => saveall
 # Built-in aliases (from loadDefaultConfig) can be overridden.
 #
-# x = { command = "quit" }
+# qq = { command = "quit" }
 # ww = { command = "saveall", description = "Save all buffers" }
 # fmt = { command = "lspformat", description = "Format code with LSP" }
 

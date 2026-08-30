@@ -266,7 +266,8 @@ suite "CommandLine - parseCommandLine":
     parser.addAlias("w", claSave)
     parser.addAlias("wa", claSaveAll)
     parser.addAlias("wq", claSaveAndQuit)
-    parser.addAlias("x", claSaveAndQuit)
+    parser.addAlias("x", claSaveIfModifiedAndQuit)
+    parser.addAlias("xit", claSaveIfModifiedAndQuit)
     parser.addAlias("wqa", claSaveAllAndQuit)
     parser.addAlias("e", claEdit)
     parser.addAlias("ene", claEnew)
@@ -409,6 +410,8 @@ suite "CommandLine - execute":
     parser.addAlias("qa", claQuitAll)
     parser.addAlias("w", claSave)
     parser.addAlias("wq", claSaveAndQuit)
+    parser.addAlias("x", claSaveIfModifiedAndQuit)
+    parser.addAlias("xit", claSaveIfModifiedAndQuit)
     parser.addAlias("e", claEdit)
     parser.addAlias("enew", claEnew)
     parser.addAlias("set", claSet)
@@ -453,6 +456,24 @@ suite "CommandLine - execute":
     let result = parser.parseAndExecute(":wq")
     check result.kind == claSaveAndQuit
     check result.forceSaveAndQuit == false
+
+  test "Execute :x":
+    let result = parser.parseAndExecute(":x")
+    check result.kind == claSaveIfModifiedAndQuit
+    check result.saveFilename.isNone
+    check result.forceSaveAndQuit == false
+
+  test "Execute :xit":
+    let result = parser.parseAndExecute(":xit")
+    check result.kind == claSaveIfModifiedAndQuit
+    check result.saveFilename.isNone
+    check result.forceSaveAndQuit == false
+
+  test "Execute :x!filename (bang glued to filename)":
+    let result = parser.parseAndExecute(":x!out.txt")
+    check result.kind == claSaveIfModifiedAndQuit
+    check result.saveFilename == some("out.txt")
+    check result.forceSaveAndQuit == true
 
   test "Execute :e with filename":
     let result = parser.parseAndExecute(":e test.nim")
@@ -635,6 +656,7 @@ suite "CommandLine - isQuitCommand and isSaveCommand":
     check isQuitCommand(CommandLineResult(kind: claQuit)) == true
     check isQuitCommand(CommandLineResult(kind: claQuitAll)) == true
     check isQuitCommand(CommandLineResult(kind: claSaveAndQuit)) == true
+    check isQuitCommand(CommandLineResult(kind: claSaveIfModifiedAndQuit)) == true
     check isQuitCommand(CommandLineResult(kind: claSaveAllAndQuit)) == true
     check isQuitCommand(CommandLineResult(kind: claCquit)) == true
 
@@ -647,6 +669,7 @@ suite "CommandLine - isQuitCommand and isSaveCommand":
     check isSaveCommand(CommandLineResult(kind: claSave)) == true
     check isSaveCommand(CommandLineResult(kind: claSaveAll)) == true
     check isSaveCommand(CommandLineResult(kind: claSaveAndQuit)) == true
+    check isSaveCommand(CommandLineResult(kind: claSaveIfModifiedAndQuit)) == true
     check isSaveCommand(CommandLineResult(kind: claSaveAllAndQuit)) == true
 
   test "isSaveCommand returns false for non-save commands":

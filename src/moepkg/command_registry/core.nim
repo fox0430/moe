@@ -53,6 +53,8 @@ type
     bcScrollCursorTop = "scroll.cursor.top"
     bcScrollCursorCenter = "scroll.cursor.center"
     bcScrollCursorBottom = "scroll.cursor.bottom"
+    bcScrollLineDown = "scroll.line.down"
+    bcScrollLineUp = "scroll.line.up"
     # Mode switching commands
     bcModeNormal = "mode.normal"
     bcModeInsert = "mode.insert"
