@@ -31,6 +31,7 @@ import
   highlight_config,
   editor_window_layout,
   editor_lsp,
+  message_log,
   git_cache,
   git_conflict,
   window_manager,
@@ -136,6 +137,15 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
       buf.bookmarks = e.savedBookmarks[absPath]
     if e.showGitDiff:
       e.state.git.requestGitRefresh(buf)
+  # A file that is not text still opens (every byte is held and saved back
+  # unchanged), but say so: line-oriented editing on it will not do what the
+  # user expects, and nothing else on screen makes that obvious.
+  if buf.hasBinaryContent:
+    let msg =
+      (if buf.filePath.isSome: buf.filePath.get else: "Buffer") &
+      ": binary content (NUL bytes); bytes are preserved on save"
+    e.state.statusMessage = msg
+    addMessageLog(msg)
   # Scan conflict markers regardless of the highlight config (like loadFile) so
   # conflict-navigation works as soon as this buffer becomes active.
   buf.refreshConflicts()

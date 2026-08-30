@@ -247,20 +247,6 @@ proc handleDebugModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   of dvrHandled, dvrUnhandled, dvrError:
     return true
 
-proc cursorAfterPaste(startPos: BufferPosition, pastedText: string): BufferPosition =
-  ## Iterate by rune: cursor.column is a rune index everywhere
-  ## (insertTextWithNewlines/deleteChar), so byte iteration would over-advance
-  ## on multibyte text.
-  var line = startPos.line
-  var column = startPos.column
-  for r in pastedText.runes:
-    if r == Rune('\n'):
-      line += 1
-      column = 0
-    else:
-      column += 1
-  BufferPosition(line: line, column: column)
-
 proc handlePasteText(e: Editor, text: string): bool =
   ## Insert pasted text without triggering auto-indentation.
   # Normalize CRLF / lone CR to LF up front (matching loadFile) so a stray \r
@@ -296,7 +282,7 @@ proc handlePasteText(e: Editor, text: string): bool =
         return true
 
     let pos = e.cursor
-    let insertResult = activeBuffer.insertText(pos, pastedText)
+    let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
     if insertResult.isErr:
       var msg = "Paste failed: " & insertResult.error
       if ownTransaction:
@@ -308,7 +294,7 @@ proc handlePasteText(e: Editor, text: string): bool =
       e.state.statusMessage = msg
       return true
 
-    e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
+    e.activeWindow.cursor = insertResult.get.cursor
 
     if ownTransaction:
       let commitResult = activeBuffer.commitTransaction()
@@ -430,7 +416,7 @@ proc middleClickPaste(e: Editor) =
       return
 
   let pos = e.cursor
-  let insertResult = activeBuffer.insertText(pos, pastedText)
+  let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
   if insertResult.isErr:
     var msg = "Paste failed: " & insertResult.error
     # Roll back the transaction we opened; a joined session transaction is
@@ -449,7 +435,7 @@ proc middleClickPaste(e: Editor) =
     e.notify(msg, nlError)
     return
 
-  e.activeWindow.cursor = cursorAfterPaste(pos, pastedText)
+  e.activeWindow.cursor = insertResult.get.cursor
 
   if ownTransaction:
     let commitResult = activeBuffer.commitTransaction()

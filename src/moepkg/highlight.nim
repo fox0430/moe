@@ -916,17 +916,17 @@ func tokenizerLeftBuffer(first, last: int): bool =
     doAssert not result, "tokenizer left the buffer: first=" & $first & " last=" & $last
 
 proc initHighlight*(
-    buffer: seq[Runes] = @[], color = EditorColorPairIndex.default
-): Highlight {.inline.} =
+    lines: seq[string] = @[], color = EditorColorPairIndex.default
+): Highlight =
   ## Return highlighting for the plain text.
+  ##
+  ## Lines are taken as strings, not runes: a `seq[Rune]` would have to be
+  ## re-encoded to reach the tokenizer, and the carrier rune standing for an
+  ## undecodable byte does not survive that round trip.
 
   var colorSegments: seq[ColorSegment]
-  for i in 0 .. buffer.high:
-    let lastColumn =
-      if buffer[i].len > 0:
-        buffer[i].high
-      else:
-        -1
+  for i in 0 .. lines.high:
+    let lastColumn = lines[i].charLen - 1
     colorSegments.add ColorSegment(
       firstRow: i,
       firstColumn: 0,
@@ -939,20 +939,20 @@ proc initHighlight*(
   return Highlight(colorSegments: colorSegments)
 
 proc initHighlight*(
-    buffer: seq[Runes], reservedWords: seq[ReservedWord], language: SourceLanguage
+    lines: seq[string], reservedWords: seq[ReservedWord], language: SourceLanguage
 ): Highlight =
   if language == SourceLanguage.langNone:
-    return initHighlight(buffer)
+    return initHighlight(lines)
 
   var totalLen = 0
-  for i in 0 .. buffer.high:
-    totalLen += buffer[i].len
-    if i < buffer.high:
+  for i in 0 .. lines.high:
+    totalLen += lines[i].len
+    if i < lines.high:
       inc totalLen # '\n'
   var bufferStr = newStringOfCap(totalLen)
-  for i in 0 .. buffer.high:
-    bufferStr.add $buffer[i]
-    if i < buffer.high:
+  for i in 0 .. lines.high:
+    bufferStr.add lines[i]
+    if i < lines.high:
       bufferStr.add '\n'
 
   var
@@ -971,7 +971,7 @@ proc initHighlight*(
         style: defaultStyle,
       )
       empty = true
-    for r in runes(str):
+    for (r, _) in str.chars:
       if r == Newline:
         # push an empty segment
         if empty:
@@ -1108,7 +1108,7 @@ proc initHighlightIncrementalFromStr*(
         style: codeBlockSegStyle,
       )
       empty = true
-    for r in runes(str):
+    for (r, _) in str.chars:
       if r == Newline:
         # push an empty segment
         if empty:
@@ -1343,17 +1343,17 @@ proc buildBufferStrCapped*(
   result.str = newStringOfCap(totalLen)
   for i in startLine .. rangeEnd:
     let line = lines[i]
-    # Quick reject: byteLen <= cap implies runeLen <= cap, so no capping. Only
-    # genuinely long lines pay for the rune scan.
+    # Quick reject: byteLen <= cap implies charLen <= cap, so no capping. Only
+    # genuinely long lines pay for the character scan.
     if capping and line.len > maxLineLen:
-      # runeSubStr scans at most `maxLineLen` runes and returns the whole string
-      # when the line has <= maxLineLen runes, so `head.len < line.len` exactly
-      # means it was truncated.
-      let head = line.runeSubStr(0, maxLineLen)
+      # charSubStr scans at most `maxLineLen` characters and returns the whole
+      # string when the line has <= maxLineLen of them, so `head.len < line.len`
+      # exactly means it was truncated.
+      let head = line.charSubStr(0, maxLineLen)
       if head.len < line.len:
         result.str.add head
-        # lastColumn over-estimates the real rune column (byte length is an
-        # upper bound); safe because the renderer queries getColorPair per real
+        # lastColumn over-estimates the real column (byte length is an upper
+        # bound); safe because the renderer queries getColorPair per real
         # character, so columns past the line end are never looked up.
         result.tails.add ColorSegment(
           firstRow: i - startLine,
@@ -2143,13 +2143,13 @@ proc addOverlayToken(
   overlay[row].tokens = newTokens
 
 proc semanticShiftForSingleLineEdit*(
-    h: Highlight, row, editCol, colDelta, lineRuneLenAfter: int
+    h: Highlight, row, editCol, colDelta, lineCharLenAfter: int
 ) =
   ## Adjust overlay tokens on `row` after an edit that inserts (`colDelta > 0`)
   ## or deletes (`colDelta < 0`) `|colDelta|` runes at column `editCol`, without
   ## changing the buffer's line count. Tokens fully before `editCol` are kept;
   ## tokens fully at/after `editCol` are shifted by `colDelta` and clipped to
-  ## `lineRuneLenAfter`; tokens straddling `editCol` are dropped (their extent
+  ## `lineCharLenAfter`; tokens straddling `editCol` are dropped (their extent
   ## no longer corresponds to a single semantic entity).
   if h.isNil:
     return
@@ -2167,10 +2167,10 @@ proc semanticShiftForSingleLineEdit*(
       shifted.firstColumn += colDelta
       if shifted.firstColumn < 0:
         continue
-      if shifted.firstColumn >= lineRuneLenAfter:
+      if shifted.firstColumn >= lineCharLenAfter:
         continue
-      if shifted.firstColumn + shifted.length > lineRuneLenAfter:
-        shifted.length = lineRuneLenAfter - shifted.firstColumn
+      if shifted.firstColumn + shifted.length > lineCharLenAfter:
+        shifted.length = lineCharLenAfter - shifted.firstColumn
         if shifted.length <= 0:
           continue
       kept.add shifted
@@ -2348,9 +2348,9 @@ proc applySemanticTokens*(
       if cachedTextRow != currentLine:
         cachedText = getLineText(currentLine)
         cachedTextRow = currentLine
-      let (startRune, _) = utf16OffsetToRune(cachedText, currentChar)
+      let (startRune, _) = utf16OffsetToChar(cachedText, currentChar)
       let (endRune, endUtf16Walked) =
-        utf16OffsetToRune(cachedText, currentChar + length)
+        utf16OffsetToChar(cachedText, currentChar + length)
       applyCol = startRune
       startRowRunes = endRune - startRune
       utf16Remaining = max(0, (currentChar + length) - endUtf16Walked)
@@ -2409,14 +2409,14 @@ proc applySemanticTokens*(
           if utf16Remaining == 0:
             break
           let rowText = getLineText(row)
-          let (rowRunes, rowUtf16) = utf16OffsetToRune(rowText, high(int32))
+          let (rowRunes, rowUtf16) = utf16OffsetToChar(rowText, high(int32))
           if utf16Remaining >= rowUtf16:
             if rowRunes > 0:
               overlay.addOverlayToken(row, 0, rowRunes, color, style)
             utf16Remaining -= rowUtf16
             inc row
           else:
-            let (partialRunes, _) = utf16OffsetToRune(rowText, utf16Remaining)
+            let (partialRunes, _) = utf16OffsetToChar(rowText, utf16Remaining)
             if partialRunes > 0:
               overlay.addOverlayToken(row, 0, partialRunes, color, style)
             utf16Remaining = 0

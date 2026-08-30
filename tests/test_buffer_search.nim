@@ -20,6 +20,7 @@
 import std/[unittest, options]
 
 import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/unicode_utils
 
 suite "Buffer Search - Basic findNext":
   test "findNext finds first occurrence":
@@ -465,6 +466,29 @@ suite "Buffer Search - findWordMatchRanges":
     let buf = newTextBuffer("")
     let ranges = buf.findWordMatchRanges(0, "Hello")
     check ranges.len == 0
+
+  test "findWordMatchRanges walks bytes past an undecodable byte":
+    # The byte cursor advances by what each character occupies, not by the
+    # width the byte would re-encode to: counting the latter ran the cursor
+    # past the end of the line and read out of bounds.
+    let buf = newTextBuffer("\xFFab cd")
+    let ranges = buf.findWordMatchRanges(0, "cd")
+    check ranges.len == 1
+    check ranges[0].startCol == 4
+    check ranges[0].endCol == 6
+    # A word run reaching end-of-line is closed against the real byte span.
+    check buf.findWordMatchRanges(0, "abcd").len == 0
+
+  test "findWordMatchRanges columns match charLen past a truncated lead byte":
+    # 0xE3 advertises three bytes but is followed by 'a' and 'b', so it stands
+    # alone as one column. `fastRuneAt` would swallow all three and report the
+    # match two columns to the left of where it is drawn.
+    let buf = newTextBuffer("\xE3ab cd")
+    check buf.getLine(0).charLen == 6
+    let ranges = buf.findWordMatchRanges(0, "cd")
+    check ranges.len == 1
+    check ranges[0].startCol == 4
+    check ranges[0].endCol == 6
 
   test "findWordMatchRanges punctuation separator":
     let buf = newTextBuffer("foo.bar(baz)")

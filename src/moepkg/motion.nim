@@ -211,7 +211,7 @@ proc moveFirstNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPos
 
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let line = e.buffer.getLine(currentPos.y)
-    let runes = line.toRunes()
+    let runes = line.toCharRunes()
 
     # Find first non-whitespace character
     for i, r in runes:
@@ -226,7 +226,7 @@ proc moveLastNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPosi
 
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let line = e.buffer.getLine(currentPos.y)
-    let runes = line.toRunes()
+    let runes = line.toCharRunes()
 
     # Find last non-whitespace character by scanning backwards
     for i in countdown(runes.len - 1, 0):
@@ -260,7 +260,7 @@ proc moveNextLineFirstNonBlank(
   result.x = 0
   if result.y >= 0 and result.y < e.buffer.len:
     let line = e.buffer.getLine(result.y)
-    let runes = line.toRunes()
+    let runes = line.toCharRunes()
     # Find first non-whitespace character
     for i, r in runes:
       if not isWhitespace(r):
@@ -281,7 +281,7 @@ proc movePreviousLineFirstNonBlank(
   result.x = 0
   if result.y >= 0 and result.y < e.buffer.len:
     let line = e.buffer.getLine(result.y)
-    let runes = line.toRunes()
+    let runes = line.toCharRunes()
     # Find first non-whitespace character
     for i, r in runes:
       if not isWhitespace(r):
@@ -313,12 +313,12 @@ proc findChar(
   ## Find next occurrence of character on current line
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let targetRunes = targetChar.toRunes
+    let targetRunes = targetChar.toCharRunes
     if targetRunes.len != 1:
       return
     let
       target = targetRunes[0]
-      runes = e.buffer.getLine(currentPos.y).toRunes
+      runes = e.buffer.getLine(currentPos.y).toCharRunes
     var found = 0
     # Index a one-time rune copy of the line instead of rescanning from the
     # start per column (avoids O(n^2) on long lines).
@@ -335,12 +335,12 @@ proc findCharBackward(
   ## Find previous occurrence of character on current line
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let targetRunes = targetChar.toRunes
+    let targetRunes = targetChar.toCharRunes
     if targetRunes.len != 1:
       return
     let
       target = targetRunes[0]
-      runes = e.buffer.getLine(currentPos.y).toRunes
+      runes = e.buffer.getLine(currentPos.y).toCharRunes
     var found = 0
     for charIdx in countdown(min(currentPos.x - 1, runes.len - 1), 0):
       if runes[charIdx] == target:
@@ -399,7 +399,7 @@ proc moveWordForward(
   ## 1. A sequence of word characters (letters, digits, underscore)
   ## 2. A sequence of non-word, non-whitespace characters (symbols)
   ##
-  ## Note: Uses toRunes() for simplicity. For most lines (<1000 chars),
+  ## Note: Uses toCharRunes() for simplicity. For most lines (<1000 chars),
   ## the overhead is negligible compared to the clarity and correctness.
   result = currentPos
   var iterCount = count
@@ -416,7 +416,7 @@ proc moveWordForward(
         line[0 ..< ^1]
       else:
         line
-    let runes = lineContent.toRunes()
+    let runes = lineContent.toCharRunes()
     let pos = skipWordForward(runes, result.x)
 
     # If we reached end of line, move to next line
@@ -431,7 +431,7 @@ proc moveWordForward(
             nextLine[0 ..< ^1]
           else:
             nextLine
-        let nextRunes = nextContent.toRunes()
+        let nextRunes = nextContent.toCharRunes()
         while result.x < nextRunes.len and isWhitespace(nextRunes[result.x]):
           result.x += 1
       else:
@@ -466,7 +466,7 @@ proc moveWordBackward(
           currentLine[0 ..< ^1]
         else:
           currentLine
-      runes = lineContent.toRunes()
+      runes = lineContent.toCharRunes()
 
     # Move back one position first
     if pos > 0:
@@ -528,7 +528,7 @@ proc moveWordEnd(
         currentLine[0 ..< ^1]
       else:
         currentLine
-    var runes = lineContent.toRunes()
+    var runes = lineContent.toCharRunes()
 
     # Move forward one position first
     if pos + 1 < runes.len:
@@ -543,7 +543,7 @@ proc moveWordEnd(
           currentLine[0 ..< ^1]
         else:
           currentLine
-      runes = lineContent.toRunes()
+      runes = lineContent.toCharRunes()
     else:
       # At end of buffer
       break
@@ -561,7 +561,7 @@ proc moveWordEnd(
             currentLine[0 ..< ^1]
           else:
             currentLine
-        runes = lineContent.toRunes()
+        runes = lineContent.toCharRunes()
       else:
         break
 
@@ -597,7 +597,7 @@ proc moveWordEndBackward(
         line[0 ..< ^1]
       else:
         line
-    content.toRunes()
+    content.toCharRunes()
 
   template isWordEnd(runes: seq[Rune], pos: int): bool =
     pos < runes.len and not isWhitespace(runes[pos]) and (
@@ -650,7 +650,7 @@ proc isBlankLine(line: string): bool =
     return true
 
   # Check if all characters are whitespace
-  for r in content.toRunes():
+  for (r, _) in content.chars:
     if not isWhitespace(r):
       return false
   return true
@@ -725,7 +725,7 @@ proc moveToMatchingBracket(
   # Get character at cursor
   var charIdx = 0
   var currentRune: Rune
-  for r in currentLine.runes:
+  for (r, _) in currentLine.chars:
     if charIdx == currentPos.x:
       currentRune = r
       break
@@ -743,8 +743,8 @@ proc moveToMatchingBracket(
 
     while lineIdx < e.buffer.len:
       # Index a one-time rune copy of the line instead of a skip scan plus a
-      # sliced toRunes copy per line.
-      let runes = e.buffer.getLine(lineIdx).toRunes
+      # sliced toCharRunes copy per line.
+      let runes = e.buffer.getLine(lineIdx).toCharRunes
       var charPos = if lineIdx == currentPos.y: colIdx else: 0
 
       while charPos < runes.len:
@@ -771,7 +771,7 @@ proc moveToMatchingBracket(
     while lineIdx >= 0:
       # Index a one-time rune copy of the line instead of rescanning from the
       # start per column (avoids O(n^2) on long lines).
-      let runes = e.buffer.getLine(lineIdx).toRunes
+      let runes = e.buffer.getLine(lineIdx).toCharRunes
 
       # Set starting column
       if lineIdx != currentPos.y:
@@ -1358,7 +1358,7 @@ proc wordForwardReachesEol(buffer: TextBuffer, pos: BufferPosition): bool =
   ## "w stuck at last line of buffer" special case in Vim.
   if pos.line < 0 or pos.line >= buffer.len:
     return false
-  let runes = lineContentNoNewline(buffer, pos.line).toRunes()
+  let runes = lineContentNoNewline(buffer, pos.line).toCharRunes()
   skipWordForward(runes, pos.column) >= runes.len
 
 proc calculateOperatorRange*(
@@ -1448,11 +1448,11 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
         # Range reaches the line end: include the trailing newline so the yanked
         # text matches what buffer.deleteRange removes (it joins the next line).
         if startCol < lineLen:
-          text.add(line.runeSubStr(startCol))
+          text.add(line.charSubStr(startCol))
         text.add("\n")
       elif startCol < lineLen:
         # Inclusive range to match buffer.deleteRange behavior.
-        text.add(line.runeSubStr(startCol, endCol - startCol + 1))
+        text.add(line.charSubStr(startCol, endCol - startCol + 1))
     else:
       # Multi-line extraction
       for lineIdx in range.start.line .. range.endPos.line:
@@ -1461,9 +1461,7 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
           if lineIdx == range.start.line:
             # First line: from startCol to end
             if range.start.column < line.charLen:
-              let runes = line.toRunes()
-              for i in range.start.column ..< runes.len:
-                text.add($runes[i])
+              text.add(line.charSubStr(range.start.column))
             text.add("\n")
           elif lineIdx == range.endPos.line:
             # Last line: from start to endPos.column (inclusive). When the range
@@ -1475,7 +1473,7 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
               text.add(line)
               text.add("\n")
             else:
-              text.add(line.runeSubStr(0, endCol + 1))
+              text.add(line.charSubStr(0, endCol + 1))
           else:
             # Middle lines: entire line
             text.add(line)
@@ -1551,7 +1549,7 @@ proc findWordBoundaries(
     return err("Cursor position out of bounds")
 
   let line = buffer.getLine(cursor.line)
-  let runes = line.toRunes()
+  let runes = line.toCharRunes()
 
   if runes.len == 0:
     return err("Empty line")
@@ -1588,7 +1586,7 @@ proc findWordBoundaries(
         var nextEndCol = 0
         for searchLine in (cursor.line + 1) ..< buffer.len:
           let searchLineStr = buffer.getLine(searchLine)
-          let searchRunes = searchLineStr.toRunes()
+          let searchRunes = searchLineStr.toCharRunes()
           var col = 0
           # Skip leading whitespace
           while col < searchRunes.len and isWhitespace(searchRunes[col]):
@@ -1771,7 +1769,7 @@ proc findWideWordBoundaries(
     return err("Cursor position out of bounds")
 
   let line = buffer.getLine(cursor.line)
-  let runes = line.toRunes()
+  let runes = line.toCharRunes()
 
   if runes.len == 0:
     return err("Empty line")
@@ -1808,7 +1806,7 @@ proc findWideWordBoundaries(
         var nextEndCol = 0
         for searchLine in (cursor.line + 1) ..< buffer.len:
           let searchLineStr = buffer.getLine(searchLine)
-          let searchRunes = searchLineStr.toRunes()
+          let searchRunes = searchLineStr.toCharRunes()
           var col = 0
           while col < searchRunes.len and isWhitespace(searchRunes[col]):
             col.inc
@@ -1934,7 +1932,7 @@ proc findQuotedBoundaries(
     return err("Cursor position out of bounds")
 
   let line = buffer.getLine(cursor.line)
-  let runes = line.toRunes()
+  let runes = line.toCharRunes()
 
   if runes.len == 0:
     return err("Empty line")
@@ -2028,7 +2026,7 @@ proc findMatchingParen(
 
   # Check if cursor is on a closing delimiter
   let cursorLine = buffer.getLine(cursor.line)
-  let cursorRunes = cursorLine.toRunes()
+  let cursorRunes = cursorLine.toCharRunes()
   let cursorCol = min(cursor.column, max(0, cursorRunes.len - 1))
 
   if cursorRunes.len > 0 and cursorCol < cursorRunes.len and
@@ -2047,7 +2045,7 @@ proc findMatchingParen(
   block searchBackward:
     while searchLine >= 0:
       let line = buffer.getLine(searchLine)
-      let runes = line.toRunes()
+      let runes = line.toCharRunes()
 
       # Adjust starting column for each line
       if searchLine < cursor.line:
@@ -2073,7 +2071,7 @@ proc findMatchingParen(
       searchLine.dec
       if searchLine >= 0:
         let nextLine = buffer.getLine(searchLine)
-        searchCol = nextLine.toRunes().len - 1
+        searchCol = nextLine.charLen - 1
 
   if startCol < 0:
     return err("No opening delimiter found")
@@ -2089,7 +2087,7 @@ proc findMatchingParen(
   block searchForward:
     while searchLine < buffer.len:
       let line = buffer.getLine(searchLine)
-      let runes = line.toRunes()
+      let runes = line.toCharRunes()
 
       # Adjust starting column for each line
       if searchLine > startLine:
@@ -2164,9 +2162,9 @@ proc findMatchingParen(
     )
 
 proc lineRunesNoNl(buffer: TextBuffer, line: int): seq[Rune] =
-  ## The line's runes with any trailing newline stripped. Out-of-range lines
-  ## yield an empty seq (via lineContentNoNewline's bounds check).
-  lineContentNoNewline(buffer, line).toRunes()
+  ## The line's characters with any trailing newline stripped, in the column
+  ## model buffer positions use. Out-of-range lines yield an empty seq.
+  lineContentNoNewline(buffer, line).toCharRunes()
 
 proc findParagraphBoundaries(
     buffer: TextBuffer, cursor: BufferPosition, inner: bool
@@ -2663,7 +2661,7 @@ proc nextObjectProbe(
   ## line's start at end of line. none() when that runs past the buffer.
   var line = fromLine
   var col = fromCol + 1
-  if col >= buffer.getLine(line).toRunes().len:
+  if col >= buffer.getLine(line).charLen:
     line.inc
     col = 0
   if line >= buffer.len:

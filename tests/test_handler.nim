@@ -3257,49 +3257,59 @@ proc makeMiddleClickEvent(x, y: int): Event =
     ),
   )
 
-suite "cursorAfterPaste":
+suite "Paste cursor position":
+  # The paste path takes its cursor from what the insertion reports instead of
+  # counting the pasted text, so these exercise that report directly.
+  const Grid = "0123456789\n0123456789\n0123456789\n0123456789\n0123456789"
+
+  proc pasteCursor(start: BufferPosition, pasted: string): BufferPosition =
+    let b = newTextBuffer(Grid)
+    let r = b.insertTextEnd(start, pasted)
+    doAssert r.isOk
+    r.get.cursor
+
   test "Empty text leaves cursor at start position":
-    let start = BufferPosition(line: 3, column: 7)
-    let after = cursorAfterPaste(start, "")
+    let after = pasteCursor(BufferPosition(line: 3, column: 7), "")
     check after.line == 3
     check after.column == 7
 
-  test "Single-line ASCII advances column by rune count":
-    let start = BufferPosition(line: 0, column: 5)
-    let after = cursorAfterPaste(start, " world")
+  test "Single-line ASCII advances column by character count":
+    let after = pasteCursor(BufferPosition(line: 0, column: 5), " world")
     check after.line == 0
     check after.column == 11
 
-  test "Multibyte runes advance column by rune, not byte":
-    # "café" is 4 runes / 5 bytes: byte iteration would land at column 5.
-    let start = BufferPosition(line: 0, column: 0)
-    let after = cursorAfterPaste(start, "café")
+  test "Multibyte characters advance by character, not byte":
+    # "café" is 4 characters / 5 bytes: byte counting would land at column 5.
+    let after = pasteCursor(BufferPosition(line: 0, column: 0), "café")
     check after.line == 0
     check after.column == 4
 
   test "LF resets column and increments line":
-    let start = BufferPosition(line: 2, column: 4)
-    let after = cursorAfterPaste(start, "\nabc")
+    let after = pasteCursor(BufferPosition(line: 2, column: 4), "\nabc")
     check after.line == 3
     check after.column == 3
 
   test "Multiple newlines advance across several lines":
-    let start = BufferPosition(line: 0, column: 2)
-    let after = cursorAfterPaste(start, "a\nbb\nccc")
+    let after = pasteCursor(BufferPosition(line: 0, column: 2), "a\nbb\nccc")
     check after.line == 2
     check after.column == 3
 
   test "Trailing newline lands cursor at column 0 of next line":
-    let start = BufferPosition(line: 1, column: 3)
-    let after = cursorAfterPaste(start, "xy\n")
+    let after = pasteCursor(BufferPosition(line: 1, column: 3), "xy\n")
     check after.line == 2
     check after.column == 0
 
-  test "Start column is preserved when first rune stays on same line":
-    let start = BufferPosition(line: 4, column: 10)
-    let after = cursorAfterPaste(start, "z")
+  test "Start column is preserved when the text stays on the same line":
+    let after = pasteCursor(BufferPosition(line: 4, column: 10), "z")
     check after.line == 4
     check after.column == 11
+
+  test "Completing a split character reports the merged column":
+    let b = newTextBuffer("\xF0")
+    let r = b.insertTextEnd(BufferPosition(line: 0, column: 1), "\x9F\x98\x81")
+    check r.isOk
+    check b.getLine(0).charLen == 1
+    check r.get.cursor.column == 1
 
 suite "handlePasteText":
   test "Insert mode paste sanitizes invalid UTF-8":

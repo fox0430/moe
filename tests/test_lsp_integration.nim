@@ -25,7 +25,8 @@ import
 
 import pkg/results
 
-import ../src/moepkg/[lsp_integration, buffer, message_log, unicode_utils, backup]
+import ../src/moepkg/lsp_integration {.all.}
+import ../src/moepkg/[buffer, message_log, unicode_utils, backup]
 import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/lsp/protocol/types
@@ -70,6 +71,27 @@ suite "LspIntegration - UTF-16/UTF-8 Conversion":
     check utf16OffsetToUtf8(line, 1) == 1 # After 'a'
     check utf16OffsetToUtf8(line, 3) == 5 # After emoji (2 UTF-16 units)
     check utf16OffsetToUtf8(line, 4) == 6 # After 'b'
+
+  test "utf16OffsetToUtf8 steps by the bytes a character occupies":
+    # 0xE9 is one source byte here (it advertises three, but only two remain)
+    # yet re-encodes to two, so walking by `Rune.size` ran the offset past it.
+    let line = "caf\xE9x"
+    check line.charLen == 5
+    check utf16OffsetToUtf8(line, 3) == 3 # Before the undecodable byte
+    check utf16OffsetToUtf8(line, 4) == 4 # After it
+    check utf16OffsetToUtf8(line, 5) == 5
+    check utf16OffsetToUtf8(line, 99) == line.len
+
+  test "utf8OffsetToUtf16 steps by the bytes a character occupies":
+    let line = "caf\xE9x"
+    check utf8OffsetToUtf16(line, 3) == 3
+    check utf8OffsetToUtf16(line, 4) == 4
+    check utf8OffsetToUtf16(line, line.len) == line.charLen
+
+  test "utf16OffsetToUtf8 and utf8OffsetToUtf16 round-trip past a raw byte":
+    let line = "caf\xE9x"
+    for col in 0 .. line.charLen:
+      check utf8OffsetToUtf16(line, utf16OffsetToUtf8(line, col)) == col
 
   test "utf8OffsetToUtf16 with ASCII text":
     let line = "hello world"
@@ -122,73 +144,104 @@ suite "LspIntegration - UTF-16/UTF-8 Conversion":
       let utf16 = utf8OffsetToUtf16(line, utf8Offset)
       check utf16OffsetToUtf8(line, utf16) == utf8Offset
 
-  test "runeIndexToUtf16 with empty string":
-    check runeIndexToUtf16("", 0) == 0
-    check runeIndexToUtf16("", 5) == 0
+  test "charIndexToUtf16 with empty string":
+    check charIndexToUtf16("", 0) == 0
+    check charIndexToUtf16("", 5) == 0
 
-  test "runeIndexToUtf16 with ASCII":
+  test "charIndexToUtf16 with ASCII":
     let line = "hello world"
-    check runeIndexToUtf16(line, 0) == 0
-    check runeIndexToUtf16(line, 5) == 5
-    check runeIndexToUtf16(line, 11) == 11
+    check charIndexToUtf16(line, 0) == 0
+    check charIndexToUtf16(line, 5) == 5
+    check charIndexToUtf16(line, 11) == 11
 
-  test "runeIndexToUtf16 with BMP characters":
-    # Each hiragana is 1 rune = 1 UTF-16 unit = 3 UTF-8 bytes.
+  test "charIndexToUtf16 with BMP characters":
+    # Each hiragana is 1 character = 1 UTF-16 unit = 3 UTF-8 bytes.
     let line = "こんにちは"
-    check runeIndexToUtf16(line, 0) == 0
-    check runeIndexToUtf16(line, 1) == 1
-    check runeIndexToUtf16(line, 5) == 5
+    check charIndexToUtf16(line, 0) == 0
+    check charIndexToUtf16(line, 1) == 1
+    check charIndexToUtf16(line, 5) == 5
 
-  test "runeIndexToUtf16 with mixed ASCII and Japanese":
+  test "charIndexToUtf16 with mixed ASCII and Japanese":
     let line = "ABCあいう"
-    check runeIndexToUtf16(line, 3) == 3
-    check runeIndexToUtf16(line, 4) == 4
-    check runeIndexToUtf16(line, 6) == 6
+    check charIndexToUtf16(line, 3) == 3
+    check charIndexToUtf16(line, 4) == 4
+    check charIndexToUtf16(line, 6) == 6
 
-  test "runeIndexToUtf16 with surrogate pairs":
+  test "charIndexToUtf16 with surrogate pairs":
     let line = "a😀b"
-    check runeIndexToUtf16(line, 0) == 0
-    check runeIndexToUtf16(line, 1) == 1
-    check runeIndexToUtf16(line, 2) == 3 # After emoji (2 UTF-16 units)
-    check runeIndexToUtf16(line, 3) == 4
+    check charIndexToUtf16(line, 0) == 0
+    check charIndexToUtf16(line, 1) == 1
+    check charIndexToUtf16(line, 2) == 3 # After emoji (2 UTF-16 units)
+    check charIndexToUtf16(line, 3) == 4
 
-  test "runeIndexToUtf16 clamps to line length":
-    check runeIndexToUtf16("abc", 100) == 3
-    check runeIndexToUtf16("a😀b", 100) == 4
+  test "charIndexToUtf16 clamps to line length":
+    check charIndexToUtf16("abc", 100) == 3
+    check charIndexToUtf16("a😀b", 100) == 4
 
-  test "utf16ToRuneIndex with empty string":
-    check utf16ToRuneIndex("", 0) == 0
-    check utf16ToRuneIndex("", 5) == 0
+  test "the didChange prefix stops on a character boundary":
+    # 0xE0 announces three bytes and the two after it are 'A' and 0xE3, so a
+    # walk that trusts the announcement jumps from byte 0 to byte 3 -- into the
+    # middle of the valid three-byte character that starts at byte 2. The
+    # offset then handed to the server names a position no character starts at.
+    let
+      a = "\xE0\x41\xE3\x81\x82"
+      b = "\xE0\x41\xE3\x81\x83"
+    check a.charLen == 3
 
-  test "utf16ToRuneIndex with ASCII":
+    var boundaries: seq[int] = @[]
+    var i = 0
+    while i <= a.len:
+      boundaries.add(i)
+      if i < a.len:
+        i += a.runeSizeAt(i)
+      else:
+        break
+    check boundaries == @[0, 1, 2, 5]
+
+    # The lenient walk reaches byte 4, inside the character spanning 2..4.
+    check commonRunePrefixBytes(a, b) == 2
+
+  test "the didChange prefix stops where two lines first differ":
+    check commonRunePrefixBytes("abc", "abd") == 2
+    check commonRunePrefixBytes("日本語", "日本X") == 6
+    check commonRunePrefixBytes("abc", "abc") == 3
+    check commonRunePrefixBytes("", "abc") == 0
+    # A truncated tail must stop the walk rather than read past either string.
+    check commonRunePrefixBytes("ab\xE3", "ab\xE3\x81\x82") == 2
+
+  test "utf16ToCharIndex with empty string":
+    check utf16ToCharIndex("", 0) == 0
+    check utf16ToCharIndex("", 5) == 0
+
+  test "utf16ToCharIndex with ASCII":
     let line = "hello"
-    check utf16ToRuneIndex(line, 0) == 0
-    check utf16ToRuneIndex(line, 3) == 3
-    check utf16ToRuneIndex(line, 5) == 5
+    check utf16ToCharIndex(line, 0) == 0
+    check utf16ToCharIndex(line, 3) == 3
+    check utf16ToCharIndex(line, 5) == 5
 
-  test "utf16ToRuneIndex with BMP characters":
+  test "utf16ToCharIndex with BMP characters":
     let line = "こんにちは"
-    check utf16ToRuneIndex(line, 0) == 0
-    check utf16ToRuneIndex(line, 2) == 2
-    check utf16ToRuneIndex(line, 5) == 5
+    check utf16ToCharIndex(line, 0) == 0
+    check utf16ToCharIndex(line, 2) == 2
+    check utf16ToCharIndex(line, 5) == 5
 
-  test "utf16ToRuneIndex with surrogate pairs":
+  test "utf16ToCharIndex with surrogate pairs":
     let line = "a😀b"
-    check utf16ToRuneIndex(line, 0) == 0
-    check utf16ToRuneIndex(line, 1) == 1
-    check utf16ToRuneIndex(line, 3) == 2 # After emoji (2 UTF-16 units)
-    check utf16ToRuneIndex(line, 4) == 3
+    check utf16ToCharIndex(line, 0) == 0
+    check utf16ToCharIndex(line, 1) == 1
+    check utf16ToCharIndex(line, 3) == 2 # After emoji (2 UTF-16 units)
+    check utf16ToCharIndex(line, 4) == 3
 
-  test "utf16ToRuneIndex clamps to rune count":
-    check utf16ToRuneIndex("abc", 100) == 3
-    check utf16ToRuneIndex("a😀b", 100) == 3
+  test "utf16ToCharIndex clamps to character count":
+    check utf16ToCharIndex("abc", 100) == 3
+    check utf16ToCharIndex("a😀b", 100) == 3
 
-  test "rune/UTF-16 roundtrip":
+  test "character/UTF-16 roundtrip":
     let line = "hello世界🌍end"
     # Rune indexes: h(0) e(1) l(2) l(3) o(4) 世(5) 界(6) 🌍(7) e(8) n(9) d(10).
-    for runeIndex in [0, 3, 5, 6, 7, 8, 11]:
-      let utf16 = runeIndexToUtf16(line, runeIndex)
-      check utf16ToRuneIndex(line, utf16) == runeIndex
+    for charIndex in [0, 3, 5, 6, 7, 8, 11]:
+      let utf16 = charIndexToUtf16(line, charIndex)
+      check utf16ToCharIndex(line, utf16) == charIndex
 
 suite "LspIntegration - Status Text":
   test "getStatusText returns empty for ok and quiescent":

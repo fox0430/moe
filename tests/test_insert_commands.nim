@@ -365,6 +365,25 @@ suite "Insert Commands - insertNewline bracket split":
     check state.cursor.line == 1
     check state.cursor.column == 8
 
+  test "bracket split still fires on a line with an undecodable byte":
+    # The bounds check counts columns with the same model the cursor uses, so a
+    # lead byte whose advertised length overruns the line does not disable it.
+    let buf = newTextBuffer()
+    # 0xF0 advertises four bytes but only three remain, so it is one character.
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "x\xF0()")
+    check buf.getLine(0).charLen == 4
+    let state = createTestState()
+    state.autoIndent = false
+    state.bracketSplit = bsmNoIndent
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    insertNewline(buf, state)
+
+    check buf.len == 3
+    check buf.getLine(0) == "x\xF0("
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == ")"
+
   test "bsmNoIndent splits [] onto three lines without indentation":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")

@@ -19,7 +19,7 @@
 
 ## Replace mode handler
 
-import std/[options, unicode]
+import std/options
 
 import pkg/results
 
@@ -65,14 +65,16 @@ proc handleCharacterReplacement*(
   ## Otherwise, replace the character at cursor position.
   let pos = state.cursor
   let lineContent = buffer.getLine(pos.line)
+  var insertEnd: BufferPosition
 
   if pos.column >= lineContent.charLen:
     # At end of line, insert character (no original character to save)
-    let insertResult = buffer.insertText(pos, text)
+    let insertResult = buffer.insertTextEnd(pos, text)
     if insertResult.isErr:
       return ReplaceModeResult(
         kind: rmrError, errorMessage: "Failed to insert text: " & insertResult.error
       )
+    insertEnd = insertResult.get.cursor
     # Save empty string as original character for consistency
     state.editState.replaceHistory.add(
       ReplaceHistoryEntry(kind: rheReplace, pos: pos, originalChar: "")
@@ -80,7 +82,7 @@ proc handleCharacterReplacement*(
   else:
     # Replace character at cursor
     # Save original character for undo with backspace
-    let originalChar = $lineContent.runeAtPos(pos.column)
+    let originalChar = lineContent.charSubStr(pos.column, 1)
 
     # Delete existing character
     let deleteResult = buffer.deleteChar(pos)
@@ -91,11 +93,12 @@ proc handleCharacterReplacement*(
       )
 
     # Insert new character
-    let insertResult = buffer.insertText(pos, text)
+    let insertResult = buffer.insertTextEnd(pos, text)
     if insertResult.isErr:
       return ReplaceModeResult(
         kind: rmrError, errorMessage: "Failed to insert text: " & insertResult.error
       )
+    insertEnd = insertResult.get.cursor
 
     # Only add to history if operations succeeded
     state.editState.replaceHistory.add(
@@ -103,7 +106,7 @@ proc handleCharacterReplacement*(
     )
 
   # Move cursor right after replacement/insertion
-  state.cursor.column += text.runeLen
+  state.cursor.column = insertEnd.column
 
   return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
 

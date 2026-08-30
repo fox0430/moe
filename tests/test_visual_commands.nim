@@ -833,6 +833,23 @@ suite "Visual Commands - visualUppercase":
     check buf.getLine(0) == "HELLO world"
     check state.visualSelection.active == false
 
+  test "Uppercase leaves a broken byte and a multi-byte character alone":
+    # Every byte of a multi-byte character is a continuation byte, so recasing
+    # cannot reach inside one; a byte that decodes as nothing has no case.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\xF0caf\xC3\xA9")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "\xF0CAF\xC3\xA9"
+
   test "Uppercase line selection":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")

@@ -733,6 +733,18 @@ suite "Buffer - Matching Paren":
     check pos.isSome
     check pos.get.column == 8
 
+  test "findMatchingParenPosition spans a truncated lead byte":
+    # 0xF0 advertises four bytes and has two, so it is one column; a walk by
+    # the advertised length would run off the line and never reach the ")".
+    let buf = newTextBuffer("(\xF0a)")
+    check buf.getLine(0).charLen == 4
+    let close = buf.findMatchingParenPosition(BufferPosition(line: 0, column: 0))
+    check close.isSome
+    check close.get.column == 3
+    let open = buf.findMatchingParenPosition(BufferPosition(line: 0, column: 3))
+    check open.isSome
+    check open.get.column == 0
+
   test "findMatchingParenPosition braces":
     let buf = newTextBuffer("{key: value}")
     let pos = buf.findMatchingParenPosition(BufferPosition(line: 0, column: 0))
@@ -1193,6 +1205,78 @@ suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
   # modifiedLines all shift through the same emitRowColRemapEvents fan-out.
   # The marker suite above covers the per-line-array half; these cover the
   # row-reference half.
+
+  test "an insert that merged a character reports the row as changed":
+    # The pasted bytes complete a lead byte left waiting on the line, so a
+    # column before the insertion point changes and the row no longer maps by
+    # a column shift. Reporting one would move every decoration on the row
+    # three columns right, and undo would take three columns back off
+    # coordinates that never moved.
+    let buf = newTextBuffer("\xF0")
+    var kinds: seq[RowColRemapEventKind] = @[]
+    buf.registerRowColRemapCallback(
+      proc(b: TextBuffer, event: RowColRemapEvent) =
+        kinds.add(event.kind)
+    )
+
+    discard buf.insertText(BufferPosition(line: 0, column: 1), "\x9F\x98\x81")
+    check buf.getLine(0).charLen == 1
+    check kinds == @[rrekMultiLine]
+
+    discard buf.undo()
+    check buf.getLine(0) == "\xF0"
+    check kinds == @[rrekMultiLine, rrekMultiLine]
+
+  test "an ordinary single-line insert still reports a column shift":
+    let buf = newTextBuffer("AB")
+    var events: seq[RowColRemapEvent] = @[]
+    buf.registerRowColRemapCallback(
+      proc(b: TextBuffer, event: RowColRemapEvent) =
+        events.add(event)
+    )
+
+    discard buf.insertText(BufferPosition(line: 0, column: 1), "xy")
+    check events.len == 1
+    check events[0].kind == rrekSingleLine
+    check events[0].editCol == 1
+    check events[0].colDelta == 2
+    check events[0].lineCharLenAfter == 4
+
+  test "a delete that merged a character reports the row as changed":
+    # Mirror of the insert case: removing the byte lets 0xF0 complete over what
+    # followed the hole, so a column before the deletion point changes and the
+    # row no longer maps by a column shift. Re-deriving the shift from the
+    # deleted text would report -1 where the row actually lost four columns.
+    let buf = newTextBuffer("\xF0a\x9F\x98\x81")
+    check buf.getLine(0).charLen == 5
+    var kinds: seq[RowColRemapEventKind] = @[]
+    buf.registerRowColRemapCallback(
+      proc(b: TextBuffer, event: RowColRemapEvent) =
+        kinds.add(event.kind)
+    )
+
+    discard buf.deleteChar(BufferPosition(line: 0, column: 1))
+    check buf.getLine(0).charLen == 1
+    check kinds == @[rrekMultiLine]
+
+    discard buf.undo()
+    check buf.getLine(0) == "\xF0a\x9F\x98\x81"
+    check kinds == @[rrekMultiLine, rrekMultiLine]
+
+  test "an ordinary single-character delete still reports a column shift":
+    let buf = newTextBuffer("ABCD")
+    var events: seq[RowColRemapEvent] = @[]
+    buf.registerRowColRemapCallback(
+      proc(b: TextBuffer, event: RowColRemapEvent) =
+        events.add(event)
+    )
+
+    discard buf.deleteChar(BufferPosition(line: 0, column: 1))
+    check events.len == 1
+    check events[0].kind == rrekSingleLine
+    check events[0].editCol == 1
+    check events[0].colDelta == -1
+    check events[0].lineCharLenAfter == 3
 
   test "fold shifts down after ckInsertText with newlines":
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4")
@@ -3178,6 +3262,40 @@ suite "Buffer - Backend selection":
     check chooseBackendForFile(AutoBackendLargeFileThreshold + 1) == PieceTable
     # Without size context, assume a small buffer.
     check chooseBackend() == GapBuffer
+
+suite "Buffer - binary content detection":
+  test "a NUL near the start marks the buffer as binary":
+    let testFile = getTempDir() / "moe_test_binary_" & $epochTime() & ".bin"
+    writeFile(testFile, "\x89PNG\x0D\x0A\x1A\x0A\x00\x00\x00rest")
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.hasBinaryContent
+
+  test "plain text is not marked as binary":
+    let testFile = getTempDir() / "moe_test_text_" & $epochTime() & ".txt"
+    writeFile(testFile, "hello\nworld\n")
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check not buf.hasBinaryContent
+
+  test "an undecodable byte alone is text, not binary":
+    # Bytes that do not decode are ordinary content for a byte-preserving
+    # editor; only a NUL says the file is not text at all.
+    let testFile = getTempDir() / "moe_test_badbyte_" & $epochTime() & ".txt"
+    writeFile(testFile, "caf\xE9 latte\n")
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check not buf.hasBinaryContent
+    check buf[0] == "caf\xE9 latte"
 
 suite "Buffer - loadFileWithContent equivalence":
   test "loadFileWithContent matches loadFile for plain UTF-8":

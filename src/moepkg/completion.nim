@@ -108,14 +108,14 @@ type
 
   SnippetStopOffset* = object ## A tabstop located inside the expanded snippet text.
     num*: int ## Tabstop number; 0 is the final stop.
-    offset*: int ## Rune offset of the stop within the expanded text.
-    len*: int ## Rune length of the placeholder default (0 for bare `$n`).
+    offset*: int ## Character offset of the stop within the expanded text.
+    len*: int ## Character length of the placeholder default (0 for bare `$n`).
 
   SnippetParse = object
     text: string
-    finalStop: int ## rune offset of `$0` (the final stop), or -1 if absent
+    finalStop: int ## character offset of `$0` (the final stop), or -1 if absent
     firstStopNum: int ## lowest tabstop number seen (>=1), high(int) if none
-    firstStopOffset: int ## rune offset of that lowest-numbered stop, or -1
+    firstStopOffset: int ## character offset of that lowest-numbered stop, or -1
     stops: seq[SnippetStopOffset] ## every stop in source order (mirrors kept)
 
 const
@@ -180,7 +180,9 @@ proc extractWords*(line: string): seq[string] =
   result = @[]
   var currentWord = ""
 
-  for r in line.runes:
+  # Use `chars` like the buffer does, so invalid bytes don't borrow
+  # neighbours. Carrier runes aren't word chars, so `$r` is safe.
+  for (r, _) in line.chars:
     if r.isWordChar:
       currentWord.add($r)
     else:
@@ -198,9 +200,8 @@ proc extractWordAtPosition*(line: string, col: int): string =
   if line.len == 0 or col < 0:
     return ""
 
-  var runes: seq[Rune] = @[]
-  for r in line.runes:
-    runes.add(r)
+  # `col` is a buffer column, so the characters must be counted the same way.
+  let runes = line.toCharRunes()
 
   if col > runes.len:
     return ""
@@ -215,9 +216,9 @@ proc extractWordAtPosition*(line: string, col: int): string =
   while endIdx < runes.len and runes[endIdx].isWordChar:
     inc endIdx
 
-  # Build the word
-  for i in startIdx ..< endIdx:
-    result.add($runes[i])
+  # Sliced out of the line rather than rebuilt from runes: `$` on an
+  # undecodable byte would emit invalid UTF-8.
+  line.charSubStr(startIdx, endIdx - startIdx)
 
 proc extractPrefixBeforeCursor*(line: string, col: int): string =
   ## Extract the word prefix before the cursor
@@ -225,9 +226,8 @@ proc extractPrefixBeforeCursor*(line: string, col: int): string =
   if line.len == 0 or col <= 0:
     return ""
 
-  var runes: seq[Rune] = @[]
-  for r in line.runes:
-    runes.add(r)
+  # `col` is a buffer column, so the characters must be counted the same way.
+  let runes = line.toCharRunes()
 
   if col > runes.len:
     return ""
@@ -237,9 +237,8 @@ proc extractPrefixBeforeCursor*(line: string, col: int): string =
   while startIdx > 0 and runes[startIdx - 1].isWordChar:
     dec startIdx
 
-  # Build prefix from start to cursor
-  for i in startIdx ..< col:
-    result.add($runes[i])
+  # Sliced, not rebuilt from runes (see `extractWordAtPosition`).
+  line.charSubStr(startIdx, col - startIdx)
 
 proc isPathChar*(r: Rune): bool =
   ## Check if a rune is part of a file path
@@ -255,9 +254,8 @@ proc extractPathPrefixBeforeCursor*(line: string, col: int): string =
   if line.len == 0 or col <= 0:
     return ""
 
-  var runes: seq[Rune] = @[]
-  for r in line.runes:
-    runes.add(r)
+  # `col` is a buffer column, so the characters must be counted the same way.
+  let runes = line.toCharRunes()
 
   if col > runes.len:
     return ""
@@ -267,10 +265,8 @@ proc extractPathPrefixBeforeCursor*(line: string, col: int): string =
   while startIdx > 0 and runes[startIdx - 1].isPathChar:
     dec startIdx
 
-  # Build the prefix
-  var prefix = ""
-  for i in startIdx ..< col:
-    prefix.add($runes[i])
+  # Sliced, not rebuilt from runes (see `extractWordAtPosition`).
+  let prefix = line.charSubStr(startIdx, col - startIdx)
 
   # Only return as path prefix if it contains a slash
   if '/' in prefix:
@@ -411,7 +407,7 @@ proc parseSnippet(body: string): SnippetParse =
         let colonPos = inner.find(':')
         if colonPos >= 0:
           default = inner[colonPos + 1 ..^ 1]
-        let pos = result.text.runeLen
+        let pos = result.text.charLen
         # Numbered tabstop / placeholder. Guard parseInt against an
         # overflowing digit run from a malformed snippet (-1 => ignore).
         let num =
@@ -424,7 +420,7 @@ proc parseSnippet(body: string): SnippetParse =
             -1
         if num >= 0:
           recordStop(num, pos)
-        var defaultRuneLen = 0
+        var defaultLen = 0
         if default.len > 0:
           # Expand the default, lifting any stop nested inside it to our coords.
           let sub = parseSnippet(default)
@@ -433,11 +429,9 @@ proc parseSnippet(body: string): SnippetParse =
           if sub.firstStopOffset >= 0 and sub.firstStopNum < result.firstStopNum:
             result.firstStopNum = sub.firstStopNum
             result.firstStopOffset = pos + sub.firstStopOffset
-          defaultRuneLen = sub.text.runeLen
+          defaultLen = sub.text.charLen
           if num >= 0:
-            result.stops.add(
-              SnippetStopOffset(num: num, offset: pos, len: defaultRuneLen)
-            )
+            result.stops.add(SnippetStopOffset(num: num, offset: pos, len: defaultLen))
           for s in sub.stops:
             result.stops.add(
               SnippetStopOffset(num: s.num, offset: pos + s.offset, len: s.len)
@@ -456,9 +450,9 @@ proc parseSnippet(body: string): SnippetParse =
         except ValueError:
           -1
       if num >= 0:
-        recordStop(num, result.text.runeLen)
+        recordStop(num, result.text.charLen)
         result.stops.add(
-          SnippetStopOffset(num: num, offset: result.text.runeLen, len: 0)
+          SnippetStopOffset(num: num, offset: result.text.charLen, len: 0)
         )
       i = k
     elif c == '$' and i + 1 < n and
@@ -479,7 +473,7 @@ proc parseSnippet(body: string): SnippetParse =
 
 proc expandSnippet*(body: string): tuple[text: string, cursorOffset: int] =
   ## Expand an LSP snippet body (insertTextFormat == Snippet) into plain text
-  ## plus the rune offset where the cursor should land.
+  ## plus the character offset where the cursor should land.
   ##
   ## Minimal support — produces the resulting text and a single primary cursor
   ## position only; there is no multi-tabstop Tab navigation:
@@ -497,7 +491,7 @@ proc expandSnippet*(body: string): tuple[text: string, cursorOffset: int] =
     elif p.firstStopOffset >= 0:
       p.firstStopOffset
     else:
-      p.text.runeLen
+      p.text.charLen
   (p.text, cursorOffset)
 
 proc expandSnippetWithStops*(
@@ -776,7 +770,7 @@ proc triggerPathCompletion*(
   mgr.pathOriginalPrefix = dirPart
   mgr.menu.prefix = filenamePart
   mgr.menu.triggerLine = cursorLine
-  mgr.menu.triggerCol = cursorCol - filenamePart.runeLen
+  mgr.menu.triggerCol = cursorCol - filenamePart.charLen
   mgr.menu.hasSelection = false
 
   # Clear LSP state
@@ -864,7 +858,7 @@ proc triggerCompletion*(
 
   # Set trigger position
   mgr.menu.triggerLine = cursorLine
-  mgr.menu.triggerCol = cursorCol - prefix.runeLen
+  mgr.menu.triggerCol = cursorCol - prefix.charLen
 
   # Reset selection state so popup starts with no selection
   mgr.menu.hasSelection = false
@@ -1320,7 +1314,7 @@ proc triggerLspCompletion*(
 
   # Set trigger position
   mgr.menu.triggerLine = cursorLine
-  mgr.menu.triggerCol = cursorCol - prefix.runeLen
+  mgr.menu.triggerCol = cursorCol - prefix.charLen
   mgr.menu.prefix = prefix
   mgr.menu.hasSelection = false
 

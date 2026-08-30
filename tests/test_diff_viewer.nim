@@ -938,49 +938,44 @@ suite "diff_viewer: diffNextToken":
 
 suite "diff_viewer: initHighlight with langDiff":
   test "Highlight maps added line to diffViewerAddedLine":
-    let runesBuffer = @["+added line".toRunes()]
-    let hl = initHighlight(runesBuffer, @[], langDiff)
+    let lines = @["+added line"]
+    let hl = initHighlight(lines, @[], langDiff)
 
     check hl.colorSegments.len > 0
     check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
 
   test "Highlight maps deleted line to diffViewerDeletedLine":
-    let runesBuffer = @["-deleted line".toRunes()]
-    let hl = initHighlight(runesBuffer, @[], langDiff)
+    let lines = @["-deleted line"]
+    let hl = initHighlight(lines, @[], langDiff)
 
     check hl.colorSegments.len > 0
     check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerDeletedLine
 
   test "Highlight maps hunk header to diffViewerHeader":
-    let runesBuffer = @["@@ -1,3 +1,4 @@".toRunes()]
-    let hl = initHighlight(runesBuffer, @[], langDiff)
+    let lines = @["@@ -1,3 +1,4 @@"]
+    let hl = initHighlight(lines, @[], langDiff)
 
     check hl.colorSegments.len > 0
     check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerHeader
 
   test "Highlight maps meta line to diffViewerMeta":
-    let runesBuffer = @["diff --git a/foo b/foo".toRunes()]
-    let hl = initHighlight(runesBuffer, @[], langDiff)
+    let lines = @["diff --git a/foo b/foo"]
+    let hl = initHighlight(lines, @[], langDiff)
 
     check hl.colorSegments.len > 0
     check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerMeta
 
   test "Highlight maps context line to default":
-    let runesBuffer = @[" context line".toRunes()]
-    let hl = initHighlight(runesBuffer, @[], langDiff)
+    let lines = @[" context line"]
+    let hl = initHighlight(lines, @[], langDiff)
 
     check hl.colorSegments.len > 0
     check hl.getColorPair(0, 0) == EditorColorPairIndex.default
 
   test "Multi-line diff highlight":
-    let runesBuffer = @[
-      "+added".toRunes(),
-      "-deleted".toRunes(),
-      "@@ -1,3 +1,4 @@".toRunes(),
-      "diff --git a/f b/f".toRunes(),
-      " context".toRunes(),
-    ]
-    let hl = initHighlight(runesBuffer, @[], langDiff)
+    let lines =
+      @["+added", "-deleted", "@@ -1,3 +1,4 @@", "diff --git a/f b/f", " context"]
+    let hl = initHighlight(lines, @[], langDiff)
 
     check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
     check hl.getColorPair(1, 0) == EditorColorPairIndex.diffViewerDeletedLine

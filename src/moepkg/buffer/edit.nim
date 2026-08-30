@@ -103,16 +103,25 @@ proc normalizeNewlines*(text: string): string =
   text.replace("\r\n", "\n").replace("\r", "\n")
 
 # Editing operations
-proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
-  ## Insert text at the specified position
-  ## Handles newlines by splitting lines as needed
-  ## CRLF / lone CR in `text` are normalized to LF (matching loadFile) so pasted
-  ## or LSP-supplied content never embeds a raw \r in line content.
-  ## Returns error if position is out of bounds
+proc insertTextEnd*(
+    b: TextBuffer, pos: BufferPosition, text: string, cursorByte: int = -1
+): Result[InsertOutcome, string] =
+  ## Insert text at the specified position, reporting where the insertion ends
+  ## and where a cursor following it belongs. Handles newlines by splitting
+  ## lines as needed. CRLF / lone CR in `text` are normalized to LF (matching
+  ## loadFile) so pasted or LSP-supplied content never embeds a raw \r.
+  ## Returns error if position is out of bounds.
+  ##
+  ## `cursorByte` is a byte offset into `text` for callers that wrote more than
+  ## the cursor should move past (auto-closed pairs, completion tabstops).
+  ##
+  ## Both positions are measured against the line as it now stands rather than
+  ## by counting `text` on its own: a lead byte completed over a seam cannot be
+  ## re-derived from the written bytes alone.
   if b.readOnly:
     return err("Buffer is read-only")
   if text.len == 0:
-    return ok(())
+    return ok(InsertOutcome(insertEnd: pos, cursor: pos, colDelta: 0))
 
   if pos.line < 0 or pos.line >= b.len:
     return err("Line position out of bounds: " & $pos.line)
@@ -124,21 +133,35 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
 
   b.captureSnapshotIfNeeded()
 
+  var outcome: InsertOutcome
   case b.backendKind
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       # Use insertTextWithNewlines to handle newlines correctly
-      b.insertTextWithNewlines(pos, normalized)
+      outcome = b.insertTextWithNewlines(pos, normalized, cursorByte)
     except IndexDefect as e:
       b.discardPendingSnapshot()
       return err("Failed to insert text: " & e.msg)
 
   # Record normalized text for undo so redo never reintroduces a raw \r
   b.pushUndoChange(
-    BufferChange(kind: ckInsertText, insertPos: pos, insertText: normalized)
+    BufferChange(
+      kind: ckInsertText,
+      insertPos: pos,
+      insertText: normalized,
+      insertColDelta: outcome.colDelta,
+      insertByteOffset: outcome.byteOffset,
+    )
   )
 
-  return ok(())
+  return ok(outcome)
+
+proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
+  ## `insertTextEnd` for callers that place no cursor after the insertion.
+  let r = b.insertTextEnd(pos, text)
+  if r.isErr:
+    return err(r.error)
+  ok(())
 
 proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
   ## Delete a single Unicode character at the specified position
@@ -161,18 +184,38 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
       return err("Column position out of bounds: " & $pos.column)
 
     try:
-      # Get the character that will be deleted for undo
+      # Slice the source bytes rather than re-encoding the decoded rune: an
+      # undecodable byte re-encodes wider than it is, which would delete a
+      # neighbouring byte.
       let
-        deletedChar = line.runeAtPos(pos.column)
-        charSize = len($deletedChar)
         bytePos = charToBytePos(line, pos.column)
+        charSize = line.runeSizeAt(bytePos)
+        deletedChar = line[bytePos ..< bytePos + charSize]
 
       # Delete character at byte position
       b.backendDeleteAtLineCol(pos.line, bytePos, charSize)
 
-      # Record change for undo
+      # One column lost, unless a lead byte before the hole absorbs the
+      # following bytes. Check only the seam (≤3 bytes) instead of
+      # re-measuring the whole line.
+      let mergesAtSeam =
+        line.mayAbsorbAtSeam(bytePos) and bytePos + charSize < line.len and
+        line[bytePos + charSize].isContinuationByte
+
+      # Record the byte the hole was made at along with those columns: neither
+      # can be re-derived from `deletedChar` once the line has merged.
       b.pushUndoChange(
-        BufferChange(kind: ckDeleteText, deletePos: pos, deletedText: $deletedChar)
+        BufferChange(
+          kind: ckDeleteText,
+          deletePos: pos,
+          deletedText: deletedChar,
+          deleteColDelta:
+            if mergesAtSeam:
+              b.getLine(pos.line).charLen - line.charLen
+            else:
+              -1,
+          deleteByteOffset: bytePos,
+        )
       )
     except IndexDefect as e:
       b.discardPendingSnapshot()
@@ -262,16 +305,15 @@ proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
       if startCol >= lineLen:
         result = tail
       else:
-        result = line.runeSubStr(startCol) & tail
+        result = line.charSubStr(startCol) & tail
     else:
       # Selection within line
       if startCol >= lineLen:
         result = ""
-      elif startCol == endCol:
-        # Single character
-        result = $line.runeAtPos(startCol)
       else:
-        result = line.runeSubStr(startCol, endCol - startCol + 1)
+        # charSubStr slices the source bytes; `$runeAtPos` would re-encode an
+        # undecodable byte into a wider sequence.
+        result = line.charSubStr(startCol, endCol - startCol + 1)
   else:
     # Multi-line range
     for lineIdx in startPos.line .. endPos.line:
@@ -284,7 +326,7 @@ proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
         if startCol >= lineLen:
           result &= "\n"
         else:
-          result &= line.runeSubStr(startCol) & "\n"
+          result &= line.charSubStr(startCol) & "\n"
       elif lineIdx == endPos.line:
         # Skip the trailing "\n" when no next line exists, to avoid a phantom
         # empty line on undo.
@@ -293,7 +335,7 @@ proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
         if endCol >= lineLen:
           result &= line & tail
         else:
-          result &= line.runeSubStr(0, endCol + 1)
+          result &= line.charSubStr(0, endCol + 1)
       else:
         # Middle lines: entire line
         result &= line & "\n"
@@ -315,8 +357,15 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
   if startPos.column < 0 or endPos.column < 0:
     return err("Column positions cannot be negative")
 
-  # Save deleted text for undo
-  let deletedText = b.getTextInRange(startPos, endPos)
+  let startLine = b.getLine(startPos.line)
+  if startPos.column > startLine.charLen:
+    return err("Start column out of bounds: " & $startPos.column)
+
+  # Save deleted text for undo, along with the byte the range starts at: after
+  # the deletion the merged line may count its columns differently.
+  let
+    deletedText = b.getTextInRange(startPos, endPos)
+    startByte = charToBytePos(startLine, startPos.column)
 
   b.captureSnapshotIfNeeded()
 
@@ -341,6 +390,7 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
       deleteEndPos: endPos,
       deletedRangeText: deletedText,
       deleteJoinedNextLine: joinedWithNext,
+      deleteRangeByteOffset: startByte,
     )
   )
 

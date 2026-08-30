@@ -23,6 +23,7 @@ import std/[unittest, strutils]
 
 import pkg/results
 
+import ../src/moepkg/unicode_utils
 import ../src/moepkg/types
 import ../src/moepkg/buffer/[core, edit]
 import ../src/moepkg/motion {.all.}
@@ -1507,6 +1508,28 @@ suite "calculateOperatorRange - linewise motions":
 
     check range.isLinewise == true
     check range.start.column == 0
+
+suite "Motion columns match the buffer's character model":
+  test "findChar lands on the column charLen counts":
+    # 0xE3 advertises three bytes but 'a' and 'b' follow it, so it stands alone
+    # as one column and 'x' is at column 4. `toRunes` folds all three into one
+    # rune and would report column 2.
+    let buffer = newTextBuffer("\xE3ab x")
+    check buffer.getLine(0).charLen == 5
+    let executor = newMotionExecutor(buffer)
+    check executor.findChar(CursorPosition(x: 0, y: 0), "x", 1).x == 4
+
+  test "findCharBackward lands on the column charLen counts":
+    let buffer = newTextBuffer("\xE3ab x y")
+    check buffer.getLine(0).charLen == 7
+    let executor = newMotionExecutor(buffer)
+    check executor.findCharBackward(CursorPosition(x: 6, y: 0), "x", 1).x == 4
+
+  test "moveLastNonBlank lands on the column charLen counts":
+    let buffer = newTextBuffer("\xE3ab z  ")
+    check buffer.getLine(0).charLen == 7
+    let executor = newMotionExecutor(buffer)
+    check executor.moveLastNonBlank(CursorPosition(x: 0, y: 0)).x == 4
 
 suite "calculateOperatorRange - exclusive motions":
   test "Motion.Home reduces endPos column by 1 (exclusive)":

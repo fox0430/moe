@@ -23,7 +23,8 @@ import std/[tables, options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, key_bindings, config, logger, notification_popup]
+import
+  ../[types, motion, key_bindings, config, logger, notification_popup, unicode_utils]
 import ../buffer/[core, undo]
 
 type
@@ -326,7 +327,7 @@ proc findAllCharPositions*(
   if line >= 0 and line < buffer.len:
     let lineContent = buffer.getLine(line)
     var charIdx = 0
-    for rune in lineContent.runes:
+    for (rune, _) in lineContent.chars:
       if $rune == targetChar:
         result.add(charIdx)
       charIdx.inc

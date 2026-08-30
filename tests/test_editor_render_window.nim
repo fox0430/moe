@@ -2152,7 +2152,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
     e.activeBuffer.language = SourceLanguage.langNim
     e.activeBuffer.highlight =
-      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
+      initHighlight(@["let x = 42"], @[], SourceLanguage.langNim)
 
     let style = e.getSelectionStyleAt(
       e.activeBuffer,
@@ -2180,7 +2180,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
     e.activeBuffer.language = SourceLanguage.langNim
     e.activeBuffer.highlight =
-      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
+      initHighlight(@["let x = 42"], @[], SourceLanguage.langNim)
 
     let style = e.getSelectionStyleAt(
       e.activeBuffer,

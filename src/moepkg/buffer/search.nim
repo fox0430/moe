@@ -276,7 +276,9 @@ proc findSearchMatchRanges*(
     if searchTextCharLen > lineCharLen:
       return @[]
 
-    let runes = line.toRunes()
+    # `charIdx` below is a `charLen` column, so the runes must be indexed in
+    # the same model.
+    let runes = line.toCharRunes()
 
     proc isWholeWordMatch(runes: seq[Rune], matchCol: int, matchLen: int): bool =
       if matchCol > 0:
@@ -377,7 +379,7 @@ proc findWordMatchRanges*(
   if line.len == 0:
     return @[]
 
-  # Scan runes left-to-right, tracking each maximal word run by its rune-column
+  # Scan characters left-to-right, tracking each maximal word run by its column
   # span [runStartCol, col) and byte span [runStartByte, bytePos). Comparing the
   # byte slice against `word` avoids materializing the line into a seq[Rune] and
   # building a fresh string for every candidate word — both of which the old
@@ -388,18 +390,23 @@ proc findWordMatchRanges*(
     runStartCol = -1
     runStartByte = 0
 
-  for r in line.runes:
+  while bytePos < line.len:
+    # `charAtByte` steps by the bytes the character actually occupies, so `col`
+    # is the same column the buffer and the renderer count (`fastRuneAt` can
+    # drift on a line holding a byte that does not decode).
+    let charStartByte = bytePos
+    let (r, size) = line.charAtByte(bytePos)
+    bytePos += size
     if isWordChar(r):
       if runStartCol < 0:
         runStartCol = col
-        runStartByte = bytePos
+        runStartByte = charStartByte
     elif runStartCol >= 0:
       # Word run [runStartCol, col) ends here; emit it when it matches.
-      if byteSliceEqualsWord(line, runStartByte, bytePos, word) and
+      if byteSliceEqualsWord(line, runStartByte, charStartByte, word) and
           not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
         result.add(ColumnRange(startCol: runStartCol, endCol: col))
       runStartCol = -1
-    bytePos += r.size
     inc col
 
   # A word run reaching end-of-line is not closed by the loop above.

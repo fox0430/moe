@@ -133,7 +133,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
         # Move cursor to the first non-whitespace character of pasted line
         ctx.cursor.line = ctx.cursor.line + 1
         ctx.cursor.column =
-          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
+          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toCharRunes())
       else:
         # Paste after cursor position (Vim 'p' behavior for characterwise yank)
         let lineContent = ctx.buffer.getLine(ctx.cursor.line)
@@ -263,7 +263,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
 
         # Move cursor to the first non-whitespace character of pasted line
         ctx.cursor.column =
-          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
+          firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toCharRunes())
       else:
         # Paste at cursor position (Vim 'P' behavior for characterwise yank)
         let pastePos = ctx.cursor
@@ -353,11 +353,7 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
         return err(txr.error)
 
       # Both chars were deleted, so both go in the register
-      storeDeletedText(
-        ctx,
-        $lineContent.runeAtPos(cursorCol) & $lineContent.runeAtPos(cursorCol + 1),
-        false,
-      )
+      storeDeletedText(ctx, lineContent.charSubStr(cursorCol, 2), false)
 
       let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
       if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
@@ -370,14 +366,7 @@ proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] 
   let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToDelete = min(actualCount, charsAvailable)
 
-  # Extract the characters to be deleted (for yank register)
-  # Get the line content and extract the substring
-  let runes = lineContent.toRunes()
-  var deletedText = ""
-  for i in 0 ..< charsToDelete:
-    let runeIdx = ctx.cursor.column + i
-    if runeIdx < runes.len:
-      deletedText.add($runes[runeIdx])
+  let deletedText = lineContent.charSubStr(ctx.cursor.column, charsToDelete)
 
   if charsToDelete > 1:
     let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
@@ -460,11 +449,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
         return err(txr.error)
 
       # Both chars were deleted, so both go in the register
-      storeDeletedText(
-        ctx,
-        $lineContent.runeAtPos(cursorCol - 1) & $lineContent.runeAtPos(cursorCol),
-        false,
-      )
+      storeDeletedText(ctx, lineContent.charSubStr(cursorCol - 1, 2), false)
       ctx.cursor.column = cursorCol - 1
 
       return Result[(), string].ok ()
@@ -477,14 +462,7 @@ proc handleDeleteCharBefore*(ctx: CommandContext, count: int = 1): Result[(), st
   # Calculate the start position for deletion
   let startColumn = ctx.cursor.column - charsToDelete
 
-  # Extract the characters to be deleted (for yank register)
-  # Get the line content and extract the substring
-  let runes = lineContent.toRunes()
-  var deletedText = ""
-  for i in 0 ..< charsToDelete:
-    let runeIdx = startColumn + i
-    if runeIdx < runes.len:
-      deletedText.add($runes[runeIdx])
+  let deletedText = lineContent.charSubStr(startColumn, charsToDelete)
 
   if charsToDelete > 1:
     let txr = withTransaction(ctx.buffer, "delete " & $charsToDelete & " chars"):
@@ -541,13 +519,7 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToDelete = min(actualCount, charsAvailable)
 
-  # Extract the characters to be deleted (for yank register)
-  let runes = lineContent.toRunes()
-  var deletedText = ""
-  for i in 0 ..< charsToDelete:
-    let runeIdx = ctx.cursor.column + i
-    if runeIdx < runes.len:
-      deletedText.add($runes[runeIdx])
+  let deletedText = lineContent.charSubStr(ctx.cursor.column, charsToDelete)
 
   # Begin transaction for delete + insert mode (all in one undo unit)
   let txnResult =
@@ -598,7 +570,7 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
   # Get indent from first line (for auto-indent)
   let firstLine = ctx.buffer.getLine(startLine)
   var indent = ""
-  for rune in firstLine.toRunes():
+  for (rune, _) in firstLine.chars:
     let ch = $rune
     if ch == " " or ch == "\t":
       indent.add(ch)
@@ -673,31 +645,26 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
   let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToToggle = min(actualCount, charsAvailable)
 
-  let txr = withTransaction(ctx.buffer, "toggle " & $charsToToggle & " char(s)"):
-    let runes = lineContent.toRunes()
-    for i in 0 ..< charsToToggle:
-      let runeIdx = ctx.cursor.column + i
-      if runeIdx < runes.len:
-        let originalChar = $runes[runeIdx]
+  # Sliced byte-exactly, so a byte that does not decode keeps the bytes it had.
+  let
+    target = lineContent.charSubStr(ctx.cursor.column, charsToToggle)
+    toggled = target.toggleAsciiCase
 
-        var toggledChar: string
-        if originalChar == originalChar.toUpperAscii():
-          toggledChar = originalChar.toLowerAscii()
-        else:
-          toggledChar = originalChar.toUpperAscii()
-
-        if originalChar != toggledChar:
-          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
-
-          let delResult = ctx.buffer.deleteRange(pos, pos)
-          if delResult.isErr:
-            return err(delResult.error)
-
-          let insResult = ctx.buffer.insertText(pos, toggledChar)
-          if insResult.isErr:
-            return err(insResult.error)
-  if txr.isErr:
-    return err(txr.error)
+  if toggled != target:
+    let
+      startPos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column)
+      endPos = BufferPosition(
+        line: ctx.cursor.line, column: ctx.cursor.column + charsToToggle - 1
+      )
+    let txr = withTransaction(ctx.buffer, "toggle " & $charsToToggle & " char(s)"):
+      let delResult = ctx.buffer.deleteRange(startPos, endPos)
+      if delResult.isErr:
+        return err(delResult.error)
+      let insResult = ctx.buffer.insertText(startPos, toggled)
+      if insResult.isErr:
+        return err(insResult.error)
+    if txr.isErr:
+      return err(txr.error)
 
   # Move cursor to the right by the number of characters toggled
   ctx.cursor.column += charsToToggle
@@ -865,13 +832,21 @@ proc handleShowCharInfo*(ctx: CommandContext): Result[(), string] =
     return Result[(), string].ok ()
 
   # Get the character at cursor position
-  let runes = lineContent.toRunes()
+  let runes = lineContent.toCharRunes()
   if ctx.cursor.column < runes.len:
     let ch = runes[ctx.cursor.column]
-    let codepoint = ch.int32
+    # An undecodable byte has no code point: show the byte itself, the way
+    # vim does, rather than a replacement character's value.
+    let
+      codepoint = if ch.isInvalidByteRune: ch.invalidByteValue.int32 else: ch.int32
+      shown =
+        if ch.isInvalidByteRune:
+          invalidByteText(ch)
+        else:
+          "<" & $ch & ">"
 
     # Format the message like Vim: <c>  123,  Hex 7b,  Oct 173
-    var msg = "<" & $ch & ">"
+    var msg = shown
     msg &= "  " & $codepoint & ","
     msg &= "  Hex " & toHex(codepoint, 2) & ","
     msg &= "  Oct " & toOct(codepoint, 3)

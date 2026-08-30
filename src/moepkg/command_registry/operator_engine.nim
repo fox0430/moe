@@ -24,7 +24,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, modes, registers, logger]
+import ../[types, motion, modes, registers, logger, unicode_utils]
 import ../buffer/[core, edit, fold, undo]
 import ../command_handlers/insert_commands
 
@@ -116,7 +116,7 @@ proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
 
   let line = ctx.buffer.getLine(lineNum)
   var column = 0
-  for r in line.runes:
+  for (r, _) in line.chars:
     if $r == " " or $r == "\t":
       column += 1
     else:

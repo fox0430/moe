@@ -34,6 +34,15 @@ suite "colorcode: scanLineForColorCodes":
     let expectedFg = contrastForeground(expectedBg)
     check expectedFg == Rgb(red: 255, green: 255, blue: 255)
 
+  test "columns stay put after a byte that does not decode":
+    # The byte-to-column map steps by the bytes each character occupies. Using
+    # the width the byte would re-encode to slid every later entry one slot on
+    # and left the tail unwritten, so the swatch landed at column 0.
+    let matches = scanLineForColorCodes("\xFF #ff0000")
+    check matches.len == 1
+    check matches[0].startCol == 2
+    check matches[0].endCol == 8
+
   test "#000 - black (3-digit shorthand)":
     let matches = scanLineForColorCodes("#000")
     check matches.len == 1

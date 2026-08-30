@@ -386,6 +386,7 @@ const DefaultColors*: ThemeColors = [
 
   # Indentation guide
   EditorColorPairIndex.indentationLine: makeColorPairDefaultBg("#464646"),
+  EditorColorPairIndex.invalidByte: makeColorPairDefaultBg("#d75f5f"),
 
   # Scroll bar
   EditorColorPairIndex.scrollBarThumb: makeColorPair("#787878", "#787878"),

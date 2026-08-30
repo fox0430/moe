@@ -129,6 +129,10 @@ proc indentationLineStyle*(): Style =
   ## Get indentation guide style from theme
   getThemeStyle(EditorColorPairIndex.indentationLine)
 
+proc invalidByteStyle*(): Style =
+  ## Get the style for an undecodable byte (drawn as `<e3>`)
+  getThemeStyle(EditorColorPairIndex.invalidByte)
+
 proc foldStyle*(): Style =
   ## Get folding line style from theme
   getThemeStyle(EditorColorPairIndex.foldingLine)
@@ -216,7 +220,7 @@ proc displayWidthSubstrWithTabs*(
     currentWidth = 0
     charCount = 0
 
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     if currentChar < startChar:
       currentChar += 1
       continue
@@ -225,7 +229,7 @@ proc displayWidthSubstrWithTabs*(
       if rune == TAB_CHAR:
         tabAdvance(currentWidth, tabStop)
       else:
-        runeWidth(rune)
+        charWidth(rune)
 
     if currentWidth + w > maxWidth:
       break
@@ -249,14 +253,15 @@ proc displayWidthSubstrFromByte*(
     charCount = 0
 
   while bytePos < text.len:
+    # Step and decode with `charAtByte`, so the segment end never runs past
+    # the text and `charCount` counts the same characters the buffer does.
     let
-      rune = text.runeAt(bytePos)
-      runeBytes = runeLenAt(text, bytePos)
+      (rune, runeBytes) = text.charAtByte(bytePos)
       w =
         if rune == TAB_CHAR:
           tabAdvance(currentWidth, tabStop)
         else:
-          runeWidth(rune)
+          charWidth(rune)
 
     if startsNewWrapSegment(currentWidth, w, maxWidth):
       # Character doesn't fit — return without including it
@@ -280,7 +285,7 @@ proc screenXToCharIndex*(
     currentWidth = 0
     charOffset = 0
 
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     if currentChar < startChar:
       currentChar += 1
       continue
@@ -289,7 +294,7 @@ proc screenXToCharIndex*(
       if rune == TAB_CHAR:
         tabAdvance(currentWidth, tabStop)
       else:
-        runeWidth(rune)
+        charWidth(rune)
 
     # If targetDisplayX falls within this character's range, stop here
     if currentWidth + w > targetDisplayX:
@@ -310,12 +315,12 @@ proc calculateWrapCount*(text: string, maxWidth: int, tabStop: int): int =
   result = 1
   var segmentWidth = 0
 
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     let w =
       if rune == TAB_CHAR:
         tabAdvance(segmentWidth, tabStop)
       else:
-        runeWidth(rune)
+        charWidth(rune)
 
     if startsNewWrapSegment(segmentWidth, w, maxWidth):
       result += 1
@@ -481,14 +486,14 @@ proc displayWidthUpToWithTabs*(text: string, charPos: int, tabStop: int): int =
   result = 0
   var currentChar = 0
 
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     if currentChar >= charPos:
       break
 
     if rune == TAB_CHAR:
       result += tabAdvance(result, tabStop)
     else:
-      result += runeWidth(rune)
+      result += charWidth(rune)
 
     currentChar += 1
 
@@ -506,7 +511,7 @@ proc displayWidthBetweenWithTabs*(
 
   var currentChar = 0
 
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     if currentChar < startChar:
       currentChar += 1
       continue
@@ -516,7 +521,7 @@ proc displayWidthBetweenWithTabs*(
     if rune == TAB_CHAR:
       result += tabAdvance(result, tabStop)
     else:
-      result += runeWidth(rune)
+      result += charWidth(rune)
 
     currentChar += 1
 
@@ -527,11 +532,11 @@ proc displayWidthWithTabs*(text: string, tabStop: int): int =
   ## Note: If tabStop <= 0, it defaults to 1 to prevent division by zero.
 
   result = 0
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     if rune == TAB_CHAR:
       result += tabAdvance(result, tabStop)
     else:
-      result += runeWidth(rune)
+      result += charWidth(rune)
 
 proc cursorWrapPosition*(
     text: string, cursorChar: int, maxWidth: int, tabStop: int
@@ -547,12 +552,12 @@ proc cursorWrapPosition*(
     wrapLine = 0
     charIndex = 0
 
-  for rune in text.runes:
+  for (rune, _) in text.chars:
     let w =
       if rune == TAB_CHAR:
         tabAdvance(segmentWidth, tabStop)
       else:
-        runeWidth(rune)
+        charWidth(rune)
 
     if startsNewWrapSegment(segmentWidth, w, maxWidth):
       wrapLine += 1
@@ -688,7 +693,7 @@ proc findTrailingSpaceStart*(text: string): int =
   var
     idx = 0
     lastNonSpace = -1
-  for r in text.runes:
+  for (r, _) in text.chars:
     if not isWhitespace(r):
       lastNonSpace = idx
     inc idx

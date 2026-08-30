@@ -22,9 +22,10 @@
 ## `adjustFoldsAfterDelete`) live in `core.nim` because they are needed by
 ## `newTextBuffer` and the mutation helpers.
 
-import std/[options, unicode]
+import std/options
 
 import core
+import ../unicode_utils
 
 proc addFold*(
     state: var FoldState,
@@ -246,12 +247,5 @@ proc formatFoldText*(b: TextBuffer, fold: Fold): string =
   if fold.collapsedText.isSome and fold.collapsedText.get.len > 0:
     result = "+-- " & $lineCount & " lines: " & fold.collapsedText.get
   else:
-    let firstLine = b.getLine(fold.startLine)
-    # Use character-based slicing for UTF-8 safety
-    let firstLineCharLen = firstLine.charLen
-    let preview =
-      if firstLineCharLen > 40:
-        firstLine.runeSubStr(0, 40) & "..."
-      else:
-        firstLine
+    let preview = b.getLine(fold.startLine).truncateToCharsWithSuffix(40)
     result = "+-- " & $lineCount & " lines: " & preview

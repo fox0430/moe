@@ -25,7 +25,7 @@ import std/[deques, options]
 
 import pkg/results
 
-import ../[primitives, unicode_utils, logger]
+import ../[primitives, logger]
 import ../buffer_backends/piece_table
 import core, internal_mutations
 
@@ -48,15 +48,19 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   try:
     case change.kind
     of ckInsertText:
-      # Undo insert by deleting the inserted text (all bytes at once)
-      let line = b.getLine(change.insertPos.line)
-      let bytePos = charToBytePos(line, change.insertPos.column)
-      b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
+      # Undo insert by deleting the inserted text (all bytes at once) from the
+      # byte the insertion recorded: a lead byte that completed over the
+      # insertion swallows the columns a walk from `insertPos.column` counts on.
+      b.backendDeleteAtLineCol(
+        change.insertPos.line, change.insertByteOffset, change.insertText.len
+      )
     of ckDeleteText:
-      # Undo delete by inserting the deleted text
-      let line = b.getLine(change.deletePos.line)
-      let bytePos = charToBytePos(line, change.deletePos.column)
-      b.backendInsertIntoLine(change.deletePos.line, bytePos, change.deletedText)
+      # Undo delete by putting the bytes back where the hole was made: a lead
+      # byte before the hole may have completed over the bytes that followed,
+      # so `deletePos.column` no longer addresses it.
+      b.backendInsertIntoLine(
+        change.deletePos.line, change.deleteByteOffset, change.deletedText
+      )
     of ckInsertLine:
       # Undo insert line by deleting it
       b.backendDeleteLine(change.insertLineIdx)
@@ -66,7 +70,11 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckDeleteRange:
       # Undo delete range by inserting the deleted text
       # Handle both single-line and multi-line deletions correctly
-      b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
+      b.insertTextWithNewlines(
+        change.deleteStartPos,
+        change.deletedRangeText,
+        atByte = change.deleteRangeByteOffset,
+      )
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineOldText)
     of ckTransaction:
@@ -474,9 +482,9 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # Use insertTextWithNewlines to handle newlines correctly during redo
       b.insertTextWithNewlines(change.insertPos, change.insertText)
     of ckDeleteText:
-      let line = b.getLine(change.deletePos.line)
-      let bytePos = charToBytePos(line, change.deletePos.column)
-      b.backendDeleteAtLineCol(change.deletePos.line, bytePos, change.deletedText.len)
+      b.backendDeleteAtLineCol(
+        change.deletePos.line, change.deleteByteOffset, change.deletedText.len
+      )
     of ckInsertLine:
       b.backendInsertLine(change.insertLineIdx, change.insertLineText)
     of ckDeleteLine:

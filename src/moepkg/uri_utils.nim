@@ -22,6 +22,8 @@
 
 import std/[options, osproc, sequtils, strutils, unicode, uri]
 
+import unicode_utils
+
 const
   UriSchemes* = ["https://", "http://", "file://", "mailto:", "ftp://", "ssh://"]
 
@@ -77,20 +79,21 @@ proc findSchemeAtRune(runes: seq[Rune], pos: int): int =
 
 type UriMatch* = tuple[start, finish: int, uri: string]
 
-proc findAllUris*(line: string, maxRunes: int = 0): seq[UriMatch] =
+proc findAllUris*(line: string, maxChars: int = 0): seq[UriMatch] =
   ## Find all URIs in a line of text.
-  ## Returns a sequence of (start rune column, end rune column, uri string).
-  ## Positions are Unicode character (rune) indices.
+  ## Returns a sequence of (start column, end column, uri string), in the
+  ## character columns buffer positions use.
   ##
-  ## `maxRunes > 0` bounds the scan to the first `maxRunes` runes (matching the
-  ## syntax-highlight cap); URIs past the cap aren't highlighted anyway, and one
-  ## straddling it is underlined only up to it. `runeSubStr` scans at most
-  ## `maxRunes` runes, keeping the cost O(cap).
+  ## `maxChars > 0` bounds the scan to the first `maxChars` characters (matching
+  ## the syntax-highlight cap); URIs past the cap aren't highlighted anyway, and
+  ## one straddling it is underlined only up to it. `charSubStr` scans at most
+  ## `maxChars` characters, keeping the cost O(cap), and `toCharRunes` steps the
+  ## same way `charLen` does, so its indices are the columns the buffer uses.
   let runes =
-    if maxRunes > 0 and line.len > maxRunes:
-      line.runeSubStr(0, maxRunes).toRunes
+    if maxChars > 0 and line.len > maxChars:
+      line.charSubStr(0, maxChars).toCharRunes
     else:
-      line.toRunes
+      line.toCharRunes
   var pos = 0
   while pos < runes.len:
     let schemeLen = findSchemeAtRune(runes, pos)
@@ -112,22 +115,24 @@ proc findAllUris*(line: string, maxRunes: int = 0): seq[UriMatch] =
 
     let rawRunes = runes[uriStart .. uriEnd]
     let strippedRunes = stripTrailingPunctuation(rawRunes)
-    let uri = $strippedRunes
+    # Sliced out of the line rather than rebuilt from the runes: `$` on an
+    # undecodable byte would emit invalid UTF-8 into a URI handed to a browser.
+    let uri = line.charSubStr(uriStart, strippedRunes.len)
     let finish = uriStart + strippedRunes.len - 1
     result.add((start: uriStart, finish: finish, uri: uri))
     pos = uriEnd + 1
 
 proc extractUriAtPosition*(line: string, column: int): Option[string] =
-  ## Extract the URI at the given cursor column (rune index), if any.
+  ## Extract the URI at the given cursor column, if any.
   for m in findAllUris(line):
     if column >= m.start and column <= m.finish:
       return some(m.uri)
   return none(string)
 
 proc extractFilePathAtPosition*(line: string, column: int): Option[string] =
-  ## Extract a file path at the given cursor column (rune index).
+  ## Extract a file path at the given cursor column.
   ## Recognizes absolute paths (/...) and relative paths (./..., ../).
-  let runes = line.toRunes
+  let runes = line.toCharRunes
   if column >= runes.len:
     return none(string)
 
@@ -153,7 +158,7 @@ proc extractFilePathAtPosition*(line: string, column: int): Option[string] =
   if finish < start:
     return none(string)
 
-  let path = $runes[start .. finish]
+  let path = line.charSubStr(start, finish - start + 1)
 
   # Must look like a file path
   if path.startsWith("/") or path.startsWith("./") or path.startsWith("../") or

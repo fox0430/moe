@@ -1610,6 +1610,7 @@ with an unknown-key warning and can be removed.
 | callHierarchyViewerHeader | Call hierarchy viewer: header |
 | helpViewerSectionHeader | Help viewer: section header |
 | indentationLine | Indentation guide line |
+| invalidByte | Byte that does not decode, shown as <e3> |
 | scrollBarThumb | Scroll bar thumb (handle) |
 | scrollBarTrack | Scroll bar track (background) |
 | documentHighlightText | LSP document highlight: text occurrence |

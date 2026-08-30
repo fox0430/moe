@@ -21,7 +21,7 @@
 
 import std/[options, unicode]
 
-import ../primitives
+import ../[primitives, unicode_utils]
 import ./core
 
 const
@@ -42,7 +42,9 @@ proc findMatchingParenPosition*(
     return none(BufferPosition)
 
   let line = b.getLine(cursor.line)
-  let runes = line.toRunes()
+  # `cursor.column` is a buffer column, so the runes must be counted the same
+  # way (`runes` steps by a different rule).
+  let runes = line.toCharRunes()
 
   if runes.len == 0 or cursor.column >= runes.len:
     return none(BufferPosition)
@@ -82,7 +84,7 @@ proc findMatchingParenPosition*(
         searchCol.inc
       searchLine.inc
       if searchLine <= scanUntil:
-        curRunes = b.getLine(searchLine).toRunes()
+        curRunes = b.getLine(searchLine).toCharRunes()
         searchCol = 0
   else:
     var searchCol = cursor.column - 1
@@ -99,7 +101,7 @@ proc findMatchingParenPosition*(
         searchCol.dec
       searchLine.dec
       if searchLine >= scanUntil:
-        curRunes = b.getLine(searchLine).toRunes()
+        curRunes = b.getLine(searchLine).toCharRunes()
         searchCol = curRunes.len - 1
 
   return none(BufferPosition)

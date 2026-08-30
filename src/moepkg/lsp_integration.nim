@@ -402,9 +402,9 @@ proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, strin
   return lsp.service.notifyDocumentClosed(path)
 
 # UTF-16 position conversion helpers
-# LSP uses UTF-16 code units for character positions. Buffer columns are rune
-# indexes (see BufferPosition), while some callers work with UTF-8 byte
-# offsets. These functions convert between the representations.
+# LSP uses UTF-16 code units for character positions. Buffer columns are
+# character indexes (see BufferPosition), while some callers work with UTF-8
+# byte offsets. These functions convert between the representations.
 
 proc utf16OffsetToUtf8*(line: string, utf16Offset: int): int =
   ## Convert LSP UTF-16 code unit offset to UTF-8 byte offset
@@ -415,20 +415,22 @@ proc utf16OffsetToUtf8*(line: string, utf16Offset: int): int =
   if line.len == 0:
     return 0
 
+  # Stepped by the bytes each character actually occupies, not by `Rune.size`:
+  # an undecodable byte takes one byte but would re-encode as 2-3, so the
+  # offset drifts past every such byte.
   var utf16Count = 0
   var byteOffset = 0
 
-  for rune in line.runes:
-    if utf16Count >= utf16Offset:
-      break
-    # BMP characters (U+0000 to U+FFFF) use 1 UTF-16 code unit
-    # Characters above U+FFFF (surrogate pairs) use 2 UTF-16 code units
-    let codePoint = rune.int
-    if codePoint >= 0x10000:
+  while byteOffset < line.len and utf16Count < utf16Offset:
+    # BMP characters use 1 UTF-16 code unit; characters above U+FFFF
+    # (surrogate pairs) use 2. `charAtByte` decodes and steps by the same
+    # rule, so a byte that stands alone is billed one unit.
+    let (rune, size) = line.charAtByte(byteOffset)
+    if rune.int >= 0x10000:
       utf16Count += 2 # Surrogate pair
     else:
       utf16Count += 1
-    byteOffset += rune.size
+    byteOffset += size
 
   return min(byteOffset, line.len)
 
@@ -440,18 +442,17 @@ proc utf8OffsetToUtf16*(line: string, utf8Offset: int): int =
   if line.len == 0:
     return 0
 
+  # Byte-stepped for the same reason as `utf16OffsetToUtf8`.
   var utf16Count = 0
   var byteCount = 0
 
-  for rune in line.runes:
-    if byteCount >= utf8Offset:
-      break
-    let codePoint = rune.int
-    if codePoint >= 0x10000:
+  while byteCount < line.len and byteCount < utf8Offset:
+    let (rune, size) = line.charAtByte(byteCount)
+    if rune.int >= 0x10000:
       utf16Count += 2 # Surrogate pair
     else:
       utf16Count += 1
-    byteCount += rune.size
+    byteCount += size
 
   return utf16Count
 
@@ -463,16 +464,17 @@ proc runeStartByteBefore(s: string, pos: int): int =
     dec result
 
 proc commonRunePrefixBytes(a, b: string): int =
-  ## Byte length of the longest common prefix of `a` and `b` ending on a rune
-  ## boundary.
+  ## Byte length of the longest common prefix of `a` and `b` ending on a
+  ## character boundary.
   while result < a.len and result < b.len:
-    let n = a.runeLenAt(result)
-    # runeLenAt derives n from the lead byte alone; if the claimed rune runs
-    # past either string (truncated/invalid UTF-8) stop here rather than read
-    # out of bounds.
-    if result + n > a.len or result + n > b.len:
+    # Stepped with `runeSizeAt`, the same rule the buffer's columns and
+    # `utf8OffsetToUtf16` use: `runeLenAt` derives the step from the lead byte
+    # alone and can jump over a byte that does not decode, handing the server
+    # an offset no character starts at.
+    let n = a.runeSizeAt(result)
+    if result + n > b.len:
       break
-    if n != b.runeLenAt(result):
+    if n != b.runeSizeAt(result):
       break
     var eq = true
     for k in 0 ..< n:
@@ -788,16 +790,17 @@ proc poll*(lsp: LspIntegration, timeoutMs: int = 0) =
   if lsp.enabled:
     lsp.service.poll(timeoutMs)
 
-proc runeIndexToUtf16*(line: string, runeIndex: int): int =
-  ## Convert a rune (character) index to a UTF-16 code unit offset.
-  ## Buffer columns are rune indexes; LSP positions are UTF-16 code units.
-  ## Clamped to the number of UTF-16 units in the line.
-  if runeIndex <= 0 or line.len == 0:
+proc charIndexToUtf16*(line: string, charIndex: int): int =
+  ## Convert a character index to a UTF-16 code unit offset.
+  ## Buffer columns are character indexes; LSP positions are UTF-16 code units.
+  ## Clamped to the number of UTF-16 units in the line. Stepped with `chars`,
+  ## so the column counted is the one the buffer holds.
+  if charIndex <= 0 or line.len == 0:
     return 0
 
-  var runeCount = 0
-  for rune in line.runes:
-    if runeCount >= runeIndex:
+  var charCount = 0
+  for (rune, _) in line.chars:
+    if charCount >= charIndex:
       break
     # BMP characters (U+0000 to U+FFFF) use 1 UTF-16 code unit
     # Characters above U+FFFF (surrogate pairs) use 2 UTF-16 code units
@@ -805,16 +808,16 @@ proc runeIndexToUtf16*(line: string, runeIndex: int): int =
       result += 2 # Surrogate pair
     else:
       result.inc
-    runeCount.inc
+    charCount.inc
 
 proc toUtf16Column(buffer: TextBuffer, line, column: int): int =
-  ## Helper to convert a buffer position (rune index) to a UTF-16 code unit offset
+  ## Helper to convert a buffer position (character index) to a UTF-16 code unit offset
   let lineText =
     if line >= 0 and line < buffer.len:
       buffer.getLine(line)
     else:
       ""
-  runeIndexToUtf16(lineText, column)
+  charIndexToUtf16(lineText, column)
 
 template requireBufferPath(lsp: LspIntegration, buffer: TextBuffer): string =
   ## Guard for sync LSP request wrappers: checks `enabled` and `filePath`,
@@ -1185,7 +1188,7 @@ proc applyTextEdits*(
         else:
           ""
       let (startCol, startUtf16Walked) =
-        utf16OffsetToRune(startLineText, edit.range.start.character)
+        utf16OffsetToChar(startLineText, edit.range.start.character)
       if startUtf16Walked < edit.range.start.character:
         failEdit(
           "Invalid edit range: start position (line " & $startLine & ", character " &
@@ -1228,7 +1231,7 @@ proc applyTextEdits*(
               BufferPosition(line: last, column: buffer.getLine(last).charLen)
           else:
             let (endRune, endUtf16Walked) =
-              utf16OffsetToRune(endLineText, lspEndPos.character)
+              utf16OffsetToChar(endLineText, lspEndPos.character)
             if endUtf16Walked < lspEndPos.character:
               failEdit(
                 "Invalid edit range: end position (line " & $lspEndPos.line &
@@ -1666,9 +1669,9 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
       BufferDiagnostic(
         startLine: startLine,
         startCol:
-          utf16ToRuneIndex(buffer.getLine(startLine), diag.range.start.character),
+          utf16ToCharIndex(buffer.getLine(startLine), diag.range.start.character),
         endLine: endLine,
-        endCol: utf16ToRuneIndex(buffer.getLine(endLine), diag.range.`end`.character),
+        endCol: utf16ToCharIndex(buffer.getLine(endLine), diag.range.`end`.character),
         severity: severity,
         message: diag.message,
       )

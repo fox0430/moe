@@ -21,7 +21,7 @@
 ## text mutation helpers used by edit.nim / undo.nim. These do NOT record
 ## undo entries — they are the lowest layer above the backend backends.
 
-import std/[strutils, unicode]
+import std/strutils
 
 import ../[primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
@@ -83,14 +83,68 @@ proc backendDeleteAtLineCol*(b: TextBuffer, line, col, count: int) =
   of PieceTable:
     b.storage.pieceTable.deleteAtLineCol(line, col, count)
 
-proc insertTextWithNewlines*(b: TextBuffer, pos: BufferPosition, text: string) =
-  ## Insert text that may contain newlines, properly splitting into multiple lines
-  ## This is used internally for undo/redo operations
+proc insertTextWithNewlines*(
+    b: TextBuffer,
+    pos: BufferPosition,
+    text: string,
+    cursorByte: int = -1,
+    atByte: int = -1,
+): InsertOutcome {.discardable.} =
+  ## Insert text that may contain newlines, properly splitting into multiple
+  ## lines. Reports where the insertion ends, where a cursor following it
+  ## belongs and how many columns the line gained -- all measured on the line
+  ## as it now stands, because a lead byte completed over a seam cannot be
+  ## re-derived from `text` alone. The line is already in hand here, so no
+  ## caller has to fetch it again.
+  ##
+  ## `cursorByte` is a byte offset into `text` for callers that wrote more than
+  ## the cursor should move past (auto-closed pairs, completion tabstops); it
+  ## defaults to the end of the text. This is also used internally for
+  ## undo/redo operations.
+  ##
+  ## `atByte` overrides where in the line the text is written, for undo putting
+  ## bytes back into a hole it recorded: after the edit that made the hole,
+  ## `pos.column` may no longer walk to it.
   if '\n' notin text:
     # Simple case: no newlines, just insert into current line
     let line = b.getLine(pos.line)
-    let bytePos = charToBytePos(line, pos.column)
+    let bytePos =
+      if atByte >= 0:
+        atByte
+      else:
+        charToBytePos(line, pos.column)
     b.backendInsertIntoLine(pos.line, bytePos, text)
+
+    let cursorOffset = if cursorByte < 0: text.len else: cursorByte
+    # A seam absorbs only where a lead byte still waiting for its continuation
+    # bytes meets continuation bytes (the line's tail meeting the text, or the
+    # text's tail meeting the rest of the line).
+    let absorbs =
+      absorbsAtSeam(line, bytePos, text) or
+      (text.mayAbsorbAtSeam and bytePos < line.len and line[bytePos].isContinuationByte)
+    if not absorbs:
+      let gained = text.charLen
+      return InsertOutcome(
+        insertEnd: BufferPosition(line: pos.line, column: pos.column + gained),
+        cursor: BufferPosition(
+          line: pos.line, column: pos.column + text.byteToCharPos(cursorOffset)
+        ),
+        colDelta: gained,
+        byteOffset: bytePos,
+      )
+
+    # Read the line back rather than rebuilding it here: the backend owns what
+    # it stored, and a second copy of its insert semantics could drift from it.
+    let merged = b.getLine(pos.line)
+    return InsertOutcome(
+      insertEnd:
+        BufferPosition(line: pos.line, column: merged.byteToCharPos(bytePos + text.len)),
+      cursor: BufferPosition(
+        line: pos.line, column: merged.byteToCharPos(bytePos + cursorOffset)
+      ),
+      colDelta: merged.charLen - line.charLen,
+      byteOffset: bytePos,
+    )
   else:
     # Complex case: text contains newlines, need to split current line and insert multiple lines
     let
@@ -98,17 +152,16 @@ proc insertTextWithNewlines*(b: TextBuffer, pos: BufferPosition, text: string) =
       currentLineLen = currentLine.charLen
 
     # Split current line at insertion position
+    let splitByte =
+      if atByte >= 0:
+        atByte
+      elif pos.column < currentLineLen:
+        charToBytePos(currentLine, pos.column)
+      else:
+        currentLine.len
     let
-      prefix =
-        if pos.column < currentLineLen:
-          currentLine.runeSubStr(0, pos.column)
-        else:
-          currentLine
-      suffix =
-        if pos.column < currentLineLen:
-          currentLine.runeSubStr(pos.column)
-        else:
-          ""
+      prefix = currentLine[0 ..< splitByte]
+      suffix = currentLine[splitByte .. ^1]
 
     # Split text to insert by newlines
     let insertedLines = text.split('\n')
@@ -135,6 +188,35 @@ proc insertTextWithNewlines*(b: TextBuffer, pos: BufferPosition, text: string) =
     for i, newLine in newLines:
       b.backendInsertLine(pos.line + i, newLine)
 
+    # A byte offset into the written text, as a position on the line that byte
+    # ended up on. Each line is measured whole, so a seam counts once, not
+    # twice; the first line carries the prefix before the written bytes.
+    proc positionAtWrittenByte(target: int): BufferPosition =
+      var lineStart = 0
+      for i, part in insertedLines:
+        if target <= lineStart + part.len or i == insertedLines.high:
+          let onLine = target - lineStart
+          let leading = if i == 0: prefix.len else: 0
+          return BufferPosition(
+            line: pos.line + i, column: newLines[i].byteToCharPos(leading + onLine)
+          )
+        # +1 for the newline that separated this part from the next.
+        lineStart += part.len + 1
+
+    let endPos = positionAtWrittenByte(text.len)
+    # colDelta describes a single-line edit; a multi-line insert is reported to
+    # subscribers as whole rows moving.
+    result = InsertOutcome(
+      insertEnd: endPos,
+      cursor:
+        if cursorByte < 0 or cursorByte >= text.len:
+          endPos
+        else:
+          positionAtWrittenByte(cursorByte),
+      colDelta: 0,
+      byteOffset: prefix.len,
+    )
+
   # Side-array shifts and the modified-line mark are deferred to the
   # sideArrayCallbacks driven from pushUndoChange / undoChange / redoChange.
 
@@ -159,7 +241,7 @@ proc deleteRangeSingleLine*(
       let nextLine = b.getLine(endPos.line + 1)
       let prefix =
         if startPos.column <= lineLen:
-          line.runeSubStr(0, startPos.column)
+          line.charSubStr(0, startPos.column)
         else:
           ""
       let newLine = buildMergedLine(prefix, nextLine)
@@ -173,7 +255,7 @@ proc deleteRangeSingleLine*(
       # Last line: just delete to end
       let newLine =
         if startPos.column <= lineLen:
-          line.runeSubStr(0, startPos.column)
+          line.charSubStr(0, startPos.column)
         else:
           ""
       b.backendDeleteLine(startPos.line)
@@ -181,8 +263,8 @@ proc deleteRangeSingleLine*(
   elif startPos.column < lineLen and endPos.column < lineLen:
     # Normal single-line deletion within bounds
     # Build new line by concatenating prefix and suffix using Unicode-safe substring
-    let prefix = line.runeSubStr(0, startPos.column)
-    let suffix = line.runeSubStr(endPos.column + 1)
+    let prefix = line.charSubStr(0, startPos.column)
+    let suffix = line.charSubStr(endPos.column + 1)
     let newLine = buildMergedLine(prefix, suffix)
 
     b.backendDeleteLine(startPos.line)
@@ -205,7 +287,7 @@ proc deleteRangeMultiLine*(
   # Build prefix (chars before selection start)
   let prefix =
     if startPos.column <= startLine.charLen:
-      startLine.runeSubStr(0, startPos.column)
+      startLine.charSubStr(0, startPos.column)
     else:
       ""
 
@@ -215,7 +297,7 @@ proc deleteRangeMultiLine*(
 
   if endPos.column < endLineLen:
     # Selection ends within the line - keep remaining chars
-    suffix = endLine.runeSubStr(endPos.column + 1)
+    suffix = endLine.charSubStr(endPos.column + 1)
   elif endPos.line < b.len - 1:
     # Selection extends to/past line end - join with next line instead
     suffix = b.getLine(endPos.line + 1)

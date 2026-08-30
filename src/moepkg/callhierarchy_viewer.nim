@@ -61,7 +61,7 @@ proc formatLine*(item: lspTypes.CallHierarchyItem, lineText: string = ""): strin
   let line = item.selectionRange.start.line + 1
   let col =
     if lineText.len > 0:
-      utf16ToRuneIndex(lineText, item.selectionRange.start.character) + 1
+      utf16ToCharIndex(lineText, item.selectionRange.start.character) + 1
     else:
       item.selectionRange.start.character + 1
   fmt"{item.name}{detail} ({path}:{line}:{col})"
