@@ -20,6 +20,7 @@
 ## Tests for replace_handler.nim
 
 import std/[unittest, options, tables]
+from std/strutils import contains
 
 import
   ../src/moepkg/
@@ -102,6 +103,35 @@ suite "ReplaceModeHandler - Character Replacement":
     check state.cursor.column == 1
     check state.editState.replaceHistory.len == 1
     check state.editState.replaceHistory[0].originalChar == "h"
+
+  test "Replacing a character in a raw buffer is refused":
+    # "one character" is decided by decoding as UTF-8, which raw bytes are not.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.keepRaw = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = handler.handleCharacterReplacement(buf, state, "x")
+
+    check result.kind == rmrError
+    check result.errorMessage.contains("raw undecodable bytes")
+    check buf.getLine(0) == "hello"
+
+  test "Appending past the end of a raw line is still allowed":
+    # Only what the user typed is inserted, so no byte is reinterpreted.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hi")
+    buf.keepRaw = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let result = handler.handleCharacterReplacement(buf, state, "x")
+
+    check result.kind == rmrHandled
+    check buf.getLine(0) == "hix"
 
   test "Replace character in middle of line":
     let buf = newTextBuffer()

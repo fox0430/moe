@@ -1306,13 +1306,17 @@ proc handleInsertModeKey*(
   if keyCombo.isCtrlT:
     # Ctrl+T - indent line
     handler.completionManager.cancelCompletion()
-    indentLine(buffer, state)
+    let indentRes = indentLine(buffer, state)
+    if indentRes.isErr:
+      state.statusMessage = indentRes.error
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   if keyCombo.isCtrlD:
     # Ctrl+D - dedent line
     handler.completionManager.cancelCompletion()
-    dedentLine(buffer, state)
+    let dedentRes = dedentLine(buffer, state)
+    if dedentRes.isErr:
+      state.statusMessage = dedentRes.error
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   if keyCombo.isCtrlE:

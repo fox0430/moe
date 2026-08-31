@@ -46,21 +46,21 @@ suite "editor_lsp - maybeUpdateLsp":
   test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
     let activeBuffer = e.activeBuffer()
-    let initialVer = e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0)
+    let initialVer = e.lastLspSyncAttempts.getOrDefault(activeBuffer.id, 0)
 
     e.maybeUpdateLsp()
 
-    check e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0) == initialVer
+    check e.lastLspSyncAttempts.getOrDefault(activeBuffer.id, 0) == initialVer
 
   test "Does nothing when buffer has not changed":
     let e = createTestEditor()
     e.lsp.enabled = true
     let activeBuffer = e.activeBuffer()
-    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
+    e.lastLspSyncAttempts[activeBuffer.id] = activeBuffer.contentVersion
 
     e.maybeUpdateLsp()
 
-    check e.lastLspContentVersions[activeBuffer.id] == activeBuffer.contentVersion
+    check e.lastLspSyncAttempts[activeBuffer.id] == activeBuffer.contentVersion
 
   test "Tracking is per-buffer":
     let e = createTestEditor()
@@ -69,13 +69,13 @@ suite "editor_lsp - maybeUpdateLsp":
     # Another buffer's entry must not affect the active buffer's tracking
     let otherBuffer = newTextBuffer("other")
     e.addBuffer(otherBuffer)
-    e.lastLspContentVersions[otherBuffer.id] = 999
+    e.lastLspSyncAttempts[otherBuffer.id] = 999
 
-    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
+    e.lastLspSyncAttempts[activeBuffer.id] = activeBuffer.contentVersion
     e.maybeUpdateLsp()
 
-    check e.lastLspContentVersions[activeBuffer.id] == activeBuffer.contentVersion
-    check e.lastLspContentVersions[otherBuffer.id] == 999
+    check e.lastLspSyncAttempts[activeBuffer.id] == activeBuffer.contentVersion
+    check e.lastLspSyncAttempts[otherBuffer.id] == 999
 
   test "Undo then edit collides on changeSeq: server must still be resynced":
     # undo() rewinds changeSeq to the pre-mutation value, so a follow-up edit
@@ -133,7 +133,7 @@ suite "editor_lsp - maybeUpdateLsp":
   test "Failed onBufferChange logs to LSP message log and advances tracker":
     # An unknown extension has no LSP config, so the untracked -> didOpen
     # fallback in onBufferChange fails. The proc must surface that via
-    # logLspDegraded and advance lastLspContentVersions so the next tick does
+    # logLspDegraded and advance lastLspSyncAttempts so the next tick does
     # not re-run and re-log the same failing didChange.
     privateAccess(LspIntegration)
 
@@ -154,7 +154,7 @@ suite "editor_lsp - maybeUpdateLsp":
 
     e.maybeUpdateLsp()
 
-    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+    check e.lastLspSyncAttempts[buf.id] == buf.contentVersion
     let logAfterFirst = getLspMessageLog()
     check logAfterFirst.len == 1
     check logAfterFirst[0].startsWith("[LSP] didChange ")
@@ -288,6 +288,22 @@ suite "editor_lsp - applyDiagnosticsForUri":
     check activeBuffer.diagnostics.len == 1
     check activeBuffer.diagnostics[0].message == "via normalized"
 
+  test "drops diagnostics aimed at a buffer that has become raw":
+    # A reload can turn a tracked document into raw bytes; its document is
+    # dropped, so the version guard has nothing to compare and a publish
+    # already on the wire would paint markers at meaningless coordinates.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some("/tmp/moe-diag-raw.nim")
+    activeBuffer.keepRaw = true
+
+    e.applyDiagnosticsForUri(
+      pathToUri("/tmp/moe-diag-raw.nim"), oneDiagnostic("stale"), none(int)
+    )
+
+    check activeBuffer.diagnostics.len == 0
+
   test "drops incoming diagnostics when disabled in config":
     let config = newEditorConfig()
     config.lsp.diagnostics.enable = false
@@ -393,32 +409,45 @@ suite "editor_lsp - pollLspCompletion":
     # No crash means success
 
 suite "editor_lsp - noteLspOpen":
-  test "Failed didOpen leaves no baseline":
+  test "Failed didOpen leaves no sync record":
     let e = createTestEditor()
     e.lsp.enabled = true
     let buf = e.activeBuffer()
     buf.filePath = some(getTempDir() / "moe_test_note_open_fail.nim")
     doAssert buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
-    e.lastLspContentVersions[buf.id] = buf.contentVersion
+    e.lastLspSyncAttempts[buf.id] = buf.contentVersion
     e.noteLspOpen(buf, Result[void, string].err("worker not writable"), "re-open")
-    check not e.lastLspContentVersions.hasKey(buf.id)
+    check not e.lastLspSyncAttempts.hasKey(buf.id)
 
-  test "Pathless buffer records no baseline even on ok":
+  test "Pathless buffer records nothing even on ok":
     let e = createTestEditor()
     e.lsp.enabled = true
     let buf = e.activeBuffer()
     buf.filePath = none(string)
     e.noteLspOpen(buf, Result[void, string].ok(), "open")
-    check not e.lastLspContentVersions.hasKey(buf.id)
+    check not e.lastLspSyncAttempts.hasKey(buf.id)
 
-  test "Disabled integration records no baseline even on ok":
+  test "Disabled integration records nothing even on ok":
     let e = createTestEditor()
     e.lsp.enabled = false
     let buf = e.activeBuffer()
     buf.filePath = some(getTempDir() / "moe_test_note_open_disabled.nim")
-    e.lastLspContentVersions[buf.id] = buf.contentVersion
+    e.lastLspSyncAttempts[buf.id] = buf.contentVersion
     e.noteLspOpen(buf, Result[void, string].ok(), "open")
-    check not e.lastLspContentVersions.hasKey(buf.id)
+    check not e.lastLspSyncAttempts.hasKey(buf.id)
+
+  test "Raw buffer records the attempt so the skip does not repeat":
+    # onBufferOpen skips didOpen for a raw buffer and reports ok(). The record
+    # says only that the attempt happened; isDocumentDelivered is what tells
+    # callers the server holds nothing.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let buf = e.activeBuffer()
+    buf.filePath = some(getTempDir() / "moe_test_note_open_raw.bin")
+    buf.keepRaw = true
+    e.noteLspOpen(buf, Result[void, string].ok(), "open")
+    check e.lastLspSyncAttempts[buf.id] == buf.contentVersion
+    check not e.lsp.isDocumentDelivered(buf.filePath.get)
 
   test "Successful didOpen records version":
     let e = createTestEditor()
@@ -427,7 +456,7 @@ suite "editor_lsp - noteLspOpen":
     buf.filePath = some(getTempDir() / "moe_test_note_open_ok.nim")
     check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
     e.noteLspOpen(buf, Result[void, string].ok(), "open")
-    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+    check e.lastLspSyncAttempts[buf.id] == buf.contentVersion
 
 suite "editor_lsp - renotifyOpenBuffers":
   # Pre-restart baseline must not survive re-open; otherwise staleness guard
@@ -440,11 +469,11 @@ suite "editor_lsp - renotifyOpenBuffers":
     buf.filePath = some(getTempDir() / "moe_test_renotify.nim")
     check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
     # Stale baseline from before the server died.
-    e.lastLspContentVersions[buf.id] = buf.contentVersion - 1
+    e.lastLspSyncAttempts[buf.id] = buf.contentVersion - 1
 
     check e.renotifyOpenBuffers("nim") == 0
     # Nothing was sent with LSP off, so no baseline should remain.
-    check not e.lastLspContentVersions.hasKey(buf.id)
+    check not e.lastLspSyncAttempts.hasKey(buf.id)
 
   test "Leaves buffers of other languages untouched":
     let e = createTestEditor()
@@ -452,10 +481,10 @@ suite "editor_lsp - renotifyOpenBuffers":
 
     let other = newTextBuffer("other", some(getTempDir() / "moe_test_renotify.rs"))
     e.addBuffer(other)
-    e.lastLspContentVersions[other.id] = 999
+    e.lastLspSyncAttempts[other.id] = 999
 
     check e.renotifyOpenBuffers("nim") == 0
-    check e.lastLspContentVersions[other.id] == 999
+    check e.lastLspSyncAttempts[other.id] == 999
 
 suite "editor_lsp - restartLspServer":
   test "Returns false when LSP is disabled":
@@ -569,7 +598,7 @@ suite "editor_lsp - applyWorkspaceEditFromServer staleness":
     e.maybeUpdateLsp()
 
     # The baseline is recorded even though nothing reached a server.
-    check e.lastLspContentVersions[buf.id] == buf.contentVersion
+    check e.lastLspSyncAttempts[buf.id] == buf.contentVersion
 
     let res = e.applyWorkspaceEditFromServer(replaceFirstThree(path))
 

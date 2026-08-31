@@ -160,8 +160,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 proc loadFileWithContent*(
     b: TextBuffer, path: string, content: string, fileSize: int64 = -1
 ): Result[(), string] =
-  ## Init buffer from pre-read content; avoids extra read and keeps
-  ## backup/edit consistency in LSP `applyEditsToFile`.
+  ## Init buffer from pre-read content.
   let effFileSize = if fileSize >= 0: fileSize else: content.len.int64
 
   var decoded = decodeFileContent(content)
@@ -176,13 +175,13 @@ proc loadFileWithContent*(
   b.encoding = decoded.encoding
   b.hasBom = decoded.hasBom
   b.keepRaw = decoded.decodeFailed
-  # Latch raw warning per file; clear when file changes or decodes.
-  if not decoded.decodeFailed or b.filePath != some(path):
-    b.rawWarned = false
   # NUL near start indicates binary (git/grep/vim convention).
   b.hasBinaryContent =
     '\0' in
     contentMut.toOpenArray(0, min(contentMut.high, EncodingDetectionSampleSize - 1))
+  # Reset warning when file path changes.
+  if b.filePath != some(path):
+    b.warnedUnusualContent = ucOrdinary
   if decoded.decodeFailed:
     # Raw bytes: keep verbatim. `lineEnding` is unused (shows RAW);
     # `endOfLine` is preserved for round-trip.

@@ -567,15 +567,16 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
       if lineContent.len == 0 or lineContent[^1] != '\n':
         text.add("\n")
 
-  # Get indent from first line (for auto-indent)
+  # Get indent; skipped for raw buffers.
   let firstLine = ctx.buffer.getLine(startLine)
   var indent = ""
-  for (rune, _) in firstLine.chars:
-    let ch = $rune
-    if ch == " " or ch == "\t":
-      indent.add(ch)
-    else:
-      break
+  if ctx.buffer.allowsTextTransforms:
+    for (rune, _) in firstLine.chars:
+      let ch = $rune
+      if ch == " " or ch == "\t":
+        indent.add(ch)
+      else:
+        break
 
   # Begin transaction for all substitute operations (delete + insert mode input)
   let transactionResult = ctx.buffer.beginTransaction("Substitute line")
@@ -634,6 +635,11 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
   ## count: number of characters to toggle (default: 1)
 
   logDebug("toggle", "handleToggleCase called with count=" & $count)
+
+  # Refused for raw buffers.
+  if not ctx.buffer.allowsTextTransforms:
+    return err(rawBytesRejection("toggle case"))
+
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
@@ -657,12 +663,10 @@ proc handleToggleCase*(ctx: CommandContext, count: int = 1): Result[(), string] 
         line: ctx.cursor.line, column: ctx.cursor.column + charsToToggle - 1
       )
     let txr = withTransaction(ctx.buffer, "toggle " & $charsToToggle & " char(s)"):
-      let delResult = ctx.buffer.deleteRange(startPos, endPos)
-      if delResult.isErr:
-        return err(delResult.error)
-      let insResult = ctx.buffer.insertText(startPos, toggled)
-      if insResult.isErr:
-        return err(insResult.error)
+      let res =
+        ctx.buffer.transformRange(startPos, endPos, "toggle case", toggleAsciiCase)
+      if res.isErr:
+        return err(res.error)
     if txr.isErr:
       return err(txr.error)
 
@@ -1474,25 +1478,19 @@ proc registerEditCommands*(registry: CommandRegistry) =
       if prevLine[0 ..< prevIndent] == lineContent[0 ..< currentIndent]:
         return Result[(), string].ok ()
 
-      # Create new line with correct indent (copied verbatim to keep tabs)
-      var newContent = prevLine[0 ..< prevIndent]
-
-      # Add non-whitespace content from current line
-      for i in currentIndent ..< lineContent.len:
-        newContent.add(lineContent[i])
+      # Rebuild the line with the previous line's indent (copied verbatim to
+      # keep tabs) in front of the current line's non-whitespace content.
+      let newIndent = prevLine[0 ..< prevIndent]
+      let reindent = proc(text: string): string =
+        newIndent & text[min(currentIndent, text.len) ..^ 1]
 
       let lineStart = BufferPosition(line: currentLine, column: 0)
       let lineEnd = BufferPosition(line: currentLine, column: lineContent.charLen - 1)
 
       let txr = withTransaction(ctx.buffer, "auto indent line"):
-        let delResult = ctx.buffer.deleteRange(lineStart, lineEnd)
-        if delResult.isErr:
-          return err(delResult.error)
-
-        if newContent.len > 0:
-          let insResult = ctx.buffer.insertText(lineStart, newContent)
-          if insResult.isErr:
-            return err(insResult.error)
+        let res = ctx.buffer.transformRange(lineStart, lineEnd, "auto indent", reindent)
+        if res.isErr:
+          return err(res.error)
       if txr.isErr:
         return err(txr.error)
 

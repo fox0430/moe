@@ -24,6 +24,7 @@
 ## registerBuiltinCommands wrapper that delegates to per-category registrars.
 
 import std/options
+from std/strutils import repeat
 
 import pkg/results
 
@@ -493,20 +494,24 @@ proc executeCommand*(
       let charsAvailable = lineContent.charLen - ctx.cursor.column
       let charsToReplace = min(actualCount, charsAvailable)
 
+      # Count via transformRange; refused for raw buffers.
+      let targetChar = cmd.targetChar
+      let repeatTarget = proc(text: string): string =
+        targetChar.repeat(text.charLen)
+
+      let startPos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column)
+      let endPos = BufferPosition(
+        line: ctx.cursor.line, column: ctx.cursor.column + charsToReplace - 1
+      )
+
       let txr =
         try:
           withTransaction(ctx.buffer, "replace " & $charsToReplace & " char(s)"):
-            for i in 0 ..< charsToReplace:
-              let pos =
-                BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
-
-              let delResult = ctx.buffer.deleteRange(pos, pos)
-              if delResult.isErr:
-                return err(delResult.error)
-
-              let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
-              if insResult.isErr:
-                return err(insResult.error)
+            let res = ctx.buffer.transformRange(
+              startPos, endPos, "replace characters", repeatTarget
+            )
+            if res.isErr:
+              return err(res.error)
         except TransactionRollbackError as exc:
           # Surface a failed rollback (untrustworthy buffer) as a status message.
           return err(exc.msg & " (buffer state may be inconsistent)")

@@ -23,7 +23,9 @@ import std/[unittest, options, os, tables, monotimes]
 
 import pkg/celina
 
-import ../src/moepkg/[types, editor, config, message_log]
+import std/strutils
+
+import ../src/moepkg/[types, editor, config, message_log, editor_notify]
 import ../src/moepkg/[highlight, editor_frame, editor_window]
 import ../src/moepkg/buffer {.all.}
 
@@ -57,6 +59,146 @@ suite "tick - frontend Git status subscription":
     check e.state.git.diffEntries.hasKey(activeBuffer.id)
     check not e.state.git.diffEntries[activeBuffer.id].forced
     check e.state.git.branchEntries.hasKey(activeBuffer.id)
+
+suite "notifyUnusualContent":
+  test "warns once for a buffer holding undecodable bytes":
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    let buf = e.activeBuffer
+    buf.filePath = some(getTempDir() / "moe-raw-notify.txt")
+    buf.keepRaw = true
+    clearMessageLog()
+
+    e.notifyUnusualContent(buf)
+    check buf.warnedUnusualContent == ucRaw
+    check "undecodable bytes" in e.state.statusMessage
+
+    # The latch keeps a second open of the same buffer quiet.
+    e.state.setStatusQuiet("")
+    e.notifyUnusualContent(buf)
+    check e.state.statusMessage == ""
+
+  test "warns again after the content goes back to ordinary and bad again":
+    # Becoming ordinary has to clear the latch. Leaving it set would silence
+    # the warning the next time the same kind comes back, and the refusals it
+    # explains (join, substitute, case, indent, replace, LSP) would then have
+    # nothing on screen accounting for them.
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    let buf = e.activeBuffer
+    buf.filePath = some(getTempDir() / "moe-raw-recovered-notify.txt")
+    buf.keepRaw = true
+    clearMessageLog()
+
+    e.notifyUnusualContent(buf)
+    check buf.warnedUnusualContent == ucRaw
+
+    # Reload: the file now decodes cleanly.
+    buf.keepRaw = false
+    e.state.setStatusQuiet("")
+    e.notifyUnusualContent(buf)
+    check buf.warnedUnusualContent == ucOrdinary
+    check e.state.statusMessage == ""
+
+    # Reload again: undecodable once more, so warn once more.
+    buf.keepRaw = true
+    e.notifyUnusualContent(buf)
+    check buf.warnedUnusualContent == ucRaw
+    check "undecodable bytes" in e.state.statusMessage
+
+  test "a raw buffer with NUL bytes gets one message naming both":
+    # Two notifications would share the status line with popups off, leaving
+    # only the second visible.
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    let buf = e.activeBuffer
+    buf.filePath = some(getTempDir() / "moe-raw-nul-notify.txt")
+    buf.keepRaw = true
+    buf.hasBinaryContent = true
+    clearMessageLog()
+
+    e.notifyUnusualContent(buf)
+
+    check "undecodable bytes and NUL bytes" in e.state.statusMessage
+    check "held raw" in e.state.statusMessage
+
+  test "warns once for a decodable buffer holding NUL bytes":
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    let buf = e.activeBuffer
+    buf.filePath = some(getTempDir() / "moe-nul-notify.txt")
+    buf.hasBinaryContent = true
+    clearMessageLog()
+
+    e.notifyUnusualContent(buf)
+    check buf.warnedUnusualContent == ucBinary
+    check "binary content (NUL bytes)" in e.state.statusMessage
+
+    e.state.setStatusQuiet("")
+    e.notifyUnusualContent(buf)
+    check e.state.statusMessage == ""
+
+  test "warns again when a reload changes what is unusual about the content":
+    # The latch is keyed by kind: a raw buffer that reloads as decodable-with-NUL
+    # would otherwise keep the "held raw" notice standing while it is no longer
+    # true, and the user would never hear about the NUL bytes.
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    let buf = e.activeBuffer
+    buf.filePath = some(getTempDir() / "moe-kind-change-notify.txt")
+    buf.keepRaw = true
+    clearMessageLog()
+
+    e.notifyUnusualContent(buf)
+    check "undecodable bytes" in e.state.statusMessage
+
+    # Reload: the bytes now decode, but they still hold NUL.
+    buf.keepRaw = false
+    buf.hasBinaryContent = true
+    e.state.setStatusQuiet("")
+
+    e.notifyUnusualContent(buf)
+
+    check buf.warnedUnusualContent == ucBinary
+    check "binary content (NUL bytes)" in e.state.statusMessage
+
+  test "warns again when a raw buffer reloads with NUL bytes":
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    let buf = e.activeBuffer
+    buf.filePath = some(getTempDir() / "moe-raw-gains-nul-notify.txt")
+    buf.keepRaw = true
+    clearMessageLog()
+
+    e.notifyUnusualContent(buf)
+    check e.state.statusMessage.count("NUL") == 0
+
+    buf.hasBinaryContent = true
+    e.state.setStatusQuiet("")
+
+    e.notifyUnusualContent(buf)
+
+    check buf.warnedUnusualContent == ucRawBinary
+    check "undecodable bytes and NUL bytes" in e.state.statusMessage
+
+  test "stays quiet for a decodable buffer":
+    let config = newEditorConfig()
+    let e = newEditor(config)
+    e.config.notification.popupNotifications = false
+    let buf = e.activeBuffer
+    buf.filePath = some(getTempDir() / "moe-text-notify.txt")
+    clearMessageLog()
+
+    e.notifyUnusualContent(buf)
+
+    check buf.warnedUnusualContent == ucOrdinary
+    check e.state.statusMessage == ""
 
 suite "notify - routing and logging":
   test "status line route sets the status message":

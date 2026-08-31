@@ -741,6 +741,19 @@ suite "LspIntegration - applyTextEdits":
     check result.isOk
     check buffer.getLine(0) == "hello world"
 
+  test "applyTextEdits refuses a raw buffer even with no edits":
+    # The refusal is the gate for the server-to-buffer direction, so it cannot
+    # depend on the edit list: a caller probing eligibility with an empty list
+    # would otherwise read ok() as "this buffer accepts server edits".
+    let buffer = newTextBuffer("hello world")
+    buffer.keepRaw = true
+    let edits: seq[TextEdit] = @[]
+
+    let result = applyTextEdits(buffer, edits)
+
+    check result.isErr
+    check result.error == RawBufferLspRejection
+
   test "applyTextEdits insert at beginning":
     let buffer = newTextBuffer("world")
     let edits = @[
@@ -2276,6 +2289,68 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "new text"
 
+  test "applyWorkspaceEdit refuses before writing when an unopened target is raw":
+    # A rename touching several files must not rewrite the first ones and then
+    # discover that a later target holds undecodable bytes.
+    let backupDir = getTempDir() / "moe_test_backup_raw_unopened"
+    if dirExists(backupDir):
+      removeDir(backupDir)
+    defer:
+      if dirExists(backupDir):
+        removeDir(backupDir)
+    let backupConfigForTest = AutoBackupConfig(
+      enable: true,
+      backupDir: some(backupDir),
+      idleTime: 1,
+      interval: 1,
+      dirToExclude: @[],
+    )
+    let buffer = newTextBuffer("hello", some(tmpDir / "raw_peer_open.txt"))
+    var buffers = @[buffer]
+    let rawPath = tmpDir / "raw_peer_undecodable.bin"
+    let rawBytes = "\xFF\xFE\x00\xD8\x41\x00"
+    writeFile(rawPath, rawBytes)
+    defer:
+      removeFile(rawPath)
+
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "raw_peer_open.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "HELLO")]
+    changes[pathToUri(rawPath)] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+
+    let result =
+      applyWorkspaceEdit(buffers, edit, backupConfig = some(backupConfigForTest))
+
+    check result.isErr
+    check "no edits applied" in result.error
+    check buffer.getLine(0) == "hello"
+    check readFile(rawPath) == rawBytes
+
+  test "applyWorkspaceEdit refuses before writing when an open target is raw":
+    let bufferA = newTextBuffer("hello", some(tmpDir / "raw_open_peer.txt"))
+    let bufferB = newTextBuffer("world", some(tmpDir / "raw_open_target.txt"))
+    bufferB.keepRaw = true
+    var buffers = @[bufferA, bufferB]
+
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(tmpDir / "raw_open_peer.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "HELLO")]
+    changes[pathToUri(tmpDir / "raw_open_target.txt")] =
+      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "WORLD")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+
+    let result = applyWorkspaceEdit(buffers, edit)
+
+    check result.isErr
+    check "no edits applied" in result.error
+    check bufferA.getLine(0) == "hello"
+    check bufferB.getLine(0) == "world"
+
   test "applyWorkspaceEdit writes unopened files when allowed (default)":
     # User-initiated flows (rename) may still touch files the user has not
     # opened: the default `allowUnopenedFileWrites = true` preserves that.
@@ -2306,6 +2381,51 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.isOk
     check result.get.modifiedFilePaths == @[targetPath]
     check readFile(targetPath) == "world"
+
+  test "applyWorkspaceEdit refuses two edit groups aimed at one unopened file":
+    # Preparing both groups from the same on-disk content and committing them
+    # in order would silently drop the first, so the whole edit is refused.
+    # Distinct URI spellings of one file collapse here the same way.
+    let backupDir = getTempDir() / "moe_test_backup_dup_unopened"
+    if dirExists(backupDir):
+      removeDir(backupDir)
+    defer:
+      if dirExists(backupDir):
+        removeDir(backupDir)
+    let backupConfigForTest = AutoBackupConfig(
+      enable: true,
+      backupDir: some(backupDir),
+      idleTime: 1,
+      interval: 1,
+      dirToExclude: @[],
+    )
+    var buffers: seq[TextBuffer] = @[]
+    let targetPath = tmpDir / "unopened_dup.txt"
+    writeFile(targetPath, "hello")
+    let docEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: pathToUri(targetPath), version: some(1)
+      ),
+      edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")],
+    )
+    let secondDocEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: pathToUri(targetPath), version: some(2)
+      ),
+      edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "other")],
+    )
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]),
+      documentChanges: some(@[docEdit, secondDocEdit]),
+    )
+
+    let result =
+      applyWorkspaceEdit(buffers, edit, backupConfig = some(backupConfigForTest))
+
+    check result.isErr
+    check "more than once" in result.error
+    check "no edits applied" in result.error
+    check readFile(targetPath) == "hello"
 
   test "applyWorkspaceEdit refuses unopened files when disallowed":
     # Server-initiated applyEdit must not write files the user has not opened:
@@ -3453,6 +3573,79 @@ suite "LspIntegration - incremental didChange":
     ## could race into lwsStarting and flip the gate, making the test flaky.
     lsp.service.liveWorkerOverride = proc(path: string): bool =
       false
+
+  test "raw buffer is never announced to the server":
+    # The wire is JSON; bytes that are not valid UTF-8 cannot ride on it.
+    let raw = newTextBuffer("abc", some(Path))
+    raw.keepRaw = true
+    check not raw.isLspEligible
+
+    check lsp.onBufferOpen(raw).isOk
+
+    check Path notin lsp.documents
+
+  test "a buffer that turns raw on reload is dropped":
+    # Reload can swap decodable content for bytes no encoding handles.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    check Path in lsp.documents
+
+    let raw = newTextBuffer("abc", some(Path))
+    raw.keepRaw = true
+    check lsp.onBufferOpen(raw).isOk
+
+    check Path notin lsp.documents
+
+  test "editing a raw buffer does not open it through the change path":
+    # onBufferChange opens untracked documents on its own, so it needs the
+    # same gate as onBufferOpen.
+    let raw = newTextBuffer("abcd", some(Path))
+    raw.keepRaw = true
+    lsp.markReady()
+
+    check lsp.onBufferChange(raw).isOk
+
+    check Path notin lsp.documents
+
+  test "saving a raw buffer does not ship its bytes":
+    # didSave carries the whole text, so it needs the same gate as didChange.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    check Path in lsp.documents
+
+    let raw = newTextBuffer("abc", some(Path))
+    raw.keepRaw = true
+
+    check lsp.onBufferSave(raw).isOk
+
+    check Path notin lsp.documents
+
+  test "requests against a raw buffer are refused":
+    let raw = newTextBuffer("abc", some(Path))
+    raw.keepRaw = true
+
+    let r = lsp.startHoverRequest(raw, 0, 0)
+
+    check r.isErr
+    check r.error == RawBufferLspRejection
+
+  test "server-computed edits are never applied to a raw buffer":
+    # The edit positions are UTF-16 offsets into text the server decoded; they
+    # do not address the bytes a raw buffer holds.
+    let raw = newTextBuffer("abc", some(Path))
+    raw.keepRaw = true
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+        ),
+        newText: "X",
+      )
+    ]
+
+    let r = applyTextEdits(raw, edits)
+
+    check r.isErr
+    check r.error == RawBufferLspRejection
+    check raw.getLine(0) == "abc"
 
   test "onBufferOpen seeds shadow and version 1":
     check lsp.onBufferOpen(newTextBuffer("abc", some(Path))).isOk

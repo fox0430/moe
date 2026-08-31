@@ -20,6 +20,7 @@
 ## Tests for insert_handler.nim
 
 import std/[unittest, options, tables, json, monotimes]
+from std/strutils import contains
 
 import pkg/results
 
@@ -1052,6 +1053,36 @@ suite "InsertModeHandler - Ctrl Key Combinations":
 
     check r.kind == imrHandled
     check buf.getLine(0) == "hello"
+
+  test "Ctrl+T reports the refusal on a raw buffer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.keepRaw = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "t", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check buf.getLine(0) == "hello"
+    check "raw undecodable bytes" in state.statusMessage
+
+  test "Ctrl+D reports the refusal on a raw buffer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    buf.keepRaw = true
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {kmCtrl})
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check r.kind == imrHandled
+    check buf.getLine(0) == "  hello"
+    check "raw undecodable bytes" in state.statusMessage
 
   test "Handle Ctrl+Y (insert char from above)":
     let buf = newTextBuffer()

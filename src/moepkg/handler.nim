@@ -249,24 +249,25 @@ proc handleDebugModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 
 proc handlePasteText(e: Editor, text: string): bool =
   ## Insert pasted text without triggering auto-indentation.
-  # Normalize CRLF / lone CR to LF up front (matching loadFile) so a stray \r
-  # never reaches line content and the cursor advance below counts line breaks
-  # correctly. insertText normalizes again defensively for non-paste callers.
-  # Sanitize invalid UTF-8 so byte/rune conversions stay consistent.
-  let pastedText = text.sanitizeInvalidUtf8().normalizeNewlines()
-  if pastedText.len == 0:
-    return true
-
   # Command / Search overlay takes precedence over the base mode.
   # Only the first line is inserted since both are single-line.
-  if e.state.isCommandOverlay:
-    e.insertPastedTextInCommand(pastedText)
-    return true
-  if e.state.isSearchOverlay:
-    e.insertPastedTextInSearch(pastedText)
+  # Overlays are always character fields, so they normalize unconditionally.
+  if e.state.isCommandOverlay or e.state.isSearchOverlay:
+    let overlayText = text.sanitizeInvalidUtf8().normalizeNewlines()
+    if overlayText.len == 0:
+      return true
+    if e.state.isCommandOverlay:
+      e.insertPastedTextInCommand(overlayText)
+    else:
+      e.insertPastedTextInSearch(overlayText)
     return true
 
   let activeBuffer = e.activeBuffer()
+
+  # Sanitize paste for `b`; skipped for raw buffers.
+  let pastedText = activeBuffer.preparePastedText(text)
+  if pastedText.len == 0:
+    return true
 
   # Handle paste differently based on mode
   case e.state.mode
@@ -388,12 +389,12 @@ proc middleClickPaste(e: Editor) =
     e.notify("Paste failed: " & readResult.error, nlError)
     return
 
-  # Normalize line endings.
-  let pastedText = readResult.get().normalizeNewlines()
+  let activeBuffer = e.activeBuffer()
+
+  # Sanitize paste; skipped for raw buffers.
+  let pastedText = activeBuffer.preparePastedText(readResult.get())
   if pastedText.len == 0:
     return
-
-  let activeBuffer = e.activeBuffer()
 
   let enteringInsertFromNormal = e.state.mode == EditorMode.Normal
 

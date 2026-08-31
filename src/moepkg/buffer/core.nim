@@ -44,6 +44,13 @@ type
     ## starts handing out ids from 1 so that the zero-initialized default of
     ## `state.windowDisplay.currentBufferId` can't accidentally collide with a real buffer.
 
+  UnusualContentKind* = enum
+    ## Content kind for warning control; kind change triggers re-warning.
+    ucOrdinary ## Decoded cleanly and holds no NUL bytes
+    ucBinary ## Decoded, but holds NUL bytes near the start
+    ucRaw ## No encoding could decode it; bytes kept verbatim
+    ucRawBinary ## Undecodable and holding NUL bytes
+
   LineMarkerKind* = enum
     ## Per-line marker classification stored in `TextBuffer.lineMarkers`.
     ## Renderer-side "empty" is represented by Option[LineMarkerKind] = none.
@@ -288,9 +295,9 @@ type
       # File modification time when loaded (for external change detection)
     externalModWarned*: bool
       # Whether the user has been warned about external modification (reset on load/save)
-    rawWarned*: bool
-      ## Whether the raw-bytes warning was shown. Latched to avoid repeat on
-      ## auto-reload; cleared when a later load decodes.
+    warnedUnusualContent*: UnusualContentKind
+      ## Last warned kind (`ucOrdinary` = none). Avoids repeat on auto-reload
+      ## but re-warns when the kind changes.
 
     # Undo/Redo stacks (using Deque for O(1) operations at both ends)
     undoStack*: Deque[BufferChange]
@@ -401,6 +408,13 @@ proc allowsTextTransforms*(b: TextBuffer): bool =
   ## Whether text transforms are safe. False for raw buffers.
   ## Use this instead of checking `keepRaw` directly.
   not b.keepRaw
+
+proc unusualContentKind*(b: TextBuffer): UnusualContentKind =
+  ## Content kind of `b` derived from load result.
+  if b.allowsTextTransforms:
+    if b.hasBinaryContent: ucBinary else: ucOrdinary
+  else:
+    if b.hasBinaryContent: ucRawBinary else: ucRaw
 
 proc rawBytesRejection*(action: string): string =
   ## Rejection message for `action` on a raw buffer.
