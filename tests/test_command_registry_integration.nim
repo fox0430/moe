@@ -24,7 +24,11 @@ import std/[deques, options, os, sets, strutils, tables, unittest]
 
 import pkg/results
 
-import ../src/moepkg/[buffer, types, motion, key_bindings, config, modes, registers]
+import
+  ../src/moepkg/[
+    buffer, types, motion, key_bindings, config, modes, registers, render_utils,
+    visible_rows,
+  ]
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/command_handlers/visual_commands
 
@@ -2185,11 +2189,51 @@ suite "Handler - Scroll operations":
     ctx.cursor = BufferPosition(line: 12, column: 0)
     ctx.motionController.viewportManager.viewport.topLine = 0
     ctx.motionController.viewportManager.viewport.height = 24
+    ctx.state.windowDisplay.viewportReservedLines = 1
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcScrollCursorCenter)).isOk
     # Cursor at line 12 should be centered
-    check ctx.motionController.viewportManager.viewport.topLine > 0
+    check ctx.motionController.viewportManager.viewport.topLine == 12 - (23 div 2)
+
+  test "zz falls back to the steady bottom reserve when unset":
+    # `viewportReservedLines` defaults to -1 (unset), so `scrollVisibleHeight`
+    # must fall back to `steadyBottomAreaHeight` instead of centering as if the
+    # status row were part of the text area.
+    var lines = newSeq[string]()
+    for i in 1 .. 40:
+      lines.add("line" & $i)
+    let buffer = newTextBuffer(lines.join("\n"))
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 12, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 0
+    ctx.motionController.viewportManager.viewport.height = 24
+    # `viewportReservedLines` left at its -1 default.
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollCursorCenter)).isOk
+    # visibleHeight = 24 - 1 (fallback) = 23, so the center row is 11. With the
+    # old 0 default the reserve would be ignored and the top would be 0.
+    check ctx.motionController.viewportManager.viewport.topLine == 12 - (23 div 2)
+
+  test "scroll cursor to center honours the reserved lines (zz)":
+    var lines = newSeq[string]()
+    for i in 1 .. 40:
+      lines.add("line" & $i)
+    let buffer = newTextBuffer(lines.join("\n"))
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 12, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 0
+    # Height 25 rather than 24: with 24 the reserve is invisible to this
+    # assertion, since 22 div 2 == 23 div 2.
+    ctx.motionController.viewportManager.viewport.height = 25
+    # Status/command row plus the tab line, as `updateViewportReservedLines`
+    # computes it for a bottom window with the tab line shown.
+    ctx.state.windowDisplay.viewportReservedLines = 2
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollCursorCenter)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 12 - (23 div 2)
 
   test "scroll cursor to bottom (zb)":
     let buffer = newTextBuffer(
@@ -2202,6 +2246,72 @@ suite "Handler - Scroll operations":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcScrollCursorBottom)).isOk
+
+  test "scroll cursor to bottom honours the reserved lines (zb)":
+    var lines = newSeq[string]()
+    for i in 1 .. 40:
+      lines.add("line" & $i)
+    let buffer = newTextBuffer(lines.join("\n"))
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 30, column: 0)
+    ctx.motionController.viewportManager.viewport.topLine = 0
+    ctx.motionController.viewportManager.viewport.height = 24
+    ctx.state.windowDisplay.viewportReservedLines = 2
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcScrollCursorBottom)).isOk
+    check ctx.motionController.viewportManager.viewport.topLine == 30 - 22 + 1
+
+  test "zz and zb count screen rows, not lines, under lineWrap":
+    # 20 lines of 30 columns at width 10 wrap to several rows each. Subtracting
+    # a row count from the line number would put both zz and zb well above the
+    # cursor's line and make them indistinguishable.
+    var lines: seq[string] = @[]
+    for i in 0 ..< 20:
+      lines.add("x".repeat(30))
+    let buffer = newTextBuffer(lines.join("\n"))
+    let registry = createTestRegistry()
+
+    proc cursorRow(ctx: CommandContext): int =
+      ## Screen row the cursor is drawn on, from the resulting viewport.
+      let
+        viewport = ctx.motionController.viewportManager.viewport
+        layout = initRowLayout(
+          ctx.buffer,
+          ctx.motionController.viewportManager.wrapCountCache,
+          ctx.state.effectiveLineWrap(),
+          wrapWidthFor(viewport.width, viewportOffsetFor(ctx.buffer, ctx.state)),
+          ctx.state.tabStop,
+        )
+      layout.rowOfLine(
+        viewport.topLine, viewport.topWrapOffset, ctx.cursor.line, high(int)
+      ) + layout.cursorCell(ctx.cursor.line, ctx.cursor.column).wrapSeg
+
+    proc scrolledCtx(command: BuiltinCommandId): CommandContext =
+      result = createTestContext(buffer)
+      result.state.config.standard.lineWrap = true
+      result.cursor = BufferPosition(line: 10, column: 0)
+      result.motionController.viewportManager.viewport.width = 10
+      result.motionController.viewportManager.viewport.height = 8
+      # visibleHeight 6.
+      result.state.windowDisplay.viewportReservedLines = 2
+      check registry.execute(result, builtin(command)).isOk
+
+    let centerCtx = scrolledCtx(bcScrollCursorCenter)
+    check centerCtx.cursorRow() == 3
+
+    let bottomCtx = scrolledCtx(bcScrollCursorBottom)
+    check bottomCtx.cursorRow() == 5
+
+    # The two must not collapse onto the same top, which is what raw line
+    # arithmetic does once a logical line spans more than one row.
+    check (
+      centerCtx.motionController.viewportManager.viewport.topLine,
+      centerCtx.motionController.viewportManager.viewport.topWrapOffset,
+    ) != (
+      bottomCtx.motionController.viewportManager.viewport.topLine,
+      bottomCtx.motionController.viewportManager.viewport.topWrapOffset,
+    )
 
   test "scroll line down keeps a visible cursor in place (Ctrl-E)":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
@@ -4382,6 +4492,72 @@ suite "Handler - Basic Motion Commands":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcMotionPageDown)).isOk
+
+  test "page and viewport motions count screen rows under lineWrap":
+    # 40 lines wide enough to wrap at viewport width 20. A page is
+    # `visibleRows - 1` screen rows, which is fewer logical lines whenever a
+    # line occupies more than one row.
+    var lines: seq[string] = @[]
+    for i in 0 ..< 40:
+      lines.add("x".repeat(60))
+    let buffer = newTextBuffer(lines.join("\n"))
+    let registry = createTestRegistry()
+
+    proc pagedCtx(command: BuiltinCommandId, fromLine: int): CommandContext =
+      result = createTestContext(buffer)
+      result.state.config.standard.lineWrap = true
+      result.state.mode = EditorMode.Normal
+      result.setCursor(fromLine, 0)
+      result.cursor = BufferPosition(line: fromLine, column: 0)
+      let viewport = result.motionController.viewportManager.viewport
+      viewport.width = 20
+      viewport.height = 8
+      viewport.topLine = fromLine
+      viewport.topWrapOffset = 0
+      # visibleRows = 6, so a page is 5 screen rows.
+      result.state.windowDisplay.viewportReservedLines = 2
+      check registry.execute(result, builtin(command)).isOk
+
+    let probe = createTestContext(buffer)
+    probe.state.config.standard.lineWrap = true
+    probe.motionController.viewportManager.viewport.width = 20
+    let layout = initRowLayout(
+      buffer,
+      probe.motionController.viewportManager.wrapCountCache,
+      true,
+      wrapWidthFor(20, viewportOffsetFor(buffer, probe.state)),
+      probe.state.tabStop,
+    )
+    let rowsPerLine = layout.lineRows(0)
+    # Guard: the whole point is that a line is more than one row here.
+    check rowsPerLine >= 2
+    # visibleRows = height(8) - reserved(2) = 6, so a page is 5 screen rows.
+    let pageSize = 5
+
+    # Ctrl-F: 5 screen rows down from (0, 0), not 5 lines. Pin the exact
+    # `(line, seg)` page target so a page-size regression is caught.
+    let down = pagedCtx(bcMotionPageDown, 0)
+    check down.cursor.line == pageSize div rowsPerLine
+    let downTarget = layout.rowAt(0, 0, pageSize)
+    check downTarget.isSome
+    check (downTarget.get.line, downTarget.get.wrapSeg) ==
+      (pageSize div rowsPerLine, pageSize mod rowsPerLine)
+
+    # L with the top at line 10: the last of 6 visible rows (row 5).
+    let low = pagedCtx(bcMotionViewportLow, 10)
+    check low.cursor.line == 10 + (pageSize div rowsPerLine)
+    let lowTarget = layout.rowAt(10, 0, pageSize)
+    check lowTarget.isSome
+    check (lowTarget.get.line, lowTarget.get.wrapSeg) ==
+      (10 + (pageSize div rowsPerLine), pageSize mod rowsPerLine)
+
+    # M with the top at line 10: visibleRows div 2 = 3 rows down.
+    let middle = pagedCtx(bcMotionViewportMiddle, 10)
+    check middle.cursor.line == 10 + (3 div rowsPerLine)
+    let middleTarget = layout.rowAt(10, 0, 3)
+    check middleTarget.isSome
+    check (middleTarget.get.line, middleTarget.get.wrapSeg) ==
+      (10 + (3 div rowsPerLine), 3 mod rowsPerLine)
 
   test "motion page up (Ctrl+b)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
@@ -6806,13 +6982,14 @@ suite "executeCommand - count prefix respects handler maxArgs":
     ctx.cursor = BufferPosition(line: 12, column: 0)
     ctx.motionController.viewportManager.viewport.topLine = 0
     ctx.motionController.viewportManager.viewport.height = 24
+    ctx.state.windowDisplay.viewportReservedLines = 1
     let registry = createTestRegistry()
 
     let cmd = Command(
       kind: ctCustom, commandId: "scroll.cursor.center", count: 2, hasCount: true
     )
     check registry.executeCommand(ctx, cmd).isOk
-    check ctx.motionController.viewportManager.viewport.topLine > 0
+    check ctx.motionController.viewportManager.viewport.topLine == 12 - (23 div 2)
 
   test "count is still prefixed for a maxArgs>=1 handler (3x)":
     let buffer = newTextBuffer("hello")

@@ -71,60 +71,12 @@ proc registerMotionCommand*(
 
 ## Scroll commands
 
-proc handleScrollCursorTop*(
-    ctx: CommandContext, args: seq[string]
-): Result[(), string] =
-  ## Scroll the viewport to place cursor line at the top (zt command)
-  ## Cursor position doesn't change, only the viewport
-
-  ctx.motionController.viewportManager.viewport.resetViewportTop(ctx.cursor.line)
-  return ok(())
-
-proc handleScrollCursorCenter*(
-    ctx: CommandContext, args: seq[string]
-): Result[(), string] =
-  ## Scroll the viewport to place cursor line at the center (z. or zz command)
-  ## Cursor position doesn't change, only the viewport
-
-  # Reserved lines (status line + command line share same row)
-  let reservedLines = steadyBottomAreaHeight()
-  let visibleHeight =
-    ctx.motionController.viewportManager.viewport.height - reservedLines
-
-  # Center the cursor line
-  let targetTopLine = ctx.cursor.line - (visibleHeight div 2)
-
-  # Clamp to valid range
-  ctx.motionController.viewportManager.viewport.resetViewportTop(max(0, targetTopLine))
-
-  return ok(())
-
-proc handleScrollCursorBottom*(
-    ctx: CommandContext, args: seq[string]
-): Result[(), string] =
-  ## Scroll the viewport to place cursor line at the bottom (zb command)
-  ## Cursor position doesn't change, only the viewport
-
-  # Reserved lines (status line + command line share same row)
-  let reservedLines = steadyBottomAreaHeight()
-  let visibleHeight =
-    ctx.motionController.viewportManager.viewport.height - reservedLines
-
-  # Place cursor at the bottom of viewport
-  let targetTopLine = ctx.cursor.line - visibleHeight + 1
-
-  # Clamp to valid range
-  ctx.motionController.viewportManager.viewport.resetViewportTop(max(0, targetTopLine))
-
-  return ok(())
-
 proc scrollVisibleHeight(ctx: CommandContext): int =
-  let reservedLines =
-    if ctx.state.windowDisplay.viewportReservedLines >= 0:
-      ctx.state.windowDisplay.viewportReservedLines
-    else:
-      steadyBottomAreaHeight()
-  max(1, ctx.motionController.viewportManager.viewport.height - reservedLines)
+  max(
+    1,
+    ctx.motionController.viewportManager.viewport.height -
+      ctx.state.motionReservedLines(),
+  )
 
 proc scrollRowLayout(ctx: CommandContext): RowLayout =
   let
@@ -133,13 +85,50 @@ proc scrollRowLayout(ctx: CommandContext): RowLayout =
   initRowLayout(
     ctx.buffer,
     ctx.motionController.viewportManager.wrapCountCache,
-    ctx.state.lineWrap,
+    ctx.state.effectiveLineWrap(),
     wrapWidthFor(viewport.width, viewportOffset),
     ctx.state.tabStop,
   )
 
+proc scrollCursorToRow(ctx: CommandContext, rowFromTop: int) =
+  ## Place cursor `rowFromTop` rows below viewport top. Walks rows to handle wrap/folds.
+  let viewport = ctx.motionController.viewportManager.viewport
+  if ctx.buffer.isNil or ctx.buffer.len == 0:
+    viewport.resetViewportTop(max(0, ctx.cursor.line - max(0, rowFromTop)))
+    return
+  let
+    layout = ctx.scrollRowLayout()
+    line = clamp(ctx.cursor.line, 0, ctx.buffer.len - 1)
+    cursorSeg = layout.cursorCell(line, ctx.cursor.column).wrapSeg
+    (topLine, topOffset) = layout.walkBackRows(line, cursorSeg, max(0, rowFromTop))
+  viewport.restoreViewportTop(topLine, topOffset)
+
+proc handleScrollCursorTop*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Place cursor at viewport top (zt).
+
+  ctx.motionController.viewportManager.viewport.resetViewportTop(ctx.cursor.line)
+  return ok(())
+
+proc handleScrollCursorCenter*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Center cursor in viewport (zz / z.).
+
+  ctx.scrollCursorToRow(ctx.scrollVisibleHeight() div 2)
+  return ok(())
+
+proc handleScrollCursorBottom*(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Place cursor at viewport bottom (zb).
+
+  ctx.scrollCursorToRow(ctx.scrollVisibleHeight() - 1)
+  return ok(())
+
 func scrollPositionAbove(a, b: tuple[line, offset: int]): bool {.inline.} =
-  a.line < b.line or (a.line == b.line and a.offset < b.offset)
+  wrapPosAbove(a.line, a.offset, b.line, b.offset)
 
 proc maxScrollTop(
     ctx: CommandContext, layout: RowLayout, visibleHeight: int
@@ -193,9 +182,7 @@ proc keepCursorInScrolledViewport(
         ctx.moveCursorToRow(layout, bottomRow.get)
 
 proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Scroll the viewport down by screen rows (Ctrl-E).
-  ## Wrapped segments and collapsed folds each count as visible rows; the cursor
-  ## moves only when scrolling would leave it outside the viewport.
+  ## Scroll viewport down by screen rows (Ctrl-E). Keeps cursor visible.
   let
     count = parseCount(args)
     visibleHeight = ctx.scrollVisibleHeight()
@@ -223,9 +210,7 @@ proc handleScrollLineDown*(ctx: CommandContext, args: seq[string]): Result[(), s
   return ok(())
 
 proc handleScrollLineUp*(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Scroll the viewport up by screen rows (Ctrl-Y).
-  ## Wrapped segments and collapsed folds each count as visible rows; the cursor
-  ## moves only when scrolling would leave it outside the viewport.
+  ## Scroll viewport up by screen rows (Ctrl-Y). Keeps cursor visible.
   let
     count = parseCount(args)
     visibleHeight = ctx.scrollVisibleHeight()

@@ -140,7 +140,7 @@ suite "rowOfLine / rowAt round trip":
   test "rowAt returns none below the last row":
     check linesBuffer(3).noWrap.rowAt(0, 0, 5).isNone
 
-suite "walkBackRows / lineTopFor":
+suite "walkBackRows":
   test "walks back over plain lines":
     check linesBuffer(50).noWrap.walkBackRows(30, 0, 10) == (20, 0)
 
@@ -157,19 +157,6 @@ suite "walkBackRows / lineTopFor":
     let buf = newTextBuffer(@["x".repeat(25), "x", "x"].join("\n"))
     # Two rows above line 2: line 1, then the last segment of line 0.
     check buf.wrapAt10.walkBackRows(2, 0, 2) == (0, 2)
-
-  test "lineTopFor moves down when the walk lands mid-line":
-    let buf = newTextBuffer(@["x".repeat(25), "x", "x"].join("\n"))
-    check buf.wrapAt10.lineTopFor(2, 0, 2) == 1
-
-  test "lineTopFor keeps a line boundary as is":
-    let buf = newTextBuffer(@["x", "x", "x"].join("\n"))
-    check buf.wrapAt10.lineTopFor(2, 0, 1) == 1
-
-  test "lineTopFor never scrolls past the target line":
-    # A single line taller than the viewport: the top stays on that line.
-    let buf = newTextBuffer(@["x", "x".repeat(50)].join("\n"))
-    check buf.wrapAt10.lineTopFor(1, 4, 2) == 1
 
 suite "totalRows":
   test "counts rows strictly before stopLine":

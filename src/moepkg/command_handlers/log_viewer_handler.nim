@@ -25,7 +25,7 @@
 
 import std/[options, unicode]
 
-import ../[types, key_bindings, search_utils]
+import ../[types, key_bindings, search_utils, render_utils]
 import ../buffer/[core, search]
 import handler_types
 export handler_types
@@ -73,7 +73,7 @@ proc handleLogViewerModeKey*(
   let
     maxLine = max(0, buffer.len - 1)
     # Calculate actual content height (viewport height minus reserved lines for status/command)
-    contentHeight = max(1, viewportHeight - state.windowDisplay.viewportReservedLines)
+    contentHeight = max(1, viewportHeight - state.motionReservedLines())
 
   # Handle 'gg' command (two g presses)
   if logState.waitingForG:

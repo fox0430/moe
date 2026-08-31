@@ -19,7 +19,7 @@
 
 ## Tests for commands.nim
 
-import std/unittest
+import std/[strutils, unittest]
 import ../src/moepkg/[buffer, motion, render_utils, types]
 
 suite "ViewportManager - Goto Line Scrolling":
@@ -218,6 +218,31 @@ suite "ViewportManager - Line Wrap Scrolling":
     # topLine should not change since cursor is already visible
     check viewportManager.viewport.topLine == 10
 
+  test "lineWrap: viewport keeps a mid-wrap top when the cursor stays visible":
+    # Two 40 cell lines wrapped at width 10 give 4 segments each. The viewport
+    # starts two segments into line 0, so line 1 begins on screen row 2 and the
+    # cursor is still inside the 4 row text area.
+    let buffer = newTextBuffer("a".repeat(40) & "\n" & "b".repeat(40))
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(
+        topLine: 0, topWrapOffset: 2, leftColumn: 0, height: 5, width: 10, x: 0, y: 0
+      )
+    )
+
+    viewportManager.updateViewport(
+      CursorPosition(x: 0, y: 1),
+      buffer.len,
+      showStatusLine = true,
+      reservedLines = 1,
+      lineWrap = true,
+      buffer = buffer,
+      viewportOffset = 0,
+      tabStop = 4,
+    )
+
+    check viewportManager.viewport.topLine == 0
+    check viewportManager.viewport.topWrapOffset == 2
+
   test "lineWrap: viewport scrolls up":
     let buffer = createTestBuffer(100)
     let viewportManager = ViewportManager(
@@ -276,9 +301,11 @@ suite "ViewportManager - Line Wrap Scrolling":
 
   test "lineWrap: viewport scrolls with cursor at non-zero wrap offset":
     # Each line: 40 chars, viewport width 20 → 2 screen lines per logical line.
-    # Cursor at column 25 → cursorWrapOffset = 1.
-    # visibleHeight = 19, budget = 19 - 1 = 18.
-    # 8 lines × 2 = 16 < 18, 9 lines × 2 = 18 (not < 18) → topLine = lastLine - 8.
+    # Cursor at column 25 → cursor wrap segment 1.
+    # visibleHeight = 19, budget = 19 - 1 = 18. Walking 18 rows back from
+    # (lastLine, 1) lands mid-line, on segment 1 of lastLine - 9: the minimal
+    # scroll that still shows the cursor, and the same top the render authority
+    # (`adjustViewportForCursor`) computes for this state.
     let buffer = createLongLineBuffer(50, 40)
     let viewportManager = ViewportManager(
       viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 20, x: 0, y: 0)
@@ -298,7 +325,8 @@ suite "ViewportManager - Line Wrap Scrolling":
       tabStop = 4,
     )
 
-    check viewportManager.viewport.topLine == lastLine - 8
+    check viewportManager.viewport.topLine == lastLine - 9
+    check viewportManager.viewport.topWrapOffset == 1
 
 suite "ViewportManager - Default reservedLines":
   proc createTestBuffer(lineCount: int): TextBuffer =

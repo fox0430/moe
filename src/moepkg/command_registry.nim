@@ -367,7 +367,6 @@ proc executeCommand*(
       let isScrollMotion =
         cmd.motion in
         {Motion.PageUp, Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown}
-      let prevTopLine = ctx.motionController.viewportManager.viewport.topLine
       let prevCursorLine = ctx.cursor.line
 
       # For smooth scroll motions, don't update viewport in executeMotion
@@ -387,32 +386,6 @@ proc executeCommand*(
 
       # Start smooth scroll animation if this was a scroll motion
       if isScrollMotion and ctx.smoothScrollConfig.enable:
-        # For page scroll motions, we want to scroll the full page amount, not just minimum to show cursor
-        let viewportHeight = ctx.motionController.viewportManager.viewport.height
-        let lineCount = ctx.motionController.executor.buffer.len
-        let reservedLines = steadyBottomAreaHeight()
-        let pageSize = max(1, viewportHeight - reservedLines - 1)
-        let halfPageSize = max(1, pageSize div 2)
-
-        # Calculate target topLine based on motion type
-        var targetTopLine = prevTopLine
-        case cmd.motion
-        of Motion.PageDown:
-          targetTopLine = min(
-            max(0, lineCount - viewportHeight + reservedLines), prevTopLine + pageSize
-          )
-        of Motion.PageUp:
-          targetTopLine = max(0, prevTopLine - pageSize)
-        of Motion.HalfPageDown:
-          targetTopLine = min(
-            max(0, lineCount - viewportHeight + reservedLines),
-            prevTopLine + halfPageSize,
-          )
-        of Motion.HalfPageUp:
-          targetTopLine = max(0, prevTopLine - halfPageSize)
-        else:
-          discard
-
         if targetCursorLine != prevCursorLine:
           # Restore original cursor position - animation will interpolate from here
           ctx.cursor.line = prevCursorLine
