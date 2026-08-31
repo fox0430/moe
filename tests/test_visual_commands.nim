@@ -19,7 +19,7 @@
 
 ## Tests for visual_commands.nim
 
-import std/[unittest, options, tables, strutils, os, osproc]
+import std/[unittest, options, tables, strutils, os, osproc, unicode]
 
 import pkg/results
 
@@ -968,7 +968,7 @@ suite "Visual Commands - visualReplace":
       kind: vskChar,
     )
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     check buf.getLine(0) == "xxxxx world"
     check state.visualSelection.active == false
@@ -985,7 +985,7 @@ suite "Visual Commands - visualReplace":
       kind: vskChar,
     )
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     check buf.getLine(0) == "xxxxx"
     check buf.getLine(1) == "xxxxx"
@@ -1001,10 +1001,126 @@ suite "Visual Commands - visualReplace":
       kind: vskBlock,
     )
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     # Should replace 3 characters, not 9 bytes worth
     check buf.getLine(0) == "xxx world"
+
+  test "Replace character selection with a multibyte replacement":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ab world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 1),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, "あ")
+
+    # Both characters get the whole replacement, not its leading byte
+    check buf.getLine(0) == "ああ world"
+    check buf.getLine(0).validateUtf8 == -1
+
+  test "Replace line selection with a multibyte replacement":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ab")
+    discard buf.insertText(BufferPosition(line: 0, column: 2), "\ncde")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualReplace(buf, state, "あ")
+
+    check buf.getLine(0) == "ああ"
+    check buf.getLine(1) == "あああ"
+
+  test "Replace block selection with a multibyte replacement":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\ndef")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 1),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualReplace(buf, state, "あ")
+
+    check buf.getLine(0) == "ああc"
+    check buf.getLine(1) == "ああf"
+
+  test "Replace character selection counts multibyte source in characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "あい world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 1),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, "x")
+
+    # Two characters replaced, not the six bytes they occupy
+    check buf.getLine(0) == "xx world"
+
+  test "Replace character selection spanning lines keeps multibyte line breaks":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "あい")
+    discard buf.insertText(BufferPosition(line: 0, column: 2), "\nうえ")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 1),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, "x")
+
+    check buf.getLine(0) == "xx"
+    check buf.getLine(1) == "xx"
+
+  test "Replace rejects an empty replacement instead of deleting the selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, "")
+
+    check buf.getLine(0) == "hello"
+    check state.visualSelection.active
+
+  test "Replace rejects a multi-character replacement":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, "ab")
+
+    check buf.getLine(0) == "hello"
+    check state.visualSelection.active
 
 suite "Visual Commands - visualJoinLines":
   test "Join two lines":
@@ -1692,7 +1808,7 @@ suite "Visual Commands - Block Selection":
       kind: vskBlock,
     )
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     # Block selection columns 0-2 (inclusive) = 3 characters
     check buf.getLine(0) == "xxxlo world"
@@ -1711,7 +1827,7 @@ suite "Visual Commands - Block Selection":
       kind: vskLine,
     )
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     check buf.getLine(0) == "xxxxx"
     check buf.getLine(1) == "xxxxx"
@@ -2020,7 +2136,7 @@ suite "Visual Commands - Edge Cases":
     let state = createTestState()
     state.visualSelection.active = false
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     check buf.getLine(0) == "hello"
 
@@ -2189,7 +2305,7 @@ suite "Visual Commands - Unicode support":
       kind: vskLine,
     )
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     check buf.getLine(0) == "xxxxxx"
     check buf.getLine(1) == "xxxxxx"
@@ -2287,7 +2403,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "(hello) world"
     check state.visualSelection.active == false
@@ -2304,9 +2420,57 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, ')')
+    visualSurround(buf, state, ")")
 
     check buf.getLine(0) == "(hello) world"
+
+  test "Surround char selection with a multibyte bracket pair":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, "「")
+
+    # The whole character is written, and the closing half of the pair is used
+    check buf.getLine(0) == "「hello」 world"
+    check buf.getLine(0).validateUtf8 == -1
+
+  test "Surround with the closing half of a multibyte pair selects the pair":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, "」")
+
+    check buf.getLine(0) == "「hello」 world"
+
+  test "Surround with an unpaired multibyte character uses it on both sides":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, "あ")
+
+    check buf.getLine(0) == "あhelloあ world"
+    check buf.getLine(0).validateUtf8 == -1
 
   test "Surround char selection with square brackets":
     let buf = newTextBuffer()
@@ -2319,7 +2483,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '[')
+    visualSurround(buf, state, "[")
 
     check buf.getLine(0) == "[hello] world"
 
@@ -2334,7 +2498,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '{')
+    visualSurround(buf, state, "{")
 
     check buf.getLine(0) == "{hello} world"
 
@@ -2349,7 +2513,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '<')
+    visualSurround(buf, state, "<")
 
     check buf.getLine(0) == "<hello> world"
 
@@ -2364,7 +2528,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '"')
+    visualSurround(buf, state, "\"")
 
     check buf.getLine(0) == "\"hello\" world"
 
@@ -2379,7 +2543,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '\'')
+    visualSurround(buf, state, "'")
 
     check buf.getLine(0) == "'hello' world"
 
@@ -2394,7 +2558,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '`')
+    visualSurround(buf, state, "`")
 
     check buf.getLine(0) == "`hello` world"
 
@@ -2411,7 +2575,7 @@ suite "Visual Commands - visualSurround":
       kind: vskLine,
     )
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "(hello)"
     check buf.getLine(1) == "(world)"
@@ -2430,7 +2594,7 @@ suite "Visual Commands - visualSurround":
       kind: vskBlock,
     )
 
-    visualSurround(buf, state, '[')
+    visualSurround(buf, state, "[")
 
     check buf.getLine(0) == "[hel]lo world"
     check buf.getLine(1) == "[foo] bar"
@@ -2441,7 +2605,7 @@ suite "Visual Commands - visualSurround":
     let state = createTestState()
     state.visualSelection.active = false
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "hello"
 
@@ -2456,7 +2620,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '"')
+    visualSurround(buf, state, "\"")
 
     check buf.getLine(0) == "hello \"world\" foo"
     check state.cursor == BufferPosition(line: 0, column: 6)
@@ -2473,7 +2637,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "he(llo"
     check buf.getLine(1) == "wor)ld"
@@ -2493,7 +2657,7 @@ suite "Visual Commands - visualSurround":
       kind: vskBlock,
     )
 
-    visualSurround(buf, state, '{')
+    visualSurround(buf, state, "{")
 
     # Line 0: columns 0-4 surrounded
     check buf.getLine(0) == "{hello} world"
@@ -2513,7 +2677,7 @@ suite "Visual Commands - visualSurround":
       kind: vskLine,
     )
 
-    visualSurround(buf, state, '[')
+    visualSurround(buf, state, "[")
 
     check buf.getLine(0) == "[あいう]"
     check buf.getLine(1) == "[かきく]"
@@ -2529,7 +2693,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "(hello)"
 
@@ -2547,7 +2711,7 @@ suite "Visual Commands - visualSurround":
       kind: vskLine,
     )
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "(hello)"
     check buf.getLine(1) == "()"
@@ -2565,7 +2729,7 @@ suite "Visual Commands - visualSurround":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "he(llo wor)ld"
     # cursor should be at normalized start (column 2)
@@ -2584,7 +2748,7 @@ suite "Visual Commands - visualSurround":
       kind: vskBlock,
     )
 
-    visualSurround(buf, state, '[')
+    visualSurround(buf, state, "[")
 
     check buf.getLine(0) == "[あいう] world"
     check buf.getLine(1) == "[かきく] bar"
@@ -2840,7 +3004,7 @@ suite "Visual edit commands - read-only failure rolls back and reports":
       kind: vskChar,
     )
 
-    visualReplace(buf, state, 'x')
+    visualReplace(buf, state, "x")
 
     check buf.getLine(0) == "Hello World"
     check state.statusMessage.len > 0
@@ -2874,7 +3038,7 @@ suite "Visual edit commands - read-only failure rolls back and reports":
       kind: vskChar,
     )
 
-    visualSurround(buf, state, '(')
+    visualSurround(buf, state, "(")
 
     check buf.getLine(0) == "Hello World"
     check state.statusMessage.len > 0

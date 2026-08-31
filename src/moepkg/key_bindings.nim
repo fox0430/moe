@@ -29,7 +29,7 @@ import std/[tables, strutils, options, sequtils]
 
 import pkg/celina
 
-import modes, logger
+import modes, logger, unicode_utils
 import key_bindings/registry
 export registry
 
@@ -105,9 +105,9 @@ proc parseKeyString*(s: string): seq[KeyCombo] =
       # than surfacing an error at the caller.
       if part.allIt(it in {'C', 'M', 'S'}):
         return @[]
-      # Vim-style concatenated characters: "jj", "gg", "gd" etc.
-      for ch in part:
-        let charCombo = parseKeyCombo($ch)
+      # Vim-style concat (e.g. "jj"); iterate by char to keep multi-byte intact.
+      for (r, _) in part.chars:
+        let charCombo = parseKeyCombo($r)
         if charCombo.isNone:
           return @[]
         result.add(charCombo.get)

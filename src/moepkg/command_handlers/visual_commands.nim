@@ -469,73 +469,23 @@ proc visualToggleCase*(buffer: TextBuffer, state: EditorState) =
   ## Toggle case of visual selection and return to previous mode
   applyVisualTextTransform(buffer, state, "Visual toggle case", toggleAsciiCase)
 
-proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
-  ## Replace all characters in visual selection with specified character
-  if state.visualSelection.active:
-    let (selStart, selEnd) = state.visualSelection.getSelectionRange()
+proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: string) =
+  ## Replace each character in the selection with `ch` (must be one character).
+  ## Multi-byte `ch` stays intact; empty/multi-char input is rejected.
+  # Registry validates `ch`; this guard is for direct callers.
+  if ch.charLen != 1:
+    return
 
-    let txr = withTransaction(buffer, "Visual replace"):
-      case state.visualSelection.kind
-      of vskBlock:
-        let
-          startLine =
-            min(state.visualSelection.start.line, state.visualSelection.current.line)
-          endLine =
-            max(state.visualSelection.start.line, state.visualSelection.current.line)
-          startCol = min(
-            state.visualSelection.start.column, state.visualSelection.current.column
-          )
-          endCol = max(
-            state.visualSelection.start.column, state.visualSelection.current.column
-          )
+  # One `ch` per character; preserve newlines for multi-line selections.
+  let fill = proc(text: string): string =
+    var first = true
+    for segment in text.split('\n'):
+      if not first:
+        result.add('\n')
+      first = false
+      result.add(ch.repeat(segment.charLen))
 
-        for lineNum in startLine .. endLine:
-          let line = buffer.getLine(lineNum)
-          let lineLen = line.charLen
-          if startCol < lineLen:
-            let actualEndCol = min(endCol, lineLen - 1)
-            let startPos = BufferPosition(line: lineNum, column: startCol)
-            let endPos = BufferPosition(line: lineNum, column: actualEndCol)
-            let blockText = buffer.getTextInRange(startPos, endPos)
-            let replaceText = $ch.repeat(blockText.charLen)
-            checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
-            checkVisualEdit(state, buffer.insertText(startPos, replaceText))
-      of vskLine:
-        let
-          startLine =
-            min(state.visualSelection.start.line, state.visualSelection.current.line)
-          endLine =
-            max(state.visualSelection.start.line, state.visualSelection.current.line)
-
-        for lineNum in startLine .. endLine:
-          let lineText = $buffer.getLine(lineNum)
-          if lineText.charLen > 0:
-            let replaceText = $ch.repeat(lineText.charLen)
-            let startPos = BufferPosition(line: lineNum, column: 0)
-            let endPos =
-              BufferPosition(line: lineNum, column: max(0, lineText.charLen - 1))
-            checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
-            checkVisualEdit(state, buffer.insertText(startPos, replaceText))
-      of vskChar:
-        let selectedText = buffer.getTextInRange(selStart, selEnd)
-        var replaceText = ""
-        for c in selectedText:
-          if c == '\n':
-            replaceText.add('\n')
-          else:
-            replaceText.add(ch)
-        checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
-        checkVisualEdit(state, buffer.insertText(selStart, replaceText))
-
-      state.cursor = selStart
-    if txr.isErr:
-      state.visualSelection.active = false
-      state.mode = state.previousMode
-      return
-
-    state.visualSelection.active = false
-    state.statusMessage = ""
-    state.mode = state.previousMode
+  applyVisualTextTransform(buffer, state, "Visual replace", fill)
 
 proc visualJoinLines*(buffer: TextBuffer, state: EditorState) =
   ## Join all lines in visual selection into one line (J command)
@@ -938,22 +888,38 @@ proc visualPaste*(
     state.statusMessage = ""
     state.mode = state.previousMode
 
-proc getSurroundPair(ch: char): tuple[open, close: char] =
+const SurroundPairs = [
+  ("(", ")"),
+  ("[", "]"),
+  ("{", "}"),
+  ("<", ">"),
+  ("「", "」"),
+  ("『", "』"),
+  ("（", "）"),
+  ("［", "］"),
+  ("｛", "｝"),
+  ("〈", "〉"),
+  ("《", "》"),
+  ("【", "】"),
+  ("〔", "〕"),
+  ("“", "”"),
+  ("‘", "’"),
+] ## Paired brackets with distinct open/close; either side selects the pair.
+
+proc getSurroundPair(ch: string): tuple[open, close: string] =
   ## Get the open/close pair for a surround character.
-  const
-    openBrackets = ['(', '[', '{', '<']
-    closeBrackets = [')', ']', '}', '>']
-  let openIdx = openBrackets.find(ch)
-  if openIdx >= 0:
-    return (openBrackets[openIdx], closeBrackets[openIdx])
-  let closeIdx = closeBrackets.find(ch)
-  if closeIdx >= 0:
-    return (openBrackets[closeIdx], closeBrackets[closeIdx])
+  for pair in SurroundPairs:
+    if ch == pair[0] or ch == pair[1]:
+      return pair
   # Quotes and other characters: same for open and close
   return (ch, ch)
 
-proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
-  ## Surround visual selection with the specified character pair.
+proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: string) =
+  ## Surround selection with `ch`'s pair; multi-byte brackets stay intact.
+  # Registry validates `ch`; this guard is for direct callers (see visualReplace).
+  if ch.charLen != 1:
+    return
+
   if state.visualSelection.active:
     let (openChar, closeChar) = getSurroundPair(ch)
     let (selStart, selEnd) = state.visualSelection.getSelectionRange()
@@ -962,8 +928,8 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
       case state.visualSelection.kind
       of vskChar:
         let afterEnd = BufferPosition(line: selEnd.line, column: selEnd.column + 1)
-        checkVisualEdit(state, buffer.insertText(afterEnd, $closeChar))
-        checkVisualEdit(state, buffer.insertText(selStart, $openChar))
+        checkVisualEdit(state, buffer.insertText(afterEnd, closeChar))
+        checkVisualEdit(state, buffer.insertText(selStart, openChar))
       of vskLine:
         let
           startLine =
@@ -973,9 +939,9 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
         for lineNum in countdown(endLine, startLine):
           let lineLen = buffer.getLine(lineNum).charLen
           let lineEnd = BufferPosition(line: lineNum, column: lineLen)
-          checkVisualEdit(state, buffer.insertText(lineEnd, $closeChar))
+          checkVisualEdit(state, buffer.insertText(lineEnd, closeChar))
           let lineStart = BufferPosition(line: lineNum, column: 0)
-          checkVisualEdit(state, buffer.insertText(lineStart, $openChar))
+          checkVisualEdit(state, buffer.insertText(lineStart, openChar))
       of vskBlock:
         let
           startLine =
@@ -993,9 +959,9 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
           if startCol < lineLen:
             let actualEndCol = min(endCol, lineLen - 1)
             let afterEnd = BufferPosition(line: lineNum, column: actualEndCol + 1)
-            checkVisualEdit(state, buffer.insertText(afterEnd, $closeChar))
+            checkVisualEdit(state, buffer.insertText(afterEnd, closeChar))
             let colStart = BufferPosition(line: lineNum, column: startCol)
-            checkVisualEdit(state, buffer.insertText(colStart, $openChar))
+            checkVisualEdit(state, buffer.insertText(colStart, openChar))
 
       state.cursor = selStart
     if txr.isErr:

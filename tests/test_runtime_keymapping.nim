@@ -98,6 +98,18 @@ suite "parseKeyString":
     check keys[0].special == skFunction
     check keys[0].fnNum == 1
 
+  test "Multibyte key is one combo":
+    let keys = parseKeyString("\u3042")
+    check keys.len == 1
+    check keys[0].isSpecial == false
+    check keys[0].char == "\u3042"
+
+  test "Concatenated characters keep a multibyte key whole":
+    let keys = parseKeyString("r\u3042")
+    check keys.len == 2
+    check keys[0].char == "r"
+    check keys[1].char == "\u3042"
+
   test "Vim-style concatenated characters (jj)":
     let keys = parseKeyString("jj")
     check keys.len == 2
