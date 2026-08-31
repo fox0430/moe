@@ -37,7 +37,8 @@ import
   buffer,
   unicode_utils,
   editorconfig_helper,
-  highlight_config
+  highlight_config,
+  editor_notify
 import lsp/protocol/types as lspTypes
 
 const
@@ -126,6 +127,10 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   applyHighlightConfig(newBuffer, e.config)
   e.addBuffer(newBuffer)
   e.switchToBufferForLsp(e.buffers.high)
+
+  # A file that is not text still opens (every byte is held and saved back
+  # unchanged), but say so.
+  e.notifyUnusualContent(newBuffer)
 
   # Notify the LSP about the newly opened file and record its synced baseline
   # so the next didChange delta is computed against the right changeSeq.

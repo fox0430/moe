@@ -201,6 +201,20 @@ suite "Buffer - Editing Operations":
     check normalizeNewlines("plain text\nwith lf") == "plain text\nwith lf"
     check normalizeNewlines("") == ""
 
+  test "preparePastedText normalizes for a decoded buffer":
+    let buf = newTextBuffer("hello")
+    check buf.preparePastedText("a\r\nb\rc") == "a\nb\nc"
+    check buf.preparePastedText("ok\xffbad") == "ok\uFFFDbad"
+
+  test "preparePastedText leaves a raw buffer's bytes alone":
+    # CR is a payload byte here (the low half of a UTF-16 code unit, say), and
+    # so is anything invalid UTF-8: rewriting either would corrupt a file the
+    # buffer has to save back verbatim.
+    let buf = newTextBuffer("hello")
+    buf.keepRaw = true
+    check buf.preparePastedText("a\r\nb\rc") == "a\r\nb\rc"
+    check buf.preparePastedText("ok\xffbad") == "ok\xffbad"
+
   test "deleteChar single character":
     let buf = newTextBuffer("Hello")
     discard buf.deleteChar(BufferPosition(line: 0, column: 0))
@@ -3184,6 +3198,52 @@ suite "Buffer - UTF-16/32 file transcoding":
     check not buf.hasBom
     check buf.getFileContent == original
 
+  test "Raw buffer writes back the exact bytes it read":
+    # One case per shape the save path could rewrite: a trailing newline
+    # (endOfLine), no trailing newline, mixed line endings, an even-length
+    # payload that fails on content rather than length, and UTF-32.
+    const cases = [
+      ("trailing newline", "\xFF\xFE\x41\x00\x0A"),
+      ("no trailing newline", "\xFF\xFE\x41\x00\x42"),
+      ("mixed CRLF and LF", "\xFF\xFE\x41\x00\x0D\x00\x0A\x00\x42\x00\x0A"),
+      ("lone high surrogate", "\xFF\xFE\x00\xD8\x41\x00"),
+      ("UTF-32", "\xFF\xFE\x00\x00\x41\x00\x00\x00\x0A"),
+    ]
+    for (name, original) in cases:
+      let testFile = getTempDir() / "moe_test_raw_roundtrip.bin"
+      writeFile(testFile, original)
+      defer:
+        removeFile(testFile)
+
+      let buf = newTextBuffer()
+      check buf.loadFile(testFile).isOk
+      checkpoint(name)
+      check buf.keepRaw
+      check not buf.allowsTextTransforms
+      check buf.getFileContent == original
+      check buf.saveFile(testFile).isOk
+      check readFile(testFile) == original
+
+  test "Raw buffer refuses to join lines":
+    # Join strips both ends and inserts a separator space: byte edits the user
+    # never typed.
+    let original = "\xFF\xFE\x41\x00\x0A\x42\x00\x0A\x43"
+    let testFile = getTempDir() / "moe_test_raw_join.bin"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.keepRaw
+    check buf.len == 3
+
+    let r = buf.joinLines(0)
+
+    check r.isErr
+    check "raw undecodable bytes" in r.error
+    check buf.getFileContent == original
+
   test "UTF-8 BOM file: BOM stripped from buffer, re-emitted on save":
     let original = "\xEF\xBB\xBF" & "ab\ncd\n"
     let testFile = getTempDir() / "moe_test_utf8_bom.txt"
@@ -3214,6 +3274,113 @@ suite "Buffer - UTF-16/32 file transcoding":
     check buf.encoding == CharacterEncoding.utf8
     check not buf.hasBom
     check buf.getFileContent == original
+
+suite "Buffer - raw buffers keep every byte":
+  test "replaceLine strips CR for text buffers":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+
+    check buf.replaceLine(0, "a\rb").isOk
+
+    check buf.getLine(0) == "ab"
+
+  test "replaceLine keeps CR in a raw buffer":
+    # 0x0D is ordinary payload in UTF-16/32 bytes (the low half of a code unit,
+    # say); dropping it would rewrite parts of the line nobody touched.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.keepRaw = true
+
+    check buf.replaceLine(0, "a\rb").isOk
+
+    check buf.getLine(0) == "a\rb"
+
+  test "insert keeps CR in a raw buffer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.keepRaw = true
+
+    check buf.insert(1, "a\rb").isOk
+
+    check buf.getLine(1) == "a\rb"
+
+  test "insertText splits on CR for text buffers":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+
+    check buf.insertText(BufferPosition(line: 0, column: 5), "a\rb").isOk
+
+    check buf.len == 2
+    check buf.getLine(0) == "helloa"
+    check buf.getLine(1) == "b"
+
+  test "insertText keeps CR in a raw buffer":
+    # Yanking a byte run out of a raw buffer and pasting it back must not turn
+    # its 0x0D bytes into line breaks.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.keepRaw = true
+
+    check buf.insertText(BufferPosition(line: 0, column: 5), "a\rb").isOk
+
+    check buf.len == 1
+    check buf.getLine(0) == "helloa\rb"
+
+  test "Raw buffer round-trips a yanked byte run through paste":
+    # A lone high surrogate makes the decode fail, and the 0x0D byte in the
+    # next code unit must survive being yanked and pasted back.
+    let original = "\xFF\xFE\x00\xD8\x41\x0D\x0A\x00"
+    let testFile = getTempDir() / "moe_test_raw_paste_roundtrip.bin"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.keepRaw
+    let lineCountBefore = buf.len
+
+    let yanked = buf.getLine(0)
+    check buf.insertText(
+      BufferPosition(line: 0, column: buf.getLine(0).charLen), yanked
+    ).isOk
+
+    check buf.len == lineCountBefore
+    check buf.getLine(0) == yanked & yanked
+
+  test "transformRange refuses to run outside a transaction":
+    # Its delete and insert must undo as one; committing the delete on its own
+    # would lose the range if the insert then failed.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+
+    let r = buf.transformRange(
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 4),
+      "uppercase",
+      toUpperAscii,
+    )
+
+    check r.isErr
+    check "not inside a transaction" in r.error
+    check buf.getLine(0) == "hello"
+
+  test "transformRange rewrites the range inside a transaction":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+
+    var inner = Result[(), string].err("not run")
+    let txr = withTransaction(buf, "uppercase"):
+      inner = buf.transformRange(
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 0, column: 4),
+        "uppercase",
+        toUpperAscii,
+      )
+    check txr.isOk
+    check inner.isOk
+
+    check buf.getLine(0) == "HELLO"
 
 suite "Buffer - Markdown fenced code block detection":
   test "isCodeBlockLine spans the opening fence, interior, and closing fence":

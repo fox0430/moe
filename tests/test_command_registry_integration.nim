@@ -1961,6 +1961,29 @@ suite "Handler - Substitute operations":
     check buffer[0] == ""
     check ctx.state.mode == EditorMode.Insert
 
+  test "substitute line keeps no indent on a raw buffer":
+    # The indent is found by decoding the line as UTF-8, so on raw bytes it can
+    # end mid code unit; keeping it would leave a stray half-character behind.
+    let buffer = newTextBuffer("  hello")
+    buffer.keepRaw = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.autoIndent = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("substitute.line")).isOk
+    check buffer[0] == ""
+
+  test "substitute line keeps the indent on a text buffer":
+    let buffer = newTextBuffer("  hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.autoIndent = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("substitute.line")).isOk
+    check buffer[0] == "  "
+
 suite "Handler - Join lines":
   test "join lines (J)":
     let buffer = newTextBuffer("line1\nline2")
@@ -2123,6 +2146,24 @@ suite "Handler - Replace char (r)":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "aaalo"
+
+  test "replace refuses a raw buffer":
+    # The replacement count comes from decoding the line as UTF-8, so on raw
+    # bytes it would swap an arbitrary byte run for one ASCII byte.
+    let buffer = newTextBuffer("hello")
+    buffer.keepRaw = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(
+      kind: ctOperatorPending, operatorType: "replace", targetChar: "X", count: 1
+    )
+
+    let result = registry.executeCommand(ctx, cmd)
+    check result.isErr
+    check "raw undecodable bytes" in result.error
+    check buffer[0] == "hello"
 
   test "replace at end of line returns error":
     let buffer = newTextBuffer("hi")
@@ -2862,6 +2903,179 @@ suite "Handler - Text Object operations":
     discard registry.execute(ctx, custom("textobject.inner"))
     check registry.execute(ctx, custom("textobject.tag")).isOk
     check buffer[0] == "<a></a>"
+
+  test "indent.line and dedent.line refuse a raw buffer":
+    # Indent inserts bytes at column 0 and dedent deletes them; on a raw buffer
+    # both rewrite bytes the user never typed.
+    for (command, before) in [("indent.line", "hello"), ("dedent.line", "    hello")]:
+      let buffer = newTextBuffer(before)
+      buffer.keepRaw = true
+      let ctx = createTestContext(buffer)
+      ctx.cursor = BufferPosition(line: 0, column: 0)
+      ctx.state.mode = EditorMode.Normal
+      let registry = createTestRegistry()
+
+      let r = registry.execute(ctx, custom(command))
+
+      checkpoint(command)
+      check r.isErr
+      check "raw undecodable bytes" in r.error
+      check buffer[0] == before
+
+  test "a refused operator does not open the folds it would have covered":
+    # applyOperatorOverMotion opens folds over the range before running the
+    # operator; a refusal must happen first so nothing visible changes.
+    let buffer = newTextBuffer("one\ntwo\nthree\nfour")
+    buffer.keepRaw = true
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    check buffer.foldState.isLineInCollapsedFold(1)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+
+    let r = applyOperatorOverMotion(
+      ctx,
+      OpIndent,
+      1,
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0),
+      Motion.Down,
+    )
+
+    check r.isErr
+    check "raw undecodable bytes" in r.error
+    check buffer.foldState.isLineInCollapsedFold(1)
+
+  test "a refused operator restores the cursor to where the command started":
+    # The motion runs before the refusal, so the cursor has already moved to
+    # its end; the refusal must put it back at the command start.
+    let buffer = newTextBuffer("one\ntwo\nthree")
+    buffer.keepRaw = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 2, column: 3)
+    ctx.state.mode = EditorMode.Normal
+
+    let r = applyOperatorOverMotion(
+      ctx,
+      OpIndent,
+      1,
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 2, column: 3),
+      Motion.Down,
+    )
+
+    check r.isErr
+    check "raw undecodable bytes" in r.error
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+
+  test "auto indent and toggle case refuse a raw buffer":
+    # == and ~ rewrite existing text as if it were characters. transformRange
+    # refuses that on a buffer holding undecodable bytes.
+    for (command, before) in [("autoindent.line", "hello"), ("toggle.case", "hello")]:
+      let buffer = newTextBuffer("    first\n" & before)
+      buffer.keepRaw = true
+      let ctx = createTestContext(buffer)
+      ctx.cursor = BufferPosition(line: 1, column: 0)
+      ctx.state.mode = EditorMode.Normal
+      let registry = createTestRegistry()
+
+      let r = registry.execute(ctx, custom(command))
+
+      checkpoint(command)
+      check r.isErr
+      check "raw undecodable bytes" in r.error
+      check buffer[1] == before
+
+  test "guu and gUU refuse a raw buffer":
+    # The operator is pending after the first press; the second applies it.
+    for (command, before) in [
+      ("operator.lowercase", "Hello"), ("operator.uppercase", "hello")
+    ]:
+      let buffer = newTextBuffer(before)
+      buffer.keepRaw = true
+      let ctx = createTestContext(buffer)
+      ctx.cursor = BufferPosition(line: 0, column: 0)
+      ctx.state.mode = EditorMode.Normal
+      let registry = createTestRegistry()
+
+      check registry.execute(ctx, custom(command)).isOk
+      let r = registry.execute(ctx, custom(command))
+
+      checkpoint(command)
+      check r.isErr
+      check "raw undecodable bytes" in r.error
+      check buffer[0] == before
+
+  test "every operator declared byte-unsafe refuses a raw buffer":
+    # textRewriteAction is the only thing refusing these on raw bytes, so walk
+    # the declaration itself rather than a hand-listed subset: an operator
+    # added to the table without a working refusal fails here.
+    var covered = 0
+    for op in OperatorType:
+      let action = textRewriteAction(op)
+      if action.isNone:
+        continue
+      covered += 1
+
+      let buffer = newTextBuffer("\tHello")
+      buffer.keepRaw = true
+      let ctx = createTestContext(buffer)
+      ctx.cursor = BufferPosition(line: 0, column: 0)
+      let range = OperatorRange(
+        start: BufferPosition(line: 0, column: 0),
+        endPos: BufferPosition(line: 0, column: 5),
+        isLinewise: true,
+      )
+
+      let r = executeOperatorOnRange(ctx, op, range, 1)
+
+      checkpoint($op)
+      check r.isErr
+      check "raw undecodable bytes" in r.error
+      check action.get in r.error
+      check buffer[0] == "\tHello"
+
+    check covered > 0
+
+  test "toggle case refuses a raw buffer holding no ASCII letters":
+    # The refusal must be structural: with nothing to toggle the old gate let
+    # the command "succeed", advancing the cursor and arming `.`.
+    let buffer = newTextBuffer("12345")
+    buffer.keepRaw = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    let r = registry.execute(ctx, custom("toggle.case"))
+
+    check r.isErr
+    check "raw undecodable bytes" in r.error
+    check buffer[0] == "12345"
+    check ctx.cursor.column == 0
+    check ctx.state.editState.lastEditCommand.isNone
+
+  test "a refused operator consumes the pending register prefix":
+    # "a>j leaves register 'a' selected if the refusal returns early, and the
+    # next unrelated delete would then land in it.
+    let buffer = newTextBuffer("one\ntwo")
+    buffer.keepRaw = true
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.pendingInput.pendingRegister = some('a')
+
+    let r = applyOperatorOverMotion(
+      ctx,
+      OpIndent,
+      1,
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0),
+      Motion.Down,
+    )
+
+    check r.isErr
+    check ctx.state.pendingInput.pendingRegister.isNone
 
   test "textobject tag (>it) on empty tag does not indent the line":
     # Regression: indent operators must honor the empty range (was <a></a> ->

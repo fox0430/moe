@@ -27,6 +27,7 @@ from std/strutils import replace, contains
 import pkg/results
 
 import ../[primitives, unicode_utils]
+from ../encoding import sanitizeInvalidUtf8
 import core, internal_mutations, undo
 
 # NoUndo procs: skip undo/changeSeq but must shift semantic overlay / folds /
@@ -65,16 +66,22 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
     includeSideArrays = false,
   )
 
+proc stripCarriageReturns(b: TextBuffer, content: string): string =
+  ## Strip CR to avoid rendering corruption; skipped for raw buffers.
+  if b.allowsTextTransforms:
+    content.replace("\r", "")
+  else:
+    content
+
 proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), string] =
-  ## Replace line content with undo recording.
-  ## Line content must not contain line separators; any stray CR is stripped
-  ## defensively so it cannot corrupt terminal rendering.
+  ## Replace line content with undo recording. CR stripped only for decoded buffers.
+  ## Line must not contain separators.
   if b.readOnly:
     return err("Buffer is read-only")
   if lineNumber < 0 or lineNumber >= b.len:
     return err("Line index out of bounds: " & $lineNumber)
   let oldContent = b.getLine(lineNumber)
-  let normalizedContent = content.replace("\r", "")
+  let normalizedContent = b.stripCarriageReturns(content)
   b.captureSnapshotIfNeeded()
   try:
     b.backendReplaceLine(lineNumber, normalizedContent)
@@ -92,32 +99,32 @@ proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), s
   return ok(())
 
 proc normalizeNewlines*(text: string): string =
-  ## Normalize CRLF and lone CR to LF so a stray \r never reaches line content.
-  ## Backends treat only \n as a line separator (an embedded \r corrupts
-  ## terminal rendering). Note this converts CR into a line break, unlike the
-  ## line-level replaceLine/insert which strip it (line content must hold no
-  ## separator). Returns the input untouched when it has no \r (the common
-  ## per-keystroke case) to avoid allocating.
+  ## Normalize CR/CRLF to LF for external text (paste/clipboard). No-op if no CR.
   if '\r' notin text:
     return text
   text.replace("\r\n", "\n").replace("\r", "\n")
+
+proc normalizeNewlines*(b: TextBuffer, text: string): string =
+  ## Normalize newlines for `b`; skipped for raw buffers.
+  if b.allowsTextTransforms:
+    normalizeNewlines(text)
+  else:
+    text
+
+proc preparePastedText*(b: TextBuffer, text: string): string =
+  ## Sanitize external text (CR, invalid UTF-8) for `b`; skipped for raw buffers.
+  ## Register contents use `normalizeNewlines` instead.
+  if b.allowsTextTransforms:
+    text.sanitizeInvalidUtf8().normalizeNewlines()
+  else:
+    text
 
 # Editing operations
 proc insertTextEnd*(
     b: TextBuffer, pos: BufferPosition, text: string, cursorByte: int = -1
 ): Result[InsertOutcome, string] =
-  ## Insert text at the specified position, reporting where the insertion ends
-  ## and where a cursor following it belongs. Handles newlines by splitting
-  ## lines as needed. CRLF / lone CR in `text` are normalized to LF (matching
-  ## loadFile) so pasted or LSP-supplied content never embeds a raw \r.
-  ## Returns error if position is out of bounds.
-  ##
-  ## `cursorByte` is a byte offset into `text` for callers that wrote more than
-  ## the cursor should move past (auto-closed pairs, completion tabstops).
-  ##
-  ## Both positions are measured against the line as it now stands rather than
-  ## by counting `text` on its own: a lead byte completed over a seam cannot be
-  ## re-derived from the written bytes alone.
+  ## Insert text at `pos`, handling newlines. CR normalized for decoded buffers only.
+  ## Returns end and cursor positions, or error if out of bounds.
   if b.readOnly:
     return err("Buffer is read-only")
   if text.len == 0:
@@ -129,7 +136,7 @@ proc insertTextEnd*(
   if pos.column < 0:
     return err("Column position cannot be negative: " & $pos.column)
 
-  let normalized = normalizeNewlines(text)
+  let normalized = b.normalizeNewlines(text)
 
   b.captureSnapshotIfNeeded()
 
@@ -143,7 +150,7 @@ proc insertTextEnd*(
       b.discardPendingSnapshot()
       return err("Failed to insert text: " & e.msg)
 
-  # Record normalized text for undo so redo never reintroduces a raw \r
+  # Record actual bytes for redo.
   b.pushUndoChange(
     BufferChange(
       kind: ckInsertText,
@@ -224,16 +231,14 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
   return ok(())
 
 proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string] =
-  ## Insert a new line at the specified index
-  ## Returns error if lineIndex is out of valid range [0..len]
-  ## Line content must not contain line separators; any stray CR is stripped
-  ## defensively so it cannot corrupt terminal rendering.
+  ## Insert a new line at `lineIndex`. CR stripped only for decoded buffers.
+  ## Line must not contain separators.
   if b.readOnly:
     return err("Buffer is read-only")
   if lineIndex < 0 or lineIndex > b.len:
     return err("Line index out of valid range [0.." & $b.len & "]: " & $lineIndex)
 
-  let normalizedContent = content.replace("\r", "")
+  let normalizedContent = b.stripCarriageReturns(content)
 
   b.captureSnapshotIfNeeded()
 
@@ -409,6 +414,9 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
 
   if b.readOnly:
     return err("Buffer is read-only")
+  # Join modifies whitespace; refused for raw buffers.
+  if not b.allowsTextTransforms:
+    return err(rawBytesRejection("join lines"))
   if startLine < 0 or startLine >= b.len:
     return err("Line index out of bounds: " & $startLine)
 
@@ -452,3 +460,31 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
     return err(txr.error)
 
   return ok(())
+
+proc transformRange*(
+    b: TextBuffer,
+    startPos, endPos: BufferPosition,
+    action: string,
+    transform: proc(text: string): string {.closure, gcsafe.},
+): Result[(), string] =
+  ## Replace range [startPos, endPos] via `transform`. Refused for raw buffers.
+  ## Must run inside a transaction.
+  if not b.allowsTextTransforms:
+    return err(rawBytesRejection(action))
+
+  if not b.inTransaction:
+    return err("Cannot " & action & ": edit is not inside a transaction")
+
+  let text = b.getTextInRange(startPos, endPos)
+  let newText = transform(text)
+
+  let deleteResult = b.deleteRange(startPos, endPos)
+  if deleteResult.isErr:
+    return err(deleteResult.error)
+
+  if newText.len > 0:
+    let insertResult = b.insertText(startPos, newText)
+    if insertResult.isErr:
+      return err(insertResult.error)
+
+  ok(())

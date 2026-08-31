@@ -133,15 +133,7 @@ proc applyLspServerConfigs*(e: Editor) =
 proc applyDiagnosticsForUri*(
     e: Editor, uri: string, diagnostics: seq[Diagnostic], version: Option[int]
 ) =
-  ## Route a server's publishDiagnostics to the buffer it targets, not just
-  ## the active one. Diagnostics for a background buffer would otherwise be
-  ## dropped, and the server does not resend them when that buffer is later
-  ## focused.
-  ## Diagnostics are server-push: there is no request to suppress, so the
-  ## Lsp.Diagnostics.enable gate drops them here on receipt instead.
-  ## When the server tagged the publish with a document version, drop frames
-  ## older than the last didChange we sent - avoids applying stale coordinates
-  ## across a reload/rapid-edit while an in-flight publish is on the wire.
+  ## Route publishDiagnostics to target buffer; drop stale or raw-buffer frames.
   if not e.config.lsp.diagnostics.enable:
     return
 
@@ -152,6 +144,9 @@ proc applyDiagnosticsForUri*(
       return
   for buf in e.buffers:
     if buf.filePath.isSome and normalizedPath(absolutePath(buf.filePath.get)) == path:
+      # Raw buffer has no version; drop diagnostics computed from decoded text.
+      if not buf.isLspEligible:
+        return
       applyDiagnosticsToBuffer(buf, diagnostics)
       return
   # No matching open buffer: drop. The server only publishes for documents
@@ -165,32 +160,29 @@ proc clearAllDiagnostics*(e: Editor) =
   for buf in e.buffers:
     applyDiagnosticsToBuffer(buf, @[])
 
-proc dropLspBaseline(e: Editor, buf: TextBuffer) =
-  ## Forget sync baseline for a buffer.
-  e.lastLspContentVersions.del(buf.id)
+proc dropLspSyncAttempt(e: Editor, buf: TextBuffer) =
+  ## Forget sync attempt so next edit retries.
+  e.lastLspSyncAttempts.del(buf.id)
 
 proc noteLspOpen*(
     e: Editor, buf: TextBuffer, openResult: Result[void, string], context: string
 ) =
-  ## Update baseline only if didOpen was actually sent.
+  ## Record didOpen attempt; raw buffers count as attempted.
   if buf.filePath.isNone:
-    e.dropLspBaseline(buf)
+    e.dropLspSyncAttempt(buf)
     return
-  let sent = e.lsp.enabled and openResult.isOk
-  if sent:
-    e.lastLspContentVersions[buf.id] = buf.contentVersion
+  if e.lsp.enabled and openResult.isOk:
+    e.lastLspSyncAttempts[buf.id] = buf.contentVersion
   else:
-    e.dropLspBaseline(buf)
+    e.dropLspSyncAttempt(buf)
   if openResult.isErr:
     logLspDegraded(context & ": didOpen " & buf.filePath.get, openResult.error)
 
 proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
-  ## didChange a buffer we just rewrote so the server's copy doesn't go stale.
-  ## maybeUpdateLsp only covers the active buffer, so non-active buffers would
-  ## otherwise drift on the server side. `context` only tags the degrade log.
+  ## Sync buffer after edit for non-active buffers.
   let syncResult = e.lsp.onBufferChange(buf)
   if syncResult.isOk:
-    e.lastLspContentVersions[buf.id] = buf.contentVersion
+    e.lastLspSyncAttempts[buf.id] = buf.contentVersion
   elif buf.filePath.isSome:
     logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
 
@@ -253,7 +245,7 @@ proc applyWorkspaceEditFromServer*(
     # Reject the edit if any targeted open buffer has local changes the server
     # has not seen: it positioned its edit against the text it knows, so
     # applying it onto newer text would corrupt the buffer.
-    if hasStaleServerEditTarget(e.lsp, e.buffers, edit, e.lastLspContentVersions):
+    if hasStaleServerEditTarget(e.lsp, e.buffers, edit, e.lastLspSyncAttempts):
       e.state.statusMessage = "Buffer changed since last sync; server edit discarded"
       return
         (applied: false, failureReason: some("buffer changed since last didChange"))
@@ -308,19 +300,12 @@ proc maybeUpdateLsp*(e: Editor) =
 
   let activeBuffer = e.activeBuffer()
 
-  # Only notify LSP if this buffer has changed since its last notification.
-  # Key on contentVersion, not changeSeq: undo rewinds changeSeq, so a
-  # follow-up edit could land on the exact value we last synced and be dropped
-  # here, leaving the server permanently out of sync.
   if activeBuffer.contentVersion !=
-      e.lastLspContentVersions.getOrDefault(activeBuffer.id, 0):
+      e.lastLspSyncAttempts.getOrDefault(activeBuffer.id, 0):
     let lspResult = e.lsp.onBufferChange(activeBuffer)
     if lspResult.isErr and activeBuffer.filePath.isSome:
       logLspDegraded("didChange " & activeBuffer.filePath.get, lspResult.error)
-    # Advance even on failure: this proc fires every frame, and leaving the
-    # tracked version behind would re-run (and re-log) the same failing
-    # didChange every tick until the buffer is edited again.
-    e.lastLspContentVersions[activeBuffer.id] = activeBuffer.contentVersion
+    e.lastLspSyncAttempts[activeBuffer.id] = activeBuffer.contentVersion
 
 proc pollLspCompletion*(e: Editor) =
   ## Poll for pending LSP completion responses

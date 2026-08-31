@@ -1108,6 +1108,34 @@ suite "CommandModeHandler - executeBufferDelete":
     check result.kind == hrBufferDelete
     check result.forceBufferDelete == true
 
+suite "CommandModeHandler - raw buffer gates":
+  test "stripwhitespace refuses a raw buffer":
+    # strip removes any trailing 0x09/0x20, which in UTF-16 can be half of a
+    # code unit; the rest of the line then shifts by an odd number of bytes.
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello   ")
+    buffer.keepRaw = true
+
+    let result = handler.executeStripWhitespace(buffer)
+
+    check result.kind == hrError
+    check "raw undecodable bytes" in result.errorMessage
+    check buffer.getLine(0) == "Hello   "
+
+  test "substitute refuses a raw buffer":
+    # The pattern is matched byte-wise, so it can land inside a code unit.
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    buffer.keepRaw = true
+
+    let result = handler.executeSubstitute(buffer, "l", "L", "g")
+
+    check result.kind == hrError
+    check "raw undecodable bytes" in result.errorMessage
+    check buffer.getLine(0) == "Hello"
+
 suite "CommandModeHandler - executeStripWhitespace":
   test "Strip whitespace from lines":
     let handler = setupHandler()

@@ -125,6 +125,61 @@ proc moveToFirstNonBlank*(ctx: CommandContext, lineNum: int) =
   ctx.cursor.line = lineNum
   ctx.cursor.column = min(column, max(0, line.charLen - 1))
 
+proc textRewriteAction*(operatorType: OperatorType): Option[string] =
+  ## Rewrite name for operator, or none if safe. Listing marks byte-unsafe for raw buffers.
+  case operatorType
+  of OpIndent:
+    some("indent")
+  of OpOutdent:
+    some("dedent")
+  of OpLowerCase:
+    some("lowercase")
+  of OpUpperCase:
+    some("uppercase")
+  else:
+    none(string)
+
+proc refuseOnRawBytes(ctx: CommandContext, operatorType: OperatorType): Option[string] =
+  ## Refusal for raw buffer, or none if safe. Checked before side effects.
+  let action = textRewriteAction(operatorType)
+  if action.isNone or ctx.buffer.allowsTextTransforms:
+    return none(string)
+
+  ctx.state.pendingInput.pendingRegister = none(char)
+  some(rawBytesRejection(action.get))
+
+proc applyCaseOperator(
+    ctx: CommandContext,
+    range: OperatorRange,
+    label: string,
+    action: string,
+    transform: proc(text: string): string {.closure, gcsafe.},
+): Result[(), string] =
+  ## Shared body of gu/gU: rewrite the range's text through `transform`.
+  let txr = withTransaction(ctx.buffer, label):
+    if range.isLinewise:
+      for lineNum in range.start.line .. range.endPos.line:
+        if lineNum < ctx.buffer.len:
+          let lineCharLen = ctx.buffer.getLine(lineNum).charLen
+          if lineCharLen > 0:
+            let startPos = BufferPosition(line: lineNum, column: 0)
+            let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+            let res = ctx.buffer.transformRange(startPos, endPos, action, transform)
+            if res.isErr:
+              return err(res.error)
+    else:
+      let res = ctx.buffer.transformRange(range.start, range.endPos, action, transform)
+      if res.isErr:
+        return err(res.error)
+  if txr.isErr:
+    return err("Transaction failed: " & txr.error)
+
+  ctx.cursor = range.start
+  if range.isLinewise:
+    # guu/gUU land on the first non-blank (matches >>/<<)
+    moveToFirstNonBlank(ctx, range.start.line)
+  ok(())
+
 proc executeOperatorOnRange*(
     ctx: CommandContext,
     operatorType: OperatorType,
@@ -139,6 +194,10 @@ proc executeOperatorOnRange*(
     "executeOperatorOnRange: " & $operatorType & " on range " & $range.start & " to " &
       $range.endPos & ", linewise=" & $range.isLinewise,
   )
+
+  let rejection = refuseOnRawBytes(ctx, operatorType)
+  if rejection.isSome:
+    return err(rejection.get)
 
   if range.isEmpty and operatorType != OpChange:
     # Empty object (e.g. yit/dit on <a></a>, gUi" on "", >i( on ()): the range
@@ -336,73 +395,12 @@ proc executeOperatorOnRange*(
 
     return ok(())
   of OpLowerCase:
-    let txr = withTransaction(ctx.buffer, "Lowercase"):
-      if range.isLinewise:
-        for lineNum in range.start.line .. range.endPos.line:
-          if lineNum < ctx.buffer.len:
-            let lineText = $ctx.buffer.getLine(lineNum)
-            let lineCharLen = lineText.charLen
-            if lineCharLen > 0:
-              let lowerText = lineText.toLowerAscii()
-              let startPos = BufferPosition(line: lineNum, column: 0)
-              let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-              let delResult = ctx.buffer.deleteRange(startPos, endPos)
-              if delResult.isErr:
-                return err(delResult.error)
-              let insResult = ctx.buffer.insertText(startPos, lowerText)
-              if insResult.isErr:
-                return err(insResult.error)
-      else:
-        let text = extractRangeText(ctx.buffer, range)
-        let lowerText = text.toLowerAscii()
-        let delResult = ctx.buffer.deleteRange(range.start, range.endPos)
-        if delResult.isErr:
-          return err(delResult.error)
-        let insResult = ctx.buffer.insertText(range.start, lowerText)
-        if insResult.isErr:
-          return err(insResult.error)
-    if txr.isErr:
-      return err("Transaction failed: " & txr.error)
-
-    ctx.cursor = range.start
-    if range.isLinewise:
-      # guu/gUU land on the first non-blank (matches >>/<<)
-      moveToFirstNonBlank(ctx, range.start.line)
-    return ok(())
+    return applyCaseOperator(ctx, range, "Lowercase", "lowercase", toLowerAscii)
   of OpUpperCase:
-    let txr = withTransaction(ctx.buffer, "Uppercase"):
-      if range.isLinewise:
-        for lineNum in range.start.line .. range.endPos.line:
-          if lineNum < ctx.buffer.len:
-            let lineText = $ctx.buffer.getLine(lineNum)
-            let lineCharLen = lineText.charLen
-            if lineCharLen > 0:
-              let upperText = lineText.toUpperAscii()
-              let startPos = BufferPosition(line: lineNum, column: 0)
-              let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-              let delResult = ctx.buffer.deleteRange(startPos, endPos)
-              if delResult.isErr:
-                return err(delResult.error)
-              let insResult = ctx.buffer.insertText(startPos, upperText)
-              if insResult.isErr:
-                return err(insResult.error)
-      else:
-        let text = extractRangeText(ctx.buffer, range)
-        let upperText = text.toUpperAscii()
-        let delResult = ctx.buffer.deleteRange(range.start, range.endPos)
-        if delResult.isErr:
-          return err(delResult.error)
-        let insResult = ctx.buffer.insertText(range.start, upperText)
-        if insResult.isErr:
-          return err(insResult.error)
-    if txr.isErr:
-      return err("Transaction failed: " & txr.error)
-
-    ctx.cursor = range.start
-    if range.isLinewise:
-      moveToFirstNonBlank(ctx, range.start.line)
-    return ok(())
+    return applyCaseOperator(ctx, range, "Uppercase", "uppercase", toUpperAscii)
   of OpSwapCase:
+    # Rewrites nothing yet, so it is absent from textRewriteAction; add it
+    # there along with the applyCaseOperator call that implements it.
     return err("Operator " & $operatorType & " not yet implemented")
 
 proc applyOperatorOverMotion*(
@@ -412,12 +410,13 @@ proc applyOperatorOverMotion*(
     startPos, endPos: BufferPosition,
     motion: Motion,
 ): Result[(), string] =
-  ## Apply an operator over a motion's span: build the [startPos, endPos] range,
-  ## open any folds it covers (vim keeps folds closed for a pure yank), then run
-  ## the operator. Shared by the generic operator+motion path, the find/till
-  ## path and the `.` repeat so all three calculate the range and handle folds
-  ## identically. The caller owns clearing pendingOperator and recording the
-  ## command for `.`.
+  ## Apply operator over motion span; opens folds except for yank.
+  # Refuse before opening folds; restore cursor if rejected.
+  let rejection = refuseOnRawBytes(ctx, operatorType)
+  if rejection.isSome:
+    ctx.cursor = startPos
+    return err(rejection.get)
+
   let range = calculateOperatorRange(ctx.buffer, startPos, endPos, motion)
   if operatorType != OpYank:
     discard ctx.buffer.foldState.openFoldsInRange(range.start.line, range.endPos.line)

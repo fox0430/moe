@@ -80,7 +80,12 @@ proc handleCharacterReplacement*(
       ReplaceHistoryEntry(kind: rheReplace, pos: pos, originalChar: "")
     )
   else:
-    # Replace character at cursor
+    # Replace char at cursor; byte size needs decoding so refused for raw buffers.
+    # Append past end remains allowed.
+    if not buffer.allowsTextTransforms:
+      return
+        ReplaceModeResult(kind: rmrError, errorMessage: rawBytesRejection("replace"))
+
     # Save original character for undo with backspace
     let originalChar = lineContent.charSubStr(pos.column, 1)
 

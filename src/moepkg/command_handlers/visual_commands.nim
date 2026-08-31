@@ -42,6 +42,15 @@ template checkVisualEdit(state: EditorState, r: Result[(), string]) =
     state.mode = state.previousMode
     return
 
+template checkVisualEditAt(
+    state: EditorState, cursorBefore: BufferPosition, r: Result[(), string]
+) =
+  ## `checkVisualEdit` that restores cursor when loop aborts mid-selection.
+  let checkVisualEditAtResult = r
+  if checkVisualEditAtResult.isErr:
+    state.cursor = cursorBefore
+  checkVisualEdit(state, checkVisualEditAtResult)
+
 template checkVisualEditErr(state: EditorState, r: Result[(), string]) =
   ## Like `checkVisualEdit` but returns error via Result for caller reporting.
   let checkVisualEditErrResult = r
@@ -350,11 +359,14 @@ proc visualIndent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
       endLine =
         max(state.visualSelection.start.line, state.visualSelection.current.line)
 
+    # indentLine reads the line to act on from the cursor, so the loop walks it.
+    let cursorBefore = state.cursor
+
     let txr = withTransaction(buffer, "Visual indent"):
       for lineNum in startLine .. endLine:
         state.cursor.line = lineNum
         state.cursor.column = 0
-        indentLine(buffer, state, count)
+        checkVisualEditAt(state, cursorBefore, indentLine(buffer, state, count))
 
       state.cursor.line = startLine
       state.cursor.column = 0
@@ -376,11 +388,14 @@ proc visualDedent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
       endLine =
         max(state.visualSelection.start.line, state.visualSelection.current.line)
 
+    # dedentLine reads the line to act on from the cursor, so the loop walks it.
+    let cursorBefore = state.cursor
+
     let txr = withTransaction(buffer, "Visual dedent"):
       for lineNum in startLine .. endLine:
         state.cursor.line = lineNum
         state.cursor.column = 0
-        dedentLine(buffer, state, count)
+        checkVisualEditAt(state, cursorBefore, dedentLine(buffer, state, count))
 
       state.cursor.line = startLine
       state.cursor.column = 0
@@ -397,9 +412,10 @@ proc applyVisualTextTransform(
     buffer: TextBuffer,
     state: EditorState,
     label: string,
+    action: string,
     transform: proc(text: string): string {.closure, gcsafe.},
 ) =
-  ## Apply transform to visual selection and return to previous mode.
+  ## Apply transform to selection; refused for raw buffers.
   if not state.visualSelection.active:
     return
 
@@ -425,9 +441,9 @@ proc applyVisualTextTransform(
           let actualEndCol = min(endCol, lineLen - 1)
           let startPos = BufferPosition(line: lineNum, column: startCol)
           let endPos = BufferPosition(line: lineNum, column: actualEndCol)
-          let segment = buffer.getTextInRange(startPos, endPos)
-          checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
-          checkVisualEdit(state, buffer.insertText(startPos, transform(segment)))
+          checkVisualEdit(
+            state, buffer.transformRange(startPos, endPos, action, transform)
+          )
     of vskLine:
       let
         startLine =
@@ -436,16 +452,15 @@ proc applyVisualTextTransform(
           max(state.visualSelection.start.line, state.visualSelection.current.line)
 
       for lineNum in startLine .. endLine:
-        let lineText = $buffer.getLine(lineNum)
-        if lineText.charLen > 0:
+        let lineCharLen = buffer.getLine(lineNum).charLen
+        if lineCharLen > 0:
           let startPos = BufferPosition(line: lineNum, column: 0)
-          let endPos = BufferPosition(line: lineNum, column: lineText.charLen - 1)
-          checkVisualEdit(state, buffer.deleteRange(startPos, endPos))
-          checkVisualEdit(state, buffer.insertText(startPos, transform(lineText)))
+          let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+          checkVisualEdit(
+            state, buffer.transformRange(startPos, endPos, action, transform)
+          )
     of vskChar:
-      let segment = buffer.getTextInRange(selStart, selEnd)
-      checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
-      checkVisualEdit(state, buffer.insertText(selStart, transform(segment)))
+      checkVisualEdit(state, buffer.transformRange(selStart, selEnd, action, transform))
 
     state.cursor = selStart
   if txr.isErr:
@@ -459,19 +474,20 @@ proc applyVisualTextTransform(
 
 proc visualLowercase*(buffer: TextBuffer, state: EditorState) =
   ## Convert visual selection to lowercase and return to previous mode
-  applyVisualTextTransform(buffer, state, "Visual lowercase", toLowerAscii)
+  applyVisualTextTransform(buffer, state, "Visual lowercase", "lowercase", toLowerAscii)
 
 proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
   ## Convert visual selection to uppercase and return to previous mode
-  applyVisualTextTransform(buffer, state, "Visual uppercase", toUpperAscii)
+  applyVisualTextTransform(buffer, state, "Visual uppercase", "uppercase", toUpperAscii)
 
 proc visualToggleCase*(buffer: TextBuffer, state: EditorState) =
   ## Toggle case of visual selection and return to previous mode
-  applyVisualTextTransform(buffer, state, "Visual toggle case", toggleAsciiCase)
+  applyVisualTextTransform(
+    buffer, state, "Visual toggle case", "toggle case", toggleAsciiCase
+  )
 
 proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: string) =
-  ## Replace each character in the selection with `ch` (must be one character).
-  ## Multi-byte `ch` stays intact; empty/multi-char input is rejected.
+  ## Replace selection with `ch` (one char). Refused for raw buffers.
   # Registry validates `ch`; this guard is for direct callers.
   if ch.charLen != 1:
     return
@@ -485,7 +501,7 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: string) =
       first = false
       result.add(ch.repeat(segment.charLen))
 
-  applyVisualTextTransform(buffer, state, "Visual replace", fill)
+  applyVisualTextTransform(buffer, state, "Visual replace", "replace", fill)
 
 proc visualJoinLines*(buffer: TextBuffer, state: EditorState) =
   ## Join all lines in visual selection into one line (J command)
@@ -792,7 +808,7 @@ proc visualPaste*(
       else:
         '"'
     let reg = state.registers.getRegister(regName)
-    var pasteText = reg.getContent().normalizeNewlines()
+    var pasteText = buffer.normalizeNewlines(reg.getContent())
     let isFullLine = reg.isLine
     let registerEmpty = reg.isEmpty
 
@@ -809,7 +825,7 @@ proc visualPaste*(
         # The clipboard layer already names the operation; a second prefix here
         # would double the sentence on the status line.
         return Result[(), string].err(readResult.error)
-      pasteText = readResult.get.normalizeNewlines()
+      pasteText = buffer.preparePastedText(readResult.get)
 
     # Empty linewise paste is valid for line-visual mode.
     let allowEmptyLinewise = isFullLine and state.visualSelection.kind == vskLine

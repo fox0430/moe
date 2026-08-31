@@ -138,8 +138,9 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
       pos.column < currentLineText.charLen and
       isAdjacentBracketPair(currentLineText, pos.column - 1):
     let indented = state.bracketSplit == bsmIndent
+    # Raw buffer: copied indent is unintended edit.
     let baseIndent =
-      if state.autoIndent:
+      if state.autoIndent and buffer.allowsTextTransforms:
         getLineIndent(currentLineText)
       else:
         ""
@@ -171,8 +172,8 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   var indentLen = 0
   var newLineIndent = ""
 
-  # Apply auto-indent if enabled
-  if state.autoIndent:
+  # Auto-indent skipped for raw buffers.
+  if state.autoIndent and buffer.allowsTextTransforms:
     # Get the indentation from the current line
     let baseIndent = getLineIndent(currentLineText)
     let extraIndent =
@@ -214,7 +215,8 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState): Result[(), string
   var indentLen = 0
   var newLineIndent = ""
 
-  if state.autoIndent:
+  # Auto-indent skipped for raw buffers.
+  if state.autoIndent and buffer.allowsTextTransforms:
     let baseIndent = getLineIndent(lineContent)
     let extraIndent =
       if state.smartIndent:
@@ -253,7 +255,8 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState): Result[(), string
   var textToInsert = "\n"
   var indentLen = 0
 
-  if state.autoIndent:
+  # Auto-indent skipped for raw buffers.
+  if state.autoIndent and buffer.allowsTextTransforms:
     let indent = getLineIndent(lineContent)
     if indent.len > 0:
       textToInsert = indent & "\n"
@@ -293,12 +296,16 @@ proc insertAppendEnd*(buffer: TextBuffer, state: EditorState) =
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
-proc indentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
-  ## Indent current line by adding indentation at the beginning
-  ## count: number of times to indent (default: 1)
+proc indentLine*(
+    buffer: TextBuffer, state: EditorState, count: int = 1
+): Result[(), string] =
+  ## Indent current line. Refusals returned for caller loop handling.
+  if not buffer.allowsTextTransforms:
+    return err(rawBytesRejection("indent"))
+
   let currentLine = state.cursor.line
   if currentLine < 0 or currentLine >= buffer.len:
-    return
+    return ok(())
 
   # Get the indent string to add
   let indentStr = getIndentString(state)
@@ -312,25 +319,29 @@ proc indentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   let insertPos = BufferPosition(line: currentLine, column: 0)
   let insertResult = buffer.insertText(insertPos, fullIndent)
   if insertResult.isErr:
-    state.statusMessage = insertResult.error
-    return
+    return err(insertResult.error)
 
   # Keep cursor at the same relative position within the line content
   # (move cursor right by the amount of indentation added)
   state.cursor.column += fullIndent.len
+  ok(())
 
-proc dedentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
-  ## Dedent current line by removing indentation from the beginning
-  ## count: number of times to dedent (default: 1)
+proc dedentLine*(
+    buffer: TextBuffer, state: EditorState, count: int = 1
+): Result[(), string] =
+  ## Dedent current line. Refusals returned for caller loop handling.
+  if not buffer.allowsTextTransforms:
+    return err(rawBytesRejection("dedent"))
+
   let currentLine = state.cursor.line
   if currentLine < 0 or currentLine >= buffer.len:
-    return
+    return ok(())
 
   let lineContent = buffer.getLine(currentLine)
   let currentIndent = getLineIndent(lineContent)
 
   if currentIndent.len == 0:
-    return # No indentation to remove
+    return ok(()) # No indentation to remove
 
   # Calculate how much to remove
   let indentStr = getIndentString(state)
@@ -338,21 +349,24 @@ proc dedentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   let removeCount = min(count * indentWidth, currentIndent.len)
 
   if removeCount <= 0:
-    return
+    return ok(())
 
   # Delete characters from the beginning of the line. Track how many were
   # actually removed so the cursor adjustment stays correct on partial failure.
   var deleted = 0
+  var failure = ""
   for i in 1 .. removeCount:
     let deletePos = BufferPosition(line: currentLine, column: 0)
     let deleteResult = buffer.deleteChar(deletePos)
     if deleteResult.isErr:
-      state.statusMessage = deleteResult.error
+      failure = deleteResult.error
       break
     inc deleted
 
   if deleted == 0:
-    return
+    if failure.len > 0:
+      return err(failure)
+    return ok(())
 
   # Adjust cursor position
   # If cursor was in the indentation area, move it to column 0
@@ -361,6 +375,10 @@ proc dedentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
     state.cursor.column -= deleted
   else:
     state.cursor.column = 0
+
+  if failure.len > 0:
+    return err(failure)
+  ok(())
 
 proc isWhitespace(r: Rune): bool =
   ## Check if a character is whitespace

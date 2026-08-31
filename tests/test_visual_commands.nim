@@ -648,6 +648,159 @@ suite "Visual Commands - visualDelete":
     check state.registers.getClipboardRegister('+').getContent() == "hello"
     check state.pendingInput.pendingRegister.isNone
 
+suite "Visual Commands - visualReplace character counting":
+  test "one replacement character per character, not per byte":
+    # vskChar used to append one `ch` per byte, so a multibyte character grew
+    # into several replacement characters.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "あい")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 1),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, "x")
+
+    check buf.getLine(0) == "xx"
+
+  test "newlines survive a multi-line character selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ab\ncd")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 1),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, "x")
+
+    check buf.getLine(0) == "xx"
+    check buf.getLine(1) == "xx"
+
+suite "Visual Commands - raw buffer gates":
+  proc rawSelection(text: string): (TextBuffer, EditorState) =
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), text)
+    buf.keepRaw = true
+    let state = createTestState()
+    state.expandTab = true
+    state.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: text.charLen - 1),
+      active: true,
+      kind: vskChar,
+    )
+    (buf, state)
+
+  test "visualIndent reports the refusal instead of silently doing nothing":
+    # The per-line refusal must reach the user: the success path used to clear
+    # the status message, so > over a raw buffer was a no-op with no reason.
+    let (buf, state) = rawSelection("hello")
+
+    visualIndent(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check "raw undecodable bytes" in state.statusMessage
+    check state.visualSelection.active == false
+
+  test "visualDedent reports the refusal":
+    let (buf, state) = rawSelection("    hello")
+
+    visualDedent(buf, state)
+
+    check buf.getLine(0) == "    hello"
+    check "raw undecodable bytes" in state.statusMessage
+
+  test "a refused visualIndent leaves the cursor where it was":
+    # indentLine reads the line to act on from the cursor, so the loop walks it
+    # down the selection. The refusal must not leave it on a line it moved to
+    # for an edit that never ran.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "one\ntwo\nthree")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.expandTab = true
+    state.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 4),
+      active: true,
+      kind: vskLine,
+    )
+    state.cursor = BufferPosition(line: 2, column: 4)
+
+    visualIndent(buf, state)
+
+    check state.cursor == BufferPosition(line: 2, column: 4)
+    check buf.getLine(0) == "one"
+    check "raw undecodable bytes" in state.statusMessage
+
+  test "a refused visualDedent leaves the cursor where it was":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  one\n  two")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.expandTab = true
+    state.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskLine,
+    )
+    state.cursor = BufferPosition(line: 1, column: 2)
+
+    visualDedent(buf, state)
+
+    check state.cursor == BufferPosition(line: 1, column: 2)
+    check buf.getLine(0) == "  one"
+    check "raw undecodable bytes" in state.statusMessage
+
+  test "a read-only visualIndent also leaves the cursor where it was":
+    # The restore is not raw-specific: any refusal from indentLine must undo
+    # the cursor walk.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "one\ntwo")
+    buf.readOnly = true
+    let state = createTestState()
+    state.expandTab = true
+    state.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskLine,
+    )
+    state.cursor = BufferPosition(line: 1, column: 2)
+
+    visualIndent(buf, state)
+
+    check state.cursor == BufferPosition(line: 1, column: 2)
+    check buf.getLine(0) == "one"
+
+  test "visualReplace refuses a raw buffer":
+    let (buf, state) = rawSelection("Hello")
+
+    visualReplace(buf, state, "x")
+
+    check buf.getLine(0) == "Hello"
+    check "raw undecodable bytes" in state.statusMessage
+
+  test "visual case transforms refuse a raw buffer":
+    for transform in [visualLowercase, visualUppercase, visualToggleCase]:
+      let (buf, state) = rawSelection("Hello")
+
+      transform(buf, state)
+
+      check buf.getLine(0) == "Hello"
+      check "raw undecodable bytes" in state.statusMessage
+
 suite "Visual Commands - visualIndent":
   test "Indent single line selection":
     let buf = newTextBuffer()

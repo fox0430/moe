@@ -299,6 +299,11 @@ proc executeStripWhitespace*(
   ## Removes trailing whitespace from all lines.
   if buffer.readOnly:
     return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
+  # Raw buffer: stripping may corrupt code units.
+  if not buffer.allowsTextTransforms:
+    return HandlerResult(
+      kind: hrError, errorMessage: rawBytesRejection("strip trailing whitespace")
+    )
   var strippedCount = 0
   let txr =
     try:
@@ -340,6 +345,9 @@ proc executeSubstitute*(
   ## Execute substitute command (:s, :%s/pattern/replacement/flags)
   if buffer.readOnly:
     return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
+  # Raw buffer: pattern may land inside code unit.
+  if not buffer.allowsTextTransforms:
+    return HandlerResult(kind: hrError, errorMessage: rawBytesRejection("substitute"))
   if pattern.len == 0:
     return HandlerResult(kind: hrError, errorMessage: "Pattern required")
 

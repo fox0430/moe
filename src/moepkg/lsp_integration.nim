@@ -20,7 +20,7 @@
 ## LSP Integration with Editor
 ## Connects LspService to Editor, TextBuffer, and UI components
 
-import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
+import std/[options, json, strutils, algorithm, sequtils, sets, tables, times, unicode]
 from std/os import absolutePath, normalizedPath, fileExists
 
 import pkg/[results, chronos]
@@ -361,15 +361,37 @@ proc setApplyEditCallback*(
   lsp.service.onApplyWorkspaceEdit = callback
 
 # Buffer lifecycle operations
+const RawBufferLspRejection* = "LSP unavailable: buffer holds raw undecodable bytes"
+  ## Refusal returned by every LSP entry point for a raw buffer.
+
+proc isLspEligible*(buffer: TextBuffer): bool =
+  ## Whether buffer can use LSP. Raw buffers are ineligible (JSON can't carry undecodable bytes).
+  buffer.allowsTextTransforms
+
+proc dropDocument(lsp: LspIntegration, path: string): Result[void, string] =
+  ## Forget document; notify server only if previously delivered.
+  if path notin lsp.documents:
+    return ok()
+
+  let delivered = lsp.documents[path].delivered
+  lsp.documents.del(path)
+
+  if not delivered:
+    return ok()
+
+  return lsp.service.notifyDocumentClosed(path)
+
+proc dropRawDocument(lsp: LspIntegration, path: string) =
+  ## Forget raw document; failed didClose goes to degrade log.
+  let dropResult = lsp.dropDocument(path)
+  if dropResult.isErr:
+    logLspDegraded("didClose " & path, dropResult.error)
+
 proc onBufferOpen*(
     lsp: LspIntegration, buffer: TextBuffer, serverIsFresh: bool = false
 ): Result[void, string] =
-  ## Called when a buffer is opened/loaded.
-  ## If the path is already tracked, sends didClose first: the version reset
-  ## below would otherwise send a second didOpen at v1 while the server still
-  ## holds a higher version, causing later didChange to be dropped as stale.
-  ## `serverIsFresh` skips the didClose on the restart path where the worker
-  ## just started and knows nothing about the document.
+  ## Called when buffer is opened. Closes existing entry first to avoid stale version.
+  ## `serverIsFresh` skips didClose after worker restart.
   if not lsp.enabled:
     return ok()
 
@@ -377,6 +399,16 @@ proc onBufferOpen*(
     return ok()
 
   let path = canonicalPath(buffer.filePath.get)
+
+  # A reload can turn a decodable document into a raw one. Drop it rather than
+  # sending bytes the wire cannot carry.
+  if not buffer.isLspEligible:
+    if not serverIsFresh:
+      lsp.dropRawDocument(path)
+    else:
+      lsp.documents.del(path)
+    return ok()
+
   let text = buffer.getTextString()
 
   if path in lsp.documents and not serverIsFresh:
@@ -397,18 +429,7 @@ proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, strin
   if buffer.filePath.isNone:
     return ok()
 
-  let path = canonicalPath(buffer.filePath.get)
-
-  if path notin lsp.documents:
-    return ok()
-
-  let delivered = lsp.documents[path].delivered
-  lsp.documents.del(path)
-
-  if not delivered:
-    return ok()
-
-  return lsp.service.notifyDocumentClosed(path)
+  return lsp.dropDocument(canonicalPath(buffer.filePath.get))
 
 # UTF-16 position conversion helpers
 # LSP uses UTF-16 code units for character positions. Buffer columns are
@@ -518,12 +539,7 @@ proc commonRuneSuffixBytes(a, b: string, floor: int): int =
   a.len - ai
 
 proc computeIncrementalChange*(oldText, newText: string): Option[JsonNode] =
-  ## Single contiguous line-range diff using character-0 (line-start) anchors,
-  ## except an in-place single-line edit, which is narrowed to a UTF-16 column
-  ## range so a one-character change on a long line ships only the changed run.
-  ## Returns none when the delta cannot be localized this way (the caller then
-  ## falls back to a full-text sync). Equivalent to a split('\n') line diff, but
-  ## scans the two strings in place instead of allocating a seq[string] per call.
+  ## Compute incremental diff for didChange. Returns none to fall back to full sync.
   let
     oldLen = oldText.len
     newLen = newText.len
@@ -702,6 +718,11 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
     return ok()
 
   let path = canonicalPath(buffer.filePath.get)
+
+  if not buffer.isLspEligible:
+    lsp.dropRawDocument(path)
+    return ok()
+
   let text = buffer.getTextString()
 
   # Untracked -> try didOpen.
@@ -729,33 +750,15 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
   if kind == tdskNone:
     return ok()
 
-  # Resolve running-ness once: it gates incremental below, and a running worker
-  # is live by definition, so the `or` short-circuits the hasLiveWorkerForPath
-  # lookup in the steady-state running path.
   let running = lsp.service.isWorkerRunningForPath(path)
 
-  # No worker would receive this change (absent/crashed). Skip without bumping
-  # the version or advancing the shadow: nothing is sent or coalesced, so
-  # advancing would desync the shadow from what the server actually holds. After
-  # a server crash that followed a successful init, onServerRestart re-sends
-  # didOpen and re-seeds the shadow, so the skip self-heals (a crash during the
-  # very first init is the exception: the buffer stays unsynced until reopened).
-  # A starting worker still counts because a full change coalesces into the
-  # pending didOpen; incremental is sent only once the worker is running.
+  # Skip if no worker exists; otherwise version/shadow would desync.
   if not (running or lsp.service.hasLiveWorkerForPath(path)):
     return ok()
 
-  # LSP requires the version to increase with every change. Use a dedicated
-  # monotonic counter: buffer.changeSeq is unsuitable because undo rolls it
-  # back, and servers ignore didChange notifications with stale versions.
   inc lsp.documents[path].version
   let version = lsp.documents[path].version
 
-  # notifyDocumentChanged* are fire-and-forget to a ready worker (they never
-  # return err here), so the shadow advances to the just-sent text.
-  # Only send incremental when the worker is already running. A starting worker
-  # must receive full sync so the change can coalesce into the pending didOpen;
-  # sending incremental to a starting worker drops it and desyncs the shadow.
   if kind == tdskIncremental and running:
     let changes = computeIncrementalChange(lsp.documents[path].shadow, text)
     if changes.isSome:
@@ -769,19 +772,19 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
   return ok()
 
 proc flushPendingBufferChange*(lsp: LspIntegration, buffer: TextBuffer) {.raises: [].} =
-  ## Send any queued didChange for `buffer` now, before an out-of-band request
-  ## puts a positional request ahead of the edit on the wire. No-op when the
-  ## server's shadow already matches (self-gated by `onBufferChange`). Best-
-  ## effort: transport errors are swallowed so callers on any raises contract
-  ## stay stable.
+  ## Flush pending didChange before positional request.
   try:
     discard lsp.onBufferChange(buffer)
   except Exception:
     discard
 
+proc isDocumentDelivered*(lsp: LspIntegration, path: string): bool =
+  ## Whether didOpen for `path` was delivered.
+  let key = canonicalPath(path)
+  key in lsp.documents and lsp.documents[key].delivered
+
 proc sentDocumentVersion*(lsp: LspIntegration, path: string): Option[int] =
-  ## The last didOpen/didChange version sent to the server for `path`,
-  ## or `none` if the document is not tracked as open. Exposed for tests.
+  ## Last version sent for `path`, or none if not tracked.
   let key = canonicalPath(path)
   if key in lsp.documents:
     some(lsp.documents[key].version)
@@ -797,6 +800,13 @@ proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string
     return ok()
 
   let path = canonicalPath(buffer.filePath.get)
+
+  # didSave carries the whole text, so it corrupts the payload for the same
+  # reason didOpen/didChange do.
+  if not buffer.isLspEligible:
+    lsp.dropRawDocument(path)
+    return ok()
+
   let text = some(buffer.getTextString())
   return lsp.service.notifyDocumentSaved(path, text)
 
@@ -836,33 +846,29 @@ proc toUtf16Column(buffer: TextBuffer, line, column: int): int =
   charIndexToUtf16(lineText, column)
 
 template requireBufferPath(lsp: LspIntegration, buffer: TextBuffer): string =
-  ## Guard for sync LSP request wrappers: checks `enabled` and `filePath`,
-  ## returning an `err` Result from the caller on failure. Evaluates to the
-  ## file path.
-  ##
-  ## Sync-only: chronos `{.async.}` procs cannot use this template because the
-  ## embedded `return err(...)` is not transformed into `complete(...)` by the
-  ## async macro. Async procs should call `resolveLspPath` instead and bind
-  ## the Result themselves.
+  ## Guard for sync LSP requests; returns file path or err. Sync-only.
   if not lsp.enabled:
     return err("LSP disabled")
   if buffer.filePath.isNone:
     return err("Buffer has no file path")
+  if not buffer.isLspEligible:
+    return err(RawBufferLspRejection)
   buffer.filePath.get
 
 proc resolveLspPath(lsp: LspIntegration, buffer: TextBuffer): Result[string, string] =
-  ## Async-safe counterpart to `requireBufferPath`: returns the buffer's path
-  ## or an error as a Result, without performing an early return in the caller.
+  ## Async-safe counterpart to `requireBufferPath`.
   if not lsp.enabled:
     return err("LSP disabled")
   if buffer.filePath.isNone:
     return err("Buffer has no file path")
+  if not buffer.isLspEligible:
+    return err(RawBufferLspRejection)
   ok(buffer.filePath.get)
 
 proc resolveLspPathForRequest(
     lsp: LspIntegration, buffer: TextBuffer
 ): Result[string, string] {.raises: [].} =
-  ## `resolveLspPath` + flush pending didChange before a positional request.
+  ## `resolveLspPath` + flush pending didChange.
   let pathRes = resolveLspPath(lsp, buffer)
   if pathRes.isErr:
     return pathRes
@@ -870,24 +876,19 @@ proc resolveLspPathForRequest(
   pathRes
 
 proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
-  ## Resolve the language ID for a buffer when LSP is enabled and the buffer
-  ## has a path. Returns `none` when any precondition fails.
+  ## Resolve language ID for buffer, or none if unavailable.
   if not lsp.enabled or buffer.filePath.isNone:
     return none(string)
   lsp.service.getLanguageIdFromPath(buffer.filePath.get)
 
 template defineSupportCheck(name: untyped) =
-  ## Generate a buffer-level capability predicate: resolve the buffer's language
-  ## and delegate to the `LspService` check of the same name. Used for the many
-  ## `hasXxxSupport` wrappers that differ only by the delegated proc.
+  ## Generate capability predicate wrapper.
   proc name*(lsp: LspIntegration, buffer: TextBuffer): bool =
     let langId = requireLangId(lsp, buffer)
     langId.isSome and lsp.service.name(langId.get)
 
 template definePositionRequest(name: untyped) =
-  ## Generate a position-based request wrapper: resolve the buffer path, convert
-  ## the rune column to UTF-16, and delegate to the `LspService` proc of the same
-  ## name. Returns the request ID.
+  ## Generate position-based request wrapper.
   proc name*(
       lsp: LspIntegration, buffer: TextBuffer, line, column: int
   ): Result[int, string] =
@@ -895,8 +896,7 @@ template definePositionRequest(name: untyped) =
     lsp.service.name(path, line, buffer.toUtf16Column(line, column))
 
 template defineDocumentRequest(name: untyped) =
-  ## Generate a whole-document request wrapper: resolve the buffer path and
-  ## delegate to the `LspService` proc of the same name. Returns the request ID.
+  ## Generate whole-document request wrapper.
   proc name*(lsp: LspIntegration, buffer: TextBuffer): Result[int, string] =
     let path = requireBufferPath(lsp, buffer)
     lsp.service.name(path)
@@ -939,10 +939,7 @@ definePositionRequest(startCallHierarchyPrepareRequest)
 proc startCallHierarchyIncomingCallsRequest*(
     lsp: LspIntegration, item: CallHierarchyItem
 ): Result[int, string] =
-  ## Start a call hierarchy incoming calls request (non-blocking). Returns request ID.
-  ## The worker is resolved from `item.uri` rather than the active buffer, so the
-  ## request routes correctly even when the call hierarchy viewer (a synthetic,
-  ## path-less buffer) is active or the item lives in a different file.
+  ## Start incoming calls request. Worker resolved from `item.uri`.
   if not lsp.enabled:
     return err("LSP disabled")
   let path = uriToPath(item.uri)
@@ -951,9 +948,7 @@ proc startCallHierarchyIncomingCallsRequest*(
 proc startCallHierarchyOutgoingCallsRequest*(
     lsp: LspIntegration, item: CallHierarchyItem
 ): Result[int, string] =
-  ## Start a call hierarchy outgoing calls request (non-blocking). Returns request ID.
-  ## See `startCallHierarchyIncomingCallsRequest` for why the path comes from
-  ## `item.uri` instead of the active buffer.
+  ## Start outgoing calls request. Worker resolved from `item.uri`.
   if not lsp.enabled:
     return err("LSP disabled")
   let path = uriToPath(item.uri)
@@ -1079,12 +1074,7 @@ defineSupportCheck(hasSelectionRangeSupport)
 
 # TextEdit application helpers
 proc compareTextEditReverse(a, b: (int, TextEdit)): int =
-  ## Order (originalIndex, edit) pairs for back-to-front application.
-  ## Later document positions sort first. For edits at the *same* start
-  ## position, the LSP spec says they appear in the document in array order;
-  ## applying back-to-front, the later array element must be applied first so
-  ## the earlier one ends up before it. Hence the original index is the
-  ## tiebreaker, in descending order.
+  ## Order edits back-to-front; ties broken by descending original index.
   let ea = a[1]
   let eb = b[1]
   if ea.range.start.line != eb.range.start.line:
@@ -1100,13 +1090,7 @@ proc abortTextEditsOnException*(
     appliedEdits: var seq[TextEdit],
     discloseJoined: bool = true,
 ): Result[void, string] =
-  ## Exception-safety tail for applyTextEdits: roll back the transaction we
-  ## opened (`ownTransaction`), or disclose that a joined outer transaction
-  ## keeps the partial edits. `appliedEdits` is cleared only when the own
-  ## transaction rolled back successfully, so a failed rollback or a joined
-  ## transaction still reports the remaining edits. `discloseJoined` (same
-  ## semantics as in applyTextEdits) suppresses the note for callers that
-  ## roll the joined transaction back themselves.
+  ## Roll back or disclose partial edits on exception.
   if ownTransaction and buffer.inTransaction:
     let rollbackResult = buffer.rollbackTransaction()
     if rollbackResult.isErr:
@@ -1131,28 +1115,11 @@ proc applyTextEdits*(
     appliedEdits: var seq[TextEdit],
     discloseJoined: bool = true,
 ): Result[void, string] =
-  ## Apply a sequence of TextEdits to the buffer
-  ## Edits are applied in reverse order (back to front) to preserve positions
-  ## Note: LSP TextEdit.range.end is exclusive, buffer.deleteRange is inclusive
-  ## Note: LSP character positions are in UTF-16 code units, converted to rune indexes
-  ## Edits are wrapped in a single undo entry. If the caller already opened a
-  ## transaction (e.g. Insert mode completion, workspace edit), we join that
-  ## one; otherwise we open and commit our own so a single Ctrl-r/u reverts
-  ## the whole edit group instead of one TextEdit at a time.
-  ##
-  ## Failure semantics:
-  ## - Self-managed (no outer transaction): on partial failure we rollback
-  ##   the transaction we opened, so the buffer is left at its pre-call state.
-  ## - Joined an outer transaction: on partial failure we return err WITHOUT
-  ##   rolling back — the outer transaction is left dirty with whichever inner
-  ##   edits already applied. The caller is responsible for rollback because
-  ##   it may want to keep earlier work in the same transaction.
-  ##
-  ## On err, `appliedEdits` lists the edits still applied (empty on success
-  ## or full rollback) so callers with a joined transaction can re-sync.
-  ## `discloseJoined` suppresses the joined-transaction note (see
-  ## abortTextEditsOnException).
+  ## Apply TextEdits back-to-front in one undo entry. Refused for raw buffers.
+  ## Rolls back on failure if own transaction, otherwise discloses partial edits.
   appliedEdits.setLen(0)
+  if not buffer.isLspEligible:
+    return err(RawBufferLspRejection)
   if edits.len == 0:
     return ok()
 
@@ -1320,13 +1287,24 @@ proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
       return some(i)
   return none(int)
 
-proc applyEditsToFile(
+type PreparedFileEdit = object
+  ## An unopened file loaded and edited in memory, not yet written back.
+  ## Preparing every target before writing any lets a file that cannot be
+  ## edited -- undecodable, unreadable, positions out of range -- be found
+  ## before the first overwrite. The cost is holding every target in memory at
+  ## once, and a read-to-write gap spanning the whole edit.
+  path: string
+  buffer: TextBuffer
+  originalContent: string
+  needsBackup: bool
+
+proc prepareEditsToFile(
     path: string,
     edits: seq[TextEdit],
     backupConfig: Option[AutoBackupConfig] = none(AutoBackupConfig),
-): Result[void, string] =
-  ## Apply edits to a file that is not currently open
-  ## Loads the file, applies edits, and saves it back
+): Result[PreparedFileEdit, string] =
+  ## Load a file that is not currently open and apply `edits` in memory.
+  ## Touches nothing on disk; `commitPreparedFileEdit` writes the result.
   var needsBackup = false
   var originalContent = ""
   var fileExistedForBackup = false
@@ -1366,8 +1344,25 @@ proc applyEditsToFile(
   if applyResult.isErr:
     return err(applyResult.error)
 
-  if needsBackup:
-    let backupRes = backupBuffer(some(path), originalContent, backupConfig.get)
+  return ok(
+    PreparedFileEdit(
+      path: path,
+      buffer: tempBuffer,
+      originalContent: originalContent,
+      needsBackup: needsBackup,
+    )
+  )
+
+proc commitPreparedFileEdit(
+    prepared: PreparedFileEdit, backupConfig: Option[AutoBackupConfig]
+): Result[void, string] =
+  ## Back up and write out what `prepareEditsToFile` built. This is the first
+  ## step that touches the file, so a caller wanting all-or-nothing prepares
+  ## every target before committing any.
+  let path = prepared.path
+
+  if prepared.needsBackup:
+    let backupRes = backupBuffer(some(path), prepared.originalContent, backupConfig.get)
     if backupRes.isErr:
       if backupRes.error == NoChangesSinceLastBackupError:
         discard
@@ -1386,7 +1381,7 @@ proc applyEditsToFile(
             " (overwrite aborted to preserve original)"
         )
 
-  let saveResult = tempBuffer.saveFile(path)
+  let saveResult = prepared.buffer.saveFile(path)
   if saveResult.isErr:
     return err("Failed to save file: " & saveResult.error)
 
@@ -1437,24 +1432,24 @@ proc hasStaleServerEditTarget*(
   ##
   ## Which text that is depends on whether the server holds the document:
   ##
-  ## * Held (live worker + delivered didOpen + a recorded sync baseline): it
+  ## * Held (live worker + delivered didOpen + a recorded sync attempt): it
   ##   sees what we last sent, so compare contentVersion against `syncedVersions`.
   ## * Not held (no worker for this file type, or didOpen never succeeded): it
   ##   read the file from disk, so `isModified` is the test. contentVersion is
-  ##   actively wrong here — maybeUpdateLsp records a baseline even when the
-  ##   notification is dropped for want of a worker, so the versions match
-  ##   while the texts do not.
+  ##   actively wrong here — an attempt is recorded even when the notification
+  ##   is dropped for want of a worker, so the versions match while the texts
+  ##   do not.
   for path in collectWorkspaceEditPaths(edit):
     let absPath = normalizedPath(absolutePath(path))
     for buf in buffers:
       if buf.filePath.isSome and
           normalizedPath(absolutePath(buf.filePath.get)) == absPath:
         let canonPath = canonicalPath(buf.filePath.get)
-        # A baseline alone does not prove delivery: maybeUpdateLsp advances it
-        # even when the sync was dropped for want of a worker.
+        # A sync record only says what was attempted, so ask the document
+        # registry whether the server actually holds it.
         let serverHolds =
           syncedVersions.hasKey(buf.id) and lsp.service.hasLiveWorkerForPath(canonPath) and
-          canonPath in lsp.documents and lsp.documents[canonPath].delivered
+          lsp.isDocumentDelivered(canonPath)
 
         if serverHolds:
           if buf.contentVersion != syncedVersions[buf.id]:
@@ -1538,6 +1533,48 @@ proc applyWorkspaceEdit*(
           )
         unopenedFilesToModify.add((path, edits))
 
+  # Everything knowable without touching a file is refused here, before the
+  # first buffer is modified: a rejection discovered midway would leave the
+  # earlier targets rewritten for an edit that never completed.
+  for (bufferIdx, _) in openBuffersToModify:
+    if not buffers[bufferIdx].isLspEligible:
+      let name =
+        if buffers[bufferIdx].filePath.isSome:
+          sanitizeEditPath(buffers[bufferIdx].filePath.get)
+        else:
+          "buffer"
+      return err(RawBufferLspRejection & ": " & name & "; no edits applied")
+
+  # Two edit groups aimed at one unopened file would each be prepared from the
+  # same on-disk content, so committing them in order would discard the first.
+  # Their positions are only well defined applied one after the other, which
+  # preparing every file up front cannot do.
+  var seenUnopenedPaths = initHashSet[string]()
+  for (path, _) in unopenedFilesToModify:
+    let key = canonicalPath(path)
+    if key in seenUnopenedPaths:
+      return err(
+        "Server edit targets " & sanitizeEditPath(path) &
+          " more than once; no edits applied"
+      )
+    seenUnopenedPaths.incl(key)
+
+  if unopenedFilesToModify.len > 0 and backupConfig.isNone:
+    return err("backupConfig required for unopened file writes; no edits applied")
+
+  # Load and edit every unopened file in memory first. A file that does not
+  # decode, will not load, or does not fit the server's positions is found here,
+  # with nothing written yet.
+  var preparedFiles: seq[PreparedFileEdit] = @[]
+  for (path, edits) in unopenedFilesToModify:
+    let prepared = prepareEditsToFile(path, edits, backupConfig)
+    if prepared.isErr:
+      return err(
+        "Failed to modify " & sanitizeEditPath(path) & ": " &
+          sanitizeEditPath(prepared.error) & "; no edits applied"
+      )
+    preparedFiles.add(prepared.get)
+
   # Track successfully modified files for error reporting
   var modifiedBufferPaths: seq[string] = @[]
   var modifiedBufferIndexes: seq[int] = @[]
@@ -1589,17 +1626,12 @@ proc applyWorkspaceEdit*(
     if buffer.filePath.isSome:
       modifiedBufferPaths.add(buffer.filePath.get)
 
-  # Apply edits to unopened files (load, modify, save)
-  for (path, edits) in unopenedFilesToModify:
-    # Require backupConfig for unopened writes; fail fast if missing.
-    let applyResult: Result[void, string] =
-      if backupConfig.isNone:
-        Result[void, string].err(
-          "backupConfig required for unopened file writes: " & sanitizeEditPath(path) &
-            " (overwrite aborted to preserve original)"
-        )
-      else:
-        applyEditsToFile(path, edits, backupConfig)
+  # Write out the prepared files. What remains are backup and write failures,
+  # which can still leave the edit half-applied; the error below names what was
+  # already modified so the user can recover it.
+  for prepared in preparedFiles:
+    let path = prepared.path
+    let applyResult = commitPreparedFileEdit(prepared, backupConfig)
     if applyResult.isErr:
       let alreadyModified = modifiedBufferPaths.len + modifiedFilePaths.len
       let errMsg =

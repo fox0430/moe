@@ -20,7 +20,9 @@
 ## Notification routing: popup or status line depending on config, plus the
 ## announcements that every file-open path shares.
 
-import types/editor_types, message_log, notification_popup
+import std/options
+
+import types/editor_types, message_log, notification_popup, buffer
 
 proc notifyPopup*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   ## Notify via popup, always logged to message log.
@@ -35,3 +37,29 @@ proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
     e.notifyPopup(msg, level)
   else:
     e.state.statusMessage = msg
+
+proc notifyUnusualContent*(e: Editor, buf: TextBuffer) =
+  ## Warn once for non-ordinary content (raw bytes/NULs). Single notification.
+  let kind = buf.unusualContentKind
+  if buf.warnedUnusualContent == kind:
+    return
+  # Latch even ordinary to allow re-warning after content is fixed then breaks again.
+  buf.warnedUnusualContent = kind
+  if kind == ucOrdinary:
+    return
+
+  let isRaw = kind in {ucRaw, ucRawBinary}
+  let what =
+    if not isRaw:
+      "binary content (NUL bytes)"
+    elif kind == ucRawBinary:
+      "undecodable bytes and NUL bytes"
+    else:
+      "undecodable bytes"
+  let fate =
+    if isRaw: "held raw and saved back unchanged" else: "bytes are preserved on save"
+
+  e.notify(
+    (if buf.filePath.isSome: buf.filePath.get else: "Buffer") & ": " & what & "; " & fate,
+    nlWarning,
+  )

@@ -162,10 +162,41 @@ suite "Insert Commands - indentLine with shiftWidth":
     state.shiftWidth = 4
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    indentLine(buf, state)
+    discard indentLine(buf, state)
 
     check buf.getLine(0) == "    hello"
     check state.cursor.column == 4
+
+suite "Insert Commands - raw buffer gates":
+  test "indentLine refuses a raw buffer and says why":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.expandTab = true
+    state.shiftWidth = 4
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let res = indentLine(buf, state)
+
+    check res.isErr
+    check "raw undecodable bytes" in res.error
+    check buf.getLine(0) == "hello"
+
+  test "dedentLine refuses a raw buffer and says why":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.expandTab = true
+    state.shiftWidth = 4
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let res = dedentLine(buf, state)
+
+    check res.isErr
+    check "raw undecodable bytes" in res.error
+    check buf.getLine(0) == "    hello"
 
 suite "Insert Commands - dedentLine with shiftWidth":
   test "Dedent uses shiftWidth when set":
@@ -177,7 +208,7 @@ suite "Insert Commands - dedentLine with shiftWidth":
     state.shiftWidth = 4
     state.cursor = BufferPosition(line: 0, column: 4)
 
-    dedentLine(buf, state)
+    discard dedentLine(buf, state)
 
     check buf.getLine(0) == "hello"
     check state.cursor.column == 0
@@ -328,6 +359,22 @@ suite "Insert Commands - insertNewline":
     check buf.getLine(0) == "hello"
     check buf.len >= 2
     check state.cursor.line == 1
+
+  test "Insert newline on a raw buffer skips auto-indent":
+    # Copying the leading whitespace bytes would be an edit the user never
+    # typed; the newline itself still splits the line.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "  hello"
+    check buf.getLine(1) == ""
+    check state.cursor == BufferPosition(line: 1, column: 0)
 
 suite "Insert Commands - insertNewline bracket split":
   test "bsmDisable keeps existing behavior inside []":
@@ -630,6 +677,23 @@ suite "Insert Commands - insertLineBelow":
     check state.cursor.column == 0
     check state.mode == EditorMode.Insert
 
+  test "Insert line below on a raw buffer skips auto-indent":
+    # Copying the leading whitespace bytes would be an edit the user never
+    # typed; the newline itself still splits the line.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    check insertLineBelow(buf, state).isOk
+
+    check buf.getLine(1) == ""
+    check state.cursor.line == 1
+    check state.cursor.column == 0
+    check state.mode == EditorMode.Insert
+
 suite "Insert Commands - insertLineAbove":
   test "Insert line above with auto-indent":
     let buf = newTextBuffer()
@@ -655,6 +719,24 @@ suite "Insert Commands - insertLineAbove":
     check insertLineAbove(buf, state).isOk
 
     check buf.len >= 2
+    check state.cursor.line == 0
+    check state.cursor.column == 0
+    check state.mode == EditorMode.Insert
+
+  test "Insert line above on a raw buffer skips auto-indent":
+    # Copying the leading whitespace bytes would be an edit the user never
+    # typed; the newline itself still splits the line.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    buf.keepRaw = true
+    let state = createTestState()
+    state.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    check insertLineAbove(buf, state).isOk
+
+    check buf.getLine(0) == ""
+    check buf.getLine(1) == "  hello"
     check state.cursor.line == 0
     check state.cursor.column == 0
     check state.mode == EditorMode.Insert
@@ -706,7 +788,7 @@ suite "Insert Commands - indentLine":
     state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    indentLine(buf, state)
+    discard indentLine(buf, state)
 
     check buf.getLine(0) == "  hello"
     check state.cursor.column == 2
@@ -718,7 +800,7 @@ suite "Insert Commands - indentLine":
     state.expandTab = false
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    indentLine(buf, state)
+    discard indentLine(buf, state)
 
     check buf.getLine(0) == "\thello"
     check state.cursor.column == 1
@@ -731,7 +813,7 @@ suite "Insert Commands - indentLine":
     state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    indentLine(buf, state, 2)
+    discard indentLine(buf, state, 2)
 
     check buf.getLine(0) == "    hello"
     check state.cursor.column == 4
@@ -745,7 +827,7 @@ suite "Insert Commands - dedentLine":
     state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 4)
 
-    dedentLine(buf, state)
+    discard dedentLine(buf, state)
 
     check buf.getLine(0) == "  hello"
     check state.cursor.column == 2
@@ -758,7 +840,7 @@ suite "Insert Commands - dedentLine":
     state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 0)
 
-    dedentLine(buf, state)
+    discard dedentLine(buf, state)
 
     check buf.getLine(0) == "hello"
     check state.cursor.column == 0
@@ -771,7 +853,7 @@ suite "Insert Commands - dedentLine":
     state.tabStop = 2
     state.cursor = BufferPosition(line: 0, column: 1) # Cursor in indent
 
-    dedentLine(buf, state)
+    discard dedentLine(buf, state)
 
     check buf.getLine(0) == "hello"
     check state.cursor.column == 0
@@ -1325,11 +1407,11 @@ suite "Insert Commands - read-only failure keeps cursor and reports":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 2)
 
-    indentLine(buf, state)
+    let res = indentLine(buf, state)
 
+    check res.isErr
     check buf.getLine(0) == "hello"
     check state.cursor == BufferPosition(line: 0, column: 2)
-    check state.statusMessage.len > 0
 
   test "dedentLine on read-only buffer keeps cursor":
     let buf = newTextBuffer()
@@ -1338,11 +1420,11 @@ suite "Insert Commands - read-only failure keeps cursor and reports":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 6)
 
-    dedentLine(buf, state)
+    let res = dedentLine(buf, state)
 
+    check res.isErr
     check buf.getLine(0) == "    hello"
     check state.cursor == BufferPosition(line: 0, column: 6)
-    check state.statusMessage.len > 0
 
   test "insertCharFromAbove on read-only buffer keeps cursor":
     let buf = newTextBuffer()

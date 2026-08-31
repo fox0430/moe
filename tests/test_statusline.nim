@@ -908,6 +908,18 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     check result == "LF"
 
+  test "Parse lineEnding placeholder for a raw buffer":
+    # A raw buffer never had its line endings classified, so report RAW rather
+    # than the unused `lineEnding` field.
+    var state = createTestState()
+    let textBuffer = createTestTextBuffer("", false, "test")
+    textBuffer.lineEnding = CRLF
+    textBuffer.keepRaw = true
+
+    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+
+    check result == "RAW"
+
   test "Parse lineEnding placeholder for CRLF":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("", false, "test")

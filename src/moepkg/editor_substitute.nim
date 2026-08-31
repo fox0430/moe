@@ -33,6 +33,10 @@ proc startSubstitutePreview*(e: Editor) =
   let buffer = e.activeBuffer()
   if buffer.readOnly:
     return
+  # `:s` itself is refused on a raw buffer, so previewing it would only write
+  # byte-sliced lines the user can never commit.
+  if not buffer.allowsTextTransforms:
+    return
   e.state.ui.substitutePreview.originalLines = newSeqOfCap[string](buffer.len)
   for line in buffer.lines:
     e.state.ui.substitutePreview.originalLines.add(line)

@@ -138,14 +138,8 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
     if e.showGitDiff:
       e.state.git.requestGitRefresh(buf)
   # A file that is not text still opens (every byte is held and saved back
-  # unchanged), but say so: line-oriented editing on it will not do what the
-  # user expects, and nothing else on screen makes that obvious.
-  if buf.hasBinaryContent:
-    e.notify(
-      (if buf.filePath.isSome: buf.filePath.get else: "Buffer") &
-        ": binary content (NUL bytes); bytes are preserved on save",
-      nlWarning,
-    )
+  # unchanged), but say so.
+  e.notifyUnusualContent(buf)
   # Scan conflict markers regardless of the highlight config (like loadFile) so
   # conflict-navigation works as soon as this buffer becomes active.
   buf.refreshConflicts()

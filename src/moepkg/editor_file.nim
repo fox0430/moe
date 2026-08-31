@@ -37,7 +37,8 @@ import
   persist,
   buffer,
   lsp_integration,
-  editor_lsp
+  editor_lsp,
+  editor_notify
 
 type SaveAllBuffersResult* = object
   savedCount*: int
@@ -113,6 +114,8 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   # `loadFile` clears `highlightNeedsUpdate`, so the frame-loop invalidation
   # cascade would not fire; drop caches directly to avoid stale-coord overlays.
   e.invalidateAllLspCaches()
+
+  e.notifyUnusualContent(e.activeBuffer)
 
   # LSP initialization - non-blocking, will start in background
   e.noteLspOpen(e.activeBuffer, e.lsp.onBufferOpen(e.activeBuffer), "open")
@@ -198,9 +201,9 @@ proc savePersistData*(e: Editor) =
           logError("editor", "Failed to remove empty bookmark file: " & ex.msg)
 
 proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer): Result[(), string] =
-  # Read-only buffers cannot be edited, so skip trimming and save as-is.
-  # Otherwise a trim failure would permanently block saving the file.
-  if buffer.readOnly or not shouldTrimTrailingWhitespace(buffer):
+  # Skip for read-only and raw buffers (trim may corrupt raw bytes).
+  if buffer.readOnly or not buffer.allowsTextTransforms or
+      not shouldTrimTrailingWhitespace(buffer):
     return ok(())
 
   # Skip trim while in a transaction; retried on the next save.
