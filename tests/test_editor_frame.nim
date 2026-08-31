@@ -773,17 +773,16 @@ suite "updateForFrame - split buffer re-parse budget":
     e.addBuffer(buf)
 
     # Simulate an LSP publishDiagnostics that sets the flag with no flight.
-    buf.diagnostics =
-      @[
-        BufferDiagnostic(
-          startLine: 10,
-          startCol: 0,
-          endLine: 10,
-          endCol: 5,
-          severity: bdsError,
-          message: "test error",
-        )
-      ]
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 10,
+        startCol: 0,
+        endLine: 10,
+        endCol: 5,
+        severity: bdsError,
+        message: "test error",
+      )
+    ]
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     check buf.incrementalHighlight.pendingReparse == nil

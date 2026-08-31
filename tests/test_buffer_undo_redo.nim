@@ -1571,23 +1571,22 @@ suite "Buffer - Transaction Partial Failure Recovery":
       startSeq: baselineSeq,
       endSeq: baselineSeq + 2,
       kind: ckTransaction,
-      transactionChanges:
-        @[
-          BufferChange(
-            startSeq: baselineSeq,
-            endSeq: baselineSeq + 1,
-            kind: ckInsertLine,
-            insertLineIdx: 999,
-            insertLineText: "x",
-          ),
-          BufferChange(
-            startSeq: baselineSeq + 1,
-            endSeq: baselineSeq + 2,
-            kind: ckInsertText,
-            insertPos: BufferPosition(line: 0, column: 0),
-            insertText: "X",
-          ),
-        ],
+      transactionChanges: @[
+        BufferChange(
+          startSeq: baselineSeq,
+          endSeq: baselineSeq + 1,
+          kind: ckInsertLine,
+          insertLineIdx: 999,
+          insertLineText: "x",
+        ),
+        BufferChange(
+          startSeq: baselineSeq + 1,
+          endSeq: baselineSeq + 2,
+          kind: ckInsertText,
+          insertPos: BufferPosition(line: 0, column: 0),
+          insertText: "X",
+        ),
+      ],
       transactionDescription: "test",
     )
     b.undoStack.addLast(txn)
@@ -1613,23 +1612,22 @@ suite "Buffer - Transaction Partial Failure Recovery":
       startSeq: baselineSeq,
       endSeq: baselineSeq + 2,
       kind: ckTransaction,
-      transactionChanges:
-        @[
-          BufferChange(
-            startSeq: baselineSeq,
-            endSeq: baselineSeq + 1,
-            kind: ckInsertText,
-            insertPos: BufferPosition(line: 0, column: 0),
-            insertText: "X",
-          ),
-          BufferChange(
-            startSeq: baselineSeq + 1,
-            endSeq: baselineSeq + 2,
-            kind: ckInsertLine,
-            insertLineIdx: 999,
-            insertLineText: "x",
-          ),
-        ],
+      transactionChanges: @[
+        BufferChange(
+          startSeq: baselineSeq,
+          endSeq: baselineSeq + 1,
+          kind: ckInsertText,
+          insertPos: BufferPosition(line: 0, column: 0),
+          insertText: "X",
+        ),
+        BufferChange(
+          startSeq: baselineSeq + 1,
+          endSeq: baselineSeq + 2,
+          kind: ckInsertLine,
+          insertLineIdx: 999,
+          insertLineText: "x",
+        ),
+      ],
       transactionDescription: "test",
     )
     b.redoStack.addLast(txn)
