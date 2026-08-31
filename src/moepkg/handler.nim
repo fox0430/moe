@@ -29,7 +29,8 @@ import
   editor, editor_window_layout, key_bindings, modes, buffer, logger, types, motion,
   quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
   clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
-  pending_input, visible_rows, viewer_mode, frontend_input, hover_popup, encoding
+  pending_input, visible_rows, viewer_mode, frontend_input, hover_popup, encoding,
+  unicode_utils
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -1182,8 +1183,9 @@ proc handlePopupKeyCombo(e: Editor, keyCombo: KeyCombo): Option[bool] =
         e.codeLensPickerSelectPrev()
         return some(true)
       # Number keys 1-9 - direct selection
-      if keyCombo.char.len == 1 and keyCombo.char[0] in '1' .. '9':
-        let num = ord(keyCombo.char[0]) - ord('0')
+      let digit = keyCombo.char.asciiChar
+      if digit.isSome and digit.get in '1' .. '9':
+        let num = ord(digit.get) - ord('0')
         asyncSpawn e.codeLensPickerSelectByNumber(num)
         return some(true)
 

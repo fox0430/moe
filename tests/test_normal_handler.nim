@@ -1716,6 +1716,100 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r2.kind == nmrHandled
     check state.pendingInput.pendingRegister == some('a')
 
+  test "macro recording rejects a multi-character register name":
+    # "ab" must not be read as register 'a' via its first byte.
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    state.pendingInput.macroState.waitingForRegister = true
+    state.pendingInput.macroState.commandType = "record"
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "ab", modifiers: {})
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == nmrHandled
+    check state.pendingInput.macroState.isRecording == false
+    check state.statusMessage == "Invalid register (use a-z)"
+
+  test "macro-play (@) rejects a multi-character register name":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    # Press @
+    let atKey = KeyCombo(isSpecial: false, char: "@")
+    discard handler.handleNormalModeKey(buf, state, viewport, atKey)
+
+    # Press "ab" (not register 'a' followed by junk)
+    let abKey = KeyCombo(isSpecial: false, char: "ab")
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, abKey)
+    check r2.kind == nmrHandled
+    check state.statusMessage == "Invalid register (use a-z, @, or :)"
+
+  test "register-select (\") rejects a multi-character register name":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    # Press "
+    let quoteKey = KeyCombo(isSpecial: false, char: "\"")
+    discard handler.handleNormalModeKey(buf, state, viewport, quoteKey)
+
+    # Press "ab" (not register 'a' followed by junk)
+    let abKey = KeyCombo(isSpecial: false, char: "ab")
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, abKey)
+    check r2.kind == nmrHandled
+    check state.pendingInput.pendingRegister.isNone
+
+  test "macro recording rejects single multibyte and empty register names":
+    # asciiChar path: あ, é, "" must be Invalid via isNone, not via range check
+    for ch in @["あ", "é", ""]:
+      let buf = newTextBuffer()
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      let viewport = createTestViewport()
+      state.pendingInput.macroState.waitingForRegister = true
+      state.pendingInput.macroState.commandType = "record"
+      let keyCombo = KeyCombo(isSpecial: false, char: ch, modifiers: {})
+      let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+      check r.kind == nmrHandled
+      check state.pendingInput.macroState.isRecording == false
+      check state.statusMessage == "Invalid register (use a-z)"
+
+  test "macro-play (@) rejects single multibyte and empty register names":
+    for ch in @["あ", "é", ""]:
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      let viewport = createTestViewport()
+      let atKey = KeyCombo(isSpecial: false, char: "@")
+      discard handler.handleNormalModeKey(buf, state, viewport, atKey)
+      let key = KeyCombo(isSpecial: false, char: ch)
+      let r2 = handler.handleNormalModeKey(buf, state, viewport, key)
+      check r2.kind == nmrHandled
+      check state.statusMessage == "Invalid register (use a-z, @, or :)"
+
+  test "register-select (\") rejects single multibyte and empty register names":
+    for ch in @["あ", "é", ""]:
+      let buf = newTextBuffer()
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      let viewport = createTestViewport()
+      let quoteKey = KeyCombo(isSpecial: false, char: "\"")
+      discard handler.handleNormalModeKey(buf, state, viewport, quoteKey)
+      let key = KeyCombo(isSpecial: false, char: ch)
+      let r2 = handler.handleNormalModeKey(buf, state, viewport, key)
+      check r2.kind == nmrHandled
+      check state.pendingInput.pendingRegister.isNone
+
   test "quickrun (\\r) returns ptQuickRun":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "echo hello")

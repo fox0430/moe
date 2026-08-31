@@ -22,7 +22,7 @@
 ## This module provides utilities for handling Unicode text properly,
 ## including cursor positioning and character operations.
 
-import std/[strutils, unicode, tables]
+import std/[options, strutils, unicode, tables]
 import pkg/celina
 
 export buffer.runeWidth, buffer.displayWidth, buffer.foldZeroWidthRune
@@ -270,6 +270,15 @@ proc charSubStr*(text: string, startChar: int, charCount: int = int.high): strin
       inc taken
 
   text[startByte ..< endByte]
+
+proc asciiChar*(s: string): Option[char] =
+  ## Single ASCII char in `s`, or none if empty, multi-char, or multi-byte.
+  ## Avoids `s[0]` returning a lead byte that accidentally passes range checks.
+  ## NUL is valid and distinct from none.
+  if s.len == 1 and s[0] < '\x80':
+    some(s[0])
+  else:
+    none(char)
 
 proc toggleAsciiCase*(c: char): char =
   ## Upper to lower and lower to upper; anything else unchanged.

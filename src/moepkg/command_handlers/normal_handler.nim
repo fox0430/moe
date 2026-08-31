@@ -28,7 +28,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, registers,
-    render_utils, search_utils, uri_utils, key_router,
+    render_utils, search_utils, uri_utils, key_router, unicode_utils,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
 import ../types/editor_types
@@ -547,19 +547,15 @@ proc handleNormalModeKey*(
   if state.pendingInput.macroState.waitingForRegister:
     # Expecting a register name (a-z or @)
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-      let registerChar =
-        if keyCombo.char.len > 0:
-          keyCombo.char[0]
-        else:
-          '\0'
+      let registerChar = keyCombo.char.asciiChar
 
       if state.pendingInput.macroState.commandType == "record":
         # Start recording to the specified register
-        if registerChar >= 'a' and registerChar <= 'z':
+        if registerChar.isSome and registerChar.get in 'a' .. 'z':
           state.pendingInput.macroState.isRecording = true
-          state.pendingInput.macroState.register = registerChar
+          state.pendingInput.macroState.register = registerChar.get
           state.pendingInput.macroState.recordedKeys = @[]
-          state.statusMessage = "recording @" & $registerChar
+          state.statusMessage = "recording @" & $registerChar.get
           state.pendingInput.macroState.waitingForRegister = false
           state.pendingInput.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -901,11 +897,11 @@ proc handleNormalModeKey*(
   of ctOperatorPending:
     case cmd.operatorType
     of "macro-play":
-      let registerChar =
-        if cmd.targetChar.len > 0:
-          cmd.targetChar[0]
-        else:
-          '\0'
+      let registerOpt = cmd.targetChar.asciiChar
+      if registerOpt.isNone:
+        state.statusMessage = "Invalid register (use a-z, @, or :)"
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      let registerChar = registerOpt.get
       let count = if cmd.count > 0: cmd.count else: 1
       if registerChar == '@':
         # @@ - repeat last macro
@@ -942,13 +938,9 @@ proc handleNormalModeKey*(
         state.statusMessage = "Invalid register (use a-z, @, or :)"
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     of "register-select":
-      let registerChar =
-        if cmd.targetChar.len > 0:
-          cmd.targetChar[0]
-        else:
-          '\0'
-      if isValidRegisterName(registerChar):
-        state.pendingInput.pendingRegister = some(registerChar)
+      let registerChar = cmd.targetChar.asciiChar
+      if registerChar.isSome and isValidRegisterName(registerChar.get):
+        state.pendingInput.pendingRegister = registerChar
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         state.pendingInput.pendingRegister = none(char)
