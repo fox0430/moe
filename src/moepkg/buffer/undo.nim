@@ -166,7 +166,10 @@ proc beginTransaction*(
 ): Result[(), string] =
   ## Begin a transaction to group multiple changes
   ## If cursorPos is provided, it will be used as the cursor position when undoing
-  ## Returns error if a transaction is already in progress
+  ## Returns error for read-only buffers or if a transaction is already in progress
+  if b.readOnly:
+    return err("Buffer is read-only")
+
   if b.inTransaction:
     let currentDesc =
       if b.currentTransaction.isSome:

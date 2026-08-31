@@ -1571,22 +1571,23 @@ suite "Buffer - Transaction Partial Failure Recovery":
       startSeq: baselineSeq,
       endSeq: baselineSeq + 2,
       kind: ckTransaction,
-      transactionChanges: @[
-        BufferChange(
-          startSeq: baselineSeq,
-          endSeq: baselineSeq + 1,
-          kind: ckInsertLine,
-          insertLineIdx: 999,
-          insertLineText: "x",
-        ),
-        BufferChange(
-          startSeq: baselineSeq + 1,
-          endSeq: baselineSeq + 2,
-          kind: ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 0),
-          insertText: "X",
-        ),
-      ],
+      transactionChanges:
+        @[
+          BufferChange(
+            startSeq: baselineSeq,
+            endSeq: baselineSeq + 1,
+            kind: ckInsertLine,
+            insertLineIdx: 999,
+            insertLineText: "x",
+          ),
+          BufferChange(
+            startSeq: baselineSeq + 1,
+            endSeq: baselineSeq + 2,
+            kind: ckInsertText,
+            insertPos: BufferPosition(line: 0, column: 0),
+            insertText: "X",
+          ),
+        ],
       transactionDescription: "test",
     )
     b.undoStack.addLast(txn)
@@ -1612,22 +1613,23 @@ suite "Buffer - Transaction Partial Failure Recovery":
       startSeq: baselineSeq,
       endSeq: baselineSeq + 2,
       kind: ckTransaction,
-      transactionChanges: @[
-        BufferChange(
-          startSeq: baselineSeq,
-          endSeq: baselineSeq + 1,
-          kind: ckInsertText,
-          insertPos: BufferPosition(line: 0, column: 0),
-          insertText: "X",
-        ),
-        BufferChange(
-          startSeq: baselineSeq + 1,
-          endSeq: baselineSeq + 2,
-          kind: ckInsertLine,
-          insertLineIdx: 999,
-          insertLineText: "x",
-        ),
-      ],
+      transactionChanges:
+        @[
+          BufferChange(
+            startSeq: baselineSeq,
+            endSeq: baselineSeq + 1,
+            kind: ckInsertText,
+            insertPos: BufferPosition(line: 0, column: 0),
+            insertText: "X",
+          ),
+          BufferChange(
+            startSeq: baselineSeq + 1,
+            endSeq: baselineSeq + 2,
+            kind: ckInsertLine,
+            insertLineIdx: 999,
+            insertLineText: "x",
+          ),
+        ],
       transactionDescription: "test",
     )
     b.redoStack.addLast(txn)
@@ -1748,6 +1750,16 @@ suite "Buffer - readOnly guard on undo/redo":
   # replay history without checking the flag — so a buffer set readOnly AFTER
   # edits were recorded could still be mutated through the history stacks. The
   # guards below complete "readOnly rejects on every mutation path".
+  test "beginTransaction on a readOnly buffer returns err":
+    let b = newTextBuffer("hello")
+    b.readOnly = true
+
+    let r = b.beginTransaction("insert")
+
+    check r.isErr
+    check r.error == "Buffer is read-only"
+    check not b.inTransaction
+
   test "undo on a readOnly buffer returns err and leaves content unchanged":
     let b = newTextBuffer("hello")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")

@@ -27,6 +27,7 @@ import pkg/results
 
 import
   types/editor_types,
+  editor_mode,
   editor_window,
   editor_window_state,
   git_cache,
@@ -158,6 +159,7 @@ proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
 
   # syncActiveWindow also updates state.windowDisplay.currentBufferId for the Jump List anchor.
   e.syncActiveWindow()
+  e.enforceModePolicy()
   e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc switchToBufferByIndex*(e: Editor, index: int) =
@@ -685,6 +687,7 @@ proc openAdditionalStartupFiles*(
         logError("moe", fmt"Failed to split for {filePath}: {splitResult.error}")
       elif readonly:
         e.activeBuffer().readOnly = true
+        e.enforceModePolicy()
     else:
       let bufResult = e.loadOrCreateBuffer(filePath)
       if bufResult.isErr:

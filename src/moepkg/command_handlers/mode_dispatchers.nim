@@ -178,6 +178,50 @@ proc beginInsertModeSession*(
 
   ok()
 
+proc recordLastInsertEdit(transaction: buffer.BufferTransaction, state: EditorState) =
+  let insertedText = extractInsertedText(transaction)
+  if insertedText.len == 0 or state.editState.insertModeStartPos.isNone:
+    return
+
+  if state.editState.substituteContext.isSome:
+    let subCtx = state.editState.substituteContext.get
+    state.editState.lastEditCommand = some(
+      types.LastEditCommand(
+        kind: types.lecSubstitute,
+        substituteText: insertedText,
+        substituteCount: subCtx.deleteCount,
+        substituteKind: subCtx.kind,
+      )
+    )
+  else:
+    state.editState.lastEditCommand = some(
+      types.LastEditCommand(
+        kind: types.lecInsertText,
+        insertedText: insertedText,
+        insertPosition: state.editState.insertModeStartPos.get,
+      )
+    )
+
+proc commitInsertModeBoundary*(
+    buffer: TextBuffer, state: EditorState
+): Result[void, string] =
+  ## Commit one Insert-mode undo group without leaving Insert mode. Unlike an
+  ## Escape or Ctrl-C exit, this keeps snippet and auto-indent state active.
+  if buffer.currentTransaction.isSome:
+    recordLastInsertEdit(buffer.currentTransaction.get, state)
+
+  state.editState.insertModeStartPos = none(BufferPosition)
+  state.editState.insertReplayCount = 0
+  state.editState.insertReplayLineEntry = false
+  state.editState.substituteContext = none(types.SubstituteContext)
+
+  if buffer.inTransaction:
+    let transactionResult = buffer.commitTransaction()
+    if transactionResult.isErr:
+      return err("Failed to commit transaction: " & transactionResult.error)
+
+  ok()
+
 proc finalizeInsertExit*(
     buffer: TextBuffer, state: EditorState
 ): Result[string, string] =
@@ -221,33 +265,14 @@ proc finalizeInsertExit*(
             break
       state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
 
-    if insertedText.len > 0:
-      if state.editState.substituteContext.isSome:
-        let subCtx = state.editState.substituteContext.get
-        state.editState.lastEditCommand = some(
-          types.LastEditCommand(
-            kind: types.lecSubstitute,
-            substituteText: insertedText,
-            substituteCount: subCtx.deleteCount,
-            substituteKind: subCtx.kind,
-          )
-        )
-      else:
-        state.editState.lastEditCommand = some(
-          types.LastEditCommand(
-            kind: types.lecInsertText,
-            insertedText: insertedText,
-            insertPosition: state.editState.insertModeStartPos.get,
-          )
-        )
-
+    recordLastInsertEdit(transaction, state)
     # Replay before commit so [count]i repeats share the same undo group.
     replayCountedInsert(buffer, state)
 
-    state.editState.insertModeStartPos = none(BufferPosition)
-    state.editState.insertReplayCount = 0
-    state.editState.insertReplayLineEntry = false
-    state.editState.substituteContext = none(types.SubstituteContext)
+  state.editState.insertModeStartPos = none(BufferPosition)
+  state.editState.insertReplayCount = 0
+  state.editState.insertReplayLineEntry = false
+  state.editState.substituteContext = none(types.SubstituteContext)
 
   if buffer.inTransaction:
     let transactionResult = buffer.commitTransaction()
@@ -262,6 +287,17 @@ proc finalizeInsertExit*(
 
   ok("")
 
+proc finalizeInsertInterrupt*(
+    buffer: TextBuffer, state: EditorState
+): Result[void, string] =
+  ## Finish Insert mode for Ctrl-C without Escape-only count replay or visual
+  ## block replication. The typed text is still recorded for dot-repeat.
+  state.snippetSession.active = false
+  clearAutoIndentIfUnedited(buffer, state)
+
+  state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+  commitInsertModeBoundary(buffer, state)
+
 proc handleInsertMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
@@ -273,13 +309,15 @@ proc handleInsertMode*(
   of imrHandled:
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
-      # Forced Insert mode disables Ctrl-o's one-shot Normal command. Keep the
-      # current transaction open so the key is a true no-op.
+      # Forced Insert mode uses Ctrl-o as its built-in route to Command mode.
       if state.config.standard.forceInsertMode and state.insertNormalMode and
           r.modeTransition.get == EditorMode.Normal:
         state.insertNormalMode = false
         return HandlerResult(
-          kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+          kind: hrHandled,
+          modeTransition: none(EditorMode),
+          overlayTransition: some(OverlayKind.okCommand),
+          statusMessage: "",
         )
 
       # Ctrl-o (insert-normal mode): skip transaction commit/cleanup,
@@ -300,7 +338,10 @@ proc handleInsertMode*(
           if finalizeResult.isErr: finalizeResult.error else: finalizeResult.get,
       )
     return HandlerResult(
-      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
+      kind: hrHandled,
+      modeTransition: r.modeTransition,
+      overlayTransition: r.overlayTransition,
+      statusMessage: "",
     )
   of imrUnhandled:
     return HandlerResult(kind: hrUnhandled)

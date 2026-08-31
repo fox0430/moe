@@ -131,7 +131,7 @@ type
     forceInsertMode* {.
       cfg,
       cfgDocDescription:
-        "Keep editable buffers in Insert mode and disable Normal-mode commands"
+        "Keep editable buffers in Insert mode; Ctrl-O opens the command line"
     .}: bool
     disableChangeCursor* {.
       cfg, cfgDocDescription: "Disable change of the cursor shape"

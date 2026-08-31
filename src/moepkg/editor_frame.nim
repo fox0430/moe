@@ -31,6 +31,7 @@ import
   types/editor_types,
   editor_reload,
   editor_config_reload,
+  editor_mode,
   editor_file,
   editor_lsp,
   editor_codelens,
@@ -353,6 +354,7 @@ proc tick*(e: Editor) =
   e.tickLsp()
   e.tickFileAndConfig()
   e.tickGitAndDebug()
+  e.tickForcedInsertBoundary()
   e.tickAutoSave()
   e.tickNotifications()
 

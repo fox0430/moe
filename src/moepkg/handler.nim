@@ -1084,14 +1084,12 @@ proc handleInterruptCore(e: Editor): bool =
     # Other file edit modes (Insert, Visual, Replace, etc.): switch to Normal mode
     let activeBuffer = e.activeBuffer()
 
-    # Finalize the complete Insert session so replay/snippet/block state cannot
-    # leak across Ctrl-C. Replace mode only owns a transaction and history.
+    # Ctrl-C records the insert for dot-repeat, but does not run Escape-only
+    # counted-insert replay or visual-block replication.
     if e.state.mode == EditorMode.Insert:
-      let finalizeResult = finalizeInsertExit(activeBuffer, e.state)
+      let finalizeResult = finalizeInsertInterrupt(activeBuffer, e.state)
       if finalizeResult.isErr:
         e.state.statusMessage = finalizeResult.error
-      elif finalizeResult.get.len > 0:
-        e.state.statusMessage = finalizeResult.get
     elif e.state.mode == EditorMode.Replace:
       if activeBuffer.inTransaction:
         clearAutoIndentIfUnedited(activeBuffer, e.state)
@@ -1100,6 +1098,7 @@ proc handleInterruptCore(e: Editor): bool =
           logError "handler", "Failed to commit transaction: " & commitResult.error
           e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
       e.state.editState.replaceHistory = @[]
+      e.state.editState.substituteContext = none(types.SubstituteContext)
 
     e.state.previousMode = e.state.mode
     e.setMode(EditorMode.Normal)
@@ -1354,12 +1353,19 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   # Handle overlay modes (Command, Search, Rename) + Debug mode
   let overlayResult = e.handleOverlayKeyCombo(keyCombo)
   if overlayResult.isSome:
+    e.enforceModePolicy()
     return overlayResult.get
 
   # Handle LSP popups (CodeLens picker, Hover popup); some keys fall through
   let popupResult = e.handlePopupKeyCombo(keyCombo)
   if popupResult.isSome:
     return popupResult.get
+
+  # GUI frontends may deliver Ctrl-C as a KeyCombo rather than an interrupt
+  # event. Route both forms through the same non-Escape Insert cleanup.
+  if e.state.mode == EditorMode.Insert and not keyCombo.isSpecial and
+      kmCtrl in keyCombo.modifiers and keyCombo.char.toLowerAscii == "c":
+    return e.handleInterruptCore()
 
   # In Normal mode, Escape cancels pending multi-key state
   if e.handleEscapeCancellationKeyCombo(keyCombo):
@@ -1526,6 +1532,7 @@ proc runBuildAsync(
         if splitResult.isErr:
           editor.notify("Failed to open output window: " & splitResult.error, nlError)
         else:
+          editor.enforceModePolicy()
           if editor.config.notification.screenNotifications and
               editor.config.notification.buildOnSaveScreenNotify:
             editor.notify("Build completed: " & info.path)
@@ -1567,6 +1574,7 @@ proc runQuickRunAsync(
           if splitResult.isErr:
             editor.notify("Failed to open output window: " & splitResult.error, nlError)
           else:
+            editor.enforceModePolicy()
             if editor.config.notification.screenNotifications and
                 editor.config.notification.quickRunScreenNotify:
               editor.notify("QuickRun completed: " & qrProcess.filePath)

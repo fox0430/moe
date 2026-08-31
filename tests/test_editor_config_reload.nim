@@ -112,6 +112,18 @@ suite "editor_config_reload - applyConfigSettings":
     check e.state.mode == EditorMode.Insert
     check e.activeBuffer.inTransaction
 
+  test "enabling forced Insert mode preserves an active overlay":
+    let e = createTestEditor()
+    e.state.enterCommandOverlay()
+    let newConfig = newEditorConfig()
+    newConfig.standard.forceInsertMode = true
+
+    e.applyConfigSettings(newConfig)
+
+    check e.state.mode == EditorMode.Normal
+    check e.state.isCommandOverlay
+    check not e.activeBuffer.inTransaction
+
   test "disables LSP servers at runtime":
     let e = createTestEditor()
     e.lsp.setEnabled(true)

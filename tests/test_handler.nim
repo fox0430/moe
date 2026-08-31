@@ -1005,21 +1005,34 @@ proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception])
   await sleepAsync(10)
   await e.handlePendingAsyncOperations(FrontendHooks())
 
+proc waitForOutputSplit(e: Editor): Future[bool] {.async: (raises: [Exception]).} =
+  for _ in 0 ..< 200:
+    if e.windowManager.windows.len > 1:
+      return true
+    await sleepAsync(10)
+  return false
+
 suite "handlePendingAsyncOperations drains ops queued from async tasks":
-  test "build op drains on tick":
+  test "build output remains Normal when forced Insert mode is enabled":
     let config = newEditorConfig()
+    config.standard.forceInsertMode = true
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoBuild,
-      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+      build: (path: "/tmp/x.nim", language: 0, customCmd: "echo hi", workspaceRoot: ""),
     )
 
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
+    check waitFor waitForOutputSplit(editor)
+    check editor.activeBuffer.readOnly
+    check editor.state.mode == EditorMode.Normal
+    check not editor.activeBuffer.inTransaction
 
-  test "quickRun op drains on tick":
+  test "QuickRun output remains Normal when forced Insert mode is enabled":
     let config = newEditorConfig()
+    config.standard.forceInsertMode = true
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
@@ -1029,6 +1042,10 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
 
     check editor.state.pending.len == 0
+    check waitFor waitForOutputSplit(editor)
+    check editor.activeBuffer.readOnly
+    check editor.state.mode == EditorMode.Normal
+    check not editor.activeBuffer.inTransaction
 
   test "syntaxCheck op drains on tick":
     let config = newEditorConfig()
@@ -4048,7 +4065,15 @@ suite "handleKeyCombo - frontend-neutral input":
 suite "forced Insert mode":
   let
     escapeKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    ctrlCKey = KeyCombo(isSpecial: false, char: "c", modifiers: {key_bindings.kmCtrl})
     ctrlOKey = KeyCombo(isSpecial: false, char: "o", modifiers: {key_bindings.kmCtrl})
+
+  proc charKey(c: string): KeyCombo =
+    KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+  proc typeKeys(e: Editor, keys: string) =
+    for key in keys:
+      check e.handleKeyCombo(charKey($key))
 
   proc createForcedInsertEditor(): Editor =
     let config = newEditorConfig()
@@ -4087,7 +4112,7 @@ suite "forced Insert mode":
     let e = createForcedInsertEditor()
     check e.handleTextInput("a")
 
-    check e.handleInterrupt()
+    check e.handleKeyCombo(ctrlCKey)
 
     check e.state.mode == EditorMode.Insert
     check e.cursor == BufferPosition(line: 0, column: 1)
@@ -4095,16 +4120,81 @@ suite "forced Insert mode":
     check e.activeBuffer.undoStack.len == 1
     check e.activeBuffer.currentTransaction.get.changes.len == 0
 
-  test "Ctrl-O cannot expose a one-shot Normal command":
+  test "Ctrl-O opens the command line without exposing Normal mode":
     let e = createForcedInsertEditor()
 
     check e.handleKeyCombo(ctrlOKey)
     check e.state.mode == EditorMode.Insert
     check not e.state.insertNormalMode
+    check e.state.isCommandOverlay
+    check e.state.input.commandText == ":"
     check e.activeBuffer.inTransaction
 
-    check e.handleTextInput("x")
+    check e.handleTextInput("w")
+    check e.state.input.commandText == ":w"
+
+  test "Ctrl-C does not replay a counted Insert command":
+    let e = createTestEditorWithBuffer("")
+
+    e.typeKeys("3ix")
+    check e.handleKeyCombo(ctrlCKey)
+
+    check e.state.mode == EditorMode.Normal
     check $e.activeBuffer.getLine(0) == "x"
+
+  test "Ctrl-C does not replicate a visual block insertion":
+    let e = createTestEditorWithBuffer("aaa\nbbb\nccc")
+    e.state.mode = EditorMode.Insert
+    check e.activeBuffer.beginTransaction("visual block insert").isOk
+    e.state.editState.insertModeStartPos = some(e.cursor)
+    e.state.editState.visualBlockInsertContext = some(
+      VisualBlockInsertContext(
+        kind: vbiInsert, startLine: 0, endLine: 2, insertColumn: 0
+      )
+    )
+
+    check e.handleTextInput("X")
+    check e.handleKeyCombo(ctrlCKey)
+
+    check $e.activeBuffer.getLine(0) == "Xaaa"
+    check $e.activeBuffer.getLine(1) == "bbb"
+    check $e.activeBuffer.getLine(2) == "ccc"
+    check e.state.editState.visualBlockInsertContext.isNone
+
+  test "Ctrl-C after substitute does not corrupt the next dot repeat":
+    let e = createTestEditorWithBuffer("old")
+
+    e.typeKeys("ccN")
+    check e.handleKeyCombo(ctrlCKey)
+    e.typeKeys("iQ")
+    check e.handleKeyCombo(escapeKey)
+    e.typeKeys(".")
+
+    check $e.activeBuffer.getLine(0) == "QQN"
+
+  test "Ctrl-C after Replace clears the prior substitute context":
+    let e = createTestEditorWithBuffer("old")
+
+    e.typeKeys("ccN")
+    check e.handleKeyCombo(escapeKey)
+    e.typeKeys("Ry")
+    check e.handleKeyCombo(ctrlCKey)
+    e.typeKeys("iQ")
+    check e.handleKeyCombo(escapeKey)
+    e.typeKeys(".")
+
+    check e.state.editState.substituteContext.isNone
+    check $e.activeBuffer.getLine(0) == "yQQ"
+
+  test "marking the first -R buffer leaves it in Normal mode":
+    let e = createForcedInsertEditor()
+    # main applies -R after loading the first path into the initial buffer.
+    e.activeBuffer.readOnly = true
+
+    e.enforceModePolicy()
+
+    check e.state.mode == EditorMode.Normal
+    check not e.activeBuffer.inTransaction
 
   test "policy restores a directly assigned Normal mode":
     let e = createForcedInsertEditor()

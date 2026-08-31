@@ -38,7 +38,7 @@ ignorecase = true                      # Search case insensitive
 
 smartcase = true                       # Smart case search
 
-forceInsertMode = false                # Keep editable buffers in Insert mode and disable Normal-mode commands
+forceInsertMode = false                # Keep editable buffers in Insert mode; Ctrl-O opens the command line
 
 disableChangeCursor = false            # Disable cursor shape changes
 

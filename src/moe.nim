@@ -333,6 +333,7 @@ proc main() =
         # Apply readonly mode if specified
         if cmdLineConfig.isReadonly:
           editor.activeBuffer().readOnly = true
+          editor.enforceModePolicy()
 
       # Open any additional files (after the first). The auto-split vs no-split
       # decision and the per-file loop live in openAdditionalStartupFiles so the

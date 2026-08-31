@@ -19,7 +19,7 @@
 
 ## Tests for editor_frame.nim
 
-import std/[unittest, options, os, tables, monotimes]
+import std/[unittest, options, os, tables, monotimes, times]
 
 import pkg/celina
 
@@ -28,6 +28,22 @@ import std/strutils
 import ../src/moepkg/[types, editor, config, message_log, editor_notify]
 import ../src/moepkg/[highlight, editor_frame, editor_window]
 import ../src/moepkg/buffer {.all.}
+
+suite "tick - forced Insert mode boundaries":
+  test "commits an idle edit group and starts the next one":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    let e = newEditor(config)
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello").isOk
+    e.cursor = BufferPosition(line: 0, column: 5)
+    e.state.timing.lastInputTime = getMonoTime() - initDuration(milliseconds = 600)
+
+    e.tick()
+
+    check e.activeBuffer.undoStack.len == 1
+    check e.activeBuffer.inTransaction
+    check e.activeBuffer.currentTransaction.get.changes.len == 0
+    check e.state.editState.insertModeStartPos == some(e.cursor)
 
 suite "tick - frontend Git status subscription":
   test "does not maintain Git status without a display or frontend consumer":
@@ -757,16 +773,17 @@ suite "updateForFrame - split buffer re-parse budget":
     e.addBuffer(buf)
 
     # Simulate an LSP publishDiagnostics that sets the flag with no flight.
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 10,
-        startCol: 0,
-        endLine: 10,
-        endCol: 5,
-        severity: bdsError,
-        message: "test error",
-      )
-    ]
+    buf.diagnostics =
+      @[
+        BufferDiagnostic(
+          startLine: 10,
+          startCol: 0,
+          endLine: 10,
+          endCol: 5,
+          severity: bdsError,
+          message: "test error",
+        )
+      ]
     buf.diagnosticsDirty = true
     buf.highlightNeedsUpdate = true
     check buf.incrementalHighlight.pendingReparse == nil

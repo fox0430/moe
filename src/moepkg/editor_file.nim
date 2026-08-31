@@ -32,6 +32,7 @@ import
   search_utils,
   editorconfig_helper,
   editor_codelens,
+  editor_mode,
   highlight,
   highlight_config,
   persist,
@@ -355,6 +356,12 @@ proc saveFile*(
     logError("editor", "Save failed: File was modified externally: " & savePath)
     return err(ExternalModErrorMsg)
 
+  let insertBoundaryResult = e.commitForcedInsertBoundary(restart = false)
+  if insertBoundaryResult.isErr:
+    return err(insertBoundaryResult.error)
+  defer:
+    e.enforceModePolicy()
+
   # Trim trailing whitespace if EditorConfig says so; reverted on save failure.
   let didTrimRes = trimTrailingWhitespaceTracked(activeBuffer)
   if didTrimRes.isErr:
@@ -401,6 +408,13 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
   ## When `force` is false, buffers whose underlying file was changed externally
   ## are skipped and reported via `skippedExternal`. When true, those changes
   ## are overwritten.
+  let insertBoundaryResult = e.commitForcedInsertBoundary(restart = false)
+  if insertBoundaryResult.isErr:
+    result.failures.add((path: "", error: insertBoundaryResult.error))
+    return
+  defer:
+    e.enforceModePolicy()
+
   for buffer in e.buffers:
     if not buffer.isModified:
       continue
@@ -480,6 +494,15 @@ proc autoSave*(e: Editor) =
 
   if elapsed < threshold:
     return
+
+  let insertBoundaryResult = e.commitForcedInsertBoundary(restart = false)
+  if insertBoundaryResult.isErr:
+    logError(
+      "editor", "Auto save insert boundary failed: " & insertBoundaryResult.error
+    )
+    return
+  defer:
+    e.enforceModePolicy()
 
   # Iterate `e.buffers`, not windows: windows only expose foreground tabs,
   # so background-tab buffers would silently miss auto save.
