@@ -27,7 +27,7 @@
 
 import std/[tables, strutils, options, sequtils, hashes]
 
-import ../[types, modes, logger]
+import ../[types, modes, logger, unicode_utils]
 
 const ExecCmdlinePrefix* = "exec.cmdline."
   ## commandId prefix for Command mode command alias bridge entries (see
@@ -281,8 +281,8 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
   ## Parse a string like "C-x" or "M-w" into a KeyCombo
   ## C = Ctrl, M = Meta/Alt, S = Shift
 
-  # Handle single-character strings directly (including "-" itself)
-  if s.len == 1:
+  # Single character (incl. "-" and multi-byte) stays as one combo.
+  if s.charLen == 1:
     return some(KeyCombo(isSpecial: false, char: s, modifiers: {}))
 
   var parts = s.split('-')
@@ -307,8 +307,8 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
   let keyStr = parts[^1]
   var combo: KeyCombo
 
-  if keyStr.len == 1:
-    combo = KeyCombo(isSpecial: false, char: $keyStr[0])
+  if keyStr.charLen == 1:
+    combo = KeyCombo(isSpecial: false, char: keyStr)
   else:
     # Handle special keys
     case keyStr.toUpperAscii
@@ -357,22 +357,19 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
   # Set the modifiers once
   combo.modifiers = modifiers
 
-  # Ctrl + non-letter character is not detectable in terminals
-  if kmCtrl in combo.modifiers and not combo.isSpecial and combo.char.len == 1:
-    if combo.char[0] notin {'a' .. 'z', 'A' .. 'Z'}:
+  # Ctrl + non-letter is undetectable; multi-byte counts as non-letter.
+  if kmCtrl in combo.modifiers and not combo.isSpecial:
+    if combo.char.len != 1 or combo.char[0] notin {'a' .. 'z', 'A' .. 'Z'}:
       return none(KeyCombo)
 
-  # Normalize Shift+<letter>: terminals deliver the uppercase character without
-  # a separate Shift modifier (see `eventToKeyCombo`).
-  if kmShift in combo.modifiers and not combo.isSpecial and combo.char.len == 1:
-    if combo.char[0] in {'a' .. 'z', 'A' .. 'Z'}:
+  # Shift+letter: terminals send uppercase without Shift (see eventToKeyCombo).
+  if kmShift in combo.modifiers and not combo.isSpecial:
+    if combo.char.len == 1 and combo.char[0] in {'a' .. 'z', 'A' .. 'Z'}:
       combo.char = combo.char.toUpperAscii
       combo.modifiers.excl(kmShift)
     else:
-      # Shift+<digit/symbol> is layout-dependent — terminals deliver the
-      # shifted character without a Shift modifier (e.g. Shift+1 -> '!').
-      # Accepting "S-1" here would silently never match. Reject so the user
-      # writes the literal shifted character.
+      # Shift+non-letter (incl. multi-byte) has no shifted form; reject so
+      # caller uses the literal char (e.g. "!" not "S-1").
       return none(KeyCombo)
 
   # Normalize Shift+Tab: terminals report it as the dedicated BackTab keycode

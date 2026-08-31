@@ -479,7 +479,7 @@ proc executeCommand*(
     of "replace":
       # Execute replace character action (r command)
       # Replace count characters with the target character
-      if cmd.targetChar.len == 0:
+      if cmd.targetChar.charLen != 1:
         return err("No character specified for replace")
 
       let actualCount = max(1, count)
@@ -528,7 +528,7 @@ proc executeCommand*(
       return ok(())
     of "visual-replace":
       # Execute visual replace action (r command in visual mode)
-      if cmd.targetChar.len == 0:
+      if cmd.targetChar.charLen != 1:
         return err("No character specified for replace")
 
       # Check if we're in visual mode with active selection
@@ -538,14 +538,14 @@ proc executeCommand*(
       # Surface a failed rollback (untrustworthy buffer) as a status message
       # instead of letting it escape to the crash handler.
       try:
-        visualReplace(ctx.buffer, ctx.state, cmd.targetChar[0])
+        visualReplace(ctx.buffer, ctx.state, cmd.targetChar)
       except TransactionRollbackError as exc:
         return err(exc.msg & " (buffer state may be inconsistent)")
 
       return ok(())
     of "visual-surround":
       # Execute visual surround action (S command in visual mode)
-      if cmd.targetChar.len == 0:
+      if cmd.targetChar.charLen != 1:
         return err("No character specified for surround")
 
       if not ctx.state.visualSelection.active:
@@ -554,7 +554,7 @@ proc executeCommand*(
       # Surface a failed rollback (untrustworthy buffer) as a status message
       # instead of letting it escape to the crash handler.
       try:
-        visualSurround(ctx.buffer, ctx.state, cmd.targetChar[0])
+        visualSurround(ctx.buffer, ctx.state, cmd.targetChar)
       except TransactionRollbackError as exc:
         return err(exc.msg & " (buffer state may be inconsistent)")
 

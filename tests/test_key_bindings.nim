@@ -222,6 +222,28 @@ suite "KeyCombo - parseKeyCombo":
     check parseKeyCombo("C-@").isNone
     check parseKeyCombo("C-/").isNone
 
+  test "Parse multibyte character as one combo":
+    let result = parseKeyCombo("\u3042")
+    check result.isSome
+    let combo = result.get
+    check combo.isSpecial == false
+    check combo.char == "\u3042"
+    check combo.modifiers == {}
+
+  test "Ctrl + multibyte character is invalid":
+    check parseKeyCombo("C-\u3042").isNone
+
+  test "Shift + multibyte character is invalid":
+    check parseKeyCombo("S-\u3042").isNone
+
+  test "Parse modifier with multibyte character":
+    let result = parseKeyCombo("M-\u3042")
+    check result.isSome
+    let combo = result.get
+    check combo.isSpecial == false
+    check combo.char == "\u3042"
+    check combo.modifiers == {kmAlt}
+
 suite "KeyCombo - keyComboToString":
   test "Simple character":
     let combo = toKeyCombo('a')

@@ -832,6 +832,77 @@ suite "executeCommand - Repeat command (.)":
     check registry.executeCommand(ctx, repeatCmd).isOk
     check buffer[1] == "yyy" # unchanged - no phantom delete
 
+suite "executeCommand - visual replace":
+  test "visual replace writes a multibyte target whole":
+    # The command carries targetChar as a string; passing only its first byte
+    # would leave a lone 0xE3 behind and make the line invalid UTF-8.
+    let buffer = newTextBuffer("ab world")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 1),
+      active: true,
+      kind: vskChar,
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "visual-replace",
+      targetChar: "あ",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "ああ world"
+
+  test "visual replace rejects a multi-character target":
+    let buffer = newTextBuffer("ab world")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 1),
+      active: true,
+      kind: vskChar,
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "visual-replace",
+      targetChar: "ab",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, cmd).isErr
+    check buffer[0] == "ab world"
+
+suite "executeCommand - visual surround":
+  test "visual surround writes a multibyte target whole":
+    # Passing only the first byte would insert a lone 0xE3 on each side.
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "visual-surround",
+      targetChar: "「",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "「hello」 world"
+
 suite "executeCommand - Record last edit":
   test "operator motion is recorded for repeat":
     let buffer = newTextBuffer("hello world")
