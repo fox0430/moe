@@ -166,39 +166,63 @@ proc moveDown(
   else:
     result.y = 0
 
+proc pageTarget(
+    e: MotionExecutor, rl: RowLayout, currentPos: CursorPosition, rows: int
+): int =
+  ## Line `rows` screen rows from cursor. Handles wrap/folds; falls back to arithmetic.
+  if e.buffer.isNil or e.buffer.len == 0:
+    return 0
+  let last = e.buffer.len - 1
+  if rl.buffer.isNil:
+    return clamp(currentPos.y + rows, 0, last)
+  let
+    line = clamp(currentPos.y, 0, last)
+    seg = rl.cursorCell(line, max(0, currentPos.x)).wrapSeg
+  if rows >= 0:
+    let row = rl.rowAt(line, seg, rows)
+    if row.isSome: row.get.line else: last
+  else:
+    rl.walkBackRows(line, seg, -rows).line
+
 proc movePageUp(
-    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    count: int,
+    visibleRows: int,
+    rl: RowLayout = RowLayout(),
 ): CursorPosition =
   result = currentPos
-  let pageSize = max(1, viewportHeight - 1) * count
-  result.y = max(0, currentPos.y - pageSize)
+  result.y = e.pageTarget(rl, currentPos, -(max(1, visibleRows - 1) * count))
 
 proc movePageDown(
-    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    count: int,
+    visibleRows: int,
+    rl: RowLayout = RowLayout(),
 ): CursorPosition =
   result = currentPos
-  let pageSize = max(1, viewportHeight - 1) * count
-  if e.buffer.len > 0:
-    result.y = min(e.buffer.len - 1, currentPos.y + pageSize)
-  else:
-    result.y = 0
+  result.y = e.pageTarget(rl, currentPos, max(1, visibleRows - 1) * count)
 
 proc moveHalfPageUp(
-    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    count: int,
+    visibleRows: int,
+    rl: RowLayout = RowLayout(),
 ): CursorPosition =
   result = currentPos
-  let halfPageSize = max(1, (viewportHeight - 1) div 2) * count
-  result.y = max(0, currentPos.y - halfPageSize)
+  result.y = e.pageTarget(rl, currentPos, -(max(1, (visibleRows - 1) div 2) * count))
 
 proc moveHalfPageDown(
-    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    count: int,
+    visibleRows: int,
+    rl: RowLayout = RowLayout(),
 ): CursorPosition =
   result = currentPos
-  let halfPageSize = max(1, (viewportHeight - 1) div 2) * count
-  if e.buffer.len > 0:
-    result.y = min(e.buffer.len - 1, currentPos.y + halfPageSize)
-  else:
-    result.y = 0
+  result.y = e.pageTarget(rl, currentPos, max(1, (visibleRows - 1) div 2) * count)
 
 proc moveHome(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
@@ -793,47 +817,53 @@ proc moveToMatchingBracket(
 
       lineIdx -= 1
 
+proc viewportRowLine(
+    e: MotionExecutor, rl: RowLayout, viewportTop: tuple[line, offset: int], row: int
+): int =
+  ## Line `row` screen rows below viewport top. Handles wrap/folds.
+  if e.buffer.isNil or e.buffer.len == 0:
+    return 0
+  let last = e.buffer.len - 1
+  if rl.buffer.isNil:
+    return clamp(viewportTop.line + row, 0, last)
+  let target = rl.rowAt(viewportTop.line, viewportTop.offset, max(0, row))
+  if target.isSome: target.get.line else: last
+
 proc moveViewportHigh(
-    e: MotionExecutor, currentPos: CursorPosition, viewportTopLine: int, count: int = 1
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    viewportTop: tuple[line, offset: int],
+    count: int = 1,
+    rl: RowLayout = RowLayout(),
 ): CursorPosition =
-  ## Move to top line of viewport (H motion)
-  ## count specifies offset from top (e.g., 2H moves to second line from top)
+  ## Move to top of viewport (H). `count` is offset from top.
   result = currentPos
-  let targetLine = viewportTopLine + (count - 1)
-  result.y = min(targetLine, e.buffer.len - 1)
+  result.y = e.viewportRowLine(rl, viewportTop, count - 1)
   result.x = 0
 
 proc moveViewportMiddle(
     e: MotionExecutor,
     currentPos: CursorPosition,
-    viewportTopLine: int,
-    viewportHeight: int,
-    reservedLines: int,
+    viewportTop: tuple[line, offset: int],
+    visibleRows: int,
+    rl: RowLayout = RowLayout(),
 ): CursorPosition =
-  ## Move to middle line of viewport (M motion)
+  ## Move to middle of viewport (M).
   result = currentPos
-  # Calculate the middle line of the visible area (excluding reserved lines)
-  let visibleHeight = viewportHeight - reservedLines
-  let middleLine = viewportTopLine + (visibleHeight div 2)
-  result.y = min(middleLine, e.buffer.len - 1)
+  result.y = e.viewportRowLine(rl, viewportTop, visibleRows div 2)
   result.x = 0
 
 proc moveViewportLow(
     e: MotionExecutor,
     currentPos: CursorPosition,
-    viewportTopLine: int,
-    viewportHeight: int,
-    reservedLines: int,
+    viewportTop: tuple[line, offset: int],
+    visibleRows: int,
     count: int = 1,
+    rl: RowLayout = RowLayout(),
 ): CursorPosition =
-  ## Move to bottom line of viewport (L motion)
-  ## count specifies offset from bottom (e.g., 2L moves to second line from bottom)
+  ## Move to bottom of viewport (L). `count` is offset from bottom.
   result = currentPos
-  # Calculate the target line (bottom of viewport minus count, excluding reserved lines)
-  let visibleHeight = viewportHeight - reservedLines
-  let bottomLine = viewportTopLine + visibleHeight - 1
-  let targetLine = bottomLine - (count - 1)
-  result.y = min(max(0, targetLine), e.buffer.len - 1)
+  result.y = e.viewportRowLine(rl, viewportTop, visibleRows - count)
   result.x = 0
 
 proc calculateNewPosition*(
@@ -844,9 +874,13 @@ proc calculateNewPosition*(
     viewportTopLine: int = 0,
     reservedLines: int = steadyBottomAreaHeight(),
     mode: EditorMode = EditorMode.Normal,
+    rowLayout: RowLayout = RowLayout(),
+    viewportTopWrapOffset: int = 0,
 ): CursorPosition =
-  ## Calculate new cursor position after motion, without modifying state.
-  ## `mode` lets Insert/Replace rest one past the last character (end of line).
+  ## New cursor position after motion (no state change). `visibleRows` is used for viewport-relative motions.
+  let
+    visibleRows = max(1, viewportHeight - max(0, reservedLines))
+    viewportTop = (line: viewportTopLine, offset: viewportTopWrapOffset)
   case cmd.motion
   of Motion.Left:
     e.moveLeft(currentPos, cmd.count)
@@ -857,13 +891,13 @@ proc calculateNewPosition*(
   of Motion.Down:
     e.moveDown(currentPos, cmd.count)
   of Motion.PageUp:
-    e.movePageUp(currentPos, cmd.count, viewportHeight)
+    e.movePageUp(currentPos, cmd.count, visibleRows, rowLayout)
   of Motion.PageDown:
-    e.movePageDown(currentPos, cmd.count, viewportHeight)
+    e.movePageDown(currentPos, cmd.count, visibleRows, rowLayout)
   of Motion.HalfPageUp:
-    e.moveHalfPageUp(currentPos, cmd.count, viewportHeight)
+    e.moveHalfPageUp(currentPos, cmd.count, visibleRows, rowLayout)
   of Motion.HalfPageDown:
-    e.moveHalfPageDown(currentPos, cmd.count, viewportHeight)
+    e.moveHalfPageDown(currentPos, cmd.count, visibleRows, rowLayout)
   of Motion.Home:
     e.moveHome(currentPos)
   of Motion.FirstNonBlank:
@@ -897,13 +931,11 @@ proc calculateNewPosition*(
   of Motion.ParagraphBackward:
     e.moveParagraphBackward(currentPos, cmd.count)
   of Motion.ViewportHigh:
-    e.moveViewportHigh(currentPos, viewportTopLine, cmd.count)
+    e.moveViewportHigh(currentPos, viewportTop, cmd.count, rowLayout)
   of Motion.ViewportMiddle:
-    e.moveViewportMiddle(currentPos, viewportTopLine, viewportHeight, reservedLines)
+    e.moveViewportMiddle(currentPos, viewportTop, visibleRows, rowLayout)
   of Motion.ViewportLow:
-    e.moveViewportLow(
-      currentPos, viewportTopLine, viewportHeight, reservedLines, cmd.count
-    )
+    e.moveViewportLow(currentPos, viewportTop, visibleRows, cmd.count, rowLayout)
   of Motion.NextLineFirstNonBlank:
     e.moveNextLineFirstNonBlank(currentPos, cmd.count)
   of Motion.PreviousLineFirstNonBlank:
@@ -911,11 +943,7 @@ proc calculateNewPosition*(
   of Motion.MatchBracket:
     e.moveToMatchingBracket(currentPos)
   of Motion.RepeatFind, Motion.RepeatFindReverse:
-    # Dispatch concepts, not real motions: executeCommand resolves these to a
-    # concrete find/till motion before the motion path reaches here (see
-    # command_registry.executeFindCharMotion). Arriving here means a caller
-    # bypassed that resolution, so fail loudly instead of silently returning
-    # currentPos (the former silent no-op masked such wiring mistakes).
+    # Must be resolved to a concrete motion before reaching here.
     raiseAssert "RepeatFind must be resolved before calculateNewPosition"
 
 proc newCursorManager*(state: EditorState): CursorManager =
@@ -966,15 +994,13 @@ proc updateViewport*(
     cursorPos: CursorPosition,
     lineCount: int,
     showStatusLine: bool = true,
-    reservedLines: int = -1, # -1 means auto-calculate from showStatusLine
+    reservedLines: int = -1, # -1 means auto-calculate
     lineWrap: bool = false,
     buffer: core.TextBuffer = nil,
     viewportOffset: int = 0,
     tabStop: int = 4,
 ) =
-  ## Update viewport to keep cursor visible with 1-line scrolling.
-  ## `viewportOffset` is every non-text cell of the window (line number +
-  ## sidebar + scrollbar), from `viewportOffsetFor`.
+  ## Keep cursor visible; scrolls viewport as needed.
 
   # Ensure we have valid data
   if lineCount <= 0:
@@ -993,44 +1019,21 @@ proc updateViewport*(
       else:
         steadyBottomAreaHeight()
 
-  # Vertical scrolling - handle line wrap mode differently
-  if lineWrap and not buffer.isNil:
-    # Line wrap mode: calculate screen positions
-    let
-      maxWidth = wrapWidthFor(mgr.viewport.width, viewportOffset)
-      visibleHeight = mgr.viewport.height - actualReservedLines
-
-      rl = initRowLayout(buffer, mgr.wrapCountCache, lineWrap, maxWidth, tabStop)
-      cursorWrapOffset = rl.cursorCell(clampedCursorY, clampedCursorX).wrapSeg
-
-    # Cursor's screen row relative to topLine. The walk stops at visibleHeight
-    # so a distant jump costs O(visibleHeight), not O(lines).
-    let cursorScreenLine =
-      rl.rowOfLine(mgr.viewport.topLine, 0, clampedCursorY, visibleHeight) +
-      cursorWrapOffset
-
-    # Scroll up if cursor is above viewport
-    if cursorScreenLine < 0 or clampedCursorY < mgr.viewport.topLine:
-      mgr.viewport.resetViewportTop(clampedCursorY)
-    # Scroll down if cursor is below viewport
-    elif cursorScreenLine >= visibleHeight:
-      # Highest top that still shows the cursor on the last row. This viewport
-      # only scrolls whole lines, so a top landing mid-line moves down one.
-      mgr.viewport.resetViewportTop(
-        rl.lineTopFor(clampedCursorY, cursorWrapOffset, max(0, visibleHeight - 1))
-      )
-  else:
-    # No line wrap: simple logic
+  let visibleHeight = max(1, mgr.viewport.height - actualReservedLines)
+  if buffer.isNil:
     if clampedCursorY < mgr.viewport.topLine:
-      # Cursor moved above viewport - scroll up
       mgr.viewport.resetViewportTop(clampedCursorY)
-    elif clampedCursorY >=
-        mgr.viewport.topLine + mgr.viewport.height - actualReservedLines:
-      # Cursor moved below viewport - scroll down (account for status and command lines)
+    elif clampedCursorY >= mgr.viewport.topLine + visibleHeight:
       let
-        newTopLine = clampedCursorY - mgr.viewport.height + actualReservedLines + 1
-        maxTopLine = max(0, lineCount - mgr.viewport.height + actualReservedLines)
+        newTopLine = clampedCursorY - visibleHeight + 1
+        maxTopLine = max(0, lineCount - visibleHeight)
       mgr.viewport.resetViewportTop(max(0, min(maxTopLine, newTopLine)))
+  else:
+    let maxWidth = wrapWidthFor(mgr.viewport.width, viewportOffset)
+    initRowLayout(buffer, mgr.wrapCountCache, lineWrap, maxWidth, tabStop)
+      .scrollViewportToCursor(
+        mgr.viewport, clampedCursorY, clampedCursorX, visibleHeight
+      )
 
   # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
   if not lineWrap:
@@ -1229,9 +1232,7 @@ proc executeMotion*(
     currentCursorPos: BufferPosition,
     updateViewport: bool = true,
 ): Result[BufferPosition, string] =
-  ## Execute a motion command - main entry point
-  ## Returns the new cursor position
-  ## If updateViewport=false, skip viewport updates (useful for operator+motion combinations)
+  ## Execute motion and return new cursor position.
 
   # Check if this is a vertical motion (preserves preferred column)
   let isVerticalMotion =
@@ -1248,63 +1249,48 @@ proc executeMotion*(
   # Convert to CursorPosition for internal calculations
   let currentPos = CursorPosition(x: effectiveX, y: currentCursorPos.line)
 
-  # Calculate reserved lines (same logic as updateViewport)
-  let actualReservedLines =
-    if controller.cursorManager.state.windowDisplay.viewportReservedLines >= 0:
-      controller.cursorManager.state.windowDisplay.viewportReservedLines
-    else:
-      steadyBottomAreaHeight()
+  let
+    actualReservedLines = controller.cursorManager.state.motionReservedLines()
+    lineWrap = controller.cursorManager.state.effectiveLineWrap()
+    viewportOffset =
+      viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
+    rowLayout = initRowLayout(
+      controller.executor.buffer,
+      controller.viewportManager.wrapCountCache,
+      lineWrap,
+      wrapWidthFor(controller.viewportManager.viewport.width, viewportOffset),
+      controller.cursorManager.state.tabStop,
+    )
 
   var newPos = controller.executor.calculateNewPosition(
     currentPos, cmd, controller.viewportManager.viewport.height,
     controller.viewportManager.viewport.topLine, actualReservedLines,
-    controller.cursorManager.state.mode,
+    controller.cursorManager.state.mode, rowLayout,
+    controller.viewportManager.viewport.topWrapOffset,
   )
 
-  # Clamp to valid buffer bounds
   newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
 
-  # Get line wrap state (needed for viewport update and horizontal scroll)
-  let lineWrap = controller.cursorManager.state.lineWrap
-
-  # Update viewport to follow cursor with line wrap support (unless suppressed)
   if updateViewport:
-    let
-      lineCount = controller.executor.buffer.len
-      viewportOffset =
-        viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
-
     controller.viewportManager.updateViewport(
-      newPos, lineCount, controller.cursorManager.state.showStatusLine,
-      controller.cursorManager.state.windowDisplay.viewportReservedLines, lineWrap,
+      newPos, controller.executor.buffer.len,
+      controller.cursorManager.state.showStatusLine, actualReservedLines, lineWrap,
       controller.executor.buffer, viewportOffset, controller.cursorManager.state.tabStop,
     )
 
-  # Disable horizontal scrolling when line wrap is enabled
   if lineWrap:
     controller.viewportManager.viewport.leftColumn = 0
 
-  # Update preferredColumn based on motion type
   if isVerticalMotion:
-    # For vertical motion: preserve preferred column
-    # If not set yet, initialize from original cursor position
     if controller.cursorManager.state.preferredColumn < 0:
       controller.cursorManager.state.preferredColumn = currentCursorPos.column
   else:
-    # For non-vertical motion: reset preferred column to -1
-    # Next vertical motion will initialize from current position
     controller.cursorManager.state.preferredColumn = -1
 
-  # Return the new cursor position
   return ok(BufferPosition(line: newPos.y, column: newPos.x))
 
-## Operator+motion classification.
-##
-## Linewise vs exclusive vs (default) inclusive determines how a motion
-## combines with an operator (`d`, `y`, `c`, ...). These sets are the single
-## source of truth -- `calculateOperatorRange` below and any external callers
-## should consult `isLinewiseMotion`/`isExclusiveMotion` instead of re-listing
-## the motions.
+## Operator+motion classification. Linewise / exclusive / inclusive
+## determines operator+motion range. Use `isLinewiseMotion`/`isExclusiveMotion`.
 
 const LinewiseMotions* = {
   Motion.Up, Motion.Down, Motion.FirstLine, Motion.LastLine, Motion.PageUp,
@@ -1326,18 +1312,14 @@ const NoMoveNoOpMotions* =
   LinewiseMotions + {
     Motion.Left, Motion.Home, Motion.FirstNonBlank, Motion.WordBackward
   }
-  ## Motions whose "no move" outcome must be treated as a no-op by an operator
-  ## (vim rings the bell). Excludes forward inclusive/right-exclusive motions
-  ## (`l`, `w`, `e`, `$`) where the char under cursor is still a valid target.
+  ## "No move" as no-op for operator (vim bell). Excludes forward motions where cursor char is valid.
 
 func isLinewiseMotion*(motion: Motion): bool {.inline.} =
-  ## True if the motion operates on whole lines for operator+motion semantics
-  ## (e.g. `dj` deletes both lines fully). Vim-compatible classification.
+  ## True if motion is linewise for operator.
   motion in LinewiseMotions
 
 func isExclusiveMotion*(motion: Motion): bool {.inline.} =
-  ## True if the motion is exclusive for operator+motion semantics
-  ## (the character at endPos is NOT included). Vim-compatible classification.
+  ## True if motion is exclusive (end char excluded).
   motion in ExclusiveMotions
 
 proc lineContentNoNewline(buffer: TextBuffer, lineIdx: int): string =

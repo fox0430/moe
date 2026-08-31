@@ -100,8 +100,13 @@ proc updateCursorToJumpPosition(
     cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
     viewportOffset = viewportOffsetFor(buffer, state)
   handler.motionController.viewportManager.updateViewport(
-    cursorPos, buffer.len, state.showStatusLine,
-    state.windowDisplay.viewportReservedLines, state.lineWrap, buffer, viewportOffset,
+    cursorPos,
+    buffer.len,
+    state.showStatusLine,
+    state.motionReservedLines(),
+    state.effectiveLineWrap(),
+    buffer,
+    viewportOffset,
     state.tabStop,
   )
   return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

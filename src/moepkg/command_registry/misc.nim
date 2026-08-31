@@ -113,8 +113,8 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
     CursorPosition(x: 0, y: line),
     ctx.buffer.len,
     ctx.state.showStatusLine,
-    ctx.state.windowDisplay.viewportReservedLines,
-    ctx.state.lineWrap,
+    ctx.state.motionReservedLines(),
+    ctx.state.effectiveLineWrap(),
     ctx.buffer,
     viewportOffset,
     ctx.state.tabStop,
@@ -281,9 +281,14 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
       ctx.motionController.viewportManager.updateViewport(
-        cursorPos, lineCount, ctx.state.showStatusLine,
-        ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap, ctx.buffer,
-        viewportOffset, ctx.state.tabStop,
+        cursorPos,
+        lineCount,
+        ctx.state.showStatusLine,
+        ctx.state.motionReservedLines(),
+        ctx.state.effectiveLineWrap(),
+        ctx.buffer,
+        viewportOffset,
+        ctx.state.tabStop,
       )
 
       ctx.state.statusMessage = "Found: " & searchText
@@ -620,9 +625,14 @@ proc registerMiscCommands*(registry: CommandRegistry) =
             viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
-            cursorPos, lineCount, ctx.state.showStatusLine,
-            ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap,
-            ctx.buffer, viewportOffset, ctx.state.tabStop,
+            cursorPos,
+            lineCount,
+            ctx.state.showStatusLine,
+            ctx.state.motionReservedLines(),
+            ctx.state.effectiveLineWrap(),
+            ctx.buffer,
+            viewportOffset,
+            ctx.state.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word
@@ -700,9 +710,14 @@ proc registerMiscCommands*(registry: CommandRegistry) =
             viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
-            cursorPos, lineCount, ctx.state.showStatusLine,
-            ctx.state.windowDisplay.viewportReservedLines, ctx.state.lineWrap,
-            ctx.buffer, viewportOffset, ctx.state.tabStop,
+            cursorPos,
+            lineCount,
+            ctx.state.showStatusLine,
+            ctx.state.motionReservedLines(),
+            ctx.state.effectiveLineWrap(),
+            ctx.buffer,
+            viewportOffset,
+            ctx.state.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word

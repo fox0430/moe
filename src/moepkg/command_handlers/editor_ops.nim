@@ -70,8 +70,14 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
     viewportOffset = viewportOffsetFor(activeBuffer, e.state)
 
   e.handlerManager.motionController.viewportManager.updateViewport(
-    cursorPos, lineCount, e.showStatusLine, e.state.windowDisplay.viewportReservedLines,
-    e.lineWrap, activeBuffer, viewportOffset, e.tabStop,
+    cursorPos,
+    lineCount,
+    e.showStatusLine,
+    e.state.motionReservedLines(),
+    e.state.effectiveLineWrap(),
+    activeBuffer,
+    viewportOffset,
+    e.tabStop,
   )
 
 proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =

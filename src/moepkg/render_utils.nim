@@ -605,6 +605,21 @@ func steadyReservedBottom*(isBottomWindow: bool): int {.inline.} =
   else:
     0
 
+func effectiveLineWrap*(lineWrap: bool, mode: EditorMode): bool {.inline.} =
+  ## Actual wrap for a window. Utility windows never wrap.
+  lineWrap and mode.isFileEditMode
+
+proc effectiveLineWrap*(state: EditorState): bool {.inline.} =
+  ## Actual wrap for active window (overlay keeps base mode).
+  effectiveLineWrap(state.lineWrap, state.mode)
+
+func motionReservedLines*(state: EditorState): int {.inline.} =
+  ## Reserved rows for viewport. Handles `-1` sentinel; `0` is valid.
+  if state.windowDisplay.viewportReservedLines >= 0:
+    state.windowDisplay.viewportReservedLines
+  else:
+    steadyBottomAreaHeight()
+
 proc overlayInput*(state: EditorState): tuple[text: string, cursorChar: int] =
   ## Full display text and rune-index cursor position for the active overlay.
   ## Matches the rendering in renderBottomLines: command text includes the

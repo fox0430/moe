@@ -67,11 +67,6 @@ proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   (e.screenSize.prevWidth != e.screenSize.width) or
     (e.screenSize.prevHeight != e.screenSize.height)
 
-proc wrapPosAbove(aLine, aSeg, bLine, bSeg: int): bool {.inline.} =
-  ## True when the visual position (aLine, aSeg) is strictly above (bLine, bSeg)
-  ## in the wrapped layout (line-major, then wrap-segment within a line).
-  aLine < bLine or (aLine == bLine and aSeg < bSeg)
-
 proc cursorIsInViewport(e: Editor, window: EditorWindow, layout: WindowLayout): bool =
   if window.buffer.isNil or window.buffer.len == 0:
     return
@@ -125,51 +120,17 @@ proc adjustViewportForCursor(
     wrapCache: WrapCountCache,
 ) =
   ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen)
-  # Vertical adjustment
-  if textBuffer.isNil or textBuffer.len == 0:
+  # Vertical adjustment: the shared rule in `visible_rows`.
+  if textBuffer.isNil:
     # No buffer to consult for folds: fall back to raw line arithmetic.
     viewport.topWrapOffset = 0
-    if textBuffer.isNil:
-      if cursor.line >= viewport.topLine + visibleHeight:
-        viewport.topLine = max(0, cursor.line - visibleHeight + 1)
-      elif cursor.line < viewport.topLine:
-        viewport.topLine = cursor.line
+    if cursor.line >= viewport.topLine + visibleHeight:
+      viewport.topLine = max(0, cursor.line - visibleHeight + 1)
+    elif cursor.line < viewport.topLine:
+      viewport.topLine = cursor.line
   else:
-    let rl = initRowLayout(textBuffer, wrapCache, lineWrap, textAreaWidth, tabStop)
-
-    if not lineWrap:
-      # Without wrap every visible line is exactly one row, so the view can only
-      # start at a line boundary; clear any offset left by a wrap toggle.
-      viewport.topWrapOffset = 0
-    elif viewport.topLine >= 0 and viewport.topLine < textBuffer.len:
-      # A width change (terminal resize, line-number / sidebar toggle) can shrink
-      # topLine's wrap count below a previously stored topWrapOffset, leaving the
-      # offset out of range. Re-clamp it to a real on-screen position before the
-      # comparisons below trust it; otherwise a stale offset makes the cursor look
-      # "below" the top and the (0,0) fling returns.
-      viewport.topWrapOffset =
-        max(0, min(viewport.topWrapOffset, rl.lineRows(viewport.topLine) - 1))
-
-    let
-      cursorLine = max(0, min(cursor.line, textBuffer.len - 1))
-      # Cursor's wrap segment within its line (a collapsed fold marker is one row).
-      cursorSeg = rl.cursorCell(cursorLine, cursor.column).wrapSeg
-
-    if wrapPosAbove(cursorLine, cursorSeg, viewport.topLine, viewport.topWrapOffset):
-      # Cursor above the visible top: scroll up so it sits on the first row.
-      viewport.topLine = cursorLine
-      viewport.topWrapOffset = cursorSeg
-    else:
-      # Latest allowed top places the cursor segment on the last visible row.
-      # If the current top is above that, the cursor is below the window, so
-      # apply the minimal downward scroll; otherwise it is visible, leave as is.
-      # Each collapsed fold is skipped in one step, so this stays
-      # O(visibleHeight) per frame even when the cursor jumps far (e.g. `G`).
-      let (latLine, latOff) =
-        rl.walkBackRows(cursorLine, cursorSeg, max(0, visibleHeight - 1))
-      if wrapPosAbove(viewport.topLine, viewport.topWrapOffset, latLine, latOff):
-        viewport.topLine = latLine
-        viewport.topWrapOffset = latOff
+    initRowLayout(textBuffer, wrapCache, lineWrap, textAreaWidth, tabStop)
+      .scrollViewportToCursor(viewport, cursor.line, cursor.column, visibleHeight)
 
   # Horizontal adjustment (only when line wrap is disabled)
   if not lineWrap:
@@ -235,7 +196,7 @@ proc computeWindowLayout(
     textAreaWidth = e.textAreaWidth(window, lineNumOffset)
     # Utility windows (Filer / Help / BufferManager / ...) render in no-wrap mode
     # regardless of the global lineWrap setting.
-    effectiveLineWrap = e.lineWrap and window.mode.isFileEditMode
+    effectiveLineWrap = effectiveLineWrap(e.lineWrap, window.mode)
     # For overlay modes (Command, Search, Rename) over the active window, paint
     # the underlying base mode as background.
     renderMode =

@@ -76,11 +76,7 @@ type
   ViewPort* = ref object
     topLine*: int
     topWrapOffset*: int
-      ## Leading wrap segments of `topLine` skipped so the view can start
-      ## mid logical line (wrap mode only; always 0 in no-wrap mode). Invariant:
-      ## `0 <= topWrapOffset < wrapCount(topLine)`. The authoritative
-      ## `adjustViewportForCursor` recomputes it every frame; every other writer
-      ## just resets it to 0 via `resetViewportTop` (next frame re-derives it).
+      ## Leading wrap segments of `topLine` skipped (wrap mode only, else 0).
     detachedFromCursor*: bool
       ## True while pointer scrolling controls the viewport independently of
       ## the logical cursor. Cursor or programmatic viewport movement clears it.
@@ -102,8 +98,8 @@ type
     ## Editor-wide window/buffer display & redraw bookkeeping.
     currentBufferId*: BufferId # BufferId of the current buffer (for jump list)
     debugBuffer*: TextBuffer # Debug buffer for auto-refresh (nil if none)
-    viewportReservedLines*: int
-      # Reserved lines for viewport calculations (for split windows)
+    viewportReservedLines*: int = -1
+      ## Reserved rows outside text area. `-1` is unset; `0` is valid. Use `motionReservedLines`.
     scrollAnimation*: ScrollAnimation # Current scroll animation state
     savedViewportTopLine*: int # Viewport position saved when operator starts
 
@@ -1121,18 +1117,13 @@ proc `==`*(a, b: ViewPort): bool =
     a.width == b.width and a.height == b.height and a.x == b.x and a.y == b.y
 
 proc resetViewportTop*(v: ViewPort, line = 0) =
-  ## Move the viewport to `line` and clear the wrap-segment offset. Used by
-  ## every non-authoritative topLine writer (scroll commands, buffer/file
-  ## switches, restores): the offset is recomputed next frame by the
-  ## authoritative `adjustViewportForCursor`, so resetting it to 0 here is
-  ## enough to avoid starting a fresh top line mid wrap segment.
+  ## Move viewport to `line` and clear wrap offset (recomputed next frame).
   v.topLine = line
   v.topWrapOffset = 0
   v.detachedFromCursor = false
 
 proc restoreViewportTop*(v: ViewPort, line, wrapOffset: int) =
-  ## Restore a snapshotted top position, preserving the wrap sub-line offset
-  ## (unlike `resetViewportTop`, which drops it to 0).
+  ## Restore viewport top with wrap offset.
   v.topLine = line
   v.topWrapOffset = wrapOffset
   v.detachedFromCursor = false
