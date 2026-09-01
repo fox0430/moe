@@ -257,10 +257,11 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
     return CharacterEncoding.utf8
 
   if s.len >= 4:
-    # Check UTF-32 BOM
+    # Check UTF-32 BOM (must be before UTF-16: FF FE 00 00 shares prefix FF FE)
     if s[0 .. 3] == "\x00\x00\xFE\xFF" or s[0 .. 3] == "\xFF\xFE\x00\x00":
       return CharacterEncoding.utf32
 
+  if s.len >= 2:
     # Check UTF-16 BOM
     if s[0 .. 1] == "\xFE\xFF" or s[0 .. 1] == "\xFF\xFE":
       return CharacterEncoding.utf16

@@ -1256,10 +1256,8 @@ suite "Editor - highlight line-length cap on load":
 
 suite "Editor - invalid bytes roundtrip":
   template invalidByteRoundtripScenario(makeEditor: untyped, tag: string) =
-    test "Basic 7 contamination patterns roundtrip" & tag:
-      let raws = @[
-        "\xE3", "\xFF\xFE", "a\xE3b", "ab\xFF\ncd", "a\xF0abc", "\xE3\n", "foo\xFF bar"
-      ]
+    test "Basic 6 contamination patterns roundtrip" & tag:
+      let raws = @["\xE3", "a\xE3b", "ab\xFF\ncd", "a\xF0abc", "\xE3\n", "foo\xFF bar"]
       for idx, raw in raws:
         let src = getTempDir() / ("moe_test_invalid_basic_" & $idx & ".bin")
         let dst = src & ".out"
@@ -1386,7 +1384,134 @@ suite "Editor - invalid bytes roundtrip":
         check e.saveFile(some(dst)).isOk
         check readFile(dst) == "Za\x00b\xE3c"
 
+  template emptyAndBomRoundtripScenario(makeEditor: untyped, tag: string) =
+    test "Empty file roundtrip" & tag:
+      let src = getTempDir() / "moe_test_empty.bin"
+      let dst = src & ".out"
+      writeFile(src, "")
+      defer:
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+      let e = makeEditor
+      check e.loadFile(src).isOk
+      check e.activeBuffer.encoding == CharacterEncoding.utf8
+      check not e.activeBuffer.hasBom
+      check not e.activeBuffer.endOfLine
+      check e.activeBuffer.len == 1
+      check e.activeBuffer[0] == ""
+      check e.activeBuffer.getFileContent() == ""
+      check e.saveFile(some(dst)).isOk
+      check readFile(dst) == ""
+      # Overwrite via saveFile() to own path must stay empty.
+      check e.saveFile().isOk
+      check readFile(dst) == ""
+
+    test "BOM-only empty payload roundtrip" & tag:
+      const cases = [
+        ("\xEF\xBB\xBF", CharacterEncoding.utf8),
+        ("\xFF\xFE", CharacterEncoding.utf16Le),
+        ("\xFE\xFF", CharacterEncoding.utf16Be),
+        ("\xFF\xFE\x00\x00", CharacterEncoding.utf32Le),
+        ("\x00\x00\xFE\xFF", CharacterEncoding.utf32Be),
+      ]
+      for idx, (original, expectedEnc) in cases:
+        let src = getTempDir() / ("moe_test_bom_only_" & $idx & ".bin")
+        let dst = src & ".out"
+        writeFile(src, original)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        checkpoint($expectedEnc)
+        check e.activeBuffer.encoding == expectedEnc
+        check e.activeBuffer.hasBom
+        check e.activeBuffer.len == 1
+        check e.activeBuffer[0] == ""
+        check not e.activeBuffer.endOfLine
+        check e.activeBuffer.getFileContent() == original
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == original
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+
+  template shortBomBoundaryScenario(makeEditor: untyped, tag: string) =
+    test "Short 2-byte UTF-16 BOM is valid empty file" & tag:
+      for (original, expectedEnc) in [
+        ("\xFF\xFE", CharacterEncoding.utf16Le), ("\xFE\xFF", CharacterEncoding.utf16Be)
+      ]:
+        let src = getTempDir() / ("moe_test_short2_" & $ord(expectedEnc) & ".bin")
+        let dst = src & ".out"
+        writeFile(src, original)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == expectedEnc
+        check e.activeBuffer.hasBom
+        check not e.activeBuffer.keepRaw
+        check e.activeBuffer.allowsTextTransforms
+        check e.activeBuffer.getFileContent() == original
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == original
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+
+    test "Short 3-byte BOM falls back to raw bytes" & tag:
+      const raws = ["\xFF\xFE\x41", "\xFF\xFE\x00", "\xFE\xFF\x41"]
+      for idx, raw in raws:
+        let src = getTempDir() / ("moe_test_short3_" & $idx & ".bin")
+        let dst = src & ".out"
+        writeFile(src, raw)
+        let e = makeEditor
+        check e.loadFile(src).isOk
+        check e.activeBuffer.encoding == CharacterEncoding.unknown
+        check not e.activeBuffer.hasBom
+        check e.activeBuffer.keepRaw
+        check not e.activeBuffer.allowsTextTransforms
+        check e.activeBuffer.getFileContent() == raw
+        check e.saveFile(some(dst)).isOk
+        check readFile(dst) == raw
+        removeFile(src)
+        if fileExists(dst):
+          removeFile(dst)
+
+    test "UTF-32 BOM precedence over UTF-16 prefix" & tag:
+      let src = getTempDir() / "moe_test_utf32_prec.bin"
+      let dst = src & ".out"
+      let utf32BomOnly = "\xFF\xFE\x00\x00"
+      writeFile(src, utf32BomOnly)
+      let e1 = makeEditor
+      check e1.loadFile(src).isOk
+      check e1.activeBuffer.encoding == CharacterEncoding.utf32Le
+      check e1.activeBuffer.hasBom
+      check e1.activeBuffer.getFileContent() == utf32BomOnly
+      check e1.saveFile(some(dst)).isOk
+      check readFile(dst) == utf32BomOnly
+      removeFile(src)
+      if fileExists(dst):
+        removeFile(dst)
+      # Same prefix but not a UTF-32 BOM must be treated as UTF-16, not UTF-32
+      let nonBom = "\xFF\xFE\x41\x00"
+      writeFile(src, nonBom)
+      let e2 = makeEditor
+      check e2.loadFile(src).isOk
+      check e2.activeBuffer.encoding == CharacterEncoding.utf16Le
+      check e2.activeBuffer.hasBom
+      check not e2.activeBuffer.keepRaw
+      check e2.activeBuffer[0] == "A"
+      check e2.activeBuffer.getFileContent() == nonBom
+      check e2.saveFile(some(dst)).isOk
+      check readFile(dst) == nonBom
+      removeFile(src)
+      if fileExists(dst):
+        removeFile(dst)
+
   invalidByteRoundtripScenario(createTestEditor(), " [GapBuffer]")
   invalidByteRoundtripScenario(
     createTestEditorWithBackend(bbcPieceTable), " [PieceTable]"
   )
+  emptyAndBomRoundtripScenario(createTestEditor(), " [GapBuffer]")
+  emptyAndBomRoundtripScenario(
+    createTestEditorWithBackend(bbcPieceTable), " [PieceTable]"
+  )
+  shortBomBoundaryScenario(createTestEditor(), " [GapBuffer]")
+  shortBomBoundaryScenario(createTestEditorWithBackend(bbcPieceTable), " [PieceTable]")

@@ -3275,6 +3275,100 @@ suite "Buffer - UTF-16/32 file transcoding":
     check not buf.hasBom
     check buf.getFileContent == original
 
+  test "Empty file roundtrips without spurious newline":
+    let testFile = getTempDir() / "moe_test_empty.txt"
+    writeFile(testFile, "")
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf8
+    check not buf.hasBom
+    check not buf.endOfLine
+    check buf.len == 1
+    check buf[0] == ""
+    check buf.getFileContent == ""
+    check buf.saveFile(testFile).isOk
+    check readFile(testFile) == ""
+
+  test "BOM-only files roundtrip as empty content with BOM preserved":
+    const cases = [
+      ("\xEF\xBB\xBF", CharacterEncoding.utf8, "UTF-8 BOM only"),
+      ("\xFF\xFE", CharacterEncoding.utf16Le, "UTF-16LE BOM only"),
+      ("\xFE\xFF", CharacterEncoding.utf16Be, "UTF-16BE BOM only"),
+      ("\xFF\xFE\x00\x00", CharacterEncoding.utf32Le, "UTF-32LE BOM only"),
+      ("\x00\x00\xFE\xFF", CharacterEncoding.utf32Be, "UTF-32BE BOM only"),
+    ]
+    for (original, expectedEnc, name) in cases:
+      let testFile = getTempDir() / "moe_test_bom_only.bin"
+      writeFile(testFile, original)
+      defer:
+        removeFile(testFile)
+
+      let buf = newTextBuffer()
+      check buf.loadFile(testFile).isOk
+      checkpoint(name)
+      check buf.encoding == expectedEnc
+      check buf.hasBom
+      check not buf.keepRaw
+      check buf.allowsTextTransforms
+      check not buf.endOfLine
+      check buf.len == 1
+      check buf[0] == ""
+      check buf.getFileContent == original
+      check buf.saveFile(testFile).isOk
+      check readFile(testFile) == original
+
+  test "Short 3-byte BOM files fall back to raw bytes":
+    const raws = [
+      ("\xFF\xFE\x41", "UTF-16LE BOM + 1 byte"),
+      ("\xFF\xFE\x00", "UTF-16LE BOM + NUL"),
+      ("\xFE\xFF\x41", "UTF-16BE BOM + 1 byte"),
+    ]
+    for (original, name) in raws:
+      let testFile = getTempDir() / "moe_test_short_bom_raw.bin"
+      writeFile(testFile, original)
+      defer:
+        removeFile(testFile)
+
+      let buf = newTextBuffer()
+      check buf.loadFile(testFile).isOk
+      checkpoint(name)
+      check buf.encoding == CharacterEncoding.unknown
+      check not buf.hasBom
+      check buf.keepRaw
+      check not buf.allowsTextTransforms
+      check buf.getFileContent == original
+      check buf.saveFile(testFile).isOk
+      check readFile(testFile) == original
+
+  test "UTF-32 BOM precedence preserved for FF FE 00 00 prefix":
+    let original = "\xFF\xFE\x00\x00"
+    let testFile = getTempDir() / "moe_test_utf32_bom_precedence.bin"
+    writeFile(testFile, original)
+    defer:
+      removeFile(testFile)
+
+    let buf = newTextBuffer()
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf32Le
+    check buf.hasBom
+    check not buf.keepRaw
+    check buf.len == 1
+    check buf.getFileContent == original
+    # 4-byte non-BOM with same prefix must be UTF-16, not UTF-32
+    let nonBom = "\xFF\xFE\x41\x00"
+    writeFile(testFile, nonBom)
+    check buf.loadFile(testFile).isOk
+    check buf.encoding == CharacterEncoding.utf16Le
+    check buf.hasBom
+    check not buf.keepRaw
+    check buf[0] == "A"
+    check buf.getFileContent == nonBom
+    check buf.saveFile(testFile).isOk
+    check readFile(testFile) == "\xFF\xFE\x41\x00"
+
 suite "Buffer - raw buffers keep every byte":
   test "replaceLine strips CR for text buffers":
     let buf = newTextBuffer()
