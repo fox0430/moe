@@ -3498,11 +3498,22 @@ suite "Buffer - loadFileWithContent equivalence":
     check buf2.len == buf1.len
     check buf2.getTextString == buf1.getTextString
     check buf2.encoding == buf1.encoding
+    # Empty files must not gain a trailing newline
+    check buf1.endOfLine == false
+    check buf2.endOfLine == false
+    check buf1.getFileContent == ""
+    check buf2.getFileContent == ""
+    let savePath = getTempDir() / "moe_test_lfwc_empty_save.txt"
+    check buf1.saveFile(savePath).isOk
+    check readFile(savePath) == ""
+    removeFile(savePath)
     # Direct empty content without file on disk
     let buf3 = newTextBuffer()
     check buf3.loadFileWithContent(path & "_nonexist", "", -1).isOk
     check buf3.len == 1
     check buf3[0] == ""
+    check buf3.endOfLine == false
+    check buf3.getFileContent == ""
 
   test "loadFileWithContent handles UTF-8 BOM correctly":
     let path = getTempDir() / "moe_test_lfwc_utf8bom.txt"
