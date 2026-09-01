@@ -25,7 +25,7 @@
 
 import std/options
 
-import ../[terminal_mode, key_bindings]
+import ../[terminal_mode, key_bindings, unicode_utils]
 import handler_types
 export handler_types
 
@@ -112,27 +112,33 @@ proc keyComboToBytes*(keyCombo: KeyCombo): string =
   else:
     if kmCtrl in keyCombo.modifiers:
       # Ctrl+letter -> ASCII control character
-      if keyCombo.char.len == 1:
-        let ch = keyCombo.char[0]
-        if ch >= 'a' and ch <= 'z':
-          return $chr(ch.ord - 'a'.ord + 1)
-        elif ch >= 'A' and ch <= 'Z':
-          return $chr(ch.ord - 'A'.ord + 1)
-        elif ch == '\\':
-          return "\x1c" # FS
-        elif ch == ']':
-          return "\x1d" # GS
-        elif ch == '^':
-          return "\x1e" # RS
-        elif ch == '_':
-          return "\x1f" # US
-        elif ch == '@':
-          return "\x00" # NUL
-        elif ch == '[':
-          return "\x1b" # ESC
-      return ""
+      let chOpt = keyCombo.char.asciiChar
+      if chOpt.isNone:
+        return ""
+      let ch = chOpt.get
+      if ch >= 'a' and ch <= 'z':
+        return $chr(ch.ord - 'a'.ord + 1)
+      elif ch >= 'A' and ch <= 'Z':
+        return $chr(ch.ord - 'A'.ord + 1)
+      elif ch == '\\':
+        return "\x1c" # FS
+      elif ch == ']':
+        return "\x1d" # GS
+      elif ch == '^':
+        return "\x1e" # RS
+      elif ch == '_':
+        return "\x1f" # US
+      elif ch == '@':
+        return "\x00" # NUL
+      elif ch == '[':
+        return "\x1b" # ESC
+      else:
+        return ""
     elif kmAlt in keyCombo.modifiers:
-      # Alt+key -> ESC + key
+      # Alt+key -> ESC + key (ASCII only)
+      let chOpt = keyCombo.char.asciiChar
+      if chOpt.isNone:
+        return ""
       return "\x1b" & keyCombo.char
     else:
       return keyCombo.char

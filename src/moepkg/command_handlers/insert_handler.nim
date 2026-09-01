@@ -1016,13 +1016,17 @@ proc isCtrlI(keyCombo: KeyCombo): bool =
 
 proc shouldTriggerSignatureHelp*(keyCombo: KeyCombo): bool =
   ## Check if the typed character should trigger signature help
-  not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len == 1 and
-    isTriggerChar(keyCombo.char[0])
+  if keyCombo.isSpecial or keyCombo.modifiers != {}:
+    return false
+  let ch = keyCombo.char.asciiChar
+  ch.isSome and isTriggerChar(ch.get)
 
 proc shouldRetriggerSignatureHelp*(keyCombo: KeyCombo): bool =
   ## Check if the typed character should retrigger signature help
-  not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len == 1 and
-    isRetriggerChar(keyCombo.char[0])
+  if keyCombo.isSpecial or keyCombo.modifiers != {}:
+    return false
+  let ch = keyCombo.char.asciiChar
+  ch.isSome and isRetriggerChar(ch.get)
 
 proc handleInsertModeKey*(
     handler: InsertModeHandler,

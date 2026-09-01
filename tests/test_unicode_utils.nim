@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, unicode]
+import std/[options, unittest, unicode]
 
 import pkg/celina
 
@@ -259,6 +259,28 @@ suite "Line Wrapping with Unicode":
     let endByte3 = charToBytePos(text, text.charLen)
     let segment3 = text[startByte3 ..< endByte3]
     check segment3.charLen == 2
+
+suite "asciiChar":
+  test "returns the character for a single ASCII byte":
+    check "a".asciiChar == some('a')
+    check "0".asciiChar == some('0')
+    check " ".asciiChar == some(' ')
+
+  test "returns none for a multibyte character":
+    # The point of the helper: "あ"[0] is 0xE3, which passes or fails later
+    # range checks by accident.
+    check "あ".asciiChar.isNone
+    check "é".asciiChar.isNone
+
+  test "returns none for empty and multi-character strings":
+    check "".asciiChar.isNone
+    check "ab".asciiChar.isNone
+    check "ああ".asciiChar.isNone
+
+  test "a real NUL stays distinct from no character":
+    # A caller that means to emit NUL (Ctrl+@ in the terminal) has to stay
+    # apart from one that was handed nothing.
+    check "\0".asciiChar == some('\0')
 
 suite "Display Width - runeWidth":
   test "ASCII characters have width 1":

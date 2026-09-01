@@ -244,6 +244,22 @@ suite "KeyCombo - parseKeyCombo":
     check combo.char == "\u3042"
     check combo.modifiers == {kmAlt}
 
+  test "Ctrl + multi-character input is invalid":
+    # "ab" is len 2, so asciiChar is none -> must be rejected
+    check parseKeyCombo("C-ab").isNone
+
+  test "Shift + multi-character input is invalid":
+    check parseKeyCombo("S-ab").isNone
+
+  test "Ctrl + empty key is invalid":
+    check parseKeyCombo("C-").isNone
+
+  test "Ctrl + é (2-byte) is invalid":
+    check parseKeyCombo("C-\u00e9").isNone
+
+  test "Shift + é is invalid":
+    check parseKeyCombo("S-\u00e9").isNone
+
 suite "KeyCombo - keyComboToString":
   test "Simple character":
     let combo = toKeyCombo('a')
@@ -505,6 +521,10 @@ suite "KeyBindingRegistry - numeric prefix":
 
   test "isDigitKey with modifiers":
     check isDigitKey(toKeyCombo('5', ctrl = true)) == false
+
+  test "isDigitKey rejects multi-character and multibyte input":
+    check isDigitKey(KeyCombo(isSpecial: false, char: "1b", modifiers: {})) == false
+    check isDigitKey(KeyCombo(isSpecial: false, char: "あ", modifiers: {})) == false
 
   test "Build numeric prefix":
     let registry = newKeyBindingRegistry()

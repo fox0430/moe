@@ -442,8 +442,10 @@ proc flushRuntimeMapping*(
 
 proc isDigitKey*(combo: KeyCombo): bool =
   ## Check if the key combination is a digit (0-9)
-  not combo.isSpecial and combo.modifiers == {} and combo.char.len == 1 and
-    combo.char[0] >= '0' and combo.char[0] <= '9'
+  if combo.isSpecial or combo.modifiers != {}:
+    return false
+  let ch = combo.char.asciiChar
+  ch.isSome and ch.get in '0' .. '9'
 
 proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   ## Get the numeric prefix as integer, defaulting to 1

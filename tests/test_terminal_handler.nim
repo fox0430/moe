@@ -96,6 +96,18 @@ suite "keyComboToBytes - Ctrl combinations":
   test "Ctrl+l":
     check keyComboToBytes(charKey("l", {kmCtrl})) == "\x0c"
 
+    # Multi-byte characters and multi-character input carry no Ctrl mapping
+    check keyComboToBytes(charKey("あ", {kmCtrl})) == ""
+    check keyComboToBytes(charKey("ab", {kmCtrl})) == ""
+    check keyComboToBytes(charKey("", {kmCtrl})) == ""
+
+  test "Alt combinations with non-ASCII are rejected":
+    # Alt is also single-ASCII-only (same rationale as Ctrl)
+    check keyComboToBytes(charKey("a", {kmAlt})) == "\x1b" & "a"
+    check keyComboToBytes(charKey("あ", {kmAlt})) == ""
+    check keyComboToBytes(charKey("ab", {kmAlt})) == ""
+    check keyComboToBytes(charKey("", {kmAlt})) == ""
+
 suite "handleTerminalModeKey - Terminal-Input sub-mode":
   test "Regular key in Input mode returns trHandled":
     let termState = newTerminalState("echo test", 80, 24)
