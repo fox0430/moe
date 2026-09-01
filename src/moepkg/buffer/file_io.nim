@@ -58,9 +58,9 @@ proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
   ## standalone \r is converted to \n. Mixed line endings are preserved
   ## as separate line breaks instead of being lost or duplicated.
 
-  if content.len > 0:
-    b.endOfLine =
-      content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")
+  b.endOfLine =
+    content.len > 0 and
+    (content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r"))
 
   var hasCR = false
   var hasCRLF = false
