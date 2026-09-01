@@ -142,6 +142,8 @@ type
     hrLspRestart # Restart LSP server (:lspRestart)
     hrLspFold # LSP folding range (:lspFold)
     hrLspExecuteCommand # LSP execute command (:lspExeCommand)
+    hrUndo # Undo the last change (:undo, :u)
+    hrRedo # Redo the last undone change (:redo)
     hrSubstitute # Search and replace (:s)
     hrDeleteLines # Delete lines (:d, :%d)
     hrReferencesQuit # Close references viewer and return to previous mode
@@ -357,6 +359,8 @@ type
     of hrLspExecuteCommand:
       hrLspCommand*: string
       hrLspCommandArgs*: seq[string]
+    of hrUndo, hrRedo:
+      discard
     of hrSubstitute:
       hrSubstituteCount*: int
     of hrDeleteLines:
@@ -487,7 +491,7 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
       hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit,
       hrExecCommand, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro,
-      hrMapAdd, hrMapRemove, hrMapClear, hrMapList:
+      hrMapAdd, hrMapRemove, hrMapClear, hrMapList, hrUndo, hrRedo:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

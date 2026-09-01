@@ -91,6 +91,7 @@ suite "Config - newEditorConfig defaults":
     check config.standard.colorMode == cm256color
     check config.standard.mouse == false
     check config.standard.lineWrap == true
+    check config.standard.forceInsertMode == false
     check config.standard.relativeNumber == false
     check config.standard.scrollbar == false
     check config.standard.scrollbarWidth == 1

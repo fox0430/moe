@@ -1748,6 +1748,16 @@ suite "Buffer - readOnly guard on undo/redo":
   # replay history without checking the flag — so a buffer set readOnly AFTER
   # edits were recorded could still be mutated through the history stacks. The
   # guards below complete "readOnly rejects on every mutation path".
+  test "beginTransaction on a readOnly buffer returns err":
+    let b = newTextBuffer("hello")
+    b.readOnly = true
+
+    let r = b.beginTransaction("insert")
+
+    check r.isErr
+    check r.error == "Buffer is read-only"
+    check not b.inTransaction
+
   test "undo on a readOnly buffer returns err and leaves content unchanged":
     let b = newTextBuffer("hello")
     discard b.insertText(BufferPosition(line: 0, column: 5), "!")
@@ -1792,3 +1802,39 @@ suite "Buffer - readOnly guard on undo/redo":
     let rr = b.redo()
     check rr.isErr
     check rr.error == "Buffer is read-only"
+
+suite "Buffer - transaction guard on undo/redo":
+  test "undo rejects an open transaction without changing history or text":
+    let b = newTextBuffer("abc")
+    discard b.insertText(BufferPosition(line: 0, column: 3), "d")
+    check b.beginTransaction("typing").isOk
+    discard b.insertText(BufferPosition(line: 0, column: 4), "e")
+    let undoLenBefore = b.undoStack.len
+    let redoLenBefore = b.redoStack.len
+
+    let r = b.undo()
+
+    check r.isErr
+    check r.error == "Cannot undo during a transaction"
+    check b.getLine(0) == "abcde"
+    check b.inTransaction
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore
+
+  test "redo rejects an open transaction without changing history or text":
+    let b = newTextBuffer("abc")
+    discard b.insertText(BufferPosition(line: 0, column: 3), "d")
+    check b.undo().isOk
+    check b.beginTransaction("typing").isOk
+    discard b.insertText(BufferPosition(line: 0, column: 3), "e")
+    let undoLenBefore = b.undoStack.len
+    let redoLenBefore = b.redoStack.len
+
+    let r = b.redo()
+
+    check r.isErr
+    check r.error == "Cannot redo during a transaction"
+    check b.getLine(0) == "abce"
+    check b.inTransaction
+    check b.undoStack.len == undoLenBefore
+    check b.redoStack.len == redoLenBefore

@@ -703,6 +703,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `ene` | Create a new empty buffer |
 | `new` | Create a new empty buffer in a horizontally split window |
 | `vnew` | Create a new empty buffer in a vertically split window |
+| `undo` | Undo the last change |
+| `redo` | Redo the last undone change |
 | `delete` | Delete current line and copy to register |
 | `ls` | Display all buffers |
 | `bprev` | Switch to the previous buffer |

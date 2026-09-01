@@ -442,7 +442,52 @@ suite "Editor - multi-file startup (no auto-split)":
     # returned extra buffers, not the active one.
     check not e.activeBuffer.readOnly
 
+  test "forced Insert mode stays Normal after activating an extra -R buffer":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    config.startUpFileOpen.autoSplit = false
+    let e = createTestEditorWithConfig(config)
+    let
+      fileA = getTempDir() / "moe_test_multi_force_ro_a.txt"
+      fileB = getTempDir() / "moe_test_multi_force_ro_b.txt"
+    writeFile(fileA, "A")
+    writeFile(fileB, "B")
+    defer:
+      removeFile(fileA)
+      removeFile(fileB)
+    check e.loadFile(fileA).isOk
+    e.openAdditionalStartupFiles(@[fileA, fileB], readonly = true)
+    let extraBuffer = e.buffers[e.findBufferByPath(fileB)]
+
+    check e.activateBuffer(extraBuffer.id)
+
+    check e.activeBuffer.readOnly
+    check e.state.mode == EditorMode.Normal
+    check not e.activeBuffer.inTransaction
+
 suite "Editor - multi-file startup (auto-split)":
+  test "forced Insert mode leaves an auto-split -R buffer in Normal mode":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    config.startUpFileOpen.autoSplit = true
+    config.startUpFileOpen.splitType = stHorizontal
+    let e = createTestEditorWithConfig(config)
+    let
+      fileA = getTempDir() / "moe_test_split_force_ro_a.txt"
+      fileB = getTempDir() / "moe_test_split_force_ro_b.txt"
+    writeFile(fileA, "A")
+    writeFile(fileB, "B")
+    defer:
+      removeFile(fileA)
+      removeFile(fileB)
+    check e.loadFile(fileA).isOk
+
+    e.openAdditionalStartupFiles(@[fileA, fileB], readonly = true)
+
+    check e.activeBuffer.readOnly
+    check e.state.mode == EditorMode.Normal
+    check not e.activeBuffer.inTransaction
+
   test "Each extra file opens in its own split window":
     # With auto-split every extra path opens in a new split window (and its own
     # buffer), unlike the no-split path which only registers buffers in the
@@ -499,6 +544,25 @@ suite "Editor - multi-file startup (auto-split)":
     check e.findBufferByPath(fileC) >= 0
 
 suite "Editor - saveFile":
+  test "forced Insert mode commits before trimming and resumes after save":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    let e = createTestEditorWithConfig(config)
+    let testFile = getTempDir() / "moe_test_forced_insert_trim.txt"
+    writeFile(testFile, "hello   \n")
+    defer:
+      removeFile(testFile)
+    check e.loadFile(testFile).isOk
+    e.activeBuffer.editorConfig =
+      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+
+    let saveResult = e.saveFile()
+
+    check saveResult.isOk
+    check readFile(testFile) == "xhello\n"
+    check e.activeBuffer.inTransaction
+
   test "Save file to existing path":
     let e = createTestEditor()
     let testFile = getTempDir() / "moe_test_save.txt"
@@ -1003,6 +1067,27 @@ suite "Editor - updateInputTime":
     check afterTime > beforeTime
 
 suite "Editor - autoSave":
+  test "forced Insert mode commits before auto-save trimming":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    config.autoSave.enable = true
+    config.autoSave.interval = 1
+    let e = createTestEditorWithConfig(config)
+    let testFile = getTempDir() / "moe_test_forced_insert_autosave_trim.txt"
+    writeFile(testFile, "hello   \n")
+    defer:
+      removeFile(testFile)
+    check e.loadFile(testFile).isOk
+    e.activeBuffer.editorConfig =
+      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
+
+    e.autoSave()
+
+    check readFile(testFile) == "xhello\n"
+    check e.activeBuffer.inTransaction
+
   test "Auto save does nothing when disabled":
     var config = newEditorConfig()
     config.autoSave.enable = false

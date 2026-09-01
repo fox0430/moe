@@ -29,6 +29,7 @@ import
   types/editor_types,
   editor_lsp,
   editor_init,
+  editor_mode,
   git_cache,
   color,
   highlight,
@@ -122,6 +123,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   # Store the new config; state.config aliases the same ref.
   e.config = newConfig
   e.state.config = newConfig
+  e.enforceModePolicy()
 
   # Re-apply [Lsp.<lang>] entries so live reload / :lspRestart pick up server
   # command/args/trace/rust-analyzer edits. Already-running workers keep

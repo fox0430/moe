@@ -166,7 +166,10 @@ proc beginTransaction*(
 ): Result[(), string] =
   ## Begin a transaction to group multiple changes
   ## If cursorPos is provided, it will be used as the cursor position when undoing
-  ## Returns error if a transaction is already in progress
+  ## Returns error for read-only buffers or if a transaction is already in progress
+  if b.readOnly:
+    return err("Buffer is read-only")
+
   if b.inTransaction:
     let currentDesc =
       if b.currentTransaction.isSome:
@@ -370,6 +373,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Returns error if nothing to undo or if the undo operation fails
   if b.readOnly:
     return Result[BufferPosition, string].err "Buffer is read-only"
+  if b.inTransaction:
+    return Result[BufferPosition, string].err "Cannot undo during a transaction"
   if b.undoStack.len == 0:
     return Result[BufferPosition, string].err "Nothing to undo"
 
@@ -560,6 +565,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Returns error if nothing to redo or if the redo operation fails
   if b.readOnly:
     return Result[BufferPosition, string].err "Buffer is read-only"
+  if b.inTransaction:
+    return Result[BufferPosition, string].err "Cannot redo during a transaction"
   if b.redoStack.len == 0:
     return Result[BufferPosition, string].err "Nothing to redo"
 

@@ -43,6 +43,8 @@ type
     nmrExecCommand # Signal to handler_manager to execute a Command mode command
     nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
     nmrOpenUri # Signal to handler_manager to open URI/file under cursor
+    nmrUndo # Signal to handler_manager to close an Insert-Normal boundary first
+    nmrRedo # Signal to handler_manager to close an Insert-Normal boundary first
     nmrPassthrough
       # Trivial 1:1 forward to a HandlerResult — payload is the canonical
       # PassthroughKind from command_passthrough.nim.
@@ -72,6 +74,8 @@ type
       nmrJumpColumn*: int # Target column number
     of nmrOpenUri:
       openUri*: string
+    of nmrUndo, nmrRedo:
+      discard
     of nmrPassthrough:
       passthroughKind*: PassthroughKind
 
@@ -724,6 +728,8 @@ proc handleNormalModeKey*(
       return handler.handleInsertModeEntry(buffer, state, "open-above", cmd.count)
     # dd, yy, cc are handled by operator doubling in command_registry
     of "edit.undo":
+      if state.insertNormalMode and buffer.inTransaction:
+        return NormalModeResult(kind: nmrUndo)
       let r = buffer.undo()
       if r.isOk:
         state.cursor = r.value
@@ -741,6 +747,8 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
     of "edit.redo":
+      if state.insertNormalMode and buffer.inTransaction:
+        return NormalModeResult(kind: nmrRedo)
       let r = buffer.redo()
       if r.isOk:
         state.cursor = r.value

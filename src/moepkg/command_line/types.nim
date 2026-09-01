@@ -37,6 +37,8 @@ type
     claEnew # :ene, :enew (new empty buffer)
     claSet # :set
     claHelp # :help, :h
+    claUndo # :undo, :u
+    claRedo # :redo
     claSubstitute # :s
     claDeleteLines # :d, :%d (delete lines)
     claGoto # :123 (go to line 123)
@@ -143,7 +145,7 @@ type
     of claEdit:
       editFilename*: Option[string]
       forceEdit*: bool # true for :e!
-    of claEnew:
+    of claEnew, claUndo, claRedo:
       discard
     of claGoto:
       lineNumber*: int

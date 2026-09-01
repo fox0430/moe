@@ -512,6 +512,7 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
     let transactionResult = ctx.buffer.beginTransaction("Substitute")
     if transactionResult.isErr:
       return err("Failed to begin transaction: " & transactionResult.error)
+    ctx.state.editState.insertModeStartPos = some(ctx.cursor)
     ctx.state.statusMessage = "-- INSERT --"
     return Result[(), string].ok ()
 
@@ -542,6 +543,7 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   ctx.state.mode = EditorMode.Insert
 
   # Record substitute context so Insert mode exit can properly record the command
+  ctx.state.editState.insertModeStartPos = some(ctx.cursor)
   ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skChar, deleteCount: charsToDelete))
 
@@ -623,6 +625,7 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
 
   # Record substitute context so Insert mode exit can properly record the command
   let lineCount = endLine - startLine + 1
+  ctx.state.editState.insertModeStartPos = some(ctx.cursor)
   ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skLine, deleteCount: lineCount))
 

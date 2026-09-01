@@ -328,6 +328,8 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
         checkVisualEdit(state, buffer.deleteRange(selStart, selEnd))
         state.cursor = selStart
     if txr.isErr:
+      if state.statusMessage.len == 0:
+        state.statusMessage = txr.error
       state.visualSelection.active = false
       state.mode = state.previousMode
       return
@@ -371,6 +373,8 @@ proc visualIndent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
       state.cursor.line = startLine
       state.cursor.column = 0
     if txr.isErr:
+      if state.statusMessage.len == 0:
+        state.statusMessage = txr.error
       state.visualSelection.active = false
       state.mode = state.previousMode
       return
@@ -400,6 +404,8 @@ proc visualDedent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
       state.cursor.line = startLine
       state.cursor.column = 0
     if txr.isErr:
+      if state.statusMessage.len == 0:
+        state.statusMessage = txr.error
       state.visualSelection.active = false
       state.mode = state.previousMode
       return
@@ -464,6 +470,8 @@ proc applyVisualTextTransform(
 
     state.cursor = selStart
   if txr.isErr:
+    if state.statusMessage.len == 0:
+      state.statusMessage = txr.error
     state.visualSelection.active = false
     state.mode = state.previousMode
     return
@@ -774,6 +782,8 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
 
         state.cursor = selStart
     if txr.isErr:
+      if state.statusMessage.len == 0:
+        state.statusMessage = txr.error
       state.visualSelection.active = false
       state.mode = state.previousMode
       return
@@ -981,6 +991,8 @@ proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: string) =
 
       state.cursor = selStart
     if txr.isErr:
+      if state.statusMessage.len == 0:
+        state.statusMessage = txr.error
       state.visualSelection.active = false
       state.mode = state.previousMode
       return

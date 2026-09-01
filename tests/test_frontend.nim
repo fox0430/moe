@@ -43,3 +43,11 @@ suite "frontend embedding facade":
     check pointer.row == 2
     check pointer.column == 3
     check e.handleTextInput("")
+
+  test "can disable Normal mode through the public config":
+    let config = newEditorConfig()
+    config.standard.forceInsertMode = true
+    let e = newEditor(config)
+
+    check e.frontendStatus.modeLabel == "INSERT"
+    check e.handleTextInput("x")

@@ -560,6 +560,10 @@ proc handleCommandModeInput*(
     handler.executeSet(cmdResult.option, cmdResult.value)
   of claHelp:
     handler.executeHelp(cmdResult.topic)
+  of claUndo:
+    HandlerResult(kind: hrUndo)
+  of claRedo:
+    HandlerResult(kind: hrRedo)
   of claVSplit:
     handler.executeVSplit(cmdResult.vsplitFilename)
   of claHSplit:
