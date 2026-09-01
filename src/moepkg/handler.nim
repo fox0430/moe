@@ -214,7 +214,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing, hrEnterTerminal,
       hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
       hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro:
+      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro, hrUndo, hrRedo:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target
@@ -1360,12 +1360,6 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   let popupResult = e.handlePopupKeyCombo(keyCombo)
   if popupResult.isSome:
     return popupResult.get
-
-  # GUI frontends may deliver Ctrl-C as a KeyCombo rather than an interrupt
-  # event. Route both forms through the same non-Escape Insert cleanup.
-  if e.state.mode == EditorMode.Insert and not keyCombo.isSpecial and
-      kmCtrl in keyCombo.modifiers and keyCombo.char.toLowerAscii == "c":
-    return e.handleInterruptCore()
 
   # In Normal mode, Escape cancels pending multi-key state
   if e.handleEscapeCancellationKeyCombo(keyCombo):

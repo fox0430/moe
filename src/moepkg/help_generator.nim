@@ -852,6 +852,7 @@ proc renderCommandModeHead*(): string {.compileTime.} =
       helpEntriesFor("bg") & helpEntriesFor("man"),
     helpEntriesFor("e") & helpEntriesFor("ene") & helpEntriesFor("new") &
       helpEntriesFor("vnew"),
+    helpEntriesFor("undo") & helpEntriesFor("redo"),
     @[CommandLineSpecialHelp.substitute] & helpEntriesFor("delete") &
       @[CommandLineSpecialHelp.deleteAll, CommandLineSpecialHelp.deleteRange],
     helpEntriesFor("ls") & helpEntriesFor("bprev") & helpEntriesFor("bnext") &

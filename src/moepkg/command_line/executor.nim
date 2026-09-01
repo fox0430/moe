@@ -81,6 +81,10 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     )
   of claEnew:
     return CommandLineResult(kind: claEnew)
+  of claUndo:
+    return CommandLineResult(kind: claUndo)
+  of claRedo:
+    return CommandLineResult(kind: claRedo)
   of claGoto:
     if cmd.args.len > 0:
       try:

@@ -57,8 +57,9 @@ const
   ## divergence is intentional — TUI help groups by action, the markdown
   ## doc groups by user-discoverability (basic → forced → window-scoped).
   CommandModeHeadNames = @[
-    "bg", "man", "e", "ene", "new", "vnew", "delete", "ls", "bprev", "bnext", "bfirst",
-    "blast", "bd", "vs", "sp", "only", "theme", "noh", "stripwhitespace",
+    "bg", "man", "e", "ene", "new", "vnew", "undo", "redo", "delete", "ls", "bprev",
+    "bnext", "bfirst", "blast", "bd", "vs", "sp", "only", "theme", "noh",
+    "stripwhitespace",
   ]
 
   CommandModeTailNames = @[

@@ -4065,8 +4065,10 @@ suite "handleKeyCombo - frontend-neutral input":
 suite "forced Insert mode":
   let
     escapeKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
     ctrlCKey = KeyCombo(isSpecial: false, char: "c", modifiers: {key_bindings.kmCtrl})
     ctrlOKey = KeyCombo(isSpecial: false, char: "o", modifiers: {key_bindings.kmCtrl})
+    ctrlRKey = KeyCombo(isSpecial: false, char: "r", modifiers: {key_bindings.kmCtrl})
 
   proc charKey(c: string): KeyCombo =
     KeyCombo(isSpecial: false, char: c, modifiers: {})
@@ -4120,6 +4122,20 @@ suite "forced Insert mode":
     check e.activeBuffer.undoStack.len == 1
     check e.activeBuffer.currentTransaction.get.changes.len == 0
 
+  test "an Insert Ctrl-C remap runs without leaving Insert mode":
+    let e = createTestEditorWithBuffer("")
+    check e.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Insert, "C-c", "insert-newline"
+    ).len == 0
+    e.typeKeys("i")
+
+    check e.handleKeyCombo(ctrlCKey)
+
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.len == 2
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    check e.activeBuffer.inTransaction
+
   test "Ctrl-O opens the command line without exposing Normal mode":
     let e = createForcedInsertEditor()
 
@@ -4132,6 +4148,49 @@ suite "forced Insert mode":
 
     check e.handleTextInput("w")
     check e.state.input.commandText == ":w"
+
+  test "Ctrl-O undo and redo commit the current typing group":
+    let e = createForcedInsertEditor()
+    check e.handleTextInput("abc")
+    check e.handleKeyCombo(escapeKey)
+    check e.handleTextInput("de")
+
+    check e.handleKeyCombo(ctrlOKey)
+    check e.handleTextInput("undo")
+    check e.handleKeyCombo(enterKey)
+
+    check $e.activeBuffer.getLine(0) == "abc"
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.inTransaction
+
+    check e.handleKeyCombo(ctrlOKey)
+    check e.handleTextInput("redo")
+    check e.handleKeyCombo(enterKey)
+
+    check $e.activeBuffer.getLine(0) == "abcde"
+    check e.state.mode == EditorMode.Insert
+    check e.activeBuffer.inTransaction
+
+  test "ordinary Ctrl-O u commits before undo and resumes Insert mode":
+    let e = createTestEditorWithBuffer("")
+    e.typeKeys("i")
+    check e.handleTextInput("abc")
+
+    check e.handleKeyCombo(ctrlOKey)
+    check e.handleKeyCombo(charKey("u"))
+
+    check $e.activeBuffer.getLine(0) == ""
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check e.activeBuffer.inTransaction
+
+    check e.handleKeyCombo(ctrlOKey)
+    check e.handleKeyCombo(ctrlRKey)
+
+    check $e.activeBuffer.getLine(0) == "abc"
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check e.activeBuffer.inTransaction
 
   test "Ctrl-C does not replay a counted Insert command":
     let e = createTestEditorWithBuffer("")

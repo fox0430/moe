@@ -327,6 +327,16 @@ proc handleInsertMode*(
           kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
         )
 
+      # Resolve the keybinding before applying Ctrl-C's interrupt semantics so
+      # :iunmap and Insert-mode remaps remain authoritative.
+      if r.isInterruptExit:
+        let interruptResult = finalizeInsertInterrupt(buffer, state)
+        return HandlerResult(
+          kind: hrHandled,
+          modeTransition: r.modeTransition,
+          statusMessage: if interruptResult.isErr: interruptResult.error else: "",
+        )
+
       let finalizeResult = finalizeInsertExit(buffer, state)
       # Even on failure, allow mode transition so user isn't stuck in Insert
       # mode. A committed replication warning (ok with a message) surfaces the

@@ -321,6 +321,29 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     action: some(claVnew),
     isCanonicalLong: true,
   ),
+  # Edit history
+  CommandLineCommandSpec(
+    name: "u",
+    completionDescription: "Undo the last change",
+    helpEntries: @[],
+    action: some(claUndo),
+    isCanonicalLong: false,
+  ),
+  CommandLineCommandSpec(
+    name: "undo",
+    completionDescription: "Undo the last change",
+    helpEntries: @[HelpEntry(syntax: "undo", description: "Undo the last change")],
+    action: some(claUndo),
+    isCanonicalLong: true,
+  ),
+  CommandLineCommandSpec(
+    name: "redo",
+    completionDescription: "Redo the last undone change",
+    helpEntries:
+      @[HelpEntry(syntax: "redo", description: "Redo the last undone change")],
+    action: some(claRedo),
+    isCanonicalLong: true,
+  ),
   # Substitute / delete lines
   CommandLineCommandSpec(
     name: "s",

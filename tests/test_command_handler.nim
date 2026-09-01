@@ -1565,6 +1565,14 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":help")
     check result.kind == hrEnterHelpViewer
 
+  test "Handle :undo and :redo commands":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    check handler.handleCommandModeInput(buffer, ":u").kind == hrUndo
+    check handler.handleCommandModeInput(buffer, ":undo").kind == hrUndo
+    check handler.handleCommandModeInput(buffer, ":redo").kind == hrRedo
+
   test "Handle :vs command":
     let handler = setupHandler()
     let buffer = setupBuffer()

@@ -29,7 +29,7 @@ import
   ../[
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, cursor_util, quick_run_utils, command_completion, key_bindings,
-    key_router, lsp_integration,
+    key_router, lsp_integration, command_registry,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -88,6 +88,56 @@ proc modeSwitchEntry(mode: EditorMode): Option[HandlerResult] =
     some(HandlerResult(kind: hrEnterFileTree, enterFileTreePath: none(string)))
   else:
     none(HandlerResult)
+
+proc processHistoryResult(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
+  ## Execute undo/redo at a committed Insert boundary. Buffer history rejects
+  ## open transactions, so commands such as forced-Insert `Ctrl-o :undo` first
+  ## turn the current typing group into an ordinary undo entry.
+  let
+    wasInsertNormal = e.state.insertNormalMode
+    resumeInsert = e.state.mode == EditorMode.Insert or wasInsertNormal
+
+  var boundaryResult = Result[void, string].ok()
+  if activeBuffer.inTransaction:
+    boundaryResult =
+      if e.state.editState.visualBlockInsertContext.isSome:
+        let finalizeResult = finalizeInsertExit(activeBuffer, e.state)
+        if finalizeResult.isErr:
+          Result[void, string].err(finalizeResult.error)
+        else:
+          Result[void, string].ok()
+      else:
+        commitInsertModeBoundary(activeBuffer, e.state)
+
+  if boundaryResult.isErr:
+    e.state.statusMessage = boundaryResult.error
+  else:
+    let ctx = CommandContext(
+      buffer: activeBuffer,
+      state: e.state,
+      viewport: e.viewport,
+      motionController: e.motionController,
+      keyBindingRegistry: e.keyBindingRegistry,
+    )
+    let commandId =
+      if r.kind == hrUndo:
+        builtin(bcEditUndo)
+      else:
+        builtin(bcEditRedo)
+    let historyResult = e.commandRegistry.execute(ctx, commandId)
+    if historyResult.isErr:
+      e.state.statusMessage = historyResult.error
+
+  if resumeInsert and not activeBuffer.readOnly and not activeBuffer.inTransaction:
+    let beginResult = beginInsertModeSession(activeBuffer, e.state)
+    if beginResult.isErr:
+      e.state.statusMessage = "Failed to begin transaction: " & beginResult.error
+
+  if wasInsertNormal:
+    e.state.insertNormalMode = false
+    e.setMode(EditorMode.Insert)
+
+  true
 
 proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Apply the editor-level side effects implied by `r`. Returns true to
@@ -163,6 +213,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     return true # Unified: ops-moved kinds keep their own status message
   of hrSetBoolOption, hrSetIntOption, hrSetFloatOption:
     return e.processSetOptionResult(r)
+  of hrUndo, hrRedo:
+    return e.processHistoryResult(r, activeBuffer)
   of hrClearSearchHighlight, hrStripWhitespace, hrShellCommand, hrBackground, hrMan,
       hrSubstitute, hrDeleteLines, hrBuild:
     return e.processMiscResult(r, activeBuffer)

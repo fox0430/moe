@@ -210,6 +210,9 @@ proc applyNormalModePostProcessing(
             )
         return normalResult
 
+  if state.insertNormalMode and normalResult.kind in {hrUndo, hrRedo}:
+    return normalResult
+
   if state.insertNormalMode and
       normalResult.kind notin {hrHandled, hrUnhandled, hrError, hrPlaybackMacro}:
     endInsertNormalSession(buffer, state)
@@ -301,6 +304,10 @@ proc handleNormalMode*(
     )
   of nmrOpenUri:
     return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
+  of nmrUndo:
+    return HandlerResult(kind: hrUndo)
+  of nmrRedo:
+    return HandlerResult(kind: hrRedo)
   of nmrPassthrough:
     # Unreachable: captured by the early return above. Listed to satisfy
     # case exhaustiveness.

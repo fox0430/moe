@@ -54,6 +54,7 @@ type
     of imrHandled:
       modeTransition*: Option[EditorMode]
       overlayTransition*: Option[OverlayKind]
+      isInterruptExit*: bool
     of imrUnhandled:
       discard
     of imrExecCommand:
@@ -320,13 +321,15 @@ proc handleMotion*(
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleModeSwitch*(
-    handler: InsertModeHandler, targetMode: EditorMode
+    handler: InsertModeHandler, targetMode: EditorMode, isInterruptExit = false
 ): InsertModeResult =
   ## Handle mode switching from insert mode
   # Cancel completion and signature help when leaving insert mode
   handler.completionManager.cancelCompletion()
   handler.signatureHelpManager.hide()
-  return InsertModeResult(kind: imrHandled, modeTransition: some(targetMode))
+  return InsertModeResult(
+    kind: imrHandled, modeTransition: some(targetMode), isInterruptExit: isInterruptExit
+  )
 
 proc charOffsetToBufferPos(
     insertText: string, charOffset: int, startLine, startCol: int
@@ -1379,7 +1382,10 @@ proc handleInsertModeKey*(
     let cmd = route.command
     case cmd.kind
     of ctModeSwitch:
-      return handler.handleModeSwitch(cmd.targetMode)
+      let isInterruptExit =
+        not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+        keyCombo.char.toLowerAscii == "c" and cmd.name == "switch-to-normal"
+      return handler.handleModeSwitch(cmd.targetMode, isInterruptExit)
     of ctOverlaySwitch:
       # Overlay switches not supported in insert mode
       return InsertModeResult(kind: imrUnhandled)
