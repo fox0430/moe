@@ -66,6 +66,21 @@ suite "Encoding Detection":
     let text = "\xFF\xFE\x00\x00\x00\x00\x00\x48" # UTF-32 LE BOM + "H"
     check detectCharacterEncoding(text) == CharacterEncoding.utf32
 
+  test "Detect UTF-16 BOM with 2 bytes":
+    check detectCharacterEncoding("\xFF\xFE") == CharacterEncoding.utf16
+    check detectCharacterEncoding("\xFE\xFF") == CharacterEncoding.utf16
+
+  test "Detect UTF-16 BOM with 3 bytes (odd payload)":
+    check detectCharacterEncoding("\xFF\xFE\x41") == CharacterEncoding.utf16
+    check detectCharacterEncoding("\xFE\xFF\x41") == CharacterEncoding.utf16
+    check detectCharacterEncoding("\xFF\xFE\x00") == CharacterEncoding.utf16
+
+  test "Detect UTF-32 BOM precedence over UTF-16 prefix":
+    check detectCharacterEncoding("\xFF\xFE\x00\x00") == CharacterEncoding.utf32
+    check detectCharacterEncoding("\x00\x00\xFE\xFF") == CharacterEncoding.utf32
+    # 4-byte sequence that shares FF FE prefix but is not a UTF-32 BOM
+    check detectCharacterEncoding("\xFF\xFE\x41\x00") == CharacterEncoding.utf16
+
   test "UTF-16 BE without BOM detected as UTF-8 when valid":
     # "Hello" in UTF-16 BE (no BOM) - also valid UTF-8 (contains NUL bytes)
     # UTF-8 is tried first and succeeds, so it's detected as UTF-8
