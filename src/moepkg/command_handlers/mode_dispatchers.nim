@@ -1083,7 +1083,8 @@ proc handleTerminalMode*(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of trSwitchToNormal:
-    # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer
+    # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer.
+    # Terminal windows hold no Insert session, so no finalization is needed.
     let snapshotBuffer = termState.enterNormalSubMode()
     window.buffer = snapshotBuffer
     window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)

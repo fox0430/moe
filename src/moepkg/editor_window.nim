@@ -32,6 +32,7 @@ import
   editor_window_layout,
   editor_lsp,
   editor_notify,
+  editor_mode,
   git_cache,
   git_conflict,
   window_manager,
@@ -307,6 +308,7 @@ proc enew*(e: Editor): Result[(), string] =
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
   # Replace the buffer in the active window
+  e.finalizeInsertSessionForBufferSwitch(e.activeWindow.buffer)
   e.activeWindow.buffer = newBuffer
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
   e.activeWindow.viewport.resetViewportTop()
@@ -316,6 +318,10 @@ proc enew*(e: Editor): Result[(), string] =
   e.cursor = BufferPosition(line: 0, column: 0)
 
   e.syncActiveWindow()
+
+  # Match activateBufferInWindow so forceInsertMode re-enters Insert at once
+  # instead of lingering in Normal until the next input.
+  e.enforceModePolicy()
 
   ok(())
 

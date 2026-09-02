@@ -29,6 +29,7 @@ import pkg/results
 import
   types/editor_types,
   editor_window,
+  editor_mode,
   viewer_mode,
   editor_lsp,
   lsp_service,
@@ -78,6 +79,7 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
   if activeWindow.buffer == targetBuffer:
     return
 
+  e.finalizeInsertSessionForBufferSwitch(activeWindow.buffer)
   activeWindow.buffer = targetBuffer
   activeWindow.cursor = BufferPosition(line: 0, column: 0)
   activeWindow.viewport.resetViewportTop()

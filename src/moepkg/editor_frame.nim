@@ -185,7 +185,8 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     let savedTopLine = foundWindow.viewport.topLine
     let savedLeftColumn = foundWindow.viewport.leftColumn
 
-    # Replace buffer in the window
+    # Replace buffer in the window.
+    # Debug windows hold no Insert session, so no finalization is needed.
     foundWindow.buffer = newDebugBuffer
 
     # Restore scroll position (clamped to valid range)
