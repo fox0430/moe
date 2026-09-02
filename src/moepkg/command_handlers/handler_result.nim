@@ -366,6 +366,7 @@ type
     of hrDeleteLines:
       hrDeletedText*: string
       hrDeletedLineCount*: int
+      hrDeleteStartLine*: int ## First deleted line; where the cursor lands after
     of hrReferencesQuit:
       discard
     of hrReferencesJumpTo:

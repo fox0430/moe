@@ -172,6 +172,9 @@ type
       insertByteOffset*: int
         ## Byte in the line the text was written at; after the insertion,
         ## walking `insertPos.column` characters no longer lands on it.
+      insertSplitTailLen*: int
+        ## Characters after `insertPos.column`, recorded at edit time: the
+        ## mutated buffer cannot tell them from the inserted text.
     of ckDeleteText:
       deletePos*: BufferPosition
       deletedText*: string
@@ -863,17 +866,24 @@ proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent) =
 template shiftRowRefsForMultiLine(
     event: RowColRemapEvent, onInsert, onDelete: untyped
 ) =
-  ## Shared skeleton for row-referring subscribers (folds, bookmarks). Ignores
-  ## `preservesFirstRow`: the shift procs use the row range directly.
+  ## Shared skeleton for row-referring subscribers (folds, bookmarks). With
+  ## `preservesFirstRow`, `firstAffectedRow` keeps its identity and the shift
+  ## starts below it.
   case event.kind
   of rrekSingleLine, rrekClear:
     return
   of rrekMultiLine:
-    let delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+    let
+      delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+      row =
+        if event.preservesFirstRow:
+          event.firstAffectedRow + 1
+        else:
+          event.firstAffectedRow
     if delta > 0:
-      onInsert(event.firstAffectedRow, delta)
+      onInsert(row, delta)
     elif delta < 0:
-      onDelete(event.firstAffectedRow, -delta)
+      onDelete(row, -delta)
 
 proc foldShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
   ## Shift folds to follow their rows across line-count-changing edits.
@@ -1024,13 +1034,16 @@ proc emitRowColRemapEvents*(
         )
       )
     else:
+      # The first row keeps its identity unless the whole original line moved
+      # down, which needs a non-empty tail after the split point.
       dispatch(
         RowColRemapEvent(
           kind: rrekMultiLine,
           firstAffectedRow: change.insertPos.line,
           lastAffectedRowBefore: change.insertPos.line,
           lastAffectedRowAfter: change.insertPos.line + nl,
-          preservesFirstRow: true,
+          preservesFirstRow:
+            change.insertPos.column > 0 or change.insertSplitTailLen <= 0,
         )
       )
   of ckDeleteText:

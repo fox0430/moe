@@ -1400,6 +1400,26 @@ proc calculateOperatorRange*(
 
   return range
 
+proc snapOperatorRange*(buffer: TextBuffer, range: OperatorRange): OperatorRange =
+  ## Widen an operator range so every closed fold it touches is covered whole:
+  ## "dl" on a closed fold deletes the fold, not one hidden line. A whole fold is
+  ## whole lines, so a charwise range reaching into one becomes linewise.
+  ## Idempotent, and a no-op when no closed fold is touched.
+  result = range
+  if range.isEmpty:
+    return
+  if not buffer.foldState.touchesCollapsedFold(range.start.line, range.endPos.line):
+    return
+  let snapped = buffer.foldState.snapRangeToFolds(range.start.line, range.endPos.line)
+  result.isLinewise = true
+  result.start = BufferPosition(line: snapped.startLine, column: 0)
+  let endCol =
+    if snapped.endLine < buffer.len:
+      buffer.getLine(snapped.endLine).charLen
+    else:
+      0
+  result.endPos = BufferPosition(line: snapped.endLine, column: endCol)
+
 proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
   ## Extract text from the given range
   ## Used for yank operations
@@ -1485,6 +1505,10 @@ proc deleteLinesInRange(buffer: TextBuffer, range: OperatorRange): Result[(), st
       )
       if clearResult.isErr:
         return err(clearResult.error)
+    # Clearing the last line is not a deletion, so the fold shift never sees it
+    # go and every fold is now empty. Dropped only once the clear succeeded:
+    # fold state is outside the caller's transaction.
+    buffer.foldState.deleteAllFolds()
   ok(())
 
 proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
@@ -1499,7 +1523,9 @@ proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] 
     # Delete entire lines
     let lineCount = range.endPos.line - range.start.line + 1
 
-    if lineCount > 1:
+    # Group the per-line deletes into one undo unit, unless the caller already
+    # owns a transaction (beginTransaction rejects a nested one).
+    if lineCount > 1 and not buffer.inTransaction:
       let txr = withTransaction(buffer, "delete " & $lineCount & " lines"):
         let r = buffer.deleteLinesInRange(range)
         if r.isErr:

@@ -1037,6 +1037,80 @@ suite "Buffer - Folding":
     check buf.foldState.getCollapsedFoldAt(3).get.startLine == 2
     check buf.foldState.getNextVisibleLine(2, buf.len - 1) == 4
 
+  test "appending at the end of a fold's last line adds a line below the fold":
+    # The inserted line goes after the row the cursor sits on, so a fold ending
+    # on that row must not stretch over it.
+    let buf = newTextBuffer("0\n1\n2\n3")
+    discard buf.foldState.addFold(0, 1, collapsed = true)
+
+    check buf.insertText(BufferPosition(line: 1, column: 1), "\nnew").isOk
+    check buf[2] == "new"
+    check buf.foldState.folds[0].startLine == 0
+    check buf.foldState.folds[0].endLine == 1
+
+  test "inserting at column 0 pushes the whole fold down":
+    # Nothing of the row stays put, so the fold moves with its content.
+    let buf = newTextBuffer("0\n1\n2\n3")
+    discard buf.foldState.addFold(1, 2, collapsed = true)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "new\n").isOk
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+  test "appending to an empty last line adds a line below the fold":
+    # The insert is at column 0, but the empty line has nothing to push down, so
+    # the row keeps its identity and the fold must not stretch over the new line.
+    let buf = newTextBuffer("0\n\n2\n3")
+    discard buf.foldState.addFold(0, 1, collapsed = true)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "\nnew").isOk
+    check buf[1] == ""
+    check buf[2] == "new"
+    check buf.foldState.folds[0].startLine == 0
+    check buf.foldState.folds[0].endLine == 1
+
+  test "undoing a split of the last line puts the fold back":
+    # The row the insert splits is the last one, so re-reading it after the
+    # insert walks off the end of the buffer.
+    let buf = newTextBuffer("abc\ndef")
+    discard buf.foldState.addFold(1, 1, collapsed = true)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "\n").isOk
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 2
+
+    check buf.undo().isOk
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 1
+    check buf.foldState.folds[0].endLine == 1
+
+  test "undoing a multi-line insert puts the fold back where it was":
+    # The shift is replayed in reverse against the already-restored backend, so
+    # the event must not re-read the line it splits.
+    let buf = newTextBuffer("0\n1\n2\n3")
+    discard buf.foldState.addFold(1, 2, collapsed = true)
+
+    check buf.insertText(BufferPosition(line: 1, column: 0), "new\n").isOk
+    check buf.foldState.folds[0].startLine == 2
+    check buf.foldState.folds[0].endLine == 3
+
+    check buf.undo().isOk
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 1
+    check buf.foldState.folds[0].endLine == 2
+
+  test "undoing an append below a fold leaves the fold unstretched":
+    let buf = newTextBuffer("0\n1\n2\n3")
+    discard buf.foldState.addFold(0, 1, collapsed = true)
+
+    check buf.insertText(BufferPosition(line: 1, column: 1), "\nnew").isOk
+    check buf.foldState.folds[0].endLine == 1
+
+    check buf.undo().isOk
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 0
+    check buf.foldState.folds[0].endLine == 1
+
 suite "Buffer - Sidebar Markers":
   test "setLineMarker and getLineMarker":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
@@ -1213,6 +1287,71 @@ suite "Buffer - Sidebar Markers":
       Bookmark,
     ]:
       check not kind.isGitChangeMarker
+
+suite "Buffer - snapRangeToFolds":
+  # Widening a line range over the closed folds it touches is what keeps every
+  # edit path off hidden lines, so it is tested on the fold state directly.
+  proc stateWith(folds: seq[(int, int, bool)]): FoldState =
+    var st = initFoldState()
+    for (s, e, collapsed) in folds:
+      check st.addFold(s, e, collapsed = collapsed)
+    st
+
+  test "a range touching no fold is returned unchanged":
+    let st = stateWith(@[(5, 8, true)])
+    check st.snapRangeToFolds(0, 2) == (0, 2)
+
+  test "an open fold does not widen the range":
+    let st = stateWith(@[(1, 5, false)])
+    check st.snapRangeToFolds(2, 2) == (2, 2)
+
+  test "a range starting inside a closed fold widens to its bounds":
+    let st = stateWith(@[(1, 5, true)])
+    check st.snapRangeToFolds(3, 3) == (1, 5)
+
+  test "widening covers an enclosing fold, not just the innermost one":
+    # The innermost fold is found first; widening to it then reaches the outer
+    # fold, which must widen the range again.
+    let st = stateWith(@[(0, 10, true), (2, 4, true)])
+    check st.snapRangeToFolds(3, 3) == (0, 10)
+
+  test "an open outer fold does not widen past a closed inner one":
+    let st = stateWith(@[(0, 10, false), (2, 4, true)])
+    check st.snapRangeToFolds(3, 3) == (2, 4)
+
+  test "a range spanning two closed folds widens over both":
+    let st = stateWith(@[(1, 3, true), (6, 9, true)])
+    check st.snapRangeToFolds(2, 7) == (1, 9)
+
+  test "widening keeps going while the range keeps growing":
+    # Widening to the inner fold reaches the outer one, whose bounds then pull in
+    # the second inner fold as well.
+    let st = stateWith(@[(0, 10, true), (2, 4, true), (7, 9, true)])
+    check st.snapRangeToFolds(3, 3) == (0, 10)
+
+  test "a reversed range is normalized before widening":
+    let st = stateWith(@[(1, 5, true)])
+    check st.snapRangeToFolds(4, 2) == (1, 5)
+
+  test "an empty fold state leaves every range alone":
+    let st = initFoldState()
+    check st.snapRangeToFolds(3, 7) == (3, 7)
+
+  test "touchesCollapsedFold reports a fold the range already covers whole":
+    # snapRangeToFolds returns such a range unchanged, so "the range widened" is
+    # not a usable test for "a closed fold is in play".
+    let st = stateWith(@[(2, 5, true)])
+    check st.snapRangeToFolds(1, 6) == (1, 6)
+    check st.touchesCollapsedFold(1, 6)
+
+  test "touchesCollapsedFold ignores open folds and untouched ones":
+    let st = stateWith(@[(1, 5, false), (8, 9, true)])
+    check not st.touchesCollapsedFold(0, 6)
+    check st.touchesCollapsedFold(6, 8)
+
+  test "touchesCollapsedFold normalizes a reversed range":
+    let st = stateWith(@[(1, 5, true)])
+    check st.touchesCollapsedFold(6, 2)
 
 suite "Buffer - Row-ref subscribers dispatch (folds/bookmarks)":
   # Guards the refactor's promise that folds, bookmarks, lineMarkers, and

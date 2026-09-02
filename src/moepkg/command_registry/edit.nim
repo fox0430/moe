@@ -25,7 +25,7 @@ import std/[options, strutils, unicode]
 import pkg/results
 
 import ../[types, motion, modes, registers, logger, unicode_utils]
-import ../buffer/[core, edit, undo]
+import ../buffer/[core, edit, fold, undo]
 
 import core, operator_engine
 
@@ -108,7 +108,15 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
     if txnResult.isErr:
       return err(txnResult.error)
 
+  # Saved before the fold snap below: a failed paste must restore the cursor.
   let savedCursor = ctx.cursor
+
+  # A closed fold is a unit: a linewise paste lands after its last line, not
+  # after whichever of its lines the cursor sits on.
+  if isFullLine:
+    let fold = ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line)
+    if fold.isSome:
+      ctx.cursor.line = fold.get.endLine
   try:
     # Paste count times
     var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
@@ -128,6 +136,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
           # Rollback transaction on error
           if actualCount > 1:
             return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          ctx.cursor = savedCursor
           return err(insertResult.error)
 
         # Move cursor to the first non-whitespace character of pasted line
@@ -151,6 +160,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
           # Rollback transaction on error
           if actualCount > 1:
             return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          ctx.cursor = savedCursor
           return err(insertResult.error)
 
         # Move the cursor to the end of the inserted text so the next
@@ -241,7 +251,15 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
     if txnResult.isErr:
       return err(txnResult.error)
 
+  # Saved before the fold snap below: a failed paste must restore the cursor.
   let savedCursor = ctx.cursor
+
+  # A closed fold is a unit: a linewise paste lands above its first line, not
+  # above whichever of its lines the cursor sits on.
+  if isFullLine:
+    let fold = ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line)
+    if fold.isSome:
+      ctx.cursor.line = fold.get.startLine
   try:
     # Paste count times
     var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
@@ -259,6 +277,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
           # Rollback transaction on error
           if actualCount > 1:
             return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          ctx.cursor = savedCursor
           return err(insertResult.error)
 
         # Move cursor to the first non-whitespace character of pasted line
@@ -276,6 +295,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
           # Rollback transaction on error
           if actualCount > 1:
             return rollbackAndPropagate(ctx, insertResult.error, some(savedCursor))
+          ctx.cursor = savedCursor
           return err(insertResult.error)
 
         # Move the cursor to the end of the inserted text so the next
@@ -307,12 +327,31 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
 
   return Result[(), string].ok ()
 
+proc isOnCollapsedFold(ctx: CommandContext): bool =
+  ctx.buffer.foldState.getCollapsedFoldAt(ctx.cursor.line).isSome
+
+proc editWholeFoldAtCursor(
+    ctx: CommandContext, operatorType: OperatorType
+): Result[(), string] =
+  ## x and s are dl and cl, and an operator takes a closed fold as a whole, so
+  ## route them through the operator engine and let its range snapping widen.
+  executeOperatorOnRange(
+    ctx, operatorType, OperatorRange(start: ctx.cursor, endPos: ctx.cursor), 1
+  )
+
 proc handleDeleteChar*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Delete character(s) at cursor position (x command)
   ## count: number of characters to delete (default: 1)
   ## With autoDeleteParen enabled, deleting an opening paren also deletes matching closing paren
 
   logDebug("delete", "handleDeleteChar called with count=" & $count)
+  if ctx.isOnCollapsedFold:
+    let foldResult = ctx.editWholeFoldAtCursor(OpDelete)
+    if foldResult.isOk:
+      # `.` still repeats an `x`, not whatever edit came before it.
+      ctx.state.editState.lastEditCommand =
+        some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
+    return foldResult
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
@@ -502,6 +541,17 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   ## count: number of characters to substitute (default: 1)
 
   logDebug("substitute", "handleSubstituteChar called with count=" & $count)
+  if ctx.isOnCollapsedFold:
+    let foldResult = ctx.editWholeFoldAtCursor(OpChange)
+    if foldResult.isOk:
+      ctx.state.editState.insertModeStartPos = some(ctx.cursor)
+      # Without this, Insert exit records the typing as a plain insert and `.`
+      # would no longer substitute. `skChar` as for any `s`; a repeat on a
+      # closed fold promotes it back to a whole-fold change.
+      ctx.state.editState.substituteContext =
+        some(SubstituteContext(kind: skChar, deleteCount: 1))
+      ctx.state.statusMessage = "-- INSERT --"
+    return foldResult
   let actualCount = max(1, count)
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
@@ -550,15 +600,28 @@ proc handleSubstituteChar*(ctx: CommandContext, count: int = 1): Result[(), stri
   ctx.state.statusMessage = "-- INSERT --"
   return Result[(), string].ok ()
 
+proc cursorLineRange(
+    ctx: CommandContext, count: int
+): tuple[startLine, endLine, lineCount: int] =
+  ## Inclusive line range for a count-prefixed linewise command at the cursor,
+  ## widened so every closed fold it touches is covered whole, as dd/yy/S do.
+  let first = ctx.cursor.line
+  if first < 0 or first >= ctx.buffer.len:
+    # A stale cursor names no line. `snapRangeToFolds` normalizes a reversed
+    # range, so it would turn the empty request into a valid-looking one.
+    return (first, first - 1, 0)
+  let
+    last = min(first + max(1, count) - 1, ctx.buffer.len - 1)
+    (lo, hi) = ctx.buffer.foldState.snapRangeToFolds(first, last)
+  (lo, hi, hi - lo + 1)
+
 proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Substitute line(s) (S command or cc)
   ## Deletes line content and enters Insert mode
   ## count: number of lines to substitute (default: 1)
 
   logDebug("substitute", "handleSubstituteLine called with count=" & $count)
-  let actualCount = max(1, count)
-  let startLine = ctx.cursor.line
-  let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
+  let (startLine, endLine, _) = ctx.cursorLineRange(count)
 
   # Extract lines for yank register
   var text = ""
@@ -624,10 +687,11 @@ proc handleSubstituteLine*(ctx: CommandContext, count: int = 1): Result[(), stri
   ctx.state.mode = EditorMode.Insert
 
   # Record substitute context so Insert mode exit can properly record the command
-  let lineCount = endLine - startLine + 1
   ctx.state.editState.insertModeStartPos = some(ctx.cursor)
+  # `.` repeats the typed count, not the widened one: replaying a fold's line
+  # count somewhere unfolded would substitute unrelated lines.
   ctx.state.editState.substituteContext =
-    some(SubstituteContext(kind: skLine, deleteCount: lineCount))
+    some(SubstituteContext(kind: skLine, deleteCount: max(1, count)))
 
   ctx.state.statusMessage = "-- INSERT --"
   return Result[(), string].ok ()
@@ -692,9 +756,7 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
   ## count: number of lines to delete (default: 1)
 
   logDebug("delete", "handleDeleteLine called with count=" & $count)
-  let actualCount = max(1, count)
-  let startLine = ctx.cursor.line
-  let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
+  let (startLine, endLine, lineCount) = ctx.cursorLineRange(count)
 
   # Build text from lines to be deleted (for yank register)
   var deletedText = ""
@@ -705,9 +767,10 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
       if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
         deletedText.add("\n")
 
-  let txr = withTransaction(ctx.buffer, "Delete " & $actualCount & " line(s)"):
+  var clearedWholeBuffer = false
+  let txr = withTransaction(ctx.buffer, "Delete " & $lineCount & " line(s)"):
     var brokeEarly = false
-    for i in 1 .. actualCount:
+    for i in 1 .. lineCount:
       if startLine < ctx.buffer.len:
         if ctx.buffer.len == 1:
           brokeEarly = true
@@ -725,14 +788,23 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
         )
         if clearResult.isErr:
           return err(clearResult.error)
+      clearedWholeBuffer = true
   if txr.isErr:
     return err("Transaction failed: " & txr.error)
+
+  # Clearing the last line is not a deletion, so the fold shift never sees it go
+  # and every fold is now empty. Dropped after the commit: fold state is outside
+  # the transaction.
+  if clearedWholeBuffer:
+    ctx.buffer.foldState.deleteAllFolds()
 
   # Store in register only after the buffer change succeeded (registers are not
   # covered by the buffer transaction, so a rollback would not undo them)
   storeDeletedText(ctx, deletedText, true)
 
-  # Adjust cursor position if needed
+  # A closed fold can put `startLine` above the cursor, so the cursor follows
+  # the range rather than its own old line.
+  ctx.cursor.line = startLine
   if ctx.cursor.line >= ctx.buffer.len:
     ctx.cursor.line = max(0, ctx.buffer.len - 1)
   # Preserve column position, clamped to end of new current line
@@ -744,16 +816,16 @@ proc handleDeleteLine*(ctx: CommandContext, count: int = 1): Result[(), string] 
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand =
-    some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: actualCount))
+    some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: max(1, count)))
 
   # Delete screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
       ctx.notificationConfig.deleteScreenNotify:
-    ctx.notify("Deleted " & $actualCount & " line(s)")
+    ctx.notify("Deleted " & $lineCount & " line(s)")
 
   # Delete log notification (controlled by config)
   if ctx.notificationConfig.logNotifications and ctx.notificationConfig.deleteLogNotify:
-    logInfo("delete", "Deleted " & $actualCount & " line(s)")
+    logInfo("delete", "Deleted " & $lineCount & " line(s)")
 
   return Result[(), string].ok ()
 
@@ -762,10 +834,8 @@ proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## count: number of lines to yank (default: 1)
 
   logDebug("yank", "handleYankLine called with count=" & $count)
-  let actualCount = max(1, count) # Ensure at least 1 line
-  logDebug("yank", "actualCount=" & $actualCount)
-  let startLine = ctx.cursor.line
-  let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
+  let (startLine, endLine, lineCount) = ctx.cursorLineRange(count)
+  logDebug("yank", "lineCount=" & $lineCount)
 
   # Build text from multiple lines
   var yankText = ""
@@ -778,9 +848,7 @@ proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
         yankText.add("\n")
 
   # Debug: log the yanked text
-  logDebug(
-    "yank", "Yanking " & $actualCount & " line(s), total length: " & $yankText.len
-  )
+  logDebug("yank", "Yanking " & $lineCount & " line(s), total length: " & $yankText.len)
   logDebug("yank", "Yanked text: '" & yankText & "'")
 
   # An empty yankText here means a single empty line was yanked — still valid
@@ -797,11 +865,11 @@ proc handleYankLine*(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Yank screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
       ctx.notificationConfig.yankScreenNotify:
-    ctx.notify("Yanked " & $actualCount & " line(s)")
+    ctx.notify("Yanked " & $lineCount & " line(s)")
 
   # Yank log notification (controlled by config)
   if ctx.notificationConfig.logNotifications and ctx.notificationConfig.yankLogNotify:
-    logInfo("yank", "Yanked " & $actualCount & " line(s)")
+    logInfo("yank", "Yanked " & $lineCount & " line(s)")
 
   return Result[(), string].ok ()
 
@@ -813,7 +881,8 @@ proc handleJoinLines*(ctx: CommandContext, count: int = 1): Result[(), string] =
   logDebug("join", "handleJoinLines called with count=" & $count)
   let actualCount = max(1, count)
 
-  # Join lines using the buffer's joinLines function
+  # J is not an operator: on a closed fold it joins the fold's first two lines
+  # and leaves the fold closed, so the range is deliberately not widened.
   let joinResult = ctx.buffer.joinLines(ctx.cursor.line, actualCount)
   if joinResult.isErr:
     return err(joinResult.error)
@@ -1711,7 +1780,14 @@ proc registerEditCommands*(registry: CommandRegistry) =
       of lecSubstitute:
         # Repeat substitute (s/S/cc)
         # Delete + insert the recorded text without entering Insert mode
-        case lastCmd.substituteKind
+        # `s` on a closed fold changes the fold as a unit (see
+        # handleSubstituteChar), so its repeat has to do the same.
+        let substituteKind =
+          if lastCmd.substituteKind == skChar and ctx.isOnCollapsedFold:
+            skLine
+          else:
+            lastCmd.substituteKind
+        case substituteKind
         of skChar:
           # Repeat s command - delete characters then insert text
           let lineContent = ctx.buffer.getLine(ctx.cursor.line)
@@ -1759,8 +1835,15 @@ proc registerEditCommands*(registry: CommandRegistry) =
           return ok(())
         of skLine:
           # Repeat S or cc command - delete lines then insert text
-          let startLine = ctx.cursor.line
-          let endLine = min(startLine + lastCmd.substituteCount - 1, ctx.buffer.len - 1)
+          # A promoted char-substitute covers the one fold at the cursor; its
+          # recorded count counts characters, not lines.
+          let repeatLineCount =
+            if lastCmd.substituteKind == skLine: lastCmd.substituteCount else: 1
+          let (startLine, endLine, _) = ctx.cursorLineRange(repeatLineCount)
+
+          # The replacement text lands on startLine, which must not stay folded.
+          # `.` never enters Insert, so it opens the fold itself.
+          discard ctx.buffer.foldState.openFoldsInRange(startLine, endLine)
 
           let txr = withTransaction(ctx.buffer, "Substitute line"):
             for i in 0 ..< (endLine - startLine):
@@ -1802,7 +1885,9 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
           return ok(())
       of lecInsertText:
-        # Repeat insert text
+        # Repeat insert text. Typing lands on the cursor line, which must not
+        # stay folded, and `.` never enters Insert to open it.
+        discard ctx.buffer.foldState.openFoldsInRange(ctx.cursor.line, ctx.cursor.line)
         let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.insertedText)
         if insertResult.isErr:
           return err("Failed to repeat insert: " & insertResult.error)

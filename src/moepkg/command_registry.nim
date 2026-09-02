@@ -46,16 +46,15 @@ const EditCommandIds = [
   "edit.decrement", "edit.repeat",
 ]
   ## Built-in command ids (dotted form, as carried by Command.commandId) that
-  ## modify the buffer at the cursor. Used to expand a collapsed fold before the
-  ## edit so hidden text is never edited blindly. Pure yanks are intentionally
-  ## excluded (they leave the fold closed, vim-like). The `r` replace command is
-  ## handled separately via its ctOperatorPending operatorType (EditOperatorTypes).
+  ## modify the buffer at the cursor, used to classify a command for the
+  ## read-only gate. The `r` replace command is handled separately via its
+  ## ctOperatorPending operatorType (EditOperatorTypes).
   ##
   ## NOTE: when adding a new buffer-modifying command, add its id here too, or
-  ## the editor will silently edit through a closed fold. A guard test
-  ## ("fold auto-open allowlists stay in sync" in test_command_registry_-
-  ## integration) asserts every id below is a real registered command, so
-  ## renames/removals fail loudly — but it cannot catch a *missing* addition.
+  ## it will bypass the read-only gate. A guard test ("read-only gate allowlists
+  ## stay in sync" in test_command_registry_integration) asserts every id below
+  ## is a real registered command, so renames/removals fail loudly — but it
+  ## cannot catch a *missing* addition.
 
 const EditOperatorTypes = ["replace"]
   ## ctOperatorPending operatorTypes (see Command.operatorType) that modify the
@@ -63,19 +62,24 @@ const EditOperatorTypes = ["replace"]
   ## EditCommandIds, so the same guard test can assert each value is a real
   ## registered operatorType: renaming the operatorType in the dispatch below
   ## without updating this list then fails loudly instead of silently skipping
-  ## the fold auto-open.
+  ## the read-only gate.
 
 const VisualEditCommandIds = [
   "visual.delete", "visual.indent", "visual.dedent", "visual.lowercase",
   "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
   "visual.change", "visual.block.append", "visual.paste",
 ]
-  ## Visual-mode command ids that modify the selection. The selection can span
-  ## several folds, so the whole line range is expanded before the edit.
+  ## Visual-mode command ids that modify the selection. The selection is snapped
+  ## to fold boundaries before the edit, and gated on read-only buffers.
 
 const VisualEditOperatorTypes = ["visual-replace", "visual-surround"]
   ## ctOperatorPending operatorTypes that modify the visual selection (`r`, `S`).
   ## Guarded the same way as EditOperatorTypes / VisualEditCommandIds.
+
+const VisualSnapOnlyCommandIds = ["visual.yank"]
+  ## Visual-mode command ids that consume the selection whole but leave the
+  ## buffer untouched. They need the same fold snap as an edit, so `y` and `d`
+  ## agree on the selection, but stay outside the read-only gate.
 
 proc reverseFindMotion(m: Motion): Motion =
   ## The opposite-direction find/till motion, used by `,`.
@@ -229,8 +233,8 @@ proc executeCommand*(
     ctx.state.ui.findCharMatches = @[]
     ctx.state.ui.findCharMatchLine = 0
 
-  # Auto-expand a collapsed fold under the cursor before a buffer-modifying
-  # command, so the user never edits text hidden behind a fold marker.
+  # Buffer-modifying commands, classified for the read-only gate below. Folds
+  # are not opened here: an operator widens its own range over a closed fold.
   let isEditCommand =
     (
       ctx.state.pendingInput.pendingOperator.isSome and
@@ -239,17 +243,19 @@ proc executeCommand*(
       cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
       cmd.commandId in EditCommandIds
     )
-  if isEditCommand:
-    discard ctx.buffer.foldState.openFold(ctx.cursor.line)
-
-  # Visual-mode edits operate on a line range that may span several folds; open
-  # every collapsed fold the selection touches before the edit.
   let isVisualEditCommand =
     (
       cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
       cmd.commandId in VisualEditCommandIds
     ) or (cmd.kind == ctOperatorPending and cmd.operatorType in VisualEditOperatorTypes)
-  if isVisualEditCommand and ctx.state.visualSelection.active:
+  let isVisualSnapCommand =
+    isVisualEditCommand or (
+      cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
+      cmd.commandId in VisualSnapOnlyCommandIds
+    )
+  # A selection reaching into a closed fold covers that fold whole, as operators
+  # do. A whole fold is whole lines, so such a selection becomes linewise.
+  if isVisualSnapCommand and ctx.state.visualSelection.active:
     let
       selLo = min(
         ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line
@@ -257,7 +263,17 @@ proc executeCommand*(
       selHi = max(
         ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line
       )
-    discard ctx.buffer.foldState.openFoldsInRange(selLo, selHi)
+      snapped = ctx.buffer.foldState.snapRangeToFolds(selLo, selHi)
+    if ctx.buffer.foldState.touchesCollapsedFold(selLo, selHi):
+      ctx.state.visualSelection.kind = vskLine
+      ctx.state.visualSelection.start =
+        BufferPosition(line: snapped.startLine, column: 0)
+      ctx.state.visualSelection.current =
+        BufferPosition(line: snapped.endLine, column: 0)
+      # The mode has to follow the selection kind: handlers such as
+      # `visualBlockAppend` key off both and would otherwise do nothing.
+      if ctx.state.mode in {EditorMode.Visual, EditorMode.VisualBlock}:
+        ctx.state.mode = EditorMode.VisualLine
 
   # Primitive-level checks in moepkg/buffer/edit.nim reject writes on readOnly
   # buffers at the choke point, and the operators now propagate those results.

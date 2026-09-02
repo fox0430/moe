@@ -697,33 +697,44 @@ proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
   ## Switch from visual block mode to insert mode at end of block (A command)
   ## Moves cursor to (startLine, endCol + 1) and sets up
   ## VisualBlockInsertContext for text replication across all selected lines.
-  if state.visualSelection.active and state.visualSelection.kind == vskBlock:
-    let startLine =
-      min(state.visualSelection.start.line, state.visualSelection.current.line)
+  ## A selection a closed fold turned line-shaped has no block columns to
+  ## replicate into, so it appends at the end of the last selected line.
+  if not state.visualSelection.active:
+    return
+
+  if state.visualSelection.kind != vskBlock:
     let endLine =
       max(state.visualSelection.start.line, state.visualSelection.current.line)
-    let endCol =
-      max(state.visualSelection.start.column, state.visualSelection.current.column)
-
-    state.cursor.line = startLine
-    state.cursor.column = endCol + 1
-    state.editState.visualBlockInsertContext = some(
-      VisualBlockInsertContext(
-        kind: vbiAppend,
-        startLine: startLine,
-        endLine: endLine,
-        insertColumn: endCol + 1,
-      )
-    )
-
-    # Clear visual selection
+    state.cursor.line = endLine
+    state.cursor.column = buffer.getLine(endLine).charLen
     state.visualSelection.active = false
-
-    # Save current mode for returning with ESC
     state.previousMode = state.mode
-
-    # Switch to insert mode
     state.mode = EditorMode.Insert
+    return
+
+  let startLine =
+    min(state.visualSelection.start.line, state.visualSelection.current.line)
+  let endLine =
+    max(state.visualSelection.start.line, state.visualSelection.current.line)
+  let endCol =
+    max(state.visualSelection.start.column, state.visualSelection.current.column)
+
+  state.cursor.line = startLine
+  state.cursor.column = endCol + 1
+  state.editState.visualBlockInsertContext = some(
+    VisualBlockInsertContext(
+      kind: vbiAppend, startLine: startLine, endLine: endLine, insertColumn: endCol + 1
+    )
+  )
+
+  # Clear visual selection
+  state.visualSelection.active = false
+
+  # Save current mode for returning with ESC
+  state.previousMode = state.mode
+
+  # Switch to insert mode
+  state.mode = EditorMode.Insert
 
 proc visualChange*(buffer: TextBuffer, state: EditorState) =
   ## Delete visual selection and enter insert mode (c command)

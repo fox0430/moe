@@ -156,6 +156,43 @@ proc getCollapsedFoldAt*(state: FoldState, line: int): Option[Fold] =
     if fold.collapsed and line >= fold.startLine and line <= fold.endLine:
       return some(fold)
 
+proc touchesCollapsedFold*(state: FoldState, startLine, endLine: int): bool =
+  ## True when any collapsed fold overlaps the inclusive line range, including
+  ## a fold the range already contains whole.
+  let
+    lo = min(startLine, endLine)
+    hi = max(startLine, endLine)
+  for fold in state.folds:
+    if fold.startLine > hi:
+      break
+    if fold.collapsed and fold.endLine >= lo:
+      return true
+
+proc snapRangeToFolds*(
+    state: FoldState, startLine, endLine: int
+): tuple[startLine, endLine: int] =
+  ## Widen an inclusive line range so every collapsed fold it touches is covered
+  ## whole, as vim does. Iterates to a fixed point for nested and chained folds.
+  ## Does not modify the fold state.
+  var
+    lo = min(startLine, endLine)
+    hi = max(startLine, endLine)
+    changed = true
+  while changed:
+    changed = false
+    for fold in state.folds:
+      if fold.startLine > hi:
+        break
+      if not fold.collapsed or fold.endLine < lo:
+        continue
+      if fold.startLine < lo:
+        lo = fold.startLine
+        changed = true
+      if fold.endLine > hi:
+        hi = fold.endLine
+        changed = true
+  (lo, hi)
+
 proc openFold*(state: var FoldState, line: int): bool =
   ## Open the innermost fold at the given line. Returns true only when a
   ## collapsed fold was actually opened, so callers can use the result to decide

@@ -312,8 +312,6 @@ proc executeStripWhitespace*(
           let line = buffer.getLine(lineIdx)
           let trimmed = line.strip(leading = false, trailing = true)
           if trimmed != line:
-            # Reveal the line if it is hidden inside a collapsed fold.
-            discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
             let replaceResult = buffer.replaceLine(lineIdx, trimmed)
             if replaceResult.isErr:
               return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
@@ -383,6 +381,12 @@ proc executeSubstitute*(
     rangeStart = currentLine
     rangeEnd = currentLine
 
+  # An Ex range reaching into a closed fold covers all of its lines.
+  let snapped = buffer.foldState.snapRangeToFolds(rangeStart, rangeEnd)
+  # Re-clamp: a stale fold can name lines past the end of the buffer.
+  rangeStart = max(0, snapped.startLine)
+  rangeEnd = min(snapped.endLine, buffer.len - 1)
+
   let txr =
     try:
       withTransaction(buffer, "substitute"):
@@ -412,7 +416,6 @@ proc executeSubstitute*(
               break
 
           if modified:
-            discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
             let replaceResult = buffer.replaceLine(lineIdx, newLine)
             if replaceResult.isErr:
               return HandlerResult(kind: hrError, errorMessage: replaceResult.error)
@@ -473,6 +476,12 @@ proc executeDelete*(
   if rangeStart >= buffer.len:
     return HandlerResult(kind: hrError, errorMessage: "Line out of range")
 
+  # An Ex range reaching into a closed fold covers all of its lines.
+  let snapped = buffer.foldState.snapRangeToFolds(rangeStart, rangeEnd)
+  # Re-clamp: a stale fold can name lines past the end of the buffer.
+  rangeStart = max(0, snapped.startLine)
+  rangeEnd = min(snapped.endLine, buffer.len - 1)
+
   var text = ""
   for lineIdx in rangeStart .. rangeEnd:
     if lineIdx > rangeStart:
@@ -482,8 +491,6 @@ proc executeDelete*(
 
   let lineCount = rangeEnd - rangeStart + 1
   let deletingAll = rangeStart == 0 and rangeEnd == buffer.len - 1
-
-  discard buffer.foldState.openFoldsInRange(rangeStart, rangeEnd)
 
   let txr =
     try:
@@ -509,7 +516,17 @@ proc executeDelete*(
   if txr.isErr:
     return HandlerResult(kind: hrError, errorMessage: txr.error)
 
-  HandlerResult(kind: hrDeleteLines, hrDeletedText: text, hrDeletedLineCount: lineCount)
+  # Clearing the last line is not a deletion, so the fold shift never sees it go.
+  # Dropped after the commit: fold state is outside the transaction.
+  if deletingAll:
+    buffer.foldState.deleteAllFolds()
+
+  HandlerResult(
+    kind: hrDeleteLines,
+    hrDeletedText: text,
+    hrDeletedLineCount: lineCount,
+    hrDeleteStartLine: rangeStart,
+  )
 
 proc handleCommandModeInput*(
     handler: CommandModeHandler,

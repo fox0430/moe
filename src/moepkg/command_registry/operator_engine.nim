@@ -180,14 +180,58 @@ proc applyCaseOperator(
     moveToFirstNonBlank(ctx, range.start.line)
   ok(())
 
+proc changeLinesInRange(ctx: CommandContext, range: OperatorRange): Result[(), string] =
+  ## Linewise change: vim empties the range down to a single blank line to type
+  ## on rather than removing its lines outright. The kept line's indent survives
+  ## under autoindent, matching `cc`/`S`.
+  let startLine = range.start.line
+  if startLine >= ctx.buffer.len:
+    return ok(())
+
+  var indent = ""
+  if ctx.state.autoIndent and ctx.buffer.allowsTextTransforms:
+    for (rune, _) in ctx.buffer.getLine(startLine).chars:
+      let ch = $rune
+      if ch != " " and ch != "\t":
+        break
+      indent.add(ch)
+
+  for _ in 0 ..< (range.endPos.line - startLine):
+    if startLine + 1 >= ctx.buffer.len:
+      break
+    let delResult = ctx.buffer.deleteLine(startLine + 1)
+    if delResult.isErr:
+      return err(delResult.error)
+
+  let line = ctx.buffer.getLine(startLine)
+  if line.charLen > 0:
+    let clearResult = ctx.buffer.deleteRange(
+      BufferPosition(line: startLine, column: 0),
+      BufferPosition(line: startLine, column: line.charLen - 1),
+    )
+    if clearResult.isErr:
+      return err(clearResult.error)
+
+  if indent.len > 0:
+    let insResult =
+      ctx.buffer.insertText(BufferPosition(line: startLine, column: 0), indent)
+    if insResult.isErr:
+      return err(insResult.error)
+
+  ok(())
+
 proc executeOperatorOnRange*(
     ctx: CommandContext,
     operatorType: OperatorType,
-    range: OperatorRange,
+    rawRange: OperatorRange,
     operatorCount: int,
 ): Result[(), string] =
   ## Execute an operator on the given range
   ## operatorCount: count before operator (e.g., "2" in "2d3w")
+
+  # The one place a closed fold widens an operator range, so every operator path
+  # (motion spans, text objects, visual selections) consumes folds whole.
+  let range = ctx.buffer.snapOperatorRange(rawRange)
 
   logDebug(
     "operator",
@@ -292,7 +336,11 @@ proc executeOperatorOnRange*(
       return err("Failed to begin transaction: " & transactionResult.error)
 
     # Delete the text
-    let delResult = deleteRange(ctx.buffer, range)
+    let delResult =
+      if range.isLinewise:
+        ctx.changeLinesInRange(range)
+      else:
+        deleteRange(ctx.buffer, range)
     if delResult.isErr:
       return rollbackAndPropagate(ctx, delResult.error)
 
@@ -309,8 +357,13 @@ proc executeOperatorOnRange*(
       ctx.cursor.line = max(0, ctx.buffer.len - 1)
     if ctx.cursor.line < ctx.buffer.len:
       let line = ctx.buffer.getLine(ctx.cursor.line)
-      # Insert mode allows cursor at charLen (append position)
-      ctx.cursor.column = min(ctx.cursor.column, line.charLen)
+      # Insert mode allows cursor at charLen (append position). A linewise
+      # change leaves only the kept indent, so typing starts after it.
+      ctx.cursor.column =
+        if range.isLinewise:
+          line.charLen
+        else:
+          min(ctx.cursor.column, line.charLen)
 
     # Restore viewport position (same logic as OpDelete)
     let newBufferLen = ctx.buffer.len
@@ -410,16 +463,14 @@ proc applyOperatorOverMotion*(
     startPos, endPos: BufferPosition,
     motion: Motion,
 ): Result[(), string] =
-  ## Apply operator over motion span; opens folds except for yank.
-  # Refuse before opening folds; restore cursor if rejected.
+  ## Apply operator over motion span.
+  # Refuse before any buffer change; restore cursor if rejected.
   let rejection = refuseOnRawBytes(ctx, operatorType)
   if rejection.isSome:
     ctx.cursor = startPos
     return err(rejection.get)
 
   let range = calculateOperatorRange(ctx.buffer, startPos, endPos, motion)
-  if operatorType != OpYank:
-    discard ctx.buffer.foldState.openFoldsInRange(range.start.line, range.endPos.line)
   executeOperatorOnRange(ctx, operatorType, range, operatorCount)
 
 ## Operator command helpers

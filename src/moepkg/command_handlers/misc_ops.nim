@@ -58,9 +58,10 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     let count = r.hrDeletedLineCount
     e.state.statusMessage =
       $count & " line" & (if count == 1: "" else: "s") & " deleted"
+    # Vim leaves the cursor on the line that followed the deleted range, which is
+    # now its start line. A fold can widen the range above the old cursor line.
     let maxLine = e.activeBuffer().len - 1
-    if e.activeWindow.cursor.line > maxLine:
-      e.activeWindow.cursor.line = maxLine
+    e.activeWindow.cursor.line = min(max(0, r.hrDeleteStartLine), maxLine)
     e.activeWindow.cursor.column = 0
     return true
   of hrBuild:
