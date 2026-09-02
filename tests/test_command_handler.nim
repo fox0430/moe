@@ -2149,6 +2149,46 @@ suite "CommandModeHandler - executeDelete":
     check buffer.len == 1
     check buffer.getLine(0) == ""
 
+  test "Delete all lines drops the folds it emptied":
+    # The last line is cleared rather than deleted, so the fold shift never sees
+    # it go: without an explicit drop the empty buffer keeps a fold marker.
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+
+    let result = handler.executeDelete(buffer, hasRange = false, isGlobalRange = true)
+    check result.kind == hrDeleteLines
+    check buffer.len == 1
+    check buffer.getLine(0) == ""
+    check buffer.foldState.folds.len == 0
+
+  test "A range widened over the whole buffer drops the folds too":
+    # `:1d` on a fold covering everything snaps to the whole buffer, so it takes
+    # the same clear-the-last-line path as `:%d`.
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+
+    let result = handler.executeDelete(
+      buffer,
+      hasRange = true,
+      startLine = 1,
+      endLine = 1,
+      isGlobalRange = false,
+      currentLine = 0,
+    )
+    check result.kind == hrDeleteLines
+    check result.hrDeletedLineCount == 3
+    check buffer.len == 1
+    check buffer.getLine(0) == ""
+    check buffer.foldState.folds.len == 0
+
   test "Delete line range":
     let handler = setupHandler()
     let buffer = newTextBuffer()
@@ -2310,12 +2350,16 @@ suite "CommandModeHandler - executeDelete":
     check buffer.getLine(0) == "line1"
     check buffer.getLine(1) == "line2"
 
-suite "CommandModeHandler - fold auto-expand on edit":
-  test "substitute reveals a collapsed fold on a modified line":
+suite "CommandModeHandler - Ex ranges cover closed folds whole":
+  # An Ex range that reaches into a closed fold is adjusted to the fold's first
+  # and last line, so the command acts on all of it. The fold itself stays as
+  # the user left it.
+  test "substitute widens its range to the whole fold":
     let handler = setupHandler()
-    let buffer = setupBuffer(@["aaa", "foo", "bbb", "ccc"])
+    let buffer = setupBuffer(@["aaa", "foo", "foo", "ccc"])
     check buffer.foldState.addFold(1, 3, collapsed = true)
-    # :2s/foo/bar/  -> 1-based line 2 == index 1 (the fold start, hidden text)
+    # :2s/foo/bar/ -> 1-based line 2 == index 1, the fold start. The range widens
+    # to 1..3, so the match on the hidden line 2 is replaced as well.
     let result = handler.executeSubstitute(
       buffer,
       "foo",
@@ -2329,7 +2373,8 @@ suite "CommandModeHandler - fold auto-expand on edit":
     )
     check result.kind == hrSubstitute
     check buffer.getLine(1) == "bar"
-    check buffer.foldState.getFoldAt(1).get.collapsed == false
+    check buffer.getLine(2) == "bar"
+    check buffer.foldState.getFoldAt(1).get.collapsed == true
 
   test "substitute leaves a fold without a match closed":
     let handler = setupHandler()
@@ -2351,11 +2396,12 @@ suite "CommandModeHandler - fold auto-expand on edit":
     check buffer.getLine(0) == "bar"
     check buffer.foldState.getFoldAt(1).get.collapsed == true
 
-  test "delete reveals a collapsed fold overlapping the range":
+  test "delete widens its range to the whole fold":
     let handler = setupHandler()
     let buffer = setupBuffer(@["a", "b", "c", "d", "e", "f"])
     check buffer.foldState.addFold(2, 4, collapsed = true)
-    # :3d -> 1-based line 3 == index 2
+    # :3d -> 1-based line 3 == index 2, the fold start. The range widens to 2..4,
+    # so the whole fold is deleted rather than one line out of the middle of it.
     let result = handler.executeDelete(
       buffer,
       hasRange = true,
@@ -2365,15 +2411,75 @@ suite "CommandModeHandler - fold auto-expand on edit":
       currentLine = 0,
     )
     check result.kind == hrDeleteLines
-    let f = buffer.foldState.getFoldAt(2)
-    check f.isSome
-    check f.get.collapsed == false
+    check buffer.len == 3
+    check buffer.getLine(0) == "a"
+    check buffer.getLine(1) == "b"
+    check buffer.getLine(2) == "f"
+    check result.hrDeleteStartLine == 2
 
-  test "stripwhitespace reveals a fold on a stripped line":
+  test "a fold reaching past the end of the buffer does not read out of range":
+    # Fold state can name lines the buffer no longer has (a reload that shrank
+    # it, before the folds are clamped). Widening must not carry the range past
+    # the end.
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["a", "b", "c"])
+    check buffer.foldState.addFold(1, 9, collapsed = true)
+    let result = handler.executeDelete(
+      buffer,
+      hasRange = true,
+      isGlobalRange = false,
+      startLine = 2,
+      endLine = 2,
+      currentLine = 0,
+    )
+    check result.kind == hrDeleteLines
+    check buffer.len == 1
+    check buffer.getLine(0) == "a"
+
+  test "substitute over a fold reaching past the end stays in range":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["foo", "foo", "foo"])
+    check buffer.foldState.addFold(1, 9, collapsed = true)
+    let result = handler.executeSubstitute(
+      buffer,
+      "foo",
+      "bar",
+      "",
+      hasRange = true,
+      isGlobalRange = false,
+      startLine = 2,
+      endLine = 2,
+      currentLine = 0,
+    )
+    check result.kind == hrSubstitute
+    check buffer.getLine(1) == "bar"
+    check buffer.getLine(2) == "bar"
+
+  test "delete reports the widened start line so the cursor can follow":
+    # The cursor sits on a line the fold marker hides; widening the range moves
+    # the deletion above it, so clamping the old cursor line would leave it on an
+    # unrelated line. The result carries the line the cursor belongs on.
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["a", "b", "c", "d", "e", "f"])
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    # :4d -> 1-based line 4 == index 3, in the middle of the fold.
+    let result = handler.executeDelete(
+      buffer,
+      hasRange = true,
+      startLine = 4,
+      endLine = 4,
+      isGlobalRange = false,
+      currentLine = 3,
+    )
+    check result.kind == hrDeleteLines
+    check result.hrDeleteStartLine == 2
+    check result.hrDeletedLineCount == 3
+
+  test "stripwhitespace covers the whole buffer and opens no fold":
     let handler = setupHandler()
     let buffer = setupBuffer(@["aaa", "bbb   ", "ccc", "ddd"])
     check buffer.foldState.addFold(1, 3, collapsed = true)
     let result = handler.executeStripWhitespace(buffer)
     check result.kind == hrStripWhitespace
     check buffer.getLine(1) == "bbb"
-    check buffer.foldState.getFoldAt(1).get.collapsed == false
+    check buffer.foldState.getFoldAt(1).get.collapsed == true

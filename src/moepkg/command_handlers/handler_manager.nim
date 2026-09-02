@@ -252,9 +252,6 @@ proc handleNormalMode*(
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
       elif targetMode == EditorMode.Replace:
-        # Reveal a collapsed fold at the cursor so Replace never overtypes text
-        # hidden behind a fold marker (mirrors the Insert-mode entry behaviour).
-        discard buffer.foldState.openFold(state.cursor.line)
         # Begin a transaction when entering Replace mode
         # Guard: during insert-normal mode a transaction is already open
         if not buffer.inTransaction:
@@ -327,15 +324,33 @@ proc handleKeyCombo*(
     if completed:
       e.state.cursor.line = cursorLine
 
-  case e.state.mode
-  of EditorMode.Normal:
-    let normalResult = manager.handleNormalMode(e, keyCombo)
-    return manager.applyNormalModePostProcessing(e, normalResult)
-  of EditorMode.Insert:
-    return manager.handleInsertMode(e, keyCombo)
-  of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
-    return manager.handleVisualMode(e, keyCombo)
-  of EditorMode.Replace:
-    return manager.handleReplaceMode(e, keyCombo)
-  else:
-    return manager.dispatchSubStateMode(e, keyCombo)
+  let res =
+    case e.state.mode
+    of EditorMode.Normal:
+      let normalResult = manager.handleNormalMode(e, keyCombo)
+      manager.applyNormalModePostProcessing(e, normalResult)
+    of EditorMode.Insert:
+      manager.handleInsertMode(e, keyCombo)
+    of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
+      manager.handleVisualMode(e, keyCombo)
+    of EditorMode.Replace:
+      manager.handleReplaceMode(e, keyCombo)
+    else:
+      manager.dispatchSubStateMode(e, keyCombo)
+
+  # Typing lands on the cursor line, so Insert and Replace never leave it
+  # folded. Held after dispatch to cover both mode entry (several handlers, some
+  # via a transition) and an edit that moves the cursor into a closed fold.
+  let effectiveMode =
+    if res.getModeTransition().isSome:
+      res.getModeTransition().get
+    else:
+      e.state.mode
+  # Only for a dispatch that did something: a rejected key must not open a fold.
+  if res.kind notin {hrError, hrUnhandled} and
+      effectiveMode in {EditorMode.Insert, EditorMode.Replace} and e.activeBuffer != nil:
+    discard e.activeBuffer.foldState.openFoldsInRange(
+      e.state.cursor.line, e.state.cursor.line
+    )
+
+  return res

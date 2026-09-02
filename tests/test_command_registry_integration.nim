@@ -6980,8 +6980,11 @@ suite "Operator with compound counts":
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "five six"
 
-suite "executeCommand - auto-open folds on edit":
-  test "delete-char opens a collapsed fold at the cursor":
+suite "executeCommand - closed folds are edited as a whole":
+  # vim applies an operator to a closed fold as a unit ("dl" deletes the whole
+  # closed fold), rather than opening the fold and editing the line it was
+  # hiding. Ranges are widened; the fold itself is left as the user set it.
+  test "x on a closed fold deletes every line of the fold":
     let buffer = newTextBuffer("0\n1\n2\n3\n4")
     check buffer.foldState.addFold(0, 3, collapsed = true)
     let ctx = createTestContext(buffer)
@@ -6990,23 +6993,10 @@ suite "executeCommand - auto-open folds on edit":
 
     let cmd = Command(kind: ctCustom, commandId: "delete.char", count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    check not buffer.foldState.folds[0].collapsed
+    check buffer.len == 1
+    check buffer[0] == "4"
 
-  test "clipboard paste opens a collapsed fold at the cursor":
-    # edit.paste modifies the buffer at the cursor, so the fold auto-open must
-    # fire before the handler runs — even when the handler itself errors out
-    # (clipboard is disabled in the test context).
-    let buffer = newTextBuffer("0\n1\n2\n3\n4")
-    check buffer.foldState.addFold(0, 3, collapsed = true)
-    let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 0, column: 0) # on the fold start line
-    let registry = createTestRegistry()
-
-    let cmd = Command(kind: ctCustom, commandId: "edit.paste", count: 1)
-    discard registry.executeCommand(ctx, cmd)
-    check not buffer.foldState.folds[0].collapsed
-
-  test "operator delete opens a collapsed fold at the cursor":
+  test "an operator takes a closed fold as a whole":
     let buffer = newTextBuffer("hello world\n1\n2\n3")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
@@ -7016,11 +7006,13 @@ suite "executeCommand - auto-open folds on edit":
     ctx.state.pendingInput.pendingOperator = some(
       PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
     )
+    # dw would delete one word; the closed fold widens it to lines 0-2.
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    check not buffer.foldState.folds[0].collapsed
+    check buffer.len == 1
+    check buffer[0] == "3"
 
-  test "yank leaves a collapsed fold closed":
+  test "yank takes a closed fold as a whole and leaves it closed":
     let buffer = newTextBuffer("hello world\n1\n2\n3")
     check buffer.foldState.addFold(0, 2, collapsed = true)
     let ctx = createTestContext(buffer)
@@ -7032,6 +7024,73 @@ suite "executeCommand - auto-open folds on edit":
     )
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
     check registry.executeCommand(ctx, cmd).isOk
+    # Yank widens like any other operator, but changes no text and opens nothing.
+    check buffer.len == 4
+    check buffer.foldState.folds[0].collapsed
+    let yanked = ctx.state.registers.getNoNamedRegister().getContent()
+    check yanked == "hello world\n1\n2\n"
+
+  test "an operator range widens to cover a fold it reaches into":
+    # The motion ends inside a fold that does not start at the cursor line.
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0) # outside the fold
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+    # >j indents lines 0-1; the fold at 1-3 widens the range to 0-3.
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    for i in 0 .. 3:
+      check buffer[i] != $i
+    check buffer[4] == "4"
+    check buffer[5] == "5"
+    check buffer.foldState.folds[0].collapsed
+
+  test "dd on a closed fold deletes the fold, not one line":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "delete.line", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "0"
+    check buffer[1] == "4"
+
+  test "J is not an operator and leaves the fold closed":
+    # Unlike x/dd, J joins the fold's first two lines and does not widen.
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "join.lines", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 4
+    check buffer[1] == "1 2"
+    check buffer.foldState.folds[0].collapsed
+
+  test "r replaces one character and leaves the fold closed":
+    # r is not an operator either: it edits the fold's first line in place.
+    let buffer = newTextBuffer("abc\n1\n2\n3")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(
+      kind: ctOperatorPending, operatorType: "replace", targetChar: "Z", count: 1
+    )
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 4
+    check buffer[0] == "Zbc"
     check buffer.foldState.folds[0].collapsed
 
   test "navigation leaves a collapsed fold closed":
@@ -7045,22 +7104,414 @@ suite "executeCommand - auto-open folds on edit":
     check registry.executeCommand(ctx, cmd).isOk
     check buffer.foldState.folds[0].collapsed
 
-  test "operator+motion opens a collapsed fold spanned by the motion range":
-    # The motion ends inside a fold that does NOT start at the cursor line, so
-    # only the range-wide guard (not the cursor-line openFold) can reveal it.
-    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5")
-    check buffer.foldState.addFold(1, 3, collapsed = true)
+  test "a rejected edit leaves the fold state untouched":
+    # Nothing widens or opens before a command that turns out to be a no-op:
+    # clipboard is disabled in the test context, so edit.paste fails.
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(0, 3, collapsed = true)
     let ctx = createTestContext(buffer)
-    ctx.cursor = BufferPosition(line: 0, column: 0) # outside the fold
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.paste", count: 1)
+    discard registry.executeCommand(ctx, cmd)
+    check buffer.foldState.folds[0].collapsed
+
+  test "a paste that fails to start leaves the cursor where it was":
+    # The linewise paste moves the cursor to the fold boundary before it writes
+    # anything. A failure after that must not leave the cursor moved by a
+    # command that reports it did nothing.
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(0, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.registers.setNoNamedRegister("new\n", true)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    # An open transaction makes the count > 1 paste fail before its first write.
+    check buffer.beginTransaction("outer").isOk
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.paste", count: 2)
+    check registry.executeCommand(ctx, cmd).isErr
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+    check buffer.foldState.folds[0].collapsed
+
+  test "s on a closed fold empties it down to one line and enters Insert":
+    let buffer = newTextBuffer("  head\n1\n2\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.autoIndent = true
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "substitute.char", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    # A linewise change leaves a line to type on, keeping the indent, instead of
+    # deleting the lines and dropping the cursor onto the line that followed.
+    check buffer.len == 2
+    check buffer[0] == "  "
+    check buffer[1] == "tail"
+    check ctx.cursor == BufferPosition(line: 0, column: 2)
+    check ctx.state.mode == EditorMode.Insert
+    check ctx.state.editState.insertModeStartPos == some(ctx.cursor)
+
+  test "x on a closed fold is what . repeats afterwards":
+    let buffer = newTextBuffer("head\n1\n2\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.editState.lastEditCommand =
+      some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: 7))
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "delete.char", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 1
+    check buffer[0] == "tail"
+    let last = ctx.state.editState.lastEditCommand
+    check last.isSome
+    check last.get.kind == lecDeleteChar
+    check last.get.deleteCount == 1
+
+  test "S on a closed fold repeats the typed count, not the fold's":
+    let buffer = newTextBuffer("head\n1\n2\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "substitute.line", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    # The fold widened the edit to three lines, but `.` elsewhere must still
+    # substitute the one line the user asked for.
+    check buffer.len == 2
+    check ctx.state.editState.substituteContext ==
+      some(SubstituteContext(kind: skLine, deleteCount: 1))
+
+  test "dd on a hidden fold line leaves the cursor where the fold was":
+    # `:42` and friends can park the cursor on a line the fold marker hides.
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    check buffer.foldState.addFold(1, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 3, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "delete.line", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 3
+    check buffer[0] == "0"
+    check buffer[1] == "5"
+    check ctx.cursor.line == 1
+
+  test "linewise p on a closed fold pastes below the whole fold":
+    let buffer = newTextBuffer("head\n1\n2\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.registers.setNoNamedRegister("X\n", true)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "paste.after", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[3] == "X"
+    check buffer[4] == "tail"
+    # The pasted line lands outside the fold, which keeps its own lines.
+    check buffer.foldState.folds[0].startLine == 0
+    check buffer.foldState.folds[0].endLine == 2
+    check ctx.cursor.line == 3
+
+  test "linewise P on a closed fold pastes above the whole fold":
+    let buffer = newTextBuffer("head\n1\n2\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.registers.setNoNamedRegister("X\n", true)
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "paste.before", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "X"
+    check buffer[1] == "head"
+    check buffer.foldState.folds[0].startLine == 1
+    check buffer.foldState.folds[0].endLine == 3
+
+  test "linewise p below a fold whose last line is empty stays outside it":
+    # The paste lands at the end of the fold's last line. When that line is empty
+    # the insert is at column 0, which normally means the row moved down -- but
+    # here nothing of it moved, so the fold must not stretch over the new line.
+    let buffer = newTextBuffer("a\nb\n\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.registers.setNoNamedRegister("PASTED\n", true)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "paste.after", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[3] == "PASTED"
+    check buffer[4] == "tail"
+    check buffer.foldState.folds[0].startLine == 0
+    check buffer.foldState.folds[0].endLine == 2
+    check ctx.cursor.line == 3
+
+  test "x on a fold covering the whole buffer leaves no fold behind":
+    # The last line is cleared rather than deleted, so the fold shift never sees
+    # it go; without an explicit sweep a fold marker survives over empty text.
+    let buffer = newTextBuffer("a\nb\nc")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "delete.char", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+    check buffer.foldState.folds.len == 0
+
+  test "dd on a fold covering the whole buffer leaves no fold behind":
+    let buffer = newTextBuffer("a\nb\nc")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "delete.line", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+    check buffer.foldState.folds.len == 0
+
+suite "executeCommand - . on a closed fold":
+  # `.` writes to the buffer without going through an operator or entering
+  # Insert mode, so it has to hold the fold rules on its own.
+  test "repeating an insert opens the fold instead of typing into it":
+    let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecInsertText,
+        insertedText: "XYZ",
+        insertPosition: BufferPosition(line: 0, column: 0),
+      )
+    )
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "XYZaaa"
+    # Insert mode never leaves the typed line folded, and neither does its repeat.
+    check not buffer.foldState.folds[0].collapsed
+
+  test "repeating S covers the whole fold":
+    let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecSubstitute,
+        substituteText: "NEW",
+        substituteCount: 1,
+        substituteKind: skLine,
+      )
+    )
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "NEW"
+    check buffer[1] == "tail"
+    # The replacement lands on the fold's line, so it must not stay hidden.
+    check not buffer.foldState.folds[0].collapsed
+
+  test "repeating s changes the fold as a unit":
+    # Live `s` on a closed fold is a linewise change over the whole fold, so its
+    # repeat cannot fall back to deleting characters off the hidden first line.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecSubstitute,
+        substituteText: "NEW",
+        substituteCount: 1,
+        substituteKind: skChar,
+      )
+    )
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "NEW"
+    check buffer[1] == "tail"
+    # The replacement lands on the fold's line, so it must not stay hidden.
+    check not buffer.foldState.folds[0].collapsed
+
+  test "dd with a cursor past the end of the buffer deletes nothing":
+    # Fold snapping normalizes a reversed range, so an out-of-range cursor must
+    # be rejected before it: otherwise the empty request becomes a valid-looking
+    # range over the tail of the buffer and takes real lines with it.
+    let buffer = newTextBuffer("aaa\nbbb\nccc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 9, column: 0)
+    let registry = createTestRegistry()
+
+    discard registry.executeCommand(
+      ctx, Command(kind: ctCustom, commandId: "delete.line", count: 1)
+    )
+    check buffer.len == 3
+    check buffer[0] == "aaa"
+    check buffer[1] == "bbb"
+    check buffer[2] == "ccc"
+
+  test "s on a fold records a substitute, so `.` repeats a substitute":
+    # The fold branch routes through the operator engine and never touches the
+    # per-character substitute path, so it has to record the context itself:
+    # without it Insert exit would record a plain insert and `.` would stop
+    # substituting.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "substitute.char", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.editState.substituteContext.isSome
+    check ctx.state.editState.substituteContext.get.kind == skChar
+
+  test "repeating s off a fold still substitutes characters":
+    let buffer = newTextBuffer("aaa\nbbb")
+    let ctx = createTestContext(buffer)
+    ctx.state.editState.lastEditCommand = some(
+      LastEditCommand(
+        kind: lecSubstitute,
+        substituteText: "X",
+        substituteCount: 1,
+        substituteKind: skChar,
+      )
+    )
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "edit.repeat", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "Xaa"
+
+suite "Change operator over a linewise range":
+  # The change operator holds its transaction open for the insert that follows,
+  # so the delete underneath must not open one of its own.
+  test "cj empties both lines instead of failing on a nested transaction":
+    let buffer = newTextBuffer("aaa\nbbb\nccc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
     ctx.state.pendingInput.pendingOperator = some(
-      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
     )
-    # >j indents lines 0-1; the range touches the collapsed fold at lines 1-3.
     let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    check not buffer.foldState.folds[0].collapsed
+    # vim leaves one empty line to type on, and both lines land in the register.
+    check buffer.len == 2
+    check buffer[0] == ""
+    check buffer[1] == "ccc"
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+    check ctx.state.mode == EditorMode.Insert
+    check ctx.state.registers.getNoNamedRegister().getContent() == "aaa\nbbb\n"
+
+  test "the kept line's indent survives under autoindent":
+    let buffer = newTextBuffer("\taaa\nbbb\nccc")
+    let ctx = createTestContext(buffer)
+    ctx.state.autoIndent = true
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingInput.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "\t"
+    check ctx.cursor == BufferPosition(line: 0, column: 1)
+
+suite "executeCommand - visual selections snapped by a closed fold":
+  test "A in visual block enters Insert instead of doing nothing":
+    # Snapping the selection to the fold makes it line-shaped, so the mode has
+    # to follow -- a VisualBlock mode over a line selection used to make the
+    # handler fall through and leave the editor sitting in Visual mode.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.VisualBlock, kind = vskBlock)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.block.append", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.mode == EditorMode.Insert
+    check not ctx.state.visualSelection.active
+    check ctx.state.cursor == BufferPosition(line: 3, column: 3)
+
+  test "I in visual block enters Insert at the start of the snapped range":
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.VisualBlock, kind = vskBlock)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.to.insert", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.mode == EditorMode.Insert
+    check not ctx.state.visualSelection.active
+    check ctx.state.cursor == BufferPosition(line: 0, column: 0)
+
+  test "the mode follows the selection kind when a fold snaps it":
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 1, 1, 2, mode = EditorMode.Visual, kind = vskChar)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.indent", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.visualSelection.kind == vskLine
+
+  test "visual yank covers the same lines visual delete would":
+    # Yank changes nothing, so it sits outside the read-only gate -- but it still
+    # consumes the selection, and taking a partial closed fold would make `y` and
+    # `d` disagree about what the same selection covers.
+    let yanked = block:
+      let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\ntail")
+      check buffer.foldState.addFold(1, 3, collapsed = true)
+      let ctx = createTestContext(buffer)
+      ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.Visual, kind = vskChar)
+      let registry = createTestRegistry()
+
+      let cmd = Command(kind: ctCustom, commandId: "visual.yank", count: 1)
+      check registry.executeCommand(ctx, cmd).isOk
+      # The buffer and the fold are untouched; only the selection widened.
+      check buffer.len == 5
+      check buffer.foldState.folds[0].collapsed
+      ctx.state.registers.getNoNamedRegister().getContent()
+
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\ntail")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 1, 0, mode = EditorMode.Visual, kind = vskChar)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.delete", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 1
+    check buffer[0] == "tail"
+    check yanked == ctx.state.registers.getNoNamedRegister().getContent()
 
 suite "executeCommand - cursor pinned on collapsed folds":
   test "horizontal motion is pinned on a collapsed fold start line":
@@ -7088,16 +7539,16 @@ suite "executeCommand - cursor pinned on collapsed folds":
     check ctx.cursor.line == 1
     check ctx.cursor.column == 0
 
-suite "executeCommand - visual edit opens folds in the selection":
-  test "a visual edit opens collapsed folds the selection spans":
+suite "executeCommand - a visual selection covers closed folds whole":
+  test "a selection reaching into a closed fold covers the whole fold":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
     check buffer.foldState.addFold(2, 4, collapsed = true)
     let ctx = createTestContext(buffer)
-    # Select lines 1..5, which span the collapsed fold (2-4).
+    # Select lines 1..3, which reaches into the collapsed fold (2-4).
     ctx.state.visualSelection = VisualSelection(
       active: true,
       start: BufferPosition(line: 1, column: 0),
-      current: BufferPosition(line: 5, column: 0),
+      current: BufferPosition(line: 3, column: 0),
       kind: vskChar,
     )
     ctx.state.mode = EditorMode.Visual
@@ -7105,8 +7556,12 @@ suite "executeCommand - visual edit opens folds in the selection":
 
     let cmd = Command(kind: ctCustom, commandId: "visual.indent", count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    # The fold the selection spans is now open.
-    check buffer.foldState.getFoldAt(2).get.collapsed == false
+    # The selection widened to 1..4, so line 4 is indented and the fold stays shut.
+    for i in 1 .. 4:
+      check buffer[i] != $i
+    check buffer[0] == "0"
+    check buffer[5] == "5"
+    check buffer.foldState.getFoldAt(2).get.collapsed
 
   test "a visual edit leaves folds outside the selection closed":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
@@ -7123,13 +7578,13 @@ suite "executeCommand - visual edit opens folds in the selection":
 
     let cmd = Command(kind: ctCustom, commandId: "visual.indent", count: 1)
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer.foldState.getFoldAt(4).get.collapsed == true
+    check buffer.foldState.getFoldAt(4).get.collapsed
 
-suite "executeCommand - fold auto-open allowlists stay in sync":
-  # The fold auto-open guard keys off hardcoded commandId allowlists. If a
-  # command is renamed or removed without updating the list, the guard silently
-  # stops revealing folds before that edit. These tests fail loudly in that
-  # case by asserting every listed id resolves to a registered built-in command.
+suite "executeCommand - read-only gate allowlists stay in sync":
+  # The read-only gate keys off hardcoded commandId allowlists. If a command is
+  # renamed or removed without updating the list, the gate silently stops
+  # classifying it as an edit. These tests fail loudly in that case by asserting
+  # every listed id resolves to a registered built-in command.
   proc registeredCommandIds(): HashSet[string] =
     result = initHashSet[string]()
     let reg = newKeyBindingRegistry()
@@ -7163,6 +7618,17 @@ suite "executeCommand - fold auto-open allowlists stay in sync":
     let ops = registeredOperatorTypes()
     for op in EditOperatorTypes:
       check op in ops
+
+  test "every VisualSnapOnlyCommandIds entry is a registered command":
+    let ids = registeredCommandIds()
+    for id in VisualSnapOnlyCommandIds:
+      check id in ids
+
+  test "a snap-only id is never also an edit id":
+    # The two lists drive different gates: everything in the snap-only list has
+    # to stay out of the read-only gate.
+    for id in VisualSnapOnlyCommandIds:
+      check id notin VisualEditCommandIds
 
   test "every VisualEditOperatorTypes entry is a registered operatorType":
     let ops = registeredOperatorTypes()

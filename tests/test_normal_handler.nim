@@ -296,26 +296,6 @@ suite "NormalModeHandler - Insert Mode Entry":
     check result.kind == nmrError
     check result.errorMessage == "Unknown insert type: unknown-type"
 
-suite "NormalModeHandler - Insert Mode Entry fold auto-expand":
-  ## Entering Insert mode must reveal a collapsed fold at the cursor so typed
-  ## text is never hidden behind a fold marker (mirrors the Replace-mode entry
-  ## behaviour). Covers every insert entry type since they share one openFold.
-  for insertType in [
-    "insert", "append", "append-end", "insert-first-non-blank", "open-below",
-    "open-above",
-  ]:
-    test "Entering Insert via '" & insertType & "' opens a collapsed fold at the cursor":
-      let buf = newTextBuffer("aaaa\nbbbb\ncccc\ndddd")
-      check buf.foldState.addFold(0, 2, collapsed = true)
-      let handler = createTestHandler(buf)
-      let state = createTestState()
-      state.cursor = BufferPosition(line: 0, column: 0) # on the fold start line
-
-      let result = handler.handleInsertModeEntry(buf, state, insertType)
-
-      check result.kind == nmrHandled
-      check buf.foldState.folds[0].collapsed == false
-
 suite "NormalModeHandler - Insert Mode Entry readOnly guard":
   ## A read-only buffer (log viewer, quick-run output, etc.) must reject every
   ## insert-entry command (o, O, a, A, I, i) before Insert mode is reached,

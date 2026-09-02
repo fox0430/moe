@@ -241,7 +241,7 @@ let Invariants = @[
     match: matchStartPosSome,
     allow: @[
       ("moepkg/command_handlers/mode_dispatchers.nim", 2),
-      ("moepkg/command_registry/edit.nim", 5),
+      ("moepkg/command_registry/edit.nim", 6),
     ],
   ),
   Invariant(

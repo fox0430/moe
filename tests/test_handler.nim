@@ -38,6 +38,7 @@ import
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/command_handlers/result_processor
+import ../src/moepkg/command_handlers/[handler_result, misc_ops]
 
 proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
   ViewPort(
@@ -4597,3 +4598,33 @@ suite "handleRecentFileModeKeyCombo - window cleanup":
     check e.bufferIndexById(recentBufId) >= 0
     check e.state.mode == EditorMode.RecentFile
     check e.state.statusMessage == "File not found: " & missing
+
+suite "processMiscResult - hrDeleteLines":
+  test "the cursor lands on the first deleted line, not on its old one":
+    # An Ex range widened by a closed fold deletes above the cursor, so following
+    # the range is what keeps the cursor on the line that came after it.
+    let e = createTestEditorWithBuffer("a\nb\nf")
+    e.activeWindow.cursor = BufferPosition(line: 2, column: 1)
+    let r = HandlerResult(
+      kind: hrDeleteLines,
+      hrDeletedText: "c\nd\ne\n",
+      hrDeletedLineCount: 3,
+      hrDeleteStartLine: 2,
+    )
+
+    check e.processMiscResult(r, e.activeBuffer())
+    check e.activeWindow.cursor.line == 2
+    check e.activeWindow.cursor.column == 0
+
+  test "a start line past the end of the buffer is clamped":
+    let e = createTestEditorWithBuffer("a")
+    e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
+    let r = HandlerResult(
+      kind: hrDeleteLines,
+      hrDeletedText: "b\nc\n",
+      hrDeletedLineCount: 2,
+      hrDeleteStartLine: 5,
+    )
+
+    check e.processMiscResult(r, e.activeBuffer())
+    check e.activeWindow.cursor.line == 0

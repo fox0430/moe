@@ -136,7 +136,11 @@ proc insertTextEnd*(
   if pos.column < 0:
     return err("Column position cannot be negative: " & $pos.column)
 
-  let normalized = b.normalizeNewlines(text)
+  let
+    normalized = b.normalizeNewlines(text)
+    # Recorded before the mutation: afterwards this tail is indistinguishable
+    # from the inserted text.
+    splitTailLen = max(0, b.getLine(pos.line).charLen - pos.column)
 
   b.captureSnapshotIfNeeded()
 
@@ -158,6 +162,7 @@ proc insertTextEnd*(
       insertText: normalized,
       insertColDelta: outcome.colDelta,
       insertByteOffset: outcome.byteOffset,
+      insertSplitTailLen: splitTailLen,
     )
   )
 

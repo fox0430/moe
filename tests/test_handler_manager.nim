@@ -2620,8 +2620,9 @@ suite "HandlerManager - Replace mode fold auto-expand":
     state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
+    # The invariant lives in handleKeyCombo, which every keystroke goes through.
     let keyCombo = KeyCombo(isSpecial: false, char: "R", modifiers: {})
-    let r = manager.handleNormalMode(
+    let r = manager.handleKeyCombo(
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyCombo
     )
 
@@ -3137,3 +3138,83 @@ suite "HandlerManager - Insert-mode line-join backspace . repeat":
     check state.editState.lastEditCommand.isSome
     check state.editState.lastEditCommand.get.kind == types.lecInsertText
     check state.editState.lastEditCommand.get.insertedText == "X"
+
+suite "Insert mode - the cursor line is never folded":
+  # Insert mode is the one place folds are opened rather than widened over: the
+  # user has to see what they type. Entry-time expansion is not enough, because
+  # an edit can move the cursor into a fold that is still closed.
+  test "backspace joining into a hidden line opens the fold above":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8")
+    check buffer.foldState.addFold(3, 7, collapsed = true)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManager()
+    state.mode = EditorMode.Insert
+    state.cursor = BufferPosition(line: 8, column: 0)
+    state.editState.insertModeStartPos = some(state.cursor)
+
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard manager.handleKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), bsKey
+    )
+
+    # Line 8 was joined onto line 7, which the fold was hiding.
+    check state.cursor.line == 7
+    check not buffer.foldState.folds[0].collapsed
+
+  test "typing outside every fold leaves them closed":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManager()
+    state.mode = EditorMode.Insert
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.editState.insertModeStartPos = some(state.cursor)
+
+    let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
+    discard manager.handleKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), xKey
+    )
+
+    check buffer.getLine(0) == "X0"
+    check buffer.foldState.folds[0].collapsed
+
+  test "a key the Insert handler rejects leaves the fold closed":
+    # Opening a fold is a visible change, so it must not come out of a dispatch
+    # that did nothing: a read-only buffer rejects the edit but the cursor stays
+    # inside the closed fold.
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    buffer.readOnly = true
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManager()
+    state.mode = EditorMode.Insert
+    state.cursor = BufferPosition(line: 3, column: 0)
+    state.editState.insertModeStartPos = some(state.cursor)
+
+    let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
+    discard manager.handleKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), xKey
+    )
+
+    check buffer.getLine(3) == "3"
+    check buffer.foldState.folds[0].collapsed
+
+  test "entering Insert mode opens every enclosing fold, not just the innermost":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10")
+    check buffer.foldState.addFold(0, 10, collapsed = true)
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManager()
+    state.cursor = BufferPosition(line: 3, column: 0)
+
+    let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
+    discard manager.handleKeyCombo(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), iKey
+    )
+
+    for fold in buffer.foldState.folds:
+      check not fold.collapsed

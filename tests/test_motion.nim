@@ -25,7 +25,7 @@ import pkg/results
 
 import ../src/moepkg/unicode_utils
 import ../src/moepkg/types
-import ../src/moepkg/buffer/[core, edit]
+import ../src/moepkg/buffer/[core, edit, fold]
 import ../src/moepkg/motion {.all.}
 
 suite "TillChar Motion":
@@ -1630,3 +1630,47 @@ suite "Operator motion classifier consistency (Vim parity)":
   test "WordForward is exclusive but NOT linewise":
     check isExclusiveMotion(Motion.WordForward)
     check not isLinewiseMotion(Motion.WordForward)
+
+suite "snapOperatorRange - a closed fold is a unit":
+  # An operator range that reaches a closed fold acts on the whole fold, and a
+  # whole fold is a whole number of lines. The range does not have to grow for
+  # that to apply: one that already contains the fold must go linewise too.
+  proc bufferWithFold(): TextBuffer =
+    result = newTextBuffer("l0\nl1\nl2\nl3\nl4\nl5\nl6")
+    check result.foldState.addFold(2, 5, collapsed = true)
+
+  test "a charwise range reaching into a fold widens and goes linewise":
+    let buffer = bufferWithFold()
+    let snapped = buffer.snapOperatorRange(
+      OperatorRange(
+        start: BufferPosition(line: 3, column: 1),
+        endPos: BufferPosition(line: 4, column: 1),
+        isLinewise: false,
+      )
+    )
+    check snapped.isLinewise
+    check snapped.start == BufferPosition(line: 2, column: 0)
+    check snapped.endPos.line == 5
+
+  test "a charwise range already covering the fold whole goes linewise":
+    let buffer = bufferWithFold()
+    let snapped = buffer.snapOperatorRange(
+      OperatorRange(
+        start: BufferPosition(line: 2, column: 0),
+        endPos: BufferPosition(line: 6, column: 1),
+        isLinewise: false,
+      )
+    )
+    check snapped.isLinewise
+    check snapped.start == BufferPosition(line: 2, column: 0)
+    check snapped.endPos.line == 6
+    check snapped.endPos.column == buffer.getLine(6).charLen
+
+  test "a range touching no closed fold is left alone":
+    let buffer = bufferWithFold()
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 1),
+      endPos: BufferPosition(line: 1, column: 1),
+      isLinewise: false,
+    )
+    check buffer.snapOperatorRange(range) == range

@@ -461,9 +461,6 @@ proc handleInsertModeEntry*(
   if buffer.readOnly:
     state.statusMessage = "Buffer is read-only"
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-  # Expand a collapsed fold at the cursor so inserted text is never hidden
-  # behind a fold marker.
-  discard buffer.foldState.openFold(state.cursor.line)
   case insertType
   of "insert":
     # Simple insert at cursor
