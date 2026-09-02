@@ -151,6 +151,9 @@ proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
   if e.activeWindow.buffer == targetBuffer:
     return
 
+  # Finalize any Insert session on the old buffer before the switch.
+  e.finalizeInsertSessionForBufferSwitch(e.activeWindow.buffer)
+
   e.activeWindow.buffer = targetBuffer
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
   e.activeWindow.viewport.resetViewportTop()
@@ -261,11 +264,32 @@ proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
           fu.tabIdx
         else:
           w.bufferIds.len - 1
-      e.switchToWindowBuffer(newIdx)
+      # Only the active window owns the global Insert session.
+      if fu.winIdx == prevActive:
+        e.switchToWindowBuffer(newIdx)
+      else:
+        # Non-active window: reassign the buffer without finalizing.
+        let targetId = w.bufferIds[newIdx]
+        let targetOpt = e.bufferById(targetId)
+        if targetOpt.isSome:
+          let target = targetOpt.get
+          w.buffer = target
+          w.cursor = BufferPosition(line: 0, column: 0)
+          w.viewport.resetViewportTop()
+          w.viewport.leftColumn = 0
+          e.applyBufferMode(target)
+          # Match activateBufferInWindow so forceInsertMode re-enters Insert.
+          e.enforceModePolicy()
+          e.syncActiveWindow()
+          e.setActiveWindowScreenCursor(w)
+        else:
+          w.bufferIds.delete(newIdx)
     else:
       let blank = newTextBuffer("")
       e.addBuffer(blank)
       e.addBufferToWindowList(blank)
+      if fu.winIdx == prevActive:
+        e.finalizeInsertSessionForBufferSwitch(w.buffer)
       w.buffer = blank
       w.cursor = BufferPosition(line: 0, column: 0)
       w.viewport.resetViewportTop()
@@ -273,6 +297,8 @@ proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
       w.modeState = ModeState(kind: mskNone)
       w.mode = EditorMode.Normal
       e.setMode(EditorMode.Normal)
+      # Same forceInsertMode alignment as the branches above.
+      e.enforceModePolicy()
       e.syncActiveWindow()
       e.setActiveWindowScreenCursor(w)
   e.windowManager.activeWindowIndex = prevActive
@@ -459,6 +485,10 @@ proc redirectWindowsFromBuffer*(
   ## and viewport.
   for window in e.windowManager.windows:
     if window.buffer == deletedBuffer:
+      # Only the active window uses the global Insert tracking; non-active
+      # windows keep their own mode in `window.mode`.
+      if window == e.activeWindow:
+        e.finalizeInsertSessionForBufferSwitch(window.buffer)
       window.buffer = newBuf
       if newBuf.id notin window.bufferIds:
         window.bufferIds.add(newBuf.id)

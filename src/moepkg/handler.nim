@@ -30,7 +30,7 @@ import
   quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
   clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
   pending_input, visible_rows, viewer_mode, frontend_input, hover_popup, encoding,
-  unicode_utils
+  unicode_utils, editor_mode
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -450,38 +450,21 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
   ## visualSelection and pendingOperator carry no buffer identity, and an open
   ## transaction is per-buffer, so any of them would misfire on the new buffer.
   let activeBuffer = e.activeBuffer()
+  let wasInInsert = e.state.mode in {EditorMode.Insert, EditorMode.Replace}
 
-  case e.state.mode
-  of EditorMode.Insert, EditorMode.Replace:
-    if activeBuffer.inTransaction:
-      clearAutoIndentIfUnedited(activeBuffer, e.state)
-      let commitResult = activeBuffer.commitTransaction()
-      if commitResult.isErr:
-        logError "handler", "Failed to commit transaction: " & commitResult.error
-        e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
-    e.state.editState.insertModeStartPos = none(BufferPosition)
-    e.state.editState.substituteContext = none(types.SubstituteContext)
-    e.state.editState.replaceHistory = @[]
-    e.state.editState.insertReplayCount = 0
-    e.state.editState.insertReplayLineEntry = false
-    e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+  # Share the buffer-switch finalizer so the two exits cannot drift apart.
+  e.finalizeInsertSessionForBufferSwitch(activeBuffer)
+
+  if wasInInsert:
+    # The finalizer leaves the cursor alone; Insert/Replace parks it one left.
     let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
     adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+
+  case e.state.mode
   of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
     e.state.visualSelection.active = false
   else:
     discard
-
-  # Ctrl-o holds an open Insert transaction while state.mode is Normal.
-  if e.state.insertNormalMode:
-    if activeBuffer.inTransaction:
-      clearAutoIndentIfUnedited(activeBuffer, e.state)
-      let commitResult = activeBuffer.commitTransaction()
-      if commitResult.isErr:
-        logError "handler", "Failed to commit transaction: " & commitResult.error
-        e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
-    e.state.insertNormalMode = false
-    e.state.editState.insertModeStartPos = none(BufferPosition)
 
   e.state.pendingInput.pendingOperator = none(PendingOperator)
   e.state.pendingInput.pendingTextObject = none(PendingTextObject)

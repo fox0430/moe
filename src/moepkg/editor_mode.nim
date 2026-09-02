@@ -23,8 +23,9 @@ import std/[monotimes, options, times]
 
 import pkg/results
 
-import types/editor_types, buffer
+import types/editor_types, buffer, logger
 import command_handlers/mode_dispatchers
+import command_handlers/insert_commands
 
 func forceInsertMode(e: Editor): bool =
   not e.isNil and not e.config.isNil and e.config.standard.forceInsertMode
@@ -45,6 +46,46 @@ proc clearInsertSessionTracking(e: Editor) =
   e.state.editState.insertReplayLineEntry = false
   e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
   e.state.editState.substituteContext = none(types.SubstituteContext)
+
+proc finalizeInsertSessionForBufferSwitch*(e: Editor, oldBuffer: TextBuffer) =
+  ## Abandon the Insert session before the active window is repointed at
+  ## another buffer or window. Call before reassigning `window.buffer`, passing
+  ## the buffer that owns the session. Handles Insert/Replace and Insert-Normal
+  ## (Ctrl-O), committing `oldBuffer`'s transaction and clearing all Insert
+  ## tracking state. A no-op when no Insert session is active.
+  ##
+  ## The typed text stays in the undo history but is not recorded for
+  ## dot-repeat: abandoning a session is not a deliberate Insert exit.
+  let inInsert = e.state.mode in {EditorMode.Insert, EditorMode.Replace}
+  let inInsertNormal = e.state.insertNormalMode
+  if not (inInsert or inInsertNormal):
+    return
+
+  # Abort snippet and auto-indent inside the transaction so `replaceLine`
+  # joins the same undo group.
+  e.state.snippetSession.active = false
+  clearAutoIndentIfUnedited(oldBuffer, e.state)
+
+  if oldBuffer.inTransaction:
+    let commitResult = oldBuffer.commitTransaction()
+    if commitResult.isErr:
+      logError "handler", "Failed to commit transaction: " & commitResult.error
+      e.state.statusMessage = "Failed to commit transaction: " & commitResult.error
+
+  # Clear all Insert tracking state regardless of entry path.
+  e.state.editState.insertModeStartPos = none(BufferPosition)
+  e.state.editState.substituteContext = none(types.SubstituteContext)
+  e.state.editState.replaceHistory = @[]
+  e.state.editState.insertReplayCount = 0
+  e.state.editState.insertReplayLineEntry = false
+  e.state.editState.visualBlockInsertContext = none(types.VisualBlockInsertContext)
+  e.state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+
+  if inInsert:
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.Normal
+  if inInsertNormal:
+    e.state.insertNormalMode = false
 
 proc enforceModePolicy*(e: Editor) =
   ## Keep an editable window in a valid Insert session when Normal mode is disabled.
