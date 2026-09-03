@@ -1247,3 +1247,82 @@ suite "mayAbsorbAtSeam":
     # and nothing written next to this text changes how it counts.
     check "x\xF0abc".charLen == 5
     check not "x\xF0abc".mayAbsorbAtSeam
+
+suite "unicode_utils - setCharString":
+  test "an undecodable byte gets the four columns charDisplayWidth measures":
+    # celina's setString folds "\xF0" into "a" and draws two columns.
+    var buf = newBuffer(20, 1)
+    let text = "\xF0abc"
+    let endX = setCharString(buf, 0, 0, text, defaultStyle())
+    check endX == text.charDisplayWidth
+    check endX == 7
+    check buf[0, 0].symbol == "<"
+    check buf[1, 0].symbol == "f"
+    check buf[2, 0].symbol == "0"
+    check buf[3, 0].symbol == ">"
+    check buf[4, 0].symbol == "a"
+
+  test "a wide character advances two columns and gets a continuation cell":
+    var buf = newBuffer(20, 1)
+    let endX = setCharString(buf, 0, 0, "あa", defaultStyle())
+    check endX == 3
+    check buf[0, 0].symbol == "あ"
+    check buf[1, 0].symbol == ""
+    check buf[2, 0].symbol == "a"
+
+  test "drawing stops at the right edge instead of writing past it":
+    var buf = newBuffer(3, 1)
+    let endX = setCharString(buf, 0, 0, "\xF0", defaultStyle())
+    check endX == 3
+    check buf[0, 0].symbol == "<"
+    check buf[1, 0].symbol == "f"
+    check buf[2, 0].symbol == "0"
+
+  test "a wide character that would straddle the right edge is not drawn":
+    # A lead without its continuation cell is repainted as a full glyph past
+    # the edge.
+    var buf = newBuffer(3, 1)
+    let endX = setCharString(buf, 0, 0, "aaあ", defaultStyle())
+    check endX == 2
+    check buf[0, 0].symbol == "a"
+    check buf[1, 0].symbol == "a"
+    check buf[2, 0].symbol != "あ"
+
+  test "a narrow character still fills the last column":
+    var buf = newBuffer(3, 1)
+    let endX = setCharString(buf, 0, 0, "aab", defaultStyle())
+    check endX == 3
+    check buf[2, 0].symbol == "b"
+
+suite "unicode_utils - display column padding and scrolling":
+  test "alignLeftDisplay pads by columns, not bytes":
+    check charDisplayWidth(alignLeftDisplay("あい", 10)) == 10
+    check charDisplayWidth(alignLeftDisplay("abcdef", 10)) == 10
+    # Nothing is cut when the text is already wider than the column.
+    check alignLeftDisplay("abcdef", 3) == "abcdef"
+
+  test "alignLeftDisplay counts an undecodable byte as its four drawn columns":
+    # A lone 0xE3 does not decode, so it is drawn as `<e3>`: four columns for
+    # one byte.
+    let text = "\xE3"
+    check charDisplayWidth(text) == 4
+    check charDisplayWidth(alignLeftDisplay(text, 10)) == 10
+
+  test "charStartAtWidth never splits a wide character":
+    let text = "aあb"
+    check text.charStartAtWidth(0) == (0, 0)
+    check text.charStartAtWidth(1) == (1, 1)
+    # Column 2 falls inside the wide character, so the whole one is skipped.
+    check text.charStartAtWidth(2) == (2, 3)
+    check text.charStartAtWidth(3) == (2, 3)
+    # A width past the end stops at the end.
+    check text.charStartAtWidth(99) == (3, 4)
+
+  test "charStartAtWidth stops at the end when minWidth is past it":
+    # The reported width then falls short of minWidth, and slicing from the
+    # returned position yields nothing -- callers must not assume otherwise.
+    let text = "ab"
+    let (charPos, width) = text.charStartAtWidth(10)
+    check (charPos, width) == (2, 2)
+    check width < 10
+    check text.charSubStr(charPos) == ""

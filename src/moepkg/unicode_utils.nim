@@ -376,6 +376,50 @@ proc charDisplayWidth*(text: string): int =
   for (r, _) in text.chars:
     result += r.charWidth
 
+proc alignLeftDisplay*(text: string, width: int): string =
+  ## Pad `text` with spaces to `width` display columns, unlike the byte-counting
+  ## `strutils.alignLeft`.
+  let w = charDisplayWidth(text)
+  if w >= width:
+    text
+  else:
+    text & ' '.repeat(width - w)
+
+proc charStartAtWidth*(text: string, minWidth: int): (int, int) =
+  ## The first character position whose prefix reaches `minWidth` display
+  ## columns, and that prefix's width. Wide characters are never split, so the
+  ## width can overshoot `minWidth`; a `minWidth` past the end returns the whole
+  ## text and a width short of it.
+  var
+    charPos = 0
+    width = 0
+  for (r, _) in text.chars:
+    if width >= minWidth:
+      break
+    width += r.charWidth
+    charPos += 1
+  (charPos, width)
+
+proc setCharString*(buffer: var Buffer, x, y: int, text: string, style: Style): int =
+  ## Draw `text` in the model `charLen` and `charDisplayWidth` use, giving an
+  ## undecodable byte its own `<f0>` columns unlike celina's `setString`.
+  ## Returns the next free column; drawing stops at the buffer's right edge.
+  result = x
+  for (r, _) in text.chars:
+    if result >= buffer.area.width:
+      break
+    if r.isInvalidByteRune:
+      for ch in invalidByteText(r):
+        if result >= buffer.area.width:
+          break
+        buffer[result, y] = cell($ch, style)
+        inc result
+    else:
+      # A lead without its continuation cell spills past the right edge.
+      if sanitizeCellRune(r).charWidth == 2 and result + 2 > buffer.area.width:
+        break
+      result += setRuneCell(buffer, result, y, r, style)
+
 proc truncateToWidthWithSuffix*(
     text: string, maxWidth: int, suffix: string = "..."
 ): string =

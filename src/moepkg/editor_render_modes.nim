@@ -66,6 +66,9 @@ proc renderConfig*(
   let isEditMode = configState.isEditing()
   let editInfo = configState.getEditInfo()
 
+  # Cursor column, measured off the line drawn below. -1 while no row is edited.
+  var editCursorX = -1
+
   # Effective search query: live text while the search overlay is open,
   # otherwise the committed query. Display is gated by the same global
   # hlsearch/hlsearchTempDisabled flags as buffer search, so a highlight
@@ -87,25 +90,38 @@ proc renderConfig*(
     let
       item = configState.items[i]
       isSelected = i == configState.selectedIndex
-      isBeingEdited =
-        isSelected and isEditMode and item.kind in {cvkInt, cvkString, cvkColor}
+      # `editMode` is only set by `startEdit`, so the edited row is the selected one.
+      isBeingEdited = isSelected and isEditMode
 
     # Build display line
     var displayLine: string
     if isBeingEdited:
-      # Show edit buffer
-      let indent = "  ".repeat(item.depth)
-      let name = item.displayName.alignLeft(max(0, maxNameWidth - item.depth * 2))
-      displayLine = indent & name & " : " & editInfo.buffer
+      # Scroll the edit buffer horizontally to keep the cursor in the pane.
+      let
+        prefix = itemNamePrefix(item, maxNameWidth)
+        prefixWidth = charDisplayWidth(prefix)
+        valueWidth = max(1, width - prefixWidth)
+        cursorWidth = editInfo.buffer.displayWidthUpTo(editInfo.cursor)
+        # Scrolling by character position can skip more width than asked for.
+        (scrollChar, scrollWidth) =
+          editInfo.buffer.charStartAtWidth(max(0, cursorWidth - (valueWidth - 1)))
+      displayLine = prefix & editInfo.buffer.charSubStr(scrollChar)
+      # Clamped to the pane since the line is truncated below.
+      editCursorX =
+        startX + min(prefixWidth + cursorWidth - scrollWidth, max(0, width - 1))
     else:
       displayLine = formatItemForDisplay(item, maxNameWidth)
 
-    # Truncate or pad in display columns (rune-safe, width <= 0 safe).
-    let contentWidth = displayWidth(displayLine)
-    if contentWidth > width:
-      displayLine = displayLine.truncateToWidthWithSuffix(width, "...")
-    elif contentWidth < width:
-      displayLine = displayLine & ' '.repeat(width - contentWidth)
+    # Truncate in display columns (width <= 0 safe). No ellipsis while editing:
+    # those columns are live text the cursor can sit on.
+    if charDisplayWidth(displayLine) > width:
+      displayLine =
+        displayLine.truncateToWidthWithSuffix(width, if isBeingEdited: "" else: "...")
+    # Pad off the drawn width: truncation stops a column short when a wide
+    # character straddles the cut.
+    let drawnWidth = charDisplayWidth(displayLine)
+    if drawnWidth < width:
+      displayLine = displayLine & ' '.repeat(width - drawnWidth)
 
     # Apply style (use theme background color to match clearBuffer)
     let style =
@@ -119,7 +135,7 @@ proc renderConfig*(
       else:
         normalStyle()
 
-    buffer.setString(startX, screenY, displayLine, style)
+    discard buffer.setCharString(startX, screenY, displayLine, style)
 
     # Overlay the search highlight on just the matched characters (like buffer
     # search), instead of repainting the whole line. Skip while editing — the
@@ -136,7 +152,7 @@ proc renderConfig*(
           break
         let charIdx = displayLine.byteToCharPos(idx)
         let screenX = startX + displayLine.displayWidthUpTo(charIdx)
-        buffer.setString(
+        discard buffer.setCharString(
           screenX, screenY, displayLine[idx ..< idx + queryLower.len], hlStyle
         )
         searchPos = idx + queryLower.len
@@ -147,14 +163,16 @@ proc renderConfig*(
     if item.kind == cvkColor and not isBeingEdited:
       let parsed = parseThemeColor(item.colorValue)
       if parsed.isOk and not parsed.get.isTermDefaultColor:
-        # Column from displayWidth, not byte len, so a multibyte displayName
-        # can't shift the highlight past the value.
+        # Column from the drawn width, not byte len, so a multibyte displayName
+        # can't shift the highlight.
         let
           formatted = formatItemForDisplay(item, maxNameWidth)
-          valueWidth = displayWidth(item.colorValue)
-          valueX = startX + displayWidth(formatted) - valueWidth
+          valueWidth = charDisplayWidth(item.colorValue)
+          valueX = startX + charDisplayWidth(formatted) - valueWidth
         if valueX + valueWidth <= startX + width:
-          buffer.setString(valueX, screenY, item.colorValue, colorCodeStyle(parsed.get))
+          discard buffer.setCharString(
+            valueX, screenY, item.colorValue, colorCodeStyle(parsed.get)
+          )
 
     inc screenY
 
@@ -230,26 +248,15 @@ proc renderConfig*(
   # draw-side exception. The screen-cursor write is gated on no overlay/temp
   # message being active, since those own the cursor and are placed earlier in
   # advanceLayoutForFrame (preserving the former draw-order precedence).
-  if isEditMode:
-    # Position cursor within the edit buffer
-    let selectedItem = configState.getSelectedItem()
-    if selectedItem.isSome:
-      let item = selectedItem.get
-      let indent = item.depth * 2
-      let nameWidth = maxNameWidth - item.depth * 2
-      if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
-        # cursor x = startX + indent + name + " : " + edit cursor position.
-        # editInfo.cursor is a rune index, so convert the buffer prefix to its
-        # display width to keep the cursor aligned with multibyte values.
-        let cursorWidth =
-          displayWidthUpToWithTabs(editInfo.buffer, editInfo.cursor, e.tabStop)
-        e.state.screenCursor.x = startX + indent + nameWidth + 3 + cursorWidth
-        e.state.screenCursor.y =
-          listStartY + (configState.selectedIndex - window.viewport.topLine)
-      e.state.cursorVisible = true
+  if isEditMode and editCursorX >= 0:
+    if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
+      e.state.screenCursor.x = editCursorX
+      e.state.screenCursor.y =
+        listStartY + (configState.selectedIndex - window.viewport.topLine)
+    e.state.cursorVisible = true
   else:
-    # Hide cursor when not in edit mode, unless an overlay (command/search) is
-    # active — then the prompt line owns the cursor.
+    # Not editing, or the edited row is outside the drawn range. An active
+    # overlay (command/search) owns the cursor instead.
     e.state.cursorVisible = e.state.hasOverlay
 
 proc terminalColorToColorValue(tc: TerminalColor): ColorValue =

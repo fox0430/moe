@@ -23,11 +23,11 @@
 ## Design: Table-driven approach to avoid duplication between building
 ## the item list and applying changes.
 
-import std/[options, strutils, unicode]
+import std/[options, strutils]
 
 import pkg/results
 
-import config, color, types, config_loader
+import config, color, types, config_loader, unicode_utils
 
 import types/config_mode_types
 export config_mode_types
@@ -564,32 +564,43 @@ proc decrementFloatValue*(state: ConfigModeState, editorState: EditorState) =
 
 # Display formatting
 
+proc itemNamePrefix*(item: ConfigItem, maxNameWidth: int): string =
+  ## The indented, padded name column and its separator, in display columns.
+  ## Cut to `maxNameWidth` so the value column stays inside a narrow pane.
+  let
+    indentWidth = min(item.depth * 2, max(0, maxNameWidth))
+    nameWidth = max(0, maxNameWidth - indentWidth)
+    # No ellipsis when the column is too narrow to hold one.
+    name = item.displayName.truncateToWidthWithSuffix(
+      nameWidth, if nameWidth > 3: "..." else: ""
+    )
+  ' '.repeat(indentWidth) & name.alignLeftDisplay(nameWidth) & " : "
+
 proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
   ## Format a config item for display
-  let indent = "  ".repeat(item.depth)
-  let name = item.displayName.alignLeft(max(0, maxNameWidth - item.depth * 2))
+  let prefix = itemNamePrefix(item, maxNameWidth)
 
   case item.kind
   of cvkSection:
     return "[" & item.displayName & "]"
   of cvkBool:
-    return indent & name & " : " & (if item.boolValue: "true" else: "false")
+    return prefix & (if item.boolValue: "true" else: "false")
   of cvkInt:
-    return indent & name & " : " & $item.intValue
+    return prefix & $item.intValue
   of cvkFloat:
-    return indent & name & " : " & $item.floatValue
+    return prefix & $item.floatValue
   of cvkString:
-    return indent & name & " : " & item.stringValue
+    return prefix & item.stringValue
   of cvkEnum:
-    return indent & name & " : " & item.enumValue
+    return prefix & item.enumValue
   of cvkColor:
-    return indent & name & " : " & item.colorValue
+    return prefix & item.colorValue
 
 proc calcMaxNameWidth*(items: seq[ConfigItem], maxWidth: int): int =
-  ## Calculate the maximum display name width for config item layout.
+  ## Calculate the maximum name width for config item layout, in display columns.
   for item in items:
     if item.kind != cvkSection:
-      result = max(result, item.displayName.len + item.depth * 2)
+      result = max(result, charDisplayWidth(item.displayName) + item.depth * 2)
   result = min(result + 4, maxWidth div 2)
 
 # Edit mode (Int/String editing)
@@ -605,19 +616,19 @@ proc startEdit*(state: ConfigModeState) =
   of cvkInt:
     state.editMode = true
     state.editBuffer = $item.intValue
-    state.editCursor = state.editBuffer.runeLen
+    state.editCursor = state.editBuffer.charLen
   of cvkFloat:
     state.editMode = true
     state.editBuffer = $item.floatValue
-    state.editCursor = state.editBuffer.runeLen
+    state.editCursor = state.editBuffer.charLen
   of cvkString:
     state.editMode = true
     state.editBuffer = item.stringValue
-    state.editCursor = state.editBuffer.runeLen
+    state.editCursor = state.editBuffer.charLen
   of cvkColor:
     state.editMode = true
     state.editBuffer = item.colorValue
-    state.editCursor = state.editBuffer.runeLen
+    state.editCursor = state.editBuffer.charLen
   else:
     discard
 
@@ -677,42 +688,40 @@ proc confirmEdit*(state: ConfigModeState, editorState: EditorState): bool =
     state.cancelEdit()
     return false
 
-# editCursor is a rune (character) index, not a byte offset, so multibyte
-# values (e.g. bookmarkMarker) stay intact while editing. String ops below
-# convert it to a byte offset via runeOffset just before mutating editBuffer.
+# editCursor is a character index, not a byte offset. Edits recompute it from a
+# byte offset because neighbouring bytes can merge into one character.
 
 proc byteOffsetAtCursor(state: ConfigModeState): int =
-  ## Byte offset of the rune at editCursor (or buffer end when at the tail).
-  if state.editCursor >= state.editBuffer.runeLen:
-    state.editBuffer.len
-  else:
-    state.editBuffer.runeOffset(state.editCursor)
+  ## Byte offset of the character at editCursor, or the buffer end at the tail.
+  state.editBuffer.charToBytePos(state.editCursor)
 
 proc editInsertChar*(state: ConfigModeState, c: string) =
   ## Insert a character at cursor position in edit buffer
   if not state.editMode:
     return
-  state.editBuffer.insert(c, state.byteOffsetAtCursor)
-  state.editCursor += c.runeLen
+  let bytePos = state.byteOffsetAtCursor
+  state.editBuffer.insert(c, bytePos)
+  state.editCursor = byteToCharPos(state.editBuffer, bytePos + c.len)
 
 proc editBackspace*(state: ConfigModeState) =
-  ## Delete the rune before the cursor
+  ## Delete the character before the cursor
   if not state.editMode or state.editCursor <= 0:
     return
   let
     endByte = state.byteOffsetAtCursor
-    startByte = state.editBuffer.runeOffset(state.editCursor - 1)
+    startByte = state.editBuffer.charToBytePos(state.editCursor - 1)
   state.editBuffer.delete(startByte ..< endByte)
-  state.editCursor.dec
+  state.editCursor = byteToCharPos(state.editBuffer, startByte)
 
 proc editDelete*(state: ConfigModeState) =
-  ## Delete the rune at the cursor
-  if not state.editMode or state.editCursor >= state.editBuffer.runeLen:
+  ## Delete the character at the cursor
+  if not state.editMode or state.editCursor >= state.editBuffer.charLen:
     return
   let
     startByte = state.byteOffsetAtCursor
-    endByte = startByte + runeLenAt(state.editBuffer, startByte)
+    endByte = startByte + state.editBuffer.runeSizeAt(startByte)
   state.editBuffer.delete(startByte ..< endByte)
+  state.editCursor = byteToCharPos(state.editBuffer, startByte)
 
 proc editMoveCursorLeft*(state: ConfigModeState) =
   ## Move cursor left in edit buffer
@@ -721,7 +730,7 @@ proc editMoveCursorLeft*(state: ConfigModeState) =
 
 proc editMoveCursorRight*(state: ConfigModeState) =
   ## Move cursor right in edit buffer
-  if state.editMode and state.editCursor < state.editBuffer.runeLen:
+  if state.editMode and state.editCursor < state.editBuffer.charLen:
     state.editCursor.inc
 
 proc editMoveCursorHome*(state: ConfigModeState) =
@@ -732,7 +741,7 @@ proc editMoveCursorHome*(state: ConfigModeState) =
 proc editMoveCursorEnd*(state: ConfigModeState) =
   ## Move cursor to end of edit buffer
   if state.editMode:
-    state.editCursor = state.editBuffer.runeLen
+    state.editCursor = state.editBuffer.charLen
 
 proc isEditing*(state: ConfigModeState): bool =
   ## Check if currently in edit mode
