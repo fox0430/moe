@@ -19,7 +19,7 @@
 
 ## Tests for command_handlers/search_mode_handler.nim
 
-import std/[unittest, unicode]
+import std/unittest
 
 import pkg/celina
 
@@ -31,13 +31,14 @@ import ../src/moepkg/config
 import ../src/moepkg/config_mode
 import ../src/moepkg/help_viewer
 import ../src/moepkg/search_utils
+import ../src/moepkg/unicode_utils
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 
 proc setSearchText(e: Editor, text: string) =
   ## Test helper: set search text and position cursor at the end,
   ## matching the state after the user has typed the text.
   e.state.input.search.text = text
-  e.state.input.search.cursor = text.runeLen
+  e.state.input.search.cursor = text.charLen
 
 proc createTestEditorWithBuffer(content: string): Editor =
   let config = newEditorConfig()
@@ -133,6 +134,37 @@ suite "handleSearchBackspace":
     handleSearchBackspace(e)
 
     check e.state.input.search.text == ""
+
+suite "Search prompt - invalid bytes use the buffer character model":
+  test "Pasted truncated lead byte counts every byte as a character":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+
+    e.insertPastedTextInSearch("\xF0abc")
+
+    check e.state.input.search.text == "\xF0abc"
+    check e.state.input.search.cursor == 4
+
+  test "Backspace after invalid paste removes the last byte only":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+
+    e.insertPastedTextInSearch("\xF0abc")
+    handleSearchBackspace(e)
+
+    check e.state.input.search.text == "\xF0ab"
+    check e.state.input.search.cursor == 3
+
+  test "Paste completing a truncated lead byte keeps cursor at insertion end":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+
+    e.state.input.search.text = "\xE2"
+    e.state.input.search.cursor = 1
+    e.insertPastedTextInSearch("\x82\xAC")
+
+    check e.state.input.search.text == "\xE2\x82\xAC"
+    check e.state.input.search.cursor == 1
 
 suite "Search mode - Insert-Normal mode (Ctrl-O)":
   test "finalizeSearch returns to Insert when insertNormalMode is set":

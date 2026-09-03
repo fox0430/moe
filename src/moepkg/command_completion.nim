@@ -347,7 +347,7 @@ proc triggerArgumentCompletion*(
   mgr.baseCommand = cmd
 
   # Base position: 1 for ":" + command length + 1 for space
-  let baseArgX = 1 + cmd.runeLen + 1
+  let baseArgX = 1 + cmd.charLen + 1
 
   # Determine completion mode based on command
   if cmd == "set":
@@ -365,7 +365,7 @@ proc triggerArgumentCompletion*(
         arg[0 .. arg.rfind("/")] # Include the /
       else:
         ""
-    mgr.argStartX = baseArgX + mgr.originalDirPrefix.runeLen
+    mgr.argStartX = baseArgX + mgr.originalDirPrefix.charLen
   else:
     # Unknown command, no argument completion
     mgr.state = ccsIdle

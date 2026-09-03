@@ -22,7 +22,7 @@
 ## This module handles the command-line overlay mode (`:` commands).
 ## Extracted from handler.nim to reduce file size.
 
-import std/[options, os, strutils, unicode]
+import std/[options, os, strutils]
 
 import pkg/[celina, chronos]
 
@@ -120,7 +120,10 @@ proc insertPastedTextInCommand*(e: Editor, text: string) =
   e.state.input.commandText =
     e.state.input.commandText[0 ..< bytePos] & insertText &
     e.state.input.commandText[bytePos ..^ 1]
-  e.state.input.commandCursor += insertText.runeLen
+  # Recompute from the insertion end byte (minus the ":" prefix) so a seam
+  # merge between the existing bytes and the paste keeps the cursor in place.
+  e.state.input.commandCursor =
+    byteToCharPos(e.state.input.commandText, bytePos + insertText.len) - 1
 
   e.state.commandCompletionManager.cancelCompletion()
   e.updateSubstitutePreviewIfNeeded()
@@ -218,20 +221,20 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       case mgr.mode
       of cmCommand:
         e.state.input.commandText = ":" & selected
-        e.state.input.commandCursor = selected.runeLen
+        e.state.input.commandCursor = selected.charLen
         return false
       of cmFilePath:
         # Use original directory prefix (saved when completion started)
         let newArg = mgr.originalDirPrefix & selected
         e.state.input.commandText = ":" & mgr.baseCommand & " " & newArg
-        e.state.input.commandCursor = mgr.baseCommand.runeLen + 1 + newArg.runeLen
+        e.state.input.commandCursor = mgr.baseCommand.charLen + 1 + newArg.charLen
         # Return true if directory selected (ends with /)
         return selected.endsWith("/")
       of cmSetOption:
         # Replace only the argument part
         let (cmd, _) = parseCommandLine(e.state.input.commandText)
         e.state.input.commandText = ":" & cmd & " " & selected
-        e.state.input.commandCursor = cmd.runeLen + 1 + selected.runeLen
+        e.state.input.commandCursor = cmd.charLen + 1 + selected.charLen
         return false
 
     if kmShift in keyCombo.modifiers or keyCombo.special == skBackTab:
@@ -325,8 +328,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # Handle Right arrow - move cursor right
   if keyCombo.isSpecial and keyCombo.special == skRight:
-    # commandText includes the ":" prefix, so max cursor position is runeLen - 1
-    let maxPos = e.state.input.commandText.runeLen - 1
+    # commandText includes the ":" prefix, so max cursor position is charLen - 1
+    let maxPos = e.state.input.commandText.charLen - 1
     if e.state.input.commandCursor < maxPos:
       e.state.input.commandCursor += 1
       e.state.commandCompletionManager.cancelCompletion()
@@ -335,7 +338,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   # Handle Backspace - delete character before cursor
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
     e.state.input.commandState.historyIndex = -1
-    if e.state.input.commandCursor > 0 and e.state.input.commandText.runeLen > 1:
+    if e.state.input.commandCursor > 0 and e.state.input.commandText.charLen > 1:
       # Delete the character before cursor (commandCursor is 0-based after ":")
       let pos = e.state.input.commandCursor # Character position in commandText
       e.state.input.commandText = e.state.input.commandText.deleteCharAt(pos)
@@ -355,7 +358,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   if keyCombo.isSpecial and keyCombo.special == skDelete:
     let charPos = e.state.input.commandCursor + 1
       # Character position in commandText (after ":")
-    if charPos < e.state.input.commandText.runeLen:
+    if charPos < e.state.input.commandText.charLen:
       e.state.input.commandText = e.state.input.commandText.deleteCharAt(charPos)
       # Update completion
       let mgr = e.state.commandCompletionManager
@@ -376,7 +379,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # Handle End - move cursor to end
   if keyCombo.isSpecial and keyCombo.special == skEnd:
-    e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
+    e.state.input.commandCursor = e.state.input.commandText.charLen - 1
     e.state.commandCompletionManager.cancelCompletion()
     return true
 
@@ -398,7 +401,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       if idx >= 0:
         e.state.input.commandState.historyIndex = idx
         e.state.input.commandText = ":" & e.state.input.commandState.history[idx]
-        e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
+        e.state.input.commandCursor = e.state.input.commandText.charLen - 1
         e.state.commandCompletionManager.cancelCompletion()
         e.updateSubstitutePreviewIfNeeded()
     return true
@@ -418,11 +421,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       if idx >= 0:
         e.state.input.commandState.historyIndex = idx
         e.state.input.commandText = ":" & e.state.input.commandState.history[idx]
-        e.state.input.commandCursor = e.state.input.commandText.runeLen - 1
+        e.state.input.commandCursor = e.state.input.commandText.charLen - 1
       else:
         e.state.input.commandState.historyIndex = -1
         e.state.input.commandText = ":" & e.state.input.commandState.historyPrefix
-        e.state.input.commandCursor = e.state.input.commandState.historyPrefix.runeLen
+        e.state.input.commandCursor = e.state.input.commandState.historyPrefix.charLen
       e.state.commandCompletionManager.cancelCompletion()
       e.updateSubstitutePreviewIfNeeded()
     return true
@@ -439,7 +442,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     e.state.input.commandText =
       e.state.input.commandText[0 ..< bytePos] & keyCombo.char &
       e.state.input.commandText[bytePos ..^ 1]
-    e.state.input.commandCursor += keyCombo.char.runeLen
+    # Recompute from the insertion end byte (minus the ":" prefix) so a seam
+    # merge between the existing bytes and the input keeps the cursor in place.
+    e.state.input.commandCursor =
+      byteToCharPos(e.state.input.commandText, bytePos + keyCombo.char.len) - 1
     # Handle completion
     let mgr = e.state.commandCompletionManager
     let hasSpace = ' ' in e.state.input.commandText
