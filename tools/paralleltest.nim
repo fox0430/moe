@@ -125,9 +125,8 @@ proc main() =
 
   if timeoutSec > 0:
     echo "Running ",
-      parallelFiles.len, " tests with ", jobs,
-      " parallel jobs (timeout: ", compileTimeoutSec, "s compile / ", timeoutSec,
-      "s run per file)..."
+      parallelFiles.len, " tests with ", jobs, " parallel jobs (timeout: ",
+      compileTimeoutSec, "s compile / ", timeoutSec, "s run per file)..."
   else:
     echo "Running ", parallelFiles.len, " tests with ", jobs, " parallel jobs..."
 
