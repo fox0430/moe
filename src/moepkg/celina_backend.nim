@@ -17,26 +17,57 @@
 #                                                                              #
 #[############################################################################]#
 
-## Compile and runtime smoke test for Moe's embedding surface.
+## Celina types used by Moe's editor core.
+##
+## A regular Moe build re-exports Celina's complete terminal API. Embedded
+## builds import only the value-type rendering and input modules needed by a
+## host frontend, so compiling the editor core never pulls in POSIX terminal
+## I/O (`termios`, stdin polling, or Celina's terminal application runtime).
 
-import pkg/results
+when defined(moe.embedded):
+  import std/unicode
 
-import ../src/moepkg/[clipboard_backend, frontend, types]
-import ../src/moepkg/command_handlers/editor_ops
+  import
+    pkg/celina/core/[geometry, colors, buffer, layout, borders, key_logic, mouse_logic]
 
-static:
-  doAssert defined(moe.embedded)
-  doAssert not declared(TerminalState)
-  doAssert not declared(newTerminalState)
-  doAssert not declared(newTerminal)
-  doAssert not declared(AsyncApp)
+  export unicode
+  export geometry, colors, buffer, layout, borders, key_logic, mouse_logic
 
-let config = newEditorConfig()
-doAssert not config.clipboard.enable
+  type
+    EventResult* = enum
+      erContinue
+      erConsume
+      erQuit
 
-let clipboardRead = readFromClipboardSync(config.clipboard.tool)
-doAssert clipboardRead.isErr
+    EventKind* = enum
+      Key
+      Mouse
+      Resize
+      Paste
+      FocusIn
+      FocusOut
+      Quit
+      Unknown
 
-let editor = newEditor(config)
-editor.enterTerminalInActiveWindow("")
-doAssert editor.state.statusMessage == "Terminal mode is unavailable in embedded builds"
+    MouseEvent* = object
+      kind*: MouseEventKind
+      button*: MouseButton
+      x*: int
+      y*: int
+      modifiers*: set[KeyModifier]
+
+    Event* = object
+      case kind*: EventKind
+      of Key:
+        key*: KeyEvent
+      of Mouse:
+        mouse*: MouseEvent
+      of Paste:
+        pastedText*: string
+      of Resize, FocusIn, FocusOut, Quit, Unknown:
+        discard
+
+else:
+  import pkg/celina
+
+  export celina

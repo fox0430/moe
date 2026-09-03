@@ -24,7 +24,9 @@
 
 import std/[options, hashes]
 
-import pkg/[celina, results]
+import pkg/results
+
+import celina_backend as celina
 
 import color
 import unicode_utils

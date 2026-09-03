@@ -24,7 +24,7 @@
 ## improve modularity and prepare for additional rendering features.
 
 import std/unicode
-import pkg/celina
+import celina_backend as celina
 
 import types, buffer/core, unicode_utils, color, modes, sidebar
 

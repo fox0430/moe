@@ -21,7 +21,9 @@
 
 import std/[options, strutils]
 
-import pkg/[celina, results]
+import pkg/results
+
+import celina_backend as celina
 
 import types/editor_types, color, colorcode, render_utils, config_mode, unicode_utils
 

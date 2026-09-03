@@ -25,7 +25,7 @@
 
 import std/[options, os, strutils, times]
 
-import pkg/[celina, results]
+import pkg/results
 
 import ../[encoding, highlight, logger]
 import core, atomic_write

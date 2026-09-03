@@ -19,7 +19,7 @@
 
 import std/[options, monotimes, times, tables, strutils]
 
-import pkg/celina
+import celina_backend as celina
 
 import
   modes,

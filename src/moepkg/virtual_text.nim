@@ -38,7 +38,7 @@
 
 import std/[algorithm, tables, unicode]
 
-import pkg/celina
+import celina_backend as celina
 
 import types/virtual_text_types
 export virtual_text_types

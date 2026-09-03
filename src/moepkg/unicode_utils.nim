@@ -23,7 +23,7 @@
 ## including cursor positioning and character operations.
 
 import std/[options, strutils, unicode, tables]
-import pkg/celina
+import celina_backend as celina
 
 export buffer.runeWidth, buffer.displayWidth, buffer.foldZeroWidthRune
 

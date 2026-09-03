@@ -27,7 +27,7 @@
 
 import std/[tables, strutils, options, sequtils]
 
-import pkg/celina
+import celina_backend as celina
 
 import modes, logger, unicode_utils
 import key_bindings/registry

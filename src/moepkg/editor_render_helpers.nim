@@ -21,7 +21,7 @@
 
 import std/[options, unicode, tables]
 
-import pkg/celina
+import celina_backend as celina
 
 import types/editor_types, color, render_utils, unicode_utils
 

@@ -19,7 +19,7 @@
 
 import std/[strformat, options, strutils, os, unicode]
 
-import pkg/celina
+import celina_backend as celina
 
 import types, buffer/core, modes, color, config, git_cache, unicode_utils
 import syntax/tokenizer
