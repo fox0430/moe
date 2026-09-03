@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, strutils, sequtils, unicode]
+import std/[options, os, strutils, sequtils]
 
 when defined(posix):
   from std/posix import nil

@@ -28,7 +28,7 @@ from std/strutils import repeat
 
 import pkg/results
 
-import types, motion, key_bindings, modes, logger, render_utils
+import types, motion, key_bindings, modes, logger
 import buffer/[core, edit, fold, undo]
 
 import command_handlers/visual_commands
