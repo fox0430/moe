@@ -72,7 +72,35 @@ proc backendReplaceLine*(b: TextBuffer, lineNumber: int, content: string) =
   of PieceTable:
     b.storage.pieceTable.replaceLine(lineNumber, content)
 
+proc deletableBytesFrom(b: TextBuffer, line, col, atLeast: int): int =
+  ## Bytes from (line, col) to the buffer end, newlines included. Stops once
+  ## `atLeast` is reached to avoid walking a large buffer.
+  result = b.getLine(line).len - col
+  var i = line + 1
+  while result < atLeast and i < b.len:
+    result += 1 + b.getLine(i).len
+    inc i
+
 proc backendDeleteAtLineCol*(b: TextBuffer, line, col, count: int) =
+  ## Delete `count` bytes from (line, col), crossing line ends. `col` and
+  ## `count` are byte offsets, not columns. Raises IndexDefect for a range the
+  ## buffer does not hold, because the backends disagree about one.
+  if count <= 0:
+    raise newException(IndexDefect, "Delete count must be > 0: " & $count)
+  if line < 0 or line >= b.len:
+    raise newException(IndexDefect, "Delete line out of bounds: " & $line)
+
+  let lineLen = b.getLine(line).len
+  if col < 0 or col > lineLen:
+    raise newException(
+      IndexDefect, "Delete column out of bounds: " & $col & " of " & $lineLen
+    )
+  # A deletion inside the line cannot reach past the buffer end.
+  if count > lineLen - col and count > b.deletableBytesFrom(line, col, count):
+    raise newException(
+      IndexDefect, "Delete count reaches past the end of the buffer: " & $count
+    )
+
   case b.backendKind
   of GapBuffer:
     b.storage.gapBuffer.deleteAtLineCol(line, col, count)
