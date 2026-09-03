@@ -1100,18 +1100,17 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       else:
         newJNull()
 
-    var initParams =
-      %*{
-        "processId": getCurrentProcessId(),
-        "clientInfo": {"name": "moe", "version": "0.3.0"},
-        "rootUri": rootUri,
-        "rootPath": rootPath,
-        "workspaceFolders": newJNull(),
-        "capabilities": buildClientCapabilities(),
-        # Forward the configured trace level verbatim (LSP spec: off/messages/verbose).
-        # An off level tells the server not to send $/logTrace at all.
-        "trace": $ctx.traceLevel,
-      }
+    var initParams = %*{
+      "processId": getCurrentProcessId(),
+      "clientInfo": {"name": "moe", "version": "0.3.0"},
+      "rootUri": rootUri,
+      "rootPath": rootPath,
+      "workspaceFolders": newJNull(),
+      "capabilities": buildClientCapabilities(),
+      # Forward the configured trace level verbatim (LSP spec: off/messages/verbose).
+      # An off level tells the server not to send $/logTrace at all.
+      "trace": $ctx.traceLevel,
+    }
 
     # Forward server-specific initializationOptions (e.g. rust-analyzer lens
     # config). Carried as a serialized string across the thread boundary.
