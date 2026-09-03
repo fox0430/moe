@@ -883,6 +883,439 @@ suite "executeCommand - visual replace":
     check registry.executeCommand(ctx, cmd).isErr
     check buffer[0] == "ab world"
 
+suite "executeCommand - visual replace dot-repeat":
+  test "dot after visual r replays the visual replace, not a stale command":
+    # Finding repro (3-way measured against Vim 9.2 / Neovim): without a
+    # record, `.` replays the preceding normal `r`. The preceding `r` is
+    # required; without it `.` is a quiet no-op and the leak is invisible.
+    let buffer = newTextBuffer("abcde\nfghij\nklmno")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setCursor(0, 0)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending, operatorType: "replace", targetChar: "z", count: 1
+      ),
+    ).isOk
+    check buffer[0] == "zbcde"
+
+    ctx.setupVisual(1, 0, 1, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[1] == "xxhij"
+
+    let recorded = ctx.state.editState.lastEditCommand
+    check recorded.isSome
+    check recorded.get.kind == lecVisualReplace
+    check recorded.get.visualReplaceChar == "x"
+    check recorded.get.visualReplaceKind == vskChar
+    check recorded.get.visualReplaceRows == 1
+    check recorded.get.visualReplaceCols == 2
+
+    ctx.setCursor(2, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "xxmno"
+    # Vim leaves the cursor where `.` was invoked.
+    check ctx.cursor == BufferPosition(line: 2, column: 0)
+
+  test "dot after visual r ignores a count":
+    # `:help visual-repeat`: "Any count passed to the `.` command is not used".
+    let buffer = newTextBuffer("abcde\nfghij\nklmno")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(1, 0, 1, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+
+    ctx.setCursor(2, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 3)
+    ).isOk
+    check buffer[2] == "xxmno"
+
+  test "dot after visual r repeats a multibyte replacement":
+    let buffer = newTextBuffer("ab world\nxy world")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setCursor(0, 0)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending, operatorType: "replace", targetChar: "z", count: 1
+      ),
+    ).isOk
+
+    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "あ",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "ああ world"
+
+    ctx.setCursor(1, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[1] == "ああ world"
+
+  test "dot after multi-line charwise visual r replays the shape":
+    # Vim-measured: first line runs cursor to end of line, middle lines whole,
+    # last line the recorded head count from column 0.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "X",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "XXX"
+    check buffer[1] == "XXb"
+
+    let recorded = ctx.state.editState.lastEditCommand
+    check recorded.isSome
+    check recorded.get.visualReplaceRows == 2
+    check recorded.get.visualReplaceCols == 2
+
+    ctx.setCursor(3, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[3] == "XXX"
+    check buffer[4] == "XXe"
+
+  test "dot after linewise visual r repeats the line count":
+    # Vim-measured: `Vjrx` then `.` replaces the same number of whole lines.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine, vskLine)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "xxx"
+    check buffer[1] == "xxx"
+
+    ctx.setCursor(3, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "ccc"
+    check buffer[3] == "xxx"
+    check buffer[4] == "xxx"
+
+  test "dot after blockwise visual r repeats rows x columns":
+    # Vim-measured: a 2x2 block repeat replaces the same rectangle, clamped
+    # per line.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 1, EditorMode.VisualBlock, vskBlock)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "xxa"
+    check buffer[1] == "xxb"
+
+    ctx.setCursor(3, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "ccc"
+    check buffer[3] == "xxd"
+    check buffer[4] == "xxe"
+
+  test "visual r on a raw buffer is not recorded for repeat":
+    # transformRange refuses raw buffers, so the live replace is a no-op; the
+    # preceding normal `r` must stay the repeatable command.
+    let buffer = newTextBuffer("ab\ncd")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setCursor(1, 0)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending, operatorType: "replace", targetChar: "z", count: 1
+      ),
+    ).isOk
+    check buffer[1] == "zd"
+    check ctx.state.editState.lastEditCommand.get.kind == lecReplaceChar
+
+    buffer.keepRaw = true
+    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "ab"
+    check ctx.state.editState.lastEditCommand.get.kind == lecReplaceChar
+
+  test "repeating a visual r onto a raw buffer fails instead of corrupting bytes":
+    # The repeat path has no silent no-op: transformRange refuses raw buffers,
+    # so `.` must surface the failure and leave the text untouched.
+    let buffer = newTextBuffer("abcde\nfghij")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "xxcde"
+    check ctx.state.editState.lastEditCommand.get.kind == lecVisualReplace
+
+    buffer.keepRaw = true
+    ctx.setCursor(1, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isErr
+    check buffer[1] == "fghij"
+
+  test "dot after linewise visual r widens over a closed fold":
+    # cursorLineRange widens like dd/yy/S: the 2-line shape from line 2
+    # touches the fold at 3-4, so lines 2-4 are replaced and the fold stays
+    # closed instead of replaying into hidden text.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    check buffer.foldState.addFold(3, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine, vskLine)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "xxx"
+    check buffer[1] == "xxx"
+
+    ctx.setCursor(2, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "xxx"
+    check buffer[3] == "xxx"
+    check buffer[4] == "xxx"
+    check buffer.foldState.folds[0].collapsed
+
+  test "dot after blockwise visual r covers a closed fold whole":
+    # The 2-row shape from line 1 touches the fold at 2-4, so snapRangeToFolds
+    # widens the range and the fold is replaced linewise as a unit.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 1, EditorMode.VisualBlock, vskBlock)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "xxa"
+    check buffer[1] == "xxb"
+
+    ctx.setCursor(1, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[0] == "xxa"
+    check buffer[1] == "xxx"
+    check buffer[2] == "xxx"
+    check buffer[3] == "xxx"
+    check buffer[4] == "xxx"
+    check buffer[5] == "fff"
+    check buffer.foldState.folds[0].collapsed
+
+  test "dot after multi-line charwise visual r covers a closed fold whole":
+    # Same snap branch as blockwise: the 2-row shape from line 1 touches the
+    # fold at 2-4, so the fold is replaced linewise instead of partially.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "X",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "XXX"
+    check buffer[1] == "XXb"
+
+    ctx.setCursor(1, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[0] == "XXX"
+    check buffer[1] == "XXX"
+    check buffer[2] == "XXX"
+    check buffer[3] == "XXX"
+    check buffer[4] == "XXX"
+    check buffer[5] == "fff"
+    check buffer.foldState.folds[0].collapsed
+
+  test "dot after single-line charwise visual r covers a closed fold whole":
+    # The recorded shape is two characters on one line, but the cursor lands on
+    # a closed fold, which the live command replaces whole and linewise.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee")
+    check buffer.foldState.addFold(2, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 0, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "xxa"
+
+    ctx.setCursor(2, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "xxx"
+    check buffer[3] == "xxx"
+    check buffer[4] == "eee"
+    check buffer.foldState.folds[0].collapsed
+
+  test "dot after blockwise visual r covers a fold the range already contains":
+    # Snapping widens nothing when the repeat range covers the fold exactly, so
+    # the branch has to ask whether a fold is touched, not whether it widened.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
+    check buffer.foldState.addFold(3, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 1, EditorMode.VisualBlock, vskBlock)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "x",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "xxa"
+    check buffer[1] == "xxb"
+
+    ctx.setCursor(3, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "ccc"
+    check buffer[3] == "xxx"
+    check buffer[4] == "xxx"
+    check buffer[5] == "fff"
+    check buffer.foldState.folds[0].collapsed
+
+  test "dot after multi-line charwise visual r covers a contained fold whole":
+    # Same exactly-aligned range as the blockwise case: without a touch test the
+    # last line would keep the partial `visualReplaceCols` replacement.
+    let buffer = newTextBuffer("aaa\nbbb\nccc\nddd\neee\nfff")
+    check buffer.foldState.addFold(3, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.setupVisual(0, 0, 1, 1, EditorMode.Visual, vskChar)
+    check registry.executeCommand(
+      ctx,
+      Command(
+        kind: ctOperatorPending,
+        operatorType: "visual-replace",
+        targetChar: "X",
+        count: 1,
+      ),
+    ).isOk
+    check buffer[0] == "XXX"
+    check buffer[1] == "XXb"
+
+    ctx.setCursor(3, 0)
+    check registry.executeCommand(
+      ctx, Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    ).isOk
+    check buffer[2] == "ccc"
+    check buffer[3] == "XXX"
+    check buffer[4] == "XXX"
+    check buffer[5] == "fff"
+    check buffer.foldState.folds[0].collapsed
+
 suite "executeCommand - visual surround":
   test "visual surround writes a multibyte target whole":
     # Passing only the first byte would insert a lone 0xE3 on each side.

@@ -457,14 +457,9 @@ proc applyVisualTextTransform(
         endLine =
           max(state.visualSelection.start.line, state.visualSelection.current.line)
 
-      for lineNum in startLine .. endLine:
-        let lineCharLen = buffer.getLine(lineNum).charLen
-        if lineCharLen > 0:
-          let startPos = BufferPosition(line: lineNum, column: 0)
-          let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
-          checkVisualEdit(
-            state, buffer.transformRange(startPos, endPos, action, transform)
-          )
+      checkVisualEdit(
+        state, buffer.replaceWholeLines(startLine, endLine, action, transform)
+      )
     of vskChar:
       checkVisualEdit(state, buffer.transformRange(selStart, selEnd, action, transform))
 

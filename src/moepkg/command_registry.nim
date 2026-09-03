@@ -529,12 +529,65 @@ proc executeCommand*(
       if not ctx.state.visualSelection.active:
         return err("No visual selection active")
 
+      # Record the selection shape for `.` (Vim-compatible sizes).
+      # `$`-extended ends keep the raw column; repeat clamps to the line.
+      let
+        sel = ctx.state.visualSelection
+        loLine = min(sel.start.line, sel.current.line)
+        hiLine = max(sel.start.line, sel.current.line)
+        loCol = min(sel.start.column, sel.current.column)
+        hiCol = max(sel.start.column, sel.current.column)
+      let visualRepeatCmd =
+        case sel.kind
+        of vskChar:
+          if loLine == hiLine:
+            LastEditCommand(
+              kind: lecVisualReplace,
+              visualReplaceChar: cmd.targetChar,
+              visualReplaceKind: vskChar,
+              visualReplaceRows: 1,
+              visualReplaceCols: hiCol - loCol + 1,
+            )
+          else:
+            let lastCol =
+              if sel.start.line <= sel.current.line:
+                sel.current.column
+              else:
+                sel.start.column
+            LastEditCommand(
+              kind: lecVisualReplace,
+              visualReplaceChar: cmd.targetChar,
+              visualReplaceKind: vskChar,
+              visualReplaceRows: hiLine - loLine + 1,
+              visualReplaceCols: lastCol + 1,
+            )
+        of vskLine:
+          LastEditCommand(
+            kind: lecVisualReplace,
+            visualReplaceChar: cmd.targetChar,
+            visualReplaceKind: vskLine,
+            visualReplaceRows: hiLine - loLine + 1,
+            visualReplaceCols: 0,
+          )
+        of vskBlock:
+          LastEditCommand(
+            kind: lecVisualReplace,
+            visualReplaceChar: cmd.targetChar,
+            visualReplaceKind: vskBlock,
+            visualReplaceRows: hiLine - loLine + 1,
+            visualReplaceCols: hiCol - loCol + 1,
+          )
+
       # Surface a failed rollback (untrustworthy buffer) as a status message
       # instead of letting it escape to the crash handler.
       try:
         visualReplace(ctx.buffer, ctx.state, cmd.targetChar)
       except TransactionRollbackError as exc:
         return err(exc.msg & " (buffer state may be inconsistent)")
+
+      # Don't record refused replaces on raw buffers; nothing changed.
+      if ctx.buffer.allowsTextTransforms:
+        ctx.state.editState.lastEditCommand = some(visualRepeatCmd)
 
       return ok(())
     of "visual-surround":

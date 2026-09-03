@@ -493,3 +493,23 @@ proc transformRange*(
       return err(insertResult.error)
 
   ok(())
+
+proc replaceWholeLines*(
+    b: TextBuffer,
+    startLine, endLine: int,
+    action: string,
+    fill: proc(text: string): string {.closure, gcsafe.},
+): Result[(), string] =
+  ## Replace each non-empty line in [startLine, endLine]. Call in a transaction.
+  for lineNum in startLine .. endLine:
+    let lineCharLen = b.getLine(lineNum).charLen
+    if lineCharLen > 0:
+      let res = b.transformRange(
+        BufferPosition(line: lineNum, column: 0),
+        BufferPosition(line: lineNum, column: lineCharLen - 1),
+        action,
+        fill,
+      )
+      if res.isErr:
+        return err(res.error)
+  ok(())
