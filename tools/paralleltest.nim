@@ -4,7 +4,9 @@
 #
 # Environment:
 #   MOE_TEST_JOBS      parallel jobs (default: number of logical CPUs)
-#   MOE_TEST_TIMEOUT   per-file timeout in seconds, 0 disables (default: 120)
+#   MOE_TEST_TIMEOUT   per-file run timeout in seconds, 0 disables (default: 120)
+#   MOE_TEST_COMPILE_TIMEOUT
+#                      per-file compile timeout in seconds (default: 600)
 #   MOE_TEST_EXCLUDE   comma separated file names to skip entirely
 #   MOE_TEST_SHARDS    total number of shards (default: 1, i.e. run everything)
 #   MOE_TEST_SHARD     1-based index of the shard to run (default: 1)
@@ -16,6 +18,7 @@ const
   # Fallback when the number of CPUs cannot be detected (countProcessors() == 0).
   FallbackJobs = 4
   DefaultTimeoutSec = 120
+  DefaultCompileTimeoutSec = 600
 
   # Flaky tests that must be run sequentially after the parallel batch
   # so concurrent file/clipboard/etc. usage cannot perturb them.
@@ -60,13 +63,20 @@ proc main() =
     else:
       defaultJobs()
 
-  # Per-file timeout (compile + run) to protect CI from hanging tests.
-  # Set MOE_TEST_TIMEOUT=0 to disable. Requires GNU coreutils `timeout`.
+  # Compile and run get separate budgets so a slow compile cannot consume the
+  # budget that is meant to catch a hanging test.
+  # Set MOE_TEST_TIMEOUT=0 to disable both. Requires GNU coreutils `timeout`.
   let timeoutSec =
     if getEnv("MOE_TEST_TIMEOUT").len > 0:
       parseInt(getEnv("MOE_TEST_TIMEOUT"))
     else:
       DefaultTimeoutSec
+
+  let compileTimeoutSec =
+    if getEnv("MOE_TEST_COMPILE_TIMEOUT").len > 0:
+      parseInt(getEnv("MOE_TEST_COMPILE_TIMEOUT"))
+    else:
+      DefaultCompileTimeoutSec
 
   let
     excluded = parseFileList(getEnv("MOE_TEST_EXCLUDE"))
@@ -115,14 +125,20 @@ proc main() =
 
   if timeoutSec > 0:
     echo "Running ",
-      parallelFiles.len, " tests with ", jobs, " parallel jobs (timeout: ", timeoutSec,
-      "s per file)..."
+      parallelFiles.len, " tests with ", jobs,
+      " parallel jobs (timeout: ", compileTimeoutSec, "s compile / ", timeoutSec,
+      "s run per file)..."
   else:
     echo "Running ", parallelFiles.len, " tests with ", jobs, " parallel jobs..."
 
+  proc withTimeout(sec: int, command: string): string =
+    "timeout --foreground --kill-after=5 " & $sec & " " & command
+
   proc buildCommand(file: string): string =
     if timeoutSec > 0:
-      "timeout --foreground --kill-after=5 " & $timeoutSec & " nim c -r tests/" & file
+      let binary = "tests" / file.changeFileExt("")
+      withTimeout(compileTimeoutSec, "nim c tests/" & file) & " && " &
+        withTimeout(timeoutSec, binary)
     else:
       "nim c -r tests/" & file
 
