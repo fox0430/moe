@@ -26,6 +26,7 @@ import std/[unittest, os, options, strutils, deques]
 import pkg/results
 
 import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/buffer/internal_mutations
 
 proc buf(
     content: string = "",
@@ -646,6 +647,62 @@ suite "CrossBackend - Trailing Empty Lines":
       check b[0] == "Line1"
       check b[1] == "Line2"
       check b[2] == ""
+
+suite "CrossBackend - backendDeleteAtLineCol range":
+  # The backends disagree about a range the buffer does not hold, so the
+  # dispatch rejects it before any backend sees it.
+  proc lines(b: TextBuffer): seq[string] =
+    for i in 0 ..< b.len:
+      result.add b[i]
+
+  for be in BufferBackend:
+    test "a column past the line end is rejected [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      expect IndexDefect:
+        b.backendDeleteAtLineCol(1, 4, 1)
+      check b.lines == @["abc", "def", "ghi"]
+
+    test "a negative column is rejected [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      expect IndexDefect:
+        b.backendDeleteAtLineCol(1, -1, 1)
+      check b.lines == @["abc", "def", "ghi"]
+
+    test "a count reaching past the buffer end is rejected [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      # "ef\nghi" is the six bytes that remain after (1, 1).
+      expect IndexDefect:
+        b.backendDeleteAtLineCol(1, 1, 7)
+      check b.lines == @["abc", "def", "ghi"]
+
+    test "a line out of bounds is rejected [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      expect IndexDefect:
+        b.backendDeleteAtLineCol(3, 0, 1)
+      expect IndexDefect:
+        b.backendDeleteAtLineCol(-1, 0, 1)
+      check b.lines == @["abc", "def", "ghi"]
+
+    test "a non-positive count is rejected [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      expect IndexDefect:
+        b.backendDeleteAtLineCol(1, 0, 0)
+      check b.lines == @["abc", "def", "ghi"]
+
+    test "the column at the line end deletes the newline [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      b.backendDeleteAtLineCol(1, 3, 1)
+      check b.lines == @["abc", "defghi"]
+
+    test "a count reaching exactly the buffer end is accepted [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      b.backendDeleteAtLineCol(1, 1, 6)
+      check b.lines == @["abc", "d"]
+
+    test "a deletion inside the line is unaffected [" & $be & "]":
+      let b = buf("abc\ndef\nghi", be)
+      b.backendDeleteAtLineCol(1, 1, 1)
+      check b.lines == @["abc", "df", "ghi"]
 
 suite "CrossBackend - NoUndo Procs":
   for be in BufferBackend:
