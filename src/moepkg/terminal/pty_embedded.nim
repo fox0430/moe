@@ -17,27 +17,60 @@
 #                                                                              #
 #[############################################################################]#
 
-## Lightweight type definitions for terminal mode.
+## Terminal stub for embedding frontends.
 ##
-## Split out from `terminal_mode` so modules that only need its State type
-## (notably `types` and its importers) do not transitively pull in the
-## PTY/ANSI pipeline procs.
+## Embedded applications provide their own terminal UI and process backend.
 
 import std/options
 
-import ../terminal/[pty_backend, ansi_parser]
-import ../buffer/core
+import pkg/results
 
-type
-  TerminalSubMode* = enum
-    tsmInput # All keystrokes forwarded to PTY (default)
-    tsmNormal # Vim-like scrollback navigation
+type PtyHandle* = ref object
+  closed*: bool
+  writeBuffer*: string
 
-  TerminalState* = ref object
-    pty*: PtyHandle
-    grid*: TerminalGrid
-    subMode*: TerminalSubMode
-    scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
-    exitCode*: Option[int]
-    waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
-    needsBufferRefresh*: bool
+const
+  maxPtyWriteBufferBytes* = 64 * 1024
+  maxPtyReadBytesPerPoll* = 256 * 1024
+  EmbeddedTerminalError = "Terminal mode is unavailable when built with -d:moe.embedded"
+
+proc openPtyAndSpawn*(
+    command: string = "", cols: int = 80, rows: int = 24
+): Result[PtyHandle, string] =
+  discard command
+  discard cols
+  discard rows
+  Result[PtyHandle, string].err(EmbeddedTerminalError)
+
+proc drainWriteBuffer*(pty: PtyHandle): Result[void, string] =
+  discard pty
+  Result[void, string].err(EmbeddedTerminalError)
+
+proc writeToPty*(pty: PtyHandle, data: string): Result[void, string] =
+  discard pty
+  discard data
+  Result[void, string].err(EmbeddedTerminalError)
+
+proc readFromPty*(pty: PtyHandle, maxBytes: int = 4096): string =
+  discard pty
+  discard maxBytes
+
+proc resizePty*(pty: PtyHandle, cols, rows: int) =
+  discard pty
+  discard cols
+  discard rows
+
+proc isAlive*(pty: PtyHandle): bool =
+  discard pty
+
+proc waitForExit*(pty: PtyHandle): int =
+  discard pty
+  -1
+
+proc checkExitStatus*(pty: PtyHandle): Option[int] =
+  discard pty
+  some(-1)
+
+proc closePty*(pty: PtyHandle) =
+  if not pty.isNil:
+    pty.closed = true

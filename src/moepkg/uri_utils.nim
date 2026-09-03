@@ -20,7 +20,10 @@
 ## URI/URL detection and external program launching utilities.
 ## Used by the `gf` command to open URIs under the cursor.
 
-import std/[options, osproc, sequtils, strutils, unicode, uri]
+import std/[options, sequtils, strutils, unicode, uri]
+
+when not defined(moe.embedded):
+  import std/osproc
 
 import unicode_utils
 
@@ -186,11 +189,15 @@ proc openExternalUri*(uri: string): bool =
   ## Open an external URI using the platform's default handler.
   ## Returns true if the command was launched successfully.
   ## The process is fire-and-forget (non-blocking).
-  let cmd = when defined(macosx): "open" else: "xdg-open"
+  when defined(moe.embedded):
+    discard uri
+    false
+  else:
+    let cmd = when defined(macosx): "open" else: "xdg-open"
 
-  try:
-    let p = startProcess(cmd, args = @[uri], options = {poUsePath})
-    p.close()
-    return true
-  except OSError:
-    return false
+    try:
+      let p = startProcess(cmd, args = @[uri], options = {poUsePath})
+      p.close()
+      true
+    except OSError:
+      false

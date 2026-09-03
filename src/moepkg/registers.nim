@@ -31,7 +31,7 @@ import std/[monotimes, options, strutils, tables, times]
 
 import pkg/results
 
-import config, clipboard, logger
+import config, clipboard_backend, logger
 import types/registers_types
 
 export registers_types

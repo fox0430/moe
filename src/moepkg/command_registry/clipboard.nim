@@ -21,7 +21,7 @@
 
 import pkg/results
 
-import ../[types, clipboard, registers]
+import ../[types, clipboard_backend, registers]
 import ../buffer/edit
 import ../command_handlers/visual_commands
 

@@ -196,6 +196,14 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 
 [Documents (Ncurses base)](https://github.com/fox0430/moe/blob/v0.4.0/documents/index.md)
 
+### Embedding Moe
+
+Build non-terminal frontends with `-d:moe.embedded` and import
+`moepkg/frontend`. Embedded mode keeps Moe's editor engine and frontend-neutral
+input API available on Windows, while disabling Moe-owned clipboard integration
+by default. The embedding frontend owns the native clipboard and terminal UI;
+attempting to use Moe's clipboard or POSIX terminal backend returns an error.
+
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".
 

@@ -28,7 +28,8 @@ from pkg/celina/core/mouse_logic import MouseButton
 import
   editor, editor_window_layout, key_bindings, modes, buffer, logger, types, motion,
   quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
-  clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
+  clipboard_backend, git_cache, cursor_util, syntax_checker, background_process,
+  key_router,
   pending_input, visible_rows, viewer_mode, frontend_input, hover_popup, encoding,
   unicode_utils, editor_mode, editor_lsp_rename
 import

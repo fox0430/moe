@@ -52,6 +52,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  embedded-windows:
+    name: embedded frontend (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: 2.2.10
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install dependencies
+      run: nimble install -d -y
+
+    - name: Compile and run embedded frontend smoke test
+      run: nim c -r -d:moe.embedded tools/embedded_smoke.nim
+
   test:
     name: shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest

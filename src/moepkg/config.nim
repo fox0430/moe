@@ -23,15 +23,21 @@
 ## (tool detection + `newEditorConfig` factory). Type definitions and the
 ## `config_macros` re-export live in `types/config_types.nim`.
 
-import std/[options, tables, os, osproc]
+import std/[options, tables, os]
+
+when not defined(moe.embedded):
+  import std/osproc
 
 import types/config_types
 export config_types
 
 proc isToolAvailable(toolCommand: string): bool =
   ## Check if a command-line tool is available in PATH
-  let checkResult = execCmdEx("command -v " & toolCommand)
-  return checkResult.exitCode == 0
+  when defined(moe.embedded):
+    discard toolCommand
+  else:
+    let checkResult = execCmdEx("command -v " & toolCommand)
+    return checkResult.exitCode == 0
 
 proc isWaylandSession(): bool =
   ## Check if running in a Wayland session
@@ -98,7 +104,11 @@ proc newEditorConfig*(): EditorConfig =
       bracketSplit: bsmDisable,
     ),
     bufferBackend: BufferBackendConfig(kind: bbcAuto),
-    clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
+    clipboard:
+      when defined(moe.embedded):
+        ClipboardConfig(enable: false)
+      else:
+        ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(
       enable: false, workspaceRoot: none(string), command: none(string), timeout: 300
     ),

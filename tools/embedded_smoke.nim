@@ -17,27 +17,22 @@
 #                                                                              #
 #[############################################################################]#
 
-## Lightweight type definitions for terminal mode.
-##
-## Split out from `terminal_mode` so modules that only need its State type
-## (notably `types` and its importers) do not transitively pull in the
-## PTY/ANSI pipeline procs.
+## Compile and runtime smoke test for Moe's embedding surface.
 
-import std/options
+import pkg/results
 
-import ../terminal/[pty_backend, ansi_parser]
-import ../buffer/core
+import ../src/moepkg/[clipboard_backend, frontend, terminal_mode]
 
-type
-  TerminalSubMode* = enum
-    tsmInput # All keystrokes forwarded to PTY (default)
-    tsmNormal # Vim-like scrollback navigation
+static:
+  doAssert defined(moe.embedded)
 
-  TerminalState* = ref object
-    pty*: PtyHandle
-    grid*: TerminalGrid
-    subMode*: TerminalSubMode
-    scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
-    exitCode*: Option[int]
-    waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
-    needsBufferRefresh*: bool
+let config = newEditorConfig()
+doAssert not config.clipboard.enable
+
+let clipboardRead = readFromClipboardSync(config.clipboard.tool)
+doAssert clipboardRead.isErr
+
+let terminal = newTerminalState()
+doAssert terminal.isErr
+
+discard newEditor(config)

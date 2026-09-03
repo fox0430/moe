@@ -17,27 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-## Lightweight type definitions for terminal mode.
-##
-## Split out from `terminal_mode` so modules that only need its State type
-## (notably `types` and its importers) do not transitively pull in the
-## PTY/ANSI pipeline procs.
+## Select the terminal-process implementation used by Moe's editor engine.
 
-import std/options
-
-import ../terminal/[pty_backend, ansi_parser]
-import ../buffer/core
-
-type
-  TerminalSubMode* = enum
-    tsmInput # All keystrokes forwarded to PTY (default)
-    tsmNormal # Vim-like scrollback navigation
-
-  TerminalState* = ref object
-    pty*: PtyHandle
-    grid*: TerminalGrid
-    subMode*: TerminalSubMode
-    scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
-    exitCode*: Option[int]
-    waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
-    needsBufferRefresh*: bool
+when defined(moe.embedded):
+  import pty_embedded
+  export pty_embedded
+else:
+  import pty
+  export pty
