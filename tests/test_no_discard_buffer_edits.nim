@@ -38,8 +38,8 @@ const
   ## Buffer-edit / transaction APIs whose Result must not be discarded.
   TargetApis = [
     "insertText", "insertTextEnd", "deleteChar", "insert", "deleteLine", "deleteRange",
-    "replaceLine", "splitLine", "joinLines", "transformRange", "beginTransaction",
-    "commitTransaction", "rollbackTransaction", "withTransaction",
+    "replaceLine", "splitLine", "joinLines", "transformRange", "replaceWholeLines",
+    "beginTransaction", "commitTransaction", "rollbackTransaction", "withTransaction",
     "deleteBlockSelection", "deleteLineSelection", "undo", "redo",
   ].toHashSet
 
