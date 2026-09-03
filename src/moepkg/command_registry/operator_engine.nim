@@ -25,7 +25,7 @@ import std/[options, strutils, unicode]
 import pkg/results
 
 import ../[types, motion, modes, registers, logger, unicode_utils]
-import ../buffer/[core, edit, fold, undo]
+import ../buffer/[core, edit, undo]
 import ../command_handlers/insert_commands
 
 import core
