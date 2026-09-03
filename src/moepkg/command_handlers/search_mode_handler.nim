@@ -22,7 +22,7 @@
 ## This module handles incremental search mode (/ and ? commands).
 ## Extracted from handler.nim to reduce file size.
 
-import std/[options, strutils, unicode]
+import std/[options, strutils]
 
 import pkg/celina
 
@@ -275,7 +275,10 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
   e.state.input.search.text =
     e.state.input.search.text[0 ..< bytePos] & ch &
     e.state.input.search.text[bytePos ..^ 1]
-  e.state.input.search.cursor += ch.runeLen
+  # Recompute from the insertion end byte so a seam merge between the
+  # existing bytes and the input keeps the cursor on the inserted tail.
+  e.state.input.search.cursor =
+    byteToCharPos(e.state.input.search.text, bytePos + ch.len)
   e.performIncrementalSearch()
 
 proc insertPastedTextInSearch*(e: Editor, text: string) =
@@ -297,7 +300,10 @@ proc insertPastedTextInSearch*(e: Editor, text: string) =
   e.state.input.search.text =
     e.state.input.search.text[0 ..< bytePos] & insertText &
     e.state.input.search.text[bytePos ..^ 1]
-  e.state.input.search.cursor += insertText.runeLen
+  # Recompute from the insertion end byte so a seam merge between the
+  # existing bytes and the paste keeps the cursor on the inserted tail.
+  e.state.input.search.cursor =
+    byteToCharPos(e.state.input.search.text, bytePos + insertText.len)
   e.performIncrementalSearch()
 
 proc handleSearchBackspace(e: Editor) =
@@ -347,7 +353,7 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       # Update search text with history entry
       e.state.input.search.text =
         e.state.input.search.history[e.state.input.search.historyIndex]
-      e.state.input.search.cursor = e.state.input.search.text.runeLen
+      e.state.input.search.cursor = e.state.input.search.text.charLen
       # Trigger incremental search with history entry
       e.performIncrementalSearch()
     return true
@@ -360,7 +366,7 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.input.search.historyIndex -= 1
         e.state.input.search.text =
           e.state.input.search.history[e.state.input.search.historyIndex]
-        e.state.input.search.cursor = e.state.input.search.text.runeLen
+        e.state.input.search.cursor = e.state.input.search.text.charLen
         e.performIncrementalSearch()
       else:
         # Reached the newest entry, clear search text
@@ -385,7 +391,7 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # Right arrow: Move cursor right within search text
   if keyCombo.isSpecial and keyCombo.special == skRight:
-    if e.state.input.search.cursor < e.state.input.search.text.runeLen:
+    if e.state.input.search.cursor < e.state.input.search.text.charLen:
       e.state.input.search.cursor += 1
     return true
 
@@ -396,12 +402,12 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # End: Move cursor to end of search text
   if keyCombo.isSpecial and keyCombo.special == skEnd:
-    e.state.input.search.cursor = e.state.input.search.text.runeLen
+    e.state.input.search.cursor = e.state.input.search.text.charLen
     return true
 
   # Delete: Remove character at cursor position
   if keyCombo.isSpecial and keyCombo.special == skDelete:
-    if e.state.input.search.cursor < e.state.input.search.text.runeLen:
+    if e.state.input.search.cursor < e.state.input.search.text.charLen:
       # Reset history navigation when user edits
       e.state.input.search.historyIndex = -1
       e.state.input.search.text =

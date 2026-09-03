@@ -137,9 +137,9 @@ proc handleRenameModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 
   # Backspace: Remove last character (Unicode-aware)
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
-    if e.state.renameState.text.runeLen > 0:
+    if e.state.renameState.text.charLen > 0:
       e.state.renameState.text =
-        e.state.renameState.text.runeSubStr(0, e.state.renameState.text.runeLen - 1)
+        e.state.renameState.text.charSubStr(0, e.state.renameState.text.charLen - 1)
     return true
 
   # Character input: Add character to rename text
