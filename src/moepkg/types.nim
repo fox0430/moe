@@ -555,6 +555,7 @@ type
     lecOperatorMotion # Operator + motion (e.g., dw, c2w, y$)
     lecInsertText # Text inserted in insert mode
     lecReplaceChar # Character replacement with r command
+    lecVisualReplace # Visual-mode replace (r) with recorded selection shape
     lecDeleteChar # Character deletion with x/X
     lecSubstitute # Substitute command (s/S)
     lecDeleteLine # Delete line(s) with dd
@@ -580,6 +581,14 @@ type
     of lecReplaceChar:
       replaceChar*: string # Character used for replacement
       replaceCount*: int # Number of characters to replace
+    of lecVisualReplace:
+      visualReplaceChar*: string # Replacement character
+      visualReplaceKind*: VisualSelectionKind # Recorded selection shape
+      visualReplaceRows*: int # Line/row span (1 for single-line charwise)
+      visualReplaceCols*: int
+        # Single-line charwise: width from cursor;
+        # multi-line charwise: last-line width from col 0; linewise: unused;
+        # blockwise: block width.
     of lecDeleteChar:
       deleteCount*: int # Number of characters to delete
       deleteForward*: bool # true for x, false for X

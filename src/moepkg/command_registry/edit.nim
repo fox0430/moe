@@ -1912,6 +1912,157 @@ proc registerEditCommands*(registry: CommandRegistry) =
           # If empty string, cursor stays at current position
 
         return ok(())
+      of lecVisualReplace:
+        # Repeat Visual `r` from the cursor with the recorded shape.
+        # Ignores count; cursor stays put. Fails on raw buffers.
+        let repChar = lastCmd.visualReplaceChar
+        let repFill = proc(text: string): string =
+          repChar.repeat(text.charLen)
+        case lastCmd.visualReplaceKind
+        of vskChar:
+          if lastCmd.visualReplaceRows <= 1:
+            # Single-line charwise: the same character count from the cursor,
+            # or the whole fold linewise when the cursor sits in a closed one.
+            let line = ctx.cursor.line
+            if line < 0 or line >= ctx.buffer.len:
+              return err("Nothing to replace")
+            if ctx.buffer.foldState.touchesCollapsedFold(line, line):
+              let (snapLo, snapHi) = ctx.buffer.foldState.snapRangeToFolds(line, line)
+              let txr = withTransaction(ctx.buffer, "repeat visual replace"):
+                let res = ctx.buffer.replaceWholeLines(
+                  snapLo, snapHi, "replace characters", repFill
+                )
+                if res.isErr:
+                  return err(res.error)
+              if txr.isErr:
+                return err(txr.error)
+              return ok(())
+            let lineContent = ctx.buffer.getLine(line)
+            if ctx.cursor.column >= lineContent.charLen:
+              return err("Nothing to replace")
+            let charsAvailable = lineContent.charLen - ctx.cursor.column
+            let charsToReplace = min(lastCmd.visualReplaceCols, charsAvailable)
+            let txr = withTransaction(ctx.buffer, "repeat visual replace"):
+              let res = ctx.buffer.transformRange(
+                ctx.cursor,
+                BufferPosition(
+                  line: ctx.cursor.line, column: ctx.cursor.column + charsToReplace - 1
+                ),
+                "replace characters",
+                repFill,
+              )
+              if res.isErr:
+                return err(res.error)
+            if txr.isErr:
+              return err(txr.error)
+            return ok(())
+          # Multi-line charwise: first line cursor to EOL, middle lines
+          # whole, last line `visualReplaceCols` chars from column 0.
+          let firstLine = ctx.cursor.line
+          if firstLine < 0 or firstLine >= ctx.buffer.len:
+            return err("Nothing to replace")
+          let lastLine =
+            min(firstLine + lastCmd.visualReplaceRows - 1, ctx.buffer.len - 1)
+          let (snapLo, snapHi) =
+            ctx.buffer.foldState.snapRangeToFolds(firstLine, lastLine)
+          let txr = withTransaction(ctx.buffer, "repeat visual replace"):
+            # Closed folds repeat whole, linewise. A fold the range merely
+            # contains does not widen it, so test for a touch, not a widening.
+            if ctx.buffer.foldState.touchesCollapsedFold(firstLine, lastLine):
+              let res = ctx.buffer.replaceWholeLines(
+                snapLo, snapHi, "replace characters", repFill
+              )
+              if res.isErr:
+                return err(res.error)
+            else:
+              let firstContent = ctx.buffer.getLine(firstLine)
+              if ctx.cursor.column < firstContent.charLen:
+                let res = ctx.buffer.transformRange(
+                  ctx.cursor,
+                  BufferPosition(line: firstLine, column: firstContent.charLen - 1),
+                  "replace characters",
+                  repFill,
+                )
+                if res.isErr:
+                  return err(res.error)
+              for lineNum in firstLine + 1 ..< lastLine:
+                let lineCharLen = ctx.buffer.getLine(lineNum).charLen
+                if lineCharLen > 0:
+                  let res = ctx.buffer.transformRange(
+                    BufferPosition(line: lineNum, column: 0),
+                    BufferPosition(line: lineNum, column: lineCharLen - 1),
+                    "replace characters",
+                    repFill,
+                  )
+                  if res.isErr:
+                    return err(res.error)
+              if lastLine > firstLine:
+                let lastContent = ctx.buffer.getLine(lastLine)
+                if lastContent.charLen > 0:
+                  let lastCount = min(lastCmd.visualReplaceCols, lastContent.charLen)
+                  let res = ctx.buffer.transformRange(
+                    BufferPosition(line: lastLine, column: 0),
+                    BufferPosition(line: lastLine, column: lastCount - 1),
+                    "replace characters",
+                    repFill,
+                  )
+                  if res.isErr:
+                    return err(res.error)
+          if txr.isErr:
+            return err(txr.error)
+          return ok(())
+        of vskLine:
+          # Linewise: same line count from the cursor, whole lines.
+          let (startLine, endLine, lineCount) =
+            ctx.cursorLineRange(lastCmd.visualReplaceRows)
+          if lineCount <= 0:
+            return err("Nothing to replace")
+          let txr = withTransaction(ctx.buffer, "repeat visual replace"):
+            let res = ctx.buffer.replaceWholeLines(
+              startLine, endLine, "replace characters", repFill
+            )
+            if res.isErr:
+              return err(res.error)
+          if txr.isErr:
+            return err(txr.error)
+          return ok(())
+        of vskBlock:
+          # Blockwise: same rows x columns from the cursor, clamped per line.
+          let firstLine = ctx.cursor.line
+          if firstLine < 0 or firstLine >= ctx.buffer.len:
+            return err("Nothing to replace")
+          let
+            startCol = ctx.cursor.column
+            endCol = startCol + max(1, lastCmd.visualReplaceCols) - 1
+            lastLine =
+              min(firstLine + max(1, lastCmd.visualReplaceRows) - 1, ctx.buffer.len - 1)
+          let (snapLo, snapHi) =
+            ctx.buffer.foldState.snapRangeToFolds(firstLine, lastLine)
+          let txr = withTransaction(ctx.buffer, "repeat visual replace"):
+            # Closed folds repeat whole, linewise. A fold the range merely
+            # contains does not widen it, so test for a touch, not a widening.
+            if ctx.buffer.foldState.touchesCollapsedFold(firstLine, lastLine):
+              let res = ctx.buffer.replaceWholeLines(
+                snapLo, snapHi, "replace characters", repFill
+              )
+              if res.isErr:
+                return err(res.error)
+            else:
+              for lineNum in firstLine .. lastLine:
+                let lineLen = ctx.buffer.getLine(lineNum).charLen
+                if startCol < lineLen:
+                  let actualEndCol = min(endCol, lineLen - 1)
+                  let res = ctx.buffer.transformRange(
+                    BufferPosition(line: lineNum, column: startCol),
+                    BufferPosition(line: lineNum, column: actualEndCol),
+                    "replace characters",
+                    repFill,
+                  )
+                  if res.isErr:
+                    return err(res.error)
+          if txr.isErr:
+            return err(txr.error)
+          return ok(())
       of lecReplaceChar:
         # Repeat replace character (r command)
         let lineContent = ctx.buffer.getLine(ctx.cursor.line)
