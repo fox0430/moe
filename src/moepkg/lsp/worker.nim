@@ -27,7 +27,12 @@ when defined(posix):
   from std/posix import nil
 
 import pkg/[results, chronos, jsony]
-import pkg/chronos/[asyncproc, threadsync, selectors2]
+import pkg/chronos/[asyncproc, threadsync]
+
+when defined(windows):
+  from pkg/chronos/osdefs import closeHandle
+else:
+  import pkg/chronos/selectors2
 
 import jsonrpc
 import protocol/types
@@ -1095,17 +1100,18 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       else:
         newJNull()
 
-    var initParams = %*{
-      "processId": getCurrentProcessId(),
-      "clientInfo": {"name": "moe", "version": "0.3.0"},
-      "rootUri": rootUri,
-      "rootPath": rootPath,
-      "workspaceFolders": newJNull(),
-      "capabilities": buildClientCapabilities(),
-      # Forward the configured trace level verbatim (LSP spec: off/messages/verbose).
-      # An off level tells the server not to send $/logTrace at all.
-      "trace": $ctx.traceLevel,
-    }
+    var initParams =
+      %*{
+        "processId": getCurrentProcessId(),
+        "clientInfo": {"name": "moe", "version": "0.3.0"},
+        "rootUri": rootUri,
+        "rootPath": rootPath,
+        "workspaceFolders": newJNull(),
+        "capabilities": buildClientCapabilities(),
+        # Forward the configured trace level verbatim (LSP spec: off/messages/verbose).
+        # An off level tells the server not to send $/logTrace at all.
+        "trace": $ctx.traceLevel,
+      }
 
     # Forward server-specific initializationOptions (e.g. rust-analyzer lens
     # config). Carried as a serialized string across the thread boundary.
@@ -1573,12 +1579,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ctx.sharedState.storeState(lwsCrashed)
     ctx.sharedState.storeRunning(false)
   finally:
-    # Close the chronos dispatcher's selector (epoll fd) to prevent FD leak.
-    # PDispatcher has no destructor, so we must close it explicitly.
+    # PDispatcher has no destructor, so close its native I/O handle explicitly.
     # Use finally to ensure cleanup even on Defect.
     try:
       let disp = getThreadDispatcher()
-      disp.getIoHandler().close()
+      when defined(windows):
+        discard closeHandle(disp.getIoHandler())
+      else:
+        disp.getIoHandler().close()
     except CancelledError:
       discard
     except Defect:
