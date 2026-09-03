@@ -21,7 +21,10 @@
 ## tab lists, buffer switching (:b/:bnext/:bprev/...), deletion, terminal
 ## teardown, and file opening into buffers (:e and friends).
 
-import std/[strutils, strformat, options, os, tables]
+import std/[strutils, strformat, options, os]
+
+when not defined(moe.embedded):
+  import std/tables
 
 import pkg/results
 
@@ -37,8 +40,10 @@ import
   logger,
   buffer,
   window_manager,
-  lsp_integration,
-  terminal_mode
+  lsp_integration
+
+when not defined(moe.embedded):
+  import terminal_mode
 
 type OpenBufferInfo* = object
   ## Frontend-neutral information about a buffer in the active window.
@@ -108,10 +113,7 @@ proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
     e.activeWindow.bufferIds.add(buffer.id)
 
 proc applyBufferMode*(e: Editor, buf: TextBuffer) =
-  ## Re-derive the active window's mode/modeState from the buffer being
-  ## activated. Tab switches reuse this so a Terminal session can be resumed
-  ## by selecting its tab. The PTY itself is owned by `e.terminalStates`,
-  ## so leaving a Terminal tab never calls `cleanup()`.
+  ## Re-derive the active window's mode/modeState from the activated buffer.
   let win = e.activeWindow
   # Drop any prior buffer-swap mode state (Filer, BufferManager, ...) so its
   # `originalBuffer` doesn't leak across the tab switch. Terminal state is
@@ -124,24 +126,34 @@ proc applyBufferMode*(e: Editor, buf: TextBuffer) =
   # first turns the restore step into a no-op while still letting
   # `clearModeState` run its mode-specific cleanup and reset the variant.
   let wasSpecialMode =
-    win.modeState.kind != mskNone and win.modeState.kind != mskTerminal
+    when defined(moe.embedded):
+      win.modeState.kind != mskNone
+    else:
+      win.modeState.kind != mskNone and win.modeState.kind != mskTerminal
   if wasSpecialMode:
     win.originalBuffer = nil
     win.clearModeState(win.mode)
 
-  if e.terminalStates.hasKey(buf.id):
-    win.modeState = ModeState(kind: mskTerminal, terminal: e.terminalStates[buf.id])
-    e.setMode(EditorMode.Terminal)
-  elif win.mode == EditorMode.Terminal:
-    # Leaving a Terminal tab: clearModeState was skipped above (PTY ownership
-    # lives in `terminalStates`), so reset the variant manually here.
-    win.modeState = ModeState(kind: mskNone)
-    e.setMode(EditorMode.Normal)
-  elif wasSpecialMode:
-    # clearModeState resets modeState but leaves `win.mode` untouched —
-    # explicitly drop it back to Normal so the tab switch doesn't leave the
-    # window stuck in Filer/BufferManager/etc.
-    e.setMode(EditorMode.Normal)
+  when defined(moe.embedded):
+    if win.mode == EditorMode.Terminal:
+      win.modeState = ModeState(kind: mskNone)
+      e.setMode(EditorMode.Normal)
+    elif wasSpecialMode:
+      e.setMode(EditorMode.Normal)
+  else:
+    if e.terminalStates.hasKey(buf.id):
+      win.modeState = ModeState(kind: mskTerminal, terminal: e.terminalStates[buf.id])
+      e.setMode(EditorMode.Terminal)
+    elif win.mode == EditorMode.Terminal:
+      # Leaving a Terminal tab: clearModeState was skipped above (PTY ownership
+      # lives in `terminalStates`), so reset the variant manually here.
+      win.modeState = ModeState(kind: mskNone)
+      e.setMode(EditorMode.Normal)
+    elif wasSpecialMode:
+      # clearModeState resets modeState but leaves `win.mode` untouched —
+      # explicitly drop it back to Normal so the tab switch doesn't leave the
+      # window stuck in Filer/BufferManager/etc.
+      e.setMode(EditorMode.Normal)
 
 proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
   ## Point the active window at `targetBuffer` and reset its viewport/cursor.
@@ -216,113 +228,114 @@ proc switchToWindowBuffer*(e: Editor, windowIndex: int) =
 
   e.activateBufferInWindow(bufOpt.get)
 
-proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
-  ## Tear down a Terminal session: free its PTY, drop the buffer from all
-  ## bookkeeping, and move every window that was displaying it to a sibling
-  ## tab (or to a fresh No Name buffer when the window has no tabs left).
-  ## No-op when `bufId` is not a registered terminal — non-terminal buffers
-  ## must go through `deleteCurrentBuffer`/`removeBufferAt` instead.
-  if not e.terminalStates.hasKey(bufId):
-    return
-  e.terminalStates[bufId].cleanup()
-  e.terminalStates.del(bufId)
+when not defined(moe.embedded):
+  proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
+    ## Tear down a Terminal session: free its PTY, drop the buffer from all
+    ## bookkeeping, and move every window that was displaying it to a sibling
+    ## tab (or to a fresh No Name buffer when the window has no tabs left).
+    ## No-op when `bufId` is not a registered terminal — non-terminal buffers
+    ## must go through `deleteCurrentBuffer`/`removeBufferAt` instead.
+    if not e.terminalStates.hasKey(bufId):
+      return
+    e.terminalStates[bufId].cleanup()
+    e.terminalStates.del(bufId)
 
-  # Snapshot which windows had this buffer active, plus their tab-list index,
-  # before we mutate the lists.
-  var followups: seq[tuple[winIdx: int, tabIdx: int]] = @[]
-  for wi, w in e.windowManager.windows:
-    if w.buffer != nil and w.buffer.id == bufId:
-      var idx = -1
-      for i, bid in w.bufferIds:
-        if bid == bufId:
-          idx = i
-          break
-      followups.add((wi, idx))
+    # Snapshot which windows had this buffer active, plus their tab-list index,
+    # before we mutate the lists.
+    var followups: seq[tuple[winIdx: int, tabIdx: int]] = @[]
+    for wi, w in e.windowManager.windows:
+      if w.buffer != nil and w.buffer.id == bufId:
+        var idx = -1
+        for i, bid in w.bufferIds:
+          if bid == bufId:
+            idx = i
+            break
+        followups.add((wi, idx))
 
-  e.pruneBufferIdFromAllWindows(bufId)
-  let bidx = e.bufferIndexById(bufId)
-  if bidx >= 0:
-    # Mirror removeBufferAt: evict before delete so the buffer's pointer can't
-    # alias a future buffer via a leftover cache entry.
-    e.state.git.evictGitCacheForBuffer(e.buffers[bidx])
-    e.deleteBufferAt(bidx)
+    e.pruneBufferIdFromAllWindows(bufId)
+    let bidx = e.bufferIndexById(bufId)
+    if bidx >= 0:
+      # Mirror removeBufferAt: evict before delete so the buffer's pointer can't
+      # alias a future buffer via a leftover cache entry.
+      e.state.git.evictGitCacheForBuffer(e.buffers[bidx])
+      e.deleteBufferAt(bidx)
 
-  let prevActive = e.windowManager.activeWindowIndex
-  for fu in followups:
-    e.windowManager.activeWindowIndex = fu.winIdx
-    let w = e.activeWindow
-    if w.bufferIds.len > 0:
-      # Prefer the tab that took the closed terminal's slot (formerly
-      # tabIdx+1); fall back to the previous tab when the closed terminal
-      # was the rightmost. Matches Vim's `:bd` "next-then-prev" preference.
-      # The `tabIdx < 0` branch is defensive — it only triggers if the
-      # window displayed the terminal without registering it in bufferIds,
-      # which shouldn't happen but would otherwise leave `w.buffer`
-      # dangling at the just-deleted buffer.
-      let newIdx =
-        if fu.tabIdx >= 0 and fu.tabIdx < w.bufferIds.len:
-          fu.tabIdx
+    let prevActive = e.windowManager.activeWindowIndex
+    for fu in followups:
+      e.windowManager.activeWindowIndex = fu.winIdx
+      let w = e.activeWindow
+      if w.bufferIds.len > 0:
+        # Prefer the tab that took the closed terminal's slot (formerly
+        # tabIdx+1); fall back to the previous tab when the closed terminal
+        # was the rightmost. Matches Vim's `:bd` "next-then-prev" preference.
+        # The `tabIdx < 0` branch is defensive — it only triggers if the
+        # window displayed the terminal without registering it in bufferIds,
+        # which shouldn't happen but would otherwise leave `w.buffer`
+        # dangling at the just-deleted buffer.
+        let newIdx =
+          if fu.tabIdx >= 0 and fu.tabIdx < w.bufferIds.len:
+            fu.tabIdx
+          else:
+            w.bufferIds.len - 1
+        # Only the active window owns the global Insert session.
+        if fu.winIdx == prevActive:
+          e.switchToWindowBuffer(newIdx)
         else:
-          w.bufferIds.len - 1
-      # Only the active window owns the global Insert session.
-      if fu.winIdx == prevActive:
-        e.switchToWindowBuffer(newIdx)
+          # Non-active window: reassign the buffer without finalizing.
+          let targetId = w.bufferIds[newIdx]
+          let targetOpt = e.bufferById(targetId)
+          if targetOpt.isSome:
+            let target = targetOpt.get
+            w.buffer = target
+            w.cursor = BufferPosition(line: 0, column: 0)
+            w.viewport.resetViewportTop()
+            w.viewport.leftColumn = 0
+            e.applyBufferMode(target)
+            # Match activateBufferInWindow so forceInsertMode re-enters Insert.
+            e.enforceModePolicy()
+            e.syncActiveWindow()
+            e.setActiveWindowScreenCursor(w)
+          else:
+            w.bufferIds.delete(newIdx)
       else:
-        # Non-active window: reassign the buffer without finalizing.
-        let targetId = w.bufferIds[newIdx]
-        let targetOpt = e.bufferById(targetId)
-        if targetOpt.isSome:
-          let target = targetOpt.get
-          w.buffer = target
-          w.cursor = BufferPosition(line: 0, column: 0)
-          w.viewport.resetViewportTop()
-          w.viewport.leftColumn = 0
-          e.applyBufferMode(target)
-          # Match activateBufferInWindow so forceInsertMode re-enters Insert.
-          e.enforceModePolicy()
-          e.syncActiveWindow()
-          e.setActiveWindowScreenCursor(w)
-        else:
-          w.bufferIds.delete(newIdx)
-    else:
-      let blank = newTextBuffer("")
-      e.addBuffer(blank)
-      e.addBufferToWindowList(blank)
-      if fu.winIdx == prevActive:
-        e.finalizeInsertSessionForBufferSwitch(w.buffer)
-      w.buffer = blank
-      w.cursor = BufferPosition(line: 0, column: 0)
-      w.viewport.resetViewportTop()
-      w.viewport.leftColumn = 0
-      w.modeState = ModeState(kind: mskNone)
-      w.mode = EditorMode.Normal
-      e.setMode(EditorMode.Normal)
-      # Same forceInsertMode alignment as the branches above.
-      e.enforceModePolicy()
-      e.syncActiveWindow()
-      e.setActiveWindowScreenCursor(w)
-  e.windowManager.activeWindowIndex = prevActive
-  # Followup loop may have re-synced `state.windowDisplay.currentBufferId`
-  # to the last visited window. Re-anchor it to the (restored) active one.
-  e.syncActiveWindow()
+        let blank = newTextBuffer("")
+        e.addBuffer(blank)
+        e.addBufferToWindowList(blank)
+        if fu.winIdx == prevActive:
+          e.finalizeInsertSessionForBufferSwitch(w.buffer)
+        w.buffer = blank
+        w.cursor = BufferPosition(line: 0, column: 0)
+        w.viewport.resetViewportTop()
+        w.viewport.leftColumn = 0
+        w.modeState = ModeState(kind: mskNone)
+        w.mode = EditorMode.Normal
+        e.setMode(EditorMode.Normal)
+        # Same forceInsertMode alignment as the branches above.
+        e.enforceModePolicy()
+        e.syncActiveWindow()
+        e.setActiveWindowScreenCursor(w)
+    e.windowManager.activeWindowIndex = prevActive
+    # Followup loop may have re-synced `state.windowDisplay.currentBufferId`
+    # to the last visited window. Re-anchor it to the (restored) active one.
+    e.syncActiveWindow()
 
-proc cleanupAllTerminals*(e: Editor) =
-  ## Tear down every live Terminal session's PTY on editor exit/crash.
-  ##
-  ## `closeTerminalBuffer` only runs on an explicit tab close, so any shell
-  ## spawned by `:terminal` and still open when moe quits or crashes would
-  ## otherwise be reaped only via the kernel closing the master fd at process
-  ## exit — which merely raises SIGHUP on the foreground process group. A shell
-  ## (or foreground child) that ignores SIGHUP, was disowned, or sits in its
-  ## own process group survives as an orphan, and the fd/zombie linger.
-  ##
-  ## `cleanup()` closes each PTY's master fd and sends SIGTERM to (and reaps)
-  ## the shell's process group deterministically. Unlike `closeTerminalBuffer`,
-  ## this does not rewire windows or buffer lists: the editor is exiting, so
-  ## only the OS resources need releasing. Idempotent and safe on an empty map.
-  for termState in e.terminalStates.values:
-    termState.cleanup()
-  e.terminalStates.clear()
+  proc cleanupAllTerminals*(e: Editor) =
+    ## Tear down every live Terminal session's PTY on editor exit/crash.
+    ##
+    ## `closeTerminalBuffer` only runs on an explicit tab close, so any shell
+    ## spawned by `:terminal` and still open when moe quits or crashes would
+    ## otherwise be reaped only via the kernel closing the master fd at process
+    ## exit — which merely raises SIGHUP on the foreground process group. A shell
+    ## (or foreground child) that ignores SIGHUP, was disowned, or sits in its
+    ## own process group survives as an orphan, and the fd/zombie linger.
+    ##
+    ## `cleanup()` closes each PTY's master fd and sends SIGTERM to (and reaps)
+    ## the shell's process group deterministically. Unlike `closeTerminalBuffer`,
+    ## this does not rewire windows or buffer lists: the editor is exiting, so
+    ## only the OS resources need releasing. Idempotent and safe on an empty map.
+    for termState in e.terminalStates.values:
+      termState.cleanup()
+    e.terminalStates.clear()
 
 proc switchToNextBuffer*(e: Editor) =
   ## Switch to the next buffer in the active window's tab list (:bnext).
@@ -497,11 +510,12 @@ proc redirectWindowsFromBuffer*(
       window.viewport.leftColumn = 0
 
 proc deleteBufferById(e: Editor, id: BufferId): Result[(), string] =
-  if e.terminalStates.hasKey(id):
-    # Terminal sessions need PTY cleanup; delegate to the dedicated path
-    # so the state map stays in sync.
-    e.closeTerminalBuffer(id)
-    return ok(())
+  when not defined(moe.embedded):
+    if e.terminalStates.hasKey(id):
+      # Terminal sessions need PTY cleanup; delegate to the dedicated path
+      # so the state map stays in sync.
+      e.closeTerminalBuffer(id)
+      return ok(())
 
   let bufferIndex = e.bufferIndexById(id)
   if bufferIndex < 0:
@@ -540,7 +554,12 @@ proc closeBuffer*(e: Editor, id: BufferId): Result[(), string] =
   let buffer = e.bufferById(id)
   if buffer.isNone:
     return err("Buffer does not exist")
-  if id notin e.terminalStates and buffer.get.isModified:
+  let isTerminal =
+    when defined(moe.embedded):
+      false
+    else:
+      id in e.terminalStates
+  if not isTerminal and buffer.get.isModified:
     return err("No write since last change (add ! to override)")
   e.deleteBufferById(id)
 

@@ -21,10 +21,13 @@
 
 import pkg/results
 
-import ../src/moepkg/[clipboard_backend, frontend, terminal_mode]
+import ../src/moepkg/[clipboard_backend, frontend, types]
+import ../src/moepkg/command_handlers/editor_ops
 
 static:
   doAssert defined(moe.embedded)
+  doAssert not declared(TerminalState)
+  doAssert not declared(newTerminalState)
 
 let config = newEditorConfig()
 doAssert not config.clipboard.enable
@@ -32,7 +35,6 @@ doAssert not config.clipboard.enable
 let clipboardRead = readFromClipboardSync(config.clipboard.tool)
 doAssert clipboardRead.isErr
 
-let terminal = newTerminalState()
-doAssert terminal.isErr
-
-discard newEditor(config)
+let editor = newEditor(config)
+editor.enterTerminalInActiveWindow("")
+doAssert editor.state.statusMessage == "Terminal mode is unavailable in embedded builds"

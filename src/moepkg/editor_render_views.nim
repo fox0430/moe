@@ -275,9 +275,12 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
     # standard buffer-cursor calculation that would overwrite them.
     let
       isTerminalInput =
-        e.activeWindow.mode == EditorMode.Terminal and
-        e.activeWindow.modeState.kind == mskTerminal and
-        e.activeWindow.modeState.terminal.subMode == tsmInput
+        when defined(moe.embedded):
+          false
+        else:
+          e.activeWindow.mode == EditorMode.Terminal and
+            e.activeWindow.modeState.kind == mskTerminal and
+            e.activeWindow.modeState.terminal.subMode == tsmInput
       isConfig = e.activeWindow.mode == EditorMode.Config
 
     if not isTerminalInput and not isConfig:
@@ -368,16 +371,22 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
       # Config supports per-window rendering
       e.renderConfig(buffer, window, layout.isBottomWindow, tabLineOffset)
     of EditorMode.Terminal:
-      # Terminal mode renders grid directly in Input sub-mode,
-      # or uses standard window rendering in Normal sub-mode
-      if window.modeState.kind == mskTerminal and
-          window.modeState.terminal.subMode == tsmInput:
-        e.renderTerminal(buffer, window, layout.isBottomWindow, tabLineOffset)
-      else:
+      when defined(moe.embedded):
         e.renderWindow(
           buffer, window, layout.lineNumOffset, layout.isBottomWindow,
           layout.isActiveWindow, tabLineOffset,
         )
+      else:
+        # Terminal mode renders grid directly in Input sub-mode,
+        # or uses standard window rendering in Normal sub-mode
+        if window.modeState.kind == mskTerminal and
+            window.modeState.terminal.subMode == tsmInput:
+          e.renderTerminal(buffer, window, layout.isBottomWindow, tabLineOffset)
+        else:
+          e.renderWindow(
+            buffer, window, layout.lineNumOffset, layout.isBottomWindow,
+            layout.isActiveWindow, tabLineOffset,
+          )
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(

@@ -25,7 +25,7 @@
 
 import std/options
 
-import ../terminal/[pty_backend, ansi_parser]
+import ../terminal/[pty, ansi_parser]
 import ../buffer/core
 
 type

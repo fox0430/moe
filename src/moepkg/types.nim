@@ -47,8 +47,10 @@ import
   types/syntax_checker_types,
   types/recent_file_mode_types,
   types/git_cache_types,
-  types/terminal_mode_types,
   config
+
+when not defined(moe.embedded):
+  import types/terminal_mode_types
 
 from lsp/protocol/types import SemanticTokensLegend
 
@@ -58,8 +60,10 @@ export
   bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
   config_mode_types, references_viewer_types, documentsymbol_viewer_types,
   callhierarchy_viewer_types, hover_popup_types, notification_popup_types, primitives,
-  syntax_checker_types, recent_file_mode_types, terminal_mode_types,
-  config.BracketSplitMode
+  syntax_checker_types, recent_file_mode_types, config.BracketSplitMode
+
+when not defined(moe.embedded):
+  export terminal_mode_types
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -160,7 +164,11 @@ type
     of mskDocumentSymbol: documentSymbol*: DocumentSymbolViewerState
     of mskCallHierarchy: callHierarchy*: CallHierarchyViewerState
     of mskRecentFile: recentFile*: RecentFileModeState
-    of mskTerminal: terminal*: TerminalState
+    of mskTerminal:
+      when defined(moe.embedded):
+        discard
+      else:
+        terminal*: TerminalState
 
   ViewerPlacement* = enum
     ## Placement chosen on viewer entry and reversed on exit.

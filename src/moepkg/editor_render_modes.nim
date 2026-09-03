@@ -23,15 +23,10 @@ import std/[options, strutils]
 
 import pkg/[celina, results]
 
-import
-  types/editor_types,
-  color,
-  colorcode,
-  render_utils,
-  config_mode,
-  editor_window_layout,
-  unicode_utils
-import terminal/ansi_parser
+import types/editor_types, color, colorcode, render_utils, config_mode, unicode_utils
+
+when not defined(moe.embedded):
+  import editor_window_layout, terminal/ansi_parser
 
 proc renderConfig*(
     e: Editor,
@@ -259,96 +254,97 @@ proc renderConfig*(
     # overlay (command/search) owns the cursor instead.
     e.state.cursorVisible = e.state.hasOverlay
 
-proc terminalColorToColorValue(tc: TerminalColor): ColorValue =
-  ## Convert ansi_parser TerminalColor to celina ColorValue.
-  case tc.kind
-  of ckDefault:
-    ColorValue(kind: Default)
-  of ckIndexed:
-    ColorValue(kind: Indexed256, indexed256: tc.index)
-  of ckRgb:
-    ColorValue(kind: celina.Rgb, rgb: RgbColor(r: tc.r, g: tc.g, b: tc.b))
+when not defined(moe.embedded):
+  proc terminalColorToColorValue(tc: TerminalColor): ColorValue =
+    ## Convert ansi_parser TerminalColor to celina ColorValue.
+    case tc.kind
+    of ckDefault:
+      ColorValue(kind: Default)
+    of ckIndexed:
+      ColorValue(kind: Indexed256, indexed256: tc.index)
+    of ckRgb:
+      ColorValue(kind: celina.Rgb, rgb: RgbColor(r: tc.r, g: tc.g, b: tc.b))
 
-proc terminalCellToStyle(cell: TerminalCell): Style =
-  ## Convert a TerminalCell's colors and attributes to a celina Style.
-  var modifiers: set[StyleModifier] = {}
-  if taBold in cell.attrs:
-    modifiers.incl(StyleModifier.Bold)
-  if taDim in cell.attrs:
-    modifiers.incl(StyleModifier.Dim)
-  if taItalic in cell.attrs:
-    modifiers.incl(StyleModifier.Italic)
-  if taUnderline in cell.attrs:
-    modifiers.incl(StyleModifier.Underline)
-  if taReverse in cell.attrs:
-    modifiers.incl(StyleModifier.Reversed)
-  if taStrikethrough in cell.attrs:
-    modifiers.incl(StyleModifier.Crossed)
+  proc terminalCellToStyle(cell: TerminalCell): Style =
+    ## Convert a TerminalCell's colors and attributes to a celina Style.
+    var modifiers: set[StyleModifier] = {}
+    if taBold in cell.attrs:
+      modifiers.incl(StyleModifier.Bold)
+    if taDim in cell.attrs:
+      modifiers.incl(StyleModifier.Dim)
+    if taItalic in cell.attrs:
+      modifiers.incl(StyleModifier.Italic)
+    if taUnderline in cell.attrs:
+      modifiers.incl(StyleModifier.Underline)
+    if taReverse in cell.attrs:
+      modifiers.incl(StyleModifier.Reversed)
+    if taStrikethrough in cell.attrs:
+      modifiers.incl(StyleModifier.Crossed)
 
-  Style(
-    fg: terminalColorToColorValue(cell.fg),
-    bg: terminalColorToColorValue(cell.bg),
-    modifiers: modifiers,
-  )
+    Style(
+      fg: terminalColorToColorValue(cell.fg),
+      bg: terminalColorToColorValue(cell.bg),
+      modifiers: modifiers,
+    )
 
-proc renderTerminal*(
-    e: Editor,
-    buffer: var Buffer,
-    window: EditorWindow,
-    isBottomWindow: bool,
-    tabLineOffset: int,
-) =
-  ## Render the terminal emulator grid within a window's viewport.
-  if window.modeState.kind != mskTerminal:
-    return
+  proc renderTerminal*(
+      e: Editor,
+      buffer: var Buffer,
+      window: EditorWindow,
+      isBottomWindow: bool,
+      tabLineOffset: int,
+  ) =
+    ## Render the terminal emulator grid within a window's viewport.
+    if window.modeState.kind != mskTerminal:
+      return
 
-  let
-    termState = window.modeState.terminal
-    grid = termState.grid
-    startX = window.viewport.x
-    startY = window.viewport.y + tabLineOffset
-    # Same formula as the PTY sizing in calculateTerminalAreaDimensions, so
-    # the rendered grid and the PTY size cannot diverge.
-    maxRows = terminalContentRows(window, isBottomWindow, tabLineOffset)
-    maxCols = window.viewport.width
+    let
+      termState = window.modeState.terminal
+      grid = termState.grid
+      startX = window.viewport.x
+      startY = window.viewport.y + tabLineOffset
+      # Same formula as the PTY sizing in calculateTerminalAreaDimensions, so
+      # the rendered grid and the PTY size cannot diverge.
+      maxRows = terminalContentRows(window, isBottomWindow, tabLineOffset)
+      maxCols = window.viewport.width
 
-  case termState.subMode
-  of tsmInput:
-    # Render live terminal grid directly to celina buffer
-    for row in 0 ..< min(grid.rows, maxRows):
-      for col in 0 ..< min(grid.cols, maxCols):
-        let cell = grid.cells[row][col]
-        if cell.widePadding:
-          continue # celina's setString handles wide char's second column
-        let style = terminalCellToStyle(cell)
-        let ch = if cell.ch.len > 0: cell.ch else: " "
-        buffer.setString(startX + col, startY + row, ch, style)
-      # Clear remaining columns if grid is narrower than viewport
-      if grid.cols < maxCols:
-        let emptyStr = " ".repeat(maxCols - grid.cols)
-        buffer.setString(startX + grid.cols, startY + row, emptyStr, normalStyle())
+    case termState.subMode
+    of tsmInput:
+      # Render live terminal grid directly to celina buffer
+      for row in 0 ..< min(grid.rows, maxRows):
+        for col in 0 ..< min(grid.cols, maxCols):
+          let cell = grid.cells[row][col]
+          if cell.widePadding:
+            continue # celina's setString handles wide char's second column
+          let style = terminalCellToStyle(cell)
+          let ch = if cell.ch.len > 0: cell.ch else: " "
+          buffer.setString(startX + col, startY + row, ch, style)
+        # Clear remaining columns if grid is narrower than viewport
+        if grid.cols < maxCols:
+          let emptyStr = " ".repeat(maxCols - grid.cols)
+          buffer.setString(startX + grid.cols, startY + row, emptyStr, normalStyle())
 
-    # Clear remaining rows
-    if grid.rows < maxRows:
-      let emptyLine = " ".repeat(maxCols)
-      for row in grid.rows ..< maxRows:
-        buffer.setString(startX, startY + row, emptyLine, normalStyle())
+      # Clear remaining rows
+      if grid.rows < maxRows:
+        let emptyLine = " ".repeat(maxCols)
+        for row in grid.rows ..< maxRows:
+          buffer.setString(startX, startY + row, emptyLine, normalStyle())
 
-    # Position cursor at terminal cursor location.
-    # Note (M16): Terminal-Input positions its own screen cursor here from the
-    # grid, inline with its specialized draw, rather than in
-    # advanceLayoutForFrame. This is an idempotent draw-side exception. The
-    # screen-cursor write is gated on no overlay/temp message being active, since
-    # those own the cursor and are placed earlier in advanceLayoutForFrame
-    # (preserving the former draw-order precedence).
-    if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
-      if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
-        e.state.screenCursor.x = startX + grid.cursorCol
-        e.state.screenCursor.y = startY + grid.cursorRow
-      e.state.cursorVisible = true
-    else:
+      # Position cursor at terminal cursor location.
+      # Note (M16): Terminal-Input positions its own screen cursor here from the
+      # grid, inline with its specialized draw, rather than in
+      # advanceLayoutForFrame. This is an idempotent draw-side exception. The
+      # screen-cursor write is gated on no overlay/temp message being active, since
+      # those own the cursor and are placed earlier in advanceLayoutForFrame
+      # (preserving the former draw-order precedence).
+      if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
+        if not e.state.hasOverlay and e.state.ui.tempMessages.len == 0:
+          e.state.screenCursor.x = startX + grid.cursorCol
+          e.state.screenCursor.y = startY + grid.cursorRow
+        e.state.cursorVisible = true
+      else:
+        e.state.cursorVisible = false
+    of tsmNormal:
+      # In Normal sub-mode, rendering is handled by editor_render_views.nim
+      # via renderWindow (the snapshot buffer is already set as window.buffer).
       e.state.cursorVisible = false
-  of tsmNormal:
-    # In Normal sub-mode, rendering is handled by editor_render_views.nim
-    # via renderWindow (the snapshot buffer is already set as window.buffer).
-    e.state.cursorVisible = false

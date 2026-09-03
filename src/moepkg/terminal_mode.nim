@@ -20,14 +20,11 @@
 ## Terminal mode state management.
 ## Integrates PTY handle with ANSI parser grid and manages sub-modes.
 
-import std/options
-
-when not defined(moe.embedded):
-  import std/os
+import std/[options, os]
 
 import pkg/results
 
-import terminal/[pty_backend, ansi_parser]
+import terminal/[pty, ansi_parser]
 import buffer/core
 import logger
 
@@ -43,13 +40,10 @@ proc newTerminalState*(
   ## session hands control to an interactive shell via `exec`, so the terminal
   ## keeps running instead of exiting once the command finishes.
   let spawnCommand =
-    when defined(moe.embedded):
-      command
+    if command.len > 0:
+      command & "; exec " & getEnv("SHELL", "/bin/sh")
     else:
-      if command.len > 0:
-        command & "; exec " & getEnv("SHELL", "/bin/sh")
-      else:
-        ""
+      ""
   let ptyResult = openPtyAndSpawn(spawnCommand, cols, rows)
   if ptyResult.isErr:
     return err(ptyResult.error)

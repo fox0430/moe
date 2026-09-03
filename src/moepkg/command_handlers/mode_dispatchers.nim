@@ -31,13 +31,19 @@
 
 import std/[options, strutils]
 
-import pkg/[results, celina]
+import pkg/results
+
+when not defined(moe.embedded):
+  import pkg/celina
 
 import
   ../[
     types, buffer, modes, key_bindings, keybind_config, string_builder, filer, filetree,
-    diff_viewer, recent_file_mode, terminal_mode,
+    diff_viewer, recent_file_mode,
   ]
+
+when not defined(moe.embedded):
+  import ../terminal_mode
 import ../lsp/protocol/types as lspTypes
 import ../types/editor_types
 # The per-mode key handlers this module forwards to come from handler_modules
@@ -1068,54 +1074,55 @@ proc handleRecentFileMode*(
   of rfmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
-proc handleTerminalMode*(
-    manager: HandlerManager,
-    termState: TerminalState,
-    state: EditorState,
-    keyCombo: KeyCombo,
-    window: EditorWindow,
-): HandlerResult =
-  ## Handle Terminal mode input
-  let r = handleTerminalModeKey(termState, keyCombo)
-  case r.kind
-  of trHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of trSwitchToNormal:
-    # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer.
-    # Terminal windows hold no Insert session, so no finalization is needed.
-    let snapshotBuffer = termState.enterNormalSubMode()
-    window.buffer = snapshotBuffer
-    window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
-    window.viewport.resetViewportTop(
-      max(0, snapshotBuffer.len - window.viewport.height)
-    )
-    return HandlerResult(
-      kind: hrHandled,
-      modeTransition: none(EditorMode),
-      statusMessage: "-- TERMINAL NORMAL --",
-    )
-  of trReturnToInput:
-    # Return to Terminal-Input sub-mode: restore placeholder buffer
-    termState.exitNormalSubMode()
-    window.buffer = newTextBuffer("")
-    window.cursor = BufferPosition(line: 0, column: 0)
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of trEnterCommand:
-    state.input.commandText = ":"
-    state.input.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of trQuit:
-    return HandlerResult(kind: hrTerminalQuit)
-  of trUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of trError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+when not defined(moe.embedded):
+  proc handleTerminalMode*(
+      manager: HandlerManager,
+      termState: TerminalState,
+      state: EditorState,
+      keyCombo: KeyCombo,
+      window: EditorWindow,
+  ): HandlerResult =
+    ## Handle Terminal mode input
+    let r = handleTerminalModeKey(termState, keyCombo)
+    case r.kind
+    of trHandled:
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    of trSwitchToNormal:
+      # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer.
+      # Terminal windows hold no Insert session, so no finalization is needed.
+      let snapshotBuffer = termState.enterNormalSubMode()
+      window.buffer = snapshotBuffer
+      window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
+      window.viewport.resetViewportTop(
+        max(0, snapshotBuffer.len - window.viewport.height)
+      )
+      return HandlerResult(
+        kind: hrHandled,
+        modeTransition: none(EditorMode),
+        statusMessage: "-- TERMINAL NORMAL --",
+      )
+    of trReturnToInput:
+      # Return to Terminal-Input sub-mode: restore placeholder buffer
+      termState.exitNormalSubMode()
+      window.buffer = newTextBuffer("")
+      window.cursor = BufferPosition(line: 0, column: 0)
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    of trEnterCommand:
+      state.input.commandText = ":"
+      state.input.commandCursor = 0
+      return HandlerResult(
+        kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
+      )
+    of trQuit:
+      return HandlerResult(kind: hrTerminalQuit)
+    of trUnhandled:
+      return HandlerResult(kind: hrUnhandled)
+    of trError:
+      return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 template dispatchSubState(
     variantKind: ModeStateKind,
@@ -1210,13 +1217,18 @@ proc dispatchSubStateMode*(
       mskCallHierarchy, callHierarchy, handleCallHierarchyMode, "Call hierarchy viewer"
     )
   of EditorMode.Terminal:
-    # Non-standard handler signature: takes `window` instead of viewport height.
-    if activeWindow.modeState.kind == mskTerminal:
-      return manager.handleTerminalMode(
-        activeWindow.modeState.terminal, state, keyCombo, activeWindow
+    when defined(moe.embedded):
+      return HandlerResult(
+        kind: hrError, errorMessage: "Terminal mode is unavailable in embedded builds"
       )
     else:
-      return
+      # Non-standard handler signature: takes `window` instead of viewport height.
+      if activeWindow.modeState.kind == mskTerminal:
+        return manager.handleTerminalMode(
+          activeWindow.modeState.terminal, state, keyCombo, activeWindow
+        )
+      else:
+        return
         HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
   of EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug:
     # Command: handled via overlay in handler.nim.
