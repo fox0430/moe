@@ -430,3 +430,141 @@ suite "renderConfig - color value highlight with multibyte displayName":
     check expectedX != byteBasedX # Precondition: CJK chars make byte != display cols
     check swatchXs.len == "#ff0000".len
     check swatchXs[0] == expectedX
+
+suite "renderConfig - edit cursor":
+  proc startEditingFirst(e: Editor, kind: ConfigValueKind): ConfigModeState =
+    ## Park the selection on the first item of `kind` and enter edit mode.
+    let configState = newConfigModeState(e.config)
+    var index = -1
+    for i, item in configState.items:
+      if item.kind == kind:
+        index = i
+        break
+    check index >= 0
+    configState.selectedIndex = index
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
+    e.activeWindow.viewport.topLine = index
+    configState.startEdit()
+    check configState.isEditing()
+    configState
+
+  test "Editing a float item shows the edit buffer and the cursor":
+    # cvkFloat enters edit mode like int/string/color, so the renderer must
+    # treat it as an edited row.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = e.startEditingFirst(cvkFloat)
+    configState.editBuffer = "12.5"
+    configState.editCursor = configState.editBuffer.charLen
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let editBg = getThemeStyle(EditorColorPairIndex.configModeEditMode).bg
+    var row = ""
+    for x in 0 ..< buffer.area.width:
+      row &= buffer[x, 0].symbol
+    check buffer[0, 0].style.bg == editBg
+    check "12.5" in row
+    check e.state.cursorVisible
+    check e.state.screenCursor.x > 0
+
+  test "The edit cursor stays inside the pane for an over-wide value":
+    # The line is truncated to the pane, so an unclamped cursor column would
+    # land in the neighbouring window.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = e.startEditingFirst(cvkString)
+    configState.editBuffer = "x".repeat(buffer.area.width * 2)
+    configState.editCursor = configState.editBuffer.charLen
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let
+      viewport = e.activeWindow.viewport
+      lastColumn = viewport.x + viewport.width - 1
+    check e.state.cursorVisible
+    check e.state.screenCursor.x >= viewport.x
+    check e.state.screenCursor.x <= lastColumn
+
+  proc renderedRow(buffer: Buffer, y: int): string =
+    for x in 0 ..< buffer.area.width:
+      result &= buffer[x, y].symbol
+
+  test "The edit view scrolls so the cursor's end of the value is visible":
+    # Without a horizontal scroll the caret is pinned on the ellipsis and the
+    # edited tail is never drawn.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = e.startEditingFirst(cvkString)
+    configState.editBuffer = "head" & "x".repeat(buffer.area.width * 2) & "TAIL"
+    configState.editCursor = configState.editBuffer.charLen
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let row = buffer.renderedRow(0)
+    check "TAIL" in row
+    check not ("head" in row)
+    check "..." notin row
+    # The caret sits on the column right after the last character of the value.
+    check e.state.screenCursor.x > 0
+    check row[e.state.screenCursor.x - 1] == 'L'
+
+  test "The edit view scrolls back to the head when the cursor returns":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = e.startEditingFirst(cvkString)
+    configState.editBuffer = "head" & "x".repeat(buffer.area.width * 2) & "TAIL"
+    configState.editCursor = 0
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let row = buffer.renderedRow(0)
+    check "head" in row
+    check not ("TAIL" in row)
+
+  test "The edited row is styled all the way to the column the cursor clamps to":
+    # truncateToWidthWithSuffix can stop a column short on a wide character, so
+    # the row has to be re-padded off the drawn width.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = e.startEditingFirst(cvkString)
+    configState.editBuffer = "あ".repeat(buffer.area.width)
+    configState.editCursor = configState.editBuffer.charLen
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let
+      editBg = getThemeStyle(EditorColorPairIndex.configModeEditMode).bg
+      viewport = e.activeWindow.viewport
+      lastColumn = viewport.x + viewport.width - 1
+    check buffer[lastColumn, 0].style.bg == editBg
+    check e.state.screenCursor.x <= lastColumn
+    check buffer[e.state.screenCursor.x, 0].style.bg == editBg
+
+  test "A long name cannot squeeze the value column out of a narrow pane":
+    # Without cutting the name to its budget, the prefix overruns a narrow pane
+    # and the value never gets drawn.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    let configState = e.startEditingFirst(cvkString)
+    e.activeWindow.viewport.width = 20
+    configState.items[configState.selectedIndex].displayName = "highlightCurrentWord"
+    configState.items[configState.selectedIndex].depth = 1
+    configState.editBuffer = "abcdefghij"
+    configState.editCursor = configState.editBuffer.charLen
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+    let
+      viewport = e.activeWindow.viewport
+      row = buffer.renderedRow(0)
+      maxNameWidth = calcMaxNameWidth(configState.items, viewport.width)
+      prefixWidth = charDisplayWidth(
+        itemNamePrefix(configState.items[configState.selectedIndex], maxNameWidth)
+      )
+    check prefixWidth < viewport.width
+    # The tail the cursor sits at is drawn inside the value column.
+    check "hij" in row
+    check e.state.screenCursor.x >= viewport.x + prefixWidth
+    check e.state.screenCursor.x <= viewport.x + viewport.width - 1

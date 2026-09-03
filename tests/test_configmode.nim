@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import std/[unittest, options, os, strutils, sets, tables, importutils]
-import ../src/moepkg/[config, color, theme, types]
+from pkg/celina import newBuffer, Style, `[]`
+import ../src/moepkg/[config, color, theme, types, unicode_utils]
 import ../src/moepkg/config_mode {.all.}
 import config_test_helper
 
@@ -381,6 +382,79 @@ suite "ConfigMode - Enum value manipulation":
 
     state.cycleEnumValue(testEditorState(cfg), forward = true)
     check state.items[enumIndex].enumValue == state.items[enumIndex].enumOptions[0]
+
+suite "ConfigMode - formatItemForDisplay name padding":
+  proc separatorColumn(line: string): int =
+    ## Display column the " : " separator starts at.
+    let idx = line.find(" : ")
+    check idx >= 0
+    line.displayWidthUpTo(line.byteToCharPos(idx))
+
+  test "The value column lines up for a multibyte name":
+    # The name column is padded in display columns, so a non-ASCII name cannot
+    # pull its value left of the ASCII rows.
+    let
+      ascii = ConfigItem(
+        kind: cvkBool,
+        displayName: "abcdef",
+        section: "S",
+        depth: 1,
+        descriptorIndex: 1,
+        boolValue: true,
+      )
+      multibyte = ConfigItem(
+        kind: cvkBool,
+        displayName: "あい",
+        section: "S",
+        depth: 1,
+        descriptorIndex: 2,
+        boolValue: true,
+      )
+      maxNameWidth = calcMaxNameWidth(@[ascii, multibyte], 80)
+
+    # Same byte length, different display width: byte padding would misalign.
+    check ascii.displayName.len == multibyte.displayName.len
+    check charDisplayWidth(ascii.displayName) != charDisplayWidth(multibyte.displayName)
+    check separatorColumn(formatItemForDisplay(ascii, maxNameWidth)) ==
+      separatorColumn(formatItemForDisplay(multibyte, maxNameWidth))
+
+  test "calcMaxNameWidth budgets the name column in display columns":
+    # The cap is a column budget, not a byte count.
+    let wide = ConfigItem(
+      kind: cvkBool,
+      displayName: "あ".repeat(20),
+      section: "S",
+      depth: 1,
+      descriptorIndex: 1,
+      boolValue: true,
+    )
+    check calcMaxNameWidth(@[wide], 40) == 20
+
+  test "The name column is cut to its budget":
+    # A name wider than the cap is truncated, else it pushes the value column
+    # past the pane edge.
+    let item = ConfigItem(
+      kind: cvkString,
+      displayName: "highlightCurrentWord",
+      section: "S",
+      depth: 1,
+      descriptorIndex: 1,
+      stringValue: "v",
+    )
+    let maxNameWidth = calcMaxNameWidth(@[item], 20)
+    check charDisplayWidth(itemNamePrefix(item, maxNameWidth)) == maxNameWidth + 3
+
+  test "A name column too narrow for an ellipsis keeps the leading characters":
+    let item = ConfigItem(
+      kind: cvkString,
+      displayName: "abcdef",
+      section: "S",
+      depth: 1,
+      descriptorIndex: 1,
+      stringValue: "v",
+    )
+    # Budget 4: two columns of indent leave a two-column name.
+    check itemNamePrefix(item, 4) == "  ab : "
 
 suite "ConfigMode - formatItemForDisplay":
   test "Section item displays with brackets":
@@ -837,8 +911,8 @@ suite "ConfigMode - Edit buffer manipulation":
     check info.cursor == 2
 
 suite "ConfigMode - Multibyte edit buffer":
-  # editCursor is a rune index. These guard against byte/rune confusion that
-  # corrupted multibyte values (e.g. bookmarkMarker) while editing.
+  # editCursor is a character index. These guard against byte/character
+  # confusion that corrupted multibyte values (e.g. bookmarkMarker).
   proc stringEditState(): ConfigModeState =
     let cfg = newEditorConfig()
     result = newConfigModeState(cfg)
@@ -944,6 +1018,95 @@ suite "ConfigMode - Multibyte edit buffer":
     state.editInsertChar("★")
     check state.editBuffer == "★→☆"
     check state.editCursor == 1
+
+suite "ConfigMode - Undecodable bytes in edit buffer":
+  # The renderer gives an undecodable byte columns of its own; `runeLen` folds it
+  # into the following character and drifts the cursor off the drawn cell.
+  proc stringEditState(value: string): ConfigModeState =
+    let cfg = newEditorConfig()
+    result = newConfigModeState(cfg)
+    var strIndex = -1
+    for i, item in result.items:
+      if item.kind == cvkString:
+        strIndex = i
+        break
+    check strIndex >= 0
+    result.selectedIndex = strIndex
+    result.items[strIndex].stringValue = value
+    result.startEdit()
+
+  test "startEdit puts the cursor at the character length":
+    # "\xF0" advertises four bytes that "abc" cannot continue: four columns.
+    let state = stringEditState("\xF0abc")
+    check state.editBuffer.charLen == 4
+    check state.editCursor == 4
+
+  test "editMoveCursorRight stops at the character length":
+    let state = stringEditState("\xF0abc")
+    state.editMoveCursorHome()
+    for expected in 1 .. 4:
+      state.editMoveCursorRight()
+      check state.editCursor == expected
+    state.editMoveCursorRight()
+    check state.editCursor == 4
+
+  test "editBackspace removes one byte of a broken sequence":
+    let state = stringEditState("\xF0abc")
+    state.editBackspace()
+    check state.editBuffer == "\xF0ab"
+    check state.editCursor == 3
+
+  test "editDelete removes only the undecodable byte at the cursor":
+    let state = stringEditState("\xF0abc")
+    state.editMoveCursorHome()
+    state.editDelete()
+    check state.editBuffer == "abc"
+    check state.editCursor == 0
+
+  test "editInsertChar completing a lead byte keeps the cursor on the tail":
+    # The missing continuation bytes turn three columns into one.
+    let state = stringEditState("\xE3")
+    check state.editCursor == 1
+
+    state.editInsertChar("\x81\x82")
+    check state.editBuffer == "\xE3\x81\x82"
+    check state.editBuffer.charLen == 1
+    check state.editCursor == 1
+
+  test "editBackspace merging across the hole keeps the cursor in range":
+    # Removing "A" lets "\xE3\x81" complete over "\x82": four columns become one.
+    let state = stringEditState("\xE3\x81A\x82")
+    check state.editBuffer.charLen == 4
+    state.editMoveCursorHome()
+    for _ in 1 .. 3:
+      state.editMoveCursorRight()
+
+    state.editBackspace()
+    check state.editBuffer == "\xE3\x81\x82"
+    check state.editBuffer.charLen == 1
+    check state.editCursor == 1
+
+  test "editDelete merging across the hole keeps the cursor in range":
+    let state = stringEditState("\xE3\x81A\x82")
+    state.editMoveCursorHome()
+    state.editMoveCursorRight()
+    state.editMoveCursorRight()
+
+    state.editDelete()
+    check state.editBuffer == "\xE3\x81\x82"
+    check state.editBuffer.charLen == 1
+    check state.editCursor == 1
+
+  test "the cursor lands on the column the drawn line ends at":
+    # Placing and drawing must agree that "\xF0" owns four columns.
+    let state = stringEditState("\xF0abc")
+    var buf = newBuffer(20, 1)
+    let drawnEndX = buf.setCharString(0, 0, state.editBuffer, Style())
+    check drawnEndX == displayWidthUpTo(state.editBuffer, state.editCursor)
+    check drawnEndX == 7
+    check buf[0, 0].symbol == "<"
+    check buf[3, 0].symbol == ">"
+    check buf[4, 0].symbol == "a"
 
 suite "ConfigMode - Enum popup":
   test "openEnumPopup opens popup for enum item":

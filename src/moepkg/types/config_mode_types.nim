@@ -73,7 +73,7 @@ type
     selectedIndex*: int # Index in items
     editMode*: bool # Whether we're editing a value (Int/String)
     editBuffer*: string # Buffer for editing text
-    editCursor*: int # Cursor position in edit buffer (rune index, not bytes)
+    editCursor*: int # Cursor position in edit buffer (character index, not bytes)
     enumPopupOpen*: bool # Whether enum selection popup is open
     enumPopupIndex*: int # Selected index in enum popup
     searchQuery*: string # Active search query ("" when no search)
