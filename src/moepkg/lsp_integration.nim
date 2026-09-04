@@ -20,15 +20,15 @@
 ## LSP Integration with Editor
 ## Connects LspService to Editor, TextBuffer, and UI components
 
-import std/[options, json, strutils, algorithm, sequtils, sets, tables, times, unicode]
+import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
 from std/os import absolutePath, normalizedPath, fileExists
 
 import pkg/[results, chronos]
 
-import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger, backup
+import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger
 import lsp/protocol/types as lspTypes
 
-import types/lsp_integration_types, types/config_types
+import types/lsp_integration_types
 export lsp_integration_types
 
 const MaxEditPathDisplayCount* = 10
@@ -1275,10 +1275,9 @@ proc samePath(a, b: string): bool =
   ## Compare two file paths after normalizing to absolute form.
   ## Buffers opened with a relative path (e.g. `moe foo.nim`) store that
   ## relative path verbatim, whereas WorkspaceEdit URIs always decode to an
-  ## absolute path. Without normalization the two never match, so the open
-  ## buffer is mistaken for an unopened file and its edits are written to disk
-  ## instead of the in-memory buffer.
-  normalizedPath(absolutePath(a)) == normalizedPath(absolutePath(b))
+  ## absolute path. Without normalization the two never match, so an edit for
+  ## an open buffer is mistaken for one targeting a file nobody has open.
+  canonicalPath(a) == canonicalPath(b)
 
 proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
   ## Find buffer index by file path
@@ -1286,106 +1285,6 @@ proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
     if buffer.filePath.isSome and samePath(buffer.filePath.get, path):
       return some(i)
   return none(int)
-
-type PreparedFileEdit = object
-  ## An unopened file loaded and edited in memory, not yet written back.
-  ## Preparing every target before writing any lets a file that cannot be
-  ## edited -- undecodable, unreadable, positions out of range -- be found
-  ## before the first overwrite. The cost is holding every target in memory at
-  ## once, and a read-to-write gap spanning the whole edit.
-  path: string
-  buffer: TextBuffer
-  originalContent: string
-  needsBackup: bool
-
-proc prepareEditsToFile(
-    path: string,
-    edits: seq[TextEdit],
-    backupConfig: Option[AutoBackupConfig] = none(AutoBackupConfig),
-): Result[PreparedFileEdit, string] =
-  ## Load a file that is not currently open and apply `edits` in memory.
-  ## Touches nothing on disk; `commitPreparedFileEdit` writes the result.
-  var needsBackup = false
-  var originalContent = ""
-  var fileExistedForBackup = false
-  if backupConfig.isSome:
-    if not backupConfig.get.enable:
-      needsBackup = false
-    else:
-      # Single read captures content+existence atomically (avoids TOCTOU and
-      # empty-file "\n" normalization); no backup needed if file absent.
-      try:
-        originalContent = readFile(path)
-        needsBackup = true
-        fileExistedForBackup = true
-      except CatchableError as e:
-        if fileExists(path):
-          # Unreadable but exists — abort to preserve original
-          return err(
-            "Failed to backup " & sanitizeEditPath(path) & ": " & sanitizeEditPath(
-              e.msg
-            ) & " (overwrite aborted to preserve original)"
-          )
-        else:
-          needsBackup = false
-          fileExistedForBackup = false
-
-  let tempBuffer = newTextBuffer()
-  var loadResult: Result[(), string]
-  if fileExistedForBackup:
-    # Reuse backed-up content to avoid second read (TOCTOU) and keep consistency.
-    loadResult = tempBuffer.loadFileWithContent(path, originalContent)
-  else:
-    loadResult = tempBuffer.loadFile(path)
-  if loadResult.isErr:
-    return err("Failed to load file: " & loadResult.error)
-
-  let applyResult = applyTextEdits(tempBuffer, edits)
-  if applyResult.isErr:
-    return err(applyResult.error)
-
-  return ok(
-    PreparedFileEdit(
-      path: path,
-      buffer: tempBuffer,
-      originalContent: originalContent,
-      needsBackup: needsBackup,
-    )
-  )
-
-proc commitPreparedFileEdit(
-    prepared: PreparedFileEdit, backupConfig: Option[AutoBackupConfig]
-): Result[void, string] =
-  ## Back up and write out what `prepareEditsToFile` built. This is the first
-  ## step that touches the file, so a caller wanting all-or-nothing prepares
-  ## every target before committing any.
-  let path = prepared.path
-
-  if prepared.needsBackup:
-    let backupRes = backupBuffer(some(path), prepared.originalContent, backupConfig.get)
-    if backupRes.isErr:
-      if backupRes.error == NoChangesSinceLastBackupError:
-        discard
-      elif backupRes.error == DirExcludedFromBackupError:
-        logWarn("lsp", "Skipped backup for excluded path " & sanitizeEditPath(path))
-        return err(
-          "Failed to backup " & sanitizeEditPath(path) & ": " &
-            sanitizeEditPath(backupRes.error) &
-            " (overwrite aborted to preserve original)"
-        )
-      else:
-        # Abort to keep original recoverable.
-        return err(
-          "Failed to backup " & sanitizeEditPath(path) & ": " &
-            sanitizeEditPath(backupRes.error) &
-            " (overwrite aborted to preserve original)"
-        )
-
-  let saveResult = prepared.buffer.saveFile(path)
-  if saveResult.isErr:
-    return err("Failed to save file: " & saveResult.error)
-
-  return ok()
 
 proc collectWorkspaceEditPaths*(edit: WorkspaceEdit): seq[string] =
   ## All target file paths of a WorkspaceEdit, in application order.
@@ -1464,22 +1363,40 @@ const BufferStateInconsistentSuffix* = " (buffer state may be inconsistent)"
   ## applyWorkspaceEditFromServer (editor_lsp.nim) detects this same
   ## constant, so the phrase must never be rewritten in only one place.
 
+proc isBefore(a, b: Position): bool =
+  ## True if `a` comes strictly before `b` in the document.
+  a.line < b.line or (a.line == b.line and a.character < b.character)
+
+proc overlaps(a, b: seq[TextEdit]): bool =
+  ## True if an edit in `a` and one in `b` cover common text, or start at the
+  ## same position. Merged groups are applied back-to-front in one pass, so only
+  ## edits clear of each other have a defined combined result.
+  for ea in a:
+    for eb in b:
+      if ea.range.start == eb.range.start:
+        return true
+      if isBefore(eb.range.start, ea.range.`end`) and
+          isBefore(ea.range.start, eb.range.`end`):
+        return true
+  false
+
 proc applyWorkspaceEdit*(
     buffers: var seq[TextBuffer],
     edit: WorkspaceEdit,
     transactionName: string = "Rename",
-    allowUnopenedFileWrites: bool = true,
-    backupConfig: Option[AutoBackupConfig] = none(AutoBackupConfig),
 ): Result[WorkspaceEditResult, string] =
-  ## Apply a WorkspaceEdit to multiple buffers
-  ## Returns which buffers/files were modified
-  ## For open buffers: uses transactions for undo support
-  ## For unopened files: loads, modifies, and saves directly
+  ## Apply a WorkspaceEdit to the open buffers holding its target files.
+  ## Returns which buffers were modified.
   ##
-  ## `allowUnopenedFileWrites` is true for user-initiated flows (rename) and
-  ## false for server-initiated workspace/applyEdit: a server must not write
-  ## files the user has not opened, and refusing the whole edit avoids
-  ## half-applied outcomes.
+  ## Every target must already be open: each file is edited inside a
+  ## transaction, so the change lands in that buffer's undo history. A target
+  ## no buffer holds refuses the whole edit rather than being rewritten on
+  ## disk, which nothing could undo. Callers that mean to edit unopened files
+  ## give them a buffer first; a server-initiated `workspace/applyEdit` must
+  ## not reach such a file at all.
+  ##
+  ## Nothing here writes to disk: the buffers are left modified for the user
+  ## to save.
   ##
   ## Note: Per LSP spec, documentChanges takes precedence over changes.
   ## If both are present, only documentChanges is used.
@@ -1495,7 +1412,32 @@ proc applyWorkspaceEdit*(
     return err(sanitizeEditPath(rejectReason.get) & "; no edits applied")
   var modifiedCount = 0
   var openBuffersToModify: seq[tuple[bufferIdx: int, edits: seq[TextEdit]]] = @[]
-  var unopenedFilesToModify: seq[tuple[path: string, edits: seq[TextEdit]]] = @[]
+
+  # Two edit groups aimed at one file are positioned against the same starting
+  # text, so merge them into the single back-to-front pass `applyTextEdits`
+  # already does. Overlapping ranges have no well-defined combined result and
+  # refuse the whole edit instead.
+  var targetIndexes = initTable[string, int]()
+
+  template collectTarget(path: string, newEdits: seq[TextEdit]): untyped =
+    let key = canonicalPath(path)
+    if key in targetIndexes:
+      let idx = targetIndexes[key]
+      if overlaps(openBuffersToModify[idx].edits, newEdits):
+        return err(
+          "Edit targets " & sanitizeEditPath(path) &
+            " more than once with overlapping ranges; no edits applied"
+        )
+      openBuffersToModify[idx].edits.add(newEdits)
+    else:
+      let bufferIdxOpt = findBufferByPath(buffers, path)
+      if bufferIdxOpt.isNone:
+        return err(
+          "Edit targets a file not open in the editor: " & sanitizeEditPath(path) &
+            "; edit discarded"
+        )
+      targetIndexes[key] = openBuffersToModify.len
+      openBuffersToModify.add((bufferIdxOpt.get, newEdits))
 
   # Per LSP specification, documentChanges takes precedence over changes
   if edit.documentChanges.isSome:
@@ -1504,38 +1446,17 @@ proc applyWorkspaceEdit*(
       let pathRes = validateLocalFileUri(docEdit.textDocument.uri)
       if pathRes.isErr:
         return err(sanitizeEditPath(pathRes.error))
-      let path = pathRes.get
-      let bufferIdxOpt = findBufferByPath(buffers, path)
-      if bufferIdxOpt.isSome:
-        openBuffersToModify.add((bufferIdxOpt.get, docEdit.edits))
-      else:
-        if not allowUnopenedFileWrites:
-          return err(
-            "Server edit targets a file not open in the editor: " &
-              sanitizeEditPath(path) & "; edit discarded"
-          )
-        unopenedFilesToModify.add((path, docEdit.edits))
+      collectTarget(pathRes.get, docEdit.edits)
   elif edit.changes.isSome:
     # Handle changes field (uri -> seq[TextEdit]) only if documentChanges is absent
     for uri, edits in edit.changes.get:
       let pathRes = validateLocalFileUri(uri)
       if pathRes.isErr:
         return err(sanitizeEditPath(pathRes.error))
-      let path = pathRes.get
-      let bufferIdxOpt = findBufferByPath(buffers, path)
-      if bufferIdxOpt.isSome:
-        openBuffersToModify.add((bufferIdxOpt.get, edits))
-      else:
-        if not allowUnopenedFileWrites:
-          return err(
-            "Server edit targets a file not open in the editor: " &
-              sanitizeEditPath(path) & "; edit discarded"
-          )
-        unopenedFilesToModify.add((path, edits))
+      collectTarget(pathRes.get, edits)
 
-  # Everything knowable without touching a file is refused here, before the
-  # first buffer is modified: a rejection discovered midway would leave the
-  # earlier targets rewritten for an edit that never completed.
+  # Refuse everything knowable without touching a buffer before modifying the
+  # first one: a rejection found midway would leave earlier targets rewritten.
   for (bufferIdx, _) in openBuffersToModify:
     if not buffers[bufferIdx].isLspEligible:
       let name =
@@ -1545,40 +1466,9 @@ proc applyWorkspaceEdit*(
           "buffer"
       return err(RawBufferLspRejection & ": " & name & "; no edits applied")
 
-  # Two edit groups aimed at one unopened file would each be prepared from the
-  # same on-disk content, so committing them in order would discard the first.
-  # Their positions are only well defined applied one after the other, which
-  # preparing every file up front cannot do.
-  var seenUnopenedPaths = initHashSet[string]()
-  for (path, _) in unopenedFilesToModify:
-    let key = canonicalPath(path)
-    if key in seenUnopenedPaths:
-      return err(
-        "Server edit targets " & sanitizeEditPath(path) &
-          " more than once; no edits applied"
-      )
-    seenUnopenedPaths.incl(key)
-
-  if unopenedFilesToModify.len > 0 and backupConfig.isNone:
-    return err("backupConfig required for unopened file writes; no edits applied")
-
-  # Load and edit every unopened file in memory first. A file that does not
-  # decode, will not load, or does not fit the server's positions is found here,
-  # with nothing written yet.
-  var preparedFiles: seq[PreparedFileEdit] = @[]
-  for (path, edits) in unopenedFilesToModify:
-    let prepared = prepareEditsToFile(path, edits, backupConfig)
-    if prepared.isErr:
-      return err(
-        "Failed to modify " & sanitizeEditPath(path) & ": " &
-          sanitizeEditPath(prepared.error) & "; no edits applied"
-      )
-    preparedFiles.add(prepared.get)
-
   # Track successfully modified files for error reporting
   var modifiedBufferPaths: seq[string] = @[]
   var modifiedBufferIndexes: seq[int] = @[]
-  var modifiedFilePaths: seq[string] = @[]
 
   # Apply edits to open buffers with transactions for undo support
   for (bufferIdx, edits) in openBuffersToModify:
@@ -1626,35 +1516,9 @@ proc applyWorkspaceEdit*(
     if buffer.filePath.isSome:
       modifiedBufferPaths.add(buffer.filePath.get)
 
-  # Write out the prepared files. What remains are backup and write failures,
-  # which can still leave the edit half-applied; the error below names what was
-  # already modified so the user can recover it.
-  for prepared in preparedFiles:
-    let path = prepared.path
-    let applyResult = commitPreparedFileEdit(prepared, backupConfig)
-    if applyResult.isErr:
-      let alreadyModified = modifiedBufferPaths.len + modifiedFilePaths.len
-      let errMsg =
-        if alreadyModified > 0:
-          var modifiedList = modifiedBufferPaths & modifiedFilePaths
-          "Failed to modify " & sanitizeEditPath(path) & ": " &
-            sanitizeEditPath(applyResult.error) & " (Warning: " & $alreadyModified &
-            " file(s) already modified: " & formatEditPathList(modifiedList) &
-            "; restore unopened files from backup and open buffers via undo if needed)"
-        else:
-          "Failed to modify " & sanitizeEditPath(path) & ": " &
-            sanitizeEditPath(applyResult.error)
-      logError("lsp", errMsg)
-      return err(errMsg)
-    logInfo("lsp", "Modified unopened file: " & sanitizeEditPath(path))
-    modifiedCount += 1
-    modifiedFilePaths.add(path)
-
   return ok(
     WorkspaceEditResult(
-      modifiedCount: modifiedCount,
-      modifiedBufferIndexes: modifiedBufferIndexes,
-      modifiedFilePaths: modifiedFilePaths,
+      modifiedCount: modifiedCount, modifiedBufferIndexes: modifiedBufferIndexes
     )
   )
 

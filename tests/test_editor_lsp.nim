@@ -25,6 +25,7 @@ import pkg/[chronos, results]
 
 import ../src/moepkg/[editor, buffer, config, config_loader, message_log, types]
 import ../src/moepkg/editor_lsp {.all.}
+import ../src/moepkg/editor_lsp_rename {.all.}
 import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/lsp_service
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -1050,7 +1051,7 @@ suite "lsp_integration - applyWorkspaceEdit sanitization":
     let edit = lspTypes.WorkspaceEdit(
       changes: some(changes), documentChanges: none(seq[lspTypes.TextDocumentEdit])
     )
-    let res = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    let res = applyWorkspaceEdit(buffers, edit)
     check res.isErr
     check not res.error.contains("\n")
     check res.error.contains("?")
@@ -1112,24 +1113,97 @@ suite "editor_lsp - helper - buildModifiedPathSuffix":
     let b2 = newTextBuffer()
     b2.filePath = some(p2)
     e.buffers = @[b1, b2]
-    let res = WorkspaceEditResult(
-      modifiedCount: 2, modifiedBufferIndexes: @[0, 1], modifiedFilePaths: @[]
-    )
+    let res = WorkspaceEditResult(modifiedCount: 2, modifiedBufferIndexes: @[0, 1])
     let suffix = e.buildModifiedPathSuffix(res)
     check suffix.contains("a.nim")
     check suffix.contains("b.nim")
     check suffix.startsWith(": ")
-  test "buildModifiedPathSuffix handles mixed and empty":
+  test "buildModifiedPathSuffix handles empty and sanitizes control characters":
     let e = createTestEditor()
-    let empty = WorkspaceEditResult(
-      modifiedCount: 0, modifiedBufferIndexes: @[], modifiedFilePaths: @[]
-    )
+    let empty = WorkspaceEditResult(modifiedCount: 0, modifiedBufferIndexes: @[])
     check e.buildModifiedPathSuffix(empty) == ""
-    let withBad = WorkspaceEditResult(
-      modifiedCount: 1,
-      modifiedBufferIndexes: @[],
-      modifiedFilePaths: @["/tmp/a\nb.nim"],
-    )
+    let bad = newTextBuffer()
+    bad.filePath = some("/tmp/a\nb.nim")
+    e.buffers = @[bad]
+    let withBad = WorkspaceEditResult(modifiedCount: 1, modifiedBufferIndexes: @[0])
     let s = e.buildModifiedPathSuffix(withBad)
     check s.contains("?")
     check not s.contains("\n")
+
+suite "editor_lsp - recoverFromFailedWorkspaceEdit":
+  let tmpDir = getTempDir() / "moe_test_recover_failed_edit"
+
+  setup:
+    removeDir(tmpDir)
+    createDir(tmpDir)
+
+  teardown:
+    removeDir(tmpDir)
+
+  proc editTargeting(path: string): lspTypes.WorkspaceEdit =
+    var changes = initTable[string, seq[lspTypes.TextEdit]]()
+    changes[pathToUri(path)] =
+      @[lspTypes.TextEdit(`range`: lspTypes.newRange(0, 0, 0, 1), newText: "x")]
+    lspTypes.WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[lspTypes.TextDocumentEdit])
+    )
+
+  test "re-syncs a target the half-applied edit left modified":
+    # applyWorkspaceEdit commits buffer by buffer, so a failure partway through
+    # leaves earlier targets modified but unsynced.
+    let path = tmpDir / "modified.nim"
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "hello").isOk
+    e.lastLspSyncAttempts[buf.id] = 0
+
+    e.recoverFromFailedWorkspaceEdit(
+      editTargeting(path), "Failed to apply edits: boom", "rename"
+    )
+
+    check e.lastLspSyncAttempts[buf.id] == buf.contentVersion
+    check buf.contentVersion > 0
+
+  test "skips the re-sync when the rollback itself failed":
+    # Partially reverted text must not become the server's new baseline.
+    let path = tmpDir / "inconsistent.nim"
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.filePath = some(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "hello").isOk
+    e.lastLspSyncAttempts[buf.id] = 0
+
+    e.recoverFromFailedWorkspaceEdit(
+      editTargeting(path),
+      "Failed to apply edits: boom" & BufferStateInconsistentSuffix,
+      "rename",
+    )
+
+    check e.lastLspSyncAttempts[buf.id] == 0
+
+  test "leaves a buffer outside the edit's targets alone":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.filePath = some(tmpDir / "untouched.nim")
+    check buf.insertText(BufferPosition(line: 0, column: 0), "hello").isOk
+    e.lastLspSyncAttempts[buf.id] = 0
+
+    e.recoverFromFailedWorkspaceEdit(
+      editTargeting(tmpDir / "other.nim"), "Failed to apply edits: boom", "rename"
+    )
+
+    check e.lastLspSyncAttempts[buf.id] == 0
+
+  test "re-clamps a cursor left past a shrunk buffer's end":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.filePath = some(tmpDir / "shrunk.nim")
+    check buf.insertText(BufferPosition(line: 0, column: 0), "hello").isOk
+    e.activeWindow.cursor = BufferPosition(line: 99, column: 99)
+
+    e.recoverFromFailedWorkspaceEdit(
+      editTargeting(tmpDir / "shrunk.nim"), "Failed to apply edits: boom", "rename"
+    )
+
+    check e.activeWindow.cursor.line < buf.len

@@ -26,7 +26,7 @@ import
 import pkg/results
 
 import ../src/moepkg/lsp_integration {.all.}
-import ../src/moepkg/[buffer, message_log, unicode_utils, backup]
+import ../src/moepkg/[buffer, message_log, unicode_utils]
 import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/lsp/protocol/types
@@ -2114,52 +2114,46 @@ suite "LspIntegration - applyWorkspaceEdit":
     check buffer.getLine(0) == "hello"
 
   test "applyWorkspaceEdit failure reports already-modified buffers":
-    # One open buffer succeeds, then an unopened file fails to load: the err
-    # must disclose that earlier targets were already modified (the warning
-    # path rewritten to raise-and-convert).
-    let backupDir = getTempDir() / "moe_test_backup_already_modified"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let backupConfigForTest = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    let buffer = newTextBuffer("hello", some(tmpDir / "ok_modify.txt"))
-    var buffers = @[buffer]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(tmpDir / "ok_modify.txt")] = @[
-      TextEdit(
-        range: Range(
-          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
-        ),
-        newText: "HELLO",
-      )
-    ]
-    # Nonexistent directory: loadFile fails, so no file is ever created.
-    changes[pathToUri(tmpDir / "moe_nonexistent_dir" / "b.txt")] = @[
-      TextEdit(
-        range: Range(
-          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
-        ),
-        newText: "x",
-      )
-    ]
+    # The first target is edited, then the second fails to apply: the err must
+    # disclose that an earlier buffer was already modified (the warning path
+    # rewritten to raise-and-convert). documentChanges fixes the order.
+    let okBuffer = newTextBuffer("hello", some(tmpDir / "ok_modify.txt"))
+    let failBuffer = newTextBuffer("world", some(tmpDir / "fail_modify.txt"))
+    var buffers = @[okBuffer, failBuffer]
     let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+      changes: none(Table[string, seq[TextEdit]]),
+      documentChanges: some(
+        @[
+          TextDocumentEdit(
+            textDocument: OptionalVersionedTextDocumentIdentifier(
+              uri: pathToUri(tmpDir / "ok_modify.txt"), version: some(1)
+            ),
+            edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "HELLO")],
+          ),
+          TextDocumentEdit(
+            textDocument: OptionalVersionedTextDocumentIdentifier(
+              uri: pathToUri(tmpDir / "fail_modify.txt"), version: some(1)
+            ),
+            edits: @[
+              TextEdit(
+                range: Range(
+                  start: Position(line: -1, character: 0),
+                  `end`: Position(line: -1, character: 0),
+                ),
+                newText: "x",
+              )
+            ],
+          ),
+        ]
+      ),
     )
-    let result =
-      applyWorkspaceEdit(buffers, edit, backupConfig = some(backupConfigForTest))
+    let result = applyWorkspaceEdit(buffers, edit)
     check result.isErr
-    check "Failed to modify" in result.error
-    check "1 file(s) already modified" in result.error
+    check "Failed to apply edits" in result.error
+    check "1 buffer(s) already modified" in result.error
     check "ok_modify.txt" in result.error
-    check buffer.getLine(0) == "HELLO"
+    check okBuffer.getLine(0) == "HELLO"
+    check failBuffer.getLine(0) == "world"
 
   test "applyWorkspaceEdit with changes field":
     var buffers = @[newTextBuffer("hello", some(tmpDir / "test.txt"))]
@@ -2254,7 +2248,6 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.isOk
     check result.get.modifiedCount == 1
     check result.get.modifiedBufferIndexes == @[0]
-    check result.get.modifiedFilePaths.len == 0
     check buffers[0].getTextString() == "baz bar"
 
   test "applyWorkspaceEdit matches a relative-path buffer via documentChanges":
@@ -2272,7 +2265,6 @@ suite "LspIntegration - applyWorkspaceEdit":
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
     check result.get.modifiedBufferIndexes == @[0]
-    check result.get.modifiedFilePaths.len == 0
     check buffers[0].getTextString() == "foo baz"
 
   test "applyWorkspaceEdit with custom transaction name":
@@ -2288,46 +2280,6 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.isOk
     check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "new text"
-
-  test "applyWorkspaceEdit refuses before writing when an unopened target is raw":
-    # A rename touching several files must not rewrite the first ones and then
-    # discover that a later target holds undecodable bytes.
-    let backupDir = getTempDir() / "moe_test_backup_raw_unopened"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let backupConfigForTest = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    let buffer = newTextBuffer("hello", some(tmpDir / "raw_peer_open.txt"))
-    var buffers = @[buffer]
-    let rawPath = tmpDir / "raw_peer_undecodable.bin"
-    let rawBytes = "\xFF\xFE\x00\xD8\x41\x00"
-    writeFile(rawPath, rawBytes)
-    defer:
-      removeFile(rawPath)
-
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(tmpDir / "raw_peer_open.txt")] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "HELLO")]
-    changes[pathToUri(rawPath)] = @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-
-    let result =
-      applyWorkspaceEdit(buffers, edit, backupConfig = some(backupConfigForTest))
-
-    check result.isErr
-    check "no edits applied" in result.error
-    check buffer.getLine(0) == "hello"
-    check readFile(rawPath) == rawBytes
 
   test "applyWorkspaceEdit refuses before writing when an open target is raw":
     let bufferA = newTextBuffer("hello", some(tmpDir / "raw_open_peer.txt"))
@@ -2351,85 +2303,77 @@ suite "LspIntegration - applyWorkspaceEdit":
     check bufferA.getLine(0) == "hello"
     check bufferB.getLine(0) == "world"
 
-  test "applyWorkspaceEdit writes unopened files when allowed (default)":
-    # User-initiated flows (rename) may still touch files the user has not
-    # opened: the default `allowUnopenedFileWrites = true` preserves that.
-    let backupDir = getTempDir() / "moe_test_backup_default_unopened"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let backupConfigForTest = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    let targetPath = tmpDir / "unopened_default.txt"
-    writeFile(targetPath, "hello")
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let result =
-      applyWorkspaceEdit(buffers, edit, backupConfig = some(backupConfigForTest))
-    check result.isOk
-    check result.get.modifiedFilePaths == @[targetPath]
-    check readFile(targetPath) == "world"
-
-  test "applyWorkspaceEdit refuses two edit groups aimed at one unopened file":
-    # Preparing both groups from the same on-disk content and committing them
-    # in order would silently drop the first, so the whole edit is refused.
+  test "applyWorkspaceEdit refuses two overlapping edit groups aimed at one file":
+    # Overlapping groups have no defined combined result: merging them would
+    # apply both to the same text and silently corrupt the buffer.
     # Distinct URI spellings of one file collapse here the same way.
-    let backupDir = getTempDir() / "moe_test_backup_dup_unopened"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let backupConfigForTest = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    let targetPath = tmpDir / "unopened_dup.txt"
-    writeFile(targetPath, "hello")
-    let docEdit = TextDocumentEdit(
-      textDocument: OptionalVersionedTextDocumentIdentifier(
-        uri: pathToUri(targetPath), version: some(1)
-      ),
-      edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")],
-    )
-    let secondDocEdit = TextDocumentEdit(
-      textDocument: OptionalVersionedTextDocumentIdentifier(
-        uri: pathToUri(targetPath), version: some(2)
-      ),
-      edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "other")],
-    )
+    let targetPath = tmpDir / "dup_target.txt"
+    let buffer = newTextBuffer("hello", some(targetPath))
+    var buffers = @[buffer]
     let edit = WorkspaceEdit(
       changes: none(Table[string, seq[TextEdit]]),
-      documentChanges: some(@[docEdit, secondDocEdit]),
+      documentChanges: some(
+        @[
+          TextDocumentEdit(
+            textDocument: OptionalVersionedTextDocumentIdentifier(
+              uri: pathToUri(targetPath), version: some(1)
+            ),
+            edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")],
+          ),
+          TextDocumentEdit(
+            textDocument: OptionalVersionedTextDocumentIdentifier(
+              uri: pathToUri(tmpDir / "." / "dup_target.txt"), version: some(2)
+            ),
+            edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "other")],
+          ),
+        ]
+      ),
     )
 
-    let result =
-      applyWorkspaceEdit(buffers, edit, backupConfig = some(backupConfigForTest))
+    let result = applyWorkspaceEdit(buffers, edit)
 
     check result.isErr
     check "more than once" in result.error
     check "no edits applied" in result.error
-    check readFile(targetPath) == "hello"
+    check buffer.getLine(0) == "hello"
 
-  test "applyWorkspaceEdit refuses unopened files when disallowed":
-    # Server-initiated applyEdit must not write files the user has not opened:
-    # the whole edit is refused and nothing is modified.
+  test "applyWorkspaceEdit merges two disjoint edit groups aimed at one file":
+    # The spec lets a server split one file's edits across documentChanges
+    # entries. Both groups are positioned against the same starting text, so
+    # they are one set of edits applied back-to-front.
+    let targetPath = tmpDir / "merge_target.txt"
+    let buffer = newTextBuffer("hello world", some(targetPath))
+    var buffers = @[buffer]
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]),
+      documentChanges: some(
+        @[
+          TextDocumentEdit(
+            textDocument: OptionalVersionedTextDocumentIdentifier(
+              uri: pathToUri(targetPath), version: some(1)
+            ),
+            edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "HI")],
+          ),
+          TextDocumentEdit(
+            textDocument: OptionalVersionedTextDocumentIdentifier(
+              uri: pathToUri(tmpDir / "." / "merge_target.txt"), version: some(1)
+            ),
+            edits: @[TextEdit(range: newRange(0, 6, 0, 11), newText: "THERE")],
+          ),
+        ]
+      ),
+    )
+
+    let result = applyWorkspaceEdit(buffers, edit)
+
+    check result.isOk
+    # One target, so one modified file even though two groups named it.
+    check result.get.modifiedCount == 1
+    check buffer.getLine(0) == "HI THERE"
+
+  test "applyWorkspaceEdit refuses a file no buffer holds":
+    # Nothing is rewritten on disk: a target no buffer holds refuses the whole
+    # edit, and nothing is modified.
     var buffers: seq[TextBuffer] = @[]
     let targetPath = tmpDir / "unopened_disallowed.txt"
     writeFile(targetPath, "hello")
@@ -2439,13 +2383,13 @@ suite "LspIntegration - applyWorkspaceEdit":
     let edit = WorkspaceEdit(
       changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
     )
-    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    let result = applyWorkspaceEdit(buffers, edit)
     check result.isErr
     check result.error.contains("not open in the editor")
     check result.error.contains(targetPath)
     check readFile(targetPath) == "hello"
 
-  test "applyWorkspaceEdit refuses mixed targets when disallowed, nothing half-applied":
+  test "applyWorkspaceEdit refuses mixed targets, nothing half-applied":
     # An edit targeting both an open buffer and an unopened file must be
     # refused whole: the open buffer is left untouched and the unopened file
     # is not written.
@@ -2462,13 +2406,13 @@ suite "LspIntegration - applyWorkspaceEdit":
     let edit = WorkspaceEdit(
       changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
     )
-    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    let result = applyWorkspaceEdit(buffers, edit)
     check result.isErr
     check result.error.contains(closedPath)
     check buffers[0].getTextString() == "aaa"
     check readFile(closedPath) == "bbb"
 
-  test "applyWorkspaceEdit refuses unopened files via documentChanges when disallowed":
+  test "applyWorkspaceEdit refuses a file no buffer holds via documentChanges":
     # The documentChanges branch must refuse an unopened target just like the
     # changes branch: the whole edit is discarded and nothing is written.
     var buffers: seq[TextBuffer] = @[]
@@ -2483,13 +2427,13 @@ suite "LspIntegration - applyWorkspaceEdit":
     let edit = WorkspaceEdit(
       changes: none(Table[string, seq[TextEdit]]), documentChanges: some(@[docEdit])
     )
-    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    let result = applyWorkspaceEdit(buffers, edit)
     check result.isErr
     check result.error.contains("not open in the editor")
     check result.error.contains(targetPath)
     check readFile(targetPath) == "hello"
 
-  test "applyWorkspaceEdit refuses mixed documentChanges targets when disallowed, nothing half-applied":
+  test "applyWorkspaceEdit refuses mixed documentChanges targets, nothing half-applied":
     # An edit via documentChanges targeting both an open buffer and an unopened
     # file must be refused whole: the open buffer is left untouched and the
     # unopened file is not written.
@@ -2515,7 +2459,7 @@ suite "LspIntegration - applyWorkspaceEdit":
     let edit = WorkspaceEdit(
       changes: none(Table[string, seq[TextEdit]]), documentChanges: some(docChanges)
     )
-    let result = applyWorkspaceEdit(buffers, edit, allowUnopenedFileWrites = false)
+    let result = applyWorkspaceEdit(buffers, edit)
     check result.isErr
     check result.error.contains(closedPath)
     check buffers[0].getTextString() == "aaa"
@@ -2743,7 +2687,6 @@ suite "LspIntegration - applyWorkspaceEdit":
     check 0 in result.get.modifiedBufferIndexes
     check 2 in result.get.modifiedBufferIndexes
     check 1 notin result.get.modifiedBufferIndexes
-    check result.get.modifiedFilePaths.len == 0
 
   test "collectWorkspaceEditPaths from changes field":
     var changes = initTable[string, seq[TextEdit]]()
@@ -4076,386 +4019,3 @@ suite "LspIntegration - hasStaleServerEditTarget":
     check not lsp.hasStaleServerEditTarget(
       @[target, other], editFor(tmpDir / "a.nim"), syncedAt(target)
     )
-
-suite "LspIntegration - applyWorkspaceEdit with backup":
-  test "backup is created for unopened file when backupConfig is provided":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_create"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    let config = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res.isOk
-    check readFile(targetPath) == "world"
-    # Backup should contain original "hello"
-    let backupFiles = getBackupFiles(backupDir, targetPath)
-    check backupFiles.len == 1
-    let bdir = getBackupDirForSource(backupDir, targetPath)
-    check bdir.len > 0
-    let backupContent = readFile(bdir / backupFiles[0])
-    check backupContent == "hello"
-
-  test "NoChangesSinceLastBackupError is ignored and edit still succeeds":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_nochange"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_nochange.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    let config = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    # First edit creates backup with "hello"
-    let res1 = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res1.isOk
-    check readFile(targetPath) == "world"
-    # Restore file to original "hello" without creating a new backup
-    writeFile(targetPath, "hello")
-    # Second edit with same original "hello" should hit NoChangesSinceLastBackupError
-    # but still succeed (discard path)
-    let res2 = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res2.isOk
-    check readFile(targetPath) == "world"
-    # Still only one backup file (second was discarded)
-    let backupFiles = getBackupFiles(backupDir, targetPath)
-    check backupFiles.len == 1
-
-  test "excluded directory causes backup to abort and file stays unmodified":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_excluded"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let excludedDir = getTempDir() / "moe_excluded_dir"
-    createDir(excludedDir)
-    defer:
-      if dirExists(excludedDir):
-        removeDir(excludedDir)
-    let targetPath = excludedDir / "target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    let config = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[excludedDir],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res.isErr
-    check DirExcludedFromBackupError in res.error or "Directory excluded" in res.error
-    check readFile(targetPath) == "hello"
-
-  test "non-existent file is created without creating a spurious backup":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_nonexist"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_nonexist_target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    let config = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "created")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res.isOk
-    check fileExists(targetPath)
-    # New file inherits endOfLine=true, so saved content has a trailing newline.
-    check readFile(targetPath).strip() == "created"
-    # No backup should have been created for a file that did not exist before
-    let backupFiles = getBackupFiles(backupDir, targetPath)
-    check backupFiles.len == 0
-    let bdir = getBackupDirForSource(backupDir, targetPath)
-    check bdir == ""
-
-  test "empty existing file backup preserves empty content":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_empty"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_empty_target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "")
-    let config = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 0), newText: "x")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res.isOk
-    let backupFiles = getBackupFiles(backupDir, targetPath)
-    check backupFiles.len == 1
-    let bdir = getBackupDirForSource(backupDir, targetPath)
-    check bdir.len > 0
-    let backupContent = readFile(bdir / backupFiles[0])
-    # Empty file must be backed up as "" not "\n"
-    check backupContent == ""
-
-  test "without backupConfig unopened write is rejected (wiring guard)":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_nowiring"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_nowiring_target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    # Intentionally do NOT pass backupConfig — this is the regression path if
-    # editor_lsp.nim:491 forgets `backupConfig = some(e.config.autoBackup)`.
-    # The guard must fail fast instead of silently skipping backup.
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit)
-    check res.isErr
-    check "backupConfig required" in res.error
-    check readFile(targetPath) == "hello"
-    let backupFiles = getBackupFiles(backupDir, targetPath)
-    check backupFiles.len == 0
-    check getBackupDirForSource(backupDir, targetPath) == ""
-
-  test "without backupConfig open buffer edit still succeeds (no unopened write)":
-    let targetPath = getTempDir() / "moe_test_backup_nowiring_open.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    var buffers: seq[TextBuffer] = @[]
-    let buf = newTextBuffer()
-    discard buf.loadFile(targetPath)
-    buffers.add(buf)
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit)
-    check res.isOk
-    check buffers[0].getLine(0) == "world"
-
-  test "generic backup failure aborts and preserves original":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_generic_fail"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    if fileExists(backupDir):
-      removeFile(backupDir)
-    # Block the backup directory by creating a file where a directory is expected
-    writeFile(backupDir, "blocking")
-    defer:
-      if fileExists(backupDir):
-        removeFile(backupDir)
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_generic_fail_target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    let config = AutoBackupConfig(
-      enable: true,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res.isErr
-    check "Failed to backup" in res.error
-    check "Failed to create backup directory" in res.error or
-      "overwrite aborted" in res.error
-    check readFile(targetPath) == "hello"
-
-  test "enable=false skips backup and edit still succeeds":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_disabled"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_disabled_target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    let config = AutoBackupConfig(
-      enable: false,
-      backupDir: some(backupDir),
-      idleTime: 1,
-      interval: 1,
-      dirToExclude: @[],
-    )
-    var buffers: seq[TextBuffer] = @[]
-    var changes = initTable[string, seq[TextEdit]]()
-    changes[pathToUri(targetPath)] =
-      @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-    let edit = WorkspaceEdit(
-      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-    )
-    let res = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-    check res.isOk
-    check readFile(targetPath) == "world"
-    # No backup when disabled
-    check getBackupFiles(backupDir, targetPath).len == 0
-    check getBackupDirForSource(backupDir, targetPath) == ""
-
-  test "unreadable existing file aborts overwrite and preserves original":
-    let backupDir = getTempDir() / "moe_test_lsp_backup_unreadable"
-    if dirExists(backupDir):
-      removeDir(backupDir)
-    defer:
-      if dirExists(backupDir):
-        removeDir(backupDir)
-    let targetPath = getTempDir() / "moe_test_backup_unreadable_target.txt"
-    if fileExists(targetPath):
-      removeFile(targetPath)
-    defer:
-      # Restore permission before removal so defer can clean up
-      try:
-        setFilePermissions(targetPath, {fpUserRead, fpUserWrite})
-      except:
-        discard
-      if fileExists(targetPath):
-        removeFile(targetPath)
-    writeFile(targetPath, "hello")
-    # Make file unreadable (owner has no permissions)
-    setFilePermissions(targetPath, {})
-    # If running as root, readFile will still succeed despite 000; skip in that case
-    var canStillRead = false
-    try:
-      discard readFile(targetPath)
-      canStillRead = true
-    except CatchableError:
-      discard
-    if canStillRead:
-      # Restore and skip — environment is root/can read anyway, branch not testable here
-      setFilePermissions(targetPath, {fpUserRead, fpUserWrite})
-      skip()
-    else:
-      let config = AutoBackupConfig(
-        enable: true,
-        backupDir: some(backupDir),
-        idleTime: 1,
-        interval: 1,
-        dirToExclude: @[],
-      )
-      var buffers: seq[TextBuffer] = @[]
-      var changes = initTable[string, seq[TextEdit]]()
-      changes[pathToUri(targetPath)] =
-        @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")]
-      let edit = WorkspaceEdit(
-        changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
-      )
-      let res = applyWorkspaceEdit(buffers, edit, backupConfig = some(config))
-      check res.isErr
-      check "Failed to backup" in res.error
-      check "overwrite aborted" in res.error
-      # Restore permission to verify content unchanged
-      setFilePermissions(targetPath, {fpUserRead, fpUserWrite})
-      check readFile(targetPath) == "hello"
-      check getBackupFiles(backupDir, targetPath).len == 0

@@ -71,6 +71,12 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     return true
   of hrCloseWindow:
     let activeWin = e.activeWindow
+    if not r.forceClose and e.windowManager.windows.len <= 1:
+      # Closing the last window quits the editor, other buffers included.
+      let discardErr = e.quitDiscardsBuffersError(activeWin.buffer)
+      if discardErr.len > 0:
+        e.state.statusMessage = discardErr
+        return true
     if e.terminalStates.hasKey(activeWin.buffer.id):
       e.closeTerminalBuffer(activeWin.buffer.id)
     let shouldQuit = e.closeWindow()
