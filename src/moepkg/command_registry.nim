@@ -281,9 +281,15 @@ proc executeCommand*(
   # cancels any visual selection or pending operator in one place, instead of
   # leaving each handler to unwind its own state after a rejected edit.
   if (isEditCommand or isVisualEditCommand) and ctx.buffer.readOnly:
-    if isVisualEditCommand:
+    # Only unwind a selection that exists.
+    if isVisualEditCommand and ctx.state.visualSelection.active:
       ctx.state.visualSelection.active = false
-      ctx.state.mode = ctx.state.previousMode
+      # `previousMode` may itself be a visual mode, which has no selection now.
+      ctx.state.mode =
+        if ctx.state.previousMode.isVisualAllMode:
+          EditorMode.Normal
+        else:
+          ctx.state.previousMode
     ctx.state.pendingInput.pendingOperator = none(PendingOperator)
     ctx.state.statusMessage = "Buffer is read-only"
     return ok(())

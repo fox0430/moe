@@ -376,3 +376,32 @@ suite "editor_selectionrange - chain expansion":
     check e.state.mode == EditorMode.Visual
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 3)
+
+  test "Expanding from VisualLine keeps the pre-visual return mode":
+    # Recording VisualLine here would leave a visual mode with no selection.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo(bar)")
+
+    e.state.previousMode = EditorMode.Normal
+    e.state.mode = EditorMode.VisualLine
+    e.state.visualSelection = VisualSelection(
+      kind: vskLine,
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 7}}
+      }
+    ]
+    e.seedResponse(3, responseJson)
+    e.pollLspSelectionRange()
+
+    check e.state.mode == EditorMode.Visual
+    check e.state.previousMode == EditorMode.Normal

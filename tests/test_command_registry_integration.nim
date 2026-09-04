@@ -8013,6 +8013,52 @@ suite "executeCommand - a visual selection covers closed folds whole":
     check registry.executeCommand(ctx, cmd).isOk
     check buffer.foldState.getFoldAt(4).get.collapsed
 
+suite "executeCommand - read-only gate and the visual selection":
+  # The gate unwinds the selection only when one is actually active.
+
+  test "a visual edit command without a selection leaves the mode alone":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    # A stale previousMode the gate must not restore.
+    ctx.state.previousMode = EditorMode.Insert
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.delete", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.mode == EditorMode.Normal
+    check not ctx.state.visualSelection.active
+    check ctx.state.statusMessage == "Buffer is read-only"
+
+  test "a visual edit command with a selection still unwinds it":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    ctx.state.previousMode = EditorMode.Normal
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.delete", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.mode == EditorMode.Normal
+    check not ctx.state.visualSelection.active
+    check ctx.state.statusMessage == "Buffer is read-only"
+
+  test "a visual previousMode does not trap the editor in a visual mode":
+    # previousMode can itself be a visual mode, which has no selection now.
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    ctx.state.previousMode = EditorMode.VisualLine
+    buffer.readOnly = true
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.delete", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.state.mode == EditorMode.Normal
+    check not ctx.state.visualSelection.active
+
 suite "executeCommand - read-only gate allowlists stay in sync":
   # The read-only gate keys off hardcoded commandId allowlists. If a command is
   # renamed or removed without updating the list, the gate silently stops
@@ -8067,6 +8113,45 @@ suite "executeCommand - read-only gate allowlists stay in sync":
     let ops = registeredOperatorTypes()
     for op in VisualEditOperatorTypes:
       check op in ops
+
+  proc visualModeCommandIds(): HashSet[string] =
+    ## Ids reachable from a visual mode, taken from the bindings themselves.
+    ## Not every one is named `visual.*` (`z f` is `fold.create`), so a
+    ## name-prefix filter would miss them.
+    result = initHashSet[string]()
+    let reg = newKeyBindingRegistry()
+    reg.setupDefaultBindings()
+    proc add(cmd: Command, s: var HashSet[string]) =
+      # commandId only exists on these command kinds (it is a variant field).
+      if cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
+          cmd.commandId.len > 0:
+        s.incl(cmd.commandId)
+
+    for mode in [EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock]:
+      if reg.bindings.hasKey(mode):
+        for b in reg.bindings[mode]:
+          b.command.add(result)
+      if reg.sequences.hasKey(mode):
+        for cmd in reg.sequences[mode].values:
+          cmd.add(result)
+
+  test "every command reachable from a visual mode is classified":
+    # The other tests only check the listed ids exist. This one catches the
+    # other direction: a new visual binding fails until it is gated or listed.
+    const VisualNonEditCommandIds = [
+      # Selection-only or non-buffer commands: safe on a read-only buffer.
+      "fold.create", "lsp.selection.range", "textobject.around", "textobject.inner",
+      "visual.move.down", "visual.move.end", "visual.move.firstline",
+      "visual.move.firstnonblank", "visual.move.home", "visual.move.lastline",
+      "visual.move.left", "visual.move.paragraph.backward",
+      "visual.move.paragraph.forward", "visual.move.right", "visual.move.up",
+      "visual.move.word", "visual.move.word.back", "visual.move.word.end",
+      "visual.move.word.end.backward", "visual.swap.selection",
+    ]
+    for id in visualModeCommandIds():
+      # EditCommandIds covers the cursor-edit ids also bound in visual modes.
+      check id in VisualEditCommandIds or id in VisualSnapOnlyCommandIds or
+        id in EditCommandIds or id in VisualNonEditCommandIds
 
 suite "executeCommand - count prefix respects handler maxArgs":
   # executeCommand prepends an explicit count to the handler args so commands
