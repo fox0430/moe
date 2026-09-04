@@ -24,6 +24,11 @@ import pkg/results
 import ../src/moepkg/[clipboard_backend, frontend, types]
 import ../src/moepkg/command_handlers/editor_ops
 
+when defined(windows):
+  import ../src/moepkg/uri_utils
+  import ../src/moepkg/command_handlers/[file_ops, handler_result]
+  import ../src/moepkg/types/editor_types
+
 static:
   doAssert defined(moe.embedded)
   doAssert not declared(TerminalState)
@@ -37,6 +42,20 @@ doAssert not config.clipboard.enable
 let clipboardRead = readFromClipboardSync(config.clipboard.tool)
 doAssert clipboardRead.isErr
 
+when defined(windows):
+  let openUriResult = openExternalUri("https://example.com")
+  doAssert openUriResult.isErr
+  doAssert openUriResult.error ==
+    "Opening external URIs is unavailable in embedded mode on Windows"
+
 let editor = newEditor(config)
+
+when defined(windows):
+  discard editor.processFileResult(
+    HandlerResult(kind: hrOpenUri, openUri: "https://example.com"), editor.activeBuffer
+  )
+  doAssert editor.state.statusMessage ==
+    "Opening external URIs is unavailable in embedded mode on Windows"
+
 editor.enterTerminalInActiveWindow("")
 doAssert editor.state.statusMessage == "Terminal mode is unavailable in embedded builds"
