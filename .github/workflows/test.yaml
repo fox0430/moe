@@ -192,4 +192,5 @@ jobs:
         nim c -r -d:moe.matter -d:matterTimeLimitMs=0 -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlight_matter.nim
         nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_matter_highlight_edges.nim
         nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlight.nim
+        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlighter_api.nim
         nim c -d:release -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" src/moe.nim

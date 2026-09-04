@@ -32,6 +32,14 @@ when defined(moe.matter):
   import ../syntax/matter_backend
 import core, markers
 
+export highlight_types
+
+proc effectiveHighlightBackend*(b: TextBuffer): HighlightBackend =
+  ## Return the engine selected for this buffer's language and build. Matter
+  ## requests fall back to builtin when unavailable or for Diff/Log. This
+  ## query does not report per-line tokenizer failures or change buffer state.
+  effectiveHighlightBackend(b.highlightBackend, b.language)
+
 proc matches*(pr: PendingReparse, b: TextBuffer): bool =
   ## TextBuffer-scoped overload of `PendingReparse.matches`.
   pr.matches(b.lastChangedLines, b.len, b.contentVersion, b.reservedWords)
@@ -40,6 +48,8 @@ proc setHighlightBackend*(b: TextBuffer, backend: HighlightBackend) =
   ## Change the requested syntax engine and invalidate every syntax-derived
   ## cache. URI styling is rebuilt; semantic and diagnostic overlays retain
   ## their identity and content version because the buffer text has not changed.
+  ## The next updateHighlight/normal editor frame reparses with the selected
+  ## engine. Use effectiveHighlightBackend to inspect compile/language fallback.
   if b.highlightBackend != backend:
     b.highlightBackend = backend
     b.incrementalHighlight = nil
