@@ -20,7 +20,7 @@
 import
   std/[sequtils, os, strutils, strformat, unicode, algorithm, options, tables, json]
 
-import pkg/celina
+import celina_backend as celina
 
 import color, unicode_utils
 import syntax/tokenizer

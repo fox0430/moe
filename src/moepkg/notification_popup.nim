@@ -25,7 +25,7 @@
 
 import std/[strutils, unicode, monotimes, times]
 
-import pkg/celina
+import celina_backend as celina
 
 import color, popup_render, unicode_utils
 

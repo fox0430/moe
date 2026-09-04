@@ -25,7 +25,7 @@
 
 import std/[options, strutils, monotimes, times, tables]
 
-import pkg/celina
+import celina_backend as celina
 
 import
   types/editor_types,

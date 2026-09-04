@@ -23,7 +23,7 @@
 
 import std/[monotimes, times, os]
 
-import pkg/[results, celina]
+import pkg/results
 
 import
   types/editor_types,

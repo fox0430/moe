@@ -27,7 +27,9 @@ import
   std/
     [algorithm, sequtils, strutils, unicode, sets, options, json, os, monotimes, times]
 
-import pkg/[celina, jsony]
+import pkg/jsony
+
+import celina_backend as celina
 
 import
   buffer, word_dictionary, command_completion, fuzzy_match, color, popup_render,

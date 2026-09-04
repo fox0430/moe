@@ -23,7 +23,7 @@
 
 import std/[os, options, times, strutils, unicode]
 
-import pkg/celina
+import celina_backend as celina
 
 import buffer/core, highlight, color, dir_scan
 import syntax/tokenizer

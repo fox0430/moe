@@ -135,10 +135,11 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
       else:
         e.state.statusMessage = "Failed to open: " & path
     elif isExternalUri(uri):
-      if openExternalUri(uri):
+      let openResult = openExternalUri(uri)
+      if openResult.isOk:
         e.state.statusMessage = "Opened: " & uri
       else:
-        e.state.statusMessage = "Failed to open: " & uri
+        e.state.statusMessage = openResult.error
     else:
       # Plain file path - resolve relative to current buffer's directory
       let activeBufferLocal = e.activeBuffer()

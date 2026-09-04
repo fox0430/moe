@@ -24,7 +24,9 @@
 
 import std/[strutils, strformat, options, os]
 
-import pkg/[results, celina]
+import pkg/results
+
+import celina_backend as celina
 
 type
   ColorModeKind* = enum

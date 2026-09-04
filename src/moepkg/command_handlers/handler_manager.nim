@@ -32,7 +32,7 @@
 
 import std/[options, tables, strutils]
 
-import pkg/[results, celina]
+import pkg/results
 
 import
   ../[
