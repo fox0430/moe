@@ -240,11 +240,18 @@ proc loadFileWithContent*(
         lines[i] = b.getLine(i)
 
       let (segments, lineStates) = initHighlightIncremental(
-        lines, 0, chunkEnd, TokenizerState(), @[], b.language, b.maxHighlightLineLength
+        lines,
+        0,
+        chunkEnd,
+        newTokenizerState(b.highlightBackend, b.language),
+        @[],
+        b.language,
+        b.maxHighlightLineLength,
       )
 
       b.highlight = Highlight(colorSegments: segments)
       b.incrementalHighlight = IncrementalHighlight(
+        backend: effectiveHighlightBackend(b.highlightBackend, b.language),
         segments: segments,
         lineStates: LineStateCache(states: lineStates),
         parsedUpTo: chunkEnd,

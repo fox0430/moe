@@ -141,6 +141,41 @@
       "checksums": {
         "sha1": "b28964a93a3cf7248126ba39047593cd63a3aa6d"
       }
+    },
+    "reni": {
+      "version": "#ae88f24",
+      "vcsRevision": "ae88f24359f7d0742328b7e4f538241d6af00fcc",
+      "url": "https://github.com/fox0430/reni",
+      "downloadMethod": "git",
+      "dependencies": [
+        "unicodedb"
+      ],
+      "checksums": {
+        "sha1": "4d9c35640c8349d7bb5030d890758326837665cd"
+      }
+    },
+    "zippy": {
+      "version": "#cd562ba",
+      "vcsRevision": "cd562ba43ae8904a4d1ba55611b8a521ef4a179e",
+      "url": "https://github.com/guzba/zippy",
+      "downloadMethod": "git",
+      "dependencies": [],
+      "checksums": {
+        "sha1": "fae5430d597432ea2916a6d45dee53542784d51e"
+      }
+    },
+    "matter": {
+      "version": "#8db6f03d1028c42693c3a586ba3625e1b48e9589",
+      "vcsRevision": "8db6f03d1028c42693c3a586ba3625e1b48e9589",
+      "url": "https://github.com/elcritch/matter",
+      "downloadMethod": "git",
+      "dependencies": [
+        "reni",
+        "zippy"
+      ],
+      "checksums": {
+        "sha1": "fb91316e3bd147651f73fd018230f41d49bd23d1"
+      }
     }
   },
   "tasks": {}

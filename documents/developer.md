@@ -149,6 +149,60 @@ nimble gendocs         # Both config and howtouse
 nimble genhowtouse     # Just documents/howtouse.md
 ```
 
+## Optional Matter syntax backend
+
+Build with `-d:moe.matter` to include the TextMate-grammar backend. Grammar
+archives are embedded into the executable at compile time; an Atlas checkout
+keeps Matter's `data/grammars` directory available automatically:
+
+```sh
+atlas install
+nim c -d:release -d:moe.matter --out:moe src/moe.nim
+```
+
+Matter 0.3.0's Nimble installation omits the archives. When building with
+Nimble, provide a full checkout of the same pinned source revision for assets:
+
+```sh
+nimble install -d -y
+nimble setup
+git clone --branch v0.3.0 --depth 1 https://github.com/elcritch/matter deps/matter-assets
+git -C deps/matter-assets rev-parse HEAD
+# Expected: 8db6f03d1028c42693c3a586ba3625e1b48e9589
+nim c -d:release -d:moe.matter \
+  -d:matterGrammarRoot="$PWD/deps/matter-assets" --out:moe src/moe.nim
+```
+
+Select the backend in `moerc.toml`; `builtin` remains the default:
+
+```toml
+[Highlight]
+backend = "matter" # or "builtin"
+```
+
+The existing `[Standard] syntax` toggle enables/disables rendering for either
+backend. Reloading config switches existing buffers and invalidates their syntax
+caches. A binary compiled without `-d:moe.matter` uses builtin highlighting even
+if the config requests Matter. Diff and Log always retain Moe's builtin lexer.
+
+Matter shares Moe's progressive-load and budgeted incremental paths, per-line
+length cap, reserved-word colours, and URI/LSP/diagnostic overlays. Tokenization
+has a soft 20ms per-line limit: a timeout or grammar error makes that line and
+following lines plain until a reparse starts from an earlier successful state
+or the backend is reset. This avoids caching a partial multiline state. Debug
+builds and expensive grammars (notably C++) may reach this limit more often.
+Debug logging records these failures; see the logging section above.
+Build with `-d:matterTimeLimitMs=N` to adjust the soft deadline (`0` disables it).
+
+The executable does not read grammar files or access the network at runtime.
+Embedded archives retain each package's license and provenance. When distributing
+a Matter-enabled build, retain these notices and include Matter's
+`data/grammars/NOTICES.md` from the pinned source with accompanying materials.
+
+Run the optional tests with `nim c -r -d:moe.matter tests/test_matter_backend.nim`
+and `nim c -r -d:moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim`
+(add the grammar-root define above for a Nimble-only dependency installation).
+
 ## Contributing
 
 Bug reports, feature requests, and pull requests are welcome. Before opening a PR:

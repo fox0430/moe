@@ -159,3 +159,37 @@ jobs:
         # whole job a silent no-op. Fail loudly instead.
         command -v lasm
         xvfb-run env XDG_SESSION_TYPE=x11 nim c -r tests/test_lsp_e2e_lasm.nim
+
+  matter:
+    name: Matter syntax backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TERM: xterm-256color
+    steps:
+    - uses: actions/checkout@v7
+    - uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: 2.2.10
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install dependencies
+      run: |
+        nimble install -d -y
+        nimble setup
+    # Matter 0.3.0's Nimble package omits its grammar archives. Use the exact
+    # locked source revision for build-time assets, never a moving branch.
+    - name: Fetch Matter grammar assets
+      uses: actions/checkout@v7
+      with:
+        repository: elcritch/matter
+        ref: 8db6f03d1028c42693c3a586ba3625e1b48e9589
+        path: deps/matter-assets
+        persist-credentials: false
+    - name: Build and test Matter backend
+      run: |
+        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_matter_backend.nim
+        # Disable wall-clock interruption for full-vs-incremental equivalence.
+        nim c -r -d:moe.matter -d:matterTimeLimitMs=0 -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlight_matter.nim
+        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_matter_highlight_edges.nim
+        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlight.nim
+        nim c -d:release -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" src/moe.nim

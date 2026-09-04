@@ -27,6 +27,7 @@
 import std/[options, tables]
 
 import ../modes
+import highlight_types
 
 import ../config_macros
 export config_macros
@@ -232,6 +233,9 @@ type
 
   # Highlight settings
   HighlightConfig* {.cfgSection: "Highlight".} = object
+    backend* {.
+      cfg, cfgDocDescription: "Syntax highlighting backend (builtin or matter)"
+    .}: HighlightBackend
     currentLine* {.cfg, cfgDocDescription: "Highlight the current line background".}:
       bool
     currentColumn* {.cfg, cfgDocDescription: "Highlight the current column background".}:

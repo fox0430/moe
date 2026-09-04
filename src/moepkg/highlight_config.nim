@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Push the editor's `config.highlight` settings (reserved words and the
+## Push the editor's `config.highlight` settings (reserved words, backend and
 ## per-line tokenization cap) into a buffer's syntax-highlight state. This is
 ## about the editor's OWN config, not `.editorconfig` files — those live in
 ## `editorconfig_helper`.
@@ -26,14 +26,18 @@ import config
 import buffer/[core, highlight]
 
 proc applyHighlightCap*(buffer: TextBuffer, config: EditorConfig) =
-  ## Seed the per-line tokenization cap from config. Must run BEFORE `loadFile`,
+  ## Seed the backend and per-line cap from config. Must run BEFORE `loadFile`,
   ## which reads `maxHighlightLineLength` to cap the first chunk. Applying it
   ## afterwards would nil the freshly-seeded progressive-load cache and force a
   ## full synchronous reparse on open — the stall the cap exists to prevent.
+  when defined(moe.matter):
+    buffer.setHighlightBackend(config.highlight.backend)
+  else:
+    buffer.setHighlightBackend(hbBuiltin)
   buffer.setMaxHighlightLineLength(config.highlight.maxHighlightLineLength)
 
 proc applyHighlightConfig*(buffer: TextBuffer, config: EditorConfig) =
-  ## Apply config-derived highlight settings (reserved words + per-line cap) to
+  ## Apply config-derived settings (reserved words, backend and per-line cap) to
   ## a buffer, funnelling both through one call so they cannot drift.
   ##
   ## Reserved words must be applied AFTER `loadFile` (it clears

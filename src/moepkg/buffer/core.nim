@@ -22,6 +22,7 @@
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
 import ../[encoding, highlight, logger, primitives, unicode_utils]
+import ../types/highlight_types
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta
 
@@ -366,6 +367,8 @@ type
     reservedWords*: seq[ReservedWord] # Reserved words to highlight (TODO, NOTE, etc.)
     maxHighlightLineLength*: int
       # Per-line tokenization cap in runes (synmaxcol). 0 = unlimited.
+    highlightBackend*: HighlightBackend
+      ## Requested syntax backend; unavailable optional backends fall back safely.
     uriScanParsedUpTo*: int # Last line scanned for URIs during progressive init
 
     # Change list (tracks positions where changes were made, like Vim's changelist)

@@ -195,6 +195,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 <!-- AUTO-GEN:start Highlight -->
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
+| backend | string (enum: builtin, matter) | builtin | Syntax highlighting backend (builtin or matter) |
 | currentLine | bool | true | Highlight the current line background |
 | currentColumn | bool | false | Highlight the current column background |
 | reservedWord | string array | ["TODO", "WIP", "NOTE"] | Highlight any words |

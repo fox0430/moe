@@ -133,6 +133,8 @@ setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} 
 
 [Highlight]
 
+backend = "builtin"                    # "matter" requires a -d:moe.matter build
+
 currentLine = true                     # Highlight current line
 
 currentColumn = false                  # Highlight current column
