@@ -38,8 +38,7 @@ import
   buffer,
   unicode_utils,
   editorconfig_helper,
-  highlight_config,
-  editor_notify
+  highlight_config
 import lsp/protocol/types as lspTypes
 
 const
@@ -106,7 +105,8 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   ##
   ## If a buffer already holds this file, switch the active window to it.
   ## Otherwise create a new buffer, load the file, apply EditorConfig and
-  ## reserved-word highlighting, register it, switch to it, and notify the LSP.
+  ## reserved-word highlighting, register it, switch to it and run the shared
+  ## `initLoadedBuffer` setup.
   ##
   ## Shared by the LSP/jump/document-link navigation paths so they all open
   ## files into the *active* window's buffer with identical setup. Unlike the
@@ -130,15 +130,12 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   e.addBuffer(newBuffer)
   e.switchToBufferForLsp(e.buffers.high)
 
-  # A file that is not text still opens (every byte is held and saved back
-  # unchanged), but say so.
-  e.notifyUnusualContent(newBuffer)
-
-  # Notify the LSP about the newly opened file and record its synced baseline
-  # so the next didChange delta is computed against the right changeSeq.
-  # Best-effort: openBufferWithLsp is a no-op when LSP is disabled / the buffer
-  # has no path, and logs a degraded notice on failure.
-  e.openBufferWithLsp(newBuffer)
+  # Share the per-buffer setup with every other open path: restore bookmarks,
+  # seed the git-diff gutter, scan conflict markers, warn about content that is
+  # not text and announce the document to the language server. Doing this by
+  # hand here used to leave a file reached by go-to-definition without its
+  # bookmarks, gutter or conflict blocks.
+  e.initLoadedBuffer(newBuffer)
 
   ok(newBuffer)
 

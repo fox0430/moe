@@ -21,6 +21,8 @@
 
 import std/[unittest, os, strutils, options, importutils, json, tables]
 
+import pkg/results
+
 import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/editor_navigation
@@ -338,6 +340,67 @@ suite "editor_navigation - handleLspLocations":
 
     check not result
     check e.state.statusMessage.contains("No local file locations found")
+
+suite "editor_navigation - openFileInActiveWindow per-buffer setup":
+  ## Navigation opens (go-to-definition, jump list, document links) create the
+  ## buffer themselves instead of going through the startup/`:e` paths, so they
+  ## used to hand-roll a shortened version of the shared setup. A file reached
+  ## this way came up without its persisted bookmarks, without the git-diff
+  ## gutter request and without conflict blocks.
+
+  const conflictContent =
+    "line before\n" & "<<<<<<< HEAD\n" & "ours\n" & "=======\n" & "theirs\n" &
+    ">>>>>>> feature\n" & "line after\n"
+
+  test "Restores persisted bookmarks for the newly opened file":
+    let e = createTestEditor()
+    e.state.showGitDiff = false
+    e.config.persist.bookmarks = true
+    let testFile = getTempDir() / "moe_nav_bookmark.txt"
+    writeFile(testFile, "a\nb\nc\n")
+    defer:
+      removeFile(testFile)
+    e.savedBookmarks[absolutePath(testFile)] = @[2]
+
+    let opened = e.openFileInActiveWindow(testFile)
+
+    check opened.isOk
+    check opened.get.bookmarks == @[2]
+
+  test "Scans conflict markers on the newly opened file":
+    let e = createTestEditor()
+    e.state.showGitDiff = false
+    let testFile = getTempDir() / "moe_nav_conflict.txt"
+    writeFile(testFile, conflictContent)
+    defer:
+      removeFile(testFile)
+
+    let opened = e.openFileInActiveWindow(testFile)
+
+    check opened.isOk
+    check opened.get.conflictBlocks.len == 1
+
+  test "Leaves an already open buffer untouched":
+    # The early-return branch switches to the existing buffer; it must not
+    # re-run the setup and stomp on state the buffer already carries.
+    let e = createTestEditor()
+    e.state.showGitDiff = false
+    e.config.persist.bookmarks = true
+    let testFile = getTempDir() / "moe_nav_reopen.txt"
+    writeFile(testFile, "a\nb\nc\n")
+    defer:
+      removeFile(testFile)
+
+    let first = e.openFileInActiveWindow(testFile)
+    check first.isOk
+    first.get.bookmarks = @[1]
+    e.savedBookmarks[absolutePath(testFile)] = @[2]
+
+    let second = e.openFileInActiveWindow(testFile)
+
+    check second.isOk
+    check second.get == first.get
+    check second.get.bookmarks == @[1]
 
 suite "editor_navigation - switchToBufferForLsp":
   test "Does nothing for invalid negative index":
