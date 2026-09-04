@@ -192,7 +192,6 @@ proc openExternalUri*(uri: string): Result[void, string] =
   ## Returns an error when the command cannot be launched.
   ## The process is fire-and-forget (non-blocking).
   when defined(moe.embedded) and defined(windows):
-    discard uri
     return err("Opening external URIs is unavailable in embedded mode on Windows")
   else:
     let cmd = when defined(macosx): "open" else: "xdg-open"
