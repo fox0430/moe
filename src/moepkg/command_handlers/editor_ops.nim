@@ -80,8 +80,31 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
     e.tabStop,
   )
 
+proc modifiedBufferCountExcept*(e: Editor, exclude: TextBuffer): int =
+  ## Number of modified buffers other than `exclude`.
+  for buf in e.buffers:
+    if buf != exclude and buf.isModified:
+      result.inc
+
+proc quitDiscardsBuffersError*(e: Editor, exclude: TextBuffer): string =
+  ## Error for a quit that would end the session while buffers other than
+  ## `exclude` are still modified, or "" when there are none. Such a buffer
+  ## need not be visible anywhere: an LSP rename edits its targets in buffers
+  ## that join no window.
+  let count = e.modifiedBufferCountExcept(exclude)
+  if count == 0:
+    return ""
+  "No write since last change: " & $count & " other buffer" &
+    (if count > 1: "s" else: "") & " modified (add ! to override)"
+
 proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
   ## Save and quit: return false on success, true on failure.
+  if not r.forceQuitAfterSave:
+    # :wq/:x end the session, not just the window, so the other buffers go too.
+    let discardErr = e.quitDiscardsBuffersError(e.activeBuffer())
+    if discardErr.len > 0:
+      e.state.statusMessage = discardErr
+      return true
   let saveResult = e.saveFile(r.saveAndQuitFilename, r.forceQuitAfterSave)
   if saveResult.isErr:
     logError("handler", "Save and quit failed: " & saveResult.error)

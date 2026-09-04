@@ -83,6 +83,26 @@ proc executeQuit*(
       return unsavedChangesErr()
   return HandlerResult(kind: hrCloseWindow, forceClose: force)
 
+proc executeQuitAll*(
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    force: bool,
+    otherModifiedCount: int = 0,
+): HandlerResult =
+  ## Execute :qa / :qa!. `otherModifiedCount` covers buffers other than `buffer`.
+  if not force:
+    let total = (if buffer.isModified: 1 else: 0) + otherModifiedCount
+    if total > 0:
+      if total == 1:
+        return unsavedChangesErr()
+      return HandlerResult(
+        kind: hrError,
+        errorMessage:
+          "No write since last change: " & $total &
+          " buffers modified (add ! to override)",
+      )
+  HandlerResult(kind: hrQuit)
+
 proc executeSave*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -112,35 +132,18 @@ proc executeSaveIfModifiedAndQuit*(
     buffer: TextBuffer,
     filename: Option[string],
     force: bool,
+    otherModifiedCount: int = 0,
 ): HandlerResult =
   ## Execute :x/:xit, writing only when the buffer is modified.
   if not buffer.isModified:
-    return HandlerResult(kind: hrQuit)
+    # Nothing to write, but the session still ends: check the other buffers
+    # exactly as :qa does.
+    return handler.executeQuitAll(buffer, force, otherModifiedCount)
   handler.executeSaveAndQuit(buffer, filename, force)
 
 proc executeSaveAllAndQuit*(handler: CommandModeHandler, force: bool): HandlerResult =
   ## Execute save all and quit command (:wqa, :xa, :wqa!)
   HandlerResult(kind: hrSaveAllAndQuit, forceSaveAllAndQuitAfter: force)
-
-proc executeQuitAll*(
-    handler: CommandModeHandler,
-    buffer: TextBuffer,
-    force: bool,
-    otherModifiedCount: int = 0,
-): HandlerResult =
-  ## Execute :qa / :qa!. `otherModifiedCount` covers buffers other than `buffer`.
-  if not force:
-    let total = (if buffer.isModified: 1 else: 0) + otherModifiedCount
-    if total > 0:
-      if total == 1:
-        return unsavedChangesErr()
-      return HandlerResult(
-        kind: hrError,
-        errorMessage:
-          "No write since last change: " & $total &
-          " buffers modified (add ! to override)",
-      )
-  HandlerResult(kind: hrQuit)
 
 proc executeEdit*(
     handler: CommandModeHandler,
@@ -563,7 +566,7 @@ proc handleCommandModeInput*(
     )
   of claSaveIfModifiedAndQuit:
     handler.executeSaveIfModifiedAndQuit(
-      buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit
+      buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit, otherModifiedCount
     )
   of claSaveAllAndQuit:
     handler.executeSaveAllAndQuit(cmdResult.forceSaveAllAndQuit)

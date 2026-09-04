@@ -49,16 +49,13 @@ proc formatPathList*(paths: seq[string]): string =
   formatEditPathList(paths)
 
 proc buildModifiedPathSuffix*(e: Editor, res: WorkspaceEditResult): string =
-  ## Collect modified buffer/file paths from a WorkspaceEditResult and format
-  ## them with truncation/sanitization (single place for rename and serverEdit).
-  if res.modifiedBufferIndexes.len == 0 and res.modifiedFilePaths.len == 0:
+  ## Modified buffer paths from a WorkspaceEditResult, truncated and sanitized.
+  if res.modifiedBufferIndexes.len == 0:
     return ""
   var allPaths: seq[string] = @[]
   for idx in res.modifiedBufferIndexes:
     if idx >= 0 and idx < e.buffers.len and e.buffers[idx].filePath.isSome:
       allPaths.add(e.buffers[idx].filePath.get)
-  for p in res.modifiedFilePaths:
-    allPaths.add(p)
   let pathList = formatPathList(allPaths)
   if pathList.len > 0:
     result = ": " & pathList
@@ -220,6 +217,27 @@ proc clampAllWindowCursors*(e: Editor) =
     )
     window.cursor = BufferPosition(line: clamped.y, column: clamped.x)
 
+proc recoverFromFailedWorkspaceEdit*(
+    e: Editor, edit: WorkspaceEdit, applyError: string, reason: string
+) =
+  ## Clean up after `applyWorkspaceEdit` failed partway through.
+  ##
+  ## It commits each buffer as it goes, so a failure can leave earlier targets
+  ## already modified. Re-sync every target buffer (best effort) so those
+  ## changes don't diverge from the server's copy; a rolled-back buffer just
+  ## resends identical text. A *failed* rollback is skipped instead: partially
+  ## reverted text must not become the server's baseline.
+  ##
+  ## A partial apply may also have shrunk a buffer, so cursors are re-clamped.
+  if BufferStateInconsistentSuffix notin applyError:
+    for path in collectWorkspaceEditPaths(edit):
+      let absPath = normalizedPath(absolutePath(path))
+      for buf in e.buffers:
+        if buf.filePath.isSome and
+            normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+          e.syncBufferAfterEdit(buf, reason)
+  e.clampAllWindowCursors()
+
 proc applyWorkspaceEditFromServer*(
     e: Editor, edit: WorkspaceEdit
 ): ApplyWorkspaceEditResult {.gcsafe.} =
@@ -250,26 +268,11 @@ proc applyWorkspaceEditFromServer*(
       return
         (applied: false, failureReason: some("buffer changed since last didChange"))
 
-    let applyResult =
-      applyWorkspaceEdit(e.buffers, edit, "LSP Edit", allowUnopenedFileWrites = false)
+    # A server-initiated edit must not touch a file the user has not opened,
+    # which is the default refusal of unopened targets.
+    let applyResult = applyWorkspaceEdit(e.buffers, edit, "LSP Edit")
     if applyResult.isErr:
-      # applyWorkspaceEdit commits each open buffer as it goes, so a failure
-      # partway through can leave earlier buffers already modified. Re-sync every
-      # target buffer (best effort) so those committed changes don't silently
-      # diverge from the server's copy — an unmodified/rolled-back buffer's
-      # didChange just resends identical text. A failed rollback is
-      # different: the partially reverted text must not become the server's
-      # new baseline, so skip the sync (staleness is caught on the next
-      # server edit instead of being silently overwritten).
-      if BufferStateInconsistentSuffix notin applyResult.error:
-        for path in collectWorkspaceEditPaths(edit):
-          let absPath = normalizedPath(absolutePath(path))
-          for buf in e.buffers:
-            if buf.filePath.isSome and
-                normalizedPath(absolutePath(buf.filePath.get)) == absPath:
-              e.syncBufferAfterEdit(buf, "applyEdit")
-      # A partial apply may have shrunk already-committed buffers.
-      e.clampAllWindowCursors()
+      e.recoverFromFailedWorkspaceEdit(edit, applyResult.error, "applyEdit")
       let sanitizedErr = sanitizeForLog(applyResult.error)
       let failMsg = "Failed to apply server edit: " & sanitizedErr
       e.state.statusMessage = failMsg
@@ -429,94 +432,6 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
     e.state.statusMessage = "LSP fold error: buffer state may be inconsistent"
   except CancelledError:
     discard
-
-proc requestLspRename*(
-    e: Editor, newName: string
-): Future[void] {.async: (raises: []).} =
-  ## Request LSP rename and apply workspace edits
-  {.cast(gcsafe).}:
-    try:
-      if not e.lsp.enabled:
-        e.state.statusMessage = "LSP not enabled"
-        return
-
-      if not e.config.lsp.rename.enable:
-        e.state.statusMessage = "LSP rename is disabled"
-        return
-
-      let activeBuffer = e.activeBuffer()
-      let line = e.state.renameState.cursorLine
-      let col = e.state.renameState.cursorColumn
-
-      # Snapshot every open buffer's contentVersion before awaiting: the
-      # server's edits are positioned against this state. If any target
-      # buffer changes while the request is in flight, applying the stale
-      # coordinates would corrupt text, so the whole edit is discarded
-      # (aborting beats partial application).
-      # Key by buffer id, not path: two buffers can share a file path (one
-      # opened relative, one absolute), and a path-keyed snapshot would let
-      # one buffer's contentVersion shadow the other's, rejecting valid renames.
-      var versionSnapshot: Table[BufferId, int]
-      for buf in e.buffers:
-        versionSnapshot[buf.id] = buf.contentVersion
-
-      # Get rename result from LSP
-      let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
-      if renameResult.isErr:
-        let msg = "LSP rename failed: " & sanitizeForLog(renameResult.error)
-        e.state.statusMessage = msg
-        logInfo("lsp", msg)
-        addLspMessageLog(msg)
-        return
-
-      let workspaceEditOpt = renameResult.get
-      if workspaceEditOpt.isNone:
-        e.state.statusMessage = "No rename changes"
-        return
-
-      let workspaceEdit = workspaceEditOpt.get
-
-      # Reject the edit if any targeted open buffer changed during the await, or
-      # was opened during it (no snapshot entry, so it is unverifiable).
-      if hasStaleTargetBuffer(e.buffers, workspaceEdit, versionSnapshot):
-        e.state.statusMessage = "Buffer changed during rename; edits discarded"
-        return
-
-      # Apply the workspace edits to all affected buffers
-      let applyResult = applyWorkspaceEdit(
-        e.buffers, workspaceEdit, backupConfig = some(e.config.autoBackup)
-      )
-      if applyResult.isErr:
-        let msg = "Failed to apply rename: " & sanitizeForLog(applyResult.error)
-        e.state.statusMessage = msg
-        logInfo("lsp", msg)
-        addLspMessageLog(msg)
-        return
-
-      # Sync the server with every buffer we just rewrote. maybeUpdateLsp
-      # only covers the active buffer, so non-active buffers would otherwise
-      # stay stale on the server side.
-      for bufferIdx in applyResult.get.modifiedBufferIndexes:
-        e.syncBufferAfterEdit(e.buffers[bufferIdx], "rename")
-
-      let modifiedCount = applyResult.get.modifiedCount
-      var renameMsg =
-        "Renamed '" & sanitizeForLog(e.state.renameState.originalWord) & "' to '" &
-        sanitizeForLog(newName) & "' (" & $modifiedCount & " file" &
-        (if modifiedCount > 1: "s" else: "") & " modified)"
-      renameMsg &= e.buildModifiedPathSuffix(applyResult.get)
-      # Always log for traceability.
-      logInfo("lsp", renameMsg)
-      addLspMessageLog(renameMsg)
-      e.state.statusMessage = renameMsg
-    except CancelledError:
-      discard
-    except TransactionRollbackError as err:
-      # asyncSpawn only logs future failures: surface the untrustworthy state explicitly.
-      logError "lsp", "Rename aborted, buffer state untrustworthy: " & err.msg
-      e.state.statusMessage = "LSP rename error: buffer state may be inconsistent"
-    except Exception as err:
-      e.state.statusMessage = "LSP rename error: " & sanitizeForLog(err.msg)
 
 proc renotifyOpenBuffers(e: Editor, langId: string): int =
   ## (Re-)send didOpen for every open buffer whose language is `langId` and

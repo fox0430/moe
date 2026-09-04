@@ -100,23 +100,18 @@ proc sameFilePath(a, b: string): bool =
   ## and rename is wrongly rejected with "Buffer changed during rename".
   normalizedPath(absolutePath(a)) == normalizedPath(absolutePath(b))
 
-proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
-  ## Open `path` in the active window and return the buffer now shown there.
-  ##
-  ## If a buffer already holds this file, switch the active window to it.
-  ## Otherwise create a new buffer, load the file, apply EditorConfig and
-  ## reserved-word highlighting, register it, switch to it and run the shared
-  ## `initLoadedBuffer` setup.
-  ##
-  ## Shared by the LSP/jump/document-link navigation paths so they all open
-  ## files into the *active* window's buffer with identical setup. Unlike the
-  ## legacy `e.loadFile`, content is loaded into a freshly registered buffer
-  ## rather than mutating the active buffer in place.
+proc bufferIndexForFile(e: Editor, path: string): int =
+  ## Index of the buffer already holding `path`, or -1. Uses `sameFilePath` so a
+  ## file opened under a differently-spelled path is not opened twice.
   for i, buf in e.buffers:
     if buf.filePath.isSome and sameFilePath(buf.filePath.get, path):
-      e.switchToBufferForLsp(i)
-      return ok(buf)
+      return i
+  -1
 
+proc loadAndRegisterBuffer(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Load `path` into a fresh buffer and register it in the global buffer list
+  ## with the setup every opened file gets. Whether a window shows the result is
+  ## the caller's choice.
   let newBuffer = newTextBuffer()
   # Seed the highlight cap before loadFile builds the first chunk, so the cap
   # is not changed afterwards (which would nil the progressive-load cache).
@@ -128,16 +123,45 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   applyEditorConfigToBuffer(newBuffer, e.config)
   applyHighlightConfig(newBuffer, e.config)
   e.addBuffer(newBuffer)
-  e.switchToBufferForLsp(e.buffers.high)
-
-  # Share the per-buffer setup with every other open path: restore bookmarks,
-  # seed the git-diff gutter, scan conflict markers, warn about content that is
-  # not text and announce the document to the language server. Doing this by
-  # hand here used to leave a file reached by go-to-definition without its
-  # bookmarks, gutter or conflict blocks.
+  # Doing this by hand used to leave a file reached by go-to-definition without
+  # its bookmarks, gutter or conflict blocks.
   e.initLoadedBuffer(newBuffer)
 
   ok(newBuffer)
+
+proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Open `path` in the active window and return the buffer now shown there.
+  ##
+  ## If a buffer already holds this file, switch the active window to it.
+  ## Otherwise load it into a freshly registered buffer and switch to that.
+  ##
+  ## Shared by the LSP/jump/document-link navigation paths so they all open
+  ## files into the *active* window's buffer with identical setup. Unlike the
+  ## legacy `e.loadFile`, content is loaded into a freshly registered buffer
+  ## rather than mutating the active buffer in place.
+  let existing = e.bufferIndexForFile(path)
+  if existing >= 0:
+    e.switchToBufferForLsp(existing)
+    return ok(e.buffers[existing])
+
+  let bufRes = e.loadAndRegisterBuffer(path)
+  if bufRes.isErr:
+    return err(bufRes.error)
+  e.switchToBufferForLsp(e.buffers.high)
+
+  ok(bufRes.get)
+
+proc openFileInBackground*(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Open `path` as a buffer without showing it anywhere: it joins the global
+  ## buffer list but no window's tab list, so nothing on screen moves.
+  ##
+  ## Gives a file an undoable editing history before it is rewritten on the
+  ## user's behalf.
+  let existing = e.bufferIndexForFile(path)
+  if existing >= 0:
+    return ok(e.buffers[existing])
+
+  e.loadAndRegisterBuffer(path)
 
 proc addToJumpList*(e: Editor) =
   ## Add current cursor position to jump list before a jump

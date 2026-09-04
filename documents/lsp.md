@@ -229,6 +229,11 @@ Please set true to `Lps.CodeLens.enable`, `Lsp.rust.rustAnalyzerRunSingle`, `Lsp
 
 `Space-r` command in Normal mode. Enter a new name in the command line.
 
+Every file the rename touches is opened as a buffer and edited there, so each
+one keeps its own undo history and shows up in the buffer manager. Nothing is
+written to disk: save the results with `:w` or `:wa`, and undo a rename you did
+not want with `u` in each affected buffer.
+
 ![moe-rename](https://github.com/fox0430/moe/assets/15966436/420ea178-c9fe-4053-8410-849fb845c698)
 
 ### Execute Command

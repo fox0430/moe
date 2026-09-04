@@ -2629,6 +2629,61 @@ suite "handleCommandModeEvent - all command mode commands execute":
     check not e.state.isCommandOverlay
     check e.state.input.commandText == ""
 
+  test ":q refuses to quit while a background buffer is modified":
+    # An LSP rename edits every file it touches in a buffer that joins no
+    # window; quitting on the active buffer alone would drop the rest of it.
+    let e = createTestEditorWithBuffer("hello")
+    e.activeBuffer.markSaved()
+    let background = newTextBuffer("world")
+    e.addBuffer(background)
+    discard background.insertText(BufferPosition(line: 0, column: 5), "!")
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = ":q"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check "other buffer" in e.state.statusMessage
+    check background.isModified
+
+  test ":q! quits despite a modified background buffer":
+    let e = createTestEditorWithBuffer("hello")
+    e.activeBuffer.markSaved()
+    let background = newTextBuffer("world")
+    e.addBuffer(background)
+    discard background.insertText(BufferPosition(line: 0, column: 5), "!")
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = ":q!"
+
+    check handleCommandModeEvent(e, makeEnterEvent()) == false
+
+  test ":wq refuses to quit while a background buffer is modified":
+    let e = createTestEditorWithBuffer("hello")
+    let background = newTextBuffer("world")
+    e.addBuffer(background)
+    discard background.insertText(BufferPosition(line: 0, column: 5), "!")
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = ":wq"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check "other buffer" in e.state.statusMessage
+
+  test ":x on a clean buffer refuses while a background buffer is modified":
+    let e = createTestEditorWithBuffer("hello")
+    e.activeBuffer.markSaved()
+    let background = newTextBuffer("world")
+    e.addBuffer(background)
+    discard background.insertText(BufferPosition(line: 0, column: 5), "!")
+    e.state.enterCommandOverlay()
+    e.state.input.commandText = ":x"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check "No write since last change" in e.state.statusMessage
+
   test ":b 0 switch to buffer":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterCommandOverlay()

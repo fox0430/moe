@@ -30,7 +30,7 @@ import
   quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
   clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
   pending_input, visible_rows, viewer_mode, frontend_input, hover_popup, encoding,
-  unicode_utils, editor_mode
+  unicode_utils, editor_mode, editor_lsp_rename
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,

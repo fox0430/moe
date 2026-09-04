@@ -72,6 +72,5 @@ type
     semanticTypeColorTables*: Table[string, SemanticTypeColorTable]
 
   WorkspaceEditResult* = object ## Outcome of applyWorkspaceEdit
-    modifiedCount*: int ## Total files modified (buffers + on-disk files)
+    modifiedCount*: int ## Total buffers modified
     modifiedBufferIndexes*: seq[int] ## Indexes into `buffers` that were modified
-    modifiedFilePaths*: seq[string] ## Unopened files modified directly on disk
