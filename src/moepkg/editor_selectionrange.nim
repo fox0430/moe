@@ -108,7 +108,10 @@ proc flattenSelectionChain(
 proc applySelectionRange(e: Editor, level: tuple[first, last: BufferPosition]) =
   ## Enter Visual mode (if not already) and select the given range.
   if e.state.mode != EditorMode.Visual:
-    e.state.previousMode = e.state.mode
+    # Never record a visual mode: restoring it would leave a visual mode with
+    # no selection.
+    if not e.state.mode.isVisualAllMode:
+      e.state.previousMode = e.state.mode
     e.setMode(EditorMode.Visual)
   e.state.visualSelection = VisualSelection(
     kind: vskChar, start: level.first, current: level.last, active: true
