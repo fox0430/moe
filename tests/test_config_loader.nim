@@ -485,6 +485,23 @@ friction = -1.0
     check config.smoothScroll.friction == 80.0 # Default value
 
 suite "Config Validation - Highlight section":
+  test "matter backend loads from TOML":
+    let content = """
+[Highlight]
+backend = "matter"
+"""
+    let (config, vr) = loadFromTomlString(content)
+    check not vr.hasErrors
+    check config.highlight.backend == hbMatter
+
+  test "invalid backend is rejected":
+    let content = """
+[Highlight]
+backend = "unknown"
+"""
+    let (_, vr) = loadFromTomlString(content)
+    check vr.hasErrors
+
   test "Valid Highlight config passes validation":
     let tomlStr = """
 [Highlight]

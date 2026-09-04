@@ -41,6 +41,21 @@ import
   key_router,
   lsp_integration
 
+import buffer/highlight
+
+export HighlightBackend
+
+proc setHighlightBackend*(e: Editor, backend: HighlightBackend) =
+  ## Select the highlighter for all current and future editor buffers without
+  ## loading or writing a configuration file. Existing syntax caches are
+  ## invalidated and rebuilt by the normal frame/updateHighlight path; semantic
+  ## and diagnostic overlays are preserved. The requested default is stored in
+  ## e.config, so a later config reload can replace it in the usual way.
+  ## Matter still requires a -d:moe.matter build; Diff/Log remain builtin.
+  e.config.highlight.backend = backend
+  for buffer in e.buffers:
+    buffer.setHighlightBackend(backend)
+
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor.
   ## Display/edit flags are pull-read from `e.config`, so the ref swap at the

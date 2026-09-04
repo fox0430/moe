@@ -29,7 +29,8 @@ when not defined(moe.embedded):
   import std/osproc
 
 import types/config_types
-export config_types
+import types/highlight_types
+export config_types, highlight_types
 
 proc isToolAvailable(toolCommand: string): bool =
   ## Check if a command-line tool is available in PATH
@@ -128,6 +129,7 @@ proc newEditorConfig*(): EditorConfig =
         "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}",
     ),
     highlight: HighlightConfig(
+      backend: hbBuiltin,
       currentLine: true,
       reservedWord: @["TODO", "WIP", "NOTE"],
       replaceText: true,

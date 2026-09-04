@@ -18,6 +18,8 @@ requires "stew >= 0.2.0"
 requires "editorconfig >= 0.1.1"
 requires "regex >= 0.26.1"
 requires "jsony >= 1.1.6"
+# Matter 0.3.0; enabled only by `-d:moe.matter`.
+requires "https://github.com/elcritch/matter >= 0.3.0"
 
 task release, "Build for release":
   exec "nimble build -d:release"
