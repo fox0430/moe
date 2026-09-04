@@ -27,8 +27,7 @@ import pkg/results
 
 import config
 
-type
-  ClipboardError* = object of CatchableError
+type ClipboardError* = object of CatchableError
 
 const
   WriteTimeoutMs = 10_000
