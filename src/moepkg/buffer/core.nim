@@ -19,6 +19,8 @@
 
 ## Core buffer types: TextBuffer, BufferChange, FoldState, and supporting enums.
 
+from std/strutils import rfind
+
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
 import ../[encoding, highlight, logger, primitives, unicode_utils]
@@ -160,6 +162,7 @@ type
       ## collisions (undo -> different edit re-hitting savedSeq). Inner
       ## transaction changes carry 0; only the wrapper that lands on
       ## undoStack gets an id. 0 = initial state.
+    marksBefore*, marksAfter*: seq[tuple[name: char, pos: BufferPosition]]
     case kind*: BufferChangeKind
     of ckInsertText:
       insertPos*: BufferPosition
@@ -220,6 +223,7 @@ type
         ## keeps O(changed lines) instead of a full O(lines) copy. The piece
         ## tree restore is absolute; only this side array is delta-encoded.
       snapshotFoldState*: FoldState
+      snapshotNamedMarks*: array['a' .. 'z', Option[BufferPosition]]
       snapshotBookmarks*: seq[int]
         ## Restored wholesale like snapshotLineMarkers / snapshotFoldState;
         ## the non-snapshot line-op branches shift via adjustBookmarksFor*.
@@ -340,6 +344,7 @@ type
     pendingSnapshotMarkers*: CowSeq[Option[LineMarkerKind]]
     pendingSnapshotModifiedLines*: seq[LineModificationKind]
     pendingSnapshotFolds*: FoldState
+    pendingSnapshotNamedMarks*: array['a' .. 'z', Option[BufferPosition]]
     pendingSnapshotBookmarks*: seq[int]
 
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
@@ -377,6 +382,7 @@ type
 
     # Bookmarks (sorted list of bookmarked line numbers)
     bookmarks*: seq[int]
+    namedMarks*: array['a' .. 'z', Option[BufferPosition]]
 
     # LSP diagnostics (full detail for hover display)
     diagnostics*: seq[BufferDiagnostic]
@@ -663,6 +669,7 @@ iterator lines*(b: TextBuffer): string =
 proc semanticRemapCallback(b: TextBuffer, event: RowColRemapEvent)
 proc foldShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc bookmarkShiftCallback(b: TextBuffer, event: RowColRemapEvent)
+proc namedMarkShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 proc modifiedLinesShiftCallback(b: TextBuffer, event: RowColRemapEvent)
 
@@ -715,6 +722,7 @@ proc newTextBuffer*(
   result.remapCallbacks.add(semanticRemapCallback)
   result.remapCallbacks.add(foldShiftCallback)
   result.remapCallbacks.add(bookmarkShiftCallback)
+  result.remapCallbacks.add(namedMarkShiftCallback)
   result.sideArrayCallbacks = @[]
   result.sideArrayCallbacks.add(lineMarkerShiftCallback)
   result.sideArrayCallbacks.add(modifiedLinesShiftCallback)
@@ -896,6 +904,29 @@ proc bookmarkShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
   shiftRowRefsForMultiLine(
     event, b.adjustBookmarksForInsert, b.adjustBookmarksForDelete
   )
+
+proc namedMarkShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
+  for mark in b.namedMarks.mitems:
+    if mark.isSome:
+      var pos = mark.get
+      case event.kind
+      of rrekClear:
+        mark = none(BufferPosition)
+      of rrekSingleLine:
+        if pos.line == event.row and pos.column >= event.editCol:
+          pos.column = max(event.editCol, pos.column + event.colDelta)
+          pos.column = min(pos.column, max(0, event.lineCharLenAfter - 1))
+        mark = some(pos)
+      of rrekMultiLine:
+        let
+          delta = event.lastAffectedRowAfter - event.lastAffectedRowBefore
+          row = event.firstAffectedRow + ord(event.preservesFirstRow)
+        if delta < 0 and pos.line >= row and pos.line < row - delta:
+          mark = none(BufferPosition)
+        else:
+          if pos.line >= row:
+            pos.line += delta
+          mark = some(pos)
 
 template shiftPerLineArray(arr: untyped, freshValue: untyped, event: RowColRemapEvent) =
   ## Shift a per-line side array to match a line-count-changing edit. When
@@ -1206,6 +1237,7 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
     b.pendingSnapshotMarkers = b.lineMarkers
     b.pendingSnapshotModifiedLines = b.modifiedLines
     b.pendingSnapshotFolds = b.foldState
+    b.pendingSnapshotNamedMarks = b.namedMarks
     b.pendingSnapshotBookmarks = b.bookmarks
   # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry).
   # PieceTable diffs pendingSnapshotModifiedLines into a ckSnapshot delta instead.
@@ -1287,7 +1319,40 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # Shift the semantic overlay to match the new content BEFORE the frame
   # reaches updateHighlight; without this the version bump above would trip
   # updateHighlight's mismatch guard and wipe the overlay every keystroke.
+  var marksBefore: seq[tuple[name: char, pos: BufferPosition]]
+  for name, pos in b.namedMarks:
+    if pos.isSome:
+      marksBefore.add((name, pos.get))
   b.emitRowColRemapEvents(change)
+  # Row callbacks cannot express a split/merge column. Preserve exact marks
+  # in the surviving tail using the original edit coordinates.
+  if change.kind == ckInsertText and countNewlines(change.insertText) > 0:
+    let
+      rows = countNewlines(change.insertText)
+      tailColumn = change.insertText[change.insertText.rfind('\n') + 1 .. ^1].charLen
+    for mark in marksBefore:
+      if mark.pos.line == change.insertPos.line and
+          mark.pos.column >= change.insertPos.column:
+        b.namedMarks[mark.name] = some(
+          BufferPosition(
+            line: mark.pos.line + rows,
+            column: tailColumn + mark.pos.column - change.insertPos.column,
+          )
+        )
+  elif change.kind == ckDeleteRange and
+      change.deleteEndPos.line > change.deleteStartPos.line:
+    for mark in marksBefore:
+      if mark.pos.line == change.deleteEndPos.line and
+          mark.pos.column > change.deleteEndPos.column and
+          not change.deleteJoinedNextLine:
+        b.namedMarks[mark.name] = some(
+          BufferPosition(
+            line: change.deleteStartPos.line,
+            column:
+              change.deleteStartPos.column + mark.pos.column - change.deleteEndPos.column -
+              1,
+          )
+        )
 
   # Mark highlight as needing update and track the first changed line for
   # incremental highlighting
@@ -1308,6 +1373,10 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
 
   # Attach pre-mutation modifiedLines snapshot to the change
   var changeWithSnapshot = change
+  changeWithSnapshot.marksBefore = marksBefore
+  for name, pos in b.namedMarks:
+    if pos.isSome:
+      changeWithSnapshot.marksAfter.add((name, pos.get))
   changeWithSnapshot.startSeq = preSeq
   changeWithSnapshot.endSeq = postSeq
   if b.hasPendingModifiedLinesSnapshot:
@@ -1337,6 +1406,7 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
           computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
         snapshotFoldState: b.pendingSnapshotFolds,
         snapshotBookmarks: b.pendingSnapshotBookmarks,
+        snapshotNamedMarks: b.pendingSnapshotNamedMarks,
       )
     )
     # Pending snapshot state is now consumed into the entry; reset it all.
