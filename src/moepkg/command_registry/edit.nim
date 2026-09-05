@@ -1703,6 +1703,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
         ctx.state.windowDisplay.savedViewportTopLine =
           ctx.motionController.viewportManager.viewport.topLine
 
+        if lastCmd.markName != '\0':
+          let op = ctx.state.pendingInput.pendingOperator.get
+          ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+          return applyOperatorToMark(ctx, op, lastCmd.markName, lastCmd.markLinewise)
+
         # LastLine with no prefix replays as count=0 (bare G); else combine counts.
         let effectiveCount =
           if lastCmd.motion == Motion.LastLine and not lastCmd.motionHasCount:

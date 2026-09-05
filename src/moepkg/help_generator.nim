@@ -325,10 +325,14 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "gT", description: "Switch to the previous buffer"),
     HelpEntry(syntax: "Ctrl-o", description: "Jump Back (Jumplist)"),
     HelpEntry(syntax: "Ctrl-i", description: "Jump Forward (Jumplist)"),
-    HelpEntry(syntax: "mm", description: "Toggle bookmark on current line"),
-    HelpEntry(syntax: "mn", description: "Jump to next bookmark"),
-    HelpEntry(syntax: "mp", description: "Jump to previous bookmark"),
-    HelpEntry(syntax: "mc", description: "Clear all bookmarks in current buffer"),
+    HelpEntry(syntax: "ma", description: "Set buffer-local mark a (a-z)"),
+    HelpEntry(syntax: "'a", description: "Jump to first nonblank on mark a's line"),
+    HelpEntry(syntax: "`a", description: "Jump to mark a's exact position"),
+    HelpEntry(syntax: "d'a", description: "Delete through mark a's line, inclusive"),
+    HelpEntry(syntax: "gmm", description: "Toggle bookmark on current line"),
+    HelpEntry(syntax: "gmn", description: "Jump to next bookmark"),
+    HelpEntry(syntax: "gmp", description: "Jump to previous bookmark"),
+    HelpEntry(syntax: "gmc", description: "Clear all bookmarks in current buffer"),
   ]
 )
 

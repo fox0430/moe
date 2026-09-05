@@ -2099,54 +2099,66 @@ suite "NormalModeHandler - Change List Navigation":
     check state.cursor.column == 5
 
 suite "NormalModeHandler - Bookmark Navigation":
-  proc pressMM(
+  proc pressGMM(
       handler: NormalModeHandler,
       buf: TextBuffer,
       state: EditorState,
       viewport: ViewPort,
   ): NormalModeResult =
-    ## Simulate m m key sequence (bookmark toggle)
+    ## Simulate g m m key sequence (bookmark toggle)
+    discard handler.handleNormalModeKey(
+      buf, state, viewport, KeyCombo(isSpecial: false, char: "g")
+    )
     let mKey = KeyCombo(isSpecial: false, char: "m")
     discard handler.handleNormalModeKey(buf, state, viewport, mKey)
     handler.handleNormalModeKey(buf, state, viewport, mKey)
 
-  proc pressMN(
+  proc pressGMN(
       handler: NormalModeHandler,
       buf: TextBuffer,
       state: EditorState,
       viewport: ViewPort,
   ): NormalModeResult =
-    ## Simulate m n key sequence (bookmark next)
+    ## Simulate g m n key sequence (bookmark next)
+    discard handler.handleNormalModeKey(
+      buf, state, viewport, KeyCombo(isSpecial: false, char: "g")
+    )
     let mKey = KeyCombo(isSpecial: false, char: "m")
     discard handler.handleNormalModeKey(buf, state, viewport, mKey)
     let nKey = KeyCombo(isSpecial: false, char: "n")
     handler.handleNormalModeKey(buf, state, viewport, nKey)
 
-  proc pressMP(
+  proc pressGMP(
       handler: NormalModeHandler,
       buf: TextBuffer,
       state: EditorState,
       viewport: ViewPort,
   ): NormalModeResult =
-    ## Simulate m p key sequence (bookmark prev)
+    ## Simulate g m p key sequence (bookmark prev)
+    discard handler.handleNormalModeKey(
+      buf, state, viewport, KeyCombo(isSpecial: false, char: "g")
+    )
     let mKey = KeyCombo(isSpecial: false, char: "m")
     discard handler.handleNormalModeKey(buf, state, viewport, mKey)
     let pKey = KeyCombo(isSpecial: false, char: "p")
     handler.handleNormalModeKey(buf, state, viewport, pKey)
 
-  proc pressMC(
+  proc pressGMC(
       handler: NormalModeHandler,
       buf: TextBuffer,
       state: EditorState,
       viewport: ViewPort,
   ): NormalModeResult =
-    ## Simulate m c key sequence (bookmark clear)
+    ## Simulate g m c key sequence (bookmark clear)
+    discard handler.handleNormalModeKey(
+      buf, state, viewport, KeyCombo(isSpecial: false, char: "g")
+    )
     let mKey = KeyCombo(isSpecial: false, char: "m")
     discard handler.handleNormalModeKey(buf, state, viewport, mKey)
     let cKey = KeyCombo(isSpecial: false, char: "c")
     handler.handleNormalModeKey(buf, state, viewport, cKey)
 
-  test "mm toggles bookmark on current line":
+  test "gmm toggles bookmark on current line":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
     let handler = createTestHandler(buf)
@@ -2154,11 +2166,11 @@ suite "NormalModeHandler - Bookmark Navigation":
     let viewport = createTestViewport()
     state.cursor.line = 1
 
-    let result = pressMM(handler, buf, state, viewport)
+    let result = pressGMM(handler, buf, state, viewport)
     check result.kind == nmrHandled
     check buf.hasBookmark(1) == true
 
-  test "mm toggles off existing bookmark":
+  test "gmm toggles off existing bookmark":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
     let handler = createTestHandler(buf)
@@ -2169,22 +2181,22 @@ suite "NormalModeHandler - Bookmark Navigation":
     buf.toggleBookmark(1)
     check buf.hasBookmark(1) == true
 
-    let result = pressMM(handler, buf, state, viewport)
+    let result = pressGMM(handler, buf, state, viewport)
     check result.kind == nmrHandled
     check buf.hasBookmark(1) == false
 
-  test "mn with no bookmarks returns error":
+  test "gmn with no bookmarks returns error":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
 
-    let result = pressMN(handler, buf, state, viewport)
+    let result = pressGMN(handler, buf, state, viewport)
     check result.kind == nmrError
     check result.errorMessage == "No bookmarks"
 
-  test "mn jumps to next bookmark":
+  test "gmn jumps to next bookmark":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne")
     let handler = createTestHandler(buf)
@@ -2195,22 +2207,22 @@ suite "NormalModeHandler - Bookmark Navigation":
     buf.toggleBookmark(2)
     buf.toggleBookmark(4)
 
-    let result = pressMN(handler, buf, state, viewport)
+    let result = pressGMN(handler, buf, state, viewport)
     check result.kind == nmrHandled
     check state.cursor.line == 2
 
-  test "mp with no bookmarks returns error":
+  test "gmp with no bookmarks returns error":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
 
-    let result = pressMP(handler, buf, state, viewport)
+    let result = pressGMP(handler, buf, state, viewport)
     check result.kind == nmrError
     check result.errorMessage == "No bookmarks"
 
-  test "mp jumps to previous bookmark":
+  test "gmp jumps to previous bookmark":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne")
     let handler = createTestHandler(buf)
@@ -2222,11 +2234,11 @@ suite "NormalModeHandler - Bookmark Navigation":
     buf.toggleBookmark(1)
     buf.toggleBookmark(3)
 
-    let result = pressMP(handler, buf, state, viewport)
+    let result = pressGMP(handler, buf, state, viewport)
     check result.kind == nmrHandled
     check state.cursor.line == 3
 
-  test "mc clears all bookmarks":
+  test "gmc clears all bookmarks":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd")
     let handler = createTestHandler(buf)
@@ -2238,7 +2250,7 @@ suite "NormalModeHandler - Bookmark Navigation":
     buf.toggleBookmark(3)
     check buf.bookmarks.len == 3
 
-    let result = pressMC(handler, buf, state, viewport)
+    let result = pressGMC(handler, buf, state, viewport)
     check result.kind == nmrHandled
     check buf.bookmarks.len == 0
 
@@ -2879,3 +2891,149 @@ suite "NormalModeHandler - guu / gUU (case operator on lines)":
 
     discard pressKeys(handler, buf, state, viewport, @[">", ">"])
     check state.cursor.column == buf.getLine(0).charLen - 1
+
+block namedMarks:
+  proc press(
+      handler: NormalModeHandler, buf: TextBuffer, state: EditorState, keys: string
+  ): NormalModeResult =
+    for key in keys:
+      result = handler.handleNormalModeKey(
+        buf, state, createTestViewport(), KeyCombo(isSpecial: false, char: $key)
+      )
+
+  for name in 'a' .. 'z':
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\n  two\nthree\nfour").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 3)
+    doAssert press(handler, buf, state, "m" & $name).kind == nmrHandled
+    state.cursor = BufferPosition()
+    doAssert press(handler, buf, state, "'" & $name).kind == nmrHandled
+    doAssert state.cursor == BufferPosition(line: 1, column: 2),
+      $name & " " & $state.cursor & " " & $buf.namedMarks[name]
+    doAssert press(handler, buf, state, "`" & $name).kind == nmrHandled
+    doAssert state.cursor == BufferPosition(line: 1, column: 3)
+
+  for backwards in [false, true]:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree\nfour").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor.line = if backwards: 0 else: 2
+    discard press(handler, buf, state, "ma")
+    state.cursor.line = if backwards: 2 else: 0
+    doAssert press(handler, buf, state, "d'a").kind == nmrHandled
+    doAssert buf.len == 1
+    doAssert buf.getLine(0) == "four"
+    doAssert state.pendingInput.pendingOperator.isNone
+
+  block exactDelete:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "aé中def").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor.column = 3
+    discard press(handler, buf, state, "ma")
+    state.cursor.column = 1
+    doAssert press(handler, buf, state, "d`a").kind == nmrHandled
+    doAssert buf.getLine(0) == "adef"
+
+  block unsetAndInvalid:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\ntwo").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    doAssert press(handler, buf, state, "d'a").kind == nmrError
+    doAssert state.pendingInput.pendingOperator.isNone
+    doAssert buf.len == 2
+    doAssert press(handler, buf, state, "m1").kind == nmrError
+    doAssert press(handler, buf, state, "j").kind == nmrHandled
+    doAssert state.cursor.line == 1
+
+  block followsEdits:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 2, column: 2)
+    discard press(handler, buf, state, "ma")
+    doAssert buf.insertText(BufferPosition(), "new\n").isOk
+    discard press(handler, buf, state, "`a")
+    doAssert state.cursor == BufferPosition(line: 3, column: 2)
+    doAssert buf.insertText(BufferPosition(line: 3), "x").isOk
+    discard press(handler, buf, state, "`a")
+    doAssert state.cursor == BufferPosition(line: 3, column: 3)
+
+  block sameLine:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\ntwo").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    discard press(handler, buf, state, "ma")
+    doAssert press(handler, buf, state, "d'a").kind == nmrHandled
+    doAssert buf.getLine(0) == "two"
+
+  block bufferLocal:
+    let first = newTextBuffer()
+    let second = newTextBuffer()
+    let handler = createTestHandler(first)
+    let state = createTestState()
+    discard press(handler, first, state, "ma")
+    doAssert press(handler, second, state, "'a").kind == nmrError
+
+  for backend in [GapBuffer, SqrtDecomp, PieceTable]:
+    block undoMarkDeletion:
+      let buf = newTextBuffer(backend = backend)
+      doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree").isOk
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.cursor.line = 1
+      discard press(handler, buf, state, "ma")
+      state.cursor.line = 0
+      doAssert press(handler, buf, state, "d'a").kind == nmrHandled
+      doAssert buf.undo().isOk
+      doAssert buf.namedMarks['a'] == some(BufferPosition(line: 1))
+      doAssert buf.redo().isOk
+      doAssert buf.namedMarks['a'].isNone
+
+  block yankAndRepeat:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor.line = 2
+    discard press(handler, buf, state, "ma")
+    state.cursor.line = 0
+    doAssert press(handler, buf, state, "y'a").kind == nmrHandled
+    doAssert buf.len == 3
+    doAssert press(handler, buf, state, "gu'a").kind == nmrHandled
+    doAssert buf.replaceLine(1, "TWO").isOk
+    state.cursor.line = 1
+    doAssert press(handler, buf, state, ".").kind == nmrHandled
+    doAssert buf.getLine(1) == "two"
+
+  block splitLine:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "abcdef").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor.column = 4
+    discard press(handler, buf, state, "ma")
+    doAssert buf.insertText(BufferPosition(column: 2), "\nxx").isOk
+    discard press(handler, buf, state, "`a")
+    doAssert state.cursor == BufferPosition(line: 1, column: 4)
+
+  block readOnly:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\ntwo").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor.line = 1
+    discard press(handler, buf, state, "ma")
+    state.cursor.line = 0
+    buf.readOnly = true
+    discard press(handler, buf, state, "d'a")
+    doAssert state.statusMessage == "Buffer is read-only"
+    doAssert state.pendingInput.pendingOperator.isNone
+    doAssert buf.len == 2

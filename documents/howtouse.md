@@ -225,10 +225,14 @@
 | <kbd>**g**</kbd> <kbd>**T**</kbd> | Switch to the previous buffer |
 | <kbd>**Ctrl**</kbd> <kbd>**o**</kbd> | Jump Back (Jumplist) |
 | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd> | Jump Forward (Jumplist) |
-| <kbd>**m**</kbd> <kbd>**m**</kbd> | Toggle bookmark on current line |
-| <kbd>**m**</kbd> <kbd>**n**</kbd> | Jump to next bookmark |
-| <kbd>**m**</kbd> <kbd>**p**</kbd> | Jump to previous bookmark |
-| <kbd>**m**</kbd> <kbd>**c**</kbd> | Clear all bookmarks in current buffer |
+| <kbd>**m**</kbd> <kbd>**a**</kbd> | Set buffer-local mark a (a-z) |
+| <kbd>**'**</kbd> <kbd>**a**</kbd> | Jump to first nonblank on mark a's line |
+| <kbd>**`**</kbd> <kbd>**a**</kbd> | Jump to mark a's exact position |
+| <kbd>**d**</kbd> <kbd>**'**</kbd> <kbd>**a**</kbd> | Delete through mark a's line, inclusive |
+| <kbd>**g**</kbd> <kbd>**m**</kbd> <kbd>**m**</kbd> | Toggle bookmark on current line |
+| <kbd>**g**</kbd> <kbd>**m**</kbd> <kbd>**n**</kbd> | Jump to next bookmark |
+| <kbd>**g**</kbd> <kbd>**m**</kbd> <kbd>**p**</kbd> | Jump to previous bookmark |
+| <kbd>**g**</kbd> <kbd>**m**</kbd> <kbd>**c**</kbd> | Clear all bookmarks in current buffer |
 <!-- AUTO-GEN:end NormalMode -->
 
 </details>

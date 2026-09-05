@@ -583,6 +583,8 @@ type
       motionHasCount*: bool # Explicit motion prefix? (dG vs d1G for `.`)
       operatorCount*: int # Count for operator (2 in "2dd")
       targetChar*: string # Target char for f/F/t/T motions (empty otherwise)
+      markName*: char # Named mark motion, or NUL for ordinary motions
+      markLinewise*: bool
     of lecInsertText:
       insertedText*: string # Text that was inserted
       insertPosition*: BufferPosition # Where insertion started

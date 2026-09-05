@@ -199,6 +199,10 @@ suite "help / keybinding consistency":
         # an "any" placeholder, not as a bare key in the Normal table.
         "register-select",
         "macro-play",
+        # Named mark prefixes are documented as composed forms (ma, 'a, `a).
+        "mark-set",
+        "mark-line",
+        "mark-exact",
       ]
     )
     let missing = findUndocumented(NormalBindings, help, allowKeys, allowCmds)
