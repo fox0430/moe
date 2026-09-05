@@ -920,11 +920,10 @@ suite "NormalModeHandler - Jump List":
     let viewport = createTestViewport()
 
     # Set up jump list with positions in the same buffer
-    state.jumpList.list =
-      @[
-        JumpPosition(bufferId: BufferId(0), line: 0, column: 0),
-        JumpPosition(bufferId: BufferId(0), line: 2, column: 0),
-      ]
+    state.jumpList.list = @[
+      JumpPosition(bufferId: BufferId(0), line: 0, column: 0),
+      JumpPosition(bufferId: BufferId(0), line: 2, column: 0),
+    ]
     state.jumpList.index = -1
     state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 1, column: 0)
@@ -1382,11 +1381,10 @@ suite "NormalModeHandler - Jump List Edge Cases":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.jumpList.list =
-      @[
-        JumpPosition(bufferId: BufferId(0), line: 0, column: 0),
-        JumpPosition(bufferId: BufferId(0), line: 1, column: 0),
-      ]
+    state.jumpList.list = @[
+      JumpPosition(bufferId: BufferId(0), line: 0, column: 0),
+      JumpPosition(bufferId: BufferId(0), line: 1, column: 0),
+    ]
     state.jumpList.index = 1 # Not first jump
     state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 2, column: 0)
@@ -1405,11 +1403,10 @@ suite "NormalModeHandler - Jump List Edge Cases":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.jumpList.list =
-      @[
-        JumpPosition(bufferId: BufferId(0), line: 0, column: 0),
-        JumpPosition(bufferId: BufferId(1), line: 5, column: 3),
-      ]
+    state.jumpList.list = @[
+      JumpPosition(bufferId: BufferId(0), line: 0, column: 0),
+      JumpPosition(bufferId: BufferId(1), line: 5, column: 3),
+    ]
     state.jumpList.index = 0
     state.windowDisplay.currentBufferId = BufferId(0)
 
@@ -2004,12 +2001,11 @@ suite "NormalModeHandler - Change List Navigation":
     let viewport = createTestViewport()
     state.windowDisplay.currentBufferId = BufferId(0)
 
-    buf.changeList =
-      @[
-        BufferPosition(line: 0, column: 3),
-        BufferPosition(line: 1, column: 5),
-        BufferPosition(line: 2, column: 1),
-      ]
+    buf.changeList = @[
+      BufferPosition(line: 0, column: 3),
+      BufferPosition(line: 1, column: 5),
+      BufferPosition(line: 2, column: 1),
+    ]
     buf.changeListIndex = 2
 
     let result = pressGSemicolon(handler, buf, state, viewport)
@@ -2060,12 +2056,11 @@ suite "NormalModeHandler - Change List Navigation":
     let viewport = createTestViewport()
     state.windowDisplay.currentBufferId = BufferId(0)
 
-    buf.changeList =
-      @[
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 1, column: 3),
-        BufferPosition(line: 2, column: 5),
-      ]
+    buf.changeList = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 3),
+      BufferPosition(line: 2, column: 5),
+    ]
     buf.changeListIndex = 2
 
     # g; - jump to index 2 position, index becomes 1
