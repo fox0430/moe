@@ -826,7 +826,9 @@ proc processOutput*(grid: TerminalGrid, data: string) =
         grid.escapeBuffer = ""
       of '\r':
         grid.cursorCol = 0
-      of '\n':
+      of '\n', '\x0b', '\x0c':
+        # LF, VT and FF all index: down one row, column preserved. Without VT
+        # and FF here they fall through to the text path and land in a cell.
         grid.lineFeed()
       of '\t':
         # Tab: move to next tab stop (every 8 columns)
