@@ -21,7 +21,7 @@
 
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
-import ../[encoding, highlight, logger, primitives, unicode_utils]
+import ../[encoding, highlight, logger, primitives, setting_issue, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta
 
@@ -30,6 +30,9 @@ export cow_seq, seq_delta
 export
   CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition,
   ColumnRange
+
+# `BufferNotice` carries a `SettingIssue`, so notice readers need it too.
+export SettingIssue, SettingIssueKind, toMessage, sameSetting
 
 # The character model buffer columns are indexed with. Exported so
 # `line.charLen` and `line.charSubStr` resolve through the same import.
@@ -50,6 +53,20 @@ type
     ucBinary ## Decoded, but holds NUL bytes near the start
     ucRaw ## No encoding could decode it; bytes kept verbatim
     ucRawBinary ## Undecodable and holding NUL bytes
+
+  BufferNoticeKind* = enum
+    ## What a notice is about.
+    bnContent ## What moe did with bytes it could not treat as ordinary text
+    bnSetting ## A `.editorconfig` value moe did not apply
+
+  BufferNotice* = object
+    ## Something the user should hear about a buffer. Holds the facts only;
+    ## the wording belongs to whoever reports it.
+    case kind*: BufferNoticeKind
+    of bnContent:
+      content*: UnusualContentKind
+    of bnSetting:
+      issue*: SettingIssue
 
   LineMarkerKind* = enum
     ## Per-line marker classification stored in `TextBuffer.lineMarkers`.
@@ -298,9 +315,15 @@ type
       # File modification time when loaded (for external change detection)
     externalModWarned*: bool
       # Whether the user has been warned about external modification (reset on load/save)
-    warnedUnusualContent*: UnusualContentKind
-      ## Last warned kind (`ucOrdinary` = none). Avoids repeat on auto-reload
-      ## but re-warns when the kind changes.
+    pendingNotices*: seq[BufferNotice]
+      ## Not yet reported to the user. Filled where the fact appears, drained
+      ## when a window first shows the buffer.
+    settingIssues*: seq[SettingIssue]
+      ## `.editorconfig` issues as of the last apply, to tell a new issue from
+      ## an already reported one.
+    reportedContentKind*: UnusualContentKind
+      ## Content kind already queued (`ucOrdinary` = none). Re-queued when the
+      ## kind changes.
 
     # Undo/Redo stacks (using Deque for O(1) operations at both ends)
     undoStack*: Deque[BufferChange]
@@ -418,6 +441,59 @@ proc unusualContentKind*(b: TextBuffer): UnusualContentKind =
     if b.hasBinaryContent: ucBinary else: ucOrdinary
   else:
     if b.hasBinaryContent: ucRawBinary else: ucRaw
+
+proc `==`*(a, b: BufferNotice): bool =
+  ## Structural equality. Nim's generic `==` cannot compare a case object.
+  if a.kind != b.kind:
+    return false
+  case a.kind
+  of bnContent:
+    a.content == b.content
+  of bnSetting:
+    a.issue == b.issue
+
+proc noteContent*(b: TextBuffer) =
+  ## Queue what `b` did with content that is not ordinary text, unless the
+  ## same kind was already reported.
+  let kind = b.unusualContentKind
+  if kind == b.reportedContentKind:
+    return
+  # Recorded even for ordinary content, so a file broken again is reported again.
+  b.reportedContentKind = kind
+  if kind != ucOrdinary:
+    b.pendingNotices.add BufferNotice(kind: bnContent, content: kind)
+
+proc noteSettingIssues*(b: TextBuffer, issues: seq[SettingIssue]) =
+  ## Queue the `.editorconfig` issues that are new since the last apply, so
+  ## that re-applying the same file on an auto-reload says nothing.
+  for issue in issues:
+    var known = false
+    for old in b.settingIssues:
+      if old.sameSetting(issue):
+        known = true
+        break
+    if not known:
+      # `settingIssues` is reset when editorconfig is off or unreadable, so
+      # check what is still queued too.
+      for pending in b.pendingNotices:
+        if pending.kind == bnSetting and pending.issue.sameSetting(issue):
+          known = true
+          break
+    if not known:
+      b.pendingNotices.add BufferNotice(kind: bnSetting, issue: issue)
+  b.settingIssues = issues
+
+proc takeNotices*(b: TextBuffer): seq[BufferNotice] =
+  ## Take the pending notices, clearing them.
+  result = b.pendingNotices
+  b.pendingNotices = @[]
+
+proc clearNotices*(b: TextBuffer) =
+  ## Drop pending and already reported notices, for a buffer taking on a
+  ## different file.
+  b.pendingNotices = @[]
+  b.settingIssues = @[]
+  b.reportedContentKind = ucOrdinary
 
 proc rawBytesRejection*(action: string): string =
   ## Rejection message for `action` on a raw buffer.

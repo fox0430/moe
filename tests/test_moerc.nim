@@ -49,5 +49,5 @@ suite "example/moerc.toml":
 
     if errors.len > 0:
       for e in errors:
-        echo "  Validation error: ", e.toErrorMessage
+        echo "  Validation error: ", e.toMessage
     check errors.len == 0
