@@ -39,6 +39,9 @@ const
   MaxQueueSize* = 10
   # Frame is either a border (2 cols) or space margins (2 cols) — always 2.
   PopupFrameSize* = 2
+  ClampedRowsMarker* = "... (:messages)"
+    ## Stands in for rows a popup had no room to draw, naming where the whole
+    ## report can be read.
 
 proc notificationInfoStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.notificationPopupInfo)
@@ -92,17 +95,23 @@ proc wrapLine(line: string, maxWidth: int): seq[string] =
   if current.len > 0:
     result.add(current)
 
+proc wrapMessage(mgr: NotificationPopupManager, message: string): seq[string] =
+  # `maxWidth` bounds the outer popup width, so reserve frame space for content.
+  let contentMaxWidth = max(1, mgr.maxWidth - PopupFrameSize)
+  for line in message.splitLines():
+    result.add(wrapLine(line, contentMaxWidth))
+
+proc wrappedRowCount*(mgr: NotificationPopupManager, message: string): int =
+  ## How many rows `message` takes up in a popup once wrapped.
+  mgr.wrapMessage(message).len
+
 proc addNotification*(
     mgr: NotificationPopupManager, message: string, level: NotificationLevel = nlInfo
 ) =
   if message.len == 0:
     return
 
-  # `maxWidth` bounds the outer popup width, so reserve frame space for content.
-  let contentMaxWidth = max(1, mgr.maxWidth - PopupFrameSize)
-  var wrappedLines: seq[string] = @[]
-  for line in message.splitLines():
-    wrappedLines.add(wrapLine(line, contentMaxWidth))
+  let wrappedLines = mgr.wrapMessage(message)
 
   var item = NotificationItem(
     message: message, level: level, createdAt: getMonoTime(), lines: wrappedLines
@@ -169,18 +178,6 @@ proc calculateNotificationPositions*(
   for i in countdown(mgr.queue.len - 1, startIdx):
     let item = mgr.queue[i]
 
-    # Calculate popup width based on content display width
-    # (accounts for East Asian Wide/Fullwidth characters)
-    var maxLineWidth = 0
-    for line in item.lines:
-      maxLineWidth = max(maxLineWidth, line.displayWidth)
-    let borderSize = if mgr.showBorder: 2 else: 0
-    # When border is off, add left and right space margins.
-    let margin = if mgr.showBorder: 0 else: 2
-    # Clamp outer width so popup never exceeds `maxWidth` on screen.
-    let popupWidth = min(maxLineWidth + borderSize + margin, mgr.maxWidth)
-    let popupHeight = item.lines.len + borderSize
-
     let corner =
       case mgr.position
       of nppBottomRight: pcBottomRight
@@ -195,6 +192,47 @@ proc calculateNotificationPositions*(
         bottomReserve + 1
       of nppTopRight, nppTopLeft:
         0
+
+    # A popup taller than the rows left to it would cover the editor. A top
+    # corner ignores the reserved rows when placing, but not when sizing.
+    let
+      heightReserve = max(effectiveReserve, bottomReserve)
+      available = termHeight - heightReserve - stackOffset
+
+    # On a short screen the border is dropped first, since it can be what
+    # leaves no room for the message.
+    var
+      showBorder = mgr.showBorder
+      borderSize = if mgr.showBorder: 2 else: 0
+    if available < borderSize + 1:
+      showBorder = false
+      borderSize = 0
+
+    # A popup with no rows left would be pinned to the screen edge on top of
+    # the ones already placed, so it is left to the message log. Later entries
+    # are older and stacked further, so none of them fit either.
+    if available < 1:
+      break
+
+    let
+      popupHeight = min(item.lines.len + borderSize, available)
+      shownLines = popupHeight - borderSize
+      # The last row of a clamped popup goes to the marker, not to content.
+      isClamped = shownLines < item.lines.len
+
+    # Width comes from the rows drawn, not the ones the item holds: sizing to a
+    # line the clamp drops leaves a band of empty background across the editor.
+    var maxLineWidth = 0
+    for j in 0 ..< (if isClamped: shownLines - 1 else: shownLines):
+      maxLineWidth = max(maxLineWidth, item.lines[j].displayWidth)
+    if isClamped:
+      maxLineWidth = max(maxLineWidth, ClampedRowsMarker.displayWidth)
+
+    # When border is off, add left and right space margins.
+    let margin = if showBorder: 0 else: 2
+    # Clamp outer width so popup never exceeds `maxWidth` on screen.
+    let popupWidth = min(maxLineWidth + borderSize + margin, mgr.maxWidth)
+
     let rect = placeCorner(
       corner,
       popupWidth,
@@ -210,7 +248,7 @@ proc calculateNotificationPositions*(
         y: rect.y,
         width: rect.width,
         height: rect.height,
-        showBorder: mgr.showBorder,
+        showBorder: showBorder,
       )
     )
 
@@ -238,13 +276,27 @@ proc renderNotificationPopup*(termBuffer: var Buffer, rect: NotificationRect) =
     if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
       termBuffer[pos.x + pos.width - 1, pos.y] = cell("┐", borderStyle)
 
-  # Content lines
-  for i in 0 ..< item.lines.len:
+  # Content lines. The rect is what fits on screen; the item may hold more.
+  let shownLines = max(0, min(item.lines.len, pos.height - borderOffset * 2))
+  # A clamp can drop the line saying the report was shortened, so the last row
+  # drawn says so itself.
+  let marker =
+    if ClampedRowsMarker.displayWidth <= contentWidth: ClampedRowsMarker else: "..."
+  let ellipsisRow =
+    if shownLines < item.lines.len:
+      shownLines - 1
+    else:
+      -1
+  for i in 0 ..< shownLines:
     let lineY = contentY + i
     if lineY < 0 or lineY >= termBuffer.area.height:
       continue
 
-    let lineText = item.lines[i]
+    let lineText =
+      if i == ellipsisRow:
+        marker
+      else:
+        item.lines[i]
 
     # Left border or space margin
     if pos.x >= 0 and pos.x < termBuffer.area.width:
@@ -278,7 +330,7 @@ proc renderNotificationPopup*(termBuffer: var Buffer, rect: NotificationRect) =
 
   # Bottom border
   if pos.showBorder:
-    let bottomY = contentY + item.lines.len
+    let bottomY = contentY + shownLines
     if bottomY >= 0 and bottomY < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
         termBuffer[pos.x, bottomY] = cell("└", borderStyle)

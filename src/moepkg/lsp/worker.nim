@@ -31,7 +31,7 @@ import pkg/chronos/[asyncproc, threadsync, selectors2]
 
 import jsonrpc
 import protocol/types
-import ../logger
+import ../[logger, setting_issue]
 
 export types
 
@@ -1112,13 +1112,32 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     if cmd.initializationOptions.len > 0:
       try:
         initParams["initializationOptions"] = parseJson(cmd.initializationOptions)
-      except JsonParsingError:
-        discard
+      except JsonParsingError as e:
+        # Reported rather than dropped: initialize still succeeds without the
+        # options, so the server would just look like it ignored them.
+        sendLogMessage(
+          mtWarning,
+          SettingIssue(
+            kind: sikInvalidValue,
+            name: "initializationOptions",
+            val: cmd.initializationOptions,
+            expected: "valid JSON (" & e.msg & ")",
+          ).toMessage,
+        )
 
     if cmd.settings.len > 0:
       try:
         currentSettings = parseJson(cmd.settings)
-      except JsonParsingError:
+      except JsonParsingError as e:
+        sendLogMessage(
+          mtWarning,
+          SettingIssue(
+            kind: sikInvalidValue,
+            name: "settings",
+            val: cmd.settings,
+            expected: "valid JSON (" & e.msg & ")",
+          ).toMessage,
+        )
         currentSettings = newJNull()
     else:
       currentSettings = newJNull()

@@ -31,7 +31,6 @@ import
   highlight_config,
   editor_window_layout,
   editor_lsp,
-  editor_notify,
   editor_mode,
   git_cache,
   git_conflict,
@@ -138,9 +137,6 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
       buf.bookmarks = e.savedBookmarks[absPath]
     if e.showGitDiff:
       e.state.git.requestGitRefresh(buf)
-  # A file that is not text still opens (every byte is held and saved back
-  # unchanged), but say so.
-  e.notifyUnusualContent(buf)
   # Scan conflict markers regardless of the highlight config (like loadFile) so
   # conflict-navigation works as soon as this buffer becomes active.
   buf.refreshConflicts()
