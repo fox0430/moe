@@ -464,13 +464,12 @@ proc executeCommand*(
     of "mark-set", "mark-line", "mark-exact":
       let op = ctx.state.pendingInput.pendingOperator
       ctx.state.pendingInput.pendingOperator = none(PendingOperator)
+      ctx.state.pendingInput.pendingRegister = none(char)
       if cmd.targetChar.len != 1 or cmd.targetChar[0] notin {'a' .. 'z'}:
-        ctx.state.pendingInput.pendingRegister = none(char)
         return err("Invalid mark (use a-z)")
       let name = cmd.targetChar[0]
       if cmd.operatorType == "mark-set":
         if op.isSome:
-          ctx.state.pendingInput.pendingRegister = none(char)
           return err("Mark setting is not a motion")
         ctx.buffer.namedMarks[name] = some(ctx.cursor)
         return ok(())

@@ -20,7 +20,7 @@
 ## Public editing API: insertText / deleteChar / insert / deleteLine /
 ## deleteRange / replaceLine / splitLine / NoUndo bypass procs.
 
-import std/unicode
+import std/[options, unicode]
 
 from std/strutils import replace, contains
 
@@ -392,6 +392,12 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
       b.discardPendingSnapshot()
       return err("Failed to delete range: " & e.msg)
 
+  let rangeColDelta =
+    if startPos.line == endPos.line and not joinedWithNext:
+      b.getLine(startPos.line).charLen - startLine.charLen
+    else:
+      0
+
   # Side-array shifts run via the emitRowColRemapEvents subscribers.
   b.pushUndoChange(
     BufferChange(
@@ -401,6 +407,7 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
       deletedRangeText: deletedText,
       deleteJoinedNextLine: joinedWithNext,
       deleteRangeByteOffset: startByte,
+      deleteRangeColDelta: rangeColDelta,
     )
   )
 
@@ -438,9 +445,11 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
     for i in 1 ..< linesToJoin:
       let currentLine = b.getLine(startLine)
       let nextLine = b.getLine(startLine + 1)
+      let marksBeforeJoin = b.namedMarks
 
       var trimmedCurrent = currentLine.strip(leading = false, trailing = true)
       let trimmedNext = nextLine.strip(leading = true, trailing = false)
+      let leadingTrim = nextLine.charLen - trimmedNext.charLen
 
       # Vim J: separate joined lines with a space, but not when the next line
       # begins with ')'.
@@ -448,6 +457,7 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
         trimmedCurrent.add(' ')
 
       let joinedLine = trimmedCurrent & trimmedNext
+      let joinedPrefixLen = trimmedCurrent.charLen
 
       let deleteResult = b.deleteLine(startLine)
       if deleteResult.isErr:
@@ -460,6 +470,26 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
       let insertResult = b.insert(startLine, joinedLine)
       if insertResult.isErr:
         return err(insertResult.error)
+
+      let lastColumn = max(0, joinedLine.charLen - 1)
+      for name in 'a' .. 'z':
+        if marksBeforeJoin[name].isSome:
+          let pos = marksBeforeJoin[name].get
+          if pos.line == startLine:
+            b.namedMarks[name] = some(
+              BufferPosition(
+                line: startLine,
+                column: min(pos.column, min(joinedPrefixLen, lastColumn)),
+              )
+            )
+          elif pos.line == startLine + 1:
+            b.namedMarks[name] = some(
+              BufferPosition(
+                line: startLine,
+                column:
+                  min(joinedPrefixLen + max(0, pos.column - leadingTrim), lastColumn),
+              )
+            )
 
   if txr.isErr:
     return err(txr.error)

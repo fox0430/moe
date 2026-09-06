@@ -2951,6 +2951,21 @@ block namedMarks:
     doAssert press(handler, buf, state, "j").kind == nmrHandled
     doAssert state.cursor.line == 1
 
+  block markCommandsConsumePendingRegister:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "one\ntwo").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor.line = 1
+    doAssert press(handler, buf, state, "\"amb").kind == nmrHandled
+    doAssert state.pendingInput.pendingRegister.isNone
+    state.cursor.line = 0
+    doAssert press(handler, buf, state, "\"c'b").kind == nmrHandled
+    doAssert state.pendingInput.pendingRegister.isNone
+    doAssert state.cursor.line == 1
+    doAssert press(handler, buf, state, "\"c'z").kind == nmrError
+    doAssert state.pendingInput.pendingRegister.isNone
+
   block followsEdits:
     let buf = newTextBuffer()
     doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree").isOk
@@ -2964,6 +2979,42 @@ block namedMarks:
     doAssert buf.insertText(BufferPosition(line: 3), "x").isOk
     discard press(handler, buf, state, "`a")
     doAssert state.cursor == BufferPosition(line: 3, column: 3)
+
+  block followsDeleteRangeColumns:
+    let buf = newTextBuffer()
+    doAssert buf.insertText(BufferPosition(), "alpha beta gamma").isOk
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor.column = 11
+    discard press(handler, buf, state, "ma")
+    state.cursor.column = 0
+    doAssert press(handler, buf, state, "dw").kind == nmrHandled
+    doAssert buf.namedMarks['a'] == some(BufferPosition(column: 5))
+
+    let multi = newTextBuffer()
+    doAssert multi.insertText(BufferPosition(), "abcdef\nuvwxyz\nend").isOk
+    multi.namedMarks['a'] = some(BufferPosition(line: 0, column: 4))
+    multi.namedMarks['b'] = some(BufferPosition(line: 0, column: 1))
+    doAssert multi.deleteRange(
+      BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)
+    ).isOk
+    doAssert multi.namedMarks['a'] == some(BufferPosition(line: 0, column: 3))
+    doAssert multi.namedMarks['b'] == some(BufferPosition(line: 0, column: 1))
+
+  block joinPreservesMarks:
+    let buf = newTextBuffer("one  \n  two")
+    buf.namedMarks['a'] = some(BufferPosition(line: 0, column: 1))
+    buf.namedMarks['b'] = some(BufferPosition(line: 1, column: 3))
+    doAssert buf.joinLines(0).isOk
+    doAssert buf.getLine(0) == "one two"
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 1))
+    doAssert buf.namedMarks['b'] == some(BufferPosition(line: 0, column: 5))
+    doAssert buf.undo().isOk
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 1))
+    doAssert buf.namedMarks['b'] == some(BufferPosition(line: 1, column: 3))
+    doAssert buf.redo().isOk
+    doAssert buf.namedMarks['a'] == some(BufferPosition(line: 0, column: 1))
+    doAssert buf.namedMarks['b'] == some(BufferPosition(line: 0, column: 5))
 
   block sameLine:
     let buf = newTextBuffer()
@@ -2996,6 +3047,32 @@ block namedMarks:
       doAssert buf.namedMarks['a'] == some(BufferPosition(line: 1))
       doAssert buf.redo().isOk
       doAssert buf.namedMarks['a'].isNone
+
+    block undoPreservesMarkSetAfterEdit:
+      let buf = newTextBuffer(backend = backend)
+      doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree").isOk
+      doAssert buf.insertText(BufferPosition(), "x").isOk
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.cursor = BufferPosition(line: 2, column: 2)
+      discard press(handler, buf, state, "mz")
+      doAssert buf.undo().isOk
+      doAssert buf.namedMarks['z'] == some(BufferPosition(line: 2, column: 2))
+
+    block redoPreservesMarkSetAfterUndo:
+      let buf = newTextBuffer(backend = backend)
+      doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree").isOk
+      let handler = createTestHandler(buf)
+      let state = createTestState()
+      state.cursor = BufferPosition(line: 2, column: 1)
+      discard press(handler, buf, state, "ma")
+      doAssert buf.deleteChar(BufferPosition()).isOk
+      doAssert buf.undo().isOk
+      state.cursor = BufferPosition(line: 1, column: 1)
+      discard press(handler, buf, state, "mb")
+      doAssert buf.redo().isOk
+      doAssert buf.namedMarks['a'] == some(BufferPosition(line: 2, column: 1))
+      doAssert buf.namedMarks['b'] == some(BufferPosition(line: 1, column: 1))
 
   block yankAndRepeat:
     let buf = newTextBuffer()

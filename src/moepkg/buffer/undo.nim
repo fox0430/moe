@@ -42,6 +42,17 @@ type TransactionRollbackError* = object of ValueError
 # will silently call the wrong overload or fail at link time.
 proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string]
 
+proc changedMarkNames(change: BufferChange): set[char] =
+  ## Collect names touched anywhere inside a transaction. A mark can be
+  ## deleted and restored to the same position by a composite edit such as J;
+  ## it still needs an aggregate delta so redo restores it after replaying the
+  ## inner line operations.
+  for markChange in change.namedMarkChanges:
+    result.incl(markChange.name)
+  if change.kind == ckTransaction:
+    for inner in change.transactionChanges:
+      result = result + changedMarkNames(inner)
+
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
   ## Returns error if the operation fails
@@ -102,7 +113,6 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # b.modifiedLines currently holds the post-mutation state; reverse it.
       applyUndo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
-      b.namedMarks = change.snapshotNamedMarks
       b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
 
@@ -112,9 +122,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     # savedModifiedLines restore below would clobber their output.
     if change.kind notin {ckSnapshot, ckTransaction}:
       b.emitRowColRemapEvents(change, reverse = true, includeSideArrays = false)
-      b.namedMarks = default(typeof(b.namedMarks))
-      for mark in change.marksBefore:
-        b.namedMarks[mark.name] = some(mark.pos)
+    b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = false)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
@@ -152,7 +160,7 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     modifiedLinesDelta: change.modifiedLinesDelta,
     snapshotFoldState: b.foldState,
     snapshotBookmarks: b.bookmarks,
-    snapshotNamedMarks: b.namedMarks,
+    namedMarkChanges: change.namedMarkChanges,
   )
 
 proc clearMarkersIfAtSavedState(b: TextBuffer) {.inline.} =
@@ -191,6 +199,7 @@ proc beginTransaction*(
       description: description,
       startSeq: b.changeSeq,
       cursorPos: cursorPos,
+      namedMarksBefore: b.namedMarks,
     )
   )
   return ok(())
@@ -212,6 +221,9 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
     # step, regardless of inner change count.
     let preTxnSeq = transaction.startSeq
     let postTxnSeq = b.changeSeq
+    var touchedMarks: set[char]
+    for change in transaction.changes:
+      touchedMarks = touchedMarks + changedMarkNames(change)
     if b.pendingSnapshot.isSome:
       # PieceTable: single O(1) snapshot undo entry for entire transaction
       b.undoStack.addLast(
@@ -231,7 +243,8 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
           snapshotFoldState: b.pendingSnapshotFolds,
           snapshotBookmarks: b.pendingSnapshotBookmarks,
-          snapshotNamedMarks: b.pendingSnapshotNamedMarks,
+          namedMarkChanges:
+            diffNamedMarks(b.pendingSnapshotNamedMarks, b.namedMarks, touchedMarks),
         )
       )
       # Pending snapshot state is now consumed into the entry; reset it all.
@@ -245,6 +258,8 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         transactionChanges: transaction.changes,
         transactionDescription: transaction.description,
         transactionCursorPos: transaction.cursorPos,
+        namedMarkChanges:
+          diffNamedMarks(transaction.namedMarksBefore, b.namedMarks, touchedMarks),
       )
       b.undoStack.addLast(transactionChange)
     # Note: changeSeq was inc'd per inner change in pushUndoChange; preTxnSeq /
@@ -537,7 +552,6 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # b.modifiedLines currently holds the pre-mutation state; re-apply it.
       applyRedo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
-      b.namedMarks = change.snapshotNamedMarks
       b.bookmarks = change.snapshotBookmarks
       b.lastChangedLines = 0
 
@@ -546,9 +560,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     # below overwrite the two per-line arrays so `includeSideArrays=false`.
     if change.kind notin {ckSnapshot, ckTransaction}:
       b.emitRowColRemapEvents(change, includeSideArrays = false)
-      b.namedMarks = default(typeof(b.namedMarks))
-      for mark in change.marksAfter:
-        b.namedMarks[mark.name] = some(mark.pos)
+    b.namedMarks.applyNamedMarkChanges(change.namedMarkChanges, useAfter = true)
 
     # For non-snapshot: restore modifiedLines from pre-mutation snapshot
     if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
