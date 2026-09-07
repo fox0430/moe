@@ -1120,11 +1120,18 @@ suite "GitDiff - Integration tests with git repository":
     discard execCmdEx("git add link.txt", workingDir = testDir)
     discard execCmdEx("git commit -m 'Add symlink'", workingDir = testDir)
 
+    let repoLink = getTempDir() / "moe_git_diff_outside_repo_link"
+    if symlinkExists(repoLink) or fileExists(repoLink):
+      removeFile(repoLink)
+    createSymlink(testDir, repoLink)
+    defer:
+      removeFile(repoLink)
+
     let diffProc = GitDiffProcess(
       stage: gdsGitRoot,
       startTime: epochTime(),
-      filePath: linkFile,
-      workingDir: testDir,
+      filePath: repoLink / "link.txt",
+      workingDir: repoLink,
       bufferContent: readFile(linkFile),
     )
 
@@ -1159,11 +1166,18 @@ suite "GitDiff - Integration tests with git repository":
       removeFile(linkFile)
       removeFile(outsideFile)
 
+    let repoLink = getTempDir() / "moe_git_diff_untracked_repo_link"
+    if symlinkExists(repoLink) or fileExists(repoLink):
+      removeFile(repoLink)
+    createSymlink(testDir, repoLink)
+    defer:
+      removeFile(repoLink)
+
     let diffProc = GitDiffProcess(
       stage: gdsGitRoot,
       startTime: epochTime(),
-      filePath: linkFile,
-      workingDir: testDir,
+      filePath: repoLink / "untracked_link.txt",
+      workingDir: repoLink,
       bufferContent: readFile(linkFile),
     )
 

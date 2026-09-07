@@ -142,6 +142,17 @@ proc tryCanonicalPath(path: string): string =
       discard
   return path
 
+proc tryCanonicalParentPath(path: string): string =
+  ## Resolve directory symlinks without resolving the final path component.
+  ## Git needs the final component when it is an in-repository symlink, while
+  ## the parent must use the same canonical spelling as the repository root.
+  let parent = path.parentDir()
+  let base = path.extractFilename()
+  if parent.len == 0 or parent == path or base.len == 0:
+    path
+  else:
+    tryCanonicalPath(parent) / base
+
 proc calculateRelativePath(filePath, gitRoot: string): string =
   ## Calculate relative path from git root to file
   ## Handles both absolute and relative paths
@@ -312,9 +323,13 @@ proc advanceToGitShow(
       true
     else:
       canonGuardPath.startsWith(canonGitRoot & "/")
-  # Keep the original when resolution moves outside the root
-  # (in-repo symlink pointing outside).
-  let effectivePath = if isUnderCanonRoot: canonFilePath else: resolvedFilePath
+  # Preserve the final symlink when it points outside the root, but canonicalize
+  # its parent so aliases such as macOS /var -> /private/var still match.
+  let effectivePath =
+    if isUnderCanonRoot:
+      canonFilePath
+    else:
+      tryCanonicalParentPath(resolvedFilePath)
   # Collapse "." / ".." / duplicate separators for the guard and the
   # `git show HEAD:<path>` argument (git rejects "..").
   let guardEffectivePath = normalizedPath(effectivePath)
