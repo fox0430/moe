@@ -171,6 +171,7 @@ proc startLspSelectionRange*(e: Editor): bool =
     proc(): Result[int, string] =
       e.lsp.startSelectionRangeRequest(activeBuffer, line, col),
     validModes = SelectionRangeValidModes,
+    trigger = lrtUserAction,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP selection range failed: " & ctxRes.error

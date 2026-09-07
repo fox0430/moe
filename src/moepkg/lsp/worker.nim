@@ -68,6 +68,13 @@ proc didOpenParamsJson(uri, langId: string, version: int, text: string): string 
       TextDocumentItem(uri: uri, languageId: langId, version: version, text: text)
   ).toJson
 
+proc didSaveParamsJson(uri: string, text: Option[string]): string =
+  var params = "{\"textDocument\":{\"uri\":" & escapeJson(uri) & "}"
+  if text.isSome:
+    params &= ",\"text\":" & escapeJson(text.get)
+  params &= "}"
+  params
+
 proc pathToFileUri*(path: string): string =
   ## Build a percent-encoded file:// URI from an absolute path. Encoding is
   ## per segment so the separators survive; without it a workspace path
@@ -142,11 +149,14 @@ type
       openLangId*: string
       openVersion*: int
       openText*: string
+      openGeneration*: int ## Document epoch, echoed back in the sync ack.
     of lcmdDidClose:
       closeUri*: string
     of lcmdDidChange:
       changeUri*: string
       changeVersion*: int
+      changeGeneration*: int
+        ## Document epoch, echoed back in the sync ack (see openGeneration).
       case changeMode*: LspDidChangeMode
       of lcdmFull:
         changeText*: string # Full document text (also used by coalescing)
@@ -155,6 +165,9 @@ type
     of lcmdDidSave:
       saveUri*: string
       saveText*: Option[string]
+      saveVersion*: int ## Document version at save time (0 when unknown).
+      saveGeneration*: int
+        ## Document epoch, echoed back in the sync ack (see openGeneration).
     of lcmdRequest:
       requestId*: int # ID for tracking response
       reqMethod*: string
@@ -192,6 +205,7 @@ type
     levDynamicUnregister # Dynamic capability unregistration
     levStatusUpdate # Server status notification (experimental/serverStatus)
     levApplyEdit # Server-initiated workspace/applyEdit (answered by main thread)
+    levSyncAck # Document notification write outcome (main thread confirms shadow)
 
   # Server health status from experimental/serverStatus
   ServerHealth* = enum
@@ -258,6 +272,12 @@ type
         # Server generation that issued this request. Echoed back in the
         # response command so the worker can drop it if the server crashed and
         # was replaced in the meantime (the replacement never issued this id).
+    of levSyncAck:
+      # Write outcome for a doc notification; generation echoes the command epoch so stale acks are dropped.
+      ackUri*: string
+      ackVersion*: int
+      ackOk*: bool
+      ackGeneration*: int
 
   # Thread-safe queues using locks and deques for O(1) operations
   CommandQueue = object
@@ -509,6 +529,107 @@ proc buildWorkspaceConfigurationResponse*(
       else:
         result.add(settings)
 
+type PendingDoc* = object
+  ## One document held while starting; one entry per URI keeps the latest text.
+  ## Flush sends that text for both frames so a save is never older than its open.
+  uri*: string
+  langId*: string
+  version*: int
+  text*: string
+  generation*: int ## Document epoch; writes with a stale epoch are refused.
+  wantSave*: bool
+  saveWithText*: bool
+
+proc findPendingDocIndex*(pending: seq[PendingDoc], uri: string): int =
+  ## Index of `uri` in `pending`, or -1.
+  for i in 0 ..< pending.len:
+    if pending[i].uri == uri:
+      return i
+  -1
+
+proc upsertPendingOpen*(
+    pending: var seq[PendingDoc],
+    uri, langId: string,
+    version: int,
+    text: string,
+    generation: int = 0,
+) =
+  ## Insert or replace the pending open for `uri`; a fresh open drops any held save.
+  let i = pending.findPendingDocIndex(uri)
+  if i >= 0:
+    pending[i].langId = langId
+    pending[i].version = version
+    pending[i].text = text
+    pending[i].generation = generation
+    pending[i].wantSave = false
+    pending[i].saveWithText = false
+  else:
+    pending.add(
+      PendingDoc(
+        uri: uri, langId: langId, version: version, text: text, generation: generation
+      )
+    )
+
+proc updatePendingText*(
+    pending: var seq[PendingDoc],
+    uri: string,
+    version: int,
+    text: string,
+    generation: int = 0,
+): bool =
+  ## Fold a full didChange into the pending open; false when no open covers `uri` or the epoch is stale.
+  let i = pending.findPendingDocIndex(uri)
+  if i < 0:
+    return false
+  if generation != pending[i].generation:
+    return false
+  pending[i].version = version
+  pending[i].text = text
+  true
+
+proc markPendingSave*(
+    pending: var seq[PendingDoc], uri: string, text: Option[string], generation: int = 0
+): bool =
+  ## Record a didSave; false when no open covers `uri` or the epoch is stale. Save text folds into the latest text.
+  let i = pending.findPendingDocIndex(uri)
+  if i < 0:
+    return false
+  if generation != pending[i].generation:
+    return false
+  pending[i].wantSave = true
+  if text.isSome:
+    pending[i].saveWithText = true
+    pending[i].text = text.get
+  true
+
+proc removePendingDoc*(pending: var seq[PendingDoc], uri: string) =
+  ## Drop the pending document for `uri` (open and save together).
+  var i = 0
+  while i < pending.len:
+    if pending[i].uri == uri:
+      pending.delete(i)
+    else:
+      inc i
+
+proc clearPendingDocs*(pending: var seq[PendingDoc]) =
+  ## Drop everything held; the next start re-opens fresh.
+  pending.setLen(0)
+
+proc pendingSaveText*(doc: PendingDoc): Option[string] =
+  ## Text the flush sends for the held save; the latest text wins so a save is never older than its open.
+  if doc.saveWithText:
+    some(doc.text)
+  else:
+    none(string)
+
+proc combineFlushAck*(openOk: bool, wantSave: bool, saveOk: bool): bool =
+  ## Sync ack for one flushed document; a failed open poisons the ack.
+  openOk and (not wantSave or saveOk)
+
+proc holdsDocCommandWhile*(state: LspWorkerState): bool =
+  ## True when a doc notification in `state` is held for the post-init flush instead of nacked.
+  state in {lwsStarting, lwsStopped}
+
 proc dropPendingDidOpen*(pending: var seq[LspCommand], uri: string) =
   ## Remove any queued lcmdDidOpen for `uri` from `pending`. Used when a
   ## didClose arrives before the server reaches lwsRunning so the flush
@@ -694,8 +815,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # was replaced on this same thread, so the old request id means nothing to
     # the new process.
     serverGeneration = 0
-    # Pending document notifications to send after initialization
-    pendingDidOpen: seq[LspCommand] = @[]
+    # Pending documents held for the post-init flush.
+    pendingDocs: seq[PendingDoc] = @[]
     # Map LSP request ID to (our request ID, timestamp) for response tracking
     pendingRequests: Table[int, tuple[requestId: int, timestamp: Time]]
     # Parsed server settings for workspace/configuration responses
@@ -774,6 +895,16 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       applyEditReqIdJson: reqIdJson,
       applyEditEditJson: editJson,
       applyEditGeneration: serverGeneration,
+    )
+    ctx.eventQueue[].push(evt)
+
+  proc sendSyncAck(uri: string, version, generation: int, ok: bool) =
+    var evt = LspEvent(
+      kind: levSyncAck,
+      ackUri: uri,
+      ackVersion: version,
+      ackOk: ok,
+      ackGeneration: generation,
     )
     ctx.eventQueue[].push(evt)
 
@@ -1056,6 +1187,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     except CatchableError as e:
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to start LSP server: " & e.msg)
+      # Drop held docs; the next start re-opens fresh.
+      pendingDocs.clearPendingDocs()
       return
 
     # Publish the pid so the main thread can SIGKILL the group at shutdown if
@@ -1152,6 +1285,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to send initialize: " & reqResult.error)
       await cleanupProcess()
+      # Drop held docs; the next start re-opens fresh.
+      pendingDocs.clearPendingDocs()
       return
 
     # Wait for initialize response (bounded).
@@ -1173,6 +1308,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           sendLogMessage(mtWarning, "LSP initialize aborted by stop request")
           await cleanupProcess()
           ctx.sharedState.storeState(lwsStopped)
+          # Explicit stop drops held docs.
+          pendingDocs.clearPendingDocs()
           return
         if Moment.now() > initDeadline:
           ctx.sharedState.storeState(lwsCrashed)
@@ -1180,6 +1317,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
             "LSP server initialize timed out after " & $InitializeTimeoutSec & "s"
           )
           await cleanupProcess()
+          pendingDocs.clearPendingDocs()
           return
 
       let respResult = outputFuture.read()
@@ -1188,6 +1326,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         ctx.sharedState.storeState(lwsCrashed)
         sendError("Failed to read initialize response: " & respResult.error)
         await cleanupProcess()
+        pendingDocs.clearPendingDocs()
         return
 
       outputFuture = serverStreams.output.read()
@@ -1229,6 +1368,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         ctx.sharedState.storeState(lwsCrashed)
         sendError("Initialize error: " & extractErrorMessage(response["error"]))
         await cleanupProcess()
+        pendingDocs.clearPendingDocs()
         return
 
       # Forward capabilities (parsed on the main thread)
@@ -1251,6 +1391,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to send initialized: " & initedResult.error)
       await cleanupProcess()
+      pendingDocs.clearPendingDocs()
       return
 
     if currentSettings.kind != JNull:
@@ -1266,16 +1407,38 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # flood below (full file bodies) so those writes can't deadlock the pipes.
     readPumpFut = readPump()
 
-    # Send all pending didOpen notifications now that server is running
-    for cmd in pendingDidOpen:
-      await sendNotificationLog(
+    # Flush pending docs in order; the latest text wins so a save never regresses its open.
+    for doc in pendingDocs:
+      let openRes = await sendNotification(
         "textDocument/didOpen",
-        didOpenParamsJson(cmd.openUri, cmd.openLangId, cmd.openVersion, cmd.openText),
+        didOpenParamsJson(doc.uri, doc.langId, doc.version, doc.text),
       )
-    pendingDidOpen = @[]
+      if openRes.isErr:
+        sendLogMessage(
+          mtWarning, "Failed to send textDocument/didOpen: " & openRes.error
+        )
+      var saveOk = true
+      if doc.wantSave:
+        let saveRes = await sendNotification(
+          "textDocument/didSave", didSaveParamsJson(doc.uri, doc.pendingSaveText())
+        )
+        if saveRes.isErr:
+          sendLogMessage(
+            mtWarning, "Failed to send textDocument/didSave: " & saveRes.error
+          )
+        saveOk = saveRes.isOk
+      sendSyncAck(
+        doc.uri,
+        doc.version,
+        doc.generation,
+        combineFlushAck(openRes.isOk, doc.wantSave, saveOk),
+      )
+    pendingDocs.clearPendingDocs()
 
   proc stopServer(): Future[void] {.async.} =
     if serverProcess.isNil:
+      # Explicit stop drops held docs.
+      pendingDocs.clearPendingDocs()
       return
 
     ctx.sharedState.storeState(lwsShuttingDown)
@@ -1284,6 +1447,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # response. The graceful shutdown handshake can block for up to 30 seconds
     # if the server is unresponsive, which delays editor exit unnecessarily.
     await cleanupProcess()
+    # Explicit stop drops held docs.
+    pendingDocs.clearPendingDocs()
     ctx.sharedState.storeState(lwsStopped)
 
   proc processCommand(cmd: LspCommand): Future[void] {.async.} =
@@ -1297,23 +1462,38 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       ctx.sharedState.storeRunning(false)
     of lcmdDidOpen:
       if ctx.sharedState.loadState() == lwsRunning:
-        await sendNotificationLog(
+        let openRes = await sendNotification(
           "textDocument/didOpen",
           didOpenParamsJson(cmd.openUri, cmd.openLangId, cmd.openVersion, cmd.openText),
         )
+        if openRes.isErr:
+          sendLogMessage(
+            mtWarning, "Failed to send textDocument/didOpen: " & openRes.error
+          )
+        sendSyncAck(cmd.openUri, cmd.openVersion, cmd.openGeneration, openRes.isOk)
       else:
         let currentState = ctx.sharedState.loadState()
-        if currentState == lwsStarting or currentState == lwsStopped:
-          # Queue didOpen to send after initialization completes
-          # Also handle lwsStopped because lcmdStart may still be pending in queue
-          pendingDidOpen.add(cmd)
+        if holdsDocCommandWhile(currentState):
+          # Hold to send after initialization completes.
+          pendingDocs.upsertPendingOpen(
+            cmd.openUri, cmd.openLangId, cmd.openVersion, cmd.openText,
+            cmd.openGeneration,
+          )
+        else:
+          # Dropped; nack so the shadow retracts.
+          sendLogMessage(
+            mtWarning,
+            "didOpen dropped; worker not running (" & $currentState & "): " & cmd.openUri,
+          )
+          sendSyncAck(cmd.openUri, cmd.openVersion, cmd.openGeneration, false)
     of lcmdDidClose:
       if ctx.sharedState.loadState() == lwsRunning:
         let params =
           DidCloseParams(textDocument: TextDocumentIdentifier(uri: cmd.closeUri)).toJson
         await sendNotificationLog("textDocument/didClose", params)
       else:
-        dropPendingDidOpen(pendingDidOpen, cmd.closeUri)
+        # Close drops the held open and save together.
+        pendingDocs.removePendingDoc(cmd.closeUri)
     of lcmdDidChange:
       let changeState = ctx.sharedState.loadState()
       if changeState == lwsRunning:
@@ -1333,59 +1513,70 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
               ),
               contentChanges: @[FullContentChange(text: cmd.changeText)],
             ).toJson
-        await sendNotificationLog("textDocument/didChange", params)
-      elif changeState == lwsStarting or changeState == lwsStopped:
-        # Before the server is running, fold the change into the pending didOpen
-        # so it opens with the latest content (handle lwsStopped too because
-        # lcmdStart may still be queued). Incremental sends only happen after
-        # lwsRunning, so an incremental command here has no full text to coalesce
-        # and is dropped rather than corrupting the pending didOpen.
+        let changeRes = await sendNotification("textDocument/didChange", params)
+        if changeRes.isErr:
+          sendLogMessage(
+            mtWarning, "Failed to send textDocument/didChange: " & changeRes.error
+          )
+        sendSyncAck(
+          cmd.changeUri, cmd.changeVersion, cmd.changeGeneration, changeRes.isOk
+        )
+      elif holdsDocCommandWhile(changeState):
+        # Fold into the pending entry so it opens with the latest content; incremental changes are dropped.
         case cmd.changeMode
         of lcdmFull:
-          var found = false
-          for i in 0 ..< pendingDidOpen.len:
-            if pendingDidOpen[i].openUri == cmd.changeUri:
-              pendingDidOpen[i] = LspCommand(
-                kind: lcmdDidOpen,
-                openUri: cmd.changeUri,
-                openLangId: pendingDidOpen[i].openLangId,
-                openVersion: cmd.changeVersion,
-                openText: cmd.changeText,
-              )
-              found = true
-              break
-          if not found:
-            # No pending didOpen for this URI: can't send didChange without one.
+          if not pendingDocs.updatePendingText(
+            cmd.changeUri, cmd.changeVersion, cmd.changeText, cmd.changeGeneration
+          ):
+            # No pending open covers this URI or the epoch is stale; nack.
             sendLogMessage(
               mtWarning,
               "didChange received for URI without prior didOpen: " & cmd.changeUri,
             )
+            sendSyncAck(cmd.changeUri, cmd.changeVersion, cmd.changeGeneration, false)
         of lcdmIncremental:
           sendLogMessage(
             mtWarning,
             "incremental didChange before server running, dropped: " & cmd.changeUri,
           )
+          sendSyncAck(cmd.changeUri, cmd.changeVersion, cmd.changeGeneration, false)
       else:
-        # lwsCrashed / lwsShuttingDown: no running server to send to and no
-        # pending didOpen to coalesce into. Log rather than drop silently. The
-        # integration shadow has already advanced, so this relies on re-sync at
-        # the next initialize: a crash AFTER a prior successful init fires
-        # onServerRestart, which re-opens the buffer and re-seeds the shadow. A
-        # crash DURING the first init does NOT (the lang never entered
-        # initializedLangs), so that buffer stays unsynced until the file is
-        # reopened or the server is restarted manually.
+        # No server to send to; nack so the shadow retracts.
         sendLogMessage(
           mtWarning,
           "didChange dropped; worker not running (" & $changeState & "): " &
             cmd.changeUri,
         )
+        sendSyncAck(cmd.changeUri, cmd.changeVersion, cmd.changeGeneration, false)
     of lcmdDidSave:
       if ctx.sharedState.loadState() == lwsRunning:
-        var params = "{\"textDocument\":{\"uri\":" & escapeJson(cmd.saveUri) & "}"
-        if cmd.saveText.isSome:
-          params &= ",\"text\":" & escapeJson(cmd.saveText.get)
-        params &= "}"
-        await sendNotificationLog("textDocument/didSave", params)
+        let saveRes = await sendNotification(
+          "textDocument/didSave", didSaveParamsJson(cmd.saveUri, cmd.saveText)
+        )
+        if saveRes.isErr:
+          sendLogMessage(
+            mtWarning, "Failed to send textDocument/didSave: " & saveRes.error
+          )
+        sendSyncAck(cmd.saveUri, cmd.saveVersion, cmd.saveGeneration, saveRes.isOk)
+      else:
+        let saveState = ctx.sharedState.loadState()
+        if holdsDocCommandWhile(saveState):
+          # Hold for the post-init flush; save text folds into the latest text.
+          if not pendingDocs.markPendingSave(
+            cmd.saveUri, cmd.saveText, cmd.saveGeneration
+          ):
+            sendLogMessage(
+              mtWarning,
+              "didSave received for URI without prior didOpen: " & cmd.saveUri,
+            )
+            sendSyncAck(cmd.saveUri, cmd.saveVersion, cmd.saveGeneration, false)
+        else:
+          # Dropped; nack so the shadow retracts.
+          sendLogMessage(
+            mtWarning,
+            "didSave dropped; worker not running (" & $saveState & "): " & cmd.saveUri,
+          )
+          sendSyncAck(cmd.saveUri, cmd.saveVersion, cmd.saveGeneration, false)
     of lcmdRequest:
       if ctx.sharedState.loadState() == lwsRunning:
         # reqParamsJson was serialized by the integration layer; pass it through
@@ -1643,7 +1834,6 @@ proc start*(worker: LspWorker) =
     return
 
   worker.sharedState.running.store(true, moRelease)
-  worker.sharedState.stateVal.store(lwsStopped.ord, moRelease)
 
   let ctx = LspWorkerContext(
     commandQueue: addr worker.commandQueue,
@@ -1704,6 +1894,10 @@ proc startServer*(
     initializationOptions: string = "",
     settings: string = "",
 ) =
+  # Mark starting before queuing so liveness checks see it; otherwise a sync
+  # in the gap re-opens an already-opened document.
+  worker.sharedState.stateVal.store(lwsStarting.ord, moRelease)
+
   let cmd = LspCommand(
     kind: lcmdStart,
     languageId: worker.languageId,
@@ -1718,13 +1912,20 @@ proc startServer*(
 proc stopServer*(worker: LspWorker) =
   worker.commandQueue.pushAndSignal(LspCommand(kind: lcmdStop), worker.signal)
 
-proc didOpen*(worker: LspWorker, uri, langId: string, version: int, text: string) =
+proc didOpen*(
+    worker: LspWorker,
+    uri, langId: string,
+    version: int,
+    text: string,
+    generation: int = 0,
+) =
   let cmd = LspCommand(
     kind: lcmdDidOpen,
     openUri: uri,
     openLangId: langId,
     openVersion: version,
     openText: text,
+    openGeneration: generation,
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
@@ -1733,32 +1934,52 @@ proc didClose*(worker: LspWorker, uri: string) =
     LspCommand(kind: lcmdDidClose, closeUri: uri), worker.signal
   )
 
-proc didChangeFull*(worker: LspWorker, uri: string, version: int, text: string) =
+proc didChangeFull*(
+    worker: LspWorker, uri: string, version: int, text: string, generation: int = 0
+) =
   ## Queue a full-document didChange (contentChanges = [{text}]).
   let cmd = LspCommand(
     kind: lcmdDidChange,
     changeUri: uri,
     changeVersion: version,
+    changeGeneration: generation,
     changeMode: lcdmFull,
     changeText: text,
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
 proc didChangeIncremental*(
-    worker: LspWorker, uri: string, version: int, contentChangesJson: string
+    worker: LspWorker,
+    uri: string,
+    version: int,
+    contentChangesJson: string,
+    generation: int = 0,
 ) =
   ## Queue an incremental didChange carrying a serialized contentChanges array.
   let cmd = LspCommand(
     kind: lcmdDidChange,
     changeUri: uri,
     changeVersion: version,
+    changeGeneration: generation,
     changeMode: lcdmIncremental,
     changeContentChangesJson: contentChangesJson,
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
-proc didSave*(worker: LspWorker, uri: string, text: Option[string] = none(string)) =
-  let cmd = LspCommand(kind: lcmdDidSave, saveUri: uri, saveText: text)
+proc didSave*(
+    worker: LspWorker,
+    uri: string,
+    text: Option[string] = none(string),
+    version: int = 0,
+    generation: int = 0,
+) =
+  let cmd = LspCommand(
+    kind: lcmdDidSave,
+    saveUri: uri,
+    saveText: text,
+    saveVersion: version,
+    saveGeneration: generation,
+  )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
 proc pollEvents*(worker: LspWorker): seq[LspEvent] =

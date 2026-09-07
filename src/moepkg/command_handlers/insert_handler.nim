@@ -843,13 +843,15 @@ proc triggerLspCompletionRequest*(
       # the skip branch above) because that branch only filters already-received
       # lspItems client-side and never issues a fresh request.
       handler.lsp.hasCompletionSupport(buffer):
-    # Cancel any pending LSP completion request to avoid orphaned responses
-    let oldReqId = handler.completionManager.getLspRequestId
-    if oldReqId.isSome:
-      handler.lsp.cancelRequest(oldReqId.get)
+    # Cancel the in-flight request; its answer is stale.
+    let staleReqId = handler.completionManager.getLspRequestId
+    if staleReqId.isSome:
+      handler.lsp.cancelRequest(staleReqId.get)
+      handler.completionManager.clearLspRequestPending()
 
-    # Flush pending didChange so the request lands on post-edit text.
-    handler.lsp.flushPendingBufferChange(buffer)
+    # Sync first; skip if behind (automatic trigger, no respawn on keystroke).
+    if handler.lsp.requestSyncGate(buffer, lrfCompletion, lrtAutomatic).isSome:
+      return
 
     let reqResult =
       handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
@@ -919,6 +921,7 @@ proc triggerResolveRequest*(
     proc(): Result[int, string] =
       handler.lsp.startCompletionResolveRequest(buffer, rawJsonOpt.get),
     validModes = {EditorMode.Insert},
+    trigger = lrtUserAction,
   )
   if ctxRes.isOk:
     handler.completionManager.resolvedIndex =
@@ -1354,6 +1357,7 @@ proc handleInsertModeKey*(
         validModes = {EditorMode.Insert},
         cursor = some(BufferPosition(line: cursorLine, column: cursorCol)),
         ignoreContentVersion = true,
+        trigger = lrtUserAction,
       )
       if ctxRes.isOk:
         # Sync the auto-poll tracker so requestSignatureHelpFromLsp does not

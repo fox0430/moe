@@ -102,7 +102,9 @@ proc requestLspRename*(
       for buf in e.buffers:
         versionSnapshot[buf.id] = buf.contentVersion
 
-      let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
+      let renameResult = await e.lsp.requestRename(
+        activeBuffer, line, col, newName, trigger = lrtUserAction
+      )
       if renameResult.isErr:
         let msg = "LSP rename failed: " & sanitizeForLog(renameResult.error)
         e.state.statusMessage = msg
@@ -137,7 +139,7 @@ proc requestLspRename*(
         e.closeRenameTargets(openedIds)
         # Pre-existing buffers keep what a half-applied edit did to them, so
         # re-sync them after the drop above (the dropped ones are not resent).
-        e.recoverFromFailedWorkspaceEdit(workspaceEdit, applyResult.error, "rename")
+        e.recoverFromFailedWorkspaceEdit(workspaceEdit, applyResult.error)
         let msg = "Failed to apply rename: " & sanitizeForLog(applyResult.error)
         e.state.statusMessage = msg
         logInfo("lsp", msg)
@@ -146,7 +148,7 @@ proc requestLspRename*(
 
       # maybeUpdateLsp only covers the active buffer.
       for bufferIdx in applyResult.get.modifiedBufferIndexes:
-        e.syncBufferAfterEdit(e.buffers[bufferIdx], "rename")
+        e.syncBufferAfterEdit(e.buffers[bufferIdx])
 
       # A rename can shrink a buffer shown in an inactive window.
       e.clampAllWindowCursors()

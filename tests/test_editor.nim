@@ -2122,11 +2122,12 @@ suite "Editor - bufferIdIndex synchronization":
     check not e.bufferIdIndex.hasKey(openedId)
 
   test "deleteBufferAt sends LSP didClose so re-open doesn't collide":
-    # Regression: :bdelete used to leave the path tracked in lsp.documents,
-    # so a later :e <same file> reset version to 1 and duplicated didOpen,
-    # causing servers to drop subsequent didChange as stale.
-    # `.txt` keeps this test from spawning a real language worker.
-    let e = createTestEditor()
+    # Regression: bdelete left the path tracked, duplicating didOpen.
+    # Unstartable server tracks the document without a worker.
+    let config = newEditorConfig()
+    config.lsp.servers["txtlang"] =
+      LspServerConfig(command: "moe-no-such-language-server", extensions: @["txt"])
+    let e = newEditor(config, newValidationResult())
     e.lsp.setEnabled(true)
     let testFile = getTempDir() / "moe_test_bdelete_lsp_close.txt"
     writeFile(testFile, "x")

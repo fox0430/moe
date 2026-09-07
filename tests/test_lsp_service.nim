@@ -313,12 +313,19 @@ suite "LspService - Worker Management (without actual workers)":
     check result.isErr
     check "No LSP support" in result.error
 
+  test "a worker is live the moment startWorker publishes it":
+    ## Regression: liveness must hold while the thread is scheduling.
+    let svc = newLspService()
+    let result = svc.startWorker("nim")
+    check result.isOk
+
+    check svc.hasLiveWorkerForPath("/home/test/file.nim")
+    check svc.getWorker("nim").isSome
+
+    result.get.stop()
+
   test "startWorker returns existing worker without creating a new one":
-    ## Regression test: startWorker must return an existing worker even when
-    ## its state is lwsStopped (the period between start() and the worker
-    ## thread processing lcmdStart). Previously, the state check
-    ## (isRunning or isStarting) missed this intermediate state, causing a
-    ## duplicate worker to be created and the original thread to be orphaned.
+    ## Regression: return existing worker while lcmdStart is queued.
     let svc = newLspService()
     let result1 = svc.startWorker("nim")
     check result1.isOk
@@ -362,12 +369,52 @@ suite "LspService - Worker Management (without actual workers)":
     check result2.isOk
     check result2.get == worker
 
+    # Regression: restart must publish lwsStarting immediately.
+    check worker.state == lwsStarting
+    check svc.hasLiveWorkerForPath("/tmp/x.crashext")
+
     # The restarted server crashes again; an immediate further restart is
     # suppressed by the rate limit
     check worker.waitForState(lwsCrashed)
     let result3 = svc.startWorker("crashlang")
     check result3.isErr
     check result3.error.contains("restart suppressed")
+
+    worker.stop()
+
+  test "a restarted server's own death is reported":
+    proc waitForState(
+        worker: LspWorker, expected: LspWorkerState, timeoutMs = 5000
+    ): bool =
+      let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+      while getMonoTime() < deadline:
+        if worker.state == expected:
+          return true
+        sleep(10)
+      false
+
+    let svc = newLspService()
+    var lost = 0
+    svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        inc lost
+    svc.setConfig(
+      "crashlang",
+      LanguageServerConfig(
+        command: "true", args: @[], extensions: @["crashext"], enabled: true
+      ),
+    )
+
+    let worker = svc.startWorker("crashlang").get
+    check worker.waitForState(lwsCrashed)
+    svc.poll(0)
+    check lost == 1
+
+    # Restart must re-baseline so the next death is reported.
+    check svc.startWorker("crashlang").isOk
+    check worker.waitForState(lwsCrashed)
+    svc.poll(0)
+    check lost == 2
 
     worker.stop()
 
@@ -843,41 +890,95 @@ suite "LspService - Request Methods (error cases for unsupported files)":
     let result = svc.startCallHierarchyPrepareRequest("/tmp/test.xyz", 0, 0)
     check result.isErr
 
+suite "LspService - timer-fired requests resolve an existing worker only":
+  privateAccess(LspService)
+
+  test "timer-fired starters fail without spawning a worker":
+    # Timer requests resolve an existing worker only.
+    let svc = newLspService()
+    defer:
+      svc.stopAll()
+    let path = getTempDir() / "no_respawn.nim"
+
+    check "no running" in svc.startCodeLensRequest(path).error
+    check svc.startDocumentHighlightRequest(path, 0, 0).isErr
+    check svc.startSemanticTokensFullRequest(path).isErr
+    check svc.startSemanticTokensRangeRequest(path, 0, 0, 10, 0).isErr
+    check svc.startInlayHintRequest(path, 0, 0, 10, 0).isErr
+    check "nim" notin svc.workers
+
+    let lens = CodeLens(
+      range: Range(
+        start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+      ),
+      command: none(Command),
+      data: none(JsonNode),
+    )
+    proc runResolve(
+        svc: LspService, path: string, lens: CodeLens
+    ): Future[Result[CodeLens, string]] {.async.} =
+      return await svc.requestCodeLensResolve(path, lens)
+
+    check waitFor(runResolve(svc, path, lens)).isErr
+
+    check "nim" notin svc.workers
+
+  test "a user-reached starter still reaches for a server":
+    # User request may restart the server.
+    let svc = newLspService()
+    defer:
+      svc.stopAll()
+    let path = getTempDir() / "reach_restart.nim"
+
+    check svc.startHoverRequest(path, 0, 0).isErr
+    check "nim" in svc.workers
+
+  test "folding range reaches for a server: :lspFold is a key press":
+    # Folding is user-driven, so it may restart.
+    let svc = newLspService()
+    defer:
+      svc.stopAll()
+    let path = getTempDir() / "fold_restart.nim"
+
+    proc runFold(
+        svc: LspService, path: string
+    ): Future[Result[seq[FoldingRange], string]] {.async.} =
+      return await svc.requestFoldingRange(path)
+
+    check waitFor(runFold(svc, path)).isErr
+    check "nim" in svc.workers
+
 suite "LspService - Document Notifications (error cases without workers)":
   test "notifyDocumentOpened fails for unsupported file":
     let svc = newLspService()
-    let result = svc.notifyDocumentOpened("/tmp/test.xyz", "content")
+    let result = svc.notifyDocumentOpened(getTempDir() / "test.xyz", "content")
     check result.isErr
 
-  test "notifyDocumentChanged returns ok for unsupported file":
+  test "notifyDocumentChanged is a no-op for an unsupported file":
+    # Queued didChange cannot fail; sync layer decides liveness.
     let svc = newLspService()
-    let result = svc.notifyDocumentChanged("/tmp/test.xyz", 1, "content")
-    check result.isOk # Returns ok because no LSP for this file type
+    svc.notifyDocumentChanged(getTempDir() / "test.xyz", 1, "content")
 
-  test "notifyDocumentClosed returns ok for unsupported file":
+  test "notifyDocumentClosed is a no-op for an unsupported file":
     let svc = newLspService()
-    let result = svc.notifyDocumentClosed("/tmp/test.xyz")
-    check result.isOk
+    svc.notifyDocumentClosed(getTempDir() / "test.xyz")
 
-  test "notifyDocumentSaved returns ok for unsupported file":
+  test "notifyDocumentSaved is a no-op for an unsupported file":
     let svc = newLspService()
-    let result = svc.notifyDocumentSaved("/tmp/test.xyz")
-    check result.isOk
+    svc.notifyDocumentSaved(getTempDir() / "test.xyz")
 
-  test "notifyDocumentChanged returns ok when no worker started":
+  test "the change notifications are no-ops when no worker started":
     let svc = newLspService()
-    let result = svc.notifyDocumentChanged("/tmp/test.nim", 1, "content")
-    check result.isOk # Returns ok because worker not started
+    svc.notifyDocumentChanged(getTempDir() / "test.nim", 1, "content")
+    svc.notifyDocumentChangedIncremental(getTempDir() / "test.nim", 1, "[]")
 
-  test "notifyDocumentClosed returns ok when no worker started":
+  test "notifyDocumentClosed is a no-op when no worker started":
     let svc = newLspService()
-    let result = svc.notifyDocumentClosed("/tmp/test.nim")
-    check result.isOk
+    svc.notifyDocumentClosed(getTempDir() / "test.nim")
 
-  test "notifyDocumentSaved returns ok when no worker started":
+  test "notifyDocumentSaved is a no-op when no worker started":
     let svc = newLspService()
-    let result = svc.notifyDocumentSaved("/tmp/test.nim")
-    check result.isOk
+    svc.notifyDocumentSaved(getTempDir() / "test.nim")
 
 suite "LspService - Poll":
   test "poll with no workers does nothing":
@@ -1621,6 +1722,74 @@ suite "LspService - documentSyncKind":
 
     worker.stop()
 
+suite "LspService - saveIncludesText":
+  privateAccess(LspService)
+
+  const NimPath = "/tmp/x.nim"
+
+  proc withCaps(caps: JsonNode): LspService =
+    result = newLspService()
+    result.processEvent("nim", LspEvent(kind: levCapabilities, capabilitiesJson: $caps))
+
+  proc withDynamicDidSave(svc: LspService, opts: Option[JsonNode]): LspService =
+    result = svc
+    result.dynamicRegistrations["nim"] = initTable[string, Registration]()
+    result.dynamicRegistrations["nim"]["reg-save"] = Registration(
+      id: "reg-save", `method`: "textDocument/didSave", registerOptions: opts
+    )
+
+  test "static save with includeText true -> true":
+    check withCaps(%*{"textDocumentSync": {"change": 2, "save": {"includeText": true}}})
+      .saveIncludesText(NimPath)
+
+  test "static save with includeText false -> false":
+    check not withCaps(
+      %*{"textDocumentSync": {"change": 2, "save": {"includeText": false}}}
+    )
+      .saveIncludesText(NimPath)
+
+  test "static save: true wants the notification, not the text -> false":
+    check not withCaps(%*{"textDocumentSync": {"change": 2, "save": true}})
+      .saveIncludesText(NimPath)
+
+  test "static int form has no save -> false":
+    check not withCaps(%*{"textDocumentSync": 2}).saveIncludesText(NimPath)
+
+  test "no capabilities -> false":
+    check not newLspService().saveIncludesText(NimPath)
+
+  test "dynamic didSave with includeText true overrides static false":
+    let svc = withCaps(
+        %*{"textDocumentSync": {"change": 2, "save": {"includeText": false}}}
+      )
+      .withDynamicDidSave(some(%*{"includeText": true}))
+    check svc.saveIncludesText(NimPath)
+
+  test "dynamic didSave with includeText false overrides static true":
+    # Dynamic registration overrides static caps.
+    let svc = withCaps(
+        %*{"textDocumentSync": {"change": 2, "save": {"includeText": true}}}
+      )
+      .withDynamicDidSave(some(%*{"includeText": false}))
+    check not svc.saveIncludesText(NimPath)
+
+  test "dynamic didSave without options -> false":
+    let svc = withCaps(
+        %*{"textDocumentSync": {"change": 2, "save": {"includeText": true}}}
+      )
+      .withDynamicDidSave(none(JsonNode))
+    check not svc.saveIncludesText(NimPath)
+
+  test "dynamic didSave with non-object options -> false":
+    let svc = withCaps(
+        %*{"textDocumentSync": {"change": 2, "save": {"includeText": true}}}
+      )
+      .withDynamicDidSave(some(%*true))
+    check not svc.saveIncludesText(NimPath)
+
+  test "unknown file type -> false":
+    check not newLspService().saveIncludesText("/tmp/x.unknownext")
+
 suite "LspService - isWorkerRunningForPath":
   privateAccess(LspService)
 
@@ -1649,3 +1818,105 @@ suite "LspService - isWorkerRunningForPath":
     svc.runningWorkerOverride = proc(path: string): bool =
       true
     check svc.isWorkerRunningForPath(NimPath)
+
+suite "LspService - onServerLost":
+  privateAccess(LspService)
+  privateAccess(LspWorker)
+
+  proc fakeWorker(svc: LspService, state: LspWorkerState): LspWorker =
+    ## A worker in a chosen state, registered without spawning a server.
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    result = workerResult.get
+    result.setStateForTest(state)
+    svc.workers["nim"] = result
+
+  test "a worker that died since the last poll is reported once":
+    # Death is visible only by comparing polls.
+    let svc = newLspService()
+    var lost = 0
+    var lostLangId = ""
+    svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        lostLangId = langId
+        inc lost
+    let worker = svc.fakeWorker(lwsRunning)
+
+    svc.poll(0)
+    check lost == 0
+
+    worker.setStateForTest(lwsCrashed)
+    svc.poll(0)
+    check lost == 1
+    check lostLangId == "nim"
+
+    svc.poll(0)
+    check lost == 1
+
+  test "a worker that was never live is not reported as lost":
+    let svc = newLspService()
+    var lost = 0
+    svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        inc lost
+    let worker = svc.fakeWorker(lwsStopped)
+
+    svc.poll(0)
+    worker.setStateForTest(lwsCrashed)
+    svc.poll(0)
+    check lost == 0
+
+  test "stopping a live worker reports the loss":
+    let svc = newLspService()
+    var lost = 0
+    svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        inc lost
+    discard svc.fakeWorker(lwsRunning)
+
+    check svc.stopWorker("nim").isOk
+    check lost == 1
+
+  test "a stopped worker is restarted, not handed back":
+    # Stopped worker is gone; restart instead of reuse.
+    let svc = newLspService()
+    svc.setConfig(
+      "stoplang",
+      LanguageServerConfig(
+        command: "true", args: @[], extensions: @["stopext"], enabled: true
+      ),
+    )
+    var lost = 0
+    svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        inc lost
+
+    let workerResult = newLspWorker("stoplang")
+    check workerResult.isOk
+    let dead = workerResult.get
+    dead.setStateForTest(lwsStopped)
+    svc.workers["stoplang"] = dead
+
+    let restarted = svc.startWorker("stoplang")
+    check restarted.isOk
+    check restarted.get != dead
+    check lost == 1
+
+    restarted.get.stop()
+
+  test "one death noticed twice is reported once":
+    # Same dead generation reports once.
+    let svc = newLspService()
+    var lost = 0
+    svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
+      {.cast(gcsafe).}:
+        inc lost
+    let worker = svc.fakeWorker(lwsRunning)
+
+    svc.poll(0)
+    worker.setStateForTest(lwsCrashed)
+    svc.poll(0)
+    check lost == 1
+
+    check svc.stopWorker("nim").isOk
+    check lost == 1

@@ -37,8 +37,7 @@ import
   highlight_config,
   persist,
   buffer,
-  lsp_integration,
-  editor_lsp
+  lsp_integration
 
 type SaveAllBuffersResult* = object
   savedCount*: int
@@ -116,7 +115,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   e.invalidateAllLspCaches()
 
   # LSP initialization - non-blocking, will start in background
-  e.noteLspOpen(e.activeBuffer, e.lsp.onBufferOpen(e.activeBuffer), "open")
+  discard e.lsp.onBufferOpen(e.activeBuffer) # onBufferOpen reports its own failure
 
   ok(())
 
@@ -392,9 +391,7 @@ proc saveFile*(
 
   # Notify LSP that a document was saved
   if e.lsp.enabled:
-    let lspResult = e.lsp.onBufferSave(activeBuffer)
-    if lspResult.isErr:
-      logLspDegraded("didSave", lspResult.error & " (" & savePath & ")")
+    e.lsp.onBufferSave(activeBuffer)
 
   ok(())
 
@@ -465,9 +462,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
       e.state.git.requestGitRefresh(buffer)
 
     if e.lsp.enabled:
-      let lspResult = e.lsp.onBufferSave(buffer)
-      if lspResult.isErr:
-        logLspDegraded("didSave", lspResult.error & " (" & savePath & ")")
+      e.lsp.onBufferSave(buffer)
 
 proc autoSave*(e: Editor) =
   ## Automatically save modified buffers if auto save is enabled and interval has passed
@@ -556,9 +551,7 @@ proc autoSave*(e: Editor) =
 
         # Notify LSP that a document was saved
         if e.lsp.enabled:
-          let lspResult = e.lsp.onBufferSave(buffer)
-          if lspResult.isErr:
-            logLspDegraded("didSave", lspResult.error & " (" & savePath & ")")
+          e.lsp.onBufferSave(buffer)
 
   # Update last auto save time
   e.state.timing.lastAutoSave = now

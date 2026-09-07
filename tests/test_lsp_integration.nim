@@ -20,18 +20,27 @@
 import
   std/[
     unittest, json, options, os, tables, times, strutils, importutils, deques, random,
-    unicode,
+    unicode, monotimes,
   ]
 
 import pkg/results
 
 import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/[buffer, message_log, unicode_utils]
+import ../src/moepkg/types
+import ../src/moepkg/lsp_service {.all.}
 import ../src/moepkg/types/config_types
 import ../src/moepkg/buffer_backends/piece_table
 import ../src/moepkg/lsp/protocol/types
+import ../src/moepkg/types/lsp_integration_types {.all.}
+
+privateAccess(LspDocumentState)
 
 let tmpDir = getTempDir()
+
+proc syncedStatus(lsp: LspIntegration, buffer: TextBuffer): SyncVerdict =
+  ## Frame sync with verdict.
+  lsp.syncAndJudge(buffer, ignoreRetryInterval = false, mayRestart = false)
 
 suite "LspIntegration - UTF-16/UTF-8 Conversion":
   test "utf16OffsetToUtf8 with ASCII text":
@@ -1501,26 +1510,27 @@ suite "LspIntegration - Buffer Operations (disabled)":
     let result = lsp.onBufferOpen(buffer)
     check result.isOk
 
-  test "onBufferClose returns ok when disabled":
+  test "onBufferClose tracks nothing when disabled":
     let lsp = newLspIntegration()
     lsp.enabled = false
     let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
-    let result = lsp.onBufferClose(buffer)
-    check result.isOk
+    lsp.onBufferClose(buffer)
+    check lsp.documents.len == 0
+    check lsp.openedPaths.len == 0
 
-  test "onBufferChange returns ok when disabled":
+  test "a sync reports nothing to send when disabled":
     let lsp = newLspIntegration()
     lsp.enabled = false
     let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
-    let result = lsp.onBufferChange(buffer)
-    check result.isOk
+    check lsp.syncedStatus(buffer).kind == svNotApplicable
 
-  test "onBufferSave returns ok when disabled":
+  test "onBufferSave tracks nothing when disabled":
     let lsp = newLspIntegration()
     lsp.enabled = false
     let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
-    let result = lsp.onBufferSave(buffer)
-    check result.isOk
+    lsp.onBufferSave(buffer)
+    check lsp.documents.len == 0
+    check lsp.openedPaths.len == 0
 
   test "onBufferOpen returns ok for buffer without path":
     let lsp = newLspIntegration()
@@ -1528,17 +1538,19 @@ suite "LspIntegration - Buffer Operations (disabled)":
     let result = lsp.onBufferOpen(buffer)
     check result.isOk
 
-  test "onBufferClose returns ok for buffer without path":
+  test "onBufferClose tracks nothing for a buffer without a path":
     let lsp = newLspIntegration()
     let buffer = newTextBuffer("test")
-    let result = lsp.onBufferClose(buffer)
-    check result.isOk
+    lsp.onBufferClose(buffer)
+    check lsp.documents.len == 0
+    check lsp.openedPaths.len == 0
 
-  test "onBufferSave returns ok for buffer without path":
+  test "onBufferSave tracks nothing for a buffer without a path":
     let lsp = newLspIntegration()
     let buffer = newTextBuffer("test")
-    let result = lsp.onBufferSave(buffer)
-    check result.isOk
+    lsp.onBufferSave(buffer)
+    check lsp.documents.len == 0
+    check lsp.openedPaths.len == 0
 
 suite "LspIntegration - Buffer Version Tracking":
   privateAccess(LspIntegration)
@@ -1553,8 +1565,7 @@ suite "LspIntegration - Buffer Version Tracking":
     lsp.shutdown()
 
   proc markReady(lsp: LspIntegration) =
-    ## Pretend a server would receive the change so onBufferChange advances
-    ## the version/shadow without a live worker.
+    ## Pretend a server receives the change.
     lsp.service.liveWorkerOverride = proc(path: string): bool =
       true
 
@@ -1570,7 +1581,7 @@ suite "LspIntegration - Buffer Version Tracking":
     for expected in [2, 3, 4]:
       # Mutate the content: an unchanged buffer is skipped as a no-op.
       check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
-      check lsp.onBufferChange(buffer).isOk
+      check lsp.syncedStatus(buffer).kind == svSynced
       check lsp.sentDocumentVersion(tmpDir / "test.nim") == some(expected)
 
   test "version does not regress when changeSeq rolls back":
@@ -1580,10 +1591,10 @@ suite "LspIntegration - Buffer Version Tracking":
     let buffer = newTextBuffer("hello", some(tmpDir / "test.nim"))
     check lsp.onBufferOpen(buffer).isOk
     check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
-    check lsp.onBufferChange(buffer).isOk
+    check lsp.syncedStatus(buffer).kind == svSynced
     let versionBeforeUndo = lsp.sentDocumentVersion(tmpDir / "test.nim").get
     check buffer.undo().isOk # changeSeq rolls back here
-    check lsp.onBufferChange(buffer).isOk
+    check lsp.syncedStatus(buffer).kind == svSynced
     check lsp.sentDocumentVersion(tmpDir / "test.nim").get > versionBeforeUndo
 
   test "per-document tracking":
@@ -1593,21 +1604,23 @@ suite "LspIntegration - Buffer Version Tracking":
     check lsp.onBufferOpen(bufferA).isOk
     check lsp.onBufferOpen(bufferB).isOk
     check bufferA.insertText(BufferPosition(line: 0, column: 0), "x").isOk
-    check lsp.onBufferChange(bufferA).isOk
+    check lsp.syncedStatus(bufferA).kind == svSynced
     check bufferA.insertText(BufferPosition(line: 0, column: 0), "y").isOk
-    check lsp.onBufferChange(bufferA).isOk
+    check lsp.syncedStatus(bufferA).kind == svSynced
     check lsp.sentDocumentVersion(tmpDir / "a.nim") == some(3)
     check lsp.sentDocumentVersion(tmpDir / "b.nim") == some(1)
 
   test "version cleared on close":
     let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
     check lsp.onBufferOpen(buffer).isOk
-    check lsp.onBufferClose(buffer).isOk
+    lsp.onBufferClose(buffer)
     check lsp.sentDocumentVersion(tmpDir / "test.nim").isNone
 
   test "change without open sends didOpen with version 1":
+    # Frame does not open; request opens at version 1.
     let buffer = newTextBuffer("test", some(tmpDir / "test.nim"))
-    check lsp.onBufferChange(buffer).isOk
+    check lsp.syncedStatus(buffer).kind == svBehind
+    check lsp.requestSyncGate(buffer, lrfDefinition, lrtUserAction).isNone
     check lsp.sentDocumentVersion(tmpDir / "test.nim") == some(1)
 
   test "re-open on tracked path resets version (implicit didClose)":
@@ -1620,14 +1633,14 @@ suite "LspIntegration - Buffer Version Tracking":
     check lsp.onBufferOpen(buffer).isOk
     for _ in 0 ..< 3:
       check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
-      check lsp.onBufferChange(buffer).isOk
+      check lsp.syncedStatus(buffer).kind == svSynced
     check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(4)
 
     check lsp.onBufferOpen(buffer).isOk
     check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(1)
 
     check buffer.insertText(BufferPosition(line: 0, column: 0), "y").isOk
-    check lsp.onBufferChange(buffer).isOk
+    check lsp.syncedStatus(buffer).kind == svSynced
     check lsp.sentDocumentVersion(tmpDir / "reopen.nim") == some(2)
 
   test "serverIsFresh skips defensive didClose on restart re-open":
@@ -1635,11 +1648,25 @@ suite "LspIntegration - Buffer Version Tracking":
     let buffer = newTextBuffer("hi", some(tmpDir / "restart.nim"))
     check lsp.onBufferOpen(buffer).isOk
     check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
-    check lsp.onBufferChange(buffer).isOk
+    check lsp.syncedStatus(buffer).kind == svSynced
     check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(2)
 
+    # Server is gone; ledger was told before re-open.
+    lsp.forgetServerDocuments("nim")
     check lsp.onBufferOpen(buffer, serverIsFresh = true).isOk
     check lsp.sentDocumentVersion(tmpDir / "restart.nim") == some(1)
+
+  test "a document the replacement server already holds is not re-opened":
+    # Already re-opened by the restarting request; skip duplicate didOpen.
+    lsp.markReady()
+    let buffer = newTextBuffer("hi", some(tmpDir / "held.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check lsp.syncedStatus(buffer).kind == svSynced
+    check lsp.sentDocumentVersion(tmpDir / "held.nim") == some(2)
+
+    check lsp.onBufferOpen(buffer, serverIsFresh = true).isOk
+    check lsp.sentDocumentVersion(tmpDir / "held.nim") == some(2)
 
 suite "LspIntegration - Path canonicalization":
   # Relative and absolute textual paths for the same file used to occupy
@@ -1658,6 +1685,70 @@ suite "LspIntegration - Path canonicalization":
   teardown:
     setCurrentDir(origCwd)
     lsp.shutdown()
+
+  test "a cwd that is gone is reported as an outage, not as an internal error":
+    # Gone cwd is an outage, reported once.
+    let gone = tmpDir / "lsp_sync_vanished_cwd"
+    removeDir(gone)
+    createDir(gone)
+    setCurrentDir(gone)
+    removeDir(gone)
+
+    clearLspMessageLog()
+    let buf = newTextBuffer("hi", some("vanished.nim"))
+    let status = lsp.syncedStatus(buf)
+
+    setCurrentDir(tmpDir)
+
+    check status.kind == svBehind
+    check getLspMessageLog().len == 1
+
+  test "onBufferSave with a gone cwd returns instead of raising":
+    # Same outage through save; void proc returns via verdict.
+    let gone = tmpDir / "lsp_save_vanished_cwd"
+    removeDir(gone)
+    createDir(gone)
+    setCurrentDir(gone)
+    removeDir(gone)
+
+    clearLspMessageLog()
+    let buf = newTextBuffer("hi", some("vanished_save.nim"))
+    lsp.onBufferSave(buf)
+
+    setCurrentDir(tmpDir)
+
+    check getLspMessageLog().len == 1
+
+  test "onBufferClose with a gone cwd returns instead of raising":
+    # Close does no I/O, so nothing shields it.
+    let gone = tmpDir / "lsp_close_vanished_cwd"
+    removeDir(gone)
+    createDir(gone)
+    setCurrentDir(gone)
+    removeDir(gone)
+
+    clearLspMessageLog()
+    let buf = newTextBuffer("hi", some("vanished_close.nim"))
+    lsp.onBufferClose(buf)
+
+    setCurrentDir(tmpDir)
+
+    check getLspMessageLog().len == 0
+
+  test "onBufferOpen with a gone cwd reports an error instead of raising":
+    let gone = tmpDir / "lsp_open_vanished_cwd"
+    removeDir(gone)
+    createDir(gone)
+    setCurrentDir(gone)
+    removeDir(gone)
+
+    clearLspMessageLog()
+    let buf = newTextBuffer("hi", some("vanished_open.nim"))
+    check lsp.onBufferOpen(buf).isErr
+
+    setCurrentDir(tmpDir)
+
+    check getLspMessageLog().len == 1
 
   test "same file via relative and absolute path collapses to one document":
     let cwd = getCurrentDir()
@@ -1679,7 +1770,7 @@ suite "LspIntegration - Path canonicalization":
     let relBuf = newTextBuffer("hi", some("canonical_mono.nim"))
     check lsp.onBufferOpen(relBuf).isOk
     check relBuf.insertText(BufferPosition(line: 0, column: 0), "x").isOk
-    check lsp.onBufferChange(relBuf).isOk
+    check lsp.syncedStatus(relBuf).kind == svSynced
     check lsp.sentDocumentVersion(cwd / "canonical_mono.nim") == some(2)
 
     # Re-open via absolute path hits the same entry (didClose + reset to 1).
@@ -1693,11 +1784,14 @@ suite "LspIntegration - Path canonicalization":
     let openBuf = newTextBuffer("hi", some(cwd / "canonical_close.nim"))
     check lsp.onBufferOpen(openBuf).isOk
     check lsp.documents.len == 1
+
+    # No claim stands; close is named by path alone.
+    lsp.openedPaths.clear()
     let closeBuf = newTextBuffer("hi", some("canonical_close.nim"))
-    check lsp.onBufferClose(closeBuf).isOk
+    lsp.onBufferClose(closeBuf)
     check lsp.documents.len == 0
 
-suite "LspIntegration - flushPendingBufferChange":
+suite "LspIntegration - syncBuffer":
   privateAccess(LspIntegration)
 
   var lsp: LspIntegration
@@ -1709,16 +1803,14 @@ suite "LspIntegration - flushPendingBufferChange":
     lsp.shutdown()
 
   test "flush advances wire version when buffer drifted since last sync":
-    # Regression: an out-of-band request (completion, hover) put a positional
-    # request on the wire before the edit that produced its coordinates. The
-    # explicit flush must bring the server up to date first.
+    # Regression: explicit flush catches up before positional request.
     let path = tmpDir / "flush_drift.nim"
     let buffer = newTextBuffer("hi", some(path))
     check lsp.onBufferOpen(buffer).isOk
     check lsp.sentDocumentVersion(path) == some(1)
 
     check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
-    lsp.flushPendingBufferChange(buffer)
+    check lsp.syncedStatus(buffer).kind == svSynced
     check lsp.sentDocumentVersion(path) == some(2)
 
   test "flush is a no-op when server shadow already matches":
@@ -1727,17 +1819,40 @@ suite "LspIntegration - flushPendingBufferChange":
     check lsp.onBufferOpen(buffer).isOk
     check lsp.sentDocumentVersion(path) == some(1)
 
-    lsp.flushPendingBufferChange(buffer)
+    check lsp.syncedStatus(buffer).kind == svSynced
+    check lsp.sentDocumentVersion(path) == some(1)
+
+  test "a worker lost at enqueue time is Behind, not Synced":
+    # Regression: enqueue race must read as Behind.
+    var calls = 0
+    var freezeAt = high(int)
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      inc calls
+      # Live for open and pre-checks, gone at enqueue.
+      calls <= freezeAt
+    let path = tmpDir / "enqueue_race.nim"
+    let buffer = newTextBuffer("hi", some(path))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion(path) == some(1)
+    # Short-circuit leaves one pre-check before enqueue.
+    freezeAt = calls + 1
+
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    let verdict = lsp.syncedStatus(buffer)
+    check verdict.kind == svBehind
+    check verdict.blocker == sbNoServer
+    # Nothing handed over; shadow and version unchanged.
+    check lsp.documents[canonicalPath(path)].shadow == "hi"
     check lsp.sentDocumentVersion(path) == some(1)
 
   test "flush is safe when LSP is disabled":
     lsp.setEnabled(false)
     let buffer = newTextBuffer("hi", some(tmpDir / "flush_disabled.nim"))
-    lsp.flushPendingBufferChange(buffer) # must not raise
+    check lsp.syncedStatus(buffer).kind == svNotApplicable
 
   test "flush is safe when buffer has no path":
     let buffer = newTextBuffer("hi")
-    lsp.flushPendingBufferChange(buffer) # must not raise
+    check lsp.syncedStatus(buffer).kind == svNotApplicable
 
 suite "LspIntegration - Request Methods (disabled)":
   test "startCompletionRequest returns error when disabled":
@@ -2002,7 +2117,8 @@ suite "LspIntegration - Shutdown":
 
   test "shutdown clears all state":
     let lsp = newLspIntegration()
-    lsp.documents[tmpDir / "test.nim"] = (version: 1, shadow: "code", delivered: true)
+    lsp.documents[tmpDir / "test.nim"] =
+      initLspDocumentState(1, "code", delivered = true)
     lsp.activeProgress["token1"] = LspProgressState(
       token: "token1",
       langId: "nim",
@@ -3261,6 +3377,50 @@ suite "LspIntegration - logLspDegraded":
     check getMessageLog().len == 0
     check getLspMessageLog().len == 1
 
+  test "stamping NoServer does not clear other failure streaks":
+    # Only landed sync clears unrelated streaks.
+    var doc = initLspDocumentState(1, "x", delivered = true)
+    let id = BufferId(424242)
+    doc.recordSyncAttempt(
+      id,
+      1,
+      SyncVerdict(kind: svBehind, blocker: sbTransport, detail: "boom"),
+      "document sync test",
+    )
+    check getLspMessageLog().len == 1
+
+    doc.recordSyncAttempt(id, 1, SyncVerdict(kind: svNoServer), "document sync test")
+
+    # Streak survived iff re-stamping stays silent.
+    doc.recordSyncAttempt(
+      id,
+      1,
+      SyncVerdict(kind: svBehind, blocker: sbTransport, detail: "boom"),
+      "document sync test",
+    )
+    check getLspMessageLog().len == 1
+
+  test "stamping Synced clears failure streaks":
+    var doc = initLspDocumentState(1, "x", delivered = true)
+    let id = BufferId(424243)
+    doc.recordSyncAttempt(
+      id,
+      1,
+      SyncVerdict(kind: svBehind, blocker: sbTransport, detail: "boom"),
+      "document sync test",
+    )
+    check getLspMessageLog().len == 1
+
+    doc.recordSyncAttempt(id, 1, SyncVerdict(kind: svSynced), "document sync test")
+
+    doc.recordSyncAttempt(
+      id,
+      1,
+      SyncVerdict(kind: svBehind, blocker: sbTransport, detail: "boom"),
+      "document sync test",
+    )
+    check getLspMessageLog().len == 2
+
 suite "LspIntegration - computeIncrementalChange":
   # Returns Option[JsonNode]: some([change]) or none (full-sync fallback).
   proc only(r: Option[JsonNode]): tuple[sl, sc, el, ec: int, text: string] =
@@ -3471,50 +3631,100 @@ suite "LspIntegration - computeIncrementalChange":
           rs = rs & @["\n"]
       roundTrip(oldText, rs.join(""))
 
+suite "LspIntegration - a worker coming up retires the memos waiting on it":
+  privateAccess(LspIntegration)
+
+  test "A stale memo is retired when its language server initializes":
+    # Init retires the waiting memo.
+    let lsp = newLspIntegration()
+    defer:
+      lsp.shutdown()
+
+    let path = canonicalPath(tmpDir / "waiting.nim")
+    lsp.documents[path] = initLspDocumentState(1, "old", delivered = true)
+    lsp.documents[path].attempt = some(
+      LspSyncAttempt(
+        bufferId: BufferId(1),
+        contentVersion: 1,
+        verdict: SyncVerdict(kind: svBehind, blocker: sbNoServer),
+      )
+    )
+
+    lsp.service.processEvent("nim", LspEvent(kind: levInitialized))
+
+    check lsp.documents[path].attempt.isNone
+
+  test "A memo that landed is left alone, and other languages are untouched":
+    let lsp = newLspIntegration()
+    defer:
+      lsp.shutdown()
+
+    let synced = canonicalPath(tmpDir / "landed.nim")
+    lsp.documents[synced] = initLspDocumentState(1, "x", delivered = true)
+    lsp.documents[synced].attempt = some(
+      LspSyncAttempt(
+        bufferId: BufferId(1), contentVersion: 1, verdict: SyncVerdict(kind: svSynced)
+      )
+    )
+
+    let otherLang = canonicalPath(tmpDir / "waiting.rs")
+    lsp.documents[otherLang] = initLspDocumentState(1, "y", delivered = true)
+    lsp.documents[otherLang].attempt = some(
+      LspSyncAttempt(
+        bufferId: BufferId(2), contentVersion: 1, verdict: SyncVerdict(kind: svBehind)
+      )
+    )
+
+    lsp.service.processEvent("nim", LspEvent(kind: levInitialized))
+
+    check lsp.documents[synced].attempt.isSome
+    check lsp.documents[otherLang].attempt.isSome
+
 suite "LspIntegration - incremental didChange":
   privateAccess(LspIntegration)
 
   let Path = tmpDir / "test.nim"
 
-  # onBufferOpen below spawns a real worker thread (nim is configured by
-  # default), so each test tears the integration down to join that thread and
-  # avoid leaking worker threads / nimlangserver processes across the suite.
+  # onBufferOpen spawns a real worker; teardown joins it.
   var lsp: LspIntegration
   setup:
     lsp = newLspIntegration()
   teardown:
     lsp.shutdown()
 
-  proc setKind(lsp: LspIntegration, syncKind: int) =
+  proc setKind(lsp: LspIntegration, syncKind: int, saveIncludesText = true) =
     lsp.service.processEvent(
       "nim",
       LspEvent(
-        kind: levCapabilities, capabilitiesJson: $(%*{"textDocumentSync": syncKind})
+        kind: levCapabilities,
+        capabilitiesJson: $(
+          %*{
+            "textDocumentSync":
+              {"change": syncKind, "save": {"includeText": saveIncludesText}}
+          }
+        ),
       ),
     )
 
   proc markReady(lsp: LspIntegration) =
-    ## Force the liveness checks to report a running server so onBufferChange
-    ## sends incremental changes deterministically, independent of the real
-    ## worker onBufferOpen spawned.
+    ## Force running server for deterministic sync.
     lsp.service.liveWorkerOverride = proc(path: string): bool =
       true
     lsp.service.runningWorkerOverride = proc(path: string): bool =
       true
 
   proc markStarting(lsp: LspIntegration) =
-    ## Force "has a worker but not yet lwsRunning" so onBufferChange falls back
-    ## to full sync to coalesce into the pending didOpen.
+    ## Force starting worker to fall back to full sync.
     lsp.service.liveWorkerOverride = proc(path: string): bool =
       true
     lsp.service.runningWorkerOverride = proc(path: string): bool =
       false
 
   proc markNoWorker(lsp: LspIntegration) =
-    ## Force the liveness checks to report no deliverable worker so onBufferChange
-    ## deterministically skips. Without this the real worker onBufferOpen spawned
-    ## could race into lwsStarting and flip the gate, making the test flaky.
+    ## Force no worker for deterministic skip.
     lsp.service.liveWorkerOverride = proc(path: string): bool =
+      false
+    lsp.service.runningWorkerOverride = proc(path: string): bool =
       false
 
   test "raw buffer is never announced to the server":
@@ -3528,38 +3738,93 @@ suite "LspIntegration - incremental didChange":
     check Path notin lsp.documents
 
   test "a buffer that turns raw on reload is dropped":
-    # Reload can swap decodable content for bytes no encoding handles.
-    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    # Reload rewrites in place; raw buffer drops its document.
+    let buf = newTextBuffer("abc", some(Path))
+    discard lsp.onBufferOpen(buf)
     check Path in lsp.documents
 
-    let raw = newTextBuffer("abc", some(Path))
-    raw.keepRaw = true
-    check lsp.onBufferOpen(raw).isOk
+    buf.keepRaw = true
+    check lsp.onBufferOpen(buf).isOk
 
     check Path notin lsp.documents
 
+  test "a sync of a file no server claims forgets the record left behind":
+    # Stale record without a server is forgotten.
+    let unclaimed = tmpDir / "test.unclaimed"
+    lsp.documents[unclaimed] = initLspDocumentState(1, "abc", delivered = true)
+    lsp.markReady()
+
+    let buffer = newTextBuffer("abcd", some(unclaimed))
+
+    check lsp.syncedStatus(buffer).kind == svNoServer
+
+    check unclaimed notin lsp.documents
+
   test "editing a raw buffer does not open it through the change path":
-    # onBufferChange opens untracked documents on its own, so it needs the
-    # same gate as onBufferOpen.
+    # Sync needs the same gate as open.
     let raw = newTextBuffer("abcd", some(Path))
     raw.keepRaw = true
     lsp.markReady()
 
-    check lsp.onBufferChange(raw).isOk
+    check lsp.syncedStatus(raw).kind == svNotApplicable
 
     check Path notin lsp.documents
 
   test "saving a raw buffer does not ship its bytes":
-    # didSave carries the whole text, so it needs the same gate as didChange.
-    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    # didSave needs the same gate as didChange.
+    let buf = newTextBuffer("abc", some(Path))
+    discard lsp.onBufferOpen(buf)
     check Path in lsp.documents
 
-    let raw = newTextBuffer("abc", some(Path))
-    raw.keepRaw = true
-
-    check lsp.onBufferSave(raw).isOk
+    buf.keepRaw = true
+    lsp.onBufferSave(buf)
 
     check Path notin lsp.documents
+
+  test "a save is not sent for a document the server no longer holds":
+    # No didOpen means no didSave.
+    var saved: seq[string]
+    lsp.service.documentSavedObserver = proc(path: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        saved.add(path)
+
+    let buf = newTextBuffer("abc", some(Path))
+    lsp.documents[Path] = initLspDocumentState(1, buf.getTextString(), delivered = true)
+    lsp.markNoWorker()
+
+    lsp.onBufferSave(buf)
+
+    check saved.len == 0
+    check not lsp.documents[Path].delivered
+
+  test "a save is sent while the server still holds the document":
+    var saved: seq[string]
+    lsp.service.documentSavedObserver = proc(path: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        saved.add(path)
+
+    let buf = newTextBuffer("abc", some(Path))
+    lsp.documents[Path] = initLspDocumentState(1, buf.getTextString(), delivered = true)
+    lsp.markReady()
+
+    lsp.onBufferSave(buf)
+
+    check saved == @[Path]
+
+  test "a change-less server still gets the save that catches it up":
+    # Save is the only catch-up for tdskNone.
+    var saved: seq[string]
+    lsp.service.documentSavedObserver = proc(path: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        saved.add(path)
+
+    lsp.documents[Path] = initLspDocumentState(1, "stale", delivered = true)
+    lsp.setKind(0)
+    lsp.markReady()
+
+    lsp.onBufferSave(newTextBuffer("abc", some(Path)))
+
+    check saved == @[Path]
 
   test "requests against a raw buffer are refused":
     let raw = newTextBuffer("abc", some(Path))
@@ -3597,7 +3862,7 @@ suite "LspIntegration - incremental didChange":
 
   test "no-op change leaves version and shadow untouched":
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
-    check lsp.onBufferChange(newTextBuffer("abc", some(Path))).isOk
+    check lsp.syncedStatus(newTextBuffer("abc", some(Path))).kind == svSynced
     check lsp.documents[Path].version == 1
     check lsp.documents[Path].shadow == "abc"
 
@@ -3605,7 +3870,7 @@ suite "LspIntegration - incremental didChange":
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
     lsp.setKind(2)
     lsp.markReady()
-    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    check lsp.syncedStatus(newTextBuffer("abXc", some(Path))).kind == svSynced
     check lsp.documents[Path].version == 2
     check lsp.documents[Path].shadow == "abXc"
 
@@ -3616,28 +3881,781 @@ suite "LspIntegration - incremental didChange":
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
     lsp.setKind(2)
     lsp.markStarting()
-    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    check lsp.syncedStatus(newTextBuffer("abXc", some(Path))).kind == svSynced
     check lsp.documents[Path].version == 2
     check lsp.documents[Path].shadow == "abXc"
 
-  test "no ready worker: change is skipped, version and shadow unchanged":
+  test "no ready worker: change is skipped and the copy is reported stale":
+    # Gone server holds nothing; request would be uninformed.
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
     lsp.setKind(2) # incremental advertised, but no server is ready
     lsp.markNoWorker() # deterministic: ignore the worker onBufferOpen spawned
-    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    let status = lsp.syncedStatus(newTextBuffer("abXc", some(Path)))
+    check status.kind == svBehind
+    check status.reason.len > 0
     check lsp.documents[Path].version == 1
-    check lsp.documents[Path].shadow == "abc"
+    # Gone copy owes didOpen, not didChange.
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == ""
 
-  test "tdskNone skips: no version bump, shadow unchanged":
+  test "a matching shadow does not prove the server is still there":
+    # Shadow records sent text, not who holds it.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markReady()
+    check lsp.syncedStatus(newTextBuffer("abXc", some(Path))).kind == svSynced
+    check lsp.documents[Path].version == 2
+    check lsp.documents[Path].shadow == "abXc"
+
+    lsp.markNoWorker()
+    # Same text but different buffer, so sync runs.
+    let buf = newTextBuffer("abXc", some(Path))
+
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isNone
+    # Retracted and re-opened, not diffed.
+    check lsp.documents[Path].version == 1
+
+  test "a timer's request waits out the retry interval; a key press does not":
+    # Refused sync retries on budget; key press retries at once.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.requestSyncGate(buf, lrfDocumentHighlight).isNone
+    let firstAttempt = lsp.documents[Path].attempt.get.at
+
+    check lsp.requestSyncGate(buf, lrfDocumentHighlight).isNone
+    check lsp.documents[Path].attempt.get.at == firstAttempt
+
+    discard lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction)
+    check lsp.documents[Path].attempt.get.at != firstAttempt
+
+  test "initialization retires the wait so the next frame sync retries at once":
+    # Init retires the memo so frame sync retries.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svBehind
+    let firstAttempt = lsp.documents[Path].attempt.get.at
+
+    # Still inside retry interval; answered from memo.
+    check lsp.syncedStatus(buf).kind == svBehind
+    check lsp.documents[Path].attempt.get.at == firstAttempt
+
+    # Server coming up retires the wait...
+    lsp.service.processEvent("nim", LspEvent(kind: levInitialized))
+    lsp.markReady()
+
+    # ...so next frame sync retries at once.
+    check lsp.syncedStatus(buf).kind == svSynced
+
+  test "a recovered sync clears the streak so the next outage is reported":
+    # Recovered sync clears streak so next outage logs.
+    clearLspMessageLog()
+    let buf = newTextBuffer("abc", some(Path))
+    discard lsp.onBufferOpen(buf)
+    lsp.setKind(2)
+
+    lsp.markNoWorker()
+    check buf.insertText(BufferPosition(line: 0, column: 2), "X").isOk
+    check lsp.syncedStatus(buf).kind == svBehind
+    check buf.insertText(BufferPosition(line: 0, column: 2), "Y").isOk
+    check lsp.syncedStatus(buf).kind == svBehind
+    check getLspMessageLog().len == 1
+
+    lsp.markReady()
+    check buf.insertText(BufferPosition(line: 0, column: 2), "Z").isOk
+    check lsp.syncedStatus(buf).kind == svSynced
+
+    lsp.markNoWorker()
+    check buf.insertText(BufferPosition(line: 0, column: 2), "W").isOk
+    check lsp.syncedStatus(buf).kind == svBehind
+    check getLspMessageLog().len == 2
+
+  test "syncBuffer reports an unusable path instead of raising":
+    # Gone cwd must return, not take down the frame.
+    clearLspMessageLog()
+    let originalDir = getCurrentDir()
+    let doomed = tmpDir / "moe_sync_doomed_cwd"
+    createDir(doomed)
+    setCurrentDir(doomed)
+    defer:
+      setCurrentDir(originalDir)
+    removeDir(doomed)
+
+    let buf = newTextBuffer("abc", some("relative.nim"))
+    lsp.syncBuffer(buf)
+
+    check lsp.syncedStatus(buf).kind == svBehind
+    check getLspMessageLog().len == 1
+
+  test "a buffer reopened after an outage can report its next one":
+    # Re-open clears streak so next outage logs.
+    clearLspMessageLog()
+    let buf = newTextBuffer("abc", some(Path))
+    discard lsp.onBufferOpen(buf)
+    lsp.setKind(2)
+
+    lsp.markNoWorker()
+    check buf.insertText(BufferPosition(line: 0, column: 2), "X").isOk
+    check lsp.syncedStatus(buf).kind == svBehind
+    check getLspMessageLog().len == 1
+
+    lsp.markReady()
+    check lsp.onBufferOpen(buf).isOk
+
+    lsp.markNoWorker()
+    check buf.insertText(BufferPosition(line: 0, column: 2), "Y").isOk
+    check lsp.syncedStatus(buf).kind == svBehind
+    check getLspMessageLog().len == 2
+
+  test "tdskNone leaves the copy behind, and says so":
+    # Declined sync leaves old copy; requests see old text.
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
     lsp.setKind(0)
-    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    lsp.markReady() # a server that is there and refuses, not one that is gone
+    let status = lsp.syncedStatus(newTextBuffer("abXc", some(Path)))
+    check status.kind == svUnsyncable
+    check not status.syncSettled
     check lsp.documents[Path].version == 1
     check lsp.documents[Path].shadow == "abc"
 
-  test "onBufferClose removes shadow":
+  test "tdskNone with a matching copy is in sync":
+    # Unedited copy is current despite no updates.
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
-    check lsp.onBufferClose(newTextBuffer("abc", some(Path))).isOk
+    lsp.setKind(0)
+    lsp.markReady()
+    check lsp.syncedStatus(newTextBuffer("abc", some(Path))).kind == svSynced
+
+  test "saving catches up the copy a tdskNone server was left with":
+    # didSave is the only catch-up for such a server.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markReady()
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svUnsyncable
+
+    lsp.onBufferSave(buf)
+
+    check lsp.documents[Path].shadow == "abXc"
+    check lsp.syncedStatus(buf).kind == svSynced
+
+  test "a request is refused when the server accepts no changes":
+    # Disk-based copy has stale coordinates.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markReady()
+    let buf = newTextBuffer("abXc", some(Path))
+
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isSome
+    check lsp.requestSyncGate(buf, lrfFormatting, lrtUserAction).isSome
+    check lsp.documents[Path].attempt.get.verdict.kind == svUnsyncable
+
+    # Decorations still run.
+    check lsp.requestSyncGate(buf, lrfHover).isNone
+
+    # Refusal names the act that lifts it.
+    check "save the file" in lsp.requestSyncGate(buf, lrfFormatting, lrtUserAction).get
+
+  test "a refusal no act of the user could lift is not a refusal":
+    # No user act can move this copy; do not refuse.
+    clearLspMessageLog()
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0, saveIncludesText = false)
+    lsp.markReady()
+    let buf = newTextBuffer("abXc", some(Path))
+
+    check lsp.syncedStatus(buf).kind == svUnsyncable
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isNone
+    check lsp.requestSyncGate(buf, lrfFormatting, lrtUserAction).isNone
+
+    # Still a degradation, logged once.
+    check getLspMessageLog().len == 1
+
+  test "a rename off a served extension closes the document it left behind":
+    # Record is named by buffer, not current path.
+    let buf = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(buf).isOk
+    check Path in lsp.documents
+
+    buf.filePath = some(tmpDir / "test.unclaimed")
+    lsp.markReady()
+
+    check lsp.syncedStatus(buf).kind == svNoServer
+    check Path notin lsp.documents
+    check buf.id notin lsp.openedPaths
+
+  test "a rename between served extensions moves the document, not copies it":
+    let buf = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(buf).isOk
+    lsp.setKind(2)
+    lsp.markReady()
+
+    let renamed = tmpDir / "renamed.nim"
+    buf.filePath = some(renamed)
+
+    check lsp.syncedStatus(buf).kind == svSynced
+    check Path notin lsp.documents
+    check renamed in lsp.documents
+    check lsp.openedPaths[buf.id] == renamed
+
+  test "closing a renamed buffer closes the URI it actually opened":
+    let buf = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(buf).isOk
+
+    buf.filePath = some(tmpDir / "closed_elsewhere.nim")
+
+    lsp.onBufferClose(buf)
+    check Path notin lsp.documents
+    check buf.id notin lsp.openedPaths
+
+  test "the shared request helper passes the caller's trigger to the gate":
+    # Helper must pass trigger; default grades user press as timer.
+    privateAccess(LspService)
+    privateAccess(LspDocumentState)
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+    check lsp.service.stopWorker("nim").isOk
+    # Both refused; only trigger decides fresh attempt.
+    lsp.service.enabled = false
+
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svBehind
+    let stampedAt = lsp.documents[Path].attempt.get.at
+
+    # Shared helper without the await.
+    check resolveLspPathForRequest(lsp, buf, lrfFormatting).isErr
+    check lsp.documents[Path].attempt.get.at == stampedAt
+
+    check resolveLspPathForRequest(lsp, buf, lrfFormatting, lrtUserAction).isErr
+    check lsp.documents[Path].attempt.get.at > stampedAt
+
+  test "a shared path stays open for the buffer that did not move":
+    # One URI, two buffers; closing one keeps the other.
+    let stays = newTextBuffer("abc", some(Path))
+    let moves = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(stays).isOk
+    check lsp.onBufferOpen(moves).isOk
+    lsp.markReady()
+
+    moves.filePath = some(tmpDir / "moved_away.unclaimed")
+    check lsp.syncedStatus(moves).kind == svNoServer
+
+    check Path in lsp.documents
+    check lsp.openedPaths[stays.id] == Path
+    check moves.id notin lsp.openedPaths
+
+  test "closing one of two buffers on a path leaves the other one open":
+    # One URI; closing one buffer keeps the other.
+    let stays = newTextBuffer("abc", some(Path))
+    let closes = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(stays).isOk
+    check lsp.onBufferOpen(closes).isOk
+
+    lsp.onBufferClose(closes)
+
+    check Path in lsp.documents
+    check lsp.openedPaths[stays.id] == Path
+    check closes.id notin lsp.openedPaths
+
+    # Last claim closes it.
+    lsp.onBufferClose(stays)
+    check Path notin lsp.documents
+
+  test "a buffer closed with LSP off still gives up its claim":
+    # Closed buffer must not read as live holder.
+    let buf = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(buf).isOk
+    check lsp.openedPaths[buf.id] == Path
+
+    lsp.setEnabled(false)
+    lsp.onBufferClose(buf)
+    check buf.id notin lsp.openedPaths
+
+    lsp.setEnabled(true)
+    let reopened = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(reopened).isOk
+    lsp.onBufferClose(reopened)
+    check Path notin lsp.documents
+
+  test "a restart forgets the document a renamed buffer opened":
+    # Unreachable record after restart must go.
+    let buf = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(buf).isOk
+    check Path in lsp.documents
+
+    buf.filePath = some(tmpDir / "restarted_away.unclaimed")
+    check lsp.onBufferOpen(buf, serverIsFresh = true).isOk
+
+    check Path notin lsp.documents
+    check buf.id notin lsp.openedPaths
+
+  test "a restart moves the claim of a buffer renamed across served extensions":
+    # Claim follows buffer; fresh server holds one document.
+    let buf = newTextBuffer("abc", some(Path))
+    check lsp.onBufferOpen(buf).isOk
+    lsp.markReady()
+
+    let renamed = tmpDir / "restarted_renamed.nim"
+    buf.filePath = some(renamed)
+    check lsp.onBufferOpen(buf, serverIsFresh = true).isOk
+
+    check Path notin lsp.documents
+    check lsp.openedPaths[buf.id] == renamed
+
+  test "a missing server reads the same whether one was configured or not":
+    # No one to ask; both refuse alike.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+    # Gone worker with no restart still refuses.
+    check lsp.service.stopWorker("nim").isOk
+    lsp.service.enabled = false
+
+    let dead = newTextBuffer("abXc", some(Path))
+    let unclaimed = newTextBuffer("abc", some(tmpDir / "plain.unclaimed"))
+
+    let deadRefusal = lsp.requestSyncGate(dead, lrfDefinition, lrtUserAction)
+    let unclaimedRefusal = lsp.requestSyncGate(unclaimed, lrfDefinition, lrtUserAction)
+    check deadRefusal.isSome
+    check unclaimedRefusal.isSome
+    check "no running language server" in deadRefusal.get
+    check "no running language server" in unclaimedRefusal.get
+
+  test "a save clears the refusal a change-less server earned":
+    # Save hands server the same bytes.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markReady()
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isSome
+
+    lsp.onBufferSave(buf)
+
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isNone
+
+  test "a refusal a save cannot lift is not raised at all":
+    # Dead worker has no save; request fails on its own.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markReady()
+
+    let buf = newTextBuffer("abXc", some(Path))
+    check "save the file" in lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).get
+
+    lsp.markNoWorker()
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isNone
+
+  test "a starting server still earns the refusal a save will lift":
+    # Save has not moved shadow yet; refusal stands.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markStarting()
+
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svUnsyncable
+    check "save the file" in lsp.requestSyncGate(buf, lrfRename, lrtUserAction).get
+
+    # Decorations tolerate stale copy.
+    check lsp.requestSyncGate(buf, lrfHover).isNone
+
+  test "a save delivers the edit the save itself made":
+    # Save-time rewrite is an edit; didChange carries it.
+    discard lsp.onBufferOpen(newTextBuffer("abc ", some(Path)))
+    lsp.setKind(2)
+    lsp.markReady()
+
+    let trimmed = newTextBuffer("abc", some(Path))
+    lsp.onBufferSave(trimmed)
+
+    check lsp.documents[Path].shadow == "abc"
+    # didChange carried the trim; save records nothing.
+    check lsp.documents[Path].version == 2
+    check lsp.syncedStatus(trimmed).kind == svSynced
+
+  test "a save cannot stand in for a didChange no server received":
+    # Save never makes a didChange server look synced.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    let buf = newTextBuffer("abXc", some(Path))
+    lsp.onBufferSave(buf)
+
+    check lsp.documents[Path].shadow == ""
+    check not lsp.documents[Path].delivered
+    check lsp.syncedStatus(buf).kind == svBehind
+
+  test "a save whose text the server discards is not recorded as one":
+    # Discarded save text leaves shadow unchanged.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0, saveIncludesText = false)
+    lsp.markReady()
+    let unsaved = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(unsaved).kind == svUnsyncable
+
+    lsp.onBufferSave(unsaved)
+
+    check lsp.documents[Path].shadow == "abc"
+    check lsp.syncedStatus(unsaved).kind == svUnsyncable
+
+  test "a save while the server is starting is held until initialization":
+    # Starting worker holds didSave until didOpen flushes.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markReady()
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svUnsyncable
+
+    lsp.markStarting()
+    lsp.onBufferSave(buf)
+
+    check lsp.documents[Path].shadow == "abXc"
+    check lsp.syncedStatus(buf).kind == svSynced
+
+  test "a wire ack confirms the queued version":
+    # Ack advances confirmed version only.
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 2
+    lsp.documents[Path].noteServerHolds("new")
+    check lsp.documents[Path].ackedVersion == 0
+
+    lsp.applySyncAck(pathToUri(Path), 2, 0, true)
+
+    check lsp.documents[Path].ackedVersion == 2
+    check lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == "new"
+
+  test "a nack for unacked work retracts the delivery":
+    # Enqueue-then-crash leaves unseen shadow; nack re-opens.
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 2
+    lsp.documents[Path].noteServerHolds("new")
+
+    lsp.applySyncAck(pathToUri(Path), 2, 0, false)
+
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == ""
+    check lsp.documents[Path].syncAttempt.isNone
+
+  test "a nack for already-acked work is ignored":
+    lsp.documents[Path] = initLspDocumentState(2, "new", delivered = true)
+    check lsp.documents[Path].ackedVersion == 2
+
+    lsp.applySyncAck(pathToUri(Path), 1, 0, false)
+
+    check lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == "new"
+
+  test "a nack retraction makes the next sync re-open":
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 2
+    lsp.documents[Path].noteServerHolds("new")
+    lsp.applySyncAck(pathToUri(Path), 2, 0, false)
+    lsp.markReady()
+
+    let buf = newTextBuffer("new", some(Path))
+    check lsp.syncedStatus(buf).kind == svSynced
+    check lsp.documents[Path].shadow == "new"
+    check lsp.documents[Path].delivered
+
+  test "an ack from an older epoch is dropped":
+    # Dead server ack confirms nothing.
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 2
+    lsp.documents[Path].noteServerHolds("new")
+    lsp.documents[Path].nextGeneration()
+    lsp.documents[Path].version = 1
+    lsp.documents[Path].noteServerHolds("new")
+
+    lsp.applySyncAck(pathToUri(Path), 2, 0, true)
+
+    check lsp.documents[Path].ackedVersion == 0
+    check lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == "new"
+
+  test "a nack from an older epoch does not retract the fresh document":
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 2
+    lsp.documents[Path].noteServerHolds("new")
+    lsp.documents[Path].nextGeneration()
+    lsp.documents[Path].version = 1
+    lsp.documents[Path].noteServerHolds("new")
+
+    lsp.applySyncAck(pathToUri(Path), 2, 0, false)
+
+    check lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == "new"
+
+  test "a new epoch unblocks nacks the old confirmed version shadowed":
+    # Regression: new epoch must unblock fresh nacks.
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 5
+    lsp.documents[Path].noteServerHolds("old")
+    lsp.applySyncAck(pathToUri(Path), 5, 0, true)
+    check lsp.documents[Path].ackedVersion == 5
+
+    lsp.documents[Path].nextGeneration()
+    lsp.documents[Path].version = 2
+    lsp.documents[Path].noteServerHolds("new")
+
+    lsp.applySyncAck(pathToUri(Path), 2, 1, false)
+
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == ""
+
+  test "a nack for the confirmed version retracts the sharing save":
+    # Shared-version nack retracts the save.
+    lsp.documents[Path] = initLspDocumentState(2, "new", delivered = true)
+    check lsp.documents[Path].ackedVersion == 2
+
+    lsp.applySyncAck(pathToUri(Path), 2, 0, false)
+
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == ""
+
+  test "a same-generation re-open clears the stale confirmed version":
+    # Regression: re-open clears stale acked version.
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 5
+    lsp.documents[Path].noteServerHolds("old")
+    lsp.applySyncAck(pathToUri(Path), 5, 0, true)
+    check lsp.documents[Path].ackedVersion == 5
+
+    lsp.documents[Path].version = 6
+    lsp.documents[Path].noteServerHolds("new")
+    lsp.applySyncAck(pathToUri(Path), 6, 0, false)
+    check not lsp.documents[Path].delivered
+
+    lsp.markReady()
+    let buf = newTextBuffer("new", some(Path))
+    check lsp.syncedStatus(buf).kind == svSynced
+    check lsp.documents[Path].ackedVersion == 0
+    check lsp.documents[Path].version == 1
+
+    lsp.applySyncAck(pathToUri(Path), 1, 0, false)
+
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == ""
+
+  test "a sync ack arriving as a worker event is routed to the document":
+    lsp.documents[Path] = initLspDocumentState(1, "", delivered = false)
+    lsp.documents[Path].version = 2
+    lsp.documents[Path].noteServerHolds("new")
+
+    lsp.service.processEvent(
+      "nim",
+      LspEvent(
+        kind: levSyncAck,
+        ackUri: pathToUri(Path),
+        ackVersion: 2,
+        ackOk: true,
+        ackGeneration: 0,
+      ),
+    )
+
+    check lsp.documents[Path].ackedVersion == 2
+    check lsp.documents[Path].delivered
+
+  test "reopening a file no server claims forgets the record left behind":
+    # Outlived record without a server is forgotten.
+    let unclaimed = tmpDir / "notes.unclaimedext"
+    let unclaimedPath = canonicalPath(unclaimed)
+    lsp.documents[unclaimedPath] = initLspDocumentState(1, "old", delivered = true)
+
+    check lsp.onBufferOpen(newTextBuffer("new", some(unclaimed))).isOk
+
+    check unclaimedPath notin lsp.documents
+
+  test "an unsyncable document is retried once the server accepts changes":
+    # Capability change re-derives the memo.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markReady()
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svUnsyncable
+
+    # Same content: memo answers.
+    check lsp.syncedStatus(buf).kind == svUnsyncable
+
+    lsp.setKind(2)
+    lsp.markReady()
+
+    check lsp.syncedStatus(buf).kind == svSynced
+    check lsp.documents[Path].shadow == "abXc"
+
+  test "an idle unsyncable document is not re-materialized on a timer":
+    # Idle unsyncable document never retries on timer.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    lsp.markReady()
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svUnsyncable
+
+    let stampedAt = lsp.documents[Path].attempt.get.at
+    lsp.documents[Path].attempt.get.at =
+      getMonoTime() - initDuration(seconds = int(StaleSyncRetryIntervalSeconds) + 1)
+
+    lsp.syncBuffer(buf)
+
+    # Fresh attempt would stamp a new memo.
+    check lsp.documents[Path].attempt.get.at < stampedAt
+
+  test "a request with no worker asks for one so a crashed server can come back":
+    # Refused request asks for restart; frame does not.
+    privateAccess(LspService)
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    # Crash stand-in: only fresh start brings it back.
+    check lsp.service.stopWorker("nim").isOk
+    check "nim" notin lsp.service.workers
+
+    let buf = newTextBuffer("abXc", some(Path))
+    discard lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction)
+
+    check "nim" in lsp.service.workers
+
+  test "a request the editor fires on a timer leaves a crashed server alone":
+    # Timer-driven decorating requests must not respawn.
+    privateAccess(LspService)
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    check lsp.service.stopWorker("nim").isOk
+    check "nim" notin lsp.service.workers
+
+    let buf = newTextBuffer("abXc", some(Path))
+    for feature in [lrfSemanticTokens, lrfInlayHint, lrfCodeLens, lrfDocumentHighlight]:
+      # Decorating request asks but never respawns.
+      check lsp.requestSyncGate(buf, feature).isNone
+      check "nim" notin lsp.service.workers
+
+  test "starting a timer-driven request does not respawn a crashed server":
+    # Start resolves existing worker only.
+    privateAccess(LspService)
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    check lsp.service.stopWorker("nim").isOk
+    check "nim" notin lsp.service.workers
+
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.requestSyncGate(buf, lrfCodeLens).isNone
+
+    check lsp.service.startCodeLensRequest(Path).isErr
+    check lsp.service.startDocumentHighlightRequest(Path, 0, 0).isErr
+    check lsp.service.startSemanticTokensFullRequest(Path).isErr
+    check lsp.service.startInlayHintRequest(Path, 0, 0, 0, 1).isErr
+    check "nim" notin lsp.service.workers
+
+  test "a gate asked without a trigger neither respawns nor jumps the interval":
+    # Respawn authority belongs to call site, not feature.
+    privateAccess(LspService)
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    check lsp.service.stopWorker("nim").isOk
+    check "nim" notin lsp.service.workers
+
+    let buf = newTextBuffer("abXc", some(Path))
+
+    # Same buffer; only trigger differs.
+    check lsp.requestSyncGate(buf, lrfDefinition).isSome
+    check "nim" notin lsp.service.workers
+
+    # User request reaches server and lands document.
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isNone
+    check "nim" in lsp.service.workers
+
+  test "a per-keystroke request does not respawn a crashed server":
+    # Per-keystroke requests must not respawn.
+    privateAccess(LspService)
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    check lsp.service.stopWorker("nim").isOk
+    check "nim" notin lsp.service.workers
+
+    let buf = newTextBuffer("abXc", some(Path))
+    for feature in [lrfCompletion, lrfSignatureHelp]:
+      discard lsp.requestSyncGate(buf, feature)
+      check "nim" notin lsp.service.workers
+
+  test "the frame path leaves a crashed server alone":
+    # Frame path never respawns crash-looping server.
+    privateAccess(LspService)
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    check lsp.service.stopWorker("nim").isOk
+    check "nim" notin lsp.service.workers
+
+    let status = lsp.syncedStatus(newTextBuffer("abXc", some(Path)))
+
+    check status.kind == svBehind
+    check "nim" notin lsp.service.workers
+
+  test "one outage is logged once however the sync path reached it":
+    # Same outage from any path logs once.
+    clearLspMessageLog()
+
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    # Gone worker fails inside startWorker.
+    check lsp.service.stopWorker("nim").isOk
+    lsp.service.enabled = false
+
+    let buf = newTextBuffer("abXc", some(Path))
+    let framed = lsp.syncedStatus(buf)
+    check framed.kind == svBehind
+    check getLspMessageLog().len == 1
+
+    # Request fails for its own reason.
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isSome
+    check getLspMessageLog().len == 1
+
+  test "a request re-attempts a sync the retry interval would have skipped":
+    # Request must not inherit stale memo.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markNoWorker()
+
+    let buf = newTextBuffer("abXc", some(Path))
+    check lsp.syncedStatus(buf).kind == svBehind
+
+    lsp.markReady()
+
+    # Young memo: frame stands by it.
+    check lsp.syncedStatus(buf).kind == svBehind
+
+    # The request does not.
+    check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isNone
+    check lsp.documents[Path].shadow == "abXc"
+
+  test "onBufferClose removes shadow":
+    let buf = newTextBuffer("abc", some(Path))
+    discard lsp.onBufferOpen(buf)
+    lsp.onBufferClose(buf)
     check Path notin lsp.documents
 
   test "shadow tracks server text across consecutive edits":
@@ -3648,7 +4666,7 @@ suite "LspIntegration - incremental didChange":
     # not the raw input string, since the buffer normalizes its content.
     for raw in ["a\nb\nX\nc", "a\nc", "a\nc\nd\ne", "done"]:
       let buf = newTextBuffer(raw, some(Path))
-      check lsp.onBufferChange(buf).isOk
+      check lsp.syncedStatus(buf).kind == svSynced
       check lsp.documents[Path].shadow == buf.getTextString()
 
   test "undelivered didOpen is retried on next change":
@@ -3656,31 +4674,62 @@ suite "LspIntegration - incremental didChange":
     # Simulate failed delivery.
     lsp.documents[Path].delivered = false
     lsp.markReady()
-    check lsp.onBufferChange(newTextBuffer("abcd", some(Path))).isOk
+    check lsp.syncedStatus(newTextBuffer("abcd", some(Path))).kind == svSynced
     check lsp.documents[Path].delivered
     check lsp.documents[Path].version == 1
     check lsp.documents[Path].shadow == "abcd"
+
+  test "an open that never lands leaves no shadow to mistake for sent text":
+    # Failed open leaves empty shadow.
+    lsp.service.enabled = false
+
+    check lsp.syncedStatus(newTextBuffer("abc", some(Path))).kind == svBehind
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow.len == 0
+
+  test "onBufferOpen keeps the shadow empty when the didOpen fails":
+    lsp.service.enabled = false
+
+    check lsp.onBufferOpen(newTextBuffer("abc", some(Path))).isErr
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow.len == 0
+
+  test "a stopped server takes the record of what it held with it":
+    # Server death empties holdings, keeps entry.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    check lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow == "abc"
+
+    check lsp.service.stopWorker("nim").isOk
+
+    check not lsp.documents[Path].delivered
+    check lsp.documents[Path].shadow.len == 0
+    check lsp.documents[Path].syncAttempt.isNone
+
+    # Entry stays; next sync re-opens.
+    check Path in lsp.documents
 
   test "onBufferClose is no-op when not tracked":
     # didClose gate: a buffer the server never saw must not send didClose.
     let untracked = tmpDir / "untracked.nim"
     check untracked notin lsp.documents
-    check lsp.onBufferClose(newTextBuffer("x", some(untracked))).isOk
+    lsp.onBufferClose(newTextBuffer("x", some(untracked)))
     check untracked notin lsp.documents
 
   test "onBufferClose drops an undelivered entry without sending didClose":
-    let badPath = tmpDir / "no_lsp.unknownlspext"
-    discard lsp.onBufferOpen(newTextBuffer("hi", some(badPath)))
-    check not lsp.documents[badPath].delivered
-    check lsp.onBufferClose(newTextBuffer("hi", some(badPath))).isOk
-    check badPath notin lsp.documents
+    # Undelivered document needs no didClose.
+    let undelivered = canonicalPath(tmpDir / "undelivered.nim")
+    lsp.documents[undelivered] = initLspDocumentState(1, "hi", delivered = false)
+    lsp.onBufferClose(newTextBuffer("hi", some(undelivered)))
+    check undelivered notin lsp.documents
 
-  test "failed didOpen leaves delivered false":
+  test "an extension no server claims is left untracked, not failed":
+    # Unclaimed file leaves nothing tracked.
     let badPath = tmpDir / "no_lsp.unknownlspext"
-    let res = lsp.onBufferOpen(newTextBuffer("hi", some(badPath)))
-    check res.isErr
-    check badPath in lsp.documents
-    check not lsp.documents[badPath].delivered
+    let buf = newTextBuffer("hi", some(badPath))
+    check lsp.lspParticipation(buf) == lpNoServer
+    check lsp.onBufferOpen(buf).isOk
+    check canonicalPath(badPath) notin lsp.documents
 
 suite "LspIntegration - getDiagnosticsAt":
   test "returns diagnostics at cursor position":
@@ -3941,81 +4990,105 @@ suite "LspIntegration - hasStaleServerEditTarget":
     changes[pathToUri(path)] = @[TextEdit(range: newRange(0, 0, 0, 3), newText: "xxx")]
     WorkspaceEdit(changes: some(changes), documentChanges: none(seq[TextDocumentEdit]))
 
-  proc syncedAt(buf: TextBuffer): Table[BufferId, int] =
-    result[buf.id] = buf.contentVersion
+  proc noteAttempt(lsp: LspIntegration, buf: TextBuffer, attempt: LspSyncAttempt) =
+    ## Memo an attempt onto its document record.
+    let path = canonicalPath(buf.filePath.get)
+    if path notin lsp.documents:
+      lsp.documents[path] = initLspDocumentState(1, "", delivered = true)
+    lsp.documents[path].attempt = some(attempt)
+
+  proc noteSynced(lsp: LspIntegration, buf: TextBuffer) =
+    ## Baseline server as holding current buffer text.
+    lsp.noteAttempt(
+      buf,
+      LspSyncAttempt(
+        bufferId: buf.id,
+        contentVersion: buf.contentVersion,
+        verdict: SyncVerdict(kind: svSynced),
+      ),
+    )
+
+  proc noteStale(lsp: LspIntegration, buf: TextBuffer) =
+    ## Record a covering attempt that never landed.
+    lsp.noteAttempt(
+      buf,
+      LspSyncAttempt(
+        bufferId: buf.id,
+        contentVersion: buf.contentVersion,
+        verdict: SyncVerdict(kind: svBehind, blocker: sbNoServer),
+      ),
+    )
 
   test "server-held buffer in sync is not stale":
     lsp.setLiveWorkers(true)
     let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
+    lsp.noteSynced(buf)
 
-    check not lsp.hasStaleServerEditTarget(
-      @[buf], editFor(tmpDir / "a.nim"), syncedAt(buf)
-    )
+    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"))
 
   test "server-held buffer edited since the last sync is stale":
     lsp.setLiveWorkers(true)
     let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
-    let synced = syncedAt(buf)
+    lsp.noteSynced(buf)
     discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
 
-    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), synced)
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"))
 
   test "buffer the server never received is stale when it has unsaved changes":
-    # Regression: maybeUpdateLsp records a sync baseline even when the
-    # notification is dropped for want of a worker (e.g. Cargo.toml in a Rust
-    # project). contentVersion then matches while the buffer diverges from the
-    # disk text the server actually read, so the edit was let through and
-    # applied at the wrong coordinates.
+    # Regression: bad baseline must still read as stale.
     lsp.setLiveWorkers(false)
     let buf = newTextBuffer("aaa", some(tmpDir / "Cargo.toml"))
     discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
+    lsp.noteSynced(buf)
 
-    check lsp.hasStaleServerEditTarget(
-      @[buf], editFor(tmpDir / "Cargo.toml"), syncedAt(buf)
-    )
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "Cargo.toml"))
 
   test "buffer the server never received is not stale when it matches disk":
     lsp.setLiveWorkers(false)
     let buf = newTextBuffer("aaa", some(tmpDir / "Cargo.toml"))
+    lsp.noteSynced(buf)
 
-    check not lsp.hasStaleServerEditTarget(
-      @[buf], editFor(tmpDir / "Cargo.toml"), syncedAt(buf)
-    )
+    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "Cargo.toml"))
+
+  test "an attempt that never landed falls back to the disk comparison":
+    # Covering attempt still falls back to disk text.
+    lsp.setLiveWorkers(true)
+    let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
+    lsp.documents[canonicalPath(tmpDir / "a.nim")] =
+      initLspDocumentState(1, "aaa", delivered = true)
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
+    lsp.noteStale(buf)
+
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"))
 
   test "live worker but no sync baseline falls back to the disk comparison":
     # didOpen never succeeded, so the server has no copy of this document.
     lsp.setLiveWorkers(true)
     let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
-    let noBaseline = initTable[BufferId, int]()
 
-    check not lsp.hasStaleServerEditTarget(
-      @[buf], editFor(tmpDir / "a.nim"), noBaseline
-    )
+    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"))
 
     discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
-    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), noBaseline)
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"))
 
   test "undelivered didOpen falls back to the disk comparison despite a baseline":
-    # maybeUpdateLsp advances the baseline even when a sync is dropped for
-    # want of a worker, so a baseline alone must not prove the server holds
-    # the text; the delivered flag decides.
+    # Delivered flag decides, not baseline alone.
     lsp.setLiveWorkers(true)
     let buf = newTextBuffer("aaa", some(tmpDir / "a.nim"))
-    let synced = syncedAt(buf)
+    lsp.noteSynced(buf)
     lsp.documents[canonicalPath(tmpDir / "a.nim")] =
-      (version: 1, shadow: "aaa", delivered: false)
+      initLspDocumentState(1, "aaa", delivered = false)
 
-    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), synced)
+    check not lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"))
 
     discard buf.insertText(BufferPosition(line: 0, column: 3), "!")
-    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"), synced)
+    check lsp.hasStaleServerEditTarget(@[buf], editFor(tmpDir / "a.nim"))
 
   test "a buffer outside the edit's targets is ignored":
     lsp.setLiveWorkers(false)
     let target = newTextBuffer("aaa", some(tmpDir / "a.nim"))
     let other = newTextBuffer("bbb", some(tmpDir / "b.nim"))
     discard other.insertText(BufferPosition(line: 0, column: 3), "!")
+    lsp.noteSynced(target)
 
-    check not lsp.hasStaleServerEditTarget(
-      @[target, other], editFor(tmpDir / "a.nim"), syncedAt(target)
-    )
+    check not lsp.hasStaleServerEditTarget(@[target, other], editFor(tmpDir / "a.nim"))

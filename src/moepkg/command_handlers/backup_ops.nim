@@ -180,7 +180,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
           if textResult.isOk:
             # Periodic LSP sync only covers the active buffer; the restored
             # buffer is in another split, so sync it explicitly.
-            e.syncBufferAfterEdit(srcBuf, "restore")
+            e.syncBufferAfterEdit(srcBuf)
             # The restored file may be shorter; re-clamp cursors in other splits.
             e.clampAllWindowCursors()
             # Refresh the restored buffer's git-diff gutter and conflicts.

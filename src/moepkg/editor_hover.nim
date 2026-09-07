@@ -60,6 +60,7 @@ proc startLspHover*(e: Editor): bool =
       e.lsp.startHoverRequest(activeBuffer, line, col),
     validModes = HoverValidModes,
     cursor = some(BufferPosition(line: line, column: col)),
+    trigger = lrtUserAction,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP hover failed: " & ctxRes.error

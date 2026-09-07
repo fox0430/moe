@@ -157,31 +157,9 @@ proc clearAllDiagnostics*(e: Editor) =
   for buf in e.buffers:
     applyDiagnosticsToBuffer(buf, @[])
 
-proc dropLspSyncAttempt(e: Editor, buf: TextBuffer) =
-  ## Forget sync attempt so next edit retries.
-  e.lastLspSyncAttempts.del(buf.id)
-
-proc noteLspOpen*(
-    e: Editor, buf: TextBuffer, openResult: Result[void, string], context: string
-) =
-  ## Record didOpen attempt; raw buffers count as attempted.
-  if buf.filePath.isNone:
-    e.dropLspSyncAttempt(buf)
-    return
-  if e.lsp.enabled and openResult.isOk:
-    e.lastLspSyncAttempts[buf.id] = buf.contentVersion
-  else:
-    e.dropLspSyncAttempt(buf)
-  if openResult.isErr:
-    logLspDegraded(context & ": didOpen " & buf.filePath.get, openResult.error)
-
-proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
-  ## Sync buffer after edit for non-active buffers.
-  let syncResult = e.lsp.onBufferChange(buf)
-  if syncResult.isOk:
-    e.lastLspSyncAttempts[buf.id] = buf.contentVersion
-  elif buf.filePath.isSome:
-    logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
+proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer) =
+  ## Sync after edit; failures report themselves.
+  e.lsp.syncBuffer(buf)
 
 proc resyncBufferAfterReload*(e: Editor, buf: TextBuffer) =
   ## Re-publish diagnostics after a reload. A reload drops the buffer's
@@ -193,8 +171,8 @@ proc resyncBufferAfterReload*(e: Editor, buf: TextBuffer) =
   ## changed — matching a reload's "re-read from disk" semantics.
   if not e.lsp.enabled or buf.filePath.isNone:
     return
-  discard e.lsp.onBufferClose(buf) # best effort; re-opened next regardless
-  e.noteLspOpen(buf, e.lsp.onBufferOpen(buf), "reload")
+  e.lsp.onBufferClose(buf) # re-opened next regardless
+  discard e.lsp.onBufferOpen(buf) # onBufferOpen reports its own failure
 
 proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
   ## didOpen a freshly registered buffer and record its synced contentVersion so
@@ -204,7 +182,7 @@ proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
   ## must call this, otherwise the server never learns about the document.
   if not e.lsp.enabled:
     return
-  e.noteLspOpen(buf, e.lsp.onBufferOpen(buf), "open")
+  discard e.lsp.onBufferOpen(buf) # onBufferOpen reports its own failure
 
 proc clampAllWindowCursors*(e: Editor) =
   ## Re-clamp every window's cursor to its buffer's bounds. A server-initiated
@@ -218,7 +196,7 @@ proc clampAllWindowCursors*(e: Editor) =
     window.cursor = BufferPosition(line: clamped.y, column: clamped.x)
 
 proc recoverFromFailedWorkspaceEdit*(
-    e: Editor, edit: WorkspaceEdit, applyError: string, reason: string
+    e: Editor, edit: WorkspaceEdit, applyError: string
 ) =
   ## Clean up after `applyWorkspaceEdit` failed partway through.
   ##
@@ -235,7 +213,7 @@ proc recoverFromFailedWorkspaceEdit*(
       for buf in e.buffers:
         if buf.filePath.isSome and
             normalizedPath(absolutePath(buf.filePath.get)) == absPath:
-          e.syncBufferAfterEdit(buf, reason)
+          e.syncBufferAfterEdit(buf)
   e.clampAllWindowCursors()
 
 proc applyWorkspaceEditFromServer*(
@@ -263,7 +241,7 @@ proc applyWorkspaceEditFromServer*(
     # Reject the edit if any targeted open buffer has local changes the server
     # has not seen: it positioned its edit against the text it knows, so
     # applying it onto newer text would corrupt the buffer.
-    if hasStaleServerEditTarget(e.lsp, e.buffers, edit, e.lastLspSyncAttempts):
+    if hasStaleServerEditTarget(e.lsp, e.buffers, edit):
       e.state.statusMessage = "Buffer changed since last sync; server edit discarded"
       return
         (applied: false, failureReason: some("buffer changed since last didChange"))
@@ -272,7 +250,7 @@ proc applyWorkspaceEditFromServer*(
     # which is the default refusal of unopened targets.
     let applyResult = applyWorkspaceEdit(e.buffers, edit, "LSP Edit")
     if applyResult.isErr:
-      e.recoverFromFailedWorkspaceEdit(edit, applyResult.error, "applyEdit")
+      e.recoverFromFailedWorkspaceEdit(edit, applyResult.error)
       let sanitizedErr = sanitizeForLog(applyResult.error)
       let failMsg = "Failed to apply server edit: " & sanitizedErr
       e.state.statusMessage = failMsg
@@ -282,7 +260,7 @@ proc applyWorkspaceEditFromServer*(
 
     # Sync the server with every buffer we just rewrote.
     for bufferIdx in applyResult.get.modifiedBufferIndexes:
-      e.syncBufferAfterEdit(e.buffers[bufferIdx], "applyEdit")
+      e.syncBufferAfterEdit(e.buffers[bufferIdx])
 
     e.clampAllWindowCursors()
     let modifiedCount = applyResult.get.modifiedCount
@@ -296,19 +274,8 @@ proc applyWorkspaceEditFromServer*(
     return (applied: true, failureReason: none(string))
 
 proc maybeUpdateLsp*(e: Editor) =
-  ## Update LSP if buffer was modified
-  ## This notifies the LSP server of document changes for real-time diagnostics
-  if not e.lsp.enabled:
-    return
-
-  let activeBuffer = e.activeBuffer()
-
-  if activeBuffer.contentVersion !=
-      e.lastLspSyncAttempts.getOrDefault(activeBuffer.id, 0):
-    let lspResult = e.lsp.onBufferChange(activeBuffer)
-    if lspResult.isErr and activeBuffer.filePath.isSome:
-      logLspDegraded("didChange " & activeBuffer.filePath.get, lspResult.error)
-    e.lastLspSyncAttempts[activeBuffer.id] = activeBuffer.contentVersion
+  ## Sync the active buffer once per frame.
+  e.lsp.syncBuffer(e.activeBuffer())
 
 proc pollLspCompletion*(e: Editor) =
   ## Poll for pending LSP completion responses
@@ -347,7 +314,8 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       let versionBeforeRequest = activeBuffer.contentVersion
 
       # Get formatting result from LSP
-      let formatResult = await e.lsp.requestFormatting(activeBuffer)
+      let formatResult =
+        await e.lsp.requestFormatting(activeBuffer, trigger = lrtUserAction)
       if formatResult.isErr:
         e.state.statusMessage =
           "LSP format failed: " & sanitizeForLog(formatResult.error)
@@ -410,8 +378,9 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
       return
 
     # Add the LSP ranges collapsed (fold-all); manual folds are kept.
-    let foldResult =
-      await lsp_integration.refreshLspFolds(e.lsp, activeBuffer, startCollapsed = true)
+    let foldResult = await lsp_integration.refreshLspFolds(
+      e.lsp, activeBuffer, startCollapsed = true, trigger = lrtUserAction
+    )
     if foldResult.isErr:
       e.state.statusMessage = "LSP fold failed: " & sanitizeForLog(foldResult.error)
       return
@@ -443,10 +412,8 @@ proc renotifyOpenBuffers(e: Editor, langId: string): int =
       let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
       if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
         # Old baseline would cause staleness guard to reject future edits.
-        let openResult = e.lsp.onBufferOpen(buf, serverIsFresh = true)
-        if openResult.isErr:
+        if e.lsp.onBufferOpen(buf, serverIsFresh = true).isErr:
           inc result
-        e.noteLspOpen(buf, openResult, "re-open")
 
 proc onLspServerRestart*(e: Editor, langId: string) =
   ## Crash-recovery hook: a language server re-initialized after crashing, so
@@ -539,8 +506,9 @@ proc requestLspExecuteCommand*(
         jsonArgs.add(%arg)
 
       # Execute the command
-      let execResult =
-        await e.lsp.requestExecuteCommand(activeBuffer, command, jsonArgs)
+      let execResult = await e.lsp.requestExecuteCommand(
+        activeBuffer, command, jsonArgs, trigger = lrtUserAction
+      )
       if execResult.isErr:
         e.state.statusMessage =
           "LSP executeCommand failed: " & sanitizeForLog(execResult.error)

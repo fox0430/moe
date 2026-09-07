@@ -234,6 +234,147 @@ suite "LspWorker - dropPendingDidOpen":
     check pending[1].openUri == "file:///c.nim"
     check pending[2].openUri == "file:///d.nim"
 
+suite "LspWorker - PendingDoc":
+  # One entry per URI holds latest text and pending save.
+  test "open inserts a fresh entry":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    check pending.len == 1
+    check pending[0].version == 1
+    check pending[0].text == "one"
+    check not pending[0].wantSave
+
+  test "change folds into the open and keeps the held save":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    check pending.markPendingSave("file:///a.nim", some("one"))
+    check pending.updatePendingText("file:///a.nim", 2, "two")
+    check pending.len == 1
+    check pending[0].version == 2
+    check pending[0].text == "two"
+    check pending[0].wantSave
+    check pending[0].saveWithText
+
+  test "save without an open is dropped":
+    var pending: seq[PendingDoc] = @[]
+    check not pending.markPendingSave("file:///a.nim", some("one"))
+    check pending.len == 0
+
+  test "change without an open is dropped":
+    var pending: seq[PendingDoc] = @[]
+    check not pending.updatePendingText("file:///a.nim", 2, "two")
+    check pending.len == 0
+
+  test "re-open resets the held save":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    check pending.markPendingSave("file:///a.nim", some("one"))
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "fresh")
+    check pending.len == 1
+    check pending[0].text == "fresh"
+    check not pending[0].wantSave
+
+  test "close removes the open and the save together":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    check pending.markPendingSave("file:///a.nim", some("one"))
+    pending.upsertPendingOpen("file:///b.nim", "nim", 1, "bee")
+    pending.removePendingDoc("file:///a.nim")
+    check pending.len == 1
+    check pending[0].uri == "file:///b.nim"
+
+  test "replacement keeps the original flush position":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    pending.upsertPendingOpen("file:///b.nim", "nim", 1, "bee")
+    check pending.updatePendingText("file:///a.nim", 2, "two")
+    check pending[0].uri == "file:///a.nim"
+    check pending[1].uri == "file:///b.nim"
+
+  test "clear drops everything held":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    pending.upsertPendingOpen("file:///b.nim", "nim", 1, "bee")
+    pending.clearPendingDocs()
+    check pending.len == 0
+
+  test "change from an older epoch is refused":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "fresh", 1)
+    check not pending.updatePendingText("file:///a.nim", 2, "stale", 0)
+    check pending[0].text == "fresh"
+    check pending[0].version == 1
+
+  test "save from an older epoch is refused":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "fresh", 1)
+    check not pending.markPendingSave("file:///a.nim", some("stale"), 0)
+    check not pending[0].wantSave
+    check pending[0].text == "fresh"
+
+  test "re-open adopts the new epoch":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one", 0)
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "fresh", 1)
+    check pending[0].generation == 1
+    check pending.updatePendingText("file:///a.nim", 2, "two", 1)
+    check pending[0].text == "two"
+
+  test "change folded after a save moves the flushed text":
+    # Later change overrides the saved snapshot.
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    check pending.markPendingSave("file:///a.nim", some("one"))
+    check pending.updatePendingText("file:///a.nim", 2, "two")
+    check pending[0].pendingSaveText() == some("two")
+
+  test "held save without text flushes without text":
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    check pending.markPendingSave("file:///a.nim", none(string))
+    check pending.updatePendingText("file:///a.nim", 2, "two")
+    check pending[0].pendingSaveText().isNone
+
+  test "held save carries its text when no change arrives":
+    # Save is the only writer when server takes no changes.
+    var pending: seq[PendingDoc] = @[]
+    pending.upsertPendingOpen("file:///a.nim", "nim", 1, "one")
+    check pending.markPendingSave("file:///a.nim", some("two"))
+    check pending[0].version == 1
+    check pending[0].text == "two"
+    check pending[0].pendingSaveText() == some("two")
+
+suite "LspWorker - combineFlushAck":
+  # Ack is false if any flushed frame failed.
+  test "open ok without a save acks true":
+    check combineFlushAck(true, false, true)
+    check combineFlushAck(true, false, false)
+
+  test "open ok with a saved ok acks true":
+    check combineFlushAck(true, true, true)
+
+  test "failed open poisons the ack even when the save succeeds":
+    check not combineFlushAck(false, true, true)
+
+  test "failed open without a save acks false":
+    check not combineFlushAck(false, false, true)
+
+  test "failed save poisons the ack":
+    check not combineFlushAck(true, true, false)
+
+suite "LspWorker - holdsDocCommandWhile":
+  # Held states flush after init, others nack.
+  test "starting and stopped hold for the flush":
+    check holdsDocCommandWhile(lwsStarting)
+    check holdsDocCommandWhile(lwsStopped)
+
+  test "running does not hold":
+    check not holdsDocCommandWhile(lwsRunning)
+
+  test "crashed and shutting down nack instead of holding":
+    check not holdsDocCommandWhile(lwsCrashed)
+    check not holdsDocCommandWhile(lwsShuttingDown)
+
 suite "LspWorker - LspCommand object":
   test "LspCommand lcmdStart variant":
     let cmd = LspCommand(
@@ -879,15 +1020,12 @@ suite "LspWorker - Worker Thread Lifecycle":
     check worker.state == lwsStopped
 
     worker.start()
-    # Worker thread is started but LSP server is not running yet
-    # isStopped returns true because stateVal is still lwsStopped (no server started)
-    # This is expected behavior - isStopped checks if LSP server state is stopped
+    # Thread up but no server requested, so still stopped.
     check worker.state == lwsStopped
     check not worker.isRunning # No LSP server started
 
     worker.stop()
     check worker.isStopped
-    check worker.state == lwsStopped
 
   test "stop is safe to call on stopped worker":
     let workerResult = newLspWorker("nim")
@@ -1210,7 +1348,7 @@ suite "LspWorker - Multiple workers":
     check worker2.state == lwsStopped
 
     worker1.start()
-    # Worker thread started, but LSP server state is still stopped
+    # Thread up but no server requested, so still stopped.
     check worker1.state == lwsStopped
     check worker2.state == lwsStopped
 
@@ -1219,8 +1357,8 @@ suite "LspWorker - Multiple workers":
     check worker2.state == lwsStopped
 
     worker1.stop()
-    check worker1.state == lwsStopped
+    check worker1.isStopped
 
     worker2.stop()
-    check worker1.state == lwsStopped
-    check worker2.state == lwsStopped
+    check worker1.isStopped
+    check worker2.isStopped
