@@ -2966,6 +2966,37 @@ block namedMarks:
     doAssert press(handler, buf, state, "\"c'z").kind == nmrError
     doAssert state.pendingInput.pendingRegister.isNone
 
+  block markOperatorsUsePendingRegister:
+    for operator in ["d", "y", "c"]:
+      for motion in ["'", "`"]:
+        let buf = newTextBuffer("one\ntwo\nthree")
+        let handler = createTestHandler(buf)
+        let state = createTestState()
+        state.registers = initRegisters()
+        state.cursor = BufferPosition(line: 1, column: 2)
+        doAssert press(handler, buf, state, "ma").kind == nmrHandled
+        state.cursor = BufferPosition()
+        doAssert press(handler, buf, state, "\"q" & operator & motion & "a").kind ==
+          nmrHandled
+        let expected = if motion == "'": "one\ntwo\n" else: "one\ntw"
+        doAssert state.registers.getNamedRegister('q').getContent() == expected,
+          operator & motion & repr(state.registers.getNamedRegister('q').getContent())
+        doAssert state.registers.isRegisterLinewise('q') == (motion == "'")
+        doAssert state.pendingInput.pendingRegister.isNone
+        doAssert state.pendingInput.pendingOperator.isNone
+
+  block failedMarkOperatorsConsumePendingRegister:
+    for motion in ["'", "`"]:
+      for name in ["z", "1"]:
+        let buf = newTextBuffer("one\ntwo")
+        let handler = createTestHandler(buf)
+        let state = createTestState()
+        doAssert press(handler, buf, state, "\"qd" & motion & name).kind == nmrError
+        doAssert state.pendingInput.pendingRegister.isNone
+        doAssert state.pendingInput.pendingOperator.isNone
+        doAssert buf.getLine(0) == "one"
+        doAssert buf.len == 2
+
   block followsEdits:
     let buf = newTextBuffer()
     doAssert buf.insertText(BufferPosition(), "one\ntwo\nthree").isOk
