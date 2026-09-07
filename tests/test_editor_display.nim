@@ -26,6 +26,18 @@ import ../src/moepkg/[buffer, config, editor, git_cache]
 proc createTestEditor(): Editor =
   newEditor(newEditorConfig())
 
+block frontend_can_control_git_refresh_without_launching_work:
+  let e = createTestEditor()
+  doAssert e.state.git.refreshMode == grmPeriodic
+  e.setFrontendGitRefreshMode(grmEventDriven)
+  doAssert e.state.git.refreshMode == grmEventDriven
+  e.notifyGitRepositoryChanged()
+  doAssert e.state.git.diffEntries.len == 0
+  doAssert e.state.git.repositories.len == 0
+  doAssert e.frontendGitStatusRevision() == 0
+  e.setFrontendGitRefreshMode(grmPeriodic)
+  doAssert e.state.git.refreshMode == grmPeriodic
+
 suite "Editor display status queries":
   test "statusModeLabel returns the active editor mode":
     let e = createTestEditor()

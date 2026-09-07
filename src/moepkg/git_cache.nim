@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Per-buffer git diff/branch cache.
+## Per-buffer diffs and per-worktree asynchronous branch cache.
 ##
 ## Without caching every frame would spawn `git diff` (dumping the whole buffer
 ## to a tempfile, ~30ms on a 40k-line JSON) and `git rev-parse`, pegging idle
@@ -26,11 +26,11 @@
 ## path only reads `gitDiffCounts` / `gitBranchName` / `isBufferGitTracked`.
 ##
 ## Diffs are refreshed when `changeSeq` moves, when `requestGitRefresh` marks
-## the entry stale, or on a TTL — the TTL is what picks up external commits and
-## checkouts without an edit. The previous counts stay on screen until the new
-## pipeline completes.
+## the entry stale, or on a TTL in periodic mode. Embedding hosts may disable
+## TTLs and notify repository changes themselves. Previous counts stay on
+## screen until a current (not superseded) pipeline completes.
 
-import std/[options, tables, monotimes, times]
+import std/[options, tables, monotimes, times, os, osproc, streams, strutils]
 
 import pkg/results
 
@@ -40,6 +40,25 @@ import types/git_cache_types
 export git_cache_types
 
 const GitBranchTtlMs = 5000
+
+proc canonicalDirectory(path: string): string =
+  result = normalizedPath(absolutePath(path))
+  try:
+    result = expandFilename(result)
+  except OSError:
+    discard
+
+proc repositoryForFile(path: string): string =
+  # Worktrees and submodules have a .git file rather than a directory. Key by
+  # worktree root, not common Git storage: linked worktrees have different HEADs.
+  var directory = canonicalDirectory(path.parentDir())
+  while directory.len > 0:
+    if dirExists(directory / ".git") or fileExists(directory / ".git"):
+      return directory
+    let parent = directory.parentDir()
+    if parent == directory:
+      break
+    directory = parent
 
 proc bufferKey(b: TextBuffer): BufferId =
   ## Stable per-buffer key: BufferId survives buffer moves/GC, unlike a raw
@@ -57,13 +76,23 @@ proc setGitDiffRefreshInterval*(gc: var GitCacheState, ms: int64) =
   if ms > 0:
     gc.diffRefreshIntervalMs = ms
 
-proc reapPendingDiff(entry: var GitDiffCacheEntry) =
+proc reapPendingDiff(entry: var GitDiffCacheEntry): bool =
   ## Advance a pending pipeline; on completion release its child, tempfiles and
   ## fds. On error/timeout keep the last known counts.
   if entry.pending.isNone:
     return
   let completion = checkGitDiffComplete(entry.pending.get)
   if completion.isNone:
+    return
+  entry.pending = none(GitDiffProcess)
+  if entry.forced or (
+    not entry.buffer.isNil and (
+      entry.buffer.filePath.get("") != entry.pathAtRefresh or
+      entry.buffer.changeSeq != entry.changeSeqAtRefresh
+    )
+  ):
+    entry.forced = true
+    entry.pendingDiffInfo = none(GitDiffInfo)
     return
   # The pipeline errors for files not in HEAD, so a successful run doubles as
   # the "git-tracked" probe for the sidebar.
@@ -72,15 +101,48 @@ proc reapPendingDiff(entry: var GitDiffCacheEntry) =
     let diffInfo = completion.get.get
     entry.counts = countGitChangedLines(diffInfo)
     entry.pendingDiffInfo = some(diffInfo)
-  entry.pending = none(GitDiffProcess)
   entry.lastRefresh = getMonoTime()
   entry.populated = true
+  result = true
+
+proc reapBranch(entry: var GitRepositoryCacheEntry): bool =
+  if entry.pending.isNil:
+    return
+  try:
+    let exitCode = entry.pending.peekExitCode()
+    if exitCode == -1:
+      if (getMonoTime() - entry.started).inSeconds < 5:
+        return
+      releaseGitProcess(entry.pending)
+      entry.lastRefresh = getMonoTime()
+      entry.populated = true
+      return
+    let output = entry.pending.outputStream().readAll()
+    releaseGitProcess(entry.pending)
+    if entry.pendingGeneration != entry.generation:
+      return
+    entry.name =
+      if exitCode == 0:
+        output.strip()
+      else:
+        ""
+    entry.lastRefresh = getMonoTime()
+    entry.populated = true
+    result = true
+  except CatchableError:
+    releaseGitProcess(entry.pending)
+    entry.lastRefresh = getMonoTime()
+    entry.populated = true
 
 proc reapGitPipelines*(gc: var GitCacheState) =
   ## Reap every buffer's pipeline, not just the visible ones — a buffer hidden
   ## mid-flight would otherwise leak its child, tempfiles and pipe fds.
   for entry in gc.diffEntries.mvalues:
-    reapPendingDiff(entry)
+    if reapPendingDiff(entry):
+      inc gc.revision
+  for entry in gc.repositories.mvalues:
+    if reapBranch(entry):
+      inc gc.revision
 
 proc scheduleGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
   ## Start a diff pipeline for `b` if the cached entry is due for a refresh.
@@ -95,12 +157,19 @@ proc scheduleGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
   let now = getMonoTime()
   let needsRefresh =
     entry.forced or not entry.populated or entry.changeSeqAtRefresh != b.changeSeq or
-    (now - entry.lastRefresh).inMilliseconds >= gc.refreshIntervalMs
+    entry.pathAtRefresh != b.filePath.get or (
+      gc.refreshMode == grmPeriodic and
+      (now - entry.lastRefresh).inMilliseconds >= gc.refreshIntervalMs
+    )
 
   if not needsRefresh:
     return
 
   entry.forced = false
+  entry.pendingDiffInfo = none(GitDiffInfo)
+  entry.buffer = b
+  entry.pathAtRefresh = b.filePath.get
+  entry.repositoryPath = repositoryForFile(entry.pathAtRefresh)
   entry.changeSeqAtRefresh = b.changeSeq
   let startResult = startGitDiffFromBufferAsync(b)
   if startResult.isOk:
@@ -122,11 +191,42 @@ proc requestGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
   let key = bufferKey(b)
   var entry = gc.diffEntries.getOrDefault(key)
   entry.forced = true
+  entry.pendingDiffInfo = none(GitDiffInfo)
   gc.diffEntries[key] = entry
 
+proc setGitRefreshMode*(gc: var GitCacheState, mode: GitRefreshMode) =
+  ## Select how elapsed time affects scheduling. Explicit requests and edits
+  ## continue to refresh in either mode; pending children are still reaped.
+  gc.refreshMode = mode
+
+proc notifyGitRepositoryChanged*(gc: var GitCacheState, rootPath: string) =
+  ## Invalidate a worktree after a host-observed Git or filesystem change.
+  ## Pass the worktree root (not its .git directory). Empty invalidates all.
+  ## Call on the owning editor thread; this never launches a process.
+  let root =
+    if rootPath.len > 0:
+      canonicalDirectory(rootPath)
+    else:
+      ""
+  for path, entry in gc.repositories.mpairs:
+    if root.len == 0 or path == root:
+      inc entry.generation
+      entry.forced = true
+  for entry in gc.diffEntries.mvalues:
+    if root.len == 0 or entry.repositoryPath == root or (
+      entry.repositoryPath.len == 0 and not entry.buffer.isNil and
+      repositoryForFile(entry.buffer.filePath.get("")) == root
+    ):
+      entry.forced = true
+      entry.pendingDiffInfo = none(GitDiffInfo)
+  # Re-discover previously non-repository files after git init, or a moved root.
+  for entry in gc.branchEntries.mvalues:
+    if root.len == 0 or entry.repositoryPath == root or entry.repositoryPath.len == 0:
+      entry.populated = false
+
 proc refreshGitBranch*(gc: var GitCacheState, b: TextBuffer) =
-  ## Re-read the branch name on a TTL. Still synchronous: `git rev-parse` is
-  ## ~5ms and runs at most once per buffer per `GitBranchTtlMs`.
+  ## Schedule a branch lookup shared by all buffers in the same worktree.
+  ## Completion is delivered by reapGitPipelines; no Git command blocks here.
   if b.filePath.isNone:
     return
 
@@ -135,18 +235,40 @@ proc refreshGitBranch*(gc: var GitCacheState, b: TextBuffer) =
   var entry = gc.branchEntries.getOrDefault(key)
 
   let now = getMonoTime()
-  let expired =
-    not entry.populated or entry.path != filePath or
+  if not entry.populated or entry.path != filePath or (
+    gc.refreshMode == grmPeriodic and
     (now - entry.lastRefresh).inMilliseconds >= GitBranchTtlMs
-  if not expired:
+  ):
+    entry.path = filePath
+    entry.repositoryPath = repositoryForFile(filePath)
+    entry.lastRefresh = now
+    entry.populated = true
+    gc.branchEntries[key] = entry
+  if entry.repositoryPath.len == 0:
     return
-
-  let branchResult = getGitBranch(filePath)
-  entry.path = filePath
-  entry.lastRefresh = now
-  entry.populated = true
-  entry.name = if branchResult.isErr: "" else: branchResult.get
-  gc.branchEntries[key] = entry
+  var repository = gc.repositories.getOrDefault(entry.repositoryPath)
+  let expired =
+    repository.forced or not repository.populated or (
+      gc.refreshMode == grmPeriodic and
+      (now - repository.lastRefresh).inMilliseconds >= GitBranchTtlMs
+    )
+  if repository.pending.isNil and expired:
+    repository.forced = false
+    repository.pendingGeneration = repository.generation
+    repository.started = now
+    try:
+      repository.pending = startProcess(
+        "git",
+        args = [
+          "-C", entry.repositoryPath, "--no-optional-locks", "rev-parse",
+          "--abbrev-ref", "HEAD",
+        ],
+        options = {poUsePath, poStdErrToStdOut},
+      )
+    except CatchableError:
+      repository.lastRefresh = now
+      repository.populated = true
+    gc.repositories[entry.repositoryPath] = repository
 
 proc gitDiffCounts*(
     gc: GitCacheState, b: TextBuffer
@@ -154,7 +276,11 @@ proc gitDiffCounts*(
   gc.diffEntries.getOrDefault(bufferKey(b)).counts
 
 proc gitBranchName*(gc: GitCacheState, b: TextBuffer): string =
-  gc.branchEntries.getOrDefault(bufferKey(b)).name
+  let entry = gc.branchEntries.getOrDefault(bufferKey(b))
+  if entry.repositoryPath in gc.repositories:
+    gc.repositories[entry.repositoryPath].name
+  else:
+    entry.name
 
 proc isBufferGitTracked*(gc: GitCacheState, b: TextBuffer): bool =
   ## Whether `b`'s file is present in HEAD, per the most recent scheduling
@@ -166,7 +292,9 @@ proc applyPendingGitMarkers*(gc: var GitCacheState, b: TextBuffer) =
   ## Apply the most recent completed diff to the sidebar gutter. No-op if
   ## nothing new has arrived since the last call.
   gc.diffEntries.withValue(bufferKey(b), entry):
-    if entry[].pendingDiffInfo.isSome:
+    if entry[].pendingDiffInfo.isSome and not entry[].forced and
+        entry[].changeSeqAtRefresh == b.changeSeq and
+        entry[].pathAtRefresh == b.filePath.get(""):
       applyGitDiffToBuffer(b, entry[].pendingDiffInfo.get)
       entry[].pendingDiffInfo = none(GitDiffInfo)
 
@@ -180,6 +308,17 @@ proc evictGitCacheForBuffer*(gc: var GitCacheState, b: TextBuffer) =
       entry[].pending = none(GitDiffProcess)
   gc.diffEntries.del(key)
   gc.branchEntries.del(key)
+  var unused: seq[string]
+  for root in gc.repositories.keys:
+    var used = false
+    for entry in gc.branchEntries.values:
+      if entry.repositoryPath == root:
+        used = true
+    if not used:
+      unused.add root
+  for root in unused:
+    releaseGitProcess(gc.repositories[root].pending)
+    gc.repositories.del(root)
 
 proc clearGitCache*(gc: var GitCacheState) =
   ## Terminate every pending pipeline and discard all entries. Called once from
@@ -190,6 +329,9 @@ proc clearGitCache*(gc: var GitCacheState) =
       entry.pending = none(GitDiffProcess)
   gc.diffEntries.clear()
   gc.branchEntries.clear()
+  for entry in gc.repositories.mvalues:
+    releaseGitProcess(entry.pending)
+  gc.repositories.clear()
 
 proc gitDiffPendingCount*(gc: GitCacheState): int =
   for entry in gc.diffEntries.values:
