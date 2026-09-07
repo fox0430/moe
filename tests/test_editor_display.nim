@@ -82,7 +82,9 @@ suite "Editor display status queries":
     e.state.git.diffEntries[key] =
       GitDiffCacheEntry(counts: (added: 3, modified: 2, deleted: 1), populated: true)
     e.state.git.branchEntries[key] =
-      GitBranchCacheEntry(name: "feature/native-status", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/repo", populated: true)
+    e.state.git.repositories["/repo"] =
+      GitRepositoryCacheEntry(name: "feature/native-status", populated: true)
 
     check e.activeGitStatus ==
       ActiveGitStatus(
@@ -95,9 +97,13 @@ suite "Editor display status queries":
       inactiveBuffer = e.activeBuffer
       activeBuffer = newTextBuffer()
     e.state.git.branchEntries[inactiveBuffer.id] =
-      GitBranchCacheEntry(name: "inactive", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/inactive", populated: true)
     e.state.git.branchEntries[activeBuffer.id] =
-      GitBranchCacheEntry(name: "active", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/active", populated: true)
+    e.state.git.repositories["/inactive"] =
+      GitRepositoryCacheEntry(name: "inactive", populated: true)
+    e.state.git.repositories["/active"] =
+      GitRepositoryCacheEntry(name: "active", populated: true)
     e.activeWindow.buffer = activeBuffer
 
     check e.activeGitStatus.branch == "active"
@@ -111,7 +117,9 @@ suite "Editor display status queries":
     e.state.git.diffEntries[activeBuffer.id] =
       GitDiffCacheEntry(counts: (added: 4, modified: 2, deleted: 1), populated: true)
     e.state.git.branchEntries[activeBuffer.id] =
-      GitBranchCacheEntry(name: "feature/frontend-status", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/repo", populated: true)
+    e.state.git.repositories["/repo"] =
+      GitRepositoryCacheEntry(name: "feature/frontend-status", populated: true)
 
     check e.frontendStatus ==
       FrontendStatus(

@@ -29,6 +29,7 @@ import pkg/results
 
 import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
 import ../src/moepkg/buffer
+import ../src/moepkg/git_cache
 import ../src/moepkg/lsp_integration
 import ../src/moepkg/editor_lsp_rename {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -272,10 +273,18 @@ suite "editor_lsp_rename - closeRenameTargets":
     check opened.isOk
     check applyWorkspaceEdit(e.buffers, edit).isOk
     let bufferCountBefore = e.buffers.len
+    let target = e.bufferForPath(targetPath)
+    e.state.git.diffEntries[target.id] =
+      GitDiffCacheEntry(sourceBuffer: target, repositoryPath: tmpDir)
+    e.state.git.branchEntries[target.id] = GitBranchCacheEntry(repositoryPath: tmpDir)
+    e.state.git.repositories[tmpDir] = GitRepositoryCacheEntry(name: "main")
 
     # Nothing was saved yet, so closing the buffer leaves the file as it was.
     e.closeRenameTargets(opened.get)
 
+    doAssert target.id notin e.state.git.diffEntries
+    doAssert target.id notin e.state.git.branchEntries
+    doAssert tmpDir notin e.state.git.repositories
     check e.buffers.len == bufferCountBefore - 1
     check e.bufferForPath(targetPath) == nil
     check readFile(targetPath) == "hello there\n"

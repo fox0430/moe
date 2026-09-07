@@ -39,7 +39,9 @@ saves and reloads. The host must notify external commits, checkouts, index/ignor
 changes and repository creation/removal. Disabling frontend status maintenance
 does not disable the terminal gutter or status line's independent consumption of
 the same cache. Selecting event-driven mode disables TTL refreshes for all those
-consumers in this editor.
+consumers in this editor for successful queries. Failed branch queries retry
+after five seconds, and failed diff starts retry after the configured Git
+interval, in either mode. Explicit events can request an earlier refresh.
 
 The completion revision advances when results are published. Hosts can compare
 it after `tick` to refresh their UI without installing callbacks. Buffer activation

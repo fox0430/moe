@@ -27,7 +27,8 @@
 ##
 ## Diffs are refreshed when `changeSeq` moves, when `requestGitRefresh` marks
 ## the entry stale, or on a TTL in periodic mode. Embedding hosts may disable
-## TTLs and notify repository changes themselves. Previous counts stay on
+## successful-query TTLs and notify repository changes themselves. Failures
+## retry after a delay in either mode. Previous counts stay on
 ## screen until a current (not superseded) pipeline completes.
 
 import std/[options, tables, monotimes, times, os, osproc, streams, strutils]
@@ -105,6 +106,12 @@ proc reapPendingDiff(entry: var GitDiffCacheEntry): bool =
   entry.populated = true
   result = true
 
+proc deferBranchRetry(entry: var GitRepositoryCacheEntry) =
+  entry.lastRefresh = getMonoTime()
+  entry.populated = true
+  entry.retryAfter =
+    some(entry.lastRefresh + initDuration(milliseconds = GitBranchTtlMs))
+
 proc reapBranch(entry: var GitRepositoryCacheEntry): bool =
   if entry.pending.isNil:
     return
@@ -114,25 +121,23 @@ proc reapBranch(entry: var GitRepositoryCacheEntry): bool =
       if (getMonoTime() - entry.started).inSeconds < 5:
         return
       releaseGitProcess(entry.pending)
-      entry.lastRefresh = getMonoTime()
-      entry.populated = true
+      entry.deferBranchRetry()
       return
     let output = entry.pending.outputStream().readAll()
     releaseGitProcess(entry.pending)
     if entry.pendingGeneration != entry.generation:
       return
-    entry.name =
-      if exitCode == 0:
-        output.strip()
-      else:
-        ""
+    if exitCode != 0:
+      entry.deferBranchRetry()
+      return
+    entry.name = output.strip()
+    entry.retryAfter = none(MonoTime)
     entry.lastRefresh = getMonoTime()
     entry.populated = true
     result = true
   except CatchableError:
     releaseGitProcess(entry.pending)
-    entry.lastRefresh = getMonoTime()
-    entry.populated = true
+    entry.deferBranchRetry()
 
 proc reapGitPipelines*(gc: var GitCacheState) =
   ## Reap every buffer's pipeline, not just the visible ones — a buffer hidden
@@ -157,7 +162,8 @@ proc scheduleGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
   let now = getMonoTime()
   let needsRefresh =
     entry.forced or not entry.populated or entry.changeSeqAtRefresh != b.changeSeq or
-    entry.pathAtRefresh != b.filePath.get or (
+    entry.pathAtRefresh != b.filePath.get or
+    (entry.retryAfter.isSome and now >= entry.retryAfter.get) or (
       gc.refreshMode == grmPeriodic and
       (now - entry.lastRefresh).inMilliseconds >= gc.refreshIntervalMs
     )
@@ -174,11 +180,13 @@ proc scheduleGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
   let startResult = startGitDiffFromBufferAsync(b)
   if startResult.isOk:
     entry.pending = some(startResult.get)
+    entry.retryAfter = none(MonoTime)
   else:
     entry.gitTracked = false
-    # Count the failed start as an attempt so we don't retry every tick.
+    # Back off failed starts even when successful-query TTLs are disabled.
     entry.lastRefresh = now
     entry.populated = true
+    entry.retryAfter = some(now + initDuration(milliseconds = gc.refreshIntervalMs))
 
   gc.diffEntries[key] = entry
 
@@ -248,7 +256,8 @@ proc refreshGitBranch*(gc: var GitCacheState, b: TextBuffer) =
     return
   var repository = gc.repositories.getOrDefault(entry.repositoryPath)
   let expired =
-    repository.forced or not repository.populated or (
+    repository.forced or not repository.populated or
+    (repository.retryAfter.isSome and now >= repository.retryAfter.get) or (
       gc.refreshMode == grmPeriodic and
       (now - repository.lastRefresh).inMilliseconds >= GitBranchTtlMs
     )
@@ -266,8 +275,7 @@ proc refreshGitBranch*(gc: var GitCacheState, b: TextBuffer) =
         options = {poUsePath, poStdErrToStdOut},
       )
     except CatchableError:
-      repository.lastRefresh = now
-      repository.populated = true
+      repository.deferBranchRetry()
     gc.repositories[entry.repositoryPath] = repository
 
 proc gitDiffCounts*(
@@ -280,7 +288,7 @@ proc gitBranchName*(gc: GitCacheState, b: TextBuffer): string =
   if entry.repositoryPath in gc.repositories:
     gc.repositories[entry.repositoryPath].name
   else:
-    entry.name
+    ""
 
 proc isBufferGitTracked*(gc: GitCacheState, b: TextBuffer): bool =
   ## Whether `b`'s file is present in HEAD, per the most recent scheduling
@@ -312,6 +320,9 @@ proc evictGitCacheForBuffer*(gc: var GitCacheState, b: TextBuffer) =
   for root in gc.repositories.keys:
     var used = false
     for entry in gc.branchEntries.values:
+      if entry.repositoryPath == root:
+        used = true
+    for entry in gc.diffEntries.values:
       if entry.repositoryPath == root:
         used = true
     if not used:

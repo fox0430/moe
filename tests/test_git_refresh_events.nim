@@ -216,4 +216,105 @@ block notification_discovers_a_new_repository:
   doAssert gc.repositories.len == 1
   doAssert gc.isBufferGitTracked(b)
 
+block failed_starts_back_off_and_retry_in_both_modes:
+  let root = repository()
+  let emptyPath = createTempDir("moe-no-git-", "")
+  let savedPath = getEnv("PATH")
+  let savedDirectory = getCurrentDir()
+  defer:
+    putEnv("PATH", savedPath)
+    setCurrentDir(savedDirectory)
+    removeDir(emptyPath)
+    removeDir(root)
+  let b = load(root / "a.txt")
+  for mode in [grmPeriodic, grmEventDriven]:
+    var gc: GitCacheState
+    defer:
+      gc.clearGitCache()
+    gc.setGitRefreshMode(mode)
+    putEnv("PATH", emptyPath)
+    gc.refreshGitBranch(b)
+    gc.scheduleGitRefresh(b)
+    # Nim's macOS spawn path can leave cwd changed when spawning raises.
+    setCurrentDir(savedDirectory)
+    doAssert not gc.pending()
+    doAssert gc.repositories[root].retryAfter.isSome
+    doAssert gc.diffEntries[b.id].retryAfter.isSome
+    let branchDeadline = gc.repositories[root].retryAfter
+    let diffDeadline = gc.diffEntries[b.id].retryAfter
+    putEnv("PATH", savedPath)
+    for tick in 0 .. 2:
+      gc.refreshGitBranch(b)
+      gc.scheduleGitRefresh(b)
+      doAssert not gc.pending()
+      doAssert gc.repositories[root].retryAfter == branchDeadline
+      doAssert gc.diffEntries[b.id].retryAfter == diffDeadline
+    gc.repositories[root].retryAfter = some(getMonoTime() - initDuration(seconds = 1))
+    gc.diffEntries[b.id].retryAfter = some(getMonoTime() - initDuration(seconds = 1))
+    gc.refreshGitBranch(b)
+    gc.scheduleGitRefresh(b)
+    doAssert not gc.repositories[root].pending.isNil
+    doAssert gc.gitDiffPendingCount() == 1
+    gc.drain()
+    doAssert gc.gitBranchName(b) == "main"
+    doAssert gc.isBufferGitTracked(b)
+    doAssert gc.repositories[root].retryAfter.isNone
+    doAssert gc.diffEntries[b.id].retryAfter.isNone
+
+block failed_branch_completion_preserves_name_and_retries:
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  let b = load(root / "a.txt")
+  gc.setGitRefreshMode(grmEventDriven)
+  gc.refreshGitBranch(b)
+  gc.drain()
+  for timedOut in [false, true]:
+    let child =
+      if timedOut:
+        startProcess("/bin/sleep", args = ["30"])
+      else:
+        startProcess(
+          "git",
+          args = ["--invalid-moe-test-option"],
+          options = {poUsePath, poStdErrToStdOut},
+        )
+    gc.repositories[root].pending = child
+    gc.repositories[root].started = getMonoTime() - initDuration(seconds = 6)
+    gc.drain()
+    doAssert gc.gitBranchName(b) == "main"
+    doAssert gc.repositories[root].retryAfter.isSome
+    gc.refreshGitBranch(b)
+    doAssert not gc.pending()
+    gc.repositories[root].retryAfter = some(getMonoTime() - initDuration(seconds = 1))
+    gc.refreshGitBranch(b)
+    doAssert gc.pending()
+    gc.drain()
+    doAssert gc.repositories[root].retryAfter.isNone
+    doAssert gc.gitBranchName(b) == "main"
+
+block diff_only_buffer_keeps_shared_repository_alive:
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  let a = load(root / "a.txt")
+  let b = load(root / "sub/b.txt")
+  gc.refreshGitBranch(a)
+  let child = gc.repositories[root].pending
+  gc.scheduleGitRefresh(b)
+  gc.evictGitCacheForBuffer(a)
+  doAssert b.id notin gc.branchEntries
+  doAssert root in gc.repositories
+  doAssert gc.repositories[root].pending == child
+  gc.drain()
+  gc.refreshGitBranch(b)
+  doAssert gc.gitBranchName(b) == "main"
+  doAssert not gc.pending()
+  gc.evictGitCacheForBuffer(b)
+  doAssert root notin gc.repositories
+
 echo "Git refresh event regressions passed"

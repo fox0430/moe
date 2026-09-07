@@ -33,6 +33,7 @@ import
   editor_lsp,
   editor_navigation,
   editor_buffers,
+  git_cache,
   lsp_integration,
   lsp_service,
   buffer,
@@ -45,6 +46,7 @@ proc closeRenameTargets(e: Editor, ids: seq[BufferId]) =
   for id in ids:
     let idx = e.bufferIndexById(id)
     if idx >= 0:
+      e.state.git.evictGitCacheForBuffer(e.buffers[idx])
       e.deleteBufferAt(idx)
 
 proc openRenameTargets(e: Editor, edit: WorkspaceEdit): Result[seq[BufferId], string] =

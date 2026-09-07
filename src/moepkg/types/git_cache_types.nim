@@ -30,12 +30,13 @@ const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
 type
   GitRefreshMode* = enum
     grmPeriodic ## Refresh on edits, explicit requests and elapsed intervals.
-    grmEventDriven ## Refresh on edits and explicit requests only.
+    grmEventDriven ## Refresh on edits and requests; retry failures after a delay.
 
   GitDiffCacheEntry* = object
     counts*: tuple[added, modified, deleted: int]
     changeSeqAtRefresh*: int
     lastRefresh*: MonoTime
+    retryAfter*: Option[MonoTime] ## Failed starts retry in either refresh mode.
     pending*: Option[GitDiffProcess]
     sourceBuffer*: TextBuffer
     pathAtRefresh*: string
@@ -52,13 +53,13 @@ type
   GitBranchCacheEntry* = object
     path*: string
     repositoryPath*: string
-    name*: string
     lastRefresh*: MonoTime
     populated*: bool
 
   GitRepositoryCacheEntry* = object
     name*: string
     lastRefresh*: MonoTime
+    retryAfter*: Option[MonoTime] ## Failed queries retry in either refresh mode.
     populated*: bool
     generation*: uint64
     pendingGeneration*: uint64
