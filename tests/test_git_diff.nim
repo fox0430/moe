@@ -345,6 +345,20 @@ suite "GitDiff - tryCanonicalPath":
     createSymlink(dir / "target.txt", dir / "link.txt")
     check tryCanonicalPath(dir / "link.txt") == expandFilename(dir / "target.txt")
 
+  test "Canonical parent preserves the final symlink":
+    let dir = getTempDir() / "moe_git_canon_test"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    let target = getTempDir() / "moe_git_canon_outside.txt"
+    writeFile(target, "x")
+    defer:
+      removeFile(target)
+    let link = dir / "link.txt"
+    createSymlink(target, link)
+
+    check tryCanonicalParentPath(link) == expandFilename(dir) / "link.txt"
+
   test "Non-existent file falls back to canonical parent":
     let dir = getTempDir() / "moe_git_canon_test"
     createDir(dir)
