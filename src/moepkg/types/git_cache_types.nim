@@ -37,7 +37,7 @@ type
     changeSeqAtRefresh*: int
     lastRefresh*: MonoTime
     pending*: Option[GitDiffProcess]
-    buffer*: TextBuffer
+    sourceBuffer*: TextBuffer
     pathAtRefresh*: string
     repositoryPath*: string
     populated*: bool

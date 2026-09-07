@@ -86,9 +86,9 @@ proc reapPendingDiff(entry: var GitDiffCacheEntry): bool =
     return
   entry.pending = none(GitDiffProcess)
   if entry.forced or (
-    not entry.buffer.isNil and (
-      entry.buffer.filePath.get("") != entry.pathAtRefresh or
-      entry.buffer.changeSeq != entry.changeSeqAtRefresh
+    not entry.sourceBuffer.isNil and (
+      entry.sourceBuffer.filePath.get("") != entry.pathAtRefresh or
+      entry.sourceBuffer.changeSeq != entry.changeSeqAtRefresh
     )
   ):
     entry.forced = true
@@ -167,7 +167,7 @@ proc scheduleGitRefresh*(gc: var GitCacheState, b: TextBuffer) =
 
   entry.forced = false
   entry.pendingDiffInfo = none(GitDiffInfo)
-  entry.buffer = b
+  entry.sourceBuffer = b
   entry.pathAtRefresh = b.filePath.get
   entry.repositoryPath = repositoryForFile(entry.pathAtRefresh)
   entry.changeSeqAtRefresh = b.changeSeq
@@ -214,8 +214,8 @@ proc notifyGitRepositoryChanged*(gc: var GitCacheState, rootPath: string) =
       entry.forced = true
   for entry in gc.diffEntries.mvalues:
     if root.len == 0 or entry.repositoryPath == root or (
-      entry.repositoryPath.len == 0 and not entry.buffer.isNil and
-      repositoryForFile(entry.buffer.filePath.get("")) == root
+      entry.repositoryPath.len == 0 and not entry.sourceBuffer.isNil and
+      repositoryForFile(entry.sourceBuffer.filePath.get("")) == root
     ):
       entry.forced = true
       entry.pendingDiffInfo = none(GitDiffInfo)
