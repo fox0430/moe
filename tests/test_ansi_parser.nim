@@ -60,6 +60,45 @@ suite "TerminalGrid - Plain text processing":
     check grid.cursorRow == 1
     check grid.cursorCol == 10
 
+  test "Vertical tab indexes like a line feed":
+    let grid = newTerminalGrid(80, 24)
+    # VT (0x0b) is an index on every terminal moe targets: down one row with
+    # the column preserved, exactly like LF. Falling through to the text path
+    # would instead put a cell on row 0 and leave the cursor there.
+    grid.processOutput("Hello\x0bWorld")
+    check grid.cells[0][0].ch == "H"
+    check grid.cells[1][5].ch == "W"
+    check grid.cursorRow == 1
+    check grid.cursorCol == 10
+
+  test "Form feed indexes like a line feed":
+    let grid = newTerminalGrid(80, 24)
+    # FF (0x0c) indexes too -- `printf '\f'` and pagination-era output rely on
+    # it, and a program that emits one expects the next text on the row below.
+    grid.processOutput("Hello\x0cWorld")
+    check grid.cells[0][0].ch == "H"
+    check grid.cells[1][5].ch == "W"
+    check grid.cursorRow == 1
+    check grid.cursorCol == 10
+
+  test "Vertical tab and form feed scroll at the bottom margin":
+    # The index has to scroll the region like LF does, not stall on the last row.
+    let grid = newTerminalGrid(10, 2)
+    grid.processOutput("a\x0bb\x0cc")
+    check grid.cursorRow == 1
+    # Two indexes from row 0 on a 2-row grid: one moves down, one scrolls.
+    check grid.cells[0][1].ch == "b"
+    check grid.cells[1][2].ch == "c"
+
+  test "Other C0 controls stay ignored":
+    # The fix must not turn the whole ignore set into line feeds.
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("a\x01\x02\x0e\x1fb")
+    check grid.cells[0][0].ch == "a"
+    check grid.cells[0][1].ch == "b"
+    check grid.cursorRow == 0
+    check grid.cursorCol == 2
+
   test "Process carriage return moves cursor to column 0":
     let grid = newTerminalGrid(80, 24)
     grid.processOutput("Hello\rWorld")

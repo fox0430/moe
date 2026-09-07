@@ -38,8 +38,7 @@ import
   persist,
   buffer,
   lsp_integration,
-  editor_lsp,
-  editor_notify
+  editor_lsp
 
 type SaveAllBuffersResult* = object
   savedCount*: int
@@ -115,8 +114,6 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   # `loadFile` clears `highlightNeedsUpdate`, so the frame-loop invalidation
   # cascade would not fire; drop caches directly to avoid stale-coord overlays.
   e.invalidateAllLspCaches()
-
-  e.notifyUnusualContent(e.activeBuffer)
 
   # LSP initialization - non-blocking, will start in background
   e.noteLspOpen(e.activeBuffer, e.lsp.onBufferOpen(e.activeBuffer), "open")

@@ -489,3 +489,31 @@ proc setPendingOperator*(
     )
   )
   ctx.state.statusMessage = statusMsg
+
+proc namedMarkPosition*(
+    ctx: CommandContext, name: char
+): Result[BufferPosition, string] =
+  ## Resolve a buffer-local mark, clamping its column after line replacements.
+  if name notin {'a' .. 'z'}:
+    return err("Invalid mark (use a-z)")
+  let mark = ctx.buffer.namedMarks[name]
+  if mark.isNone or mark.get.line >= ctx.buffer.len:
+    return err("Mark not set: " & $name)
+  var pos = mark.get
+  pos.column = min(pos.column, max(0, ctx.buffer.getLine(pos.line).charLen - 1))
+  ok(pos)
+
+proc applyOperatorToMark*(
+    ctx: CommandContext, op: PendingOperator, name: char, linewise: bool
+): Result[(), string] =
+  ## Apply an operator to a named mark; backtick motions exclude the endpoint.
+  let dest = ctx.namedMarkPosition(name)
+  if dest.isErr:
+    ctx.state.pendingInput.pendingRegister = none(char)
+    return err(dest.error)
+  var range = calculateOperatorRange(
+    ctx.buffer, op.startPos, dest.get, if linewise: Motion.Down else: Motion.Right
+  )
+  if not linewise and op.startPos == dest.get:
+    range.isEmpty = true
+  executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)

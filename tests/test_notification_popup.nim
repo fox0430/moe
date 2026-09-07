@@ -19,7 +19,7 @@
 
 ## Tests for notification popup functionality
 
-import std/[unittest, monotimes, times]
+import std/[unittest, monotimes, times, strutils]
 
 import pkg/celina
 
@@ -173,6 +173,106 @@ suite "NotificationPopup - calculateNotificationPositions":
     # Should be positioned at bottom-right, above status line
     check rects[0].x + rects[0].width <= 80
     check rects[0].y + rects[0].height <= 24 - 2
+
+  test "A notification taller than the screen is clamped to the rows it has":
+    # Without a clamp the popup covers the editor while the notification stands.
+    let mgr = newNotificationPopupManager()
+    mgr.position = nppBottomRight
+    var tall = ""
+    for i in 0 ..< 40:
+      tall.add "line " & $i & "\n"
+    mgr.addNotification(tall)
+
+    let rects = mgr.calculateNotificationPositions(80, 24, bottomReserve = 2)
+    check rects.len == 1
+    check rects[0].y >= 0
+    check rects[0].y + rects[0].height <= 24 - 2
+
+  test "A tall notification in a top corner clears the reserved rows too":
+    # A top corner ignores the reserved rows when placing the popup; its
+    # height still has to stop above them.
+    let mgr = newNotificationPopupManager()
+    mgr.position = nppTopRight
+    var tall = ""
+    for i in 0 ..< 40:
+      tall.add "line " & $i & "\n"
+    mgr.addNotification(tall)
+
+    let rects = mgr.calculateNotificationPositions(80, 24, bottomReserve = 2)
+    check rects.len == 1
+    check rects[0].y == 0
+    check rects[0].y + rects[0].height <= 24 - 2
+
+  test "A notification with no rows left to it is not placed on top of another":
+    # One that cannot fit waits in the queue rather than being pinned to the
+    # edge over the popups already placed.
+    let mgr = newNotificationPopupManager()
+    mgr.position = nppBottomRight
+    mgr.showBorder = true
+    for k in 0 ..< 3:
+      var tall = ""
+      for i in 0 ..< 16:
+        tall.add "popup " & $k & " line " & $i & "\n"
+      mgr.addNotification(tall)
+
+    let rects = mgr.calculateNotificationPositions(100, 24, bottomReserve = 2)
+    check rects.len < 3
+    for r in rects:
+      check r.y >= 0
+      check r.y + r.height <= 24 - 2
+    # No two popups may share a row.
+    for a in 0 ..< rects.len:
+      for b in a + 1 ..< rects.len:
+        check rects[a].y + rects[a].height <= rects[b].y or
+          rects[b].y + rects[b].height <= rects[a].y
+
+  test "A notification cut to a single row still points at the message log":
+    # One content row holds nothing but the marker: it still says a
+    # notification happened and where to read it.
+    let mgr = newNotificationPopupManager()
+    mgr.position = nppBottomRight
+    mgr.showBorder = false
+    for k in 0 ..< 3:
+      var lines: seq[string]
+      for i in 0 ..< 9:
+        lines.add "popup " & $k & " line " & $i
+      mgr.addNotification(lines.join("\n"))
+
+    let rects = mgr.calculateNotificationPositions(80, 24, bottomReserve = 2)
+    for r in rects:
+      check r.height >= 1
+      check r.y >= 0
+      check r.y + r.height <= 24 - 2
+
+  test "A screen too short for the border loses the border, not the popup":
+    # The frame is what leaves no room here, so an error raised in a four-row
+    # pane still reaches the screen without it.
+    let mgr = newNotificationPopupManager()
+    mgr.position = nppBottomRight
+    mgr.showBorder = true
+    mgr.addNotification("Something went wrong", nlError)
+
+    let rects = mgr.calculateNotificationPositions(80, 4, bottomReserve = 2)
+    check rects.len == 1
+    check not rects[0].showBorder
+    check rects[0].height == 1
+    check rects[0].y == 0
+
+  test "Width comes from the rows drawn, not the ones the clamp drops":
+    # Sizing to a line it never draws leaves a band of empty background.
+    let mgr = newNotificationPopupManager()
+    mgr.position = nppBottomRight
+    mgr.showBorder = true
+    var lines: seq[string]
+    for i in 0 ..< 40:
+      lines.add "short"
+    lines[39] = "a considerably wider line that the clamp never gets to draw"
+    mgr.addNotification(lines.join("\n"))
+
+    let rects = mgr.calculateNotificationPositions(80, 24, bottomReserve = 2)
+    check rects.len == 1
+    # "short" plus the marker row, not the wide line hidden past the clamp.
+    check rects[0].width == ClampedRowsMarker.displayWidth + 2
 
   test "Bottom-right with bottomReserve for status line":
     let mgr = newNotificationPopupManager()
@@ -391,6 +491,31 @@ suite "NotificationPopup - renderNotificationPopup":
     check buf[r.x + 1, r.y].symbol == "T"
     # Right space margin
     check buf[r.x + r.width - 1, r.y].symbol == " "
+
+  test "A shortened notification says so on its last row":
+    # The line naming what was left out is itself dropped by the clamp, so the
+    # surviving row stands in for it.
+    var buf = newBuffer(80, 24)
+    let mgr = newNotificationPopupManager()
+    mgr.showBorder = true
+    var tall = ""
+    for i in 0 ..< 40:
+      tall.add "line " & $i & "\n"
+    mgr.addNotification(tall)
+
+    let rects = mgr.calculateNotificationPositions(80, 24, bottomReserve = 2)
+    check rects.len == 1
+    let r = rects[0]
+    check r.height < mgr.queue[0].lines.len + 2
+
+    renderNotificationPopup(buf, r)
+    let lastContentY = r.y + r.height - 2
+    var lastRow = ""
+    for x in r.x + 1 ..< r.x + r.width - 1:
+      lastRow.add buf[x, lastContentY].symbol
+    # It names the message log: the count is gone, but where to read the whole
+    # report must not be.
+    check lastRow.strip() == ClampedRowsMarker
 
   test "Render notification with warning level":
     var buf = newBuffer(80, 24)

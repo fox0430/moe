@@ -48,13 +48,15 @@
 ## `command_handlers/*_handler.nim`) with no enumerable key table, so their
 ## help coverage can only be reviewed by hand and is out of scope for this test.
 
-import std/[strutils, unittest, options, sets]
+import std/[os, options, sets, strutils, unittest]
 
 import ../src/moepkg/[help_generator, help_markdown]
 import ../src/moepkg/key_bindings/registry
 import ../src/moepkg/key_bindings/normal_bindings {.all.}
 import ../src/moepkg/key_bindings/visual_bindings {.all.}
 import ../src/moepkg/key_bindings/insert_bindings {.all.}
+
+const FeaturesDocPath = currentSourcePath.parentDir.parentDir / "documents/features.md"
 
 proc keyComboTokens(kc: KeyCombo): seq[string] =
   ## Map one `KeyCombo` to the same token vocabulary `tokenizeKey` produces,
@@ -160,6 +162,11 @@ proc report(mode: string, missing: seq[string]) =
       echo "  " & m
 
 suite "help / keybinding consistency":
+  test "features.md documents the g m bookmark prefix":
+    let features = readFile(FeaturesDocPath)
+    for keys in ["g m m", "g m n", "g m p", "g m c"]:
+      check "| `" & keys & "` |" in features
+
   test "Normal mode bindings are documented or allowlisted":
     # Normal-mode keys are split across the "Changing modes" and "Normal mode"
     # help sections, so both groups count as documentation.
@@ -199,6 +206,10 @@ suite "help / keybinding consistency":
         # an "any" placeholder, not as a bare key in the Normal table.
         "register-select",
         "macro-play",
+        # Named mark prefixes are documented as composed forms (ma, 'a, `a).
+        "mark-set",
+        "mark-line",
+        "mark-exact",
       ]
     )
     let missing = findUndocumented(NormalBindings, help, allowKeys, allowCmds)

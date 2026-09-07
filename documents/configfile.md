@@ -847,6 +847,9 @@ Commands are grouped by category below. Any command name listed here can be used
 
 | Command | Description |
 |:----|:----|
+| mark-set | Set buffer-local named mark (a-z) |
+| mark-line | Jump to named mark line |
+| mark-exact | Jump to named mark position |
 | macro-record | Start/stop macro recording |
 | macro-play | Play macro from register |
 | register-select | Select register for next command |

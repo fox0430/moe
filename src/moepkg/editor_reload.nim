@@ -35,8 +35,7 @@ import
   git_conflict,
   motion,
   logger,
-  buffer,
-  editor_notify
+  buffer
 
 proc clampCursorAfterReload(e: Editor, buf: TextBuffer) =
   ## A reload swaps the buffer contents wholesale without touching the cursor.
@@ -67,7 +66,6 @@ proc finishReload(e: Editor, buf: TextBuffer, filePath: string) =
   # Reload clears highlightNeedsUpdate; drop caches so a pre-reload response
   # cannot paint stale coords onto the fresh buffer.
   e.invalidateAllLspCaches()
-  e.notifyUnusualContent(buf)
   e.resyncBufferAfterReload(buf)
 
 proc maybeReloadExternallyModifiedFile*(e: Editor) =
