@@ -277,6 +277,9 @@ const OverlaySwitchCommands: seq[tuple[name, desc: string, target: OverlayKind]]
 ]
 
 const OperatorPendingCommands: seq[tuple[name, desc, opType: string, reverse: bool]] = @[
+  ("mark-set", "Set buffer-local named mark (a-z)", "mark-set", false),
+  ("mark-line", "Jump to named mark line", "mark-line", false),
+  ("mark-exact", "Jump to named mark position", "mark-exact", false),
   ("macro-play", "Play macro from register", "macro-play", false),
   ("register-select", "Select register for next command", "register-select", false),
   ("find-char", "Find character forward", "find", false),

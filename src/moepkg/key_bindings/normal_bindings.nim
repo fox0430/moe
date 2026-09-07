@@ -53,10 +53,10 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("g ;", "changelist-prev"),
   ("g ,", "changelist-next"),
   # Bookmarks
-  ("m m", "bookmark-toggle"),
-  ("m n", "bookmark-next"),
-  ("m p", "bookmark-prev"),
-  ("m c", "bookmark-clear"),
+  ("g m m", "bookmark-toggle"),
+  ("g m n", "bookmark-next"),
+  ("g m p", "bookmark-prev"),
+  ("g m c", "bookmark-clear"),
   # Search navigation
   ("n", "search-next"),
   ("N", "search-prev"),
@@ -127,6 +127,10 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("C-w <", "window-decrease-width"),
   ("C-w =", "window-equalize"),
   ("C-w x", "window-swap"),
+  # Named marks
+  ("m", "mark-set"),
+  ("'", "mark-line"),
+  ("`", "mark-exact"),
   # Macro / register
   ("q", "macro-record"),
   ("@", "macro-play"),
@@ -172,7 +176,6 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("a", "textobject-around"),
   # Note: No bindKey for `"` in Normal mode — register-select takes precedence.
   # Text objects are handled by pendingTextObject raw dispatch.
-  ("'", "textobject-quote-single"),
   ("(", "textobject-paren"),
   (")", "textobject-paren"),
   ("[", "textobject-bracket"),
