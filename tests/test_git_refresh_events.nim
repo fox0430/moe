@@ -1,7 +1,7 @@
 ## Event-driven embedding, repository sharing and stale-result regressions.
 import std/[options, os, osproc, streams, tables, tempfiles, monotimes, times]
 import pkg/results
-import ../src/moepkg/[buffer, git_cache]
+import ../src/moepkg/[buffer, git_cache, git_diff]
 
 proc git(root: string, args: openArray[string]): string =
   let child = startProcess(
@@ -215,6 +215,103 @@ block notification_discovers_a_new_repository:
   gc.drain()
   doAssert gc.repositories.len == 1
   doAssert gc.isBufferGitTracked(b)
+
+block notification_discovers_a_nested_repository:
+  let root = repository()
+  let otherRoot = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+    removeDir(otherRoot)
+  gc.setGitRefreshMode(grmEventDriven)
+  let b = load(root / "sub/b.txt")
+  let other = load(otherRoot / "a.txt")
+  gc.refreshGitBranch(b)
+  gc.scheduleGitRefresh(b)
+  gc.refreshGitBranch(other)
+  gc.scheduleGitRefresh(other)
+  gc.drain()
+  doAssert gc.branchEntries[b.id].repositoryPath == root
+  doAssert gc.diffEntries[b.id].repositoryPath == root
+  doAssert gc.gitBranchName(b) == "main"
+  doAssert gc.gitBranchName(other) == "main"
+
+  let nestedRoot = root / "sub"
+  discard git(nestedRoot, ["init", "-q"])
+  discard git(nestedRoot, ["symbolic-ref", "HEAD", "refs/heads/inner"])
+  discard git(nestedRoot, ["add", "b.txt"])
+  discard git(
+    nestedRoot,
+    [
+      "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm",
+      "initial",
+    ],
+  )
+
+  gc.notifyGitRepositoryChanged(nestedRoot)
+  doAssert gc.repositories[root].forced
+  doAssert gc.diffEntries[b.id].forced
+  doAssert not gc.branchEntries[b.id].populated
+  doAssert not gc.diffEntries[other.id].forced
+  doAssert gc.branchEntries[other.id].populated
+
+  gc.refreshGitBranch(b)
+  gc.scheduleGitRefresh(b)
+  gc.drain()
+  doAssert gc.branchEntries[b.id].repositoryPath == nestedRoot
+  doAssert gc.diffEntries[b.id].repositoryPath == nestedRoot
+  doAssert gc.gitBranchName(b) == "inner"
+  doAssert gc.isBufferGitTracked(b)
+
+  removeDir(nestedRoot / ".git")
+  gc.notifyGitRepositoryChanged(nestedRoot)
+  gc.refreshGitBranch(b)
+  gc.scheduleGitRefresh(b)
+  gc.drain()
+  doAssert gc.branchEntries[b.id].repositoryPath == root
+  doAssert gc.diffEntries[b.id].repositoryPath == root
+  doAssert gc.gitBranchName(b) == "main"
+  doAssert gc.isBufferGitTracked(b)
+
+block failed_diff_completion_retries_in_event_mode:
+  let root = repository()
+  var gc: GitCacheState
+  defer:
+    gc.clearGitCache()
+    removeDir(root)
+  gc.setGitRefreshMode(grmEventDriven)
+  gc.setGitDiffRefreshInterval(50)
+  let b = load(root / "a.txt")
+  gc.scheduleGitRefresh(b)
+  gc.drain()
+  doAssert gc.isBufferGitTracked(b)
+
+  let child =
+    startProcess("sleep", args = ["30"], options = {poUsePath, poStdErrToStdOut})
+  gc.diffEntries[b.id].pending = some(
+    GitDiffProcess(
+      process: child,
+      stage: gdsGitRoot,
+      startTime: epochTime() - 10,
+      filePath: b.filePath.get,
+    )
+  )
+  gc.reapGitPipelines()
+  doAssert not gc.pending()
+  doAssert not gc.isBufferGitTracked(b)
+  doAssert gc.diffEntries[b.id].retryAfter.isSome
+  let retryDeadline = gc.diffEntries[b.id].retryAfter
+  gc.scheduleGitRefresh(b)
+  doAssert not gc.pending()
+  doAssert gc.diffEntries[b.id].retryAfter == retryDeadline
+
+  gc.diffEntries[b.id].retryAfter = some(getMonoTime() - initDuration(seconds = 1))
+  gc.scheduleGitRefresh(b)
+  doAssert gc.gitDiffPendingCount() == 1
+  gc.drain()
+  doAssert gc.isBufferGitTracked(b)
+  doAssert gc.diffEntries[b.id].retryAfter.isNone
 
 block failed_starts_back_off_and_retry_in_both_modes:
   let root = repository()

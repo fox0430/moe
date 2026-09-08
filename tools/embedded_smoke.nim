@@ -63,3 +63,4 @@ when defined(windows):
 
 editor.enterTerminalInActiveWindow("")
 doAssert editor.state.statusMessage == "Terminal mode is unavailable in embedded builds"
+editor.releaseExternalResources()
