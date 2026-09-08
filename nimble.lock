@@ -165,8 +165,8 @@
       }
     },
     "matter": {
-      "version": "#8db6f03d1028c42693c3a586ba3625e1b48e9589",
-      "vcsRevision": "8db6f03d1028c42693c3a586ba3625e1b48e9589",
+      "version": "#333b79c75fa883a3ebb5ddd7d4fdbd7a11819b94",
+      "vcsRevision": "333b79c75fa883a3ebb5ddd7d4fdbd7a11819b94",
       "url": "https://github.com/elcritch/matter",
       "downloadMethod": "git",
       "dependencies": [
@@ -174,7 +174,7 @@
         "zippy"
       ],
       "checksums": {
-        "sha1": "fb91316e3bd147651f73fd018230f41d49bd23d1"
+        "sha1": "0fc81925fc84df06711eb3ba4834c45df3459416"
       }
     }
   },
