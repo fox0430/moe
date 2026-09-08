@@ -304,8 +304,8 @@ proc tickGitCache(e: Editor) =
   e.state.git.reapGitPipelines()
 
   # Refresh only what is displayed or explicitly requested by an embedding
-  # frontend: a diff spawns a subprocess and a branch lookup blocks on
-  # `git rev-parse`, so neither should run without a consumer.
+  # frontend: diffs and branch lookups spawn subprocesses, so neither should
+  # run without a consumer.
   let
     sl = e.config.statusLine
     frontendWantsGit = e.state.frontendSubscriptions.gitStatus

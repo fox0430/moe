@@ -17,12 +17,64 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, osproc, strutils, options, times]
+import
+  std/[unittest, os, osproc, strutils, options, times, streams, tempfiles, monotimes]
+
+when defined(posix):
+  import std/posix
 
 import pkg/results
 
 import ../src/moepkg/buffer
 import ../src/moepkg/git_diff {.all.}
+
+when defined(posix):
+  proc openDescriptorCount(): int =
+    for fd in 0.cint ..< 4096.cint:
+      if fcntl(fd, F_GETFD) != -1:
+        inc result
+
+  block git_cleanup_reaps_children_and_closes_pipes:
+    let before = openDescriptorCount()
+    for timeout in [false, true]:
+      let child =
+        startProcess("sleep", args = ["30"], options = {poUsePath, poStdErrToStdOut})
+      let pid = Pid(child.processID())
+      let (scratch, scratchPath) = createTempFile("moe_cleanup_", ".tmp")
+      scratch.close()
+      let pipeline = GitDiffProcess(
+        process: child, startTime: epochTime() - 10, tempOriginal: scratchPath
+      )
+      if timeout:
+        doAssert checkGitDiffComplete(pipeline, timeout = 0).get.isErr
+      else:
+        abandonGitDiffProcess(pipeline)
+      doAssert pipeline.process.isNil
+      doAssert not fileExists(scratchPath)
+      var status: cint
+      doAssert waitpid(pid, status, WNOHANG) == -1
+      doAssert errno == ECHILD
+      doAssert openDescriptorCount() == before
+      abandonGitDiffProcess(pipeline)
+      doAssert openDescriptorCount() == before
+
+  block git_cleanup_kills_a_child_that_ignores_termination:
+    let before = openDescriptorCount()
+    let child = startProcess(
+      "sh",
+      args = ["-c", "trap '' TERM; echo ready; exec sleep 30"],
+      options = {poUsePath, poStdErrToStdOut},
+    )
+    doAssert child.outputStream.readLine() == "ready"
+    let pid = Pid(child.processID())
+    let pipeline = GitDiffProcess(process: child)
+    let started = getMonoTime()
+    abandonGitDiffProcess(pipeline)
+    doAssert (getMonoTime() - started).inMilliseconds < 2000
+    var status: cint
+    doAssert waitpid(pid, status, WNOHANG) == -1
+    doAssert errno == ECHILD
+    doAssert openDescriptorCount() == before
 
 suite "GitDiff - parseDiffHunk":
   test "Parse standard hunk header":
@@ -292,6 +344,20 @@ suite "GitDiff - tryCanonicalPath":
     writeFile(dir / "target.txt", "x")
     createSymlink(dir / "target.txt", dir / "link.txt")
     check tryCanonicalPath(dir / "link.txt") == expandFilename(dir / "target.txt")
+
+  test "Canonical parent preserves the final symlink":
+    let dir = getTempDir() / "moe_git_canon_test"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+    let target = getTempDir() / "moe_git_canon_outside.txt"
+    writeFile(target, "x")
+    defer:
+      removeFile(target)
+    let link = dir / "link.txt"
+    createSymlink(target, link)
+
+    check tryCanonicalParentPath(link) == expandFilename(dir) / "link.txt"
 
   test "Non-existent file falls back to canonical parent":
     let dir = getTempDir() / "moe_git_canon_test"
@@ -1068,11 +1134,18 @@ suite "GitDiff - Integration tests with git repository":
     discard execCmdEx("git add link.txt", workingDir = testDir)
     discard execCmdEx("git commit -m 'Add symlink'", workingDir = testDir)
 
+    let repoLink = getTempDir() / "moe_git_diff_outside_repo_link"
+    if symlinkExists(repoLink) or fileExists(repoLink):
+      removeFile(repoLink)
+    createSymlink(testDir, repoLink)
+    defer:
+      removeFile(repoLink)
+
     let diffProc = GitDiffProcess(
       stage: gdsGitRoot,
       startTime: epochTime(),
-      filePath: linkFile,
-      workingDir: testDir,
+      filePath: repoLink / "link.txt",
+      workingDir: repoLink,
       bufferContent: readFile(linkFile),
     )
 
@@ -1107,11 +1180,18 @@ suite "GitDiff - Integration tests with git repository":
       removeFile(linkFile)
       removeFile(outsideFile)
 
+    let repoLink = getTempDir() / "moe_git_diff_untracked_repo_link"
+    if symlinkExists(repoLink) or fileExists(repoLink):
+      removeFile(repoLink)
+    createSymlink(testDir, repoLink)
+    defer:
+      removeFile(repoLink)
+
     let diffProc = GitDiffProcess(
       stage: gdsGitRoot,
       startTime: epochTime(),
-      filePath: linkFile,
-      workingDir: testDir,
+      filePath: repoLink / "untracked_link.txt",
+      workingDir: repoLink,
       bufferContent: readFile(linkFile),
     )
 

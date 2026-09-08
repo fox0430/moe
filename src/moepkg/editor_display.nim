@@ -24,6 +24,8 @@ import std/options
 
 import types/editor_types, status_line, git_cache
 
+export GitRefreshMode
+
 type
   ActiveGitStatus* = object ## Cached Git information for the active editor buffer.
     branch*: string
@@ -83,6 +85,24 @@ proc setFrontendGitStatusEnabled*(e: Editor, enabled: bool) =
   e.state.frontendSubscriptions = subscriptions
   if enabled:
     e.state.git.requestGitRefresh(e.activeBuffer)
+
+proc setFrontendGitRefreshMode*(e: Editor, mode: GitRefreshMode) =
+  ## Choose periodic (default) or host-driven Git refresh scheduling.
+  ## Event-driven mode still refreshes on edits, saves, reloads and first use.
+  ## Continue calling tick to collect asynchronous results in either mode.
+  e.state.git.setGitRefreshMode(mode)
+
+proc notifyGitRepositoryChanged*(e: Editor, rootPath = "") =
+  ## Notify Moe after a Git/worktree change observed by the embedding host.
+  ## Pass the worktree root, or empty to invalidate every cached repository.
+  ## Marshal watcher callbacks onto the editor thread before calling this.
+  e.state.git.notifyGitRepositoryChanged(rootPath)
+
+proc frontendGitStatusRevision*(e: Editor): uint64 =
+  ## Completion revision for hosts to observe after tick, without callbacks.
+  ## A change means cached Git results were published. Use frontendStatus to
+  ## read the active buffer; buffer activation can change it independently.
+  e.state.git.revision
 
 proc toggleStatusLine*(e: Editor) =
   e.showStatusLine = not e.showStatusLine

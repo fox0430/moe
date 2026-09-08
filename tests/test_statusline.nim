@@ -1495,8 +1495,10 @@ suite "StatusLine - sanitize control characters":
     let tb = createTestTextBuffer("/path/to/file.nim", false, "test")
     var gc = GitCacheState()
     gc.branchEntries[tb.id] = GitBranchCacheEntry(
-      path: tb.filePath.get, name: "feat\x1B/branch\x00test\x7F", populated: true
+      path: tb.filePath.get, repositoryPath: "/path", populated: true
     )
+    gc.repositories["/path"] =
+      GitRepositoryCacheEntry(name: "feat\x1B/branch\x00test\x7F", populated: true)
     var cfg = createTestStatusLineConfig()
     cfg.gitBranchName = true
     cfg.showGitInactive = true
@@ -1510,8 +1512,10 @@ suite "StatusLine - sanitize control characters":
     var state = createTestState()
     let tb = createTestTextBuffer("/path/to/file.nim", false, "test")
     state.git.branchEntries[tb.id] = GitBranchCacheEntry(
-      path: tb.filePath.get, name: "fix\x00/awful\x1Bbranch", populated: true
+      path: tb.filePath.get, repositoryPath: "/path", populated: true
     )
+    state.git.repositories["/path"] =
+      GitRepositoryCacheEntry(name: "fix\x00/awful\x1Bbranch", populated: true)
     let res = parseSetupText(state, tb, "{gitBranch}")
     check not hasControl(res)
     check "fix /awful branch" in res or "fix" in res
@@ -1521,8 +1525,10 @@ suite "StatusLine - sanitize control characters":
     let tb = createTestTextBuffer("/path/file.nim", false, "test")
     var gc = GitCacheState()
     gc.branchEntries[tb.id] = GitBranchCacheEntry(
-      path: tb.filePath.get, name: "a\x1Bb\x00c漢\x7F", populated: true
+      path: tb.filePath.get, repositoryPath: "/path", populated: true
     )
+    gc.repositories["/path"] =
+      GitRepositoryCacheEntry(name: "a\x1Bb\x00c漢\x7F", populated: true)
     var cfg = createTestStatusLineConfig()
     cfg.gitBranchName = true
     let res = buildGitInfo(gc, tb, EditorMode.Normal, cfg, true)

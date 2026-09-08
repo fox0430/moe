@@ -22,7 +22,7 @@
 ## This module provides functionality for getting git diff information
 ## and applying it to buffer sidebar markers.
 
-import std/[options, osproc, strutils, tables, os, tempfiles, streams, times]
+import std/[options, osproc, strutils, tables, os, tempfiles, streams, times, monotimes]
 
 import pkg/results
 
@@ -83,6 +83,27 @@ proc closeSafely(p: Process) =
   except CatchableError as e:
     logError("git diff", "Failed to close process: " & e.msg)
 
+proc releaseGitProcess*(process: var Process) =
+  ## Reap and close a Git child exactly once. Give termination 100ms before
+  ## escalating to kill. Call on the editor thread that owns the process.
+  if process.isNil:
+    return
+  let child = process
+  process = nil
+  try:
+    if child.peekExitCode() == PROCESS_RUNNING:
+      terminateProcess(child)
+      let deadline = getMonoTime() + initDuration(milliseconds = 100)
+      while child.peekExitCode() == PROCESS_RUNNING and getMonoTime() < deadline:
+        sleep(1)
+      if child.peekExitCode() == PROCESS_RUNNING:
+        child.kill()
+    discard child.waitForExit()
+  except CatchableError as e:
+    logError("git diff", "Failed to reap process: " & e.msg)
+  finally:
+    closeSafely(child)
+
 proc readFileSafely(path: string): string =
   try:
     readFile(path)
@@ -91,13 +112,14 @@ proc readFileSafely(path: string): string =
     ""
 
 proc abandonGitDiffProcess*(diffProc: GitDiffProcess) =
-  ## Terminate a pending GitDiffProcess and release its resources without
-  ## waiting for completion. Used by callers that cache pending async diffs
+  ## Terminate and reap a pending GitDiffProcess and release its resources.
+  ## Used by callers that cache pending async diffs
   ## (e.g. status-line cache) to clean up on buffer close or editor
   ## shutdown. Safe to call multiple times; swallows all process/OS
   ## errors so it can be used from shutdown paths.
-  terminateProcess(diffProc.process)
-  closeSafely(diffProc.process)
+  if diffProc.isNil:
+    return
+  releaseGitProcess(diffProc.process)
   cleanupTempFiles(diffProc)
 
 proc tryCanonicalPath(path: string): string =
@@ -119,6 +141,17 @@ proc tryCanonicalPath(path: string): string =
     except OSError, ValueError:
       discard
   return path
+
+proc tryCanonicalParentPath(path: string): string =
+  ## Resolve directory symlinks without resolving the final path component.
+  ## Git needs the final component when it is an in-repository symlink, while
+  ## the parent must use the same canonical spelling as the repository root.
+  let parent = path.parentDir()
+  let base = path.extractFilename()
+  if parent.len == 0 or parent == path or base.len == 0:
+    path
+  else:
+    tryCanonicalPath(parent) / base
 
 proc calculateRelativePath(filePath, gitRoot: string): string =
   ## Calculate relative path from git root to file
@@ -290,9 +323,13 @@ proc advanceToGitShow(
       true
     else:
       canonGuardPath.startsWith(canonGitRoot & "/")
-  # Keep the original when resolution moves outside the root
-  # (in-repo symlink pointing outside).
-  let effectivePath = if isUnderCanonRoot: canonFilePath else: resolvedFilePath
+  # Preserve the final symlink when it points outside the root, but canonicalize
+  # its parent so aliases such as macOS /var -> /private/var still match.
+  let effectivePath =
+    if isUnderCanonRoot:
+      canonFilePath
+    else:
+      tryCanonicalParentPath(resolvedFilePath)
   # Collapse "." / ".." / duplicate separators for the guard and the
   # `git show HEAD:<path>` argument (git rejects "..").
   let guardEffectivePath = normalizedPath(effectivePath)
@@ -399,7 +436,7 @@ proc advanceToGitDiff(diffProc: GitDiffProcess): Option[Result[GitDiffInfo, stri
   diffProc.stage = gdsGitDiff
   return none(Result[GitDiffInfo, string])
 
-proc checkGitDiffComplete*(
+proc pollGitDiff(
     diffProc: GitDiffProcess, timeout: float = DEFAULT_GIT_DIFF_TIMEOUT
 ): Option[Result[GitDiffInfo, string]] =
   ## Poll the buffer-diff pipeline. Returns:
@@ -407,9 +444,11 @@ proc checkGitDiffComplete*(
   ## - `some(ok(info))` after the final stage completes successfully
   ## - `some(err(msg))` on timeout or any stage failure
 
+  if diffProc.isNil or diffProc.process.isNil:
+    return some(Result[GitDiffInfo, string].err("Git diff process is closed"))
+
   if epochTime() - diffProc.startTime > timeout:
-    terminateProcess(diffProc.process)
-    cleanupTempFiles(diffProc)
+    abandonGitDiffProcess(diffProc)
     return some(
       Result[GitDiffInfo, string].err(
         "Git diff timed out after " & $timeout & " seconds"
@@ -421,7 +460,7 @@ proc checkGitDiffComplete*(
     return none(Result[GitDiffInfo, string])
 
   let output = drainOutput(diffProc.process)
-  closeSafely(diffProc.process)
+  releaseGitProcess(diffProc.process)
 
   case diffProc.stage
   of gdsGitRoot:
@@ -447,6 +486,18 @@ proc checkGitDiffComplete*(
       )
     return some(Result[GitDiffInfo, string].ok(parseDiffOutput(diffOutput)))
 
+proc checkGitDiffComplete*(
+    diffProc: GitDiffProcess, timeout: float = DEFAULT_GIT_DIFF_TIMEOUT
+): Option[Result[GitDiffInfo, string]] =
+  ## Advance a diff pipeline, releasing resources on completion or any error.
+  ## Returns none while running, or a result once finished. Closed pipelines
+  ## return an error; repeated cleanup is safe.
+  try:
+    result = pollGitDiff(diffProc, timeout)
+  except CatchableError as e:
+    abandonGitDiffProcess(diffProc)
+    result = some(Result[GitDiffInfo, string].err(e.msg))
+
 proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, string] =
   ## Start the buffer-vs-HEAD diff pipeline as a background state machine.
   ## Returns a `GitDiffProcess` that must be polled with `checkGitDiffComplete`;
@@ -461,6 +512,8 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
 
   let filePath = buffer.filePath.get
   let fileDir = filePath.parentDir()
+  # Snapshot before starting a child so a buffer read failure cannot orphan it.
+  let content = buffer.getFileContent()
 
   let process =
     try:
@@ -479,7 +532,7 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
     startTime: epochTime(),
     filePath: filePath,
     workingDir: fileDir,
-    bufferContent: buffer.getFileContent(),
+    bufferContent: content,
   )
 
   return ok(diffProc)

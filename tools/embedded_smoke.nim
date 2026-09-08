@@ -49,6 +49,10 @@ when defined(windows):
     "Opening external URIs is unavailable in embedded mode on Windows"
 
 let editor = newEditor(config)
+editor.setFrontendGitStatusEnabled(true)
+editor.setFrontendGitRefreshMode(grmEventDriven)
+editor.notifyGitRepositoryChanged()
+doAssert editor.frontendGitStatusRevision() == 0
 
 when defined(windows):
   discard editor.processFileResult(
@@ -59,3 +63,4 @@ when defined(windows):
 
 editor.enterTerminalInActiveWindow("")
 doAssert editor.state.statusMessage == "Terminal mode is unavailable in embedded builds"
+editor.releaseExternalResources()

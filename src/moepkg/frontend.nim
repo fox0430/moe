@@ -25,6 +25,9 @@
 ##
 ## Call `setFrontendGitStatusEnabled(true)` once when the host displays Git
 ## status, then call `tick` each frame before reading `frontendStatus`.
+## Hosts with filesystem/Git watchers can select `grmEventDriven` using
+## `setFrontendGitRefreshMode`, then call `notifyGitRepositoryChanged` on the
+## editor thread. `frontendGitStatusRevision` changes when results arrive.
 
 import
   config, editor, editor_frame, editor_display, editor_buffers, frontend_input, handler
@@ -35,7 +38,9 @@ export editor_frame.tick
 export
   editor_display.FrontendStatus, editor_display.ActiveGitStatus,
   editor_display.frontendStatus, editor_display.frontendGitStatusEnabled,
-  editor_display.setFrontendGitStatusEnabled
+  editor_display.setFrontendGitStatusEnabled, editor_display.GitRefreshMode,
+  editor_display.setFrontendGitRefreshMode, editor_display.notifyGitRepositoryChanged,
+  editor_display.frontendGitStatusRevision
 export
   editor_buffers.OpenBufferInfo, editor_buffers.activeWindowBuffers,
   editor_buffers.activateBuffer, editor_buffers.closeBuffer, editor_buffers.moveBuffer,
@@ -43,4 +48,4 @@ export
 export
   frontend_input.GridRegion, frontend_input.PointerButton, frontend_input.PointerAction,
   frontend_input.PointerInput, frontend_input.ScrollInput, frontend_input.ScrollOutcome
-export handler.handleTextInput, handler.handleEvent
+export handler.handleTextInput, handler.handleEvent, handler.releaseExternalResources

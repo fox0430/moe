@@ -26,6 +26,18 @@ import ../src/moepkg/[buffer, config, editor, git_cache]
 proc createTestEditor(): Editor =
   newEditor(newEditorConfig())
 
+block frontend_can_control_git_refresh_without_launching_work:
+  let e = createTestEditor()
+  doAssert e.state.git.refreshMode == grmPeriodic
+  e.setFrontendGitRefreshMode(grmEventDriven)
+  doAssert e.state.git.refreshMode == grmEventDriven
+  e.notifyGitRepositoryChanged()
+  doAssert e.state.git.diffEntries.len == 0
+  doAssert e.state.git.repositories.len == 0
+  doAssert e.frontendGitStatusRevision() == 0
+  e.setFrontendGitRefreshMode(grmPeriodic)
+  doAssert e.state.git.refreshMode == grmPeriodic
+
 suite "Editor display status queries":
   test "statusModeLabel returns the active editor mode":
     let e = createTestEditor()
@@ -70,7 +82,9 @@ suite "Editor display status queries":
     e.state.git.diffEntries[key] =
       GitDiffCacheEntry(counts: (added: 3, modified: 2, deleted: 1), populated: true)
     e.state.git.branchEntries[key] =
-      GitBranchCacheEntry(name: "feature/native-status", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/repo", populated: true)
+    e.state.git.repositories["/repo"] =
+      GitRepositoryCacheEntry(name: "feature/native-status", populated: true)
 
     check e.activeGitStatus ==
       ActiveGitStatus(
@@ -83,9 +97,13 @@ suite "Editor display status queries":
       inactiveBuffer = e.activeBuffer
       activeBuffer = newTextBuffer()
     e.state.git.branchEntries[inactiveBuffer.id] =
-      GitBranchCacheEntry(name: "inactive", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/inactive", populated: true)
     e.state.git.branchEntries[activeBuffer.id] =
-      GitBranchCacheEntry(name: "active", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/active", populated: true)
+    e.state.git.repositories["/inactive"] =
+      GitRepositoryCacheEntry(name: "inactive", populated: true)
+    e.state.git.repositories["/active"] =
+      GitRepositoryCacheEntry(name: "active", populated: true)
     e.activeWindow.buffer = activeBuffer
 
     check e.activeGitStatus.branch == "active"
@@ -99,7 +117,9 @@ suite "Editor display status queries":
     e.state.git.diffEntries[activeBuffer.id] =
       GitDiffCacheEntry(counts: (added: 4, modified: 2, deleted: 1), populated: true)
     e.state.git.branchEntries[activeBuffer.id] =
-      GitBranchCacheEntry(name: "feature/frontend-status", populated: true)
+      GitBranchCacheEntry(repositoryPath: "/repo", populated: true)
+    e.state.git.repositories["/repo"] =
+      GitRepositoryCacheEntry(name: "feature/frontend-status", populated: true)
 
     check e.frontendStatus ==
       FrontendStatus(

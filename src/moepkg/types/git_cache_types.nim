@@ -20,7 +20,7 @@
 ## Types for the per-buffer git cache. Split out from `git_cache` so `types`
 ## can hold the cache on `EditorState` without pulling in the pipeline logic.
 
-import std/[options, tables, monotimes]
+import std/[options, tables, monotimes, osproc]
 
 import git_diff_types
 import ../buffer/core
@@ -28,11 +28,19 @@ import ../buffer/core
 const DefaultGitDiffRefreshIntervalMs*: int64 = 2000
 
 type
+  GitRefreshMode* = enum
+    grmPeriodic ## Refresh on edits, explicit requests and elapsed intervals.
+    grmEventDriven ## Refresh on edits and requests; retry failures after a delay.
+
   GitDiffCacheEntry* = object
     counts*: tuple[added, modified, deleted: int]
     changeSeqAtRefresh*: int
     lastRefresh*: MonoTime
+    retryAfter*: Option[MonoTime] ## Failed starts retry in either refresh mode.
     pending*: Option[GitDiffProcess]
+    sourceBuffer*: TextBuffer
+    pathAtRefresh*: string
+    repositoryPath*: string
     populated*: bool
     forced*: bool ## Invalidated by an event that doesn't bump `changeSeq`.
     gitTracked*: bool
@@ -44,13 +52,27 @@ type
 
   GitBranchCacheEntry* = object
     path*: string
-    name*: string
+    repositoryPath*: string
     lastRefresh*: MonoTime
     populated*: bool
 
+  GitRepositoryCacheEntry* = object
+    name*: string
+    lastRefresh*: MonoTime
+    retryAfter*: Option[MonoTime] ## Failed queries retry in either refresh mode.
+    populated*: bool
+    generation*: uint64
+    pendingGeneration*: uint64
+    forced*: bool
+    pending*: Process
+    started*: MonoTime
+
   GitCacheState* = object
-    ## Per-buffer git status owned by `EditorState`. Both refresh cycles are
-    ## driven from the editor tick; the render path only reads.
+    ## Git state owned by EditorState: buffer diffs and shared worktree branches.
+    ## Both refresh cycles are driven from the editor tick; rendering only reads.
     diffEntries*: Table[BufferId, GitDiffCacheEntry]
     branchEntries*: Table[BufferId, GitBranchCacheEntry]
+    repositories*: Table[string, GitRepositoryCacheEntry]
     diffRefreshIntervalMs*: int64
+    refreshMode*: GitRefreshMode
+    revision*: uint64 ## Advances when a completed result is published.
