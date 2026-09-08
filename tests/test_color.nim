@@ -381,3 +381,10 @@ suite "color - colorModeRank":
 suite "color - applyColorModeFallback":
   test "cmkNone always returns cmkNone":
     check applyColorModeFallback(cmkNone) == cmkNone
+
+  when defined(moe.embedded):
+    test "embedded frontends retain the requested color precision":
+      check applyColorModeFallback(cmk8color) == cmk8color
+      check applyColorModeFallback(cmk16color) == cmk16color
+      check applyColorModeFallback(cmk256color) == cmk256color
+      check applyColorModeFallback(cmk24bit) == cmk24bit
