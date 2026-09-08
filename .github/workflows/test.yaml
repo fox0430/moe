@@ -192,6 +192,8 @@ jobs:
       with:
         nim-version: 2.2.10
         repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Update Nimble for revision-pinned dependencies
+      run: nimble install 'nimble@0.24.1' -y
     - name: Install dependencies
       run: |
         nimble install -d -y
