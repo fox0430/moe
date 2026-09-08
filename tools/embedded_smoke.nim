@@ -17,37 +17,45 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, sequtils]
+## Compile and runtime smoke test for Moe's embedding surface.
 
 import pkg/results
 
-import ../src/moepkg/config_loader
+import ../src/moepkg/[clipboard_backend, frontend, types]
+import ../src/moepkg/command_handlers/editor_ops
 
-const ExampleMoerc = currentSourcePath().parentDir / ".." / "example" / "moerc.toml"
+when defined(windows):
+  import ../src/moepkg/uri_utils
+  import ../src/moepkg/command_handlers/[file_ops, handler_result]
+  import ../src/moepkg/types/editor_types
 
-suite "example/moerc.toml":
-  test "File exists":
-    check fileExists(ExampleMoerc)
+static:
+  doAssert defined(moe.embedded)
+  doAssert not declared(TerminalState)
+  doAssert not declared(newTerminalState)
+  doAssert not declared(newTerminal)
+  doAssert not declared(AsyncApp)
 
-  test "Parse without errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    if loadResult.isErr:
-      echo "  Parse error: ", loadResult.error
-    check loadResult.isOk
+let config = newEditorConfig()
+doAssert not config.clipboard.enable
 
-  test "No validation errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    require loadResult.isOk
+let clipboardRead = readFromClipboardSync(config.clipboard.tool)
+doAssert clipboardRead.isErr
 
-    let (_, vr) = loadResult.get
+when defined(windows):
+  let openUriResult = openExternalUri("https://example.com")
+  doAssert openUriResult.isErr
+  doAssert openUriResult.error ==
+    "Opening external URIs is unavailable in embedded mode on Windows"
 
-    # Filter out Theme.path errors since the theme file may not exist in the
-    # test environment.
-    let errors = vr.errors.filterIt(
-      not (it.name == "Theme.path" and "existing file path" in it.expected)
-    )
+let editor = newEditor(config)
 
-    if errors.len > 0:
-      for e in errors:
-        echo "  Validation error: ", e.toMessage
-    check errors.len == 0
+when defined(windows):
+  discard editor.processFileResult(
+    HandlerResult(kind: hrOpenUri, openUri: "https://example.com"), editor.activeBuffer
+  )
+  doAssert editor.state.statusMessage ==
+    "Opening external URIs is unavailable in embedded mode on Windows"
+
+editor.enterTerminalInActiveWindow("")
+doAssert editor.state.statusMessage == "Terminal mode is unavailable in embedded builds"

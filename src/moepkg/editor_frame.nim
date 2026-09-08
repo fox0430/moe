@@ -25,7 +25,7 @@
 
 import std/[options, strutils, monotimes, times, tables]
 
-import pkg/celina
+import celina_backend as celina
 
 import
   types/editor_types,
@@ -341,6 +341,16 @@ proc tickAutoSave(e: Editor) =
   e.autoSave()
   e.autoBackup()
 
+proc tickBufferNotes(e: Editor) =
+  ## Report the pending notices of every buffer on screen. Notices belong to
+  ## the buffer, so an unshown buffer keeps them until some window shows it.
+  var bufs: seq[TextBuffer]
+  for w in e.windowManager.windows:
+    if w.buffer != nil and w.buffer.pendingNotices.len > 0:
+      bufs.add w.buffer
+  if bufs.len > 0:
+    e.drainNotices(bufs)
+
 proc tickNotifications(e: Editor) =
   ## Dismiss expired popup notifications.
   e.state.notificationPopup.tick()
@@ -357,6 +367,7 @@ proc tick*(e: Editor) =
   e.tickGitAndDebug()
   e.tickForcedInsertBoundary()
   e.tickAutoSave()
+  e.tickBufferNotes()
   e.tickNotifications()
 
 proc updateForFrame*(e: Editor, buffer: Buffer): bool =

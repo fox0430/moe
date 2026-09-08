@@ -25,7 +25,7 @@
 
 import std/[options, unicode, json]
 
-import pkg/celina
+import celina_backend as celina
 
 import lsp_integration, popup_render, unicode_utils, color
 import lsp/protocol/types as lspTypes

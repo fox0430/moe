@@ -24,7 +24,7 @@
 
 import std/[options, os, strutils]
 
-import pkg/celina
+import celina_backend as celina
 
 import types, buffer/core, color, unicode_utils, modes
 

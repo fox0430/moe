@@ -86,10 +86,10 @@ moe supports line bookmarks inspired by vim-bookmarks. Bookmarks are per-buffer,
 
 | Keys | Description |
 |---|---|
-| `mm` | Toggle bookmark on current line |
-| `mn` | Jump to next bookmark |
-| `mp` | Jump to previous bookmark |
-| `mc` | Clear all bookmarks in current buffer |
+| `g m m` | Toggle bookmark on current line |
+| `g m n` | Jump to next bookmark |
+| `g m p` | Jump to previous bookmark |
+| `g m c` | Clear all bookmarks in current buffer |
 | `:bookmarks` | Open Bookmark Manager |
 
 Bookmarks automatically adjust their positions when lines are inserted or deleted. They are saved on exit and restored when files are reopened.

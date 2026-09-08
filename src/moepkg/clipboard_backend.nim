@@ -17,37 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, sequtils]
+## Select the clipboard implementation used by Moe's editor engine.
 
-import pkg/results
-
-import ../src/moepkg/config_loader
-
-const ExampleMoerc = currentSourcePath().parentDir / ".." / "example" / "moerc.toml"
-
-suite "example/moerc.toml":
-  test "File exists":
-    check fileExists(ExampleMoerc)
-
-  test "Parse without errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    if loadResult.isErr:
-      echo "  Parse error: ", loadResult.error
-    check loadResult.isOk
-
-  test "No validation errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    require loadResult.isOk
-
-    let (_, vr) = loadResult.get
-
-    # Filter out Theme.path errors since the theme file may not exist in the
-    # test environment.
-    let errors = vr.errors.filterIt(
-      not (it.name == "Theme.path" and "existing file path" in it.expected)
-    )
-
-    if errors.len > 0:
-      for e in errors:
-        echo "  Validation error: ", e.toMessage
-    check errors.len == 0
+when defined(moe.embedded):
+  import clipboard_embedded
+  export clipboard_embedded
+else:
+  import clipboard
+  export clipboard

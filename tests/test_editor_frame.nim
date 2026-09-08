@@ -26,7 +26,8 @@ import pkg/celina
 import std/strutils
 
 import ../src/moepkg/[types, editor, config, message_log, editor_notify]
-import ../src/moepkg/[highlight, editor_frame, editor_window]
+import ../src/moepkg/[highlight, editor_window]
+import ../src/moepkg/editor_frame {.all.}
 import ../src/moepkg/buffer {.all.}
 
 suite "tick - forced Insert mode boundaries":
@@ -76,7 +77,7 @@ suite "tick - frontend Git status subscription":
     check not e.state.git.diffEntries[activeBuffer.id].forced
     check e.state.git.branchEntries.hasKey(activeBuffer.id)
 
-suite "notifyUnusualContent":
+suite "buffer content notices":
   test "warns once for a buffer holding undecodable bytes":
     let config = newEditorConfig()
     let e = newEditor(config)
@@ -86,13 +87,16 @@ suite "notifyUnusualContent":
     buf.keepRaw = true
     clearMessageLog()
 
-    e.notifyUnusualContent(buf)
-    check buf.warnedUnusualContent == ucRaw
+    buf.noteContent()
+
+    e.drainNotices([buf])
+    check buf.reportedContentKind == ucRaw
     check "undecodable bytes" in e.state.statusMessage
 
     # The latch keeps a second open of the same buffer quiet.
     e.state.setStatusQuiet("")
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
+    e.drainNotices([buf])
     check e.state.statusMessage == ""
 
   test "warns again after the content goes back to ordinary and bad again":
@@ -108,20 +112,24 @@ suite "notifyUnusualContent":
     buf.keepRaw = true
     clearMessageLog()
 
-    e.notifyUnusualContent(buf)
-    check buf.warnedUnusualContent == ucRaw
+    buf.noteContent()
+
+    e.drainNotices([buf])
+    check buf.reportedContentKind == ucRaw
 
     # Reload: the file now decodes cleanly.
     buf.keepRaw = false
     e.state.setStatusQuiet("")
-    e.notifyUnusualContent(buf)
-    check buf.warnedUnusualContent == ucOrdinary
+    buf.noteContent()
+    e.drainNotices([buf])
+    check buf.reportedContentKind == ucOrdinary
     check e.state.statusMessage == ""
 
     # Reload again: undecodable once more, so warn once more.
     buf.keepRaw = true
-    e.notifyUnusualContent(buf)
-    check buf.warnedUnusualContent == ucRaw
+    buf.noteContent()
+    e.drainNotices([buf])
+    check buf.reportedContentKind == ucRaw
     check "undecodable bytes" in e.state.statusMessage
 
   test "a raw buffer with NUL bytes gets one message naming both":
@@ -136,7 +144,9 @@ suite "notifyUnusualContent":
     buf.hasBinaryContent = true
     clearMessageLog()
 
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
+
+    e.drainNotices([buf])
 
     check "undecodable bytes and NUL bytes" in e.state.statusMessage
     check "held raw" in e.state.statusMessage
@@ -150,12 +160,15 @@ suite "notifyUnusualContent":
     buf.hasBinaryContent = true
     clearMessageLog()
 
-    e.notifyUnusualContent(buf)
-    check buf.warnedUnusualContent == ucBinary
+    buf.noteContent()
+
+    e.drainNotices([buf])
+    check buf.reportedContentKind == ucBinary
     check "binary content (NUL bytes)" in e.state.statusMessage
 
     e.state.setStatusQuiet("")
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
+    e.drainNotices([buf])
     check e.state.statusMessage == ""
 
   test "warns again when a reload changes what is unusual about the content":
@@ -170,7 +183,9 @@ suite "notifyUnusualContent":
     buf.keepRaw = true
     clearMessageLog()
 
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
+
+    e.drainNotices([buf])
     check "undecodable bytes" in e.state.statusMessage
 
     # Reload: the bytes now decode, but they still hold NUL.
@@ -178,9 +193,11 @@ suite "notifyUnusualContent":
     buf.hasBinaryContent = true
     e.state.setStatusQuiet("")
 
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
 
-    check buf.warnedUnusualContent == ucBinary
+    e.drainNotices([buf])
+
+    check buf.reportedContentKind == ucBinary
     check "binary content (NUL bytes)" in e.state.statusMessage
 
   test "warns again when a raw buffer reloads with NUL bytes":
@@ -192,15 +209,19 @@ suite "notifyUnusualContent":
     buf.keepRaw = true
     clearMessageLog()
 
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
+
+    e.drainNotices([buf])
     check e.state.statusMessage.count("NUL") == 0
 
     buf.hasBinaryContent = true
     e.state.setStatusQuiet("")
 
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
 
-    check buf.warnedUnusualContent == ucRawBinary
+    e.drainNotices([buf])
+
+    check buf.reportedContentKind == ucRawBinary
     check "undecodable bytes and NUL bytes" in e.state.statusMessage
 
   test "stays quiet for a decodable buffer":
@@ -211,10 +232,199 @@ suite "notifyUnusualContent":
     buf.filePath = some(getTempDir() / "moe-text-notify.txt")
     clearMessageLog()
 
-    e.notifyUnusualContent(buf)
+    buf.noteContent()
 
-    check buf.warnedUnusualContent == ucOrdinary
+    e.drainNotices([buf])
+
+    check buf.reportedContentKind == ucOrdinary
     check e.state.statusMessage == ""
+
+suite "drainNotices":
+  proc rawBuffer(e: Editor, name: string): TextBuffer =
+    result = newTextBuffer()
+    result.filePath = some(getTempDir() / name)
+    result.keepRaw = true
+    result.noteContent()
+
+  test "two buffers coming into view together get one report":
+    # With popups off the status line holds a single message, so reporting
+    # them one after another would leave only the last one readable.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    let
+      a = e.rawBuffer("moe-drain-a.txt")
+      b = e.rawBuffer("moe-drain-b.txt")
+    clearMessageLog()
+
+    e.drainNotices([a, b])
+
+    check e.state.statusMessage.count('\n') == 1
+    check "moe-drain-a.txt" in e.state.statusMessage
+    check "moe-drain-b.txt" in e.state.statusMessage
+    # The log keeps them apart.
+    check getMessageLog().len == 2
+
+  test "a buffer shown twice says nothing the second time":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    let buf = e.rawBuffer("moe-drain-twice.txt")
+    clearMessageLog()
+
+    e.drainNotices([buf, buf])
+
+    check getMessageLog().len == 1
+
+  test "a drained buffer stays quiet on the next pass":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    let buf = e.rawBuffer("moe-drain-again.txt")
+
+    e.drainNotices([buf])
+    e.state.setStatusQuiet("")
+    e.drainNotices([buf])
+
+    check e.state.statusMessage == ""
+
+  test "a buffer that owes nothing leaves the status line alone":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    let buf = newTextBuffer()
+    buf.filePath = some(getTempDir() / "moe-drain-quiet.txt")
+    e.state.setStatusQuiet("standing message")
+
+    e.drainNotices([buf])
+
+    check e.state.statusMessage == "standing message"
+
+suite "tickBufferNotes":
+  proc rawBufferNamed(name: string): TextBuffer =
+    result = newTextBuffer()
+    result.filePath = some(getTempDir() / name)
+    result.keepRaw = true
+    result.noteContent()
+
+  test "reports for a split the user has not moved into":
+    # A split is on screen whether or not it holds the cursor, so its notices
+    # are due now rather than when the user steps across.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    let split = EditorWindow(buffer: rawBufferNamed("moe-tick-split.txt"))
+    e.windowManager.windows.add split
+    clearMessageLog()
+
+    e.tickBufferNotes()
+
+    check "moe-tick-split.txt" in e.state.statusMessage
+    check getMessageLog().len == 1
+
+  test "a buffer no window shows keeps what it owes":
+    # `:lspRename` loads project files with nothing showing them.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    let offscreen = rawBufferNamed("moe-tick-offscreen.txt")
+    clearMessageLog()
+
+    e.tickBufferNotes()
+
+    check getMessageLog().len == 0
+    check offscreen.pendingNotices.len == 1
+
+  test "stays quiet once every buffer on screen has been drained":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    e.windowManager.windows.add EditorWindow(
+      buffer: rawBufferNamed("moe-tick-drained.txt")
+    )
+
+    e.tickBufferNotes()
+    e.state.setStatusQuiet("")
+    e.tickBufferNotes()
+
+    check e.state.statusMessage == ""
+
+suite "notifyAll - bounded delivery":
+  test "a long report is cut short on screen and kept whole in the log":
+    # A line the display drops is never reported again, so the log keeps it.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    var msgs: seq[string]
+    for i in 0 ..< 20:
+      msgs.add "note " & $i
+    clearMessageLog()
+
+    e.notifyAll(msgs, nlWarning)
+
+    check e.state.statusMessage.count('\n') + 1 == MaxNotifiedLines
+    check "note 0" in e.state.statusMessage
+    check "and 13 more (:messages)" in e.state.statusMessage
+    check getMessageLog().len == 20
+    check getMessageLog()[19] == "note 19"
+
+  test "a screen shorter than the bound keeps the head of the report":
+    # The status line area is rendered from its last row up, so a report
+    # taller than the screen would lose the messages it chose to keep.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    e.screenSize.height = 4
+    var msgs: seq[string]
+    for i in 0 ..< 20:
+      msgs.add "note " & $i
+    clearMessageLog()
+
+    e.notifyAll(msgs, nlWarning)
+
+    let lines = e.state.statusMessage.split('\n')
+    check lines.len <= 3
+    check lines[0] == "note 0"
+    check lines[^1].endsWith "more (:messages)"
+    check getMessageLog().len == 20
+
+  test "a popup report is bounded by the rows it wraps to, not by message count":
+    # A notice wraps to more than one row, so counting messages instead of
+    # rows would let eight of them blanket the editor.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = true
+    let mgr = e.state.notificationPopup
+    var msgs: seq[string]
+    for i in 0 ..< 20:
+      msgs.add "/very/long/path/to/some/file" & $i &
+        ".nim: the setting is out of range and was dropped"
+    clearMessageLog()
+
+    e.notifyAll(msgs, nlWarning)
+
+    check mgr.queue.len == 1
+    check mgr.queue[0].lines.len <= MaxNotifiedLines
+    check mgr.queue[0].lines[^1].endsWith "more (:messages)"
+    check getMessageLog().len == 20
+
+  test "a narrow popup counts the rows the \"and N more\" line itself wraps to":
+    # That line wraps like any other message, so budgeting it as a single row
+    # lets the report overrun its bound.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = true
+    let mgr = e.state.notificationPopup
+    mgr.maxWidth = 12
+    var msgs: seq[string]
+    for i in 0 ..< 20:
+      msgs.add "note " & $i & " abcdefghij"
+    clearMessageLog()
+
+    e.notifyAll(msgs, nlWarning)
+
+    check mgr.queue.len == 1
+    check mgr.queue[0].lines.len <= MaxNotifiedLines
+    check mgr.queue[0].lines[^1].endsWith ")"
+
+  test "a report that fits is shown whole":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+    clearMessageLog()
+
+    e.notifyAll(@["one", "two"], nlWarning)
+
+    check e.state.statusMessage == "one\ntwo"
+    check getMessageLog().len == 2
 
 suite "notify - routing and logging":
   test "status line route sets the status message":

@@ -76,11 +76,12 @@ type
       ## `runningBackgroundProcesses` because they own temporary files (temp
       ## source + build artifacts) that must be removed on editor exit/crash.
       ## Cleaned up via `cleanupQuickRunProcesses` on shutdown/emergency.
-    terminalStates*: Table[BufferId, TerminalState]
-      ## Live Terminal sessions keyed by their buffer id. The window's
-      ## `modeState` is rebuilt from this table on tab switches so a
-      ## terminal can be backgrounded by moving to another tab and resumed
-      ## later.
+    when not defined(moe.embedded):
+      terminalStates*: Table[BufferId, TerminalState]
+        ## Live Terminal sessions keyed by their buffer id. The window's
+        ## `modeState` is rebuilt from this table on tab switches so a
+        ## terminal can be backgrounded by moving to another tab and resumed
+        ## later.
 
   RenderContext* = object
     ## Context for rendering operations to reduce parameter passing

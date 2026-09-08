@@ -17,37 +17,57 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, sequtils]
+## Celina types used by Moe's editor core.
+##
+## A regular Moe build re-exports Celina's complete terminal API. Embedded
+## builds import only the value-type rendering and input modules needed by a
+## host frontend, so compiling the editor core never pulls in POSIX terminal
+## I/O (`termios`, stdin polling, or Celina's terminal application runtime).
 
-import pkg/results
+when defined(moe.embedded):
+  import std/unicode
 
-import ../src/moepkg/config_loader
+  import
+    pkg/celina/core/[geometry, colors, buffer, layout, borders, key_logic, mouse_logic]
 
-const ExampleMoerc = currentSourcePath().parentDir / ".." / "example" / "moerc.toml"
+  export unicode
+  export geometry, colors, buffer, layout, borders, key_logic, mouse_logic
 
-suite "example/moerc.toml":
-  test "File exists":
-    check fileExists(ExampleMoerc)
+  type
+    EventResult* = enum
+      erContinue
+      erConsume
+      erQuit
 
-  test "Parse without errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    if loadResult.isErr:
-      echo "  Parse error: ", loadResult.error
-    check loadResult.isOk
+    EventKind* = enum
+      Key
+      Mouse
+      Resize
+      Paste
+      FocusIn
+      FocusOut
+      Quit
+      Unknown
 
-  test "No validation errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    require loadResult.isOk
+    MouseEvent* = object
+      kind*: MouseEventKind
+      button*: MouseButton
+      x*: int
+      y*: int
+      modifiers*: set[KeyModifier]
 
-    let (_, vr) = loadResult.get
+    Event* = object
+      case kind*: EventKind
+      of Key:
+        key*: KeyEvent
+      of Mouse:
+        mouse*: MouseEvent
+      of Paste:
+        pastedText*: string
+      of Resize, FocusIn, FocusOut, Quit, Unknown:
+        discard
 
-    # Filter out Theme.path errors since the theme file may not exist in the
-    # test environment.
-    let errors = vr.errors.filterIt(
-      not (it.name == "Theme.path" and "existing file path" in it.expected)
-    )
+else:
+  import pkg/celina
 
-    if errors.len > 0:
-      for e in errors:
-        echo "  Validation error: ", e.toMessage
-    check errors.len == 0
+  export celina

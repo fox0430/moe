@@ -17,37 +17,43 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, sequtils]
+## Clipboard API for embedding frontends.
+##
+## An embedding frontend owns clipboard access and keeps Moe's clipboard
+## integration disabled. These routines remain available so editor modules have
+## one stable interface, but report a clear error if called.
 
 import pkg/results
 
-import ../src/moepkg/config_loader
+import config
 
-const ExampleMoerc = currentSourcePath().parentDir / ".." / "example" / "moerc.toml"
+type ClipboardError* = object of CatchableError
 
-suite "example/moerc.toml":
-  test "File exists":
-    check fileExists(ExampleMoerc)
+const
+  WriteTimeoutMs = 10_000
+  EmbeddedClipboardError =
+    "System clipboard access is owned by the embedding frontend (-d:moe.embedded)"
 
-  test "Parse without errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    if loadResult.isErr:
-      echo "  Parse error: ", loadResult.error
-    check loadResult.isOk
+proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
+  discard tool
+  Result[string, string].err(EmbeddedClipboardError)
 
-  test "No validation errors":
-    let loadResult = loadConfigFromToml(ExampleMoerc)
-    require loadResult.isOk
+proc readFromPrimarySelectionSync*(tool: ClipboardTool): Result[string, string] =
+  discard tool
+  Result[string, string].err(EmbeddedClipboardError)
 
-    let (_, vr) = loadResult.get
+proc writeToClipboardSync*(
+    tool: ClipboardTool, text: string, timeoutMs: int = WriteTimeoutMs
+): Result[bool, string] =
+  discard tool
+  discard text
+  discard timeoutMs
+  Result[bool, string].err(EmbeddedClipboardError)
 
-    # Filter out Theme.path errors since the theme file may not exist in the
-    # test environment.
-    let errors = vr.errors.filterIt(
-      not (it.name == "Theme.path" and "existing file path" in it.expected)
-    )
-
-    if errors.len > 0:
-      for e in errors:
-        echo "  Validation error: ", e.toMessage
-    check errors.len == 0
+proc writeToPrimarySelectionSync*(
+    tool: ClipboardTool, text: string, timeoutMs: int = WriteTimeoutMs
+): Result[bool, string] =
+  discard tool
+  discard text
+  discard timeoutMs
+  Result[bool, string].err(EmbeddedClipboardError)

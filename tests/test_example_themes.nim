@@ -48,5 +48,5 @@ suite "example/themes/*.toml":
 
       if vr.errors.len > 0:
         for e in vr.errors:
-          echo "  Validation error: ", e.toErrorMessage
+          echo "  Validation error: ", e.toMessage
       check vr.errors.len == 0

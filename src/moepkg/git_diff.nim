@@ -452,6 +452,10 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
   ## Returns a `GitDiffProcess` that must be polled with `checkGitDiffComplete`;
   ## every `git` invocation runs in a subprocess so this call never blocks.
 
+  when defined(moe.embedded) and defined(windows):
+    discard buffer
+    return err("Git diff is unavailable in embedded mode on Windows")
+
   if buffer.filePath.isNone:
     return err("Buffer has no associated file path")
 

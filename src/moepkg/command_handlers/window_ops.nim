@@ -20,7 +20,8 @@
 ## Buffer / window switching and layout side effects, split out of
 ## result_processor.nim.
 
-import std/tables
+when not defined(moe.embedded):
+  import std/tables
 
 import pkg/results
 
@@ -77,8 +78,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
       if discardErr.len > 0:
         e.state.statusMessage = discardErr
         return true
-    if e.terminalStates.hasKey(activeWin.buffer.id):
-      e.closeTerminalBuffer(activeWin.buffer.id)
+    when not defined(moe.embedded):
+      if e.terminalStates.hasKey(activeWin.buffer.id):
+        e.closeTerminalBuffer(activeWin.buffer.id)
     let shouldQuit = e.closeWindow()
     if shouldQuit:
       return false
@@ -117,9 +119,12 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     e.deleteCurrentBuffer()
     return true
   of hrTerminalQuit:
-    # Close the Terminal tab; closeTerminalBuffer picks a successor tab and
-    # resets the window's mode to Normal.
-    e.closeTerminalBuffer(e.activeWindow.buffer.id)
+    when defined(moe.embedded):
+      e.state.statusMessage = "Terminal mode is unavailable in embedded builds"
+    else:
+      # Close the Terminal tab; closeTerminalBuffer picks a successor tab and
+      # resets the window's mode to Normal.
+      e.closeTerminalBuffer(e.activeWindow.buffer.id)
     return true
   of hrFileTreeQuit:
     # Close file tree window

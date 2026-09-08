@@ -24,7 +24,9 @@
 
 import std/[options, os, strutils]
 
-import pkg/[celina, chronos]
+import pkg/chronos
+
+import ../celina_backend as celina
 
 import
   ../[

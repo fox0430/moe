@@ -20,16 +20,22 @@
 ## Editor helpers shared by the Command mode handler and result processor
 ## without a circular import.
 
-import std/[options, os, times, strutils, tables]
+import std/[options, os, times, strutils]
+
+when not defined(moe.embedded):
+  import std/tables
 
 import pkg/results
 
 import
   ../[
-    editor, editor_window_state, editor_window_layout, modes, buffer, logger, types,
-    filer, filetree, config_loader, terminal_mode, window_manager, log_viewer,
-    syntax_checker, render_utils, motion, viewer_mode,
+    editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
+    config_loader, window_manager, log_viewer, syntax_checker, render_utils, motion,
+    viewer_mode,
   ]
+
+when not defined(moe.embedded):
+  import ../[editor_window_layout, terminal_mode]
 
 import handler_result
 
@@ -351,29 +357,32 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
   e.syncActiveWindow()
 
 proc enterTerminalInActiveWindow*(e: Editor, command: string) =
-  ## Open a new Terminal session as a tab in the active window; the PTY is
-  ## tracked in `e.terminalStates` by buffer id so tabs survive switching.
-  let activeWin = e.activeWindow
-  let (cols, rows) = e.calculateTerminalAreaDimensions(activeWin)
-  let termResult = newTerminalState(command, cols, rows)
-  if termResult.isErr:
-    e.state.statusMessage = "Terminal error: " & termResult.error
-    return
+  when defined(moe.embedded):
+    e.state.statusMessage = "Terminal mode is unavailable in embedded builds"
+  else:
+    ## Open a new Terminal session as a tab in the active window; the PTY is
+    ## tracked in `e.terminalStates` by buffer id so tabs survive switching.
+    let activeWin = e.activeWindow
+    let (cols, rows) = e.calculateTerminalAreaDimensions(activeWin)
+    let termResult = newTerminalState(command, cols, rows)
+    if termResult.isErr:
+      e.state.statusMessage = "Terminal error: " & termResult.error
+      return
 
-  let termState = termResult.get
-  let termBuf = newTextBuffer("")
-  termBuf.displayName = some("[Terminal: " & command & "]")
+    let termState = termResult.get
+    let termBuf = newTextBuffer("")
+    termBuf.displayName = some("[Terminal: " & command & "]")
 
-  e.addBuffer(termBuf)
-  e.addBufferToWindowList(termBuf)
-  e.terminalStates[termBuf.id] = termState
+    e.addBuffer(termBuf)
+    e.addBufferToWindowList(termBuf)
+    e.terminalStates[termBuf.id] = termState
 
-  activeWin.buffer = termBuf
-  activeWin.modeState = ModeState(kind: mskTerminal, terminal: termState)
-  activeWin.cursor = BufferPosition(line: 0, column: 0)
-  activeWin.viewport.resetViewportTop()
-  activeWin.viewport.leftColumn = 0
-  e.setMode(EditorMode.Terminal)
+    activeWin.buffer = termBuf
+    activeWin.modeState = ModeState(kind: mskTerminal, terminal: termState)
+    activeWin.cursor = BufferPosition(line: 0, column: 0)
+    activeWin.viewport.resetViewportTop()
+    activeWin.viewport.leftColumn = 0
+    e.setMode(EditorMode.Terminal)
 
 proc applyThemeCommand*(e: Editor, themeName: string) =
   ## Apply a `:theme` selection via `initTheme` so `config.theme` and

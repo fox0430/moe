@@ -24,7 +24,7 @@
 
 import std/[algorithm, strutils, unicode, tables, os]
 
-import pkg/celina
+import celina_backend as celina
 
 import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,

@@ -122,7 +122,7 @@ suite "config_macros: generateConfigLoader":
     loadMini(t, c, vr)
     var sawUnknown = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and "bogus" in e.name:
+      if e.kind == sikUnknownKey and "bogus" in e.name:
         sawUnknown = true
     check sawUnknown
 
@@ -361,7 +361,7 @@ suite "config_macros: cfgDeprecated":
     check c.gone # value still loaded for backward compatibility
     var sawDeprecated = false
     for e in vr.errors:
-      if e.kind == iikDeprecated and e.name == "Depr.gone":
+      if e.kind == sikDeprecated and e.name == "Depr.gone":
         sawDeprecated = true
         check "use keep instead" in e.expected
     check sawDeprecated
@@ -371,14 +371,14 @@ suite "config_macros: cfgDeprecated":
     var c: DeprSection
     var vr = newValidationResult()
     loadDepr(t, c, vr)
-    check not vr.errors.anyIt(it.kind == iikDeprecated)
+    check not vr.errors.anyIt(it.kind == sikDeprecated)
 
   test "deprecated key does not surface as an unknown key":
     let t = tomlTable("gone = true\n")
     var c: DeprSection
     var vr = newValidationResult()
     loadDepr(t, c, vr)
-    check not vr.errors.anyIt(it.kind == iikUnknownKey and "gone" in it.name)
+    check not vr.errors.anyIt(it.kind == sikUnknownKey and "gone" in it.name)
 
   test "serializer skips deprecated fields":
     var cfg = DeprSection(keep: true, gone: true)
@@ -387,10 +387,10 @@ suite "config_macros: cfgDeprecated":
     check "keep = true" in lines
     check not lines.anyIt(it.startsWith("gone = "))
 
-  test "toErrorMessage renders the deprecation notice":
+  test "toMessage renders the deprecation notice":
     let item =
-      InvalidItem(kind: iikDeprecated, name: "Depr.gone", expected: "use keep instead")
-    let msg = item.toErrorMessage
+      SettingIssue(kind: sikDeprecated, name: "Depr.gone", expected: "use keep instead")
+    let msg = item.toMessage
     check "Depr.gone" in msg
     check "Deprecated" in msg
     check "use keep instead" in msg
@@ -478,7 +478,7 @@ extra = 7
     var c: GroupSection
     var vr = newValidationResult()
     loadGroup(t, c, vr)
-    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "Group.First.typo")
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Group.First.typo")
 
   test "constraint pragmas apply to the parent table's own keys":
     let t = tomlTable("limit = 0\n")

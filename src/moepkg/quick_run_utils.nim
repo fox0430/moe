@@ -265,6 +265,13 @@ proc prepareQuickRun*(
 ): Result[QuickRunPrepareResult, string] =
   ## Prepare QuickRun by saving file and creating command (sync).
 
+  when defined(moe.embedded) and defined(windows):
+    discard buffer
+    discard settings
+    return Result[QuickRunPrepareResult, string].err(
+      "QuickRun is unavailable in embedded mode on Windows"
+    )
+
   let
     useTempFile = buffer.filePath.isNone or not fileExists(buffer.filePath.get)
     langExt =

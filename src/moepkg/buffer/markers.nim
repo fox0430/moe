@@ -21,7 +21,7 @@
 
 import std/[options, tables]
 
-import pkg/celina
+import ../celina_backend as celina
 
 import ../highlight
 import ./core

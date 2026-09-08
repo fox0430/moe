@@ -22,15 +22,42 @@ import std/[options, os, strutils, sequtils]
 when defined(posix):
   from std/posix import nil
 
-import pkg/[celina, results, chronos]
+import pkg/[results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
 
 import
-  editor, editor_window_layout, key_bindings, modes, buffer, logger, types, motion,
-  quick_run_utils, command_completion, build, render_utils, tab_line, terminal_mode,
-  clipboard, git_cache, cursor_util, syntax_checker, background_process, key_router,
-  pending_input, visible_rows, viewer_mode, frontend_input, hover_popup, encoding,
-  unicode_utils, editor_mode, editor_lsp_rename
+  celina_backend as celina,
+  editor,
+  editor_window_layout,
+  key_bindings,
+  modes,
+  buffer,
+  logger,
+  types,
+  motion,
+  quick_run_utils,
+  command_completion,
+  build,
+  render_utils,
+  tab_line,
+  clipboard_backend,
+  git_cache,
+  cursor_util,
+  syntax_checker,
+  background_process,
+  key_router,
+  pending_input,
+  visible_rows,
+  viewer_mode,
+  frontend_input,
+  hover_popup,
+  encoding,
+  unicode_utils,
+  editor_mode,
+  editor_lsp_rename
+
+when not defined(moe.embedded):
+  import terminal_mode
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
@@ -85,7 +112,8 @@ proc releaseExternalResources*(e: Editor) =
   ## Shared by the normal quit path and the crash path. Idempotent.
   e.cleanupBackgroundProcesses()
   e.cleanupQuickRunProcesses()
-  e.cleanupAllTerminals()
+  when not defined(moe.embedded):
+    e.cleanupAllTerminals()
 
   # Swallow so a git cache failure cannot block the rest of the sequence.
   try:
@@ -1013,14 +1041,15 @@ proc handleInterruptCore(e: Editor): bool =
   ## current mode/overlay: forward to Terminal PTY, cancel overlays, exit
   ## Insert-Normal, or transition file-edit modes back to Normal.
 
-  # Terminal-Input mode: forward Ctrl-C to PTY as \x03
-  if e.state.mode == EditorMode.Terminal:
-    let activeWin = e.activeWindow
-    if activeWin.modeState.kind == mskTerminal:
-      let termState = activeWin.modeState.terminal
-      if termState.subMode == tsmInput:
-        termState.feedInput("\x03")
-        return true
+  when not defined(moe.embedded):
+    # Terminal-Input mode: forward Ctrl-C to PTY as \x03
+    if e.state.mode == EditorMode.Terminal:
+      let activeWin = e.activeWindow
+      if activeWin.modeState.kind == mskTerminal:
+        let termState = activeWin.modeState.terminal
+        if termState.subMode == tsmInput:
+          termState.feedInput("\x03")
+          return true
 
   # Search overlay: cancel search and exit overlay
   if e.state.isSearchOverlay:

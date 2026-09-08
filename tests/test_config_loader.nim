@@ -44,7 +44,7 @@ proc loadFromTomlString(tomlStr: string): (EditorConfig, ValidationResult) =
     vr.addError("parse", loadResult.error, "valid TOML")
     return (newEditorConfig(), vr)
 
-suite "Config Validation - InvalidItem and ValidationResult":
+suite "Config Validation - SettingIssue and ValidationResult":
   test "Empty validation result has no errors":
     let vr = newValidationResult()
     check not vr.hasErrors
@@ -58,10 +58,10 @@ suite "Config Validation - InvalidItem and ValidationResult":
     check vr.errors[0].val == "0"
     check vr.errors[0].expected == "integer >= 1"
 
-  test "toErrorMessage generates readable message":
+  test "toMessage generates readable message":
     let item =
-      InvalidItem(name: "Standard.tabStop", val: "invalid", expected: "integer >= 1")
-    let msg = item.toErrorMessage
+      SettingIssue(name: "Standard.tabStop", val: "invalid", expected: "integer >= 1")
+    let msg = item.toMessage
     check "Standard.tabStop" in msg
     check "invalid" in msg
     check "integer >= 1" in msg
@@ -663,7 +663,7 @@ Hover = true
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.errors.anyIt(
-      it.kind == iikInvalidValue and it.name == "Lsp.Hover" and it.expected == "table"
+      it.kind == sikInvalidValue and it.name == "Lsp.Hover" and it.expected == "table"
     )
     check config.lsp.hover.enable # Default kept
 
@@ -674,7 +674,7 @@ enabel = true
 """
     let (_, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
-    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "Lsp.Hover.enabel")
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Lsp.Hover.enabel")
 
   test "Misspelled feature table is not absorbed as a language server":
     ## `[Lsp.Completin]` has no language-server key, so it must surface as an
@@ -685,7 +685,7 @@ enable = true
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
-    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "Lsp.Completin")
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "Lsp.Completin")
     check not config.lsp.servers.hasKey("Completin")
 
   test "Negative Lsp.Diagnostics.autoHoverDelay is rejected":
@@ -1212,7 +1212,7 @@ unknownKey = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "StartUp.FileTree.unknownKey":
+      if e.kind == sikUnknownKey and e.name == "StartUp.FileTree.unknownKey":
         found = true
     check found
 
@@ -1225,7 +1225,7 @@ enable = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "StartUp.Unknown":
+      if e.kind == sikUnknownKey and e.name == "StartUp.Unknown":
         found = true
     check found
 
@@ -1597,7 +1597,7 @@ suite "Config - loadThemeFromToml":
     let result = loadThemeFromToml(testFile, vr)
     check result.isOk
     check vr.hasErrors
-    check vr.errors[0].kind == iikInvalidValue
+    check vr.errors[0].kind == sikInvalidValue
     check "keyword" in vr.errors[0].name
 
   test "Unknown sub-key inside inline table is reported":
@@ -1614,7 +1614,7 @@ suite "Config - loadThemeFromToml":
     let colors = result.get
     check colors[EditorColorPairIndex.keyword].foreground.rgb.blue == 255
     check vr.errors.len == 1
-    check vr.errors[0].kind == iikUnknownKey
+    check vr.errors[0].kind == sikUnknownKey
     check "keyword.bogus" in vr.errors[0].name
 
   test "Empty inline table is reported":
@@ -1631,7 +1631,7 @@ suite "Config - loadThemeFromToml":
     let result = loadThemeFromToml(testFile, vr)
     check result.isOk
     check vr.errors.len == 1
-    check vr.errors[0].kind == iikInvalidValue
+    check vr.errors[0].kind == sikInvalidValue
     check vr.errors[0].name == "Theme.Colors.keyword"
     check vr.errors[0].val == "{}"
 
@@ -1646,7 +1646,7 @@ suite "Config - loadThemeFromToml":
     let result = loadThemeFromToml(testFile, vr)
     check result.isOk
     check vr.errors.len == 1
-    check vr.errors[0].kind == iikInvalidValue
+    check vr.errors[0].kind == sikInvalidValue
     check vr.errors[0].name == "Theme.Colors.keyword.fg"
     # The error message should mention "string" so the user knows the value
     # type is wrong (not just the format).
@@ -1690,7 +1690,7 @@ suite "Config - loadThemeFromToml":
     check result.isOk
     check vr.hasErrors
     check vr.errors.len == 1
-    check vr.errors[0].kind == iikUnknownKey
+    check vr.errors[0].kind == sikUnknownKey
     check "nonExistentKey" in vr.errors[0].name
 
   test "Invalid color value is reported in ValidationResult":
@@ -1706,7 +1706,7 @@ suite "Config - loadThemeFromToml":
     check result.isOk
     check vr.hasErrors
     check vr.errors.len == 1
-    check vr.errors[0].kind == iikInvalidValue
+    check vr.errors[0].kind == sikInvalidValue
     check "keyword.fg" in vr.errors[0].name
     check vr.errors[0].val == "notacolor"
 
@@ -1840,7 +1840,7 @@ suite "Config - initTheme":
     var vr = newValidationResult()
     initTheme(config, vr)
     check vr.hasErrors
-    check vr.errors.anyIt(it.kind == iikUnknownKey and "bogusKey" in it.name)
+    check vr.errors.anyIt(it.kind == sikUnknownKey and "bogusKey" in it.name)
     # Should not crash; falls back to default theme
 
 suite "Config - saveConfigToToml":
@@ -2230,7 +2230,7 @@ number = false
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Standrd":
+      if e.kind == sikUnknownKey and e.name == "Standrd":
         found = true
     check found
 
@@ -2242,7 +2242,7 @@ Standard = 5
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.errors.anyIt(
-      it.kind == iikInvalidValue and it.name == "Standard" and it.expected == "table"
+      it.kind == sikInvalidValue and it.name == "Standard" and it.expected == "table"
     )
     check config.standard.tabStop == 2 # Default kept
 
@@ -2256,7 +2256,7 @@ tabStp = 4
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Standard.tabStp":
+      if e.kind == sikUnknownKey and e.name == "Standard.tabStp":
         found = true
     check found
 
@@ -2270,7 +2270,7 @@ colorCodse = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Highlight.colorCodse":
+      if e.kind == sikUnknownKey and e.name == "Highlight.colorCodse":
         found = true
     check found
 
@@ -2284,7 +2284,7 @@ unknownKey = "value"
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Clipboard.unknownKey":
+      if e.kind == sikUnknownKey and e.name == "Clipboard.unknownKey":
         found = true
     check found
 
@@ -2298,7 +2298,7 @@ typoKey = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Notification.typoKey":
+      if e.kind == sikUnknownKey and e.name == "Notification.typoKey":
         found = true
     check found
 
@@ -2325,7 +2325,7 @@ unknownFlag = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Lsp.unknownFlag":
+      if e.kind == sikUnknownKey and e.name == "Lsp.unknownFlag":
         found = true
     check found
 
@@ -2341,7 +2341,7 @@ enable = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Debug.UnknownSection":
+      if e.kind == sikUnknownKey and e.name == "Debug.UnknownSection":
         found = true
     check found
 
@@ -2355,7 +2355,7 @@ unknownField = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "Debug.WindowNode.unknownField":
+      if e.kind == sikUnknownKey and e.name == "Debug.WindowNode.unknownField":
         found = true
     check found
 
@@ -2371,7 +2371,7 @@ key = true
     check vr.hasErrors
     var found = false
     for e in vr.errors:
-      if e.kind == iikUnknownKey and e.name == "StartUp.UnknownSub":
+      if e.kind == sikUnknownKey and e.name == "StartUp.UnknownSub":
         found = true
     check found
 
@@ -2412,20 +2412,20 @@ splitType = "vertical"
     let (_, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
 
-  test "toErrorMessage for unknown key":
-    let item = InvalidItem(kind: iikUnknownKey, name: "Standard.typo")
-    let msg = item.toErrorMessage
+  test "toMessage for unknown key":
+    let item = SettingIssue(kind: sikUnknownKey, name: "Standard.typo")
+    let msg = item.toMessage
     check "Unknown key" in msg
     check "Standard.typo" in msg
 
-  test "toErrorMessage for invalid value (backward compat)":
-    let item = InvalidItem(
-      kind: iikInvalidValue,
+  test "toMessage for invalid value (backward compat)":
+    let item = SettingIssue(
+      kind: sikInvalidValue,
       name: "Standard.tabStop",
       val: "0",
       expected: "integer >= 1",
     )
-    let msg = item.toErrorMessage
+    let msg = item.toMessage
     check "Invalid value" in msg
     check "Standard.tabStop" in msg
 
@@ -2740,7 +2740,7 @@ suite "Config Validation - KeyMapping section":
 """
     let (config, vr) = loadFromTomlString(toml)
     check vr.hasErrors
-    check vr.errors.anyIt(it.kind == iikUnknownKey and it.name == "KeyMapping.QuickRun")
+    check vr.errors.anyIt(it.kind == sikUnknownKey and it.name == "KeyMapping.QuickRun")
     check config.keyMapping.perMode[BookmarkManager]["d"].rhs == "Escape"
     check config.keyMapping.perMode[FileTree]["r"].rhs == "Escape"
 

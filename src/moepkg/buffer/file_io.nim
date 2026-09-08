@@ -25,7 +25,7 @@
 
 import std/[options, os, strutils, times]
 
-import pkg/[celina, results]
+import pkg/results
 
 import ../[encoding, highlight, logger]
 import core, atomic_write
@@ -179,9 +179,9 @@ proc loadFileWithContent*(
   b.hasBinaryContent =
     '\0' in
     contentMut.toOpenArray(0, min(contentMut.high, EncodingDetectionSampleSize - 1))
-  # Reset warning when file path changes.
   if b.filePath != some(path):
-    b.warnedUnusualContent = ucOrdinary
+    b.clearNotices()
+  b.noteContent()
   if decoded.decodeFailed:
     # Raw bytes: keep verbatim. `lineEnding` is unused (shows RAW);
     # `endOfLine` is preserved for round-trip.

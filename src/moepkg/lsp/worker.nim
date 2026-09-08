@@ -27,11 +27,16 @@ when defined(posix):
   from std/posix import nil
 
 import pkg/[results, chronos, jsony]
-import pkg/chronos/[asyncproc, threadsync, selectors2]
+import pkg/chronos/[asyncproc, threadsync]
+
+when defined(windows):
+  from pkg/chronos/osdefs import closeHandle
+else:
+  import pkg/chronos/selectors2
 
 import jsonrpc
 import protocol/types
-import ../logger
+import ../[logger, setting_issue]
 
 export types
 
@@ -1112,13 +1117,32 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     if cmd.initializationOptions.len > 0:
       try:
         initParams["initializationOptions"] = parseJson(cmd.initializationOptions)
-      except JsonParsingError:
-        discard
+      except JsonParsingError as e:
+        # Reported rather than dropped: initialize still succeeds without the
+        # options, so the server would just look like it ignored them.
+        sendLogMessage(
+          mtWarning,
+          SettingIssue(
+            kind: sikInvalidValue,
+            name: "initializationOptions",
+            val: cmd.initializationOptions,
+            expected: "valid JSON (" & e.msg & ")",
+          ).toMessage,
+        )
 
     if cmd.settings.len > 0:
       try:
         currentSettings = parseJson(cmd.settings)
-      except JsonParsingError:
+      except JsonParsingError as e:
+        sendLogMessage(
+          mtWarning,
+          SettingIssue(
+            kind: sikInvalidValue,
+            name: "settings",
+            val: cmd.settings,
+            expected: "valid JSON (" & e.msg & ")",
+          ).toMessage,
+        )
         currentSettings = newJNull()
     else:
       currentSettings = newJNull()
@@ -1573,12 +1597,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ctx.sharedState.storeState(lwsCrashed)
     ctx.sharedState.storeRunning(false)
   finally:
-    # Close the chronos dispatcher's selector (epoll fd) to prevent FD leak.
-    # PDispatcher has no destructor, so we must close it explicitly.
+    # PDispatcher has no destructor, so close its native I/O handle explicitly.
     # Use finally to ensure cleanup even on Defect.
     try:
       let disp = getThreadDispatcher()
-      disp.getIoHandler().close()
+      when defined(windows):
+        discard closeHandle(disp.getIoHandler())
+      else:
+        disp.getIoHandler().close()
     except CancelledError:
       discard
     except Defect:
