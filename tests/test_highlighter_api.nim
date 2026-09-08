@@ -3,13 +3,18 @@ import std/[os, tempfiles, unittest]
 import pkg/results
 import ../src/moepkg/[buffer, config, editor, highlight]
 
+when defined(moe.matter):
+  import matter_test_grammars
+
 suite "Programmatic highlighter selection":
   test "buffer facade exposes selection and effective fallback":
     let buffer = newTextBuffer("let x = true")
     buffer.language = langNim
     buffer.setHighlightBackend(hbMatter)
     check buffer.highlightBackend == hbMatter
+    check buffer.effectiveHighlightBackend == hbBuiltin
     when defined(moe.matter):
+      buffer.setMatterGrammar(langNim, NimMatterGrammar, "nim.tmLanguage.json")
       check buffer.effectiveHighlightBackend == hbMatter
     else:
       check buffer.effectiveHighlightBackend == hbBuiltin
@@ -39,11 +44,13 @@ suite "Programmatic highlighter selection":
     for buffer in editor.buffers:
       check buffer.highlightBackend == hbMatter
       check buffer.highlightNeedsUpdate
-      when defined(moe.matter):
-        check buffer.effectiveHighlightBackend == hbMatter
-      else:
-        check buffer.effectiveHighlightBackend == hbBuiltin
+      check buffer.effectiveHighlightBackend == hbBuiltin
     check current.highlight == originalHighlight
+
+    when defined(moe.matter):
+      editor.setMatterGrammar(langNim, NimMatterGrammar, "nim.tmLanguage.json")
+      for buffer in editor.buffers:
+        check buffer.effectiveHighlightBackend == hbMatter
 
     let directory = createTempDir("moe_highlighter_api_", "")
     defer:
@@ -61,17 +68,25 @@ suite "Programmatic highlighter selection":
     for buffer in editor.buffers:
       check buffer.effectiveHighlightBackend == hbBuiltin
 
-  test "editor constructor accepts programmatic backend configuration":
+  test "backend configuration alone does not opt into Matter":
     let config = newEditorConfig()
     config.lsp.enable = false
     config.clipboard.enable = false
     config.highlight.backend = hbMatter
     let editor = newEditor(config)
     editor.activeBuffer().language = langNim
+    check editor.activeBuffer().effectiveHighlightBackend == hbBuiltin
+
+  test "invalid or unavailable grammar API does not change backend":
+    let buffer = newTextBuffer("let x = true")
+    buffer.language = langNim
     when defined(moe.matter):
-      check editor.activeBuffer().effectiveHighlightBackend == hbMatter
+      expect TextMateGrammarError:
+        buffer.setMatterGrammar(langNim, "{", "invalid.tmLanguage.json")
     else:
-      check editor.activeBuffer().effectiveHighlightBackend == hbBuiltin
+      expect TextMateGrammarError:
+        buffer.setMatterGrammar(langNim, "{}")
+    check buffer.highlightBackend == hbBuiltin
 
   test "per-buffer override does not change the editor default":
     let config = newEditorConfig()

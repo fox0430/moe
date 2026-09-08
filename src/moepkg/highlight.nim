@@ -140,6 +140,8 @@ type
 
   IncrementalHighlight* = ref object ## Incremental highlighting information
     backend*: HighlightBackend
+    initialState*: TokenizerState
+      ## Fresh state for this cache's backend, including its opted-in grammar.
     segments*: seq[ColorSegment]
     lineStates*: LineStateCache
     parsedUpTo*: int ## Last line parsed during initial load. -1 = not started.
@@ -217,16 +219,43 @@ proc effectiveHighlightBackend*(
     backend: HighlightBackend, language: SourceLanguage
 ): HighlightBackend =
   ## Resolve compile-time availability and specialised lexer fallbacks.
-  when defined(moe.matter):
-    if backend == hbMatter and matterSupports(language):
-      return hbMatter
+  discard backend
+  discard language
   hbBuiltin
+
+when defined(moe.matter):
+  proc effectiveHighlightBackend*(
+      backend: HighlightBackend, language: SourceLanguage, grammars: MatterGrammarSet
+  ): HighlightBackend =
+    ## Resolve backend availability after an explicit grammar opt-in.
+    if backend == hbMatter and grammars.matterSupports(language):
+      return hbMatter
+    hbBuiltin
 
 proc newTokenizerState*(
     backend: HighlightBackend, language: SourceLanguage
 ): TokenizerState =
-  ## Fresh state for the selected engine, including unavailable-backend fallback.
+  ## Fresh state without an explicit grammar. Matter therefore falls back.
   TokenizerState(backend: effectiveHighlightBackend(backend, language))
+
+when defined(moe.matter):
+  proc newTokenizerState*(
+      backend: HighlightBackend, language: SourceLanguage, grammars: MatterGrammarSet
+  ): TokenizerState =
+    ## Fresh state for the selected engine and explicit grammar collection.
+    let effective = effectiveHighlightBackend(backend, language, grammars)
+    result.backend = effective
+    if effective == hbMatter:
+      result.matterState = initialMatterState(grammars, language)
+
+proc freshTokenizerState(
+    incrHighlight: IncrementalHighlight, language: SourceLanguage
+): TokenizerState =
+  ## Recover the immutable engine seed retained by this cache. Older/manual
+  ## cache constructors without a seed continue to get the builtin default.
+  if incrHighlight.initialState.backend == incrHighlight.backend:
+    return incrHighlight.initialState
+  newTokenizerState(incrHighlight.backend, language)
 
 proc `==`*(a, b: TokenizerState): bool =
   ## Keep engine-specific equality at this boundary so clients comparing
@@ -1684,7 +1713,7 @@ proc updateHighlightIncremental*(
     if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
       initialState = incrHighlight.lineStates.states[reparseStart - 1]
     else:
-      initialState = newTokenizerState(incrHighlight.backend, language)
+      initialState = incrHighlight.freshTokenizerState(language)
 
     # Multi-line tokens record the depth at their completion, so restarting
     # mid-token restores a stale depth (e.g. nested comments); rewind to the
@@ -1704,7 +1733,7 @@ proc updateHighlightIncremental*(
       if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
         initialState = incrHighlight.lineStates.states[reparseStart - 1]
       else:
-        initialState = newTokenizerState(incrHighlight.backend, language)
+        initialState = incrHighlight.freshTokenizerState(language)
 
     if oldFrontier >= 0 and reparseStart > oldFrontier:
       # Rows between the old frontier and the new anchor were trimmed but
@@ -1713,7 +1742,7 @@ proc updateHighlightIncremental*(
       if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
         initialState = incrHighlight.lineStates.states[reparseStart - 1]
       else:
-        initialState = newTokenizerState(incrHighlight.backend, language)
+        initialState = incrHighlight.freshTokenizerState(language)
     elif oldReparseStart >= 0 and reparseStart - 1 >= incrHighlight.lineStates.states.len:
       # The discarded flight's trim left no seed state below the new anchor;
       # restart from the top of the available cache (fresh flights always
@@ -1722,7 +1751,7 @@ proc updateHighlightIncremental*(
       if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
         initialState = incrHighlight.lineStates.states[reparseStart - 1]
       else:
-        initialState = newTokenizerState(incrHighlight.backend, language)
+        initialState = incrHighlight.freshTokenizerState(language)
 
     let trimIdx = incrHighlight.segments.segmentCutIndex(reparseStart)
     if trimIdx < incrHighlight.segments.len:

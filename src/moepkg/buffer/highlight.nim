@@ -38,7 +38,16 @@ proc effectiveHighlightBackend*(b: TextBuffer): HighlightBackend =
   ## Return the engine selected for this buffer's language and build. Matter
   ## requests fall back to builtin when unavailable or for Diff/Log. This
   ## query does not report per-line tokenizer failures or change buffer state.
-  effectiveHighlightBackend(b.highlightBackend, b.language)
+  when defined(moe.matter):
+    effectiveHighlightBackend(b.highlightBackend, b.language, b.matterGrammarSet)
+  else:
+    effectiveHighlightBackend(b.highlightBackend, b.language)
+
+proc newBufferTokenizerState*(b: TextBuffer): TokenizerState =
+  when defined(moe.matter):
+    newTokenizerState(b.highlightBackend, b.language, b.matterGrammarSet)
+  else:
+    newTokenizerState(b.highlightBackend, b.language)
 
 proc matches*(pr: PendingReparse, b: TextBuffer): bool =
   ## TextBuffer-scoped overload of `PendingReparse.matches`.
@@ -55,6 +64,35 @@ proc setHighlightBackend*(b: TextBuffer, backend: HighlightBackend) =
     b.incrementalHighlight = nil
     b.uriScanParsedUpTo = -1
     b.highlightNeedsUpdate = true
+
+when defined(moe.matter):
+  proc setMatterGrammarSet*(b: TextBuffer, grammars: MatterGrammarSet) =
+    ## Replace the explicit grammar collection and invalidate syntax caches.
+    if b.matterGrammarSet != grammars:
+      b.matterGrammarSet = grammars
+      b.incrementalHighlight = nil
+      b.uriScanParsedUpTo = -1
+      b.highlightNeedsUpdate = true
+
+proc setMatterGrammar*(
+    b: TextBuffer,
+    language: SourceLanguage,
+    grammar: string,
+    path = "grammar.tmLanguage.json",
+) =
+  ## Opt this buffer into Matter by supplying its TextMate grammar text.
+  ## Invalid grammar input raises a catchable error and leaves the buffer
+  ## unchanged. Matter support must be compiled with `-d:moe.matter`.
+  when defined(moe.matter):
+    let grammars = b.matterGrammarSet.withMatterGrammar(language, grammar, path)
+    b.setMatterGrammarSet(grammars)
+    b.setHighlightBackend(hbMatter)
+  else:
+    discard b
+    discard language
+    discard grammar
+    discard path
+    raise newException(TextMateGrammarError, "Matter support requires -d:moe.matter")
 
 proc rewindUriScan(b: TextBuffer, to: int) =
   ## Move the URI-scan frontier back to `to` (clamped to -1); no-op if it is
@@ -192,7 +230,7 @@ proc continueInitialHighlight*(
     else:
       min(startLine + max(ChunkSize, 2 * reparsedLines) - 1, b.len - 1)
 
-  var lastState = newTokenizerState(b.highlightBackend, b.language)
+  var lastState = b.newBufferTokenizerState()
   if startLine > 0:
     lastState = b.incrementalHighlight.lineStates.states[startLine - 1]
 
@@ -370,7 +408,8 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
         elif reparseBudget > 0:
           b.highlight.colorSegments = @[]
           b.incrementalHighlight = IncrementalHighlight(
-            backend: effectiveHighlightBackend(b.highlightBackend, b.language),
+            backend: b.effectiveHighlightBackend,
+            initialState: b.newBufferTokenizerState(),
             segments: @[],
             lineStates: LineStateCache(states: @[]),
             parsedUpTo: -1,
@@ -387,7 +426,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
             lines,
             0,
             lines.high,
-            newTokenizerState(b.highlightBackend, b.language),
+            b.newBufferTokenizerState(),
             b.reservedWords,
             b.language,
             b.maxHighlightLineLength,
@@ -395,7 +434,8 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
 
           b.highlight.colorSegments = segments
           b.incrementalHighlight = IncrementalHighlight(
-            backend: effectiveHighlightBackend(b.highlightBackend, b.language),
+            backend: b.effectiveHighlightBackend,
+            initialState: b.newBufferTokenizerState(),
             segments: segments,
             lineStates: LineStateCache(states: lineStates),
             parsedUpTo: b.len - 1,

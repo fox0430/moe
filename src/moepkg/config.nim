@@ -32,6 +32,9 @@ import types/config_types
 import types/highlight_types
 export config_types, highlight_types
 
+when defined(moe.matter):
+  import syntax/matter_backend
+
 proc isToolAvailable(toolCommand: string): bool =
   ## Check if a command-line tool is available in PATH
   when defined(moe.embedded):
@@ -67,7 +70,7 @@ proc detectClipboardTool*(): ClipboardTool =
 
 proc newEditorConfig*(): EditorConfig =
   ## Create a new configuration with default values
-  EditorConfig(
+  result = EditorConfig(
     standard: StandardConfig(
       number: true,
       relativeNumber: false,
@@ -130,6 +133,7 @@ proc newEditorConfig*(): EditorConfig =
     ),
     highlight: HighlightConfig(
       backend: hbBuiltin,
+      matterGrammarFiles: @[],
       currentLine: true,
       reservedWord: @["TODO", "WIP", "NOTE"],
       replaceText: true,
@@ -296,3 +300,5 @@ proc newEditorConfig*(): EditorConfig =
     commandAliases: initTable[string, UserCommandEntry](),
     disabledCommandAliases: @[],
   )
+  when defined(moe.matter):
+    result.highlight.matterGrammarSet = newMatterGrammarSet()

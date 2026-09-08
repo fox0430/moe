@@ -8,15 +8,17 @@ import ../src/moepkg/types/highlight_types
 
 when defined(moe.matter):
   import pkg/celina
+  import matter_test_grammars
 
   suite "Matter incremental highlight":
     test "Matter seed produces one state per line":
+      let grammars = newTestMatterGrammarSet()
       let lines = @["proc hello() =", "  discard", "# note"]
       let (segments, states) = initHighlightIncremental(
         lines,
         0,
         lines.high,
-        newTokenizerState(hbMatter, SourceLanguage.langNim),
+        newTokenizerState(hbMatter, SourceLanguage.langNim, grammars),
         @[],
         SourceLanguage.langNim,
       )
@@ -25,11 +27,12 @@ when defined(moe.matter):
       check segments.len > 0
 
     test "trailing empty line keeps a state":
+      let grammars = newTestMatterGrammarSet()
       let (segments, states) = initHighlightIncrementalFromStr(
         "# one\n",
         0,
         1,
-        newTokenizerState(hbMatter, SourceLanguage.langNim),
+        newTokenizerState(hbMatter, SourceLanguage.langNim, grammars),
         @[],
         SourceLanguage.langNim,
       )
@@ -37,13 +40,16 @@ when defined(moe.matter):
       check states.len == 2
 
     test "Diff and Log fall back to builtin":
-      check newTokenizerState(hbMatter, SourceLanguage.langDiff).backend == hbBuiltin
-      check newTokenizerState(hbMatter, SourceLanguage.langLog).backend == hbBuiltin
+      let grammars = newTestMatterGrammarSet()
+      check newTokenizerState(hbMatter, langDiff, grammars).backend == hbBuiltin
+      check newTokenizerState(hbMatter, langLog, grammars).backend == hbBuiltin
 
     test "Markdown fences use Matter state":
       var buffer = newTextBuffer("```nim\nproc x() = discard\n```\n")
       buffer.language = SourceLanguage.langMarkdown
-      buffer.highlightBackend = hbMatter
+      buffer.setMatterGrammar(
+        langMarkdown, MarkdownMatterGrammar, "markdown.tmLanguage.json"
+      )
       buffer.highlightNeedsUpdate = true
       discard buffer.updateHighlight()
       check buffer.isCodeBlockLine(0)
@@ -53,7 +59,7 @@ when defined(moe.matter):
     test "switching backends invalidates incremental state":
       var buffer = newTextBuffer("proc x() = discard")
       buffer.language = SourceLanguage.langNim
-      buffer.setHighlightBackend(hbMatter)
+      buffer.setMatterGrammar(langNim, NimMatterGrammar, "nim.tmLanguage.json")
       buffer.highlightNeedsUpdate = true
       discard buffer.updateHighlight()
       check buffer.incrementalHighlight.backend == hbMatter
@@ -67,12 +73,13 @@ when defined(moe.matter):
         lines.add("comment line " & $i)
       lines.add("]#")
       lines.add("proc tail() = discard")
-      let seed = newTokenizerState(hbMatter, SourceLanguage.langNim)
+      let seed = newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet())
       let (oldSegments, oldStates) = initHighlightIncremental(
         lines, 0, lines.high, seed, @[], SourceLanguage.langNim
       )
       var incremental = IncrementalHighlight(
         backend: hbMatter,
+        initialState: seed,
         segments: oldSegments,
         lineStates: LineStateCache(states: oldStates),
         parsedUpTo: lines.high,
@@ -109,12 +116,7 @@ when defined(moe.matter):
           parsed,
         )
       let (freshSegments, freshStates) = initHighlightIncremental(
-        lines,
-        0,
-        lines.high,
-        newTokenizerState(hbMatter, SourceLanguage.langNim),
-        @[],
-        SourceLanguage.langNim,
+        lines, 0, lines.high, seed, @[], SourceLanguage.langNim
       )
       check incremental.segments == freshSegments
       check incremental.lineStates.states == freshStates
@@ -126,6 +128,7 @@ when defined(moe.matter):
       var buffer = newTextBuffer()
       var config = newEditorConfig()
       config.highlight.backend = hbMatter
+      config.highlight.matterGrammarSet = newTestMatterGrammarSet()
       buffer.applyHighlightCap(config)
       check buffer.loadFileWithContent("matter-progressive.nim", content).isOk
       check buffer.incrementalHighlight.backend == hbMatter
@@ -151,7 +154,7 @@ when defined(moe.matter):
         lines,
         0,
         lines.high,
-        newTokenizerState(hbMatter, SourceLanguage.langNim),
+        newTokenizerState(hbMatter, langNim, config.highlight.matterGrammarSet),
         @[],
         SourceLanguage.langNim,
       )

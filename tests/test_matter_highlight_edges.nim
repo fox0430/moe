@@ -7,6 +7,7 @@ import pkg/celina
 when defined(moe.matter):
   import std/[sequtils, strutils, tables]
   import ../src/moepkg/unicode_utils
+  import matter_test_grammars
 
   suite "Matter highlight edge cases":
     test "capped Unicode tails remain plain and reserved words use editor columns":
@@ -15,7 +16,7 @@ when defined(moe.matter):
         lines,
         0,
         lines.high,
-        newTokenizerState(hbMatter, langNim),
+        newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet()),
         @[ReservedWord(word: "TODO", color: reservedWord)],
         langNim,
         8,
@@ -37,7 +38,7 @@ when defined(moe.matter):
         lines,
         0,
         lines.high,
-        newTokenizerState(hbMatter, langNim),
+        newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet()),
         @[ReservedWord(word: "TODO", color: reservedWord)],
         langNim,
       )
@@ -54,14 +55,14 @@ when defined(moe.matter):
         @["# TODO"],
         0,
         0,
-        newTokenizerState(hbMatter, langNim),
+        newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet()),
         @[ReservedWord(word: "", color: reservedWord)],
         langNim,
       )
       check states.len == 1
 
     test "failed line states remain plain and keep capped tails":
-      var seed = newTokenizerState(hbMatter, langNim)
+      var seed = newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet())
       seed.matterState.failed = true
       let (segments, states) = initHighlightIncremental(
         @["let x = 1", "# comment"], 0, 1, seed, @[], langNim, 3
@@ -75,7 +76,7 @@ when defined(moe.matter):
       let text = "let x = 1 # https://example.com\nlet y = 2"
       let buffer = newTextBuffer(text)
       buffer.language = langNim
-      buffer.setHighlightBackend(hbMatter)
+      buffer.setMatterGrammar(langNim, NimMatterGrammar, "nim.tmLanguage.json")
       buffer.diagnostics = @[
         BufferDiagnostic(
           startLine: 1,
@@ -97,6 +98,7 @@ when defined(moe.matter):
       for backend in [hbBuiltin, hbMatter]:
         var config = newEditorConfig()
         config.highlight.backend = backend
+        config.highlight.matterGrammarSet = newTestMatterGrammarSet()
         buffer.applyHighlightConfig(config)
         discard buffer.updateHighlight()
         check buffer.highlight == original
@@ -114,5 +116,6 @@ else:
       config.highlight.backend = hbMatter
       buffer.applyHighlightConfig(config)
       discard buffer.updateHighlight()
-      check buffer.highlightBackend == hbBuiltin
+      check buffer.highlightBackend == hbMatter
+      check buffer.effectiveHighlightBackend == hbBuiltin
       check buffer.incrementalHighlight.backend == hbBuiltin

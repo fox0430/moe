@@ -1,21 +1,16 @@
-## Optional Matter TextMate adapter, with resources embedded from the pinned
-## source package. Only Matter-enabled builds import this module. Grammar and
-## resource caches belong to the editor thread; immutable line states belong to
-## each buffer's incremental cache.
+## Optional Matter TextMate adapter. Moe does not bundle grammars: callers add
+## grammar source explicitly, either through the public editor/buffer API or
+## through files named by the user's configuration.
 
 when not defined(moe.matter):
   {.error: "moepkg/syntax/matter_backend requires -d:moe.matter".}
 
-import std/[macros, options, os, sets, streams, strutils, tables]
-import matter/[engine, grammarloader, grammarpackages]
-import zippy/ziparchives_v1
+import std/[sets, strutils, tables]
+import matter/[engine, grammarpackages, rawgrammar]
 
 import tokenizer
 import ../[logger, unicode_utils]
-
-const matterGrammarRoot* {.strdefine.} = ""
-  ## Optional full Matter source checkout containing data/grammars. Atlas
-  ## checkouts are located automatically; Nimble 0.3.0 installs omit the assets.
+import ../types/highlight_types
 
 const MatterTimeLimitMs* {.intdefine.} = 20
   ## Soft per-line deadline. Override with -d:matterTimeLimitMs=N; 0 disables
@@ -23,36 +18,6 @@ const MatterTimeLimitMs* {.intdefine.} = 20
 
 static:
   doAssert MatterTimeLimitMs >= 0, "matterTimeLimitMs must be non-negative"
-
-macro matterRoot(): untyped =
-  if matterGrammarRoot.len > 0:
-    result = newLit(matterGrammarRoot)
-  else:
-    let source = bindSym"findMoeGrammar".getImpl.lineInfoObj.filename
-    result = newLit(source.parentDir.parentDir.parentDir)
-
-const ResolvedMatterRoot = matterRoot()
-
-static:
-  doAssert dirExists(ResolvedMatterRoot / "data/grammars"),
-    "Matter grammar assets are unavailable. Build with Atlas, or pass " &
-      "-d:matterGrammarRoot=/full/matter-v0.3.0-source-checkout"
-
-macro embedArchives(): untyped =
-  # Use the pinned package catalog as the single source of archive names.
-  result = newNimNode(nnkBracket)
-  for package in knownPackages:
-    result.add(
-      newTree(
-        nnkTupleConstr,
-        newLit(package.dataArchivePath),
-        newCall(
-          bindSym"staticRead", newLit(ResolvedMatterRoot / package.dataArchivePath)
-        ),
-      )
-    )
-
-const EmbeddedArchives = embedArchives()
 
 type
   MatterColorCategory* = enum
@@ -75,19 +40,39 @@ type
     scopes*: seq[string]
     category*: MatterColorCategory
 
+  MatterGrammarSource* = object
+    ## One caller-owned TextMate grammar. `path` selects JSON (`.json`) versus
+    ## XML plist parsing and is used in diagnostics; Moe never reads it here.
+    content*: string
+    path*: string
+    language*: SourceLanguage
+      ## `langNone` lets Moe infer the language from the grammar's scope name.
+
+  MatterGrammarSet* = ref object
+    ## An immutable-by-convention collection shared by an editor's buffers.
+    ## Use `withMatterGrammar` to derive a set with a programmatic override.
+    sources: seq[MatterGrammarSource]
+    registry: Registry
+    scopes: HashSet[string]
+    languageScopes: Table[SourceLanguage, string]
+    grammarCache: Table[SourceLanguage, Grammar]
+    unavailableLanguages: HashSet[SourceLanguage]
+
   MatterLineState* = object
     ## Completed state entering the next line. A failure is sticky so a slow
     ## or invalid grammar cannot be retried on every subsequent line/frame.
+    grammar: Grammar
     stack*: StateStack
     failed*: bool
 
-var
-  grammarCache: Table[string, Grammar]
-  unavailableScopes: HashSet[string]
-  extractedArchives: Table[string, Table[string, string]]
-
 proc `==`*(a, b: MatterLineState): bool =
-  a.failed == b.failed and a.stack == b.stack
+  a.failed == b.failed and a.grammar == b.grammar and a.stack == b.stack
+
+proc `==`*(a, b: MatterGrammarSet): bool =
+  ## Runtime caches do not participate in configuration value equality.
+  if a.isNil or b.isNil:
+    return a.isNil and b.isNil
+  a.sources == b.sources
 
 func scopeMatches(scope, prefix: string): bool =
   scope == prefix or scope.startsWith(prefix & ".")
@@ -139,35 +124,6 @@ proc category(scopes: openArray[string]): MatterColorCategory =
       return mccString
   mccDefault
 
-proc embeddedArchive(path: string): string =
-  for archive in EmbeddedArchives:
-    if archive[0] == path:
-      return archive[1]
-
-proc embeddedResource(contribution: GrammarContribution): Option[string] =
-  let path = contribution.dataArchivePath
-  if not extractedArchives.hasKey(path):
-    let data = embeddedArchive(path)
-    if data.len == 0:
-      return none(string)
-    var archive = ZipArchive()
-    # Zippy's modern reader accepts file paths only. Keep the deprecated
-    # in-memory stream API isolated until Zippy provides a bytes reader.
-    {.push warning[Deprecated]: off.}
-    archive.open(newStringStream(data))
-    {.pop.}
-    var members: Table[string, string]
-    for grammar in knownGrammars:
-      if grammar.dataArchivePath == path and
-          archive.contents.hasKey(grammar.archiveMember):
-        members[grammar.archiveMember] =
-          archive.contents[grammar.archiveMember].contents
-    extractedArchives[path] = members
-  if extractedArchives[path].hasKey(contribution.archiveMember):
-    some(extractedArchives[path][contribution.archiveMember])
-  else:
-    none(string)
-
 proc scopeFor(language: SourceLanguage): string =
   if language in {langNone, langDiff, langLog}:
     return ""
@@ -176,27 +132,104 @@ proc scopeFor(language: SourceLanguage): string =
     if mapping.modeName.toLowerAscii == mode:
       return mapping.scopeName
 
-proc matterSupports*(language: SourceLanguage): bool =
-  ## Diff and Log deliberately retain Moe's specialised built-in highlighters.
-  scopeFor(language).len > 0
+proc newMatterGrammarSet*(): MatterGrammarSet =
+  ## Create an empty set. An empty set cannot select Matter highlighting.
+  MatterGrammarSet(
+    registry: newRegistry(),
+    scopes: initHashSet[string](),
+    languageScopes: initTable[SourceLanguage, string](),
+    grammarCache: initTable[SourceLanguage, Grammar](),
+    unavailableLanguages: initHashSet[SourceLanguage](),
+  )
 
-proc grammarFor(language: SourceLanguage): Grammar =
-  let scope = scopeFor(language)
-  if scope.len == 0 or scope in unavailableScopes:
+proc newMatterGrammarSet*(sources: openArray[MatterGrammarSource]): MatterGrammarSet =
+  ## Parse and register caller-provided grammar text. All sources are added
+  ## before any root is compiled, so they may provide external includes for
+  ## one another. Parse errors are reported to the caller.
+  result = newMatterGrammarSet()
+  for source in sources:
+    let path = if source.path.len > 0: source.path else: "grammar.tmLanguage.json"
+    let raw =
+      try:
+        parseRawGrammar(source.content, path)
+      except CatchableError as error:
+        raise newException(TextMateGrammarError, error.msg)
+    try:
+      result.registry.addGrammar(raw)
+    except CatchableError as error:
+      raise newException(TextMateGrammarError, error.msg)
+    result.scopes.incl(raw.scopeName)
+    result.sources.add(
+      MatterGrammarSource(
+        content: source.content, path: path, language: source.language
+      )
+    )
+    if source.language != langNone:
+      result.languageScopes[source.language] = raw.scopeName
+
+proc grammarFor(grammars: MatterGrammarSet, language: SourceLanguage): Grammar =
+  if grammars.isNil or language in {langNone, langDiff, langLog} or
+      language in grammars.unavailableLanguages:
     return nil
-  if grammarCache.hasKey(scope):
-    return grammarCache[scope]
+  let scope =
+    if grammars.languageScopes.hasKey(language):
+      grammars.languageScopes[language]
+    else:
+      scopeFor(language)
+  if scope.len == 0 or scope notin grammars.scopes:
+    return nil
+  if grammars.grammarCache.hasKey(language):
+    return grammars.grammarCache[language]
   try:
-    let registry = newRegistry()
-    # Optional external includes are common in TextMate packages. The loader
-    # registers every available dependency; missing optional scopes are not a
-    # reason to disable the root grammar.
-    discard registry.loadGrammarPackage(embeddedResource, scope)
-    result = registry.loadGrammar(scope)
-    grammarCache[scope] = result
+    result = grammars.registry.loadGrammar(scope)
+    grammars.grammarCache[language] = result
   except CatchableError as error:
-    unavailableScopes.incl(scope)
+    grammars.unavailableLanguages.incl(language)
     logWarn("highlight", "Matter grammar " & scope & " is unavailable: " & error.msg)
+
+proc matterSupports*(grammars: MatterGrammarSet, language: SourceLanguage): bool =
+  ## Matter is available only after this set received a valid root grammar.
+  ## Diff and Log deliberately retain Moe's specialised built-in highlighters.
+  not grammars.grammarFor(language).isNil
+
+proc matterSupports*(language: SourceLanguage): bool =
+  ## The compatibility query has no implicit global grammar registry. Callers
+  ## must pass the grammar set they opted into.
+  discard language
+  false
+
+proc withMatterGrammar*(
+    grammars: MatterGrammarSet,
+    language: SourceLanguage,
+    content: string,
+    path = "grammar.tmLanguage.json",
+): MatterGrammarSet =
+  ## Return a grammar set with one programmatic root for `language`. Existing
+  ## inferred/config-file grammars and roots for other languages are retained.
+  ## The new root is compiled before return, so malformed regexes fail at the
+  ## API boundary instead of silently degrading on the first rendered line.
+  if language in {langNone, langDiff, langLog}:
+    raise newException(
+      TextMateGrammarError,
+      "Matter highlighting requires a concrete non-Diff/Log language",
+    )
+  var sources: seq[MatterGrammarSource]
+  if not grammars.isNil:
+    for source in grammars.sources:
+      if source.language != language:
+        sources.add(source)
+  sources.add(MatterGrammarSource(content: content, path: path, language: language))
+  result = newMatterGrammarSet(sources)
+  if result.grammarFor(language).isNil:
+    raise newException(
+      TextMateGrammarError, "TextMate grammar could not be compiled for " & $language
+    )
+
+proc initialMatterState*(
+    grammars: MatterGrammarSet, language: SourceLanguage
+): MatterLineState =
+  ## Create a fresh line state for a grammar set/language pair.
+  MatterLineState(grammar: grammars.grammarFor(language))
 
 proc sanitizeInvalidUtf8(line: string): string =
   ## Replace only malformed high bytes with spaces, preserving byte positions
@@ -214,6 +247,7 @@ proc tokenizeMatterLine*(
     language: SourceLanguage,
     previous = MatterLineState(),
     timeLimitMs = MatterTimeLimitMs,
+    grammars: MatterGrammarSet = nil,
 ): tuple[spans: seq[MatterSpan], nextState: MatterLineState] =
   ## Tokenize one line with a soft deadline (0 disables it). Failed/partial
   ## parses return no spans and no partial stack. Subsequent lines stay plain
@@ -221,10 +255,15 @@ proc tokenizeMatterLine*(
   if previous.failed:
     result.nextState = previous
     return
-  let grammar = grammarFor(language)
+  let grammar =
+    if previous.grammar.isNil:
+      grammars.grammarFor(language)
+    else:
+      previous.grammar
   if grammar.isNil:
     result.nextState.failed = true
     return
+  result.nextState.grammar = grammar
   try:
     let parsed =
       grammar.tokenizeLine(sanitizeInvalidUtf8(line), previous.stack, timeLimitMs)
@@ -235,6 +274,7 @@ proc tokenizeMatterLine*(
         "Matter tokenization exceeded its soft line budget for " & $language,
       )
       return
+    result.nextState.grammar = grammar
     result.nextState.stack = parsed.completedRuleStack
     for token in parsed.tokens:
       if token.endIndex > token.startIndex:

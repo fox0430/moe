@@ -30,6 +30,8 @@ proc applyHighlightCap*(buffer: TextBuffer, config: EditorConfig) =
   ## which reads `maxHighlightLineLength` to cap the first chunk. Applying it
   ## afterwards would nil the freshly-seeded progressive-load cache and force a
   ## full synchronous reparse on open — the stall the cap exists to prevent.
+  when defined(moe.matter):
+    buffer.setMatterGrammarSet(config.highlight.matterGrammarSet)
   buffer.setHighlightBackend(config.highlight.backend)
   buffer.setMaxHighlightLineLength(config.highlight.maxHighlightLineLength)
 

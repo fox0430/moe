@@ -196,21 +196,12 @@ jobs:
       run: |
         nimble install -d -y
         nimble setup
-    # Matter 0.3.0's Nimble package omits its grammar archives. Use the exact
-    # locked source revision for build-time assets, never a moving branch.
-    - name: Fetch Matter grammar assets
-      uses: actions/checkout@v7
-      with:
-        repository: elcritch/matter
-        ref: 8db6f03d1028c42693c3a586ba3625e1b48e9589
-        path: deps/matter-assets
-        persist-credentials: false
     - name: Build and test Matter backend
       run: |
-        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_matter_backend.nim
+        nim c -r -d:moe.matter tests/test_matter_backend.nim
         # Disable wall-clock interruption for full-vs-incremental equivalence.
-        nim c -r -d:moe.matter -d:matterTimeLimitMs=0 -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlight_matter.nim
-        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_matter_highlight_edges.nim
-        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlight.nim
-        nim c -r -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" tests/test_highlighter_api.nim
-        nim c -d:release -d:moe.matter -d:matterGrammarRoot="$PWD/deps/matter-assets" src/moe.nim
+        nim c -r -d:moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim
+        nim c -r -d:moe.matter tests/test_matter_highlight_edges.nim
+        nim c -r -d:moe.matter tests/test_highlight.nim
+        nim c -r -d:moe.matter tests/test_highlighter_api.nim
+        nim c -d:release -d:moe.matter src/moe.nim

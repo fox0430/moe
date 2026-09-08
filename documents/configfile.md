@@ -196,6 +196,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:---|:---|:---|:---|
 | backend | string (enum: builtin, matter) | builtin | Syntax highlighting backend (builtin or matter) |
+| matterGrammarFiles | string array | [] | TextMate grammar files, resolved inside Moe's configuration directory |
 | currentLine | bool | true | Highlight the current line background |
 | currentColumn | bool | false | Highlight the current column background |
 | reservedWord | string array | ["TODO", "WIP", "NOTE"] | Highlight any words |

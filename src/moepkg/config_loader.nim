@@ -38,11 +38,50 @@ import pkg/[parsetoml, results]
 
 import config, color, config_macros
 
+when defined(moe.matter):
+  import syntax/matter_backend
+  import syntax/tokenizer
+
 import
   config_loader/[
     base, save_base, simple, debug, lsp, theme as themeLoader, keymapping, user_commands
   ]
 export base, save_base, simple, debug, lsp, themeLoader, keymapping, user_commands
+
+when defined(moe.matter):
+  proc loadMatterGrammarFiles(
+      configPath: string, config: var HighlightConfig, vr: var ValidationResult
+  ) =
+    ## Load only files contained by the directory holding moerc.toml. Grammar
+    ## contents stay in memory; Matter itself never performs implicit I/O.
+    let configDir = normalizedPath(absolutePath(parentDir(configPath)))
+    var sources: seq[MatterGrammarSource]
+    for fileName in config.matterGrammarFiles:
+      let grammarPath = normalizedPath(absolutePath(configDir / fileName))
+      if fileName.isAbsolute or not grammarPath.isRelativeTo(configDir):
+        vr.addError(
+          "Highlight.matterGrammarFiles", fileName, "relative path inside " & configDir
+        )
+      elif not fileExists(grammarPath):
+        vr.addError(
+          "Highlight.matterGrammarFiles", fileName, "readable TextMate grammar file"
+        )
+      else:
+        try:
+          let source = MatterGrammarSource(
+            content: readFile(grammarPath), path: grammarPath, language: langNone
+          )
+          # Validate each source separately so one malformed file does not
+          # prevent other configured grammars from remaining available.
+          discard newMatterGrammarSet([source])
+          sources.add(source)
+        except CatchableError as error:
+          vr.addError(
+            "Highlight.matterGrammarFiles",
+            fileName,
+            "valid TextMate grammar: " & error.msg,
+          )
+    config.matterGrammarSet = newMatterGrammarSet(sources)
 
 proc loadConfigFromToml*(
     path: string
@@ -87,6 +126,9 @@ proc loadConfigFromToml*(
   # DisabledCommandAliases) and the nested [StartUp.*] sections are handled by
   # hand below.
   generateSectionLoaders(toml, config, vr, EditorConfig)
+
+  when defined(moe.matter):
+    loadMatterGrammarFiles(path, config.highlight, vr)
 
   if toml.hasKey("Theme"):
     loadThemeConfig(toml["Theme"].getTable(), config.theme, vr)

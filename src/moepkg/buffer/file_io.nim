@@ -243,7 +243,7 @@ proc loadFileWithContent*(
         lines,
         0,
         chunkEnd,
-        newTokenizerState(b.highlightBackend, b.language),
+        b.newBufferTokenizerState(),
         @[],
         b.language,
         b.maxHighlightLineLength,
@@ -251,7 +251,8 @@ proc loadFileWithContent*(
 
       b.highlight = Highlight(colorSegments: segments)
       b.incrementalHighlight = IncrementalHighlight(
-        backend: effectiveHighlightBackend(b.highlightBackend, b.language),
+        backend: b.effectiveHighlightBackend,
+        initialState: b.newBufferTokenizerState(),
         segments: segments,
         lineStates: LineStateCache(states: lineStates),
         parsedUpTo: chunkEnd,

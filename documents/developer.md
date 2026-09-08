@@ -151,39 +151,48 @@ nimble genhowtouse     # Just documents/howtouse.md
 
 ## Optional Matter syntax backend
 
-Build with `-d:moe.matter` to include the TextMate-grammar backend. Grammar
-archives are embedded into the executable at compile time; an Atlas checkout
-keeps Matter's `data/grammars` directory available automatically:
-
-```sh
-atlas install
-nim c -d:release -d:moe.matter --out:moe src/moe.nim
-```
-
-Matter 0.3.0's Nimble installation omits the archives. When building with
-Nimble, provide a full checkout of the same pinned source revision for assets:
+Build with `-d:moe.matter` to include the TextMate-grammar engine:
 
 ```sh
 nimble install -d -y
 nimble setup
-git clone --branch v0.3.0 --depth 1 https://github.com/elcritch/matter deps/matter-assets
-git -C deps/matter-assets rev-parse HEAD
-# Expected: 8db6f03d1028c42693c3a586ba3625e1b48e9589
-nim c -d:release -d:moe.matter \
-  -d:matterGrammarRoot="$PWD/deps/matter-assets" --out:moe src/moe.nim
+nim c -d:release -d:moe.matter --out:moe src/moe.nim
 ```
 
-Select the backend in `moerc.toml`; `builtin` remains the default:
+Moe does not embed or implicitly select any TextMate grammars. A Matter-enabled
+build continues to use the builtin tokenizer until a grammar is explicitly
+provided. Host applications can opt a buffer or an editor into Matter by passing
+grammar text through the public API:
+
+```nim
+let grammar = readFile("Nim.tmLanguage.json")
+editor.setMatterGrammar(langNim, grammar, "Nim.tmLanguage.json")
+# Or limit the opt-in to one buffer:
+buffer.setMatterGrammar(langNim, grammar, "Nim.tmLanguage.json")
+```
+
+For standalone Moe, place JSON `.tmLanguage.json` or XML plist `.tmLanguage`
+files inside Moe's configuration directory (normally `~/.config/moe`) and name
+them in `moerc.toml`. Relative subdirectories are allowed; absolute paths and
+paths escaping the configuration directory are rejected:
 
 ```toml
 [Highlight]
-backend = "matter" # or "builtin"
+backend = "matter"
+matterGrammarFiles = ["grammars/Nim.tmLanguage.json"]
 ```
+
+Config-loaded roots are matched to Moe languages by their declared TextMate
+`scopeName`; additional listed grammars may satisfy external includes. The API
+overload associates the supplied root with its `SourceLanguage` explicitly, so
+custom scope names are supported there.
 
 The existing `[Standard] syntax` toggle enables/disables rendering for either
 backend. Reloading config switches existing buffers and invalidates their syntax
 caches. A binary compiled without `-d:moe.matter` uses builtin highlighting even
-if the config requests Matter. Diff and Log always retain Moe's builtin lexer.
+if the config requests Matter. A Matter-enabled binary also falls back per
+language when no valid grammar was supplied. Diff and Log always retain Moe's
+builtin lexer.
 
 Matter shares Moe's progressive-load and budgeted incremental paths, per-line
 length cap, reserved-word colours, and URI/LSP/diagnostic overlays. Tokenization
@@ -194,14 +203,12 @@ builds and expensive grammars (notably C++) may reach this limit more often.
 Debug logging records these failures; see the logging section above.
 Build with `-d:matterTimeLimitMs=N` to adjust the soft deadline (`0` disables it).
 
-The executable does not read grammar files or access the network at runtime.
-Embedded archives retain each package's license and provenance. When distributing
-a Matter-enabled build, retain these notices and include Matter's
-`data/grammars/NOTICES.md` from the pinned source with accompanying materials.
+Moe never downloads grammars. The config path reads only the files explicitly
+listed by the user; the API path performs no filesystem access. Grammar licenses
+and provenance remain the responsibility of the user or embedding application.
 
 Run the optional tests with `nim c -r -d:moe.matter tests/test_matter_backend.nim`
-and `nim c -r -d:moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim`
-(add the grammar-root define above for a Nimble-only dependency installation).
+and `nim c -r -d:moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim`.
 
 ## Contributing
 

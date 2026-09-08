@@ -43,6 +43,9 @@ import
 
 import buffer/highlight
 
+when defined(moe.matter):
+  import syntax/matter_backend
+
 export HighlightBackend
 
 proc setHighlightBackend*(e: Editor, backend: HighlightBackend) =
@@ -55,6 +58,30 @@ proc setHighlightBackend*(e: Editor, backend: HighlightBackend) =
   e.config.highlight.backend = backend
   for buffer in e.buffers:
     buffer.setHighlightBackend(backend)
+
+proc setMatterGrammar*(
+    e: Editor,
+    language: SourceLanguage,
+    grammar: string,
+    path = "grammar.tmLanguage.json",
+) =
+  ## Opt current and future editor buffers into Matter by supplying a TextMate
+  ## grammar. The content is kept in memory and is never written to moerc.toml.
+  ## Invalid grammar input raises a catchable error without changing the editor.
+  when defined(moe.matter):
+    let grammars =
+      e.config.highlight.matterGrammarSet.withMatterGrammar(language, grammar, path)
+    e.config.highlight.matterGrammarSet = grammars
+    e.config.highlight.backend = hbMatter
+    for buffer in e.buffers:
+      buffer.setMatterGrammarSet(grammars)
+      buffer.setHighlightBackend(hbMatter)
+  else:
+    discard e
+    discard language
+    discard grammar
+    discard path
+    raise newException(TextMateGrammarError, "Matter support requires -d:moe.matter")
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor.
