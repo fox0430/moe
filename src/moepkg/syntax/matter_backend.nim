@@ -2,8 +2,8 @@
 ## grammar source explicitly, either through the public editor/buffer API or
 ## through files named by the user's configuration.
 
-when not defined(moe.matter):
-  {.error: "moepkg/syntax/matter_backend requires -d:moe.matter".}
+when not (defined(moe.matter) or defined(features.moe.matter)):
+  {.error: "moepkg/syntax/matter_backend requires the Matter feature".}
 
 import std/[sets, strutils, tables]
 import matter/[engine, grammarpackages, rawgrammar]

@@ -1,4 +1,4 @@
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import ../src/moepkg/syntax/[matter_backend, tokenizer]
 
   const

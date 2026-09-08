@@ -38,7 +38,7 @@ import pkg/[parsetoml, results]
 
 import config, color, config_macros
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import syntax/matter_backend
   import syntax/tokenizer
 
@@ -48,7 +48,7 @@ import
   ]
 export base, save_base, simple, debug, lsp, themeLoader, keymapping, user_commands
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   proc loadMatterGrammarFiles(
       configPath: string, config: var HighlightConfig, vr: var ValidationResult
   ) =
@@ -127,7 +127,7 @@ proc loadConfigFromToml*(
   # hand below.
   generateSectionLoaders(toml, config, vr, EditorConfig)
 
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     loadMatterGrammarFiles(path, config.highlight, vr)
 
   if toml.hasKey("Theme"):

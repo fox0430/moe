@@ -26,7 +26,7 @@ import color, unicode_utils
 import types/highlight_types
 import syntax/tokenizer
 import lsp/protocol/types
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import syntax/matter_backend
 
 export SourceLanguage, EditorColorPairIndex, HighlightBackend
@@ -98,7 +98,7 @@ type
     state*: TokenClass
     lang*: LangState
     backend*: HighlightBackend
-    when defined(moe.matter):
+    when defined(moe.matter) or defined(features.moe.matter):
       matterState*: MatterLineState
 
   LineStateCache* = object ## Cache of tokenizer states for each line
@@ -223,7 +223,7 @@ proc effectiveHighlightBackend*(
   discard language
   hbBuiltin
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   proc effectiveHighlightBackend*(
       backend: HighlightBackend, language: SourceLanguage, grammars: MatterGrammarSet
   ): HighlightBackend =
@@ -238,7 +238,7 @@ proc newTokenizerState*(
   ## Fresh state without an explicit grammar. Matter therefore falls back.
   TokenizerState(backend: effectiveHighlightBackend(backend, language))
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   proc newTokenizerState*(
       backend: HighlightBackend, language: SourceLanguage, grammars: MatterGrammarSet
   ): TokenizerState =
@@ -262,7 +262,7 @@ proc `==`*(a, b: TokenizerState): bool =
   ## cached states do not need to import Matter's structural stack operator.
   if a.backend != b.backend:
     return false
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     if a.backend == hbMatter:
       return a.matterState == b.matterState
   a.state == b.state and a.lang == b.lang
@@ -1132,7 +1132,7 @@ func capturedBoundaryState(
   else:
     token.state
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   proc matterColor(category: MatterColorCategory): EditorColorPairIndex =
     case category
     of mccComment: comment
@@ -1263,7 +1263,7 @@ proc initHighlightIncrementalFromStr*(
   ## `startLine + i + 1` — even when the tokenizer stops before the end of
   ## the buffer (interior NUL, defensive break). Consumers index into it
   ## positionally and must be able to rely on this.
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     if initialState.backend == hbMatter:
       return initMatterHighlight(
         bufferStr, startLine, endLine, initialState, reservedWords, language,

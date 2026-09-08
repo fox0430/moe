@@ -32,7 +32,7 @@ import types/config_types
 import types/highlight_types
 export config_types, highlight_types
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import syntax/matter_backend
 
 proc isToolAvailable(toolCommand: string): bool =
@@ -300,5 +300,5 @@ proc newEditorConfig*(): EditorConfig =
     commandAliases: initTable[string, UserCommandEntry](),
     disabledCommandAliases: @[],
   )
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     result.highlight.matterGrammarSet = newMatterGrammarSet()

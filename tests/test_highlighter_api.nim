@@ -3,7 +3,7 @@ import std/[os, tempfiles, unittest]
 import pkg/results
 import ../src/moepkg/[buffer, config, editor, highlight]
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import matter_test_grammars
 
 suite "Programmatic highlighter selection":
@@ -13,7 +13,7 @@ suite "Programmatic highlighter selection":
     buffer.setHighlightBackend(hbMatter)
     check buffer.highlightBackend == hbMatter
     check buffer.effectiveHighlightBackend == hbBuiltin
-    when defined(moe.matter):
+    when defined(moe.matter) or defined(features.moe.matter):
       buffer.setMatterGrammar(langNim, NimMatterGrammar, "nim.tmLanguage.json")
       check buffer.effectiveHighlightBackend == hbMatter
     else:
@@ -47,7 +47,7 @@ suite "Programmatic highlighter selection":
       check buffer.effectiveHighlightBackend == hbBuiltin
     check current.highlight == originalHighlight
 
-    when defined(moe.matter):
+    when defined(moe.matter) or defined(features.moe.matter):
       editor.setMatterGrammar(langNim, NimMatterGrammar, "nim.tmLanguage.json")
       for buffer in editor.buffers:
         check buffer.effectiveHighlightBackend == hbMatter
@@ -58,7 +58,7 @@ suite "Programmatic highlighter selection":
     let opened = editor.loadOrCreateBuffer(directory / "future.nim")
     require opened.isOk
     check opened.get.highlightBackend == hbMatter
-    when defined(moe.matter):
+    when defined(moe.matter) or defined(features.moe.matter):
       check opened.get.effectiveHighlightBackend == hbMatter
     else:
       check opened.get.effectiveHighlightBackend == hbBuiltin
@@ -80,7 +80,7 @@ suite "Programmatic highlighter selection":
   test "invalid or unavailable grammar API does not change backend":
     let buffer = newTextBuffer("let x = true")
     buffer.language = langNim
-    when defined(moe.matter):
+    when defined(moe.matter) or defined(features.moe.matter):
       expect TextMateGrammarError:
         buffer.setMatterGrammar(langNim, "{", "invalid.tmLanguage.json")
     else:

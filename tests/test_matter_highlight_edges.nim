@@ -4,7 +4,7 @@ import ../src/moepkg/[buffer, config, highlight, highlight_config]
 import ../src/moepkg/syntax/tokenizer
 import pkg/celina
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import std/[sequtils, strutils, tables]
   import ../src/moepkg/unicode_utils
   import matter_test_grammars

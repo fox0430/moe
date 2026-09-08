@@ -25,7 +25,7 @@ import ../src/moepkg/[config_loader, config, color, theme, modes]
 
 import config_test_helper
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import ../src/moepkg/syntax/[matter_backend, tokenizer]
   import matter_test_grammars
 
@@ -506,7 +506,7 @@ backend = "unknown"
     let (_, vr) = loadFromTomlString(content)
     check vr.hasErrors
 
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     test "Matter grammar files resolve from the moerc directory":
       inc testFileCounter
       let

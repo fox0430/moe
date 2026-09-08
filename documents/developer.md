@@ -151,7 +151,8 @@ nimble genhowtouse     # Just documents/howtouse.md
 
 ## Optional Matter syntax backend
 
-Build with `-d:moe.matter` to include the TextMate-grammar engine:
+Build with `-d:moe.matter` or the Nimble feature define
+`-d:features.moe.matter` to include the TextMate-grammar engine:
 
 ```sh
 nimble install -d -y
@@ -189,8 +190,8 @@ custom scope names are supported there.
 
 The existing `[Standard] syntax` toggle enables/disables rendering for either
 backend. Reloading config switches existing buffers and invalidates their syntax
-caches. A binary compiled without `-d:moe.matter` uses builtin highlighting even
-if the config requests Matter. A Matter-enabled binary also falls back per
+caches. A binary compiled without either Matter define uses builtin highlighting
+even if the config requests Matter. A Matter-enabled binary also falls back per
 language when no valid grammar was supplied. Diff and Log always retain Moe's
 builtin lexer.
 
@@ -207,8 +208,9 @@ Moe never downloads grammars. The config path reads only the files explicitly
 listed by the user; the API path performs no filesystem access. Grammar licenses
 and provenance remain the responsibility of the user or embedding application.
 
-Run the optional tests with `nim c -r -d:moe.matter tests/test_matter_backend.nim`
-and `nim c -r -d:moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim`.
+Run the optional tests with
+`nim c -r -d:features.moe.matter tests/test_matter_backend.nim` and
+`nim c -r -d:features.moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim`.
 
 ## Contributing
 

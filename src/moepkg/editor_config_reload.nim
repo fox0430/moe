@@ -43,7 +43,7 @@ import
 
 import buffer/highlight
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import syntax/matter_backend
 
 export HighlightBackend
@@ -54,7 +54,7 @@ proc setHighlightBackend*(e: Editor, backend: HighlightBackend) =
   ## invalidated and rebuilt by the normal frame/updateHighlight path; semantic
   ## and diagnostic overlays are preserved. The requested default is stored in
   ## e.config, so a later config reload can replace it in the usual way.
-  ## Matter still requires a -d:moe.matter build; Diff/Log remain builtin.
+  ## Matter still requires compile-time enablement; Diff/Log remain builtin.
   e.config.highlight.backend = backend
   for buffer in e.buffers:
     buffer.setHighlightBackend(backend)
@@ -68,7 +68,7 @@ proc setMatterGrammar*(
   ## Opt current and future editor buffers into Matter by supplying a TextMate
   ## grammar. The content is kept in memory and is never written to moerc.toml.
   ## Invalid grammar input raises a catchable error without changing the editor.
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     let grammars =
       e.config.highlight.matterGrammarSet.withMatterGrammar(language, grammar, path)
     e.config.highlight.matterGrammarSet = grammars
@@ -81,7 +81,9 @@ proc setMatterGrammar*(
     discard language
     discard grammar
     discard path
-    raise newException(TextMateGrammarError, "Matter support requires -d:moe.matter")
+    raise newException(
+      TextMateGrammarError, "Matter support is not enabled at compile time"
+    )
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor.

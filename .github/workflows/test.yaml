@@ -200,8 +200,8 @@ jobs:
       run: |
         nim c -r -d:moe.matter tests/test_matter_backend.nim
         # Disable wall-clock interruption for full-vs-incremental equivalence.
-        nim c -r -d:moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim
-        nim c -r -d:moe.matter tests/test_matter_highlight_edges.nim
-        nim c -r -d:moe.matter tests/test_highlight.nim
-        nim c -r -d:moe.matter tests/test_highlighter_api.nim
-        nim c -d:release -d:moe.matter src/moe.nim
+        nim c -r -d:features.moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim
+        nim c -r -d:features.moe.matter tests/test_matter_highlight_edges.nim
+        nim c -r -d:features.moe.matter tests/test_highlight.nim
+        nim c -r -d:features.moe.matter tests/test_highlighter_api.nim
+        nim c -d:release -d:features.moe.matter src/moe.nim

@@ -28,7 +28,7 @@ import std/tables
 import ../[highlight, uri_utils]
 import ../types/highlight_types
 import ../syntax/tokenizer
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import ../syntax/matter_backend
 import core, markers
 
@@ -38,13 +38,13 @@ proc effectiveHighlightBackend*(b: TextBuffer): HighlightBackend =
   ## Return the engine selected for this buffer's language and build. Matter
   ## requests fall back to builtin when unavailable or for Diff/Log. This
   ## query does not report per-line tokenizer failures or change buffer state.
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     effectiveHighlightBackend(b.highlightBackend, b.language, b.matterGrammarSet)
   else:
     effectiveHighlightBackend(b.highlightBackend, b.language)
 
 proc newBufferTokenizerState*(b: TextBuffer): TokenizerState =
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     newTokenizerState(b.highlightBackend, b.language, b.matterGrammarSet)
   else:
     newTokenizerState(b.highlightBackend, b.language)
@@ -65,7 +65,7 @@ proc setHighlightBackend*(b: TextBuffer, backend: HighlightBackend) =
     b.uriScanParsedUpTo = -1
     b.highlightNeedsUpdate = true
 
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   proc setMatterGrammarSet*(b: TextBuffer, grammars: MatterGrammarSet) =
     ## Replace the explicit grammar collection and invalidate syntax caches.
     if b.matterGrammarSet != grammars:
@@ -82,8 +82,8 @@ proc setMatterGrammar*(
 ) =
   ## Opt this buffer into Matter by supplying its TextMate grammar text.
   ## Invalid grammar input raises a catchable error and leaves the buffer
-  ## unchanged. Matter support must be compiled with `-d:moe.matter`.
-  when defined(moe.matter):
+  ## unchanged. Matter support must be enabled by its direct define or Nimble feature.
+  when defined(moe.matter) or defined(features.moe.matter):
     let grammars = b.matterGrammarSet.withMatterGrammar(language, grammar, path)
     b.setMatterGrammarSet(grammars)
     b.setHighlightBackend(hbMatter)
@@ -92,7 +92,9 @@ proc setMatterGrammar*(
     discard language
     discard grammar
     discard path
-    raise newException(TextMateGrammarError, "Matter support requires -d:moe.matter")
+    raise newException(
+      TextMateGrammarError, "Matter support is not enabled at compile time"
+    )
 
 proc rewindUriScan(b: TextBuffer, to: int) =
   ## Move the URI-scan frontier back to `to` (clamped to -1); no-op if it is
@@ -113,7 +115,7 @@ proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
   let states = b.incrementalHighlight.lineStates.states
   if line < 0 or line >= states.len:
     return false
-  when defined(moe.matter):
+  when defined(moe.matter) or defined(features.moe.matter):
     if states[line].backend == hbMatter:
       let enterInBlock = line >= 1 and isMatterCodeBlock(states[line - 1].matterState)
       return enterInBlock or isMatterCodeBlock(states[line].matterState)

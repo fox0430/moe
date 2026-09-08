@@ -28,7 +28,7 @@ import std/[options, tables]
 
 import ../modes
 import highlight_types
-when defined(moe.matter):
+when defined(moe.matter) or defined(features.moe.matter):
   import ../syntax/matter_backend
 
 import ../config_macros
@@ -244,7 +244,7 @@ type
       cfgDocDescription:
         "TextMate grammar files, resolved inside Moe's configuration directory"
     .}: seq[string]
-    when defined(moe.matter):
+    when defined(moe.matter) or defined(features.moe.matter):
       matterGrammarSet* {.cfgSkip.}: MatterGrammarSet
         ## Parsed runtime grammar collection; never serialized into TOML.
     currentLine* {.cfg, cfgDocDescription: "Highlight the current line background".}:
