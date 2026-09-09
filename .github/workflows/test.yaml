@@ -196,8 +196,8 @@ jobs:
       run: nimble install 'nimble@0.24.1' -y
     - name: Install dependencies
       run: |
-        nimble install -d -y
-        nimble setup
+        nimble --parser:declarative --features:matter install -d -y
+        nimble --parser:declarative --features:matter setup
     - name: Build and test Matter backend
       run: |
         nim c -r -d:moe.matter tests/test_matter_backend.nim

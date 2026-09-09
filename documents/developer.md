@@ -151,12 +151,19 @@ nimble genhowtouse     # Just documents/howtouse.md
 
 ## Optional Matter syntax backend
 
-Build with `-d:moe.matter` or the Nimble feature define
-`-d:features.moe.matter` to include the TextMate-grammar engine:
+Enable the `matter` Nimble feature to install and build the TextMate-grammar
+engine (Nimble 0.24.1 or newer):
 
 ```sh
-nimble install -d -y
-nimble setup
+nimble --parser:declarative --features:matter build -d:release
+```
+
+For direct compiler invocations, install the optional dependencies first, then
+build with `-d:moe.matter` or `-d:features.moe.matter`:
+
+```sh
+nimble --parser:declarative --features:matter install -d -y
+nimble --parser:declarative --features:matter setup
 nim c -d:release -d:moe.matter --out:moe src/moe.nim
 ```
 
