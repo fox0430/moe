@@ -535,6 +535,31 @@ proc scanRadixNumber*(g: var GeneralTokenizer, position: int): int =
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
+type LexerProc* = proc(g: var GeneralTokenizer) ## Single-language tokenizer proc.
+
+var lexerRegistry: array[SourceLanguage, LexerProc]
+  ## Runtime lexer table. Each `syntax_*` module self-registers on import, so
+  ## the dispatcher never imports them back and the import cycle stays closed.
+
+proc registerLexer*(lang: SourceLanguage, lexer: LexerProc) =
+  ## Called once at module scope by a `syntax_*` module.
+  assert lexerRegistry[lang] == nil or lexerRegistry[lang] == lexer,
+    "registerLexer: conflicting lexer for " & $lang
+  lexerRegistry[lang] = lexer
+
+proc isLexerRegistered*(lang: SourceLanguage): bool =
+  ## True once a `syntax_*` module has registered a lexer for `lang`.
+  lexerRegistry[lang] != nil
+
+proc dispatchRegisteredLexer*(g: var GeneralTokenizer, lang: SourceLanguage) =
+  ## A missing registration means the module was never imported: fail loudly in
+  ## debug builds, degrade to EOF instead of a nil call in release.
+  if lexerRegistry[lang] == nil:
+    assert false, "dispatchRegisteredLexer: no lexer registered for " & $lang
+    g.kind = gtEof
+  else:
+    lexerRegistry[lang](g)
+
 import syntax_markdown
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =

@@ -21,47 +21,82 @@ import
   tokenizer, syntax_latex, syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp,
   syntax_csharp, syntax_diff, syntax_dockerfile, syntax_fish, syntax_git_rebase_todo,
   syntax_gitignore, syntax_go, syntax_haskell, syntax_html, syntax_hyprland,
-  syntax_java, syntax_javascript, syntax_lisp, syntax_log, syntax_lua, syntax_nim,
-  syntax_python, syntax_rust, syntax_shell, syntax_tcl, syntax_toml, syntax_yaml,
-  syntax_json, syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
+  syntax_java, syntax_javascript, syntax_lisp, syntax_log, syntax_lua, syntax_python,
+  syntax_rust, syntax_shell, syntax_tcl, syntax_toml, syntax_yaml, syntax_json,
+  syntax_jsonc, syntax_typescript, syntax_xml, syntax_zsh
 
 proc codeBlockNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   ## The single language dispatch, shared with `getNextToken` in
   ## tokenizer.nim. langMarkdown/langNone have no tokenizer here.
+  ## langNim goes through the lexer registry to avoid an import cycle, so the
+  ## dispatching binary must import `syntax_nim`.
   case lang
-  of langAstro: g.astroNextToken
-  of langC: g.cNextToken
-  of langCommitEditMsg: g.commitEditMsgNextToken
-  of langCpp: g.cppNextToken
-  of langCsharp: g.csharpNextToken
-  of langDiff: g.diffNextToken
-  of langDockerfile: g.dockerfileNextToken
-  of langFish: g.fishNextToken
-  of langGitRebaseTodo: g.gitRebaseTodoNextToken
-  of langGitignore: g.gitignoreNextToken
-  of langGo: g.goNextToken
-  of langHaskell: g.haskellNextToken
-  of langHtml: g.htmlNextToken
-  of langHyprland: g.hyprlandNextToken
-  of langJava: g.javaNextToken
-  of langJavaScript, langJsx: g.javaScriptNextToken
-  of langLatex: g.latexNextToken
-  of langLisp: g.lispNextToken
-  of langLog: g.logNextToken
-  of langLua: g.luaNextToken
-  of langNim: g.nimNextToken
-  of langPython: g.pythonNextToken
-  of langRust: g.rustNextToken
-  of langShell: g.shellNextToken
-  of langTcl: g.tclNextToken
-  of langToml: g.tomlNextToken
-  of langYaml: g.yamlNextToken
-  of langJson: g.jsonNextToken
-  of langJsonc: g.jsoncNextToken
-  of langTypeScript, langTsx: g.typescriptNextToken
-  of langXml: g.xmlNextToken
-  of langZsh: g.zshNextToken
-  of langMarkdown, langNone: discard
+  of langAstro:
+    g.astroNextToken
+  of langC:
+    g.cNextToken
+  of langCommitEditMsg:
+    g.commitEditMsgNextToken
+  of langCpp:
+    g.cppNextToken
+  of langCsharp:
+    g.csharpNextToken
+  of langDiff:
+    g.diffNextToken
+  of langDockerfile:
+    g.dockerfileNextToken
+  of langFish:
+    g.fishNextToken
+  of langGitRebaseTodo:
+    g.gitRebaseTodoNextToken
+  of langGitignore:
+    g.gitignoreNextToken
+  of langGo:
+    g.goNextToken
+  of langHaskell:
+    g.haskellNextToken
+  of langHtml:
+    g.htmlNextToken
+  of langHyprland:
+    g.hyprlandNextToken
+  of langJava:
+    g.javaNextToken
+  of langJavaScript, langJsx:
+    g.javaScriptNextToken
+  of langLatex:
+    g.latexNextToken
+  of langLisp:
+    g.lispNextToken
+  of langLog:
+    g.logNextToken
+  of langLua:
+    g.luaNextToken
+  of langNim:
+    g.dispatchRegisteredLexer(langNim)
+  of langPython:
+    g.pythonNextToken
+  of langRust:
+    g.rustNextToken
+  of langShell:
+    g.shellNextToken
+  of langTcl:
+    g.tclNextToken
+  of langToml:
+    g.tomlNextToken
+  of langYaml:
+    g.yamlNextToken
+  of langJson:
+    g.jsonNextToken
+  of langJsonc:
+    g.jsoncNextToken
+  of langTypeScript, langTsx:
+    g.typescriptNextToken
+  of langXml:
+    g.xmlNextToken
+  of langZsh:
+    g.zshNextToken
+  of langMarkdown, langNone:
+    discard
 
 template isLineStart(lexer: GeneralTokenizer): bool =
   lexer.state in {gtWhitespace, low(TokenClass)}

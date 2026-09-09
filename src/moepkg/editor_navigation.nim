@@ -226,7 +226,7 @@ proc jumpToLspLocation*(
   ## happens in a new vertical split window instead of the current one.
   ## Returns true if successful
   ##
-  ## The URI is LSP-server-sourced (trust boundary #3): only a well-formed
+  ## The URI is LSP-server-sourced: only a well-formed
   ## local file URI may open a buffer, so anything else is refused here.
   let pathRes = lsp_service.validateLocalFileUri(loc.uri)
   if pathRes.isErr:
