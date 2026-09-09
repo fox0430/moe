@@ -18,8 +18,8 @@ requires "stew >= 0.2.0"
 requires "editorconfig >= 0.1.1"
 requires "regex >= 0.26.1"
 requires "jsony >= 1.1.6"
-# Matter 0.3.0 engine; enabled by its direct define or Nimble feature. No grammars bundled.
-requires "https://github.com/elcritch/matter#333b79c75fa883a3ebb5ddd7d4fdbd7a11819b94"
+# Matter is enabled by its direct define or Nimble feature. No grammars bundled.
+requires "https://github.com/elcritch/matter >= 0.4.2"
 
 task release, "Build for release":
   exec "nimble build -d:release"
