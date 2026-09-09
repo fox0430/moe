@@ -40,7 +40,7 @@ let tmpDir = getTempDir()
 
 proc syncedStatus(lsp: LspIntegration, buffer: TextBuffer): SyncVerdict =
   ## Frame sync with verdict.
-  lsp.syncAndJudge(buffer, ignoreRetryInterval = false, mayRestart = false)
+  lsp.syncAndJudge(buffer, forceRetry = false, mayRestart = false)
 
 suite "LspIntegration - UTF-16/UTF-8 Conversion":
   test "utf16OffsetToUtf8 with ASCII text":
@@ -3915,8 +3915,8 @@ suite "LspIntegration - incremental didChange":
     # Retracted and re-opened, not diffed.
     check lsp.documents[Path].version == 1
 
-  test "a timer's request waits out the retry interval; a key press does not":
-    # Refused sync retries on budget; key press retries at once.
+  test "an automatic request answers a behind memo; a key press retries at once":
+    # Behind memo holds for automatic requests; key press retries at once.
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
     lsp.setKind(2)
     lsp.markNoWorker()
@@ -3927,6 +3927,13 @@ suite "LspIntegration - incremental didChange":
 
     check lsp.requestSyncGate(buf, lrfDocumentHighlight).isNone
     check lsp.documents[Path].attempt.get.at == firstAttempt
+
+    # No timer re-arms the memo: long after the old retry interval,
+    # automatic requests still answer from it without restamping.
+    lsp.documents[Path].attempt.get.at = getMonoTime() - initDuration(minutes = 1)
+    let staleAt = lsp.documents[Path].attempt.get.at
+    check lsp.requestSyncGate(buf, lrfDocumentHighlight).isNone
+    check lsp.documents[Path].attempt.get.at == staleAt
 
     discard lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction)
     check lsp.documents[Path].attempt.get.at != firstAttempt
@@ -3941,7 +3948,7 @@ suite "LspIntegration - incremental didChange":
     check lsp.syncedStatus(buf).kind == svBehind
     let firstAttempt = lsp.documents[Path].attempt.get.at
 
-    # Still inside retry interval; answered from memo.
+    # Unchanged and still behind; answered from memo.
     check lsp.syncedStatus(buf).kind == svBehind
     check lsp.documents[Path].attempt.get.at == firstAttempt
 
@@ -4113,7 +4120,7 @@ suite "LspIntegration - incremental didChange":
     check buf.id notin lsp.openedPaths
 
   test "the shared request helper passes the caller's trigger to the gate":
-    # Helper must pass trigger; default grades user press as timer.
+    # Helper must pass trigger; default stays automatic.
     privateAccess(LspService)
     privateAccess(LspDocumentState)
 
@@ -4489,8 +4496,8 @@ suite "LspIntegration - incremental didChange":
     check lsp.syncedStatus(buf).kind == svSynced
     check lsp.documents[Path].shadow == "abXc"
 
-  test "an idle unsyncable document is not re-materialized on a timer":
-    # Idle unsyncable document never retries on timer.
+  test "an idle unsyncable document is not re-materialized":
+    # Idle unsyncable document never re-materializes.
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
     lsp.setKind(0)
     lsp.markReady()
@@ -4498,8 +4505,7 @@ suite "LspIntegration - incremental didChange":
     check lsp.syncedStatus(buf).kind == svUnsyncable
 
     let stampedAt = lsp.documents[Path].attempt.get.at
-    lsp.documents[Path].attempt.get.at =
-      getMonoTime() - initDuration(seconds = int(StaleSyncRetryIntervalSeconds) + 1)
+    lsp.documents[Path].attempt.get.at = getMonoTime() - initDuration(seconds = 3)
 
     lsp.syncBuffer(buf)
 
@@ -4523,8 +4529,8 @@ suite "LspIntegration - incremental didChange":
 
     check "nim" in lsp.service.workers
 
-  test "a request the editor fires on a timer leaves a crashed server alone":
-    # Timer-driven decorating requests must not respawn.
+  test "an automatic request leaves a crashed server alone":
+    # Automatic decorating requests must not respawn.
     privateAccess(LspService)
 
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
@@ -4540,7 +4546,7 @@ suite "LspIntegration - incremental didChange":
       check lsp.requestSyncGate(buf, feature).isNone
       check "nim" notin lsp.service.workers
 
-  test "starting a timer-driven request does not respawn a crashed server":
+  test "starting an automatic request does not respawn a crashed server":
     # Start resolves existing worker only.
     privateAccess(LspService)
 
@@ -4560,7 +4566,7 @@ suite "LspIntegration - incremental didChange":
     check lsp.service.startInlayHintRequest(Path, 0, 0, 0, 1).isErr
     check "nim" notin lsp.service.workers
 
-  test "a gate asked without a trigger neither respawns nor jumps the interval":
+  test "a gate asked without a trigger neither respawns nor forces a retry":
     # Respawn authority belongs to call site, not feature.
     privateAccess(LspService)
 
@@ -4634,8 +4640,8 @@ suite "LspIntegration - incremental didChange":
     check lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isSome
     check getLspMessageLog().len == 1
 
-  test "a request re-attempts a sync the retry interval would have skipped":
-    # Request must not inherit stale memo.
+  test "a key-press request retries a sync the frame path answers from memo":
+    # User action must not inherit the frame's memo.
     discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
     lsp.setKind(2)
     lsp.markNoWorker()

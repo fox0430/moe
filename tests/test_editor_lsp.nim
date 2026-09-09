@@ -35,7 +35,7 @@ privateAccess(LspDocumentState)
 
 proc syncedStatus(lsp: LspIntegration, buffer: TextBuffer): SyncVerdict =
   ## Frame sync with verdict.
-  lsp.syncAndJudge(buffer, ignoreRetryInterval = false, mayRestart = false)
+  lsp.syncAndJudge(buffer, forceRetry = false, mayRestart = false)
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
