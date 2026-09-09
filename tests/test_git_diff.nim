@@ -552,13 +552,6 @@ suite "GitDiff - applyGitDiffToBuffer":
     check buf.diagnostics.len == 1
     check buf.diagnostics[0].message == "oops"
 
-suite "GitDiff - getGitBranch":
-  test "Non-existent file returns error":
-    let result = getGitBranch("/nonexistent/path/file.txt")
-
-    check result.isErr
-    check result.error.contains("does not exist")
-
 suite "GitDiff - startGitDiffFromBufferAsync":
   test "Buffer without file path returns error":
     let buf = newTextBuffer()
@@ -583,17 +576,6 @@ suite "GitDiff - Integration tests with git repository":
   teardown:
     if dirExists(testDir):
       removeDir(testDir)
-
-  test "getGitBranch returns branch name":
-    let testFile = testDir / "test.txt"
-    writeFile(testFile, "initial content\n")
-    discard execCmdEx("git add test.txt", workingDir = testDir)
-    discard execCmdEx("git commit -m 'Initial commit'", workingDir = testDir)
-
-    let result = getGitBranch(testFile)
-
-    check result.isOk
-    check result.get.len > 0
 
   test "startGitDiffFromBufferAsync with unchanged buffer (LF, no trailing newline) returns no diff":
     let testFile = testDir / "test.txt"

@@ -564,26 +564,6 @@ proc applyGitDiffToBuffer*(buffer: TextBuffer, diffInfo: GitDiffInfo) =
 
       buffer.setLineMarker(lineNum, markerKind)
 
-proc getGitBranch*(filePath: string): Result[string, string] =
-  ## Get the current git branch name for a file
-  ## Returns error if file is not in a git repository or git command fails
-  if not fileExists(filePath):
-    return err("File does not exist: " & filePath)
-
-  let fileDir = filePath.parentDir()
-
-  # Get current branch name
-  let (output, exitCode) =
-    try:
-      execCmdEx("git rev-parse --abbrev-ref HEAD", workingDir = fileDir)
-    except OSError as e:
-      return err("Failed to execute git command: " & e.msg)
-
-  if exitCode != 0:
-    return err("Not in a git repository")
-
-  return ok(output.strip())
-
 proc countGitChangedLines*(
     diffInfo: GitDiffInfo
 ): tuple[added: int, modified: int, deleted: int] =
