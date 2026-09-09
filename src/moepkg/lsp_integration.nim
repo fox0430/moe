@@ -20,8 +20,9 @@
 ## LSP Integration with Editor
 ## Connects LspService to Editor, TextBuffer, and UI components
 
-import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
-from std/os import absolutePath, normalizedPath, fileExists
+import
+  std/[options, json, strutils, algorithm, sequtils, monotimes, tables, times, unicode]
+from std/os import absolutePath, normalizedPath, fileExists, isAbsolute
 
 import pkg/[results, chronos]
 
@@ -96,10 +97,12 @@ const MaxProgressTextLen* = 50 ## Maximum display width for progress text
 
 const ProgressCleanupIntervalSeconds* = 1.0 ## Interval between stale progress checks
 
-proc canonicalPath(path: string): string {.inline.} =
-  ## Collapse relative/absolute forms of the same file so `lsp.documents`
-  ## and the notify* wire share one key.
-  normalizedPath(absolutePath(path))
+proc canonicalPath(path: string): string =
+  ## One key for `lsp.documents` and the notify wire. Skips the syscall for absolute paths.
+  if path.isAbsolute:
+    normalizedPath(path)
+  else:
+    normalizedPath(absolutePath(path))
 
 proc lspDegradeReason*(status: LspResponseStatus, detail = ""): string =
   ## Human-readable reason for a failed or timed-out LSP response.
@@ -116,15 +119,43 @@ proc lspDegradeReason*(status: LspResponseStatus, detail = ""): string =
     "failed"
 
 proc logLspDegraded*(feature, reason: string) =
-  ## Record a degraded LSP feature to the LSP message log so the degradation
-  ## stays visible in the LSP log viewer even when file logging is disabled.
-  ## Use for background features where interrupting the user is undesirable;
-  ## for user-initiated features also set `statusMessage` at the call site.
+  ## Log a degraded LSP feature to the LSP log viewer.
   addLspMessageLog("[LSP] " & feature & ": " & reason)
 
 proc logLspDegraded*(feature: string, status: LspResponseStatus, detail = "") =
   ## Overload taking an LspResponseStatus (and optional error detail) directly.
   logLspDegraded(feature, lspDegradeReason(status, detail))
+
+proc retryStaleSyncs*(lsp: LspIntegration, langId: string) =
+  ## A worker for `langId` just initialized. Drop waiting memos so the next sync retries at once.
+  for path, doc in lsp.documents.mpairs:
+    let attempt = doc.syncAttempt
+    if attempt.isSome and attempt.get.verdict.kind != svSynced and
+        lsp.service.getLanguageIdFromPath(path) == some(langId):
+      doc.forgetSyncAttempt()
+
+proc forgetServerDocuments*(lsp: LspIntegration, langId: string) {.raises: [].} =
+  ## Retract `langId` documents; records stay for re-open with a new epoch.
+  for path, doc in lsp.documents.mpairs:
+    if lsp.service.getLanguageIdFromPath(path) == some(langId):
+      doc.nextGeneration()
+
+proc applySyncAck*(
+    lsp: LspIntegration, uri: string, version, generation: int, ok: bool
+) {.raises: [].} =
+  ## Apply a worker sync ack; only the current epoch counts.
+  let path =
+    try:
+      canonicalPath(uriToPath(uri))
+    except CatchableError:
+      return
+  if path notin lsp.documents:
+    return
+  lsp.documents.withValue(path, doc):
+    if ok:
+      doc[].noteSyncAcked(version, generation)
+    else:
+      discard doc[].noteSyncNacked(version, generation)
 
 proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   ## Create a new LSP integration
@@ -133,7 +164,7 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   result = LspIntegration(
     service: svc,
     enabled: true,
-    documents: initTable[string, tuple[version: int, shadow: string, delivered: bool]](),
+    documents: initTable[string, LspDocumentState](),
     pendingMessages: @[],
     activeProgress: initTable[string, LspProgressState](),
     lastProgressCleanupTime: 0.0,
@@ -143,6 +174,24 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
 
   # Set up internal callback to collect LSP log messages for display
   let lsp = result
+
+  # A worker coming up ends the stale-retry wait.
+  svc.onServerInitialized = proc(langId: string) {.gcsafe.} =
+    {.cast(gcsafe).}:
+      lsp.retryStaleSyncs(langId)
+
+  # A worker going down retracts what it held.
+  svc.onServerLost = proc(langId: string) {.gcsafe, raises: [].} =
+    {.cast(gcsafe).}:
+      lsp.forgetServerDocuments(langId)
+
+  # A document write outcome confirms the shadow or retracts it.
+  svc.onSyncAck = proc(
+      langId, uri: string, version, generation: int, ok: bool
+  ) {.gcsafe, raises: [].} =
+    {.cast(gcsafe).}:
+      lsp.applySyncAck(uri, version, generation, ok)
+
   svc.onLogMessage = proc(
       langId: string, msgType: MessageType, message: string
   ) {.gcsafe.} =
@@ -368,68 +417,190 @@ proc isLspEligible*(buffer: TextBuffer): bool =
   ## Whether buffer can use LSP. Raw buffers are ineligible (JSON can't carry undecodable bytes).
   buffer.allowsTextTransforms
 
-proc dropDocument(lsp: LspIntegration, path: string): Result[void, string] =
+proc lspParticipation*(lsp: LspIntegration, buffer: TextBuffer): LspParticipation =
+  ## Whether the server takes part in `buffer`. Inspection only; sends nothing.
+  if not lsp.enabled:
+    return lpDisabled
+  if buffer.filePath.isNone:
+    return lpNoPath
+  if not buffer.isLspEligible:
+    return lpRawBuffer
+  # Extension lookup only; canonicalPath can raise and is not needed here.
+  if lsp.service.getLanguageIdFromPath(buffer.filePath.get).isNone:
+    return lpNoServer
+  lpParticipates
+
+proc syncLogLabel(buffer: TextBuffer): string =
+  ## Single label for document-sync degradation, so dedup by message stays stable.
+  if buffer.filePath.isSome:
+    "document sync " & sanitizeEditPath(buffer.filePath.get)
+  else:
+    "document sync"
+
+proc recordAttempt(
+    lsp: LspIntegration, buffer: TextBuffer, path: string, verdict: SyncVerdict
+) =
+  ## Memo the attempt and report it. Only new verdicts reach here, so each outage logs once.
+  if path in lsp.documents:
+    lsp.documents[path].recordSyncAttempt(
+      buffer.id, buffer.contentVersion, verdict, syncLogLabel(buffer)
+    )
+  else:
+    let key = syncLogKey(buffer.id, verdict)
+    if key.isSome:
+      logLspDegradedOnce(key.get, syncLogLabel(buffer), verdict.reason)
+
+proc dropDocument(lsp: LspIntegration, path: string) =
   ## Forget document; notify server only if previously delivered.
+  # Whoever held this URI no longer does, however the record came to be dropped.
+  var owners: seq[BufferId] = @[]
+  for id, owned in lsp.openedPaths:
+    if owned == path:
+      owners.add(id)
+  for id in owners:
+    lsp.openedPaths.del(id)
+
   if path notin lsp.documents:
-    return ok()
+    return
 
   let delivered = lsp.documents[path].delivered
   lsp.documents.del(path)
 
   if not delivered:
-    return ok()
+    return
 
-  return lsp.service.notifyDocumentClosed(path)
+  lsp.service.notifyDocumentClosed(path)
 
-proc dropRawDocument(lsp: LspIntegration, path: string) =
-  ## Forget raw document; failed didClose goes to degrade log.
-  let dropResult = lsp.dropDocument(path)
-  if dropResult.isErr:
-    logLspDegraded("didClose " & path, dropResult.error)
+proc dropTrackedDocument(lsp: LspIntegration, path: string) =
+  ## Forget the document; didClose is fire-and-forget.
+  lsp.dropDocument(path)
+
+proc isClaimed(lsp: LspIntegration, path: string): bool =
+  ## Whether any buffer still holds `path` on the server.
+  for owned in lsp.openedPaths.values:
+    if owned == path:
+      return true
+  false
+
+proc dropPathUnlessClaimed(lsp: LspIntegration, path: string, notify = true) =
+  ## Close `path` unless another buffer still holds it.
+  if lsp.isClaimed(path):
+    return
+  if notify:
+    lsp.dropTrackedDocument(path)
+  else:
+    lsp.documents.del(path)
+
+proc releaseClaim(lsp: LspIntegration, buffer: TextBuffer, keep = "", notify = true) =
+  ## Release `buffer`'s claim unless it equals `keep`.
+  let owned = lsp.openedPaths.getOrDefault(buffer.id, "")
+  if owned.len == 0 or owned == keep:
+    return
+  lsp.openedPaths.del(buffer.id)
+  lsp.dropPathUnlessClaimed(owned, notify)
+
+proc claimDocument(
+    lsp: LspIntegration, buffer: TextBuffer, path: string, notify = true
+) =
+  ## Record `buffer` as holder of `path`.
+  lsp.releaseClaim(buffer, keep = path, notify = notify)
+  lsp.openedPaths[buffer.id] = path
+
+proc dropTrackedDocumentIfAny(lsp: LspIntegration, buffer: TextBuffer) =
+  ## Retract what the server holds for `buffer`.
+  lsp.releaseClaim(buffer)
+  if lsp.documents.len > 0 and buffer.filePath.isSome:
+    lsp.dropPathUnlessClaimed(canonicalPath(buffer.filePath.get))
 
 proc onBufferOpen*(
     lsp: LspIntegration, buffer: TextBuffer, serverIsFresh: bool = false
 ): Result[void, string] =
-  ## Called when buffer is opened. Closes existing entry first to avoid stale version.
-  ## `serverIsFresh` skips didClose after worker restart.
-  if not lsp.enabled:
+  ## Open a buffer; `serverIsFresh` skips didClose after a restart.
+  let participation = lsp.lspParticipation(buffer)
+  if participation in {lpDisabled, lpNoPath}:
     return ok()
 
-  if buffer.filePath.isNone:
+  # Canonicalize once; report a gone cwd like the sync path does.
+  let path =
+    try:
+      canonicalPath(buffer.filePath.get)
+    except OSError as e:
+      let verdict = SyncVerdict(kind: svBehind, blocker: sbEnvironment, detail: e.msg)
+      let key = syncLogKey(buffer.id, verdict)
+      if key.isSome:
+        logLspDegradedOnce(key.get, syncLogLabel(buffer), verdict.reason)
+      return err(verdict.reason)
+    except CatchableError as e:
+      return err(e.msg)
+
+  case participation
+  of lpDisabled, lpNoPath:
+    return ok() # Already returned above; the case stays total.
+  of lpRawBuffer:
+    # Raw reload; the wire cannot carry it.
+    lsp.releaseClaim(buffer, notify = not serverIsFresh)
+    lsp.dropPathUnlessClaimed(path, notify = not serverIsFresh)
     return ok()
+  of lpNoServer:
+    # Renamed off a claimed extension; drop via the ownership record.
+    lsp.releaseClaim(buffer, notify = not serverIsFresh)
+    lsp.dropPathUnlessClaimed(path, notify = not serverIsFresh)
+    return ok()
+  of lpParticipates:
+    discard
 
-  let path = canonicalPath(buffer.filePath.get)
+  # Release the old path first so a rename sends didClose-then-didOpen.
+  lsp.releaseClaim(buffer, keep = path, notify = not serverIsFresh)
 
-  # A reload can turn a decodable document into a raw one. Drop it rather than
-  # sending bytes the wire cannot carry.
-  if not buffer.isLspEligible:
-    if not serverIsFresh:
-      lsp.dropRawDocument(path)
-    else:
-      lsp.documents.del(path)
+  if serverIsFresh and path in lsp.documents and lsp.documents[path].delivered:
+    # Already re-opened on the fresh server; reopening would duplicate the URI.
+    lsp.claimDocument(buffer, path, notify = false)
     return ok()
 
   let text = buffer.getTextString()
 
-  if path in lsp.documents and not serverIsFresh:
-    discard lsp.service.notifyDocumentClosed(path)
+  if path in lsp.documents and lsp.documents[path].delivered and not serverIsFresh:
+    # Only a delivered record needs didClose; an undelivered open never landed.
+    lsp.service.notifyDocumentClosed(path)
 
-  # Record before notify so onBufferClose knows if didClose is needed.
-  lsp.documents[path] = (version: 1, shadow: text, delivered: false)
+  # Record before notify; a re-open starts a new epoch.
+  if path in lsp.documents:
+    lsp.documents[path].nextGeneration()
+    lsp.documents[path].version = 1
+  else:
+    lsp.documents[path] = initLspDocumentState(1, "", delivered = false)
+  lsp.claimDocument(buffer, path, notify = not serverIsFresh)
 
-  let openResult = lsp.service.notifyDocumentOpened(path, text)
-  lsp.documents[path].delivered = openResult.isOk
+  let openResult =
+    lsp.service.notifyDocumentOpened(path, text, lsp.documents[path].generation)
+  if openResult.isOk:
+    lsp.documents[path].noteServerHolds(text)
+  # Stamp here: this open is a sync, and saves the next frame a full comparison.
+  lsp.recordAttempt(
+    buffer,
+    path,
+    if openResult.isOk:
+      SyncVerdict(kind: svSynced)
+    else:
+      SyncVerdict(kind: svBehind, blocker: sbTransport, detail: openResult.error),
+  )
   openResult
 
-proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
+proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer) =
   ## Called when a buffer is closed. Only send didClose if didOpen was delivered.
-  if not lsp.enabled:
-    return ok()
+  # Release the claim even with LSP off; the record names renamed paths.
+  lsp.releaseClaim(buffer, notify = lsp.enabled)
 
-  if buffer.filePath.isNone:
-    return ok()
+  if not lsp.enabled or buffer.filePath.isNone:
+    return
 
-  return lsp.dropDocument(canonicalPath(buffer.filePath.get))
+  # Drop the close when the cwd is gone; the next sync re-derives it.
+  let path =
+    try:
+      canonicalPath(buffer.filePath.get)
+    except CatchableError:
+      return
+  lsp.dropPathUnlessClaimed(path)
 
 # UTF-16 position conversion helpers
 # LSP uses UTF-16 code units for character positions. Buffer columns are
@@ -709,74 +880,243 @@ proc computeIncrementalChange*(oldText, newText: string): Option[JsonNode] =
     ]
   )
 
-proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
-  ## Called when a buffer content changes
-  if not lsp.enabled:
-    return ok()
+proc validMemo(
+    lsp: LspIntegration, buffer: TextBuffer, path: string
+): Option[LspSyncAttempt] =
+  ## Last attempt, when it still describes the buffer as it stands.
+  if path notin lsp.documents:
+    return none(LspSyncAttempt)
+  let last = lsp.documents[path].syncAttempt
+  # A shadow shared with another buffer says nothing about this one.
+  if last.isNone or last.get.bufferId != buffer.id or
+      last.get.contentVersion != buffer.contentVersion:
+    return none(LspSyncAttempt)
+  last
 
-  if buffer.filePath.isNone:
-    return ok()
+proc syncIsDue(
+    lsp: LspIntegration, buffer: TextBuffer, path: string, ignoreRetryInterval: bool
+): bool =
+  ## Whether a sync attempt is due; landed buffers answer from the memo.
+  let memo = lsp.validMemo(buffer, path)
+  if memo.isNone:
+    return true
 
-  let path = canonicalPath(buffer.filePath.get)
+  case memo.get.verdict.kind
+  of svSynced:
+    # Unchanged since the landed attempt; another try only materializes the buffer.
+    false
+  of svNotApplicable, svNoServer:
+    # No writer stamps these; kept defensive.
+    false
+  of svUnsyncable:
+    # Server property; recheck capabilities instead of re-materializing the buffer.
+    lsp.service.documentSyncKind(path) != tdskNone
+  of svBehind:
+    ignoreRetryInterval or
+      getMonoTime() - memo.get.at >=
+      initDuration(milliseconds = int(StaleSyncRetryIntervalSeconds * 1000))
 
-  if not buffer.isLspEligible:
-    lsp.dropRawDocument(path)
-    return ok()
+proc openDocument(lsp: LspIntegration, path, text: string): SyncVerdict =
+  ## Hand the server the whole document it does not hold.
+  doAssert not lsp.documents[path].delivered,
+    "openDocument on a document the server already holds: " & path
+
+  let openResult =
+    lsp.service.notifyDocumentOpened(path, text, lsp.documents[path].generation)
+  if openResult.isErr:
+    return SyncVerdict(kind: svBehind, blocker: sbTransport, detail: openResult.error)
+  # Same-generation re-open rewinds version to 1; clear the confirmed version too.
+  lsp.documents[path].resetAckedVersion()
+  lsp.documents[path].version = 1
+  lsp.documents[path].noteServerHolds(text)
+  SyncVerdict(kind: svSynced)
+
+proc syncNow(
+    lsp: LspIntegration, buffer: TextBuffer, path: string, mayRestart: bool
+): SyncVerdict =
+  ## Send what the server misses for `path`.
+  if path notin lsp.documents:
+    # Empty shadow until the open lands, so a failed open claims nothing.
+    lsp.documents[path] = initLspDocumentState(1, "", delivered = false)
+  lsp.claimDocument(buffer, path)
+
+  # Liveness first: a dead server holds nothing.
+  let running = lsp.service.isWorkerRunningForPath(path)
+  let serverGone = not (running or lsp.service.hasLiveWorkerForPath(path))
+
+  if serverGone:
+    # New epoch so dead-server acks cannot confirm the re-open.
+    lsp.documents[path].nextGeneration()
+
+    if not mayRestart:
+      # Only requests may restart a crashed server.
+      return SyncVerdict(kind: svBehind, blocker: sbNoServer)
 
   let text = buffer.getTextString()
 
-  # Untracked -> try didOpen.
-  if path notin lsp.documents:
-    lsp.documents[path] = (version: 1, shadow: text, delivered: false)
-    let openResult = lsp.service.notifyDocumentOpened(path, text)
-    if openResult.isErr:
-      lsp.documents.del(path)
-      return openResult
-    lsp.documents[path].delivered = true
-    return ok()
-
   if lsp.documents[path].delivered and lsp.documents[path].shadow == text:
-    return ok()
+    return SyncVerdict(kind: svSynced)
 
   # Undelivered: retry didOpen instead of didChange.
   if not lsp.documents[path].delivered:
-    let openResult = lsp.service.notifyDocumentOpened(path, text)
-    if openResult.isErr:
-      return openResult
-    lsp.documents[path] = (version: 1, shadow: text, delivered: true)
-    return ok()
+    let verdict = lsp.openDocument(path, text)
+    if serverGone and verdict.kind == svBehind:
+      # Keep the transport detail so a crash loop still says so.
+      return SyncVerdict(kind: svBehind, blocker: sbNoServer, detail: verdict.detail)
+    return verdict
 
   let kind = lsp.service.documentSyncKind(path)
   if kind == tdskNone:
-    return ok()
+    # No notification can catch it up; only didSave with text can.
+    return SyncVerdict(kind: svUnsyncable)
 
-  let running = lsp.service.isWorkerRunningForPath(path)
-
-  # Skip if no worker exists; otherwise version/shadow would desync.
-  if not (running or lsp.service.hasLiveWorkerForPath(path)):
-    return ok()
+  # Re-check liveness at enqueue time; a queued didChange to nobody is dropped.
+  if not lsp.service.hasLiveWorkerForPath(path):
+    return SyncVerdict(kind: svBehind, blocker: sbNoServer)
+  let runningNow = lsp.service.isWorkerRunningForPath(path)
 
   inc lsp.documents[path].version
   let version = lsp.documents[path].version
+  let generation = lsp.documents[path].generation
 
-  if kind == tdskIncremental and running:
+  # didChange is fire-and-forget; the worker acks with the echoed epoch.
+  if kind == tdskIncremental and runningNow:
     let changes = computeIncrementalChange(lsp.documents[path].shadow, text)
     if changes.isSome:
-      discard lsp.service.notifyDocumentChangedIncremental(path, version, $changes.get)
-      lsp.documents[path] = (version: version, shadow: text, delivered: true)
-      return ok()
+      lsp.service.notifyDocumentChangedIncremental(
+        path, version, $changes.get, generation
+      )
+      lsp.documents[path].noteServerHolds(text)
+      return SyncVerdict(kind: svSynced)
 
   # Full sync (tdskFull / diff fallback / starting worker).
-  discard lsp.service.notifyDocumentChanged(path, version, text)
-  lsp.documents[path] = (version: version, shadow: text, delivered: true)
-  return ok()
+  lsp.service.notifyDocumentChanged(path, version, text, generation)
+  lsp.documents[path].noteServerHolds(text)
+  return SyncVerdict(kind: svSynced)
 
-proc flushPendingBufferChange*(lsp: LspIntegration, buffer: TextBuffer) {.raises: [].} =
-  ## Flush pending didChange before positional request.
+proc syncAndJudge(
+    lsp: LspIntegration, buffer: TextBuffer, ignoreRetryInterval: bool, mayRestart: bool
+): SyncVerdict {.raises: [].} =
+  ## Sync `buffer` and judge the result.
+  if buffer.isNil:
+    return SyncVerdict(kind: svNotApplicable)
+
   try:
-    discard lsp.onBufferChange(buffer)
-  except Exception:
-    discard
+    case lsp.lspParticipation(buffer)
+    of lpDisabled, lpNoPath:
+      # Re-derived by inspection every time; nothing to memo.
+      return SyncVerdict(kind: svNotApplicable)
+    of lpNoServer:
+      # A record may stand from before a rename; drop it so checks see no server.
+      lsp.dropTrackedDocumentIfAny(buffer)
+      # Name why: a request has no one to ask.
+      return SyncVerdict(kind: svNoServer)
+    of lpRawBuffer:
+      # Cannot cross the JSON wire; retract what the server holds.
+      lsp.dropTrackedDocumentIfAny(buffer)
+      return SyncVerdict(kind: svNotApplicable)
+    of lpParticipates:
+      let path = canonicalPath(buffer.filePath.get)
+      # A rename closes the document opened under the former path.
+      lsp.releaseClaim(buffer, keep = path)
+      if lsp.syncIsDue(buffer, path, ignoreRetryInterval):
+        let verdict = lsp.syncNow(buffer, path, mayRestart)
+        lsp.recordAttempt(buffer, path, verdict)
+        return verdict
+      let memo = lsp.validMemo(buffer, path)
+      if memo.isNone:
+        # Gate said no attempt due from a memo, but it is gone now.
+        return SyncVerdict(
+          kind: svBehind,
+          blocker: sbInternal,
+          detail: "the sync memo vanished between the check and the read",
+        )
+      return memo.get.verdict
+  except OSError as e:
+    # Cwd is gone; nothing to memo it on, so report directly.
+    let verdict = SyncVerdict(kind: svBehind, blocker: sbEnvironment, detail: e.msg)
+    logLspDegradedOnce(
+      syncLogKey(buffer.id, verdict).get, syncLogLabel(buffer), verdict.reason
+    )
+    return verdict
+  except Exception as e:
+    if e of Defect:
+      # Defects stay fatal (codebase policy).
+      {.cast(raises: []).}:
+        raise
+    # A bug in the sync path, not a server outage; kept on its own streak key.
+    let verdict = SyncVerdict(kind: svBehind, blocker: sbInternal, detail: e.msg)
+    logLspDegradedOnce(
+      syncLogKey(buffer.id, verdict).get, syncLogLabel(buffer), verdict.reason
+    )
+    return verdict
+
+proc syncBuffer*(lsp: LspIntegration, buffer: TextBuffer) {.raises: [].} =
+  ## Bring the server copy up to date; never raises.
+  discard lsp.syncAndJudge(buffer, ignoreRetryInterval = false, mayRestart = false)
+
+proc staleTolerance*(feature: LspRequestFeature): LspStaleTolerance =
+  ## Refuse only when a wrong answer costs an undo or navigation.
+  case feature
+  of lrfHover, lrfSignatureHelp, lrfCodeLens, lrfCodeLensResolve, lrfInlayHint,
+      lrfDocumentHighlight, lrfSemanticTokens:
+    # Painted over the buffer and redrawn on the next update; costs nothing.
+    lstTolerate
+  of lrfCompletion, lrfCompletionResolve, lrfSelectionRange, lrfDocumentSymbol,
+      lrfDocumentLink, lrfDocumentLinkResolve, lrfFoldingRange, lrfDefinition,
+      lrfDeclaration, lrfReferences, lrfTypeDefinition, lrfImplementation,
+      lrfCallHierarchyPrepareIncoming, lrfCallHierarchyPrepareOutgoing,
+      lrfCallHierarchyIncoming, lrfCallHierarchyOutgoing, lrfFormatting, lrfRename,
+      lrfExecuteCommand:
+    # Wrong answers here need a manual undo.
+    lstRefuse
+
+proc canCatchUpOnSave(lsp: LspIntegration, buffer: TextBuffer): bool {.raises: [].} =
+  ## Whether a save would hand this server the buffer text.
+  if buffer.isNil or buffer.filePath.isNone:
+    return false
+  try:
+    let path = canonicalPath(buffer.filePath.get)
+    lsp.service.saveIncludesText(path) and lsp.service.hasLiveWorkerForPath(path)
+  except CatchableError:
+    false
+  except Exception as e:
+    if e of Defect:
+      # Defects stay fatal (codebase policy).
+      {.cast(raises: []).}:
+        raise
+    # Treat anything the liveness check throws as "no catch-up".
+    false
+
+proc requestSyncGate*(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    feature: LspRequestFeature,
+    trigger: LspRequestTrigger = lrtAutomatic,
+): Option[string] {.raises: [].} =
+  ## Sync for the request; return the refusal reason or none.
+  # A key press pays a fresh attempt; automatic requests use the throttled memo.
+  let userDriven = trigger == lrtUserAction
+  let status =
+    lsp.syncAndJudge(buffer, ignoreRetryInterval = userDriven, mayRestart = userDriven)
+  if feature.staleTolerance == lstTolerate:
+    return none(string)
+
+  case status.kind
+  of svSynced, svNotApplicable:
+    none(string)
+  of svNoServer:
+    # Say so; the request would fail on its own anyway.
+    some(status.refusalMessage)
+  of svBehind:
+    # A retry, or a restart on the next key press, can still deliver it.
+    some(status.refusalMessage)
+  of svUnsyncable:
+    if lsp.canCatchUpOnSave(buffer):
+      some(status.refusalMessage)
+    else:
+      # No edit or save reaches this server; let the request go.
+      none(string)
 
 proc isDocumentDelivered*(lsp: LspIntegration, path: string): bool =
   ## Whether didOpen for `path` was delivered.
@@ -791,24 +1131,51 @@ proc sentDocumentVersion*(lsp: LspIntegration, path: string): Option[int] =
   else:
     none(int)
 
-proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
+proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer) =
   ## Called when a buffer is saved
   if not lsp.enabled:
-    return ok()
+    return
 
   if buffer.filePath.isNone:
-    return ok()
+    return
 
-  let path = canonicalPath(buffer.filePath.get)
+  # Sync first; `syncAndJudge` also absorbs the gone-cwd outage.
+  let verdict = lsp.syncAndJudge(buffer, ignoreRetryInterval = true, mayRestart = false)
 
-  # didSave carries the whole text, so it corrupts the payload for the same
-  # reason didOpen/didChange do.
-  if not buffer.isLspEligible:
-    lsp.dropRawDocument(path)
-    return ok()
+  # didSave needs a held document; svUnsyncable is the exception.
+  case verdict.kind
+  of svNotApplicable, svNoServer, svBehind:
+    return
+  of svSynced, svUnsyncable:
+    discard
 
-  let text = some(buffer.getTextString())
-  return lsp.service.notifyDocumentSaved(path, text)
+  # Guard the re-derived path; this proc cannot raise.
+  let path =
+    try:
+      canonicalPath(buffer.filePath.get)
+    except CatchableError:
+      return
+
+  let text = buffer.getTextString()
+  let savedVersion =
+    if path in lsp.documents:
+      lsp.documents[path].version
+    else:
+      0
+  let savedGeneration =
+    if path in lsp.documents:
+      lsp.documents[path].generation
+    else:
+      0
+  lsp.service.notifyDocumentSaved(path, some(text), savedVersion, savedGeneration)
+
+  # Only tdskNone moves the shadow on didSave; otherwise the next diff desyncs.
+  if lsp.service.documentSyncKind(path) == tdskNone and path in lsp.documents and
+      lsp.documents[path].delivered and lsp.service.hasLiveWorkerForPath(path) and
+      lsp.service.saveIncludesText(path):
+    lsp.documents[path].noteServerHolds(text)
+    # Drop the memo so the next sync re-derives it.
+    lsp.documents[path].forgetSyncAttempt()
 
 # Polling for server messages
 proc poll*(lsp: LspIntegration, timeoutMs: int = 0) =
@@ -866,13 +1233,18 @@ proc resolveLspPath(lsp: LspIntegration, buffer: TextBuffer): Result[string, str
   ok(buffer.filePath.get)
 
 proc resolveLspPathForRequest(
-    lsp: LspIntegration, buffer: TextBuffer
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    feature: LspRequestFeature,
+    trigger: LspRequestTrigger = lrtAutomatic,
 ): Result[string, string] {.raises: [].} =
-  ## `resolveLspPath` + flush pending didChange.
+  ## `resolveLspPath` + `requestSyncGate`.
   let pathRes = resolveLspPath(lsp, buffer)
   if pathRes.isErr:
     return pathRes
-  lsp.flushPendingBufferChange(buffer)
+  let refusal = lsp.requestSyncGate(buffer, feature, trigger)
+  if refusal.isSome:
+    return err(refusal.get)
   pathRes
 
 proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
@@ -1321,37 +1693,30 @@ proc hasStaleTargetBuffer*(
   return false
 
 proc hasStaleServerEditTarget*(
-    lsp: LspIntegration,
-    buffers: seq[TextBuffer],
-    edit: WorkspaceEdit,
-    syncedVersions: Table[BufferId, int],
+    lsp: LspIntegration, buffers: seq[TextBuffer], edit: WorkspaceEdit
 ): bool =
-  ## True if applying a server-initiated `edit` would corrupt an open buffer,
-  ## i.e. the buffer no longer holds the text the server positioned it against.
-  ##
-  ## Which text that is depends on whether the server holds the document:
-  ##
-  ## * Held (live worker + delivered didOpen + a recorded sync attempt): it
-  ##   sees what we last sent, so compare contentVersion against `syncedVersions`.
-  ## * Not held (no worker for this file type, or didOpen never succeeded): it
-  ##   read the file from disk, so `isModified` is the test. contentVersion is
-  ##   actively wrong here — an attempt is recorded even when the notification
-  ##   is dropped for want of a worker, so the versions match while the texts
-  ##   do not.
+  ## True if a server edit would corrupt an open buffer.
   for path in collectWorkspaceEditPaths(edit):
     let absPath = normalizedPath(absolutePath(path))
     for buf in buffers:
       if buf.filePath.isSome and
           normalizedPath(absolutePath(buf.filePath.get)) == absPath:
         let canonPath = canonicalPath(buf.filePath.get)
-        # A sync record only says what was attempted, so ask the document
-        # registry whether the server actually holds it.
+        # No record means nothing sent; another buffer's attempt never counts.
+        let attempt =
+          if canonPath in lsp.documents:
+            lsp.documents[canonPath].syncAttempt
+          else:
+            none(LspSyncAttempt)
+        let landed =
+          attempt.isSome and attempt.get.verdict.kind == svSynced and
+          attempt.get.bufferId == buf.id
         let serverHolds =
-          syncedVersions.hasKey(buf.id) and lsp.service.hasLiveWorkerForPath(canonPath) and
+          landed and lsp.service.hasLiveWorkerForPath(canonPath) and
           lsp.isDocumentDelivered(canonPath)
 
         if serverHolds:
-          if buf.contentVersion != syncedVersions[buf.id]:
+          if buf.contentVersion != attempt.get.contentVersion:
             return true
         elif buf.isModified:
           return true
@@ -1800,7 +2165,7 @@ proc requestCodeLensResolve*(
 .} =
   ## Resolve a code lens to get its command
   ## Used when the initial codeLens response doesn't include the command
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer, lrfCodeLensResolve)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestCodeLensResolve(pathRes.get, lens)
@@ -1810,11 +2175,12 @@ proc requestExecuteCommand*(
     buffer: TextBuffer,
     command: string,
     arguments: seq[JsonNode] = @[],
+    trigger: LspRequestTrigger = lrtAutomatic,
 ): Future[Result[JsonNode, string]] {.
     async: (raises: [CancelledError, TransactionRollbackError])
 .} =
   ## Execute a command on the LSP server (used for code lens commands)
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer, lrfExecuteCommand, trigger)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestExecuteCommand(pathRes.get, command, arguments)
@@ -1873,28 +2239,37 @@ proc shutdown*(lsp: LspIntegration) =
   ## Shutdown all LSP servers
   lsp.service.stopAll()
   lsp.documents.clear()
+  lsp.openedPaths.clear()
   lsp.activeProgress.clear()
   lsp.serverStatus.clear()
 
 proc requestFormatting*(
-    lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    tabSize: int = 2,
+    insertSpaces: bool = true,
+    trigger: LspRequestTrigger = lrtAutomatic,
 ): Future[Result[seq[TextEdit], string]] {.
     async: (raises: [CancelledError, TransactionRollbackError])
 .} =
   ## Request formatting for a buffer
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer, lrfFormatting, trigger)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestFormatting(pathRes.get, tabSize, insertSpaces)
 
 proc requestRename*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    line, column: int,
+    newName: string,
+    trigger: LspRequestTrigger = lrtAutomatic,
 ): Future[Result[Option[WorkspaceEdit], string]] {.
     async: (raises: [CancelledError, TransactionRollbackError])
 .} =
   ## Request rename at a position
   ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer, lrfRename, trigger)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestRename(
@@ -1902,12 +2277,12 @@ proc requestRename*(
   )
 
 proc requestFoldingRanges*(
-    lsp: LspIntegration, buffer: TextBuffer
+    lsp: LspIntegration, buffer: TextBuffer, trigger: LspRequestTrigger = lrtAutomatic
 ): Future[Result[seq[FoldingRange], string]] {.
     async: (raises: [CancelledError, TransactionRollbackError])
 .} =
   ## Request folding ranges for a buffer
-  let pathRes = resolveLspPathForRequest(lsp, buffer)
+  let pathRes = resolveLspPathForRequest(lsp, buffer, lrfFoldingRange, trigger)
   if pathRes.isErr:
     return err(pathRes.error)
   return await lsp.service.requestFoldingRange(pathRes.get)
@@ -1917,10 +2292,11 @@ proc refreshLspFolds*(
     buffer: TextBuffer,
     clearExisting: bool = true,
     startCollapsed: bool = false,
+    trigger: LspRequestTrigger = lrtAutomatic,
 ): Future[Result[int, string]] {.async: (raises: [CancelledError]).} =
   ## Request folding ranges from LSP and apply them to buffer
   {.cast(raises: [CancelledError]).}:
-    let rangesResult = await lsp.requestFoldingRanges(buffer)
+    let rangesResult = await lsp.requestFoldingRanges(buffer, trigger)
     if rangesResult.isErr:
       return err(rangesResult.error)
 

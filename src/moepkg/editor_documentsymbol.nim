@@ -55,6 +55,7 @@ proc startLspDocumentSymbols*(e: Editor): bool =
     proc(): Result[int, string] =
       e.lsp.startDocumentSymbolsRequest(activeBuffer),
     validModes = DocumentSymbolValidModes,
+    trigger = lrtUserAction,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP document symbols failed: " & ctxRes.error

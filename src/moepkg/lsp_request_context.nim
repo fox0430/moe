@@ -220,15 +220,19 @@ proc startContextualRequestOnCache*(
     ignoreContentVersion: bool = false,
     isItemDriven: bool = false,
     blockedByOverlay: bool = true,
+    trigger: LspRequestTrigger = lrtAutomatic,
 ): Result[LspRequestContext, string] =
   ## Cache-scoped counterpart of `startContextualRequest` for call sites
   ## without an `Editor` (e.g. insert handler). Preserves the prior pending
   ## entry when `startImpl` errors so a transient failure does not destroy a
   ## good in-flight response.
-  # Flush pending didChange first so this request doesn't precede the edit
-  # that produced its coordinates on the wire (shared FIFO, per-frame flush).
+  ##
+  ## `trigger` defaults to automatic so it never restarts a crash-looping server.
+  # Sync first so coordinates match the latest edit; skip if the server stays behind.
   if not buffer.isNil:
-    lsp.flushPendingBufferChange(buffer)
+    let refusal = lsp.requestSyncGate(buffer, feature, trigger)
+    if refusal.isSome:
+      return err(refusal.get)
   let reqRes = startImpl()
   if reqRes.isErr:
     return err(reqRes.error)
@@ -256,6 +260,7 @@ proc startContextualRequest*(
     ignoreContentVersion: bool = false,
     isItemDriven: bool = false,
     blockedByOverlay: bool = true,
+    trigger: LspRequestTrigger = lrtAutomatic,
 ): Result[LspRequestContext, string] =
   ## Fire the LSP request via `startImpl` and, on success, cancel any prior
   ## pending entry and record the new ctx. On failure the prior in-flight is
@@ -275,4 +280,5 @@ proc startContextualRequest*(
     ignoreContentVersion = ignoreContentVersion,
     isItemDriven = isItemDriven,
     blockedByOverlay = blockedByOverlay,
+    trigger = trigger,
   )

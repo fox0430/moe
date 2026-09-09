@@ -19,11 +19,17 @@
 
 ## Tests for LspRequestContext / classifyResponse (docs §10 Phase A).
 
-import std/[options, os, unittest]
+import std/[options, os, tables, unittest]
+from std/strutils import contains
+import std/importutils
+
+import pkg/results
 
 import ../src/moepkg/[editor, config, config_loader, modes, types]
 import ../src/moepkg/buffer/core
+import ../src/moepkg/buffer
 import ../src/moepkg/editor_lsp
+import ../src/moepkg/lsp_integration {.all.}
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -160,3 +166,131 @@ suite "classifyResponse - overlay dimension":
     let ctx = makeCtx(BufferId(0), -1, isItemDriven = true, blockedByOverlay = true)
 
     check classifyResponse(e, ctx) == lrsOverlay
+
+suite "startContextualRequest - pre-request sync":
+  test "A stale document refuses the request instead of asking about text the server lacks":
+    # Stale sync refuses; server would answer about unseen text.
+    let e = createTestEditor()
+    defer:
+      e.lsp.shutdown()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer
+    # No reachable worker, so didChange has nowhere to go.
+    let path = getTempDir() / "sync_refused.nim"
+    e.lsp.service.liveWorkerOverride = proc(p: string): bool =
+      false
+    buf.filePath = some(path)
+    e.lsp.documents[canonicalPath(path)] = initLspDocumentState(1, "", delivered = true)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+
+    var started = false
+    let ctxRes = e.startContextualRequest(
+      lrfDefinition,
+      proc(): Result[int, string] =
+        started = true
+        ok(1),
+    )
+
+    check not started
+    check ctxRes.isErr
+    # Refusal names the absent server.
+    check "no running language server" in ctxRes.error
+
+  test "A decorating feature asks anyway rather than showing nothing":
+    # Decorating feature tolerates stale text over showing nothing.
+    let e = createTestEditor()
+    defer:
+      e.lsp.shutdown()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer
+    let path = getTempDir() / "sync_tolerated.nim"
+    e.lsp.service.liveWorkerOverride = proc(p: string): bool =
+      false
+    buf.filePath = some(path)
+    e.lsp.documents[canonicalPath(path)] = initLspDocumentState(1, "", delivered = true)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "a").isOk
+
+    var started = false
+    let ctxRes = e.startContextualRequest(
+      lrfSemanticTokens,
+      proc(): Result[int, string] =
+        started = true
+        ok(1),
+    )
+
+    check started
+    check ctxRes.isOk
+
+  test "A timer-driven request does not respawn a crashed server on start":
+    # Timer request must not respawn a crash-looping server.
+    privateAccess(LspService)
+    let e = createTestEditor()
+    defer:
+      e.lsp.shutdown()
+    e.lsp.enabled = true
+    # Service must stay enabled to observe the respawn.
+    e.lsp.service.enabled = true
+
+    let buf = e.activeBuffer
+    let path = getTempDir() / "no_respawn.nim"
+    e.lsp.service.liveWorkerOverride = proc(p: string): bool =
+      false
+    e.lsp.service.runningWorkerOverride = proc(p: string): bool =
+      false
+    buf.filePath = some(path)
+
+    let ctxRes = e.startContextualRequest(
+      lrfCodeLens,
+      proc(): Result[int, string] =
+        e.lsp.startCodeLensRequest(buf),
+    )
+
+    check ctxRes.isErr
+    check "nim" notin e.lsp.service.workers
+
+  test "Every feature is classified, and the destructive ones refuse":
+    # Default is safe: wait for the server.
+    check lrfDefinition.staleTolerance == lstRefuse
+    check lrfReferences.staleTolerance == lstRefuse
+    check lrfCompletion.staleTolerance == lstRefuse
+    check lrfCompletionResolve.staleTolerance == lstRefuse
+    check lrfDocumentSymbol.staleTolerance == lstRefuse
+    check lrfSelectionRange.staleTolerance == lstRefuse
+    check lrfInlayHint.staleTolerance == lstTolerate
+    check lrfCodeLens.staleTolerance == lstTolerate
+    check lrfDocumentHighlight.staleTolerance == lstTolerate
+    check lrfSemanticTokens.staleTolerance == lstTolerate
+    # Popups tolerate stale text.
+    check lrfHover.staleTolerance == lstTolerate
+    check lrfSignatureHelp.staleTolerance == lstTolerate
+
+  test "A request kind reached without a pending context shares the table":
+    # Context-less requests share the same policy.
+    check lrfFormatting.staleTolerance == lstRefuse
+    check lrfRename.staleTolerance == lstRefuse
+    check lrfExecuteCommand.staleTolerance == lstRefuse
+    check lrfCodeLensResolve.staleTolerance == lrfCodeLens.staleTolerance
+    # Links and folds refuse; they act on stale positions.
+    check lrfFoldingRange.staleTolerance == lstRefuse
+    check lrfDocumentLink.staleTolerance == lstRefuse
+    check lrfDocumentLinkResolve.staleTolerance == lstRefuse
+    # Completion refuses; it inserts at server coordinates.
+    check lrfCompletion.staleTolerance == lstRefuse
+
+  test "Every LspRequestFeature carries an explicit stale policy":
+    # Exhaustive guard for new variants.
+    const tolerated = {
+      lrfHover, lrfSignatureHelp, lrfCodeLens, lrfCodeLensResolve, lrfInlayHint,
+      lrfDocumentHighlight, lrfSemanticTokens,
+    }
+    var seen = 0
+    for feature in LspRequestFeature:
+      inc seen
+      if feature in tolerated:
+        check feature.staleTolerance == lstTolerate
+      else:
+        check feature.staleTolerance == lstRefuse
+    check tolerated.len == 7
+    check seen == 26

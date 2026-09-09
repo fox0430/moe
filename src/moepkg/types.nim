@@ -317,8 +317,10 @@ type
       # for the prior viewport. `-1` when no pending.
 
   LspRequestFeature* = enum
+    ## All LSP request kinds.
     lrfHover
     lrfSignatureHelp
+    lrfCompletion
     lrfCompletionResolve
     lrfSelectionRange
     lrfDocumentSymbol
@@ -337,6 +339,11 @@ type
     lrfCallHierarchyPrepareOutgoing
     lrfCallHierarchyIncoming
     lrfCallHierarchyOutgoing
+    lrfFormatting
+    lrfRename
+    lrfFoldingRange
+    lrfCodeLensResolve
+    lrfExecuteCommand
 
   LspRequestContext* = object ## Snapshot of the world at request-send time.
     requestId*: int

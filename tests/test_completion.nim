@@ -378,6 +378,17 @@ suite "Completion - LSP support":
     check mgr.isPendingLsp == true
     check mgr.getLspRequestId().get() == 42
 
+  test "clearLspRequestPending retires a request nothing will replace":
+    # Retired request stops polling; its answer is stale.
+    let mgr = newCompletionManager()
+    mgr.setLspRequestPending(42)
+
+    mgr.clearLspRequestPending()
+
+    check mgr.getLspRequestId().isNone
+    check mgr.isPendingLsp == false
+    check mgr.state == csIdle
+
   test "isActive returns true when pending LSP":
     let mgr = newCompletionManager()
     check mgr.isActive == false

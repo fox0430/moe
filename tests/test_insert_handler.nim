@@ -41,6 +41,11 @@ import
   ]
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/command_handlers/insert_handler
+import ../src/moepkg/lsp_service {.all.}
+import ../src/moepkg/lsp/protocol/types as lsp_protocol_types
+import ../src/moepkg/types/lsp_integration_types
+from std/importutils import privateAccess
+from std/os import getTempDir, absolutePath, normalizedPath, `/`
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -3679,3 +3684,42 @@ suite "InsertModeHandler - read-only failure keeps cursor and reports error":
     check result.kind == imrError
     check buf.getLine(0) == "hello"
     check state.cursor == BufferPosition(line: 0, column: 2)
+
+suite "InsertModeHandler - LSP completion request retirement":
+  privateAccess(LspService)
+
+  test "a completion request that never reaches the server retires the one in flight":
+    # Failed send retires the in-flight request.
+    let path = getTempDir() / "test_insert_handler_completion.nim"
+    let buf = newTextBuffer("hel", some(path))
+
+    let lsp = newLspIntegration("")
+    lsp.enabled = true
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(completionProvider: some(CompletionOptions()))
+
+    # Sync gate passes but send fails with no worker.
+    lsp.documents[normalizedPath(absolutePath(path))] =
+      initLspDocumentState(1, buf.getTextString(), delivered = true)
+
+    let keyBindingRegistry = newKeyBindingRegistry()
+    setupDefaultBindings(keyBindingRegistry)
+    let commandRegistry = newCommandRegistry()
+    registerBuiltinCommands(commandRegistry)
+    let motionController =
+      newMotionController(buf, createTestState(), createTestViewport())
+    let handler =
+      newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
+
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    state.config.autocomplete.enable = true
+    state.config.lsp.completion.enable = true
+
+    handler.completionManager.setLspRequestPending(42)
+    check handler.completionManager.isPendingLsp
+
+    handler.triggerLspCompletionRequest(buf, state)
+
+    check handler.completionManager.getLspRequestId.isNone
+    check not handler.completionManager.isPendingLsp

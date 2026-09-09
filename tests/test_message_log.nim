@@ -123,6 +123,38 @@ suite "message_log - Isolation":
     clearLspMessageLog()
     check lspMessageLogLen() == 0
 
+suite "addLspMessageLogOnce - one line per degradation, not per check":
+  setup:
+    clearLspMessageLog()
+
+  test "a repeat of what already stands is dropped":
+    check addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    check not addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    check not addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    check getLspMessageLog() == @["[LSP] a: down"]
+
+  test "a different reason for the same key is a change worth showing":
+    check addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    check addLspMessageLogOnce("sync:1", "[LSP] a: no worker")
+    check getLspMessageLog().len == 2
+
+  test "keys do not silence each other":
+    check addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    check addLspMessageLogOnce("sync:2", "[LSP] a: down")
+    check getLspMessageLog().len == 2
+
+  test "clearing the streak lets the same message through again":
+    check addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    clearLspMessageLogStreak("sync:1")
+    check addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    check getLspMessageLog().len == 2
+
+  test "clearing the log clears what stands, so nothing is silently swallowed":
+    check addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    clearLspMessageLog()
+    check addLspMessageLogOnce("sync:1", "[LSP] a: down")
+    check getLspMessageLog() == @["[LSP] a: down"]
+
 suite "EditorState - statusMessage logging side effects":
   setup:
     clearMessageLog()

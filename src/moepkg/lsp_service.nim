@@ -124,6 +124,10 @@ type
     # re-opened. stopWorker clears the entry so an explicit restart, which
     # re-opens buffers itself, is not double-counted as a crash recovery.
     initializedLangs: HashSet[string]
+    # Last seen worker states; `poll` reports only transitions as deaths.
+    observedWorkerStates: Table[string, LspWorkerState]
+    # Generations already reported lost; cleared when a new one starts.
+    lostGenerationReported: HashSet[string]
     # Global callbacks (forwarded from individual workers)
     onDiagnosticsUpdate*:
       proc(uri: string, diagnostics: seq[Diagnostic], version: Option[int]) {.gcsafe.}
@@ -138,6 +142,14 @@ type
     # uses this to re-send didOpen for every open buffer of that language, since
     # the restarted server starts with no open documents (see initializedLangs).
     onServerRestart*: proc(langId: string) {.gcsafe.}
+    # Invoked whenever a server finishes initializing; pending syncs retry at once.
+    onServerInitialized*: proc(langId: string) {.gcsafe.}
+    # Invoked when a server generation ends; the editor retracts what it held.
+    onServerLost*: proc(langId: string) {.gcsafe, raises: [].}
+    # Invoked when a document notification write completes; the epoch scopes ack matching.
+    onSyncAck*: proc(langId, uri: string, version, generation: int, ok: bool) {.
+      gcsafe, raises: []
+    .}
     # Apply a server-initiated workspace/applyEdit on the main thread (it
     # mutates buffers). Returns whether the edit was applied so the worker can
     # answer the server's blocking request.
@@ -155,6 +167,8 @@ type
     # the "config changed for a running worker" branch without spawning a real
     # server. nil in production.
     liveWorkerLangIdsOverride*: proc(): seq[string] {.gcsafe.}
+    # Test seam: observes requested didSave paths without a real server.
+    documentSavedObserver*: proc(path: string) {.gcsafe.}
 
 proc defaultLanguageServerConfigs*(): Table[string, LanguageServerConfig] =
   ## Built-in default LSP server registrations.
@@ -279,6 +293,14 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
       discard,
     onServerRestart: proc(langId: string) {.gcsafe.} =
       discard,
+    onServerInitialized: proc(langId: string) {.gcsafe.} =
+      discard,
+    onServerLost: proc(langId: string) {.gcsafe, raises: [].} =
+      discard,
+    onSyncAck: proc(
+        langId, uri: string, version, generation: int, ok: bool
+    ) {.gcsafe, raises: [].} =
+      discard,
     onApplyWorkspaceEdit: proc(
         edit: WorkspaceEdit
     ): ApplyWorkspaceEditResult {.gcsafe.} =
@@ -326,7 +348,7 @@ proc getLanguageIdFromPath*(svc: LspService, path: string): Option[string] =
   if ext.len == 0:
     return none(string)
   if ext in svc.extToLangId:
-    return some(svc.extToLangId[ext])
+    return some(svc.extToLangId.getOrDefault(ext))
   return none(string)
 
 proc getLanguageIdFromExtension*(svc: LspService, ext: string): Option[string] =
@@ -392,6 +414,17 @@ proc staticRejectionReason*(edit: WorkspaceEdit): Option[string] =
         return some(pathRes.error)
   none(string)
 
+proc noteServerLost(svc: LspService, langId: string) =
+  ## Report the end of `langId`'s generation, once per generation.
+  if langId in svc.lostGenerationReported:
+    return
+  svc.lostGenerationReported.incl(langId)
+  svc.onServerLost(langId)
+
+proc noteServerGenerationStarted(svc: LspService, langId: string) =
+  ## A new generation starts; its death is a new event.
+  svc.lostGenerationReported.excl(langId)
+
 proc getWorker*(svc: LspService, langId: string): Option[LspWorker] =
   ## Get existing worker for a language (running or starting)
   if langId in svc.workers:
@@ -417,11 +450,8 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
 
   if langId in svc.workers:
     let worker = svc.workers[langId]
-    if worker.state != lwsCrashed:
-      # Running, starting, or the lcmdStart is still queued (lwsStopped
-      # right after creation) — return the existing worker. Only a crashed
-      # server warrants a restart; re-sending lcmdStart in other states
-      # would spawn a duplicate server process.
+    if worker.state in {lwsStarting, lwsRunning}:
+      # Live; every other state means the server is gone and needs a restart.
       return ok(worker)
 
     # The server crashed. Restart it, rate-limited so a crash-looping
@@ -431,24 +461,24 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
       return err("LSP server for " & langId & " crashed recently; restart suppressed")
     svc.lastRestartTimes[langId] = now
 
-    # Drop the crashed server's stale capabilities so documentSyncKind is
-    # conservatively Full during the restart window. Otherwise a didChange sent
-    # before the new server re-initializes could be a ranged (incremental) change
-    # for a document the fresh server has not yet been told about. initializedLangs
-    # is intentionally kept so the next initialize is recognized as a restart and
-    # onServerRestart re-opens the buffers.
+    # Drop stale caps so the restart window defaults to Full sync.
     svc.capabilities.del(langId)
     svc.serverInfo.del(langId)
     svc.dynamicRegistrations.del(langId)
 
+    # Report loss before restart, or the retraction takes back the new didOpen.
+    svc.noteServerLost(langId)
+
     if worker.isThreadAlive:
-      # The worker thread survived (only the server process died); ask it to
-      # spawn a new server on the same thread.
+      # Thread survived; respawn the server on it.
       worker.startServer(
         config.command, config.args, svc.workspaceRoot, config.initializationOptions,
         config.settings,
       )
       svc.onLogMessage(langId, mtInfo, "Restarting language server: " & config.command)
+      # Re-baseline to lwsStarting; a re-read could miss an instant death.
+      svc.observedWorkerStates[langId] = lwsStarting
+      svc.noteServerGenerationStarted(langId)
       return ok(worker)
 
     # The thread itself died (fatal error): join it and fall through to
@@ -476,6 +506,9 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
   # Notify via log callback that server is starting
   svc.onLogMessage(langId, mtInfo, "Starting language server: " & config.command)
 
+  svc.observedWorkerStates[langId] = lwsStarting
+  svc.noteServerGenerationStarted(langId)
+
   return ok(worker)
 
 proc getOrStartWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
@@ -499,29 +532,32 @@ proc isWorkerReady*(svc: LspService, langId: string): bool =
   return false
 
 proc workerForExistingPath(svc: LspService, path: string): Option[LspWorker] =
-  ## Resolve the already running/starting worker for `path` WITHOUT starting one
-  ## (unlike getWorkerForPath). Shared by the notifyDocument* notifications and
-  ## hasLiveWorkerForPath so they agree on what "deliverable" means.
+  ## Running/starting worker for `path`, without starting one.
   let langIdOpt = svc.getLanguageIdFromPath(path)
   if langIdOpt.isNone:
     return none(LspWorker)
   svc.getWorker(langIdOpt.get)
 
+proc getExistingWorkerForPath*(
+    svc: LspService, path: string
+): Result[LspWorker, string] =
+  ## Same, as Result. Timer-fired requests use this so they never restart a crashed server.
+  let langIdOpt = svc.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return err("No LSP support for file: " & path)
+  let workerOpt = svc.getWorker(langIdOpt.get)
+  if workerOpt.isNone:
+    return err("no running language server for this file")
+  ok(workerOpt.get)
+
 proc hasLiveWorkerForPath*(svc: LspService, path: string): bool =
-  ## Whether a notification for `path` would actually be handed to a worker.
-  ## Mirrors notifyDocument*'s getWorker check: true when the worker is running
-  ## (sends now) or starting (coalesces into the pending didOpen); false when
-  ## the file has no LSP or the worker is absent/crashed, so a change would be
-  ## silently dropped.
+  ## Whether a notification for `path` reaches a worker (running or starting).
   if svc.liveWorkerOverride != nil:
     return svc.liveWorkerOverride(path)
   svc.workerForExistingPath(path).isSome
 
 proc isWorkerRunningForPath*(svc: LspService, path: string): bool =
-  ## Whether the worker for `path` is actually running (lwsRunning), as opposed
-  ## to merely starting/crashed/stopped. The integration layer uses this to
-  ## decide whether incremental didChange can be sent safely: a starting worker
-  ## must receive full sync so the change can coalesce into the pending didOpen.
+  ## Whether the worker for `path` is running; starting workers need full sync.
   if svc.runningWorkerOverride != nil:
     return svc.runningWorkerOverride(path)
   if svc.liveWorkerOverride != nil:
@@ -539,6 +575,8 @@ proc stopWorker*(svc: LspService, langId: string): Result[void, string] =
   let worker = svc.workers[langId]
   worker.stop()
   svc.workers.del(langId)
+  svc.observedWorkerStates.del(langId)
+  svc.noteServerLost(langId)
   svc.capabilities.del(langId)
   svc.serverInfo.del(langId)
   svc.dynamicRegistrations.del(langId)
@@ -563,7 +601,9 @@ proc stopAll*(svc: LspService) =
   ## Stop all workers
   for langId, worker in svc.workers:
     worker.stop()
+    svc.noteServerLost(langId)
   svc.workers.clear()
+  svc.observedWorkerStates.clear()
   svc.capabilities.clear()
   svc.serverInfo.clear()
   svc.dynamicRegistrations.clear()
@@ -599,6 +639,7 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
       svc.onServerRestart(langId)
     else:
       svc.initializedLangs.incl(langId)
+    svc.onServerInitialized(langId)
   of levError:
     svc.onLogMessage(langId, mtError, evt.errorMsg)
   of levDiagnostics:
@@ -740,6 +781,8 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
       workerOpt.get.sendApplyEditResponse(
         evt.applyEditReqIdJson, applied, failureReason, evt.applyEditGeneration
       )
+  of levSyncAck:
+    svc.onSyncAck(langId, evt.ackUri, evt.ackVersion, evt.ackGeneration, evt.ackOk)
 
 proc poll*(svc: LspService, timeoutMs: int = 0) =
   ## Poll all workers - process events from worker threads
@@ -750,7 +793,7 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
     return
 
   # Snapshot the worker set before processing events. processEvent can re-enter
-  # the service — the applyEdit callback runs onBufferChange, which may
+  # the service — the applyEdit callback runs syncBuffer, which may
   # notifyDocumentOpened -> startWorker and insert/replace entries in
   # svc.workers. Mutating the table while its `pairs` iterator is live raises
   # "the length of the table changed while iterating" (a Defect), so iterate a
@@ -758,6 +801,15 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
   var snapshot: seq[(string, LspWorker)] = @[]
   for langId, worker in svc.workers:
     snapshot.add((langId, worker))
+
+  # Report deaths before draining; transitions are visible only across polls.
+  for (langId, worker) in snapshot:
+    let state = worker.state
+    let previous = svc.observedWorkerStates.getOrDefault(langId, state)
+    svc.observedWorkerStates[langId] = state
+    if previous in {lwsStarting, lwsRunning} and
+        state in {lwsStopped, lwsShuttingDown, lwsCrashed}:
+      svc.noteServerLost(langId)
 
   # A TransactionRollbackError (untrustworthy buffer) raised by processEvent
   # is re-raised AFTER the drain so the remaining queued events are not lost:
@@ -779,14 +831,7 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
 proc checkResponse*(
     svc: LspService, requestId: int
 ): tuple[status: LspResponseStatus, result: Option[JsonNode], error: Option[string]] =
-  ## Non-blocking check if a response has arrived
-  ## Returns (lrsPending, none, none) if not yet received
-  ## Returns (lrsSuccess, some(result), none) on success
-  ## Returns (lrsError, none, some(error)) on error
-  ## Returns (lrsTimeout, none, some("timeout")) if timed out, or if the id is
-  ## unknown to the service (already swept by cleanupTimedOutRequests, or
-  ## consumed by an earlier checkResponse). Reporting unknown ids as timeout
-  ## lets pollers reset their pending state instead of looping on lrsPending.
+  ## Non-blocking response check. Unknown ids report timeout so pollers drop stale state.
 
   # Check if response has arrived
   if requestId in svc.pendingResponses:
@@ -813,18 +858,12 @@ proc checkResponse*(
       return (lrsTimeout, none(JsonNode), some("Request timed out"))
     return (lrsPending, none(JsonNode), none(string))
 
-  # Unknown id: treat as timeout so the poller drops its pending state. This
-  # is the sweep-then-poll case — cleanupTimedOutRequests already dropped the
-  # activeRequests entry, and returning lrsPending here would freeze the
-  # feature until an unrelated invalidate (e.g. a buffer edit) cleared the id.
   return (lrsTimeout, none(JsonNode), some("Request timed out"))
 
 proc checkResponseRaw*(
     svc: LspService, requestId: int
 ): tuple[status: LspResponseStatus, raw: Option[string], error: Option[string]] =
-  ## Like checkResponse but returns the unparsed result JSON string, letting a
-  ## typed consumer parse it directly (jsony fromJson) without the intermediate
-  ## JsonNode. `raw` is none when the server returned no result (or null).
+  ## Like checkResponse, but returns raw JSON for typed consumers.
   if requestId in svc.pendingResponses:
     let resp = svc.pendingResponses[requestId]
     svc.pendingResponses.del(requestId)
@@ -843,7 +882,6 @@ proc checkResponseRaw*(
       return (lrsTimeout, none(string), some("Request timed out"))
     return (lrsPending, none(string), none(string))
 
-  # Unknown id — see checkResponse for the sweep-then-poll rationale.
   return (lrsTimeout, none(string), some("Request timed out"))
 
 proc hasPendingRequests*(svc: LspService): bool =
@@ -1006,10 +1044,18 @@ proc startTrackedRequest(
 
 # Helper for position-based LSP requests (reduces boilerplate)
 proc startPositionRequest(
-    svc: LspService, path: string, line, character: int, methodName: string
+    svc: LspService,
+    path: string,
+    line, character: int,
+    methodName: string,
+    mayRestart: bool = true,
 ): Result[int, string] =
-  ## Common helper for position-based LSP requests
-  let workerResult = svc.getWorkerForPath(path)
+  ## Position-based request helper. `mayRestart = false` never restarts a crashed server.
+  let workerResult =
+    if mayRestart:
+      svc.getWorkerForPath(path)
+    else:
+      svc.getExistingWorkerForPath(path)
   if workerResult.isErr:
     return err(workerResult.error)
   let worker = workerResult.get
@@ -1022,10 +1068,14 @@ proc startPositionRequest(
 
 # Helper for document-based LSP requests (path only, no position)
 proc startDocumentRequest(
-    svc: LspService, path: string, methodName: string
+    svc: LspService, path: string, methodName: string, mayRestart: bool = true
 ): Result[int, string] =
-  ## Common helper for document-based LSP requests
-  let workerResult = svc.getWorkerForPath(path)
+  ## Document-based request helper. `mayRestart = false` never restarts a crashed server.
+  let workerResult =
+    if mayRestart:
+      svc.getWorkerForPath(path)
+    else:
+      svc.getExistingWorkerForPath(path)
   if workerResult.isErr:
     return err(workerResult.error)
   let worker = workerResult.get
@@ -1037,9 +1087,9 @@ proc startDocumentRequest(
 
 # High-level document operations
 proc notifyDocumentOpened*(
-    svc: LspService, path: string, text: string
+    svc: LspService, path: string, text: string, generation: int = 0
 ): Result[void, string] =
-  ## Notify that a document was opened (non-blocking)
+  ## Notify that a document was opened (non-blocking); `generation` scopes the sync ack.
   let workerResult = svc.getWorkerForPath(path)
   if workerResult.isErr:
     return err(workerResult.error)
@@ -1047,63 +1097,68 @@ proc notifyDocumentOpened*(
   let worker = workerResult.get
   let langId = worker.languageId
   let uri = pathToUri(path)
-  worker.didOpen(uri, langId, 1, text)
+  worker.didOpen(uri, langId, 1, text, generation)
   return ok()
 
+# Only didOpen can fail (it starts a worker); other notifies queue fire-and-forget.
 proc notifyDocumentChanged*(
-    svc: LspService, path: string, version: int, text: string
-): Result[void, string] =
-  ## Notify that a document changed (non-blocking)
+    svc: LspService, path: string, version: int, text: string, generation: int = 0
+) =
+  ## Queue a full-document didChange (non-blocking).
   let workerOpt = svc.workerForExistingPath(path)
   if workerOpt.isNone:
-    return ok() # No LSP for this file type, or worker not started
+    return # No LSP for this file type, or worker not started
 
-  workerOpt.get.didChangeFull(pathToUri(path), version, text)
-  return ok()
+  workerOpt.get.didChangeFull(pathToUri(path), version, text, generation)
 
 proc notifyDocumentChangedIncremental*(
-    svc: LspService, path: string, version: int, contentChangesJson: string
-): Result[void, string] =
-  ## Incremental variant of notifyDocumentChanged: sends a serialized
-  ## contentChanges array instead of the full text (non-blocking).
+    svc: LspService,
+    path: string,
+    version: int,
+    contentChangesJson: string,
+    generation: int = 0,
+) =
+  ## Incremental didChange with serialized contentChanges (non-blocking).
   let workerOpt = svc.workerForExistingPath(path)
   if workerOpt.isNone:
-    return ok() # No LSP for this file type, or worker not started
+    return # No LSP for this file type, or worker not started
 
-  workerOpt.get.didChangeIncremental(pathToUri(path), version, contentChangesJson)
-  return ok()
+  workerOpt.get.didChangeIncremental(
+    pathToUri(path), version, contentChangesJson, generation
+  )
 
-proc notifyDocumentClosed*(svc: LspService, path: string): Result[void, string] =
+proc notifyDocumentClosed*(svc: LspService, path: string) =
   ## Notify that a document was closed (non-blocking)
   let langIdOpt = svc.getLanguageIdFromPath(path)
   if langIdOpt.isNone:
-    return ok()
+    return
 
   let workerOpt = svc.getWorker(langIdOpt.get)
   if workerOpt.isNone:
-    return ok()
+    return
 
-  let worker = workerOpt.get
-  let uri = pathToUri(path)
-  worker.didClose(uri)
-  return ok()
+  workerOpt.get.didClose(pathToUri(path))
 
 proc notifyDocumentSaved*(
-    svc: LspService, path: string, text: Option[string] = none(string)
-): Result[void, string] =
-  ## Notify that a document was saved (non-blocking)
+    svc: LspService,
+    path: string,
+    text: Option[string] = none(string),
+    version: int = 0,
+    generation: int = 0,
+) =
+  ## Notify that a document was saved (non-blocking); `version` and `generation` scope the sync ack.
+  if svc.documentSavedObserver != nil:
+    svc.documentSavedObserver(path)
+
   let langIdOpt = svc.getLanguageIdFromPath(path)
   if langIdOpt.isNone:
-    return ok()
+    return
 
   let workerOpt = svc.getWorker(langIdOpt.get)
   if workerOpt.isNone:
-    return ok()
+    return
 
-  let worker = workerOpt.get
-  let uri = pathToUri(path)
-  worker.didSave(uri, text)
-  return ok()
+  workerOpt.get.didSave(pathToUri(path), text, version, generation)
 
 # High-level async (non-blocking) feature requests
 # These return a request ID immediately. Use poll() and checkResponse() to get results.
@@ -1211,12 +1266,14 @@ proc startSignatureHelpRequest*(
 proc startDocumentHighlightRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
-  ## Start a document highlight request (non-blocking). Returns request ID.
-  svc.startPositionRequest(path, line, character, "textDocument/documentHighlight")
+  ## Start a document highlight request (non-blocking). Timer-fired; never restarts.
+  svc.startPositionRequest(
+    path, line, character, "textDocument/documentHighlight", mayRestart = false
+  )
 
 proc startCodeLensRequest*(svc: LspService, path: string): Result[int, string] =
-  ## Start a code lens request (non-blocking). Returns request ID.
-  svc.startDocumentRequest(path, "textDocument/codeLens")
+  ## Start a code lens request (non-blocking). Timer-fired; never restarts.
+  svc.startDocumentRequest(path, "textDocument/codeLens", mayRestart = false)
 
 proc startDocumentLinkRequest*(svc: LspService, path: string): Result[int, string] =
   ## Start a document link request (non-blocking). Returns request ID.
@@ -1240,14 +1297,14 @@ proc startDocumentLinkResolveRequest*(
 proc startSemanticTokensFullRequest*(
     svc: LspService, path: string
 ): Result[int, string] =
-  ## Start a semantic tokens full request (non-blocking). Returns request ID.
-  svc.startDocumentRequest(path, "textDocument/semanticTokens/full")
+  ## Start a semantic tokens full request (non-blocking). Timer-fired; never restarts.
+  svc.startDocumentRequest(path, "textDocument/semanticTokens/full", mayRestart = false)
 
 proc startSemanticTokensRangeRequest*(
     svc: LspService, path: string, startLine, startChar, endLine, endChar: int
 ): Result[int, string] =
-  ## Start a semantic tokens range request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
+  ## Start a semantic tokens range request (non-blocking). Timer-fired; never restarts.
+  let workerResult = svc.getExistingWorkerForPath(path)
   if workerResult.isErr:
     return err(workerResult.error)
 
@@ -1271,10 +1328,8 @@ proc startSemanticTokensRangeRequest*(
 proc startInlayHintRequest*(
     svc: LspService, path: string, startLine, startChar, endLine, endChar: int
 ): Result[int, string] =
-  ## Start a textDocument/inlayHint request (non-blocking). Returns request ID.
-  ## InlayHintParams requires a range; hints are requested for the visible
-  ## viewport only.
-  let workerResult = svc.getWorkerForPath(path)
+  ## Start an inlayHint request (non-blocking). Timer-fired; never restarts.
+  let workerResult = svc.getExistingWorkerForPath(path)
   if workerResult.isErr:
     return err(workerResult.error)
 
@@ -1720,10 +1775,7 @@ proc hasExecuteCommandSupport*(svc: LspService, langId: string): bool =
   svc.hasCapabilitySupport(langId, "workspace/executeCommand", executeCommandProvider)
 
 proc documentSyncKind*(svc: LspService, path: string): TextDocumentSyncKind =
-  ## Resolution order: dynamic registration > static textDocumentSync > Full.
-  ## The default is Full rather than the spec's None to avoid a regression:
-  ## servers that under-advertise capabilities would otherwise stop receiving
-  ## didChange (breaking diagnostics, etc.).
+  ## Dynamic registration > static sync > Full; Full keeps under-advertising servers working.
   let langIdOpt = svc.getLanguageIdFromPath(path)
   if langIdOpt.isNone:
     return tdskFull
@@ -1731,10 +1783,7 @@ proc documentSyncKind*(svc: LspService, path: string): TextDocumentSyncKind =
 
   let reg = svc.getDynamicRegistration(langId, "textDocument/didChange")
   if reg.isSome:
-    # A dynamic didChange registration is authoritative: the server explicitly
-    # opted into didChange, so resolve its syncKind here. Fall back to Full (not
-    # the static caps, which could be None) when the options are absent/malformed
-    # so an explicit opt-in is never turned into a silent opt-out.
+    # Dynamic opt-in is authoritative; malformed options still mean Full, never silent None.
     if reg.get.registerOptions.isSome:
       let opts = reg.get.registerOptions.get
       if opts.kind == JObject and opts.hasKey("syncKind") and
@@ -1754,12 +1803,40 @@ proc documentSyncKind*(svc: LspService, path: string): TextDocumentSyncKind =
   of JObject:
     if node.hasKey("change") and node["change"].kind == JInt:
       return toEnumOr(node["change"].getInt, tdskFull)
-    # Object without an explicit `change`: default to Full rather than None,
-    # consistent with the "don't under-advertise" default. An explicit
-    # `change: 0` above still opts the server out.
+    # Object without `change` still defaults to Full; explicit `change: 0` opts out.
     return tdskFull
   else:
     return tdskFull
+
+proc saveIncludesText*(svc: LspService, path: string): bool =
+  ## Whether didSave carries the text; defaults to false to avoid faking sync.
+  let langIdOpt = svc.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+  let langId = langIdOpt.get
+
+  let reg = svc.getDynamicRegistration(langId, "textDocument/didSave")
+  if reg.isSome:
+    if reg.get.registerOptions.isSome:
+      let opts = reg.get.registerOptions.get
+      if opts.kind == JObject and opts.hasKey("includeText"):
+        return opts["includeText"].getBool(false)
+    return false
+
+  if langId notin svc.capabilities:
+    return false
+  let tds = svc.capabilities[langId].textDocumentSync
+  if tds.isNone:
+    return false
+  let node = tds.get
+  if node.kind != JObject or not node.hasKey("save"):
+    # The number form only describes `change`, not save.
+    return false
+  let save = node["save"]
+  # `save: true` wants the notification, not the text.
+  if save.kind != JObject or not save.hasKey("includeText"):
+    return false
+  return save["includeText"].getBool(false)
 
 proc requestFormatting*(
     svc: LspService, path: string, tabSize: int = 2, insertSpaces: bool = true
@@ -1869,7 +1946,8 @@ proc requestCodeLensResolve*(
 .} =
   ## Async version of requestCodeLensResolve
   {.cast(raises: [CancelledError, TransactionRollbackError]).}:
-    let workerResult = svc.getWorkerForPath(path)
+    # Follows a timer result; never restarts a crashed server.
+    let workerResult = svc.getExistingWorkerForPath(path)
     if workerResult.isErr:
       return err(workerResult.error)
 

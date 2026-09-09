@@ -315,7 +315,9 @@ proc executeCodeLensItem*(
       except JsonParsingError:
         args.add(%argStr)
 
-    let execResult = await e.lsp.requestExecuteCommand(activeBuffer, item.command, args)
+    let execResult = await e.lsp.requestExecuteCommand(
+      activeBuffer, item.command, args, trigger = lrtUserAction
+    )
     if execResult.isErr:
       return err("Failed to execute command: " & execResult.error)
 

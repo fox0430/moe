@@ -31,6 +31,8 @@ import std/[unittest, json, options, os, osproc, strutils, tables, times]
 import pkg/[chronos, results]
 
 import ../src/moepkg/lsp_service
+import ../src/moepkg/lsp_integration
+import ../src/moepkg/[buffer, types]
 import ../src/moepkg/lsp/protocol/[types, enums]
 
 const
@@ -1015,7 +1017,7 @@ suite "e2e: LspService driven by lasm":
 
       # Send a full didChange with new text and bumped version.
       const NewText = "hello world\n"
-      check h.svc.notifyDocumentChanged(h.filePath, 2, NewText).isOk
+      h.svc.notifyDocumentChanged(h.filePath, 2, NewText)
 
       let after = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
       check after.isOk
@@ -1041,7 +1043,7 @@ suite "e2e: LspService driven by lasm":
           "text": "HELLO",
         }
       ]
-      check h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges).isOk
+      h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges)
 
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
       check resp.isOk
@@ -1064,7 +1066,7 @@ suite "e2e: LspService driven by lasm":
           "text": "X",
         }
       ]
-      check h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges).isOk
+      h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges)
 
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
       check resp.isOk
@@ -1092,7 +1094,7 @@ suite "e2e: LspService driven by lasm":
           "text": "BBBB",
         },
       ]
-      check h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges).isOk
+      h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges)
 
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
       check resp.isOk
@@ -1132,7 +1134,7 @@ suite "e2e: LspService driven by lasm":
           "text": "XX",
         }
       ]
-      check h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges).isOk
+      h.svc.notifyDocumentChangedIncremental(h.filePath, 2, $contentChanges)
 
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
       check resp.isOk
@@ -1185,7 +1187,7 @@ suite "e2e: LspService driven by lasm":
     let h = startLasm()
     try:
       const SavedText = "saved payload"
-      check h.svc.notifyDocumentSaved(h.filePath, some(SavedText)).isOk
+      h.svc.notifyDocumentSaved(h.filePath, some(SavedText))
 
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
       check resp.isOk
@@ -1197,7 +1199,7 @@ suite "e2e: LspService driven by lasm":
   lasmTest "didClose drops the document from listOpenFiles":
     let h = startLasm()
     try:
-      check h.svc.notifyDocumentClosed(h.filePath).isOk
+      h.svc.notifyDocumentClosed(h.filePath)
 
       let resp = awaitExecuteCommand(h.svc, h.filePath, "lsptest.listOpenFiles", @[])
       check resp.isOk
@@ -1236,7 +1238,7 @@ suite "e2e: LspService driven by lasm":
         sleep(20)
       check diagReceived.len == 2
 
-      check h.svc.notifyDocumentClosed(h.filePath).isOk
+      h.svc.notifyDocumentClosed(h.filePath)
 
       # Then: didClose provokes an empty publishDiagnostics for the same URI.
       let d2 = epochTime() + 3.0
@@ -1336,3 +1338,114 @@ suite "e2e: LspService driven by lasm":
       check diagReceived[1].severity.get == DiagnosticSeverity.dsWarning
     finally:
       stopLasm(h)
+
+# Integration checks decisions against the server, not editor bookkeeping.
+
+type IntegrationHandle = object
+  lsp: LspIntegration
+  workspace: string
+
+proc startIntegration(): IntegrationHandle =
+  let workspace = getTempDir() / "moe-lasm-e2e-integration"
+  createDir(workspace)
+  let cfgPath = workspace / "lasm.json"
+  writeFile(cfgPath, scenarioJson())
+
+  let lsp = newLspIntegration(workspace)
+  lsp.service.setConfig(
+    LangId,
+    LanguageServerConfig(
+      command: LasmBin, args: @["--config", cfgPath], extensions: @[Ext], enabled: true
+    ),
+  )
+  doAssert lsp.service.startWorker(LangId).isOk
+  doAssert waitUntilReady(lsp.service, LangId, ReadyTimeoutMs),
+    "lasm did not become ready"
+
+  IntegrationHandle(lsp: lsp, workspace: workspace)
+
+proc stopIntegration(h: IntegrationHandle) =
+  h.lsp.shutdown()
+
+proc servedPath(h: IntegrationHandle, name: string): string =
+  ## A path the configured server claims, with the file on disk.
+  result = h.workspace / (name & "." & Ext)
+  writeFile(result, SampleText)
+
+proc openFileNames(h: IntegrationHandle, routePath: string): seq[string] =
+  ## Base names of documents the server holds.
+  let resp = awaitExecuteCommand(h.lsp.service, routePath, "lsptest.listOpenFiles", @[])
+  doAssert resp.isOk, resp.error
+  for entry in resp.get:
+    result.add entry{"fileName"}.getStr("")
+
+suite "e2e: LspIntegration document lifecycle driven by lasm":
+  lasmTest "a buffer renamed off a served extension is closed on the server":
+    let h = startIntegration()
+    try:
+      let served = h.servedPath("rename_away")
+      let buf = newTextBuffer(SampleText, some(served))
+      check h.lsp.onBufferOpen(buf).isOk
+      check h.openFileNames(served) == @["rename_away." & Ext]
+
+      # Save-as off served extension must close the old document.
+      buf.filePath = some(h.workspace / "rename_away.unclaimed")
+      h.lsp.syncBuffer(buf)
+
+      check h.openFileNames(served).len == 0
+    finally:
+      stopIntegration(h)
+
+  lasmTest "a buffer renamed between served paths moves its document":
+    let h = startIntegration()
+    try:
+      let src = h.servedPath("move_from")
+      let dst = h.workspace / ("move_to." & Ext)
+      let buf = newTextBuffer(SampleText, some(src))
+      check h.lsp.onBufferOpen(buf).isOk
+      check h.openFileNames(src) == @["move_from." & Ext]
+
+      buf.filePath = some(dst)
+      h.lsp.syncBuffer(buf)
+
+      # Moved, not copied: one document, under the new URI.
+      check h.openFileNames(src) == @["move_to." & Ext]
+    finally:
+      stopIntegration(h)
+
+  lasmTest "a timer-driven request leaves a dead server alone":
+    let h = startIntegration()
+    try:
+      let served = h.servedPath("timer_driven")
+      let buf = newTextBuffer(SampleText, some(served))
+      check h.lsp.onBufferOpen(buf).isOk
+
+      discard h.lsp.service.stopWorker(LangId)
+      # Live excludes a just-spawned worker.
+      check not h.lsp.service.hasLiveWorkerForPath(served)
+
+      # Timer-driven requests must not respawn a dead server.
+      discard h.lsp.requestSyncGate(buf, lrfCodeLens)
+      discard h.lsp.requestSyncGate(buf, lrfDefinition)
+      check not h.lsp.service.hasLiveWorkerForPath(served)
+    finally:
+      stopIntegration(h)
+
+  lasmTest "a request the user made respawns the server and re-opens the document":
+    let h = startIntegration()
+    try:
+      let served = h.servedPath("user_driven")
+      let buf = newTextBuffer(SampleText, some(served))
+      check h.lsp.onBufferOpen(buf).isOk
+
+      discard h.lsp.service.stopWorker(LangId)
+      check not h.lsp.service.hasLiveWorkerForPath(served)
+
+      # User action may respawn and must re-open the document.
+      check h.lsp.requestSyncGate(buf, lrfDefinition, lrtUserAction).isNone
+      check h.lsp.service.hasLiveWorkerForPath(served)
+      check waitUntilReady(h.lsp.service, LangId, ReadyTimeoutMs)
+
+      check h.openFileNames(served) == @["user_driven." & Ext]
+    finally:
+      stopIntegration(h)

@@ -20,6 +20,8 @@
 ## Message log for editor messages displayed on the command line.
 ## These messages are stored for later viewing in the log viewer.
 
+import std/tables
+
 const MaxLspMessageLogLen* = 20000
   ## Cap on retained LSP log lines. Raw-JSON logging can append a full
   ## pretty-printed document per keystroke, so the log must be bounded or it
@@ -68,13 +70,37 @@ proc addLspMessageLog*(messages: seq[string]) =
     lspMessageLog.add(m)
   trimLspMessageLog()
 
+var degradedStreaks {.threadvar.}: Table[string, string]
+  ## Last logged message per key; suppresses repeats from timer-driven checks.
+
+proc addLspMessageLogOnce*(key, message: string): bool {.discardable.} =
+  ## Log unless the same message already stands for `key`. Returns whether it was added.
+  if degradedStreaks.getOrDefault(key, "") == message:
+    return false
+  degradedStreaks[key] = message
+  addLspMessageLog(message)
+  true
+
+proc addLspMessageLogForKey*(key, message: string): bool {.discardable.} =
+  ## Log only the first message per key; use Once when a changed message is a new fact.
+  if key in degradedStreaks:
+    return false
+  degradedStreaks[key] = message
+  addLspMessageLog(message)
+  true
+
+proc clearLspMessageLogStreak*(key: string) =
+  ## Forget `key` so its next message logs again.
+  degradedStreaks.del(key)
+
 proc getLspMessageLog*(): seq[string] =
   ## Return all messages in the LSP log.
   lspMessageLog
 
 proc clearLspMessageLog*() =
-  ## Clear all messages from the LSP log.
+  ## Clear the log and the dedup record with it.
   lspMessageLog = @[]
+  degradedStreaks.clear()
 
 proc lspMessageLogLen*(): int =
   ## Returns the number of messages in the LSP log.

@@ -74,6 +74,7 @@ proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool 
     feature,
     proc(): Result[int, string] =
       e.lsp.startCallHierarchyPrepareRequest(activeBuffer, line, col),
+    trigger = lrtUserAction,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP call hierarchy failed: " & ctxRes.error
@@ -129,6 +130,7 @@ proc handlePrepareResponse(
     # semantics of requestCallHierarchy{Incoming,Outgoing}ForItem so a
     # mid-flight buffer switch doesn't silently drop the response.
     isItemDriven = true,
+    trigger = lrtUserAction,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP call hierarchy failed: " & ctxRes.error

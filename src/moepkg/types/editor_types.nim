@@ -64,10 +64,6 @@ type
       ## never mutate directly.
     config*: EditorConfig
     lsp*: LspIntegration
-    lastLspSyncAttempts*: Table[BufferId, int]
-      ## Per-buffer contentVersion at last sync attempt. Records attempt, not delivery
-      ## (skipped syncs count as success). Use `isDocumentDelivered` for actual state.
-      ## Monotonic; per-buffer to avoid masking unsynced state.
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
     runningBackgroundProcesses*: seq[BackgroundProcess]
@@ -156,7 +152,7 @@ proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   let id = buf.id
   e.buffers.delete(idx)
   e.bufferIdIndex.del(id)
-  e.lastLspSyncAttempts.del(id)
+  forgetSyncReport(id)
 
 proc pruneBufferIdFromAllWindows*(e: Editor, id: BufferId) =
   ## Remove `id` from every window's per-window tab list (`bufferIds`).

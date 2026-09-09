@@ -92,7 +92,7 @@ proc deleteBufferAt*(e: Editor, idx: int) =
   ## Also sends LSP didClose so a later re-open doesn't collide with stale
   ## server state (no-op for non-file buffers and untracked paths).
   if e.lsp != nil:
-    discard e.lsp.onBufferClose(e.buffers[idx])
+    e.lsp.onBufferClose(e.buffers[idx])
   e.deleteBufferAtNoLsp(idx)
 
 proc findBufferByPath*(e: Editor, path: string): int =

@@ -1183,6 +1183,12 @@ proc setLspRequestPending*(mgr: CompletionManager, requestId: int) =
   mgr.lspRequestId = some(requestId)
   mgr.state = csPendingLsp
 
+proc clearLspRequestPending*(mgr: CompletionManager) =
+  ## Forget the in-flight request. Its answer targets an old prefix and cursor.
+  mgr.lspRequestId = none(int)
+  if mgr.state == csPendingLsp:
+    mgr.state = csIdle
+
 proc isPendingLsp*(mgr: CompletionManager): bool =
   ## Check if waiting for LSP response
   mgr.state == csPendingLsp and mgr.lspRequestId.isSome

@@ -433,6 +433,7 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
     # goto-* response is URI-anchored (handleLspLocations opens by path), so a
     # mid-flight buffer switch must not drop it.
     isItemDriven = true,
+    trigger = lrtUserAction,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP " & kindName & " failed: " & ctxRes.error

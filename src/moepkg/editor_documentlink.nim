@@ -130,6 +130,7 @@ proc startLspDocumentLinks*(e: Editor): bool =
     proc(): Result[int, string] =
       e.lsp.startDocumentLinkRequest(activeBuffer),
     validModes = DocumentLinkValidModes,
+    trigger = lrtUserAction,
   )
   if ctxRes.isErr:
     e.state.statusMessage = "LSP document links failed: " & ctxRes.error
@@ -176,6 +177,7 @@ proc pollLspDocumentLinks*(e: Editor) =
             validModes = DocumentLinkValidModes,
             # jumpToDocumentLink dispatches by URI, not active buffer.
             isItemDriven = true,
+            trigger = lrtUserAction,
           )
           if resolveCtx.isErr:
             e.state.statusMessage = "Failed to resolve link: " & resolveCtx.error
