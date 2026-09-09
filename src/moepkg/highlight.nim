@@ -257,6 +257,18 @@ proc freshTokenizerState(
     return incrHighlight.initialState
   newTokenizerState(incrHighlight.backend, language)
 
+proc cachedTokenizerState(
+    incrHighlight: IncrementalHighlight, startLine: int, language: SourceLanguage
+): TokenizerState =
+  ## Return the cached state entering `startLine`, or a fresh state when that
+  ## row is outside the cache or belongs to another syntax backend. Default
+  ## states may fill a gap below an in-flight reparse's frontier.
+  if startLine > 0 and startLine - 1 < incrHighlight.lineStates.states.len:
+    let cached = incrHighlight.lineStates.states[startLine - 1]
+    if cached.backend == incrHighlight.backend:
+      return cached
+  incrHighlight.freshTokenizerState(language)
+
 proc `==`*(a, b: TokenizerState): bool =
   ## Keep engine-specific equality at this boundary so clients comparing
   ## cached states do not need to import Matter's structural stack operator.
@@ -1710,10 +1722,7 @@ proc updateHighlightIncremental*(
     # A small backward margin covers tokens spanning the boundary.
     reparseStart = max(0, changedStartLine - 2)
 
-    if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-      initialState = incrHighlight.lineStates.states[reparseStart - 1]
-    else:
-      initialState = incrHighlight.freshTokenizerState(language)
+    initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
 
     # Multi-line tokens record the depth at their completion, so restarting
     # mid-token restores a stale depth (e.g. nested comments); rewind to the
@@ -1730,28 +1739,25 @@ proc updateHighlightIncremental*(
     )
     :
       dec reparseStart
-      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-        initialState = incrHighlight.lineStates.states[reparseStart - 1]
-      else:
-        initialState = incrHighlight.freshTokenizerState(language)
+      initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
 
     if oldFrontier >= 0 and reparseStart > oldFrontier:
       # Rows between the old frontier and the new anchor were trimmed but
       # never re-parsed; restart from the old start line instead.
       reparseStart = oldReparseStart
-      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-        initialState = incrHighlight.lineStates.states[reparseStart - 1]
-      else:
-        initialState = incrHighlight.freshTokenizerState(language)
+      initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
     elif oldReparseStart >= 0 and reparseStart - 1 >= incrHighlight.lineStates.states.len:
       # The discarded flight's trim left no seed state below the new anchor;
       # restart from the top of the available cache (fresh flights always
       # have `states.len >= reparseStart`).
       reparseStart = incrHighlight.lineStates.states.len
-      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-        initialState = incrHighlight.lineStates.states[reparseStart - 1]
-      else:
-        initialState = incrHighlight.freshTokenizerState(language)
+      initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
+
+    when defined(moe.matter) or defined(features.moe.matter):
+      if initialState.backend == hbMatter:
+        # A timeout or grammar error remains sticky within one parse flight,
+        # but a later edit starts a new flight and gets one recovery attempt.
+        initialState.matterState.failed = false
 
     let trimIdx = incrHighlight.segments.segmentCutIndex(reparseStart)
     if trimIdx < incrHighlight.segments.len:

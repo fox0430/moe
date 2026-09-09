@@ -206,4 +206,5 @@ jobs:
         nim c -r -d:features.moe.matter tests/test_matter_highlight_edges.nim
         nim c -r -d:features.moe.matter tests/test_highlight.nim
         nim c -r -d:features.moe.matter tests/test_highlighter_api.nim
+        nim c -r -d:features.moe.matter tests/test_config_loader.nim
         nim c -d:release -d:features.moe.matter src/moe.nim

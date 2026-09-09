@@ -160,6 +160,89 @@ when defined(moe.matter) or defined(features.moe.matter):
       )
       check buffer.incrementalHighlight.segments == freshSegments
       check buffer.incrementalHighlight.lineStates.states == freshStates
+
+    test "default config preserves a progressive builtin load cache":
+      var content = ""
+      for i in 0 ..< 1600:
+        content.add("let value" & $i & " = " & $i & "\n")
+      let buffer = newTextBuffer()
+      check buffer.loadFileWithContent("builtin-progressive.nim", content).isOk
+      check buffer.incrementalHighlight.parsedUpTo == 999
+      let initialCache = buffer.incrementalHighlight
+      buffer.applyHighlightConfig(newEditorConfig())
+      check buffer.incrementalHighlight == initialCache
+      check buffer.incrementalHighlight.parsedUpTo == 999
+
+    test "Matter reparse rejects a default state from a cache gap":
+      var lines = newSeq[string](220)
+      for i in 0 ..< lines.len:
+        lines[i] = "let value" & $i & " = " & $i
+      let seed = newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet())
+      let (segments, states) = initHighlightIncremental(
+        lines, 0, lines.high, seed, @[], SourceLanguage.langNim
+      )
+      var incremental = IncrementalHighlight(
+        backend: hbMatter,
+        initialState: seed,
+        segments: segments,
+        lineStates: LineStateCache(states: states),
+        parsedUpTo: lines.high,
+      )
+      incremental.lineStates.states[147] = TokenizerState()
+      lines[150] = "# edited"
+      var parsed: int
+      while updateHighlightIncremental(
+        lines.len,
+        proc(i: int): string =
+          lines[i],
+        incremental,
+        150,
+        @[],
+        SourceLanguage.langNim,
+        0,
+        25,
+        1,
+        parsed,
+      )
+      :
+        discard
+      check incremental.lineStates.states[148 .. ^1].allIt(it.backend == hbMatter)
+
+    test "a fresh Matter reparse retries a cached failed state":
+      var lines = newSeq[string](20)
+      for i in 0 ..< lines.len:
+        lines[i] = "let value" & $i & " = " & $i
+      let seed = newTokenizerState(hbMatter, langNim, newTestMatterGrammarSet())
+      let (segments, states) = initHighlightIncremental(
+        lines, 0, lines.high, seed, @[], SourceLanguage.langNim
+      )
+      var incremental = IncrementalHighlight(
+        backend: hbMatter,
+        initialState: seed,
+        segments: segments,
+        lineStates: LineStateCache(states: states),
+        parsedUpTo: lines.high,
+      )
+      for i in 2 ..< incremental.lineStates.states.len:
+        incremental.lineStates.states[i].matterState.failed = true
+      lines[5] = "# edited"
+      var parsed: int
+      while updateHighlightIncremental(
+        lines.len,
+        proc(i: int): string =
+          lines[i],
+        incremental,
+        5,
+        @[],
+        SourceLanguage.langNim,
+        0,
+        5,
+        1,
+        parsed,
+      )
+      :
+        discard
+      check incremental.lineStates.states[3 .. ^1].allIt(not it.matterState.failed)
 else:
   static:
     doAssert true

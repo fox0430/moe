@@ -70,8 +70,12 @@ proc `==`*(a, b: MatterLineState): bool =
 
 proc `==`*(a, b: MatterGrammarSet): bool =
   ## Runtime caches do not participate in configuration value equality.
-  if a.isNil or b.isNil:
-    return a.isNil and b.isNil
+  if cast[pointer](a) == cast[pointer](b):
+    return true
+  if a.isNil:
+    return b.sources.len == 0
+  if b.isNil:
+    return a.sources.len == 0
   a.sources == b.sources
 
 func scopeMatches(scope, prefix: string): bool =
