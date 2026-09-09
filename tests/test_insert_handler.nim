@@ -3723,3 +3723,128 @@ suite "InsertModeHandler - LSP completion request retirement":
 
     check handler.completionManager.getLspRequestId.isNone
     check not handler.completionManager.isPendingLsp
+
+suite "InsertModeHandler - LSP resolve poll/trigger (NT-09)":
+  ## Direct tests for `pollLspResolve` / `triggerResolveRequest`.
+  ## The success paths need a live language server; these lock in the no-op
+  ## guards and the stale-entry cleanup (`checkResponse` reports unknown ids
+  ## as `lrsTimeout`, so polling must drop the pending entry).
+
+  proc createLspHandler(buf: TextBuffer, lsp: LspIntegration): InsertModeHandler =
+    let keyBindingRegistry = newKeyBindingRegistry()
+    setupDefaultBindings(keyBindingRegistry)
+    let commandRegistry = newCommandRegistry()
+    registerBuiltinCommands(commandRegistry)
+    let motionController =
+      newMotionController(buf, createTestState(), createTestViewport())
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
+
+  proc createResolveState(): EditorState =
+    let state = createTestState()
+    state.lspCache.pending = initTable[LspRequestFeature, LspRequestContext]()
+    state
+
+  proc staleResolveCtx(buf: TextBuffer): LspRequestContext =
+    LspRequestContext(
+      requestId: 999999,
+      feature: lrfCompletionResolve,
+      bufferId: buf.id,
+      contentVersion: 0,
+      path: "",
+      generation: 0,
+      cursorLine: -1,
+      cursorCol: -1,
+      validModes: {},
+      isItemDriven: false,
+      ignoreContentVersion: false,
+      blockedByOverlay: true,
+    )
+
+  test "pollLspResolve with nil LSP is a no-op":
+    let buf = newTextBuffer("hello")
+    let handler = createTestHandler(buf)
+    let state = createResolveState()
+
+    handler.pollLspResolve(state)
+
+    check state.lspCache.pending.len == 0
+
+  test "pollLspResolve with disabled LSP keeps the pending entry":
+    let buf = newTextBuffer("hello")
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let handler = createLspHandler(buf, lsp)
+    let state = createResolveState()
+    state.lspCache.pending[lrfCompletionResolve] = staleResolveCtx(buf)
+
+    handler.pollLspResolve(state)
+
+    check state.lspCache.pending.len == 1
+
+  test "pollLspResolve with no pending resolve is a no-op":
+    let buf = newTextBuffer("hello")
+    let handler = createLspHandler(buf, newLspIntegration())
+    let state = createResolveState()
+
+    handler.pollLspResolve(state)
+
+    check state.lspCache.pending.len == 0
+
+  test "pollLspResolve drops a pending entry whose request never existed":
+    # requestId 999999 was never started; checkResponse reports unknown ids
+    # as lrsTimeout, so the poller must retire the stale entry.
+    let buf = newTextBuffer("hello")
+    let handler = createLspHandler(buf, newLspIntegration())
+    let state = createResolveState()
+    state.lspCache.pending[lrfCompletionResolve] = staleResolveCtx(buf)
+
+    handler.pollLspResolve(state)
+
+    check lrfCompletionResolve notin state.lspCache.pending
+
+  test "triggerResolveRequest with nil LSP is a no-op":
+    let buf = newTextBuffer("hello")
+    let handler = createTestHandler(buf)
+    let state = createResolveState()
+
+    handler.triggerResolveRequest(buf, state)
+
+    check lrfCompletionResolve notin state.lspCache.pending
+
+  test "triggerResolveRequest with disabled LSP starts nothing":
+    let buf = newTextBuffer("hello")
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let handler = createLspHandler(buf, lsp)
+    let state = createResolveState()
+
+    handler.triggerResolveRequest(buf, state)
+
+    check lrfCompletionResolve notin state.lspCache.pending
+
+  test "triggerResolveRequest with nothing to resolve starts nothing":
+    let buf = newTextBuffer("hello")
+    let handler = createLspHandler(buf, newLspIntegration())
+    let state = createResolveState()
+    check not handler.completionManager.needsResolve()
+
+    handler.triggerResolveRequest(buf, state)
+
+    check lrfCompletionResolve notin state.lspCache.pending
+
+  test "triggerResolveRequest without backing JSON starts nothing":
+    # The selection needs resolve (LSP entry, no detail), but its backing
+    # item is gone (lspItemIndex -1), so there is nothing to send.
+    let buf = newTextBuffer("hello")
+    let handler = createLspHandler(buf, newLspIntegration())
+    let state = createResolveState()
+    handler.completionManager.menu.entries =
+      @[CompletionEntry(word: "foo", matchScore: 0, source: csLsp, lspItemIndex: -1)]
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.menu.selectedIndex = 0
+    check handler.completionManager.needsResolve()
+    check handler.completionManager.getSelectedRawJson().isNone
+
+    handler.triggerResolveRequest(buf, state)
+
+    check lrfCompletionResolve notin state.lspCache.pending
