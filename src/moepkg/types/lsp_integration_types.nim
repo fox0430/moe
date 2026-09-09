@@ -30,9 +30,6 @@ import ../lsp/worker
 import ../buffer/core
 import ../message_log
 
-const StaleSyncRetryIntervalSeconds* = 2.0
-  ## Retry interval while the buffer sits still; edits retry immediately.
-
 type
   LspParticipation* = enum
     ## Whether a server takes part in a buffer. Answered by inspection only.
@@ -73,8 +70,7 @@ type
 
   LspRequestTrigger* = enum
     ## What set a request off; supplied by the call site.
-    lrtAutomatic
-      ## Timer or keystroke; never restarts a dead server nor jumps the retry interval.
+    lrtAutomatic ## Frame or keystroke; never restarts a dead server nor forces a retry.
     lrtUserAction ## One deliberate key press; restarts once and retries immediately.
 
   LspSyncAttempt* = object

@@ -20,8 +20,7 @@
 ## LSP Integration with Editor
 ## Connects LspService to Editor, TextBuffer, and UI components
 
-import
-  std/[options, json, strutils, algorithm, sequtils, monotimes, tables, times, unicode]
+import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
 from std/os import absolutePath, normalizedPath, fileExists, isAbsolute
 
 import pkg/[results, chronos]
@@ -894,9 +893,11 @@ proc validMemo(
   last
 
 proc syncIsDue(
-    lsp: LspIntegration, buffer: TextBuffer, path: string, ignoreRetryInterval: bool
+    lsp: LspIntegration, buffer: TextBuffer, path: string, forceRetry: bool
 ): bool =
-  ## Whether a sync attempt is due; landed buffers answer from the memo.
+  ## Whether a sync attempt is due; answered memos hold until an event retires them.
+  ## A behind memo retries only on an edit (which invalidates it), a key press or
+  ## save (which force it), or a server restart (which drops it via `retryStaleSyncs`).
   let memo = lsp.validMemo(buffer, path)
   if memo.isNone:
     return true
@@ -912,9 +913,8 @@ proc syncIsDue(
     # Server property; recheck capabilities instead of re-materializing the buffer.
     lsp.service.documentSyncKind(path) != tdskNone
   of svBehind:
-    ignoreRetryInterval or
-      getMonoTime() - memo.get.at >=
-      initDuration(milliseconds = int(StaleSyncRetryIntervalSeconds * 1000))
+    # No timer re-arms this; automatic requests answer from the memo.
+    forceRetry
 
 proc openDocument(lsp: LspIntegration, path, text: string): SyncVerdict =
   ## Hand the server the whole document it does not hold.
@@ -995,7 +995,7 @@ proc syncNow(
   return SyncVerdict(kind: svSynced)
 
 proc syncAndJudge(
-    lsp: LspIntegration, buffer: TextBuffer, ignoreRetryInterval: bool, mayRestart: bool
+    lsp: LspIntegration, buffer: TextBuffer, forceRetry: bool, mayRestart: bool
 ): SyncVerdict {.raises: [].} =
   ## Sync `buffer` and judge the result.
   if buffer.isNil:
@@ -1019,7 +1019,7 @@ proc syncAndJudge(
       let path = canonicalPath(buffer.filePath.get)
       # A rename closes the document opened under the former path.
       lsp.releaseClaim(buffer, keep = path)
-      if lsp.syncIsDue(buffer, path, ignoreRetryInterval):
+      if lsp.syncIsDue(buffer, path, forceRetry):
         let verdict = lsp.syncNow(buffer, path, mayRestart)
         lsp.recordAttempt(buffer, path, verdict)
         return verdict
@@ -1053,7 +1053,7 @@ proc syncAndJudge(
 
 proc syncBuffer*(lsp: LspIntegration, buffer: TextBuffer) {.raises: [].} =
   ## Bring the server copy up to date; never raises.
-  discard lsp.syncAndJudge(buffer, ignoreRetryInterval = false, mayRestart = false)
+  discard lsp.syncAndJudge(buffer, forceRetry = false, mayRestart = false)
 
 proc staleTolerance*(feature: LspRequestFeature): LspStaleTolerance =
   ## Refuse only when a wrong answer costs an undo or navigation.
@@ -1095,10 +1095,10 @@ proc requestSyncGate*(
     trigger: LspRequestTrigger = lrtAutomatic,
 ): Option[string] {.raises: [].} =
   ## Sync for the request; return the refusal reason or none.
-  # A key press pays a fresh attempt; automatic requests use the throttled memo.
+  # A key press pays a fresh attempt; automatic requests answer from the memo.
   let userDriven = trigger == lrtUserAction
   let status =
-    lsp.syncAndJudge(buffer, ignoreRetryInterval = userDriven, mayRestart = userDriven)
+    lsp.syncAndJudge(buffer, forceRetry = userDriven, mayRestart = userDriven)
   if feature.staleTolerance == lstTolerate:
     return none(string)
 
@@ -1140,7 +1140,7 @@ proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer) =
     return
 
   # Sync first; `syncAndJudge` also absorbs the gone-cwd outage.
-  let verdict = lsp.syncAndJudge(buffer, ignoreRetryInterval = true, mayRestart = false)
+  let verdict = lsp.syncAndJudge(buffer, forceRetry = true, mayRestart = false)
 
   # didSave needs a held document; svUnsyncable is the exception.
   case verdict.kind
