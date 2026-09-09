@@ -23,6 +23,8 @@
 
 import std/[times, os, strformat, locks, syncio]
 
+import unicode_utils
+
 type
   LogLevel* {.pure.} = enum
     ## Log severity levels
@@ -81,7 +83,9 @@ proc initLogger*(
       except CatchableError:
         # If we can't open the log file, disable logging
         result.enabled = false
-        stderr.writeLine(&"Warning: Failed to open log file: {e.msg}")
+        stderr.writeLine(
+          &"Warning: Failed to open log file: {sanitizeForDisplay(e.msg)}"
+        )
 
 # Global logger instance - initialized at module load time for thread safety
 var globalLogger: Logger

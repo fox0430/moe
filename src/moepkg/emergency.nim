@@ -25,7 +25,7 @@
 
 import std/[os, times, json, options, strformat]
 
-import types/editor_types, buffer/[core, file_io], backup
+import types/editor_types, buffer/[core, file_io], backup, unicode_utils
 
 const DefaultCrashRecoveryDir* = "~/.cache/moe/crash_recovery"
 
@@ -83,13 +83,15 @@ proc emergencySaveBuffers*(
       let originalPath = if buf.filePath.isSome: buf.filePath.get else: ""
       metadata[finalName] = %*{"originalPath": originalPath}
     except CatchableError as e:
-      stderr.writeLine "moe: emergency save failed for " & finalName & ": " & e.msg
+      stderr.writeLine "moe: emergency save failed for " & sanitizeForDisplay(finalName) &
+        ": " & sanitizeForDisplay(e.msg)
 
   if savedPaths.len > 0:
     try:
       writeFile(recoveryDir / "recovery.json", $metadata)
     except CatchableError as e:
-      stderr.writeLine "moe: failed to write recovery metadata: " & e.msg
+      stderr.writeLine "moe: failed to write recovery metadata: " &
+        sanitizeForDisplay(e.msg)
   else:
     # No files saved, remove the empty directory
     try:

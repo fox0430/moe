@@ -536,12 +536,6 @@ proc genBufferId(): BufferId =
   result = BufferId(nextBufferId)
   inc nextBufferId
 
-proc resetBufferIdCounterForTests*() =
-  ## Reset the global `nextBufferId` counter back to its initial value.
-  ## Intended for tests that want deterministic ids across runs; production
-  ## code must never call this — recycled ids would alias live buffers.
-  nextBufferId = 1
-
 proc setConfiguredBackend*(backend: BufferBackend) =
   configuredBackend = backend
 
