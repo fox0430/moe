@@ -95,6 +95,12 @@ proc parseBufferBackendKind*(s: string): BufferBackendKind =
   of "pieceTable": bbcPieceTable
   else: bbcAuto
 
+proc parseHighlightBackend*(s: string): HighlightBackend =
+  case s
+  of "builtin": hbBuiltin
+  of "matter": hbMatter
+  else: hbBuiltin
+
 proc parseBracketSplitMode*(s: string): BracketSplitMode =
   case s
   of "disable": bsmDisable
@@ -343,4 +349,5 @@ const
   ValidSplitTypes* = ["horizontal", "vertical"]
   ValidLspTraceLevels* = ["off", "messages", "verbose"]
   ValidBufferBackendKinds* = ["auto", "gapBuffer", "sqrtDecomp", "rope", "pieceTable"]
+  ValidHighlightBackends* = ["builtin", "matter"]
   ValidBracketSplitModes* = ["disable", "noIndent", "indent"]

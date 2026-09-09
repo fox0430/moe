@@ -23,10 +23,13 @@ import
 import celina_backend as celina
 
 import color, unicode_utils
+import types/highlight_types
 import syntax/tokenizer
 import lsp/protocol/types
+when defined(moe.matter) or defined(features.moe.matter):
+  import syntax/matter_backend
 
-export SourceLanguage, EditorColorPairIndex
+export SourceLanguage, EditorColorPairIndex, HighlightBackend
 
 type
   # Runes type alias for sequence of Unicode characters
@@ -94,6 +97,9 @@ type
     ## Tokenizer state captured at a line boundary for incremental re-parsing.
     state*: TokenClass
     lang*: LangState
+    backend*: HighlightBackend
+    when defined(moe.matter) or defined(features.moe.matter):
+      matterState*: MatterLineState
 
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
@@ -133,6 +139,9 @@ type
       ## fresh flights.
 
   IncrementalHighlight* = ref object ## Incremental highlighting information
+    backend*: HighlightBackend
+    initialState*: TokenizerState
+      ## Fresh state for this cache's backend, including its opted-in grammar.
     segments*: seq[ColorSegment]
     lineStates*: LineStateCache
     parsedUpTo*: int ## Last line parsed during initial load. -1 = not started.
@@ -205,6 +214,70 @@ const NoContentVersion* = low(int)
   ## Sentinel for callers without version tracking; `matches` skips the
   ## version check when either side carries it. Real values (incl. `-1`)
   ## still participate.
+
+proc effectiveHighlightBackend*(
+    backend: HighlightBackend, language: SourceLanguage
+): HighlightBackend =
+  ## Resolve compile-time availability and specialised lexer fallbacks.
+  discard backend
+  discard language
+  hbBuiltin
+
+when defined(moe.matter) or defined(features.moe.matter):
+  proc effectiveHighlightBackend*(
+      backend: HighlightBackend, language: SourceLanguage, grammars: MatterGrammarSet
+  ): HighlightBackend =
+    ## Resolve backend availability after an explicit grammar opt-in.
+    if backend == hbMatter and grammars.matterSupports(language):
+      return hbMatter
+    hbBuiltin
+
+proc newTokenizerState*(
+    backend: HighlightBackend, language: SourceLanguage
+): TokenizerState =
+  ## Fresh state without an explicit grammar. Matter therefore falls back.
+  TokenizerState(backend: effectiveHighlightBackend(backend, language))
+
+when defined(moe.matter) or defined(features.moe.matter):
+  proc newTokenizerState*(
+      backend: HighlightBackend, language: SourceLanguage, grammars: MatterGrammarSet
+  ): TokenizerState =
+    ## Fresh state for the selected engine and explicit grammar collection.
+    let effective = effectiveHighlightBackend(backend, language, grammars)
+    result.backend = effective
+    if effective == hbMatter:
+      result.matterState = initialMatterState(grammars, language)
+
+proc freshTokenizerState(
+    incrHighlight: IncrementalHighlight, language: SourceLanguage
+): TokenizerState =
+  ## Recover the immutable engine seed retained by this cache. Older/manual
+  ## cache constructors without a seed continue to get the builtin default.
+  if incrHighlight.initialState.backend == incrHighlight.backend:
+    return incrHighlight.initialState
+  newTokenizerState(incrHighlight.backend, language)
+
+proc cachedTokenizerState(
+    incrHighlight: IncrementalHighlight, startLine: int, language: SourceLanguage
+): TokenizerState =
+  ## Return the cached state entering `startLine`, or a fresh state when that
+  ## row is outside the cache or belongs to another syntax backend. Default
+  ## states may fill a gap below an in-flight reparse's frontier.
+  if startLine > 0 and startLine - 1 < incrHighlight.lineStates.states.len:
+    let cached = incrHighlight.lineStates.states[startLine - 1]
+    if cached.backend == incrHighlight.backend:
+      return cached
+  incrHighlight.freshTokenizerState(language)
+
+proc `==`*(a, b: TokenizerState): bool =
+  ## Keep engine-specific equality at this boundary so clients comparing
+  ## cached states do not need to import Matter's structural stack operator.
+  if a.backend != b.backend:
+    return false
+  when defined(moe.matter) or defined(features.moe.matter):
+    if a.backend == hbMatter:
+      return a.matterState == b.matterState
+  a.state == b.state and a.lang == b.lang
 
 proc matches*(
     pr: PendingReparse,
@@ -1071,6 +1144,121 @@ func capturedBoundaryState(
   else:
     token.state
 
+when defined(moe.matter) or defined(features.moe.matter):
+  proc matterColor(category: MatterColorCategory): EditorColorPairIndex =
+    case category
+    of mccComment: comment
+    of mccString: stringLit
+    of mccNumber: decNumber
+    of mccKeyword: keyword
+    of mccFunction: functionName
+    of mccType: typeName
+    of mccBuiltin: builtin
+    of mccIdentifier: identifier
+    of mccBoolean: boolean
+    of mccOperator: operator
+    of mccPreprocessor: preprocessor
+    of mccProperty: property
+    of mccDefault: default
+
+  proc initMatterHighlight(
+      bufferStr: string,
+      startLine, endLine: int,
+      initialState: TokenizerState,
+      reservedWords: seq[ReservedWord],
+      language: SourceLanguage,
+      tailSegments: seq[ColorSegment],
+  ): tuple[segments: seq[ColorSegment], lineStates: seq[TokenizerState]] =
+    let
+      # Bare CR is a character in a buffer line, not an extra cached row.
+      lines = bufferStr.split('\n')
+      words = reservedWords.filterIt(it.word.len > 0)
+    var
+      state = initialState.matterState
+      tailIndex = 0
+    for offset in 0 ..< max(0, endLine - startLine + 1):
+      let
+        line =
+          if offset < lines.len:
+            lines[offset]
+          else:
+            ""
+        row = startLine + offset
+        parsed = tokenizeMatterLine(line, language, state)
+        style =
+          if language == langMarkdown and
+              (state.isMatterCodeBlock or parsed.nextState.isMatterCodeBlock):
+            Style(bg: getThemeStyle(EditorColorPairIndex.markdownCodeBlock).bg)
+          else:
+            defaultStyle
+      state = parsed.nextState
+
+      # One linear pass per line, rather than rescanning every token's prefix.
+      # All bytes within a character map to its editor column; malformed bytes
+      # each occupy one column, just as they do in the buffer and renderer.
+      var columns = newSeq[int](line.len + 1)
+      var bytePos, column: int
+      while bytePos < line.len:
+        let size = line.runeSizeAt(bytePos)
+        for i in bytePos ..< bytePos + size:
+          columns[i] = column
+        bytePos += size
+        inc column
+      columns[line.len] = column
+
+      template addSpan(first, last: int, spanColor: EditorColorPairIndex) =
+        if columns[last] > columns[first]:
+          result.segments.add(
+            ColorSegment(
+              firstRow: row,
+              lastRow: row,
+              firstColumn: columns[first],
+              lastColumn: columns[last] - 1,
+              color: spanColor,
+              style: style,
+            )
+          )
+
+      if parsed.spans.len == 0:
+        # Explicit plain coverage also prevents URI overlays from inheriting a
+        # previous row's colour when tokenization is interrupted.
+        result.segments.add(
+          ColorSegment(
+            firstRow: row,
+            lastRow: row,
+            firstColumn: 0,
+            lastColumn: column - 1,
+            color: EditorColorPairIndex.default,
+            style: style,
+          )
+        )
+      else:
+        for span in parsed.spans:
+          let
+            first = clamp(span.firstByte, 0, line.len)
+            last = clamp(span.lastByte, first, line.len)
+            color = matterColor(span.category)
+          if span.category == mccComment and words.len > 0:
+            var partStart = first
+            for (text, partColor) in line[first ..< last].parseReservedWord(
+              words, color
+            ):
+              let partEnd = partStart + text.len
+              addSpan(partStart, partEnd, partColor)
+              partStart = partEnd
+          else:
+            addSpan(first, last, color)
+
+      # Capped tails are already sorted by relative row and follow every token
+      # on their line. Keep the same absolute-row contract as the builtin path.
+      while tailIndex < tailSegments.len and tailSegments[tailIndex].firstRow == offset:
+        var tail = tailSegments[tailIndex]
+        tail.firstRow += startLine
+        tail.lastRow += startLine
+        result.segments.add(tail)
+        inc tailIndex
+      result.lineStates.add(TokenizerState(backend: hbMatter, matterState: state))
+
 proc initHighlightIncrementalFromStr*(
     bufferStr: string,
     startLine: int,
@@ -1087,6 +1275,12 @@ proc initHighlightIncrementalFromStr*(
   ## `startLine + i + 1` — even when the tokenizer stops before the end of
   ## the buffer (interior NUL, defensive break). Consumers index into it
   ## positionally and must be able to rely on this.
+  when defined(moe.matter) or defined(features.moe.matter):
+    if initialState.backend == hbMatter:
+      return initMatterHighlight(
+        bufferStr, startLine, endLine, initialState, reservedWords, language,
+        tailSegments,
+      )
 
   var
     currentRow = startLine
@@ -1528,10 +1722,7 @@ proc updateHighlightIncremental*(
     # A small backward margin covers tokens spanning the boundary.
     reparseStart = max(0, changedStartLine - 2)
 
-    if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-      initialState = incrHighlight.lineStates.states[reparseStart - 1]
-    else:
-      initialState = TokenizerState()
+    initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
 
     # Multi-line tokens record the depth at their completion, so restarting
     # mid-token restores a stale depth (e.g. nested comments); rewind to the
@@ -1542,34 +1733,31 @@ proc updateHighlightIncremental*(
 
     # Also rewind across chunk-handoff hazards (see `chunkHandoffUnsafe`);
     # rewinding early is safe: the re-parse restarts from a cached state.
-    while reparseStart > 0 and (
+    while initialState.backend == hbBuiltin and reparseStart > 0 and (
       initialState.state in MultiLineKinds or
       chunkHandoffUnsafe(language, initialState.state, getLine(reparseStart))
     )
     :
       dec reparseStart
-      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-        initialState = incrHighlight.lineStates.states[reparseStart - 1]
-      else:
-        initialState = TokenizerState()
+      initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
 
     if oldFrontier >= 0 and reparseStart > oldFrontier:
       # Rows between the old frontier and the new anchor were trimmed but
       # never re-parsed; restart from the old start line instead.
       reparseStart = oldReparseStart
-      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-        initialState = incrHighlight.lineStates.states[reparseStart - 1]
-      else:
-        initialState = TokenizerState()
+      initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
     elif oldReparseStart >= 0 and reparseStart - 1 >= incrHighlight.lineStates.states.len:
       # The discarded flight's trim left no seed state below the new anchor;
       # restart from the top of the available cache (fresh flights always
       # have `states.len >= reparseStart`).
       reparseStart = incrHighlight.lineStates.states.len
-      if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-        initialState = incrHighlight.lineStates.states[reparseStart - 1]
-      else:
-        initialState = TokenizerState()
+      initialState = incrHighlight.cachedTokenizerState(reparseStart, language)
+
+    when defined(moe.matter) or defined(features.moe.matter):
+      if initialState.backend == hbMatter:
+        # A timeout or grammar error remains sticky within one parse flight,
+        # but a later edit starts a new flight and gets one recovery attempt.
+        initialState.matterState.failed = false
 
     let trimIdx = incrHighlight.segments.segmentCutIndex(reparseStart)
     if trimIdx < incrHighlight.segments.len:
@@ -1625,7 +1813,7 @@ proc updateHighlightIncremental*(
     # block scalar) moves back so the rewound lines re-parse with their
     # context; the final chunk keeps the whole window.
     var handoff = chunkEnd + 1
-    if chunkEnd < lastLine:
+    if currentState.backend == hbBuiltin and chunkEnd < lastLine:
       while handoff > currentStart and
           chunkHandoffUnsafe(
             language, newLineStates[handoff - currentStart - 1].state, getLine(handoff)

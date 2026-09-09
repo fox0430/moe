@@ -41,6 +41,50 @@ import
   key_router,
   lsp_integration
 
+import buffer/highlight
+
+when defined(moe.matter) or defined(features.moe.matter):
+  import syntax/matter_backend
+
+export HighlightBackend
+
+proc setHighlightBackend*(e: Editor, backend: HighlightBackend) =
+  ## Select the highlighter for all current and future editor buffers without
+  ## loading or writing a configuration file. Existing syntax caches are
+  ## invalidated and rebuilt by the normal frame/updateHighlight path; semantic
+  ## and diagnostic overlays are preserved. The requested default is stored in
+  ## e.config, so a later config reload can replace it in the usual way.
+  ## Matter still requires compile-time enablement; Diff/Log remain builtin.
+  e.config.highlight.backend = backend
+  for buffer in e.buffers:
+    buffer.setHighlightBackend(backend)
+
+proc setMatterGrammar*(
+    e: Editor,
+    language: SourceLanguage,
+    grammar: string,
+    path = "grammar.tmLanguage.json",
+) =
+  ## Opt current and future editor buffers into Matter by supplying a TextMate
+  ## grammar. The content is kept in memory and is never written to moerc.toml.
+  ## Invalid grammar input raises a catchable error without changing the editor.
+  when defined(moe.matter) or defined(features.moe.matter):
+    let grammars =
+      e.config.highlight.matterGrammarSet.withMatterGrammar(language, grammar, path)
+    e.config.highlight.matterGrammarSet = grammars
+    e.config.highlight.backend = hbMatter
+    for buffer in e.buffers:
+      buffer.setMatterGrammarSet(grammars)
+      buffer.setHighlightBackend(hbMatter)
+  else:
+    discard e
+    discard language
+    discard grammar
+    discard path
+    raise newException(
+      TextMateGrammarError, "Matter support is not enabled at compile time"
+    )
+
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor.
   ## Display/edit flags are pull-read from `e.config`, so the ref swap at the

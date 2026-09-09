@@ -24,6 +24,9 @@ from std/strutils import rfind
 import std/[algorithm, deques, hashes, options, tables, times, unicode]
 
 import ../[encoding, highlight, logger, primitives, setting_issue, unicode_utils]
+import ../types/highlight_types
+when defined(moe.matter) or defined(features.moe.matter):
+  import ../syntax/matter_backend
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 import cow_seq, seq_delta
 
@@ -403,6 +406,11 @@ type
     reservedWords*: seq[ReservedWord] # Reserved words to highlight (TODO, NOTE, etc.)
     maxHighlightLineLength*: int
       # Per-line tokenization cap in runes (synmaxcol). 0 = unlimited.
+    highlightBackend*: HighlightBackend
+      ## Requested syntax backend; unavailable optional backends fall back safely.
+    when defined(moe.matter) or defined(features.moe.matter):
+      matterGrammarSet*: MatterGrammarSet
+        ## Explicit grammar collection shared with other buffers in the editor.
     uriScanParsedUpTo*: int # Last line scanned for URIs during progressive init
 
     # Change list (tracks positions where changes were made, like Vim's changelist)

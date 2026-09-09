@@ -179,3 +179,32 @@ jobs:
         # whole job a silent no-op. Fail loudly instead.
         command -v lasm
         xvfb-run env XDG_SESSION_TYPE=x11 nim c -r tests/test_lsp_e2e_lasm.nim
+
+  matter:
+    name: Matter syntax backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TERM: xterm-256color
+    steps:
+    - uses: actions/checkout@v7
+    - uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: 2.2.10
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Update Nimble for revision-pinned dependencies
+      run: nimble install 'nimble@0.24.1' -y
+    - name: Install dependencies
+      run: |
+        nimble --parser:declarative --features:matter install -d -y
+        nimble --parser:declarative --features:matter setup
+    - name: Build and test Matter backend
+      run: |
+        nim c -r -d:moe.matter tests/test_matter_backend.nim
+        # Disable wall-clock interruption for full-vs-incremental equivalence.
+        nim c -r -d:features.moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim
+        nim c -r -d:features.moe.matter tests/test_matter_highlight_edges.nim
+        nim c -r -d:features.moe.matter tests/test_highlight.nim
+        nim c -r -d:features.moe.matter tests/test_highlighter_api.nim
+        nim c -r -d:features.moe.matter tests/test_config_loader.nim
+        nim c -d:release -d:features.moe.matter src/moe.nim

@@ -149,6 +149,76 @@ nimble gendocs         # Both config and howtouse
 nimble genhowtouse     # Just documents/howtouse.md
 ```
 
+## Optional Matter syntax backend
+
+Enable the `matter` Nimble feature to install and build the TextMate-grammar
+engine (Nimble 0.24.1 or newer):
+
+```sh
+nimble --parser:declarative --features:matter build -d:release
+```
+
+For direct compiler invocations, install the optional dependencies first, then
+build with `-d:moe.matter` or `-d:features.moe.matter`:
+
+```sh
+nimble --parser:declarative --features:matter install -d -y
+nimble --parser:declarative --features:matter setup
+nim c -d:release -d:moe.matter --out:moe src/moe.nim
+```
+
+Moe does not embed or implicitly select any TextMate grammars. A Matter-enabled
+build continues to use the builtin tokenizer until a grammar is explicitly
+provided. Host applications can opt a buffer or an editor into Matter by passing
+grammar text through the public API:
+
+```nim
+let grammar = readFile("Nim.tmLanguage.json")
+editor.setMatterGrammar(langNim, grammar, "Nim.tmLanguage.json")
+# Or limit the opt-in to one buffer:
+buffer.setMatterGrammar(langNim, grammar, "Nim.tmLanguage.json")
+```
+
+For standalone Moe, place JSON `.tmLanguage.json` or XML plist `.tmLanguage`
+files inside Moe's configuration directory (normally `~/.config/moe`) and name
+them in `moerc.toml`. Relative subdirectories are allowed; absolute paths and
+paths escaping the configuration directory are rejected:
+
+```toml
+[Highlight]
+backend = "matter"
+matterGrammarFiles = ["grammars/Nim.tmLanguage.json"]
+```
+
+Config-loaded roots are matched to Moe languages by their declared TextMate
+`scopeName`; additional listed grammars may satisfy external includes. The API
+overload associates the supplied root with its `SourceLanguage` explicitly, so
+custom scope names are supported there.
+
+The existing `[Standard] syntax` toggle enables/disables rendering for either
+backend. Reloading config switches existing buffers and invalidates their syntax
+caches. A binary compiled without either Matter define uses builtin highlighting
+even if the config requests Matter. A Matter-enabled binary also falls back per
+language when no valid grammar was supplied. Diff and Log always retain Moe's
+builtin lexer.
+
+Matter shares Moe's progressive-load and budgeted incremental paths, per-line
+length cap, reserved-word colours, and URI/LSP/diagnostic overlays. Tokenization
+has a soft 20ms per-line limit: a timeout or grammar error makes that line and
+following lines plain until a reparse starts from an earlier successful state
+or the backend is reset. This avoids caching a partial multiline state. Debug
+builds and expensive grammars (notably C++) may reach this limit more often.
+Debug logging records these failures; see the logging section above.
+Build with `-d:matterTimeLimitMs=N` to adjust the soft deadline (`0` disables it).
+
+Moe never downloads grammars. The config path reads only the files explicitly
+listed by the user; the API path performs no filesystem access. Grammar licenses
+and provenance remain the responsibility of the user or embedding application.
+
+Run the optional tests with
+`nim c -r -d:features.moe.matter tests/test_matter_backend.nim` and
+`nim c -r -d:features.moe.matter -d:matterTimeLimitMs=0 tests/test_highlight_matter.nim`.
+
 ## Contributing
 
 Bug reports, feature requests, and pull requests are welcome. Before opening a PR:

@@ -1053,9 +1053,14 @@ proc applyColorModeFallback*(requested: ColorModeKind): ColorModeKind =
   if requested == cmkNone:
     return cmkNone
 
-  let capability = detectTerminalColorCapability()
-
-  if colorModeRank(requested) <= colorModeRank(capability):
+  when defined(moe.embedded):
+    # Embedded frontends render color values themselves and have no terminal
+    # capability to probe. Honor the host's requested color precision.
     return requested
   else:
-    return capability
+    let capability = detectTerminalColorCapability()
+
+    if colorModeRank(requested) <= colorModeRank(capability):
+      return requested
+    else:
+      return capability

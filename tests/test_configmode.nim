@@ -2388,6 +2388,7 @@ suite "ConfigMode - descriptor completeness":
     let excluded = [
       ("StatusLine", "setupText"),
       ("Highlight", "reservedWord"),
+      ("Highlight", "matterGrammarFiles"),
       ("AutoBackup", "backupDir"),
       ("AutoBackup", "dirToExclude"),
       ("BuildOnSave", "workspaceRoot"),

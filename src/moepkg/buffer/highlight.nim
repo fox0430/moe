@@ -26,12 +26,75 @@
 import std/tables
 
 import ../[highlight, uri_utils]
+import ../types/highlight_types
 import ../syntax/tokenizer
+when defined(moe.matter) or defined(features.moe.matter):
+  import ../syntax/matter_backend
 import core, markers
+
+export highlight_types
+
+proc effectiveHighlightBackend*(b: TextBuffer): HighlightBackend =
+  ## Return the engine selected for this buffer's language and build. Matter
+  ## requests fall back to builtin when unavailable or for Diff/Log. This
+  ## query does not report per-line tokenizer failures or change buffer state.
+  when defined(moe.matter) or defined(features.moe.matter):
+    effectiveHighlightBackend(b.highlightBackend, b.language, b.matterGrammarSet)
+  else:
+    effectiveHighlightBackend(b.highlightBackend, b.language)
+
+proc newBufferTokenizerState*(b: TextBuffer): TokenizerState =
+  when defined(moe.matter) or defined(features.moe.matter):
+    newTokenizerState(b.highlightBackend, b.language, b.matterGrammarSet)
+  else:
+    newTokenizerState(b.highlightBackend, b.language)
 
 proc matches*(pr: PendingReparse, b: TextBuffer): bool =
   ## TextBuffer-scoped overload of `PendingReparse.matches`.
   pr.matches(b.lastChangedLines, b.len, b.contentVersion, b.reservedWords)
+
+proc setHighlightBackend*(b: TextBuffer, backend: HighlightBackend) =
+  ## Change the requested syntax engine and invalidate every syntax-derived
+  ## cache. URI styling is rebuilt; semantic and diagnostic overlays retain
+  ## their identity and content version because the buffer text has not changed.
+  ## The next updateHighlight/normal editor frame reparses with the selected
+  ## engine. Use effectiveHighlightBackend to inspect compile/language fallback.
+  if b.highlightBackend != backend:
+    b.highlightBackend = backend
+    b.incrementalHighlight = nil
+    b.uriScanParsedUpTo = -1
+    b.highlightNeedsUpdate = true
+
+when defined(moe.matter) or defined(features.moe.matter):
+  proc setMatterGrammarSet*(b: TextBuffer, grammars: MatterGrammarSet) =
+    ## Replace the explicit grammar collection and invalidate syntax caches.
+    if b.matterGrammarSet != grammars:
+      b.matterGrammarSet = grammars
+      b.incrementalHighlight = nil
+      b.uriScanParsedUpTo = -1
+      b.highlightNeedsUpdate = true
+
+proc setMatterGrammar*(
+    b: TextBuffer,
+    language: SourceLanguage,
+    grammar: string,
+    path = "grammar.tmLanguage.json",
+) =
+  ## Opt this buffer into Matter by supplying its TextMate grammar text.
+  ## Invalid grammar input raises a catchable error and leaves the buffer
+  ## unchanged. Matter support must be enabled by its direct define or Nimble feature.
+  when defined(moe.matter) or defined(features.moe.matter):
+    let grammars = b.matterGrammarSet.withMatterGrammar(language, grammar, path)
+    b.setMatterGrammarSet(grammars)
+    b.setHighlightBackend(hbMatter)
+  else:
+    discard b
+    discard language
+    discard grammar
+    discard path
+    raise newException(
+      TextMateGrammarError, "Matter support is not enabled at compile time"
+    )
 
 proc rewindUriScan(b: TextBuffer, to: int) =
   ## Move the URI-scan frontier back to `to` (clamped to -1); no-op if it is
@@ -52,6 +115,10 @@ proc isCodeBlockLine*(b: TextBuffer, line: int): bool =
   let states = b.incrementalHighlight.lineStates.states
   if line < 0 or line >= states.len:
     return false
+  when defined(moe.matter) or defined(features.moe.matter):
+    if states[line].backend == hbMatter:
+      let enterInBlock = line >= 1 and isMatterCodeBlock(states[line - 1].matterState)
+      return enterInBlock or isMatterCodeBlock(states[line].matterState)
   let enterInBlock = line >= 1 and states[line - 1].lang.markdown.inCodeBlock
   let exitInBlock = states[line].lang.markdown.inCodeBlock
   enterInBlock or exitInBlock
@@ -144,6 +211,7 @@ proc continueInitialHighlight*(
   # blank / alone-header lines), so rewind to a safe line and re-parse the
   # previous chunk's tail together with the new one.
   while startLine > 0 and
+      b.incrementalHighlight.lineStates.states[startLine - 1].backend == hbBuiltin and
       chunkHandoffUnsafe(
         b.language,
         b.incrementalHighlight.lineStates.states[startLine - 1].state,
@@ -164,7 +232,7 @@ proc continueInitialHighlight*(
     else:
       min(startLine + max(ChunkSize, 2 * reparsedLines) - 1, b.len - 1)
 
-  var lastState = TokenizerState()
+  var lastState = b.newBufferTokenizerState()
   if startLine > 0:
     lastState = b.incrementalHighlight.lineStates.states[startLine - 1]
 
@@ -342,7 +410,11 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
         elif reparseBudget > 0:
           b.highlight.colorSegments = @[]
           b.incrementalHighlight = IncrementalHighlight(
-            segments: @[], lineStates: LineStateCache(states: @[]), parsedUpTo: -1
+            backend: b.effectiveHighlightBackend,
+            initialState: b.newBufferTokenizerState(),
+            segments: @[],
+            lineStates: LineStateCache(states: @[]),
+            parsedUpTo: -1,
           )
           discard continueInitialHighlight(b, reparseBudget, parsedLines)
         else:
@@ -356,7 +428,7 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
             lines,
             0,
             lines.high,
-            TokenizerState(), # Default initial state
+            b.newBufferTokenizerState(),
             b.reservedWords,
             b.language,
             b.maxHighlightLineLength,
@@ -364,6 +436,8 @@ proc updateHighlight*(b: TextBuffer, reparseBudget: int, parsedLines: var int): 
 
           b.highlight.colorSegments = segments
           b.incrementalHighlight = IncrementalHighlight(
+            backend: b.effectiveHighlightBackend,
+            initialState: b.newBufferTokenizerState(),
             segments: segments,
             lineStates: LineStateCache(states: lineStates),
             parsedUpTo: b.len - 1,

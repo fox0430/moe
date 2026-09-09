@@ -133,6 +133,10 @@ setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} 
 
 [Highlight]
 
+backend = "builtin"                    # "matter" requires compile-time support and grammars below
+
+matterGrammarFiles = []                # TextMate grammar files inside ~/.config/moe
+
 currentLine = true                     # Highlight current line
 
 currentColumn = false                  # Highlight current column

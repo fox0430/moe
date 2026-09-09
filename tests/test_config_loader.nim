@@ -25,6 +25,10 @@ import ../src/moepkg/[config_loader, config, color, theme, modes]
 
 import config_test_helper
 
+when defined(moe.matter) or defined(features.moe.matter):
+  import ../src/moepkg/syntax/[matter_backend, tokenizer]
+  import matter_test_grammars
+
 var testFileCounter {.global.} = 0
 
 # Helper proc to load config from a TOML string using a temp file
@@ -485,6 +489,77 @@ friction = -1.0
     check config.smoothScroll.friction == 80.0 # Default value
 
 suite "Config Validation - Highlight section":
+  test "matter backend loads from TOML":
+    let content = """
+[Highlight]
+backend = "matter"
+"""
+    let (config, vr) = loadFromTomlString(content)
+    check not vr.hasErrors
+    check config.highlight.backend == hbMatter
+
+  test "invalid backend is rejected":
+    let content = """
+[Highlight]
+backend = "unknown"
+"""
+    let (_, vr) = loadFromTomlString(content)
+    check vr.hasErrors
+
+  when defined(moe.matter) or defined(features.moe.matter):
+    test "Matter grammar files resolve from the moerc directory":
+      inc testFileCounter
+      let
+        directory = getTempDir() / "moe_matter_config_" & $testFileCounter
+        grammarPath = directory / "nim.tmLanguage.json"
+        configPath = directory / "moerc.toml"
+      createDir(directory)
+      defer:
+        removeFile(configPath)
+        removeFile(grammarPath)
+        removeDir(directory)
+      writeFile(grammarPath, NimMatterGrammar)
+      writeFile(
+        configPath,
+        """
+[Highlight]
+backend = "matter"
+matterGrammarFiles = ["nim.tmLanguage.json"]
+""",
+      )
+
+      let loaded = loadConfigFromToml(configPath)
+      require loaded.isOk
+      let (config, vr) = loaded.get
+      check not vr.hasErrors
+      check config.highlight.backend == hbMatter
+      check config.highlight.matterGrammarSet.matterSupports(langNim)
+      check not config.highlight.matterGrammarSet.matterSupports(langRust)
+
+    test "Matter grammar paths cannot escape the moerc directory":
+      inc testFileCounter
+      let
+        directory = getTempDir() / "moe_matter_escape_" & $testFileCounter
+        configPath = directory / "moerc.toml"
+      createDir(directory)
+      defer:
+        removeFile(configPath)
+        removeDir(directory)
+      writeFile(
+        configPath,
+        """
+[Highlight]
+backend = "matter"
+matterGrammarFiles = ["../outside.tmLanguage.json"]
+""",
+      )
+
+      let loaded = loadConfigFromToml(configPath)
+      require loaded.isOk
+      let (_, vr) = loaded.get
+      check vr.hasErrors
+      check vr.errors.anyIt(it.name == "Highlight.matterGrammarFiles")
+
   test "Valid Highlight config passes validation":
     let tomlStr = """
 [Highlight]

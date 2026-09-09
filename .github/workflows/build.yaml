@@ -69,9 +69,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.nimble
-          key: ${{ runner.os }}-nimble-v2-${{ hashFiles('*.nimble') }}
+          key: ${{ runner.os }}-${{ matrix.nim-version }}-nimble-v3-${{ hashFiles('nimble.lock', 'moe.nimble') }}
           restore-keys: |
-            ${{ runner.os }}-nimble-v2-
+            ${{ runner.os }}-${{ matrix.nim-version }}-nimble-v3-
 
       - uses: jiro4989/setup-nim-action@v2
         with:
@@ -85,5 +85,11 @@ jobs:
           use-nightlies: true
           repo-token: ${{ secrets.GITHUB_TOKEN }}
         if: matrix.nim-version == 'devel'
+
+      # Nim 2.0.10 bundles Nimble 0.16.1, whose lockfile installer fails for
+      # revision-pinned packages when their generated path contains '#'.
+      - name: Update Nimble for revision-pinned dependencies
+        if: matrix.nim-version == '2.0.10'
+        run: nimble install 'nimble@0.24.1' -y
 
       - run: nimble build -y

@@ -56,6 +56,11 @@ suite "Config - SplitType enum":
     check $stHorizontal == "horizontal"
     check $stVertical == "vertical"
 
+suite "Config - HighlightBackend enum":
+  test "HighlightBackend string values":
+    check $hbBuiltin == "builtin"
+    check $hbMatter == "matter"
+
 suite "Config - LspTraceLevel enum":
   test "LspTraceLevel string values":
     check $ltOff == "off"
@@ -137,6 +142,7 @@ suite "Config - newEditorConfig defaults":
   test "Highlight config defaults":
     let config = newEditorConfig()
 
+    check config.highlight.backend == hbBuiltin
     check config.highlight.currentLine == true
     check config.highlight.currentColumn == false
     check config.highlight.reservedWord == @["TODO", "WIP", "NOTE"]
