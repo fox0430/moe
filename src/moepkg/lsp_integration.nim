@@ -1095,6 +1095,10 @@ proc requestSyncGate*(
     trigger: LspRequestTrigger = lrtAutomatic,
 ): Option[string] {.raises: [].} =
   ## Sync for the request; return the refusal reason or none.
+  ##
+  ## This gate answers "has the server seen the buffer" before sending.
+  ## Freshness of an answer already received is the response side's job
+  ## (`classifyResponse` drops stale/gone/hijacked responses).
   # A key press pays a fresh attempt; automatic requests answer from the memo.
   let userDriven = trigger == lrtUserAction
   let status =
