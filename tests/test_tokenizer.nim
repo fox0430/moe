@@ -20,7 +20,8 @@
 import std/[unittest, sets, strutils]
 
 import
-  ../src/moepkg/syntax/[tokenizer, syntax_markdown, syntax_python, syntax_javascript]
+  ../src/moepkg/syntax/
+    [tokenizer, syntax_markdown, syntax_nim, syntax_python, syntax_javascript]
 
 suite "tokenizer - TokenClass enum":
   test "TokenClass has expected values":

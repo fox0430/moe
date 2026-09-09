@@ -19,7 +19,7 @@
 
 import std/unittest
 
-import ../src/moepkg/syntax/[tokenizer, syntax_markdown]
+import ../src/moepkg/syntax/[tokenizer, syntax_markdown, syntax_nim]
 
 proc collectTokens(input: string): seq[(TokenClass, string)] =
   var g: GeneralTokenizer
