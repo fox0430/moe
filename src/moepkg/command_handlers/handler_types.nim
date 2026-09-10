@@ -43,7 +43,7 @@ proc textObjectCommandIdFor*(ch: string): string =
   of "`": "textobject.quote.backtick"
   of "(", ")", "b": "textobject.paren"
   of "[", "]": "textobject.bracket"
-  of "{", "}": "textobject.brace"
+  of "{", "}", "B": "textobject.brace"
   of "<", ">": "textobject.angle"
   of "t": "textobject.tag"
   of "s": "textobject.sentence"
