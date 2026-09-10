@@ -813,7 +813,12 @@ proc triggerLspCompletionRequest*(
     # without touching LSP.
     if handler.completionManager.shouldSkipLspRequest(prefix):
       if handler.completionManager.lspItems.len > 0:
-        # Filter existing LSP items client-side without clearing them
+        # Filter existing LSP items client-side without clearing them.
+        # Schema candidates depend on the cursor position, not just the
+        # prefix, so they are still recollected.
+        handler.completionManager.refreshSchemaEntries(
+          buffer, state.cursor.line, state.cursor.column
+        )
         handler.completionManager.menu.prefix = prefix
         handler.completionManager.menu.entries =
           handler.completionManager.filterAndSortEntries(prefix)
@@ -1114,10 +1119,14 @@ proc handleInsertModeKey*(
         else:
           handler.completionManager.cancelCompletion()
       else:
-        # Update completion filter with new prefix
+        # Update completion filter with new prefix. Backspace can move the
+        # cursor across a config context boundary, so re-analyze the line.
         let line = buffer.getLine(state.cursor.line)
         let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
         if newPrefix.len >= MinPrefixLength:
+          handler.completionManager.refreshSchemaEntries(
+            buffer, state.cursor.line, state.cursor.column
+          )
           handler.completionManager.updateFilter(newPrefix)
         else:
           handler.completionManager.cancelCompletion()

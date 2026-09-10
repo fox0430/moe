@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils, monotimes, times, json, os]
+import std/[unittest, options, sequtils, strutils, monotimes, times, json, os]
 
 import pkg/celina
 
@@ -2115,3 +2115,141 @@ suite "Completion - truncation display-width boundaries":
     check termBuffer[3, 0].symbol == "型"
     check termBuffer[5, 0].symbol == "情"
     check termBuffer[7, 0].symbol == "…"
+
+suite "Completion - moerc.toml schema":
+  const MoercContent = """
+[Standard]
+number = true
+colorMode = "256"
+
+[Lsp.Completion]
+enable = true
+"""
+
+  proc newMoercBuffer(): TextBuffer =
+    newTextBuffer(MoercContent, some(getTempDir() / "moerc.toml"))
+
+  proc words(mgr: CompletionManager): seq[string] =
+    for e in mgr.menu.entries:
+      result.add e.word
+
+  test "Only a moerc.toml buffer completes config keys":
+    let buf = newTextBuffer(MoercContent, some(getTempDir() / "other.toml"))
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 1, 4)
+    check "number" notin mgr.words
+
+  test "Key names complete inside their section":
+    let buf = newMoercBuffer()
+    let mgr = newCompletionManager()
+    # Cursor after "numb" on the `number = true` line.
+    mgr.triggerCompletion(buf, 1, 4)
+    check mgr.isActive
+    check mgr.menu.entries[0].word == "number"
+    check mgr.menu.entries[0].source == csConfigSchema
+    check mgr.menu.entries[0].detail == some("bool")
+
+  test "Section names complete in a header":
+    let buf = newTextBuffer("[Sta", some(getTempDir() / "moerc.toml"))
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 0, 4)
+    check "Standard" in mgr.words
+    check "StartUp.FileOpen" in mgr.words
+
+  test "A dotted header completes the sub-table alone":
+    let buf = newTextBuffer("[Lsp.Compl", some(getTempDir() / "moerc.toml"))
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 0, 10)
+    check mgr.menu.entries[0].word == "Completion"
+    check mgr.menu.entries[0].label == "Lsp.Completion"
+
+  test "Enum values complete inside the quotes":
+    let buf =
+      newTextBuffer("[Standard]\ncolorMode = \"25", some(getTempDir() / "moerc.toml"))
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 1, 15)
+    check "256\"" in mgr.words
+
+  test "Schema entries outrank buffer words":
+    let buf = newMoercBuffer()
+    let mgr = newCompletionManager()
+    # "colorMode" is both a schema key and a word of the buffer; it must be
+    # offered once, from the schema.
+    mgr.triggerCompletion(buf, 2, 5)
+    let hits = mgr.menu.entries.filterIt(it.word == "colorMode")
+    check hits.len == 1
+    check hits[0].source == csConfigSchema
+
+  test "Re-analyzing at a new position replaces the candidates":
+    # `[Lsp.Compl` offers "Completion" alone, relative to the typed `Lsp.`
+    # head, so candidates only fit the position they were collected at. Every
+    # path that filters an open popup after the cursor moved must recollect
+    # them rather than re-filter the cached list.
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(
+      newTextBuffer("[Lsp.Compl", some(getTempDir() / "moerc.toml")), 0, 10
+    )
+    check mgr.menu.entries[0].word == "Completion"
+
+    let buf = newTextBuffer("[Lsp", some(getTempDir() / "moerc.toml"))
+    mgr.refreshSchemaEntries(buf, 0, 4)
+    mgr.updateFilter("Lsp")
+    check "Lsp.Completion" in mgr.words
+    check "Completion" notin mgr.words
+
+  test "An element of a multi-line array is not read as a section header":
+    # The `["a", "b"]` line looks bracketed, so mistaking it for a header
+    # would leave the key completion looking up an unknown section.
+    let buf = newTextBuffer(
+      "[Highlight]\nreservedWord = [\n  [\"a\", \"b\"]\n]\ncurr",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 4, 4)
+    check "currentLine" in mgr.words
+
+  test "A space after the bracket still completes the sub-table":
+    let buf = newTextBuffer("[ Lsp.Compl", some(getTempDir() / "moerc.toml"))
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 0, 11)
+    check mgr.menu.entries[0].word == "Completion"
+    check mgr.menu.entries[0].label == "Lsp.Completion"
+
+  test "A quoted value is not offered twice":
+    # "256" is both a schema value and a word of the buffer. The schema
+    # candidate carries the closing quote, so offering the buffer word beside
+    # it would insert an unterminated string.
+    let buf = newTextBuffer(
+      "[Standard]\ncolorMode = \"256\"\ncolorMode = \"25",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 2, 15)
+    check "256\"" in mgr.words
+    check "256" notin mgr.words
+
+  test "A key is not offered inside a multi-line array":
+    let buf = newTextBuffer(
+      "[Highlight]\nreservedWord = [\n  \"reserv", some(getTempDir() / "moerc.toml")
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 2, 9)
+    # The array element is still a buffer word; what must not appear is the
+    # schema key, which would be written as a bare key inside the array.
+    check mgr.schemaEntries.len == 0
+
+  test "The key completes again once the array closes":
+    let buf = newTextBuffer(
+      "[Highlight]\nreservedWord = [\"a\"]\nreserv", some(getTempDir() / "moerc.toml")
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 2, 6)
+    check mgr.menu.entries[0].word == "reservedWord"
+    check mgr.menu.entries[0].source == csConfigSchema
+
+  test "Cancelling drops the schema entries":
+    let buf = newMoercBuffer()
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 1, 4)
+    mgr.cancelCompletion()
+    check mgr.schemaEntries.len == 0

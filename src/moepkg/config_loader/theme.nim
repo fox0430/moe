@@ -32,14 +32,16 @@ import base, save_base
 # Top-level TOML section name handled by this module.
 const ThemeSectionName* = "Theme"
 
+# Keys of the [Theme] section.
+const ThemeConfigKeys* = ["kind", "path"]
+
 # [Theme] section loader (kind/path)
 
 proc loadThemeConfig*(
     table: TomlTableRef, config: var ThemeConfig, vr: var ValidationResult
 ) =
-  const section = "Theme"
-  const validKeys = ["kind", "path"]
-  checkUnknownKeys(table, validKeys, section, vr)
+  const section = ThemeSectionName
+  checkUnknownKeys(table, ThemeConfigKeys, section, vr)
   loadEnum(table, "kind", config.kind, vr, section, parseThemeKind, ValidThemeKinds)
   # Path existence is not validated here even when kind = tkConfig: `initTheme`
   # seeds a missing file with DefaultColors so a fresh environment whose

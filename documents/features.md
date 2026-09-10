@@ -55,6 +55,15 @@ Both views keep the normal text color and mark added/deleted lines and changed w
 moe can now use simple auto-complete.  
 It is possible to auto-complete a words in the currently open buffer.
 
+### moerc.toml completion
+
+When the open buffer is `moerc.toml`, the popup also offers the settings moe
+itself accepts: section headers (`[Standard]`, `[Lsp.Completion]`, ...), the key
+names of the section the cursor is in, and the accepted values of boolean and
+enum keys. Each entry shows its type and description, so the configuration
+reference is available while editing. The candidates are derived from the same
+declarations the config loader uses, so they always match what moe accepts.
+
 ## Register
 
 moe can use Vim-like registers.
