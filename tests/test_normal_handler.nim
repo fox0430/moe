@@ -1808,6 +1808,18 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptQuickRun
 
+  test "background (C-z) returns ptBackground":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let czKey = KeyCombo(isSpecial: false, char: "z", modifiers: {kmCtrl})
+    let r = handler.handleNormalModeKey(buf, state, viewport, czKey)
+    check r.kind == nmrPassthrough
+    check r.passthroughKind == ptBackground
+
   test "window-next (C-w k) returns ptNextWindow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
