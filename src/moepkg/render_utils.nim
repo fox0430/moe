@@ -386,16 +386,21 @@ proc clearBuffer*(buffer: var Buffer) =
 
 # Layout calculation functions
 
+proc lineNumberOffsetFor*(lineCount: int, showLineNumber: bool = true): int =
+  ## Line-number gutter width for a buffer with `lineCount` lines, without
+  ## requiring the buffer itself. 0 when line numbers are hidden or empty.
+  if not showLineNumber or lineCount <= 0:
+    0
+  else:
+    len($lineCount) + LineNumberSpacer
+
 proc calculateLineNumOffset*(buffer: TextBuffer, showLineNumber: bool = true): int =
   ## Calculate line number display offset based on buffer size
   ## If showLineNumber is false, returns 0 (line numbers hidden)
   ## Utility buffers (filer, buffer manager, etc.) never show line numbers
-  if not showLineNumber or buffer.isUtilityBuffer:
+  if buffer.isUtilityBuffer:
     return 0
-  if buffer.len > 0:
-    len($buffer.len) + LineNumberSpacer
-  else:
-    0
+  lineNumberOffsetFor(buffer.len, showLineNumber)
 
 proc sidebarWidthFor*(mode: EditorMode, showSidebar: bool): int {.inline.} =
   ## Mode-gated sidebar width. Sidebar only renders in file-edit modes.

@@ -47,6 +47,8 @@ History mode is experimental feature.
 
 You can check, restore and delete backup files in this mode.  
 If you select backup file, you can check the difference from the current original file.  
+In the diff viewer, press `s` to toggle unified/side-by-side view and `w` to toggle word highlight. The default view follows `[DiffViewer]` in the configuration file.  
+Both views keep the normal text color and mark added/deleted lines and changed words with background colors. The side-by-side view additionally keeps the file's syntax highlighting.  
 
 ## General-purpose autocomplete
 

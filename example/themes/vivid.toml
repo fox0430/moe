@@ -244,6 +244,11 @@ backupManagerCurrentLine = { fg = "#ffffff", bg = "#ff0087" }
 
 diffViewerAddedLine = { fg = "#008000", bg = "#000000" }
 diffViewerDeletedLine = { fg = "#ff0000", bg = "#000000" }
+diffViewerAddedWord = { bg = "#008000" }
+diffViewerDeletedWord = { bg = "#b00000" }
+diffViewerAddedLineBg = { bg = "#003300" }
+diffViewerDeletedLineBg = { bg = "#330000" }
+diffViewerFiller = { fg = "#585858", bg = "#1c1c1c" }
 
 configModeCurrentLine = { fg = "#ffffff", bg = "#ff0087" }
 

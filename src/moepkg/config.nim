@@ -201,6 +201,7 @@ proc newEditorConfig*(): EditorConfig =
     ),
     filer: FilerConfig(showIcons: true),
     fileTree: FileTreeConfig(width: 30),
+    diffViewer: DiffViewerConfig(sideBySide: false, wordHighlight: true),
     autocomplete: AutocompleteConfig(enable: true, windowBorder: true),
     autoSave: AutoSaveConfig(enable: true, interval: 5),
     persist: PersistConfig(

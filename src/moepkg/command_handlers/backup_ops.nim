@@ -25,8 +25,8 @@ import pkg/results
 
 import
   ../[
-    backup, backup_manager, buffer, diff_viewer, editor, editor_window_state, logger,
-    types,
+    backup, backup_manager, buffer, diff_viewer, editor, editor_window_layout,
+    editor_window_state, logger, types,
   ]
 import ../buffer/atomic_write
 
@@ -252,13 +252,20 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
       let bkState = activeWin.modeState.backupManager
       if backupIndex >= 0 and backupIndex < bkState.items.len:
         let entry = bkState.items[backupIndex]
-        # Initialize diff viewer with source and backup paths
-        let dvState = initDiffViewerState(bkState.sourceFilePath, entry.fullPath)
+        # The initial presentation follows [DiffViewer] config.
+        let initialMode =
+          if e.config.diffViewer.sideBySide: dvmSideBySide else: dvmUnified
+        let dvState = initDiffViewerState(
+          bkState.sourceFilePath, entry.fullPath, initialMode,
+          e.config.diffViewer.wordHighlight, e.tabStop,
+        )
         # Suspend backup-manager mode and overlay the diff; both the swapped
         # buffer and the suspended (mode, modeState) must be restored on exit.
         activeWin.saveOriginalBuffer()
         activeWin.suspendMode()
-        activeWin.buffer = dvState.createDiffTextBuffer()
+        # Size by the text area so the gutter cannot clip the right column.
+        let textWidth = e.diffViewerTextWidth(activeWin, dvState)
+        activeWin.buffer = dvState.refreshDiffTextBuffer(textWidth)
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.resetViewportTop()
         activeWin.viewport.leftColumn = 0

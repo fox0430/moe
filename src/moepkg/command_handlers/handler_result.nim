@@ -98,6 +98,8 @@ type
     hrBackupManagerQuit # Close backup manager and return to previous mode
     hrEnterBackupManager # Enter backup manager mode
     hrDiffViewerQuit # Close diff viewer and return to previous mode
+    hrDiffViewerToggleView # Toggle unified/side-by-side in diff viewer
+    hrDiffViewerToggleWord # Toggle word highlight in diff viewer
     hrRecentFile # Enter recent file selection mode
     hrRecentFileOpenFile # Open file from recent file mode
     hrRecentFileQuit # Quit recent file mode
@@ -280,6 +282,8 @@ type
     of hrEnterBackupManager:
       discard
     of hrDiffViewerQuit:
+      discard
+    of hrDiffViewerToggleView, hrDiffViewerToggleWord:
       discard
     of hrRecentFile:
       discard
@@ -484,15 +488,16 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
       hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
       hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
-      hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-      hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-      hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition,
-      hrLspGotoDeclaration, hrLspFindReferences, hrLspDocumentSymbol,
-      hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
-      hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
-      hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit,
-      hrExecCommand, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro,
-      hrMapAdd, hrMapRemove, hrMapClear, hrMapList, hrUndo, hrRedo:
+      hrDiffViewerToggleView, hrDiffViewerToggleWord, hrRecentFileOpenFile,
+      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight,
+      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
+      hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
+      hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
+      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+      hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig,
+      hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit, hrExecCommand,
+      hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri, hrPlaybackMacro, hrMapAdd,
+      hrMapRemove, hrMapClear, hrMapList, hrUndo, hrRedo:
     hrgExitAndResync
 
 proc group*(r: HandlerResult): HandlerResultGroup =

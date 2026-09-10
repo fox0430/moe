@@ -450,6 +450,17 @@ type
       cfg, cfgMin: 1, cfgDocDescription: "Width of the FileTree sidebar in columns"
     .}: int
 
+  # Diff viewer settings
+  DiffViewerConfig* {.cfgSection: "DiffViewer".} = object
+    sideBySide* {.
+      cfg, cfgDocDescription: "Show diffs side-by-side by default in the diff viewer"
+    .}: bool
+    wordHighlight* {.
+      cfg,
+      cfgDocDescription:
+        "Highlight changed words inside changed lines in the diff viewer"
+    .}: bool
+
   # Autocomplete settings
   AutocompleteConfig* {.cfgSection: "Autocomplete".} = object
     enable* {.cfg, cfgDocDescription: "Enable/Disable General-purpose autocompletion".}:
@@ -771,6 +782,7 @@ type
     notification*: NotificationConfig
     filer*: FilerConfig
     fileTree*: FileTreeConfig
+    diffViewer*: DiffViewerConfig
     autocomplete*: AutocompleteConfig
     autoSave*: AutoSaveConfig
     persist*: PersistConfig

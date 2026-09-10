@@ -2264,8 +2264,9 @@ suite "ConfigMode - descriptor completeness":
     let tested = [
       "standard", "bufferBackend", "clipboard", "buildOnSave", "tabLine", "statusLine",
       "highlight", "autoBackup", "quickRun", "notification", "filer", "fileTree",
-      "autocomplete", "autoSave", "persist", "git", "syntaxChecker", "smoothScroll",
-      "startUpFileOpen", "startUpFileTree", "editorConfig", "log", "theme", "lsp",
+      "diffViewer", "autocomplete", "autoSave", "persist", "git", "syntaxChecker",
+      "smoothScroll", "startUpFileOpen", "startUpFileTree", "editorConfig", "log",
+      "theme", "lsp",
     ].toHashSet
     let excluded = [
       "debug", "keyMapping", "shellCommands", "commandAliases", "disabledCommandAliases"
@@ -2289,8 +2290,9 @@ suite "ConfigMode - descriptor completeness":
     for name in [
       "Standard", "BufferBackend", "Clipboard", "BuildOnSave", "TabLine", "StatusLine",
       "Highlight", "AutoBackup", "QuickRun", "Notification", "Filer", "FileTree",
-      "Autocomplete", "AutoSave", "Persist", "Git", "SyntaxChecker", "SmoothScroll",
-      "StartUp.FileOpen", "StartUp.FileTree", "EditorConfig", "Log", "Theme", "Lsp",
+      "DiffViewer", "Autocomplete", "AutoSave", "Persist", "Git", "SyntaxChecker",
+      "SmoothScroll", "StartUp.FileOpen", "StartUp.FileTree", "EditorConfig", "Log",
+      "Theme", "Lsp",
     ]:
       check name in sections
 
@@ -2364,6 +2366,7 @@ suite "ConfigMode - descriptor completeness":
     collectFieldNames(cfg.notification, "Notification", allFields)
     collectFieldNames(cfg.filer, "Filer", allFields)
     collectFieldNames(cfg.fileTree, "FileTree", allFields)
+    collectFieldNames(cfg.diffViewer, "DiffViewer", allFields)
     collectFieldNames(cfg.autocomplete, "Autocomplete", allFields)
     collectFieldNames(cfg.autoSave, "AutoSave", allFields)
     collectFieldNames(cfg.persist, "Persist", allFields)

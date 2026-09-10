@@ -355,6 +355,8 @@ const DiffModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "k", description: "Go up"),
     HelpEntry(syntax: "gg", description: "Go to the first line"),
     HelpEntry(syntax: "G", description: "Go to the last line"),
+    HelpEntry(syntax: "s", description: "Toggle unified/side-by-side view"),
+    HelpEntry(syntax: "w", description: "Toggle word highlight"),
   ]
 )
 

@@ -176,8 +176,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrBufferManagerQuit, hrBufferManagerSelectBuffer,
       hrBufferManagerDeleteBuffer, hrBookmarkManagerQuit, hrBookmarkManagerJump,
-      hrBookmarkManagerDelete, hrBackupManagerQuit, hrDiffViewerQuit, hrFilerQuit,
-      hrLspLog:
+      hrBookmarkManagerDelete, hrBackupManagerQuit, hrDiffViewerQuit,
+      hrDiffViewerToggleView, hrDiffViewerToggleWord, hrFilerQuit, hrLspLog:
     return e.processViewerResult(r)
   of hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile:
     return e.processConfigResult(r)

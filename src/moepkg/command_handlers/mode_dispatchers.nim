@@ -987,6 +987,10 @@ proc handleDiffViewerMode*(
     )
   of dvrQuit:
     return HandlerResult(kind: hrDiffViewerQuit)
+  of dvrToggleView:
+    return HandlerResult(kind: hrDiffViewerToggleView)
+  of dvrToggleWord:
+    return HandlerResult(kind: hrDiffViewerToggleWord)
   of dvrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of dvrError:
