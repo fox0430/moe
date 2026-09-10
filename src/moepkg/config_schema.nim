@@ -209,11 +209,13 @@ func stripComment(line: string): string =
 
 func parseSectionHeader*(line: string): Option[string] =
   ## The section name of a `[Section]` header line, or none for any other
-  ## line. A trailing comment is allowed.
+  ## line. A trailing comment is allowed. An element of a multi-line array
+  ## such as `["a", "b"]` also looks bracketed, so names holding a bracket,
+  ## comma or quote are rejected.
   let s = line.stripComment.strip
   if s.len >= 2 and s[0] == '[' and s[^1] == ']':
     let name = s[1 ..^ 2].strip
-    if name.len > 0:
+    if name.len > 0 and name.find({'[', ']', ',', '"', '\''}) < 0:
       return some(name)
 
 func quoteChar(state: QuoteState): char =
@@ -264,7 +266,9 @@ func analyzeLine*(
         return ConfigCompletionContext(kind: cckNone)
       # `head` is the dotted part only: the trailing word is the prefix the
       # offered text replaces.
-      let typed = before[bracket + 1 ..^ 1]
+      # Leading space after `[` is legal TOML, and `head` must line up with
+      # the schema names, so drop it.
+      let typed = before[bracket + 1 ..^ 1].strip(trailing = false)
       if ']' in typed:
         # The header is already closed before the cursor.
         return ConfigCompletionContext(kind: cckNone)

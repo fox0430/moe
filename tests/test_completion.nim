@@ -2197,6 +2197,24 @@ enable = true
     check "Lsp.Completion" in mgr.words
     check "Completion" notin mgr.words
 
+  test "An element of a multi-line array is not read as a section header":
+    # The `["a", "b"]` line looks bracketed, so mistaking it for a header
+    # would leave the key completion looking up an unknown section.
+    let buf = newTextBuffer(
+      "[Highlight]\nreservedWord = [\n  [\"a\", \"b\"]\n]\ncurr",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 4, 4)
+    check "currentLine" in mgr.words
+
+  test "A space after the bracket still completes the sub-table":
+    let buf = newTextBuffer("[ Lsp.Compl", some(getTempDir() / "moerc.toml"))
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 0, 11)
+    check mgr.menu.entries[0].word == "Completion"
+    check mgr.menu.entries[0].label == "Lsp.Completion"
+
   test "A quoted value is not offered twice":
     # "256" is both a schema value and a word of the buffer. The schema
     # candidate carries the closing quote, so offering the buffer word beside

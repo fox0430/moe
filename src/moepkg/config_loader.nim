@@ -48,6 +48,18 @@ import
   ]
 export base, save_base, simple, debug, lsp, themeLoader, keymapping, user_commands
 
+# Every top-level section name moerc.toml accepts. Each sub-module owns the
+# names it handles; "StartUp" is the parent table of `[StartUp.FileOpen]` and
+# `[StartUp.FileTree]` so it belongs to the orchestrator.
+const KnownTopLevelSections* =
+  @SimpleSectionNames &
+  @[
+    DebugSectionName, LspSectionName, ThemeSectionName, KeyMappingSectionName, "StartUp"
+  ] & @UserCommandsSectionNames
+
+# The sub-tables of [StartUp].
+const StartUpSubSectionNames* = ["FileOpen", "FileTree"]
+
 when defined(moe.matter) or defined(features.moe.matter):
   proc loadMatterGrammarFiles(
       configPath: string, config: var HighlightConfig, vr: var ValidationResult
@@ -107,16 +119,7 @@ proc loadConfigFromToml*(
   var config = newEditorConfig()
   var vr = newValidationResult()
 
-  # Validate top-level section names. Each sub-module owns the section names
-  # it handles; "StartUp" is a parent table for `[StartUp.FileOpen]` and
-  # `[StartUp.FileTree]` so it lives here at the orchestrator level.
-  const knownSections =
-    @SimpleSectionNames &
-    @[
-      DebugSectionName, LspSectionName, ThemeSectionName, KeyMappingSectionName,
-      "StartUp",
-    ] & @UserCommandsSectionNames
-  checkUnknownKeys(toml.getTable(), knownSections, "", vr)
+  checkUnknownKeys(toml.getTable(), KnownTopLevelSections, "", vr)
 
   # Load each top-level {.cfgSection.} section (validation integrated into
   # loading). This single macro call expands to the per-section
@@ -135,8 +138,7 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("StartUp"):
     let startUpTable = toml["StartUp"].getTable()
-    const startUpValidKeys = ["FileOpen", "FileTree"]
-    checkUnknownKeys(startUpTable, startUpValidKeys, "StartUp", vr)
+    checkUnknownKeys(startUpTable, StartUpSubSectionNames, "StartUp", vr)
     if startUpTable.hasKey("FileOpen"):
       loadStartUpFileOpenConfig(
         startUpTable["FileOpen"].getTable(), config.startUpFileOpen, vr

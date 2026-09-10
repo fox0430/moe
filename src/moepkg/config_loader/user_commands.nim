@@ -33,6 +33,10 @@ import base, save_base
 const UserCommandsSectionNames* =
   ["CommandAliases", "ShellCommands", "DisabledCommandAliases"]
 
+# Keys of the [DisabledCommandAliases] section. The other two take
+# caller-defined keys.
+const DisabledCommandAliasesKeys* = ["aliases"]
+
 proc loadCommandAliasesConfig*(
     table: TomlTableRef,
     commandAliases: var Table[string, UserCommandEntry],
@@ -112,7 +116,7 @@ proc loadDisabledCommandAliasesConfig*(
   ## Value format: aliases = ["q", "w"]
   const section = "DisabledCommandAliases"
   for key, value in table.pairs:
-    if key != "aliases":
+    if key notin DisabledCommandAliasesKeys:
       vr.addUnknownKey(fullKey(section, key))
       continue
     if value.kind != TomlValueKind.Array:

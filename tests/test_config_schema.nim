@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, sequtils, strutils]
+import std/[algorithm, unittest, options, sequtils, strutils]
 
-import ../src/moepkg/config_schema
+import ../src/moepkg/[config_schema, config_loader]
 import ../src/moepkg/config_loader/base
 
 proc texts(cs: seq[ConfigCandidate]): seq[string] =
@@ -84,6 +84,38 @@ suite "Config schema - derived data":
       for k in s.keys:
         check not k.description.toLowerAscii.startsWith("deprecated")
 
+suite "Config schema - drift against the loader":
+  ## The hand-written parts of the schema (Theme, DisabledCommandAliases, the
+  ## caller-keyed tables) cannot follow the loader on their own, so compare
+  ## them here: a section or key added to the loader must fail these until it
+  ## is offered by the completion too.
+
+  test "Top-level sections match the ones the loader accepts":
+    var top: seq[string] = @[]
+    for s in ConfigSchema:
+      let name = s.name.split('.')[0]
+      if name notin top:
+        top.add name
+    check top.sorted == (@KnownTopLevelSections).sorted
+
+  test "[StartUp] sub-tables match the ones the loader accepts":
+    var offered: seq[string] = @[]
+    for s in ConfigSchema:
+      let parts = s.name.split('.')
+      if parts.len == 2 and parts[0] == "StartUp" and parts[1] notin offered:
+        offered.add parts[1]
+    check offered.sorted == (@StartUpSubSectionNames).sorted
+
+  test "[Theme] keys match the loader":
+    let sec = findSection("Theme")
+    check sec.isSome
+    check sec.get.keys.mapIt(it.name).sorted == (@ThemeConfigKeys).sorted
+
+  test "[DisabledCommandAliases] keys match the loader":
+    let sec = findSection("DisabledCommandAliases")
+    check sec.isSome
+    check sec.get.keys.mapIt(it.name).sorted == (@DisabledCommandAliasesKeys).sorted
+
 suite "Config schema - section headers":
   test "Parse a section header":
     check parseSectionHeader("[Standard]") == some("Standard")
@@ -98,6 +130,11 @@ suite "Config schema - section headers":
     check parseSectionHeader("[Standard]  # comment") == some("Standard")
     check parseSectionHeader("[Lsp.Completion] # [Other]") == some("Lsp.Completion")
 
+  test "An element of a multi-line array is not a header":
+    check parseSectionHeader("""  ["a", "b"]""").isNone
+    check parseSectionHeader("  ['a']").isNone
+    check parseSectionHeader("  [1, 2]").isNone
+
 suite "Config schema - context analysis":
   test "Inside a section header":
     let ctx = analyzeLine("[Sta", 4, "")
@@ -108,6 +145,12 @@ suite "Config schema - context analysis":
     let ctx = analyzeLine("[Lsp.Compl", 10, "")
     check ctx.kind == cckSection
     check ctx.head == "Lsp."
+
+  test "A space after the bracket keeps the head aligned with the schema":
+    let ctx = analyzeLine("[ Lsp.Compl", 11, "")
+    check ctx.kind == cckSection
+    check ctx.head == "Lsp."
+    check "Completion" in candidates(ctx).texts
 
   test "Key position":
     let ctx = analyzeLine("numb", 4, "Standard")
