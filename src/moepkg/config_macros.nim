@@ -1339,3 +1339,120 @@ macro generateSectionMarkdown*(
         escapeMdCell(formatDocDefault(`defaultExpr`)) & " | " & `descLit` & " |\n"
 
   result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(result, resVar))
+
+## Config schema
+##
+## The same walk as the loader/serializer/docs, exposed as runtime data so
+## editing helpers can offer exactly the keys the loader accepts.
+
+proc schemaValueTypeIdent(typeNode, pragmas: NimNode): NimNode =
+  ## The `ConfigValueType` member matching a field's declared type, resolved
+  ## at the call site. A `{.cfgEnumStrings.}` string is reported as an enum.
+  case classifyConfigFieldType(typeNode)
+  of cfkBool:
+    ident("cvtBool")
+  of cfkInt:
+    ident("cvtInt")
+  of cfkFloat:
+    ident("cvtFloat")
+  of cfkString:
+    if findPragma(pragmas, "cfgEnumStrings") != nil:
+      ident("cvtEnum")
+    else:
+      ident("cvtString")
+  of cfkEnum:
+    ident("cvtEnum")
+  of cfkSeqString:
+    ident("cvtStringArray")
+  of cfkOptionString:
+    ident("cvtString")
+  of cfkUnsupported:
+    ident("cvtString")
+
+proc schemaValues(typeNode: NimNode, pragmas: NimNode): seq[string] =
+  ## The values a key accepts when they are a closed set: booleans, an enum's
+  ## members (`{.cfgEnum.}` overrides the derived order) or a
+  ## `{.cfgEnumStrings.}` option list. Empty for open-ended types.
+  case classifyConfigFieldType(typeNode)
+  of cfkBool:
+    @["true", "false"]
+  of cfkEnum:
+    let p = findPragma(pragmas, "cfgEnum")
+    if p != nil:
+      parseStringArrayLit(pragmaArg(p))
+    else:
+      enumStringValues(typeNode)
+  of cfkString:
+    let p = findPragma(pragmas, "cfgEnumStrings")
+    if p != nil:
+      parseStringArrayLit(pragmaArg(p))
+    else:
+      @[]
+  else:
+    @[]
+
+proc buildSchemaBody(target, innerTd: NimNode, sec: string, subject = ""): NimNode =
+  ## Emit `target.add ConfigSchemaSection(...)` for the section TypeDef
+  ## `innerTd` under the TOML name `sec`. Deprecated keys are left out: still
+  ## accepted by the loader, but not to be advertised.
+  var keys = newNimNode(nnkBracket)
+  for (fieldName, typeNode, pragmas, key) in serializableFields(innerTd):
+    if hasPragma(pragmas, "cfgDeprecated"):
+      continue
+
+    var desc = ""
+    let descP = findPragma(pragmas, "cfgDocDescription")
+    if descP != nil:
+      let arg = pragmaArg(descP)
+      if arg == nil or arg.kind != nnkStrLit:
+        error("cfgDocDescription requires a string literal", descP)
+      desc = arg.strVal.replace(DocSubjectPlaceholder, subject)
+
+    let values = schemaValues(typeNode, pragmas)
+    var valuesArr = newNimNode(nnkBracket)
+    for v in values:
+      valuesArr.add newLit(v)
+
+    # The docs label a `{.cfgEnumStrings.}` field a plain string; list its
+    # options like a real enum instead.
+    let typeLabel =
+      if classifyConfigFieldType(typeNode) == cfkString and values.len > 0:
+        "string (enum: " & values.join(", ") & ")"
+      else:
+        docTypeLabel(typeNode)
+
+    keys.add nnkObjConstr.newTree(
+      ident("ConfigSchemaKey"),
+      newColonExpr(ident("name"), newLit(key)),
+      newColonExpr(ident("valueType"), schemaValueTypeIdent(typeNode, pragmas)),
+      newColonExpr(ident("typeLabel"), newLit(typeLabel)),
+      newColonExpr(ident("description"), newLit(desc)),
+      newColonExpr(ident("values"), newCall(ident("@"), valuesArr)),
+    )
+
+  let sectionExpr = nnkObjConstr.newTree(
+    ident("ConfigSchemaSection"),
+    newColonExpr(ident("name"), newLit(sec)),
+    newColonExpr(ident("description"), newLit(subject)),
+    newColonExpr(ident("keys"), newCall(ident("@"), keys)),
+  )
+  newCall(newDotExpr(target, ident("add")), sectionExpr)
+
+macro generateConfigSchema*(target: typed, OuterT: typedesc): untyped =
+  ## Emit one `ConfigSchemaSection` per `{.cfgSection.}` field of `OuterT`, in
+  ## declaration order. Works for any object owning section-typed fields.
+  let outerTd = typeDef(OuterT)
+  if outerTd == nil:
+    error("cannot get impl for outer type", OuterT)
+  result = newStmtList()
+  for (_, typ, sec) in cfgSectionFields(outerTd):
+    result.add buildSchemaBody(target, typ.getImpl, sec)
+
+macro generateSectionGroupSchema*(target: typed, T: typedesc): untyped =
+  ## Emit the schema for a section group: the parent table, then one section
+  ## per `{.cfgSubSection.}` sub-table.
+  let ownerTd = groupOwner(T)
+  let section = groupName(ownerTd)
+  result = newStmtList(buildSchemaBody(target, ownerTd, section))
+  for (_, typ, name, subject) in subSectionSpecs(T):
+    result.add buildSchemaBody(target, typ.getImpl, section & "." & name, subject)

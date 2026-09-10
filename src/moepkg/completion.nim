@@ -32,8 +32,8 @@ import pkg/jsony
 import celina_backend as celina
 
 import
-  buffer, word_dictionary, command_completion, fuzzy_match, color, popup_render,
-  unicode_utils
+  buffer, word_dictionary, command_completion, config_schema, fuzzy_match, color,
+  popup_render, unicode_utils
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
@@ -50,6 +50,7 @@ type
     csLsp ## From LSP server
     csKeyword ## From language keywords
     csFilePath ## From file system paths
+    csConfigSchema ## From the moerc.toml schema
 
   CompletionEntry* = object ## A single completion entry
     word*: string ## The word to insert
@@ -96,6 +97,8 @@ type
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
     otherBuffers*: seq[TextBuffer]
       ## Other FileEditMode buffers for multi-buffer completion
+    schemaEntries*: seq[CompletionEntry]
+      ## moerc.toml schema candidates for the triggered position.
     isPathCompletion*: bool ## Whether currently in path completion mode
     pathBasePath*: string ## Base directory for resolving relative paths
     pathOriginalPrefix*: string ## Full path prefix typed so far (e.g. "./src/")
@@ -633,6 +636,68 @@ proc bufferWordEntries(mgr: CompletionManager, prefix: string): seq[CompletionEn
     else:
       cmp(a.word, b.word)
 
+const MoercFileName = "moerc.toml"
+
+proc isConfigFileBuffer*(buffer: TextBuffer): bool =
+  ## True for `moerc.toml`, the only file the config schema describes.
+  buffer.filePath.isSome and buffer.filePath.get.extractFilename == MoercFileName
+
+proc enclosingSection(
+    buffer: TextBuffer, line: int
+): tuple[name: string, headerLine: int] =
+  ## The `[Section]` header the line sits under and its line number;
+  ## ("", 0) above the first one.
+  for i in countdown(line, 0):
+    let header = parseSectionHeader(buffer.getLine(i))
+    if header.isSome:
+      return (header.get, i)
+  ("", 0)
+
+proc inOpenArray(buffer: TextBuffer, headerLine, cursorLine: int): bool =
+  ## True when the lines below the section header leave a multi-line array
+  ## open. A value cannot span sections, so the header is far enough back.
+  var depth = 0
+  for i in headerLine ..< cursorLine:
+    depth = arrayDepthAfter(buffer.getLine(i), depth)
+  depth > 0
+
+proc refreshSchemaEntries*(
+    mgr: CompletionManager, buffer: TextBuffer, cursorLine, cursorCol: int
+) =
+  ## Rebuild the moerc.toml schema candidates for the cursor position. The
+  ## candidate text is relative to the analyzed position, so every path that
+  ## moves the cursor must recollect instead of filtering a cached list.
+  mgr.schemaEntries = @[]
+  if not buffer.isConfigFileBuffer:
+    return
+
+  let section = buffer.enclosingSection(cursorLine)
+  let ctx = analyzeLine(
+    buffer.getLine(cursorLine),
+    cursorCol,
+    section.name,
+    buffer.inOpenArray(section.headerLine, cursorLine),
+  )
+  for c in ctx.candidates:
+    let kind =
+      case c.kind
+      of cckSection: CompletionItemKind.cikModule
+      of cckValue: CompletionItemKind.cikEnumMember
+      else: CompletionItemKind.cikProperty
+    mgr.schemaEntries.add CompletionEntry(
+      word: c.text,
+      label: c.label,
+      source: csConfigSchema,
+      kind: some(kind),
+      detail: (if c.detail.len > 0: some(c.detail) else: none(string)),
+      documentation:
+        (if c.documentation.len > 0: some(c.documentation)
+        else: none(string)),
+      filterText: c.matchText,
+      sortText: c.matchText,
+      lspItemIndex: -1,
+    )
+
 func prefixMatchTier(entry: CompletionEntry, prefix: string): int =
   ## Ranking tier by how well the entry matches the typed prefix, so prefix
   ## matches outrank loose fuzzy (subsequence) matches regardless of source:
@@ -647,6 +712,27 @@ func prefixMatchTier(entry: CompletionEntry, prefix: string): int =
   if text.toLowerAscii.startsWith(prefix.toLowerAscii):
     return 1
   return 2
+
+proc schemaEntryBlock(mgr: CompletionManager, prefix: string): seq[CompletionEntry] =
+  ## The schema candidates matching `prefix`, best match first. An empty
+  ## prefix keeps the declaration order of the config type.
+  for entry in mgr.schemaEntries:
+    if prefix.len == 0:
+      result.add entry
+    else:
+      let score = matchScore(prefix, entry.filterText)
+      if score > 0:
+        var scored = entry
+        scored.matchScore = score
+        result.add scored
+
+  if prefix.len > 0:
+    result.sort do(a, b: CompletionEntry) -> int:
+      result = prefixMatchTier(a, prefix) - prefixMatchTier(b, prefix)
+      if result == 0:
+        result = b.matchScore - a.matchScore
+      if result == 0:
+        result = cmp(a.filterText, b.filterText)
 
 proc filterAndSortEntries*(
     mgr: CompletionManager, prefix: string
@@ -722,6 +808,24 @@ proc filterAndSortEntries*(
     # their match score).
     result = mgr.bufferWordEntries(prefix)
 
+  # The schema knows exactly which keys and values are accepted, so its
+  # candidates lead the list and buffer words repeating one are dropped.
+  let schemaBlock = mgr.schemaEntryBlock(prefix)
+  if schemaBlock.len > 0:
+    # Dedup on the matched text as well as the inserted one: a value
+    # candidate carries TOML quotes in `word` while the buffer word does not,
+    # and picking the buffer row would insert an unterminated literal.
+    var shown = initHashSet[string]()
+    for entry in schemaBlock:
+      shown.incl(entry.word)
+      if entry.filterText.len > 0:
+        shown.incl(entry.filterText)
+    var rest = newSeqOfCap[CompletionEntry](result.len)
+    for entry in result:
+      if entry.word notin shown:
+        rest.add(entry)
+    result = schemaBlock & rest
+
 proc updateFilter*(mgr: CompletionManager, prefix: string) =
   ## Update the completion filter with new prefix.
   ## Re-filtering rebuilds the entry list and resets the highlight, so any prior
@@ -775,9 +879,10 @@ proc triggerPathCompletion*(
   mgr.menu.triggerCol = cursorCol - filenamePart.charLen
   mgr.menu.hasSelection = false
 
-  # Clear LSP state
+  # Clear LSP and schema state
   mgr.lspItems = @[]
   mgr.lspRequestId = none(int)
+  mgr.schemaEntries = @[]
 
   # Collect and filter entries
   mgr.menu.entries = mgr.filterAndSortEntries(filenamePart)
@@ -858,6 +963,9 @@ proc triggerCompletion*(
   # Collect words (cached against the source buffers' change sequences)
   mgr.refreshBufferWords(buffer, cursorLine, cursorCol, language)
 
+  # Collect the moerc.toml schema candidates for this position.
+  mgr.refreshSchemaEntries(buffer, cursorLine, cursorCol)
+
   # Set trigger position
   mgr.menu.triggerLine = cursorLine
   mgr.menu.triggerCol = cursorCol - prefix.charLen
@@ -884,6 +992,7 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.hasSelection = false
   mgr.lspRequestId = none(int)
   mgr.lspItems = @[]
+  mgr.schemaEntries = @[]
   mgr.isPathCompletion = false
   mgr.pathBasePath = ""
   mgr.pathOriginalPrefix = ""
