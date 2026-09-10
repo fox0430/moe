@@ -610,7 +610,10 @@ proc renderLineSegmentWithSelection*(
     let tabStyle = style.merge(e.charOverridePatch(ctx, lineCtx, TAB_CHAR, col))
     for i in 0 ..< spacesToNextTab:
       if screenX + displayX < ctx.windowRightEdge:
-        if e.shouldShowIndentationGuide(indentInfo, displayX, col):
+        # No guides in the diff viewer: +/- markers and synthetic
+        # side-by-side rows make the leading-whitespace analysis misfire.
+        if ctx.windowMode != EditorMode.DiffViewer and
+            e.shouldShowIndentationGuide(indentInfo, displayX, col):
           let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
           buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)
         else:
@@ -639,9 +642,8 @@ proc renderLineSegmentWithSelection*(
       # cell starts the segment — its base, if any, is on the previous row.
       if displayX > 0:
         foldZeroWidthRune(buffer, screenX + displayX, screenY, cellRune)
-    elif cellRune == ' '.Rune and e.shouldShowIndentationGuide(
-      indentInfo, displayX, col
-    ):
+    elif cellRune == ' '.Rune and ctx.windowMode != EditorMode.DiffViewer and
+        e.shouldShowIndentationGuide(indentInfo, displayX, col):
       if screenX + displayX < ctx.windowRightEdge:
         let guideStyle = indentationLineStyle().merge(bgOnly(style.bg))
         buffer.setCell(screenX + displayX, screenY, "│", 1, guideStyle)

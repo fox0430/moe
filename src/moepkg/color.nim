@@ -360,6 +360,11 @@ type
     # Diff viewer specific
     diffViewerHeader
     diffViewerMeta
+    diffViewerAddedWord
+    diffViewerDeletedWord
+    diffViewerAddedLineBg
+    diffViewerDeletedLineBg
+    diffViewerFiller
 
     # Other viewers
     recentFileMissing
@@ -651,8 +656,8 @@ const
     EditorColorPairIndex.gitConflictBase: "Git conflict: diff3 \"base\" side",
     EditorColorPairIndex.gitConflictTheirs: "Git conflict: \"theirs\" side",
     EditorColorPairIndex.backupManagerCurrentLine: "Backup manager: current line",
-    EditorColorPairIndex.diffViewerAddedLine: "Diff viewer: added line",
-    EditorColorPairIndex.diffViewerDeletedLine: "Diff viewer: deleted line",
+    EditorColorPairIndex.diffViewerAddedLine: "Diff file buffer: added line",
+    EditorColorPairIndex.diffViewerDeletedLine: "Diff file buffer: deleted line",
     EditorColorPairIndex.configModeCurrentLine: "Configuration mode: current line",
     EditorColorPairIndex.currentLineBg: "Editor current line background (bg-only)",
     EditorColorPairIndex.currentColumnBg: "Editor current column background (bg-only)",
@@ -684,6 +689,13 @@ const
       "Configuration mode: popup selected entry",
     EditorColorPairIndex.diffViewerHeader: "Diff viewer: header",
     EditorColorPairIndex.diffViewerMeta: "Diff viewer: metadata line",
+    EditorColorPairIndex.diffViewerAddedWord:
+      "Diff viewer: changed word background on added line",
+    EditorColorPairIndex.diffViewerDeletedWord:
+      "Diff viewer: changed word background on deleted line",
+    EditorColorPairIndex.diffViewerAddedLineBg: "Diff viewer: added line background",
+    EditorColorPairIndex.diffViewerDeletedLineBg: "Diff viewer: deleted line background",
+    EditorColorPairIndex.diffViewerFiller: "Diff viewer: empty filler for side-by-side",
     EditorColorPairIndex.recentFileMissing: "Recent file mode: missing file entry",
     EditorColorPairIndex.debugViewerSectionHeader: "Debug viewer: section header",
     EditorColorPairIndex.referencesViewerHeader: "References viewer: header",
@@ -974,9 +986,17 @@ proc getThemeStyle*(
   ## Get celina Style from current theme with modifiers.
   themeColors[index].toStyle(modifiers)
 
+var themeGenerationCounter = 1
+
+proc themeGeneration*(): int =
+  ## Bumped on every theme change, so caches holding concrete colors can tell
+  ## whether they are stale.
+  themeGenerationCounter
+
 proc setThemeColors*(colors: ThemeColors) =
   ## Set the current theme colors.
   themeColors = colors
+  inc themeGenerationCounter
 
 var cachedTerminalCapability: Option[ColorModeKind] = none(ColorModeKind)
 

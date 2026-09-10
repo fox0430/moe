@@ -23,10 +23,13 @@
 import std/[unittest, options, os, strutils, unicode]
 
 import pkg/results
+import pkg/celina
 
-import ../src/moepkg/[buffer, highlight, color]
+import ../src/moepkg/[buffer, highlight, color, theme]
 import ../src/moepkg/syntax/[tokenizer, syntax_diff]
 import ../src/moepkg/diff_viewer {.all.}
+
+setThemeColors(DefaultColors)
 
 # Re-export Result type for tests
 export results
@@ -806,29 +809,88 @@ suite "diff_viewer: createDiffTextBuffer":
     let buf = state.createDiffTextBuffer()
 
     check not buf.highlight.isNil
-    # Added line → diffViewerAddedLine
-    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
-    # Deleted line → diffViewerDeletedLine
-    check buf.highlight.getColorPair(1, 0) == EditorColorPairIndex.diffViewerDeletedLine
+    let
+      addedLineBg = getThemeStyle(EditorColorPairIndex.diffViewerAddedLineBg).bg
+      deletedLineBg = getThemeStyle(EditorColorPairIndex.diffViewerDeletedLineBg).bg
+    # Added/deleted lines keep the normal foreground; the change is the bg.
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.default
+    check buf.highlight.getSegmentBg(0, 0) == some(addedLineBg)
+    check buf.highlight.getColorPair(1, 0) == EditorColorPairIndex.default
+    check buf.highlight.getSegmentBg(1, 0) == some(deletedLineBg)
     # Header line → diffViewerHeader
     check buf.highlight.getColorPair(2, 0) == EditorColorPairIndex.diffViewerHeader
     # Meta line → diffViewerMeta
     check buf.highlight.getColorPair(3, 0) == EditorColorPairIndex.diffViewerMeta
     # Context line → default
     check buf.highlight.getColorPair(4, 0) == EditorColorPairIndex.default
+    check buf.highlight.getSegmentBg(4, 0).isNone
 
-  test "Caps tokenization on a very long diff line":
-    # A diff line longer than the highlight cap is colored only up to the cap;
-    # past it renders as default. Guards that the diff viewer uses the capped
-    # path instead of tokenizing a huge minified line in full on open.
+  test "File headers (---/+++) use the meta color":
+    let state = newDiffViewerState()
+    state.items = @[
+      DiffLine(text: "--- a/file", kind: dlkHeader),
+      DiffLine(text: "+++ b/file", kind: dlkHeader),
+    ]
+
+    let buf = state.createDiffTextBuffer()
+
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.diffViewerMeta
+    check buf.highlight.getColorPair(1, 0) == EditorColorPairIndex.diffViewerMeta
+
+  test "Changed words use the word background":
+    let state = newDiffViewerState()
+    state.items = @[
+      DiffLine(text: "@@ -1 +1 @@", kind: dlkHeader),
+      DiffLine(text: "-hello world", kind: dlkDeleted),
+      DiffLine(text: "+hello nim", kind: dlkAdded),
+    ]
+
+    let buf = state.createDiffTextBuffer()
+
+    let
+      deletedLineBg = getThemeStyle(EditorColorPairIndex.diffViewerDeletedLineBg).bg
+      addedLineBg = getThemeStyle(EditorColorPairIndex.diffViewerAddedLineBg).bg
+      deletedWordBg = getThemeStyle(EditorColorPairIndex.diffViewerDeletedWord).bg
+      addedWordBg = getThemeStyle(EditorColorPairIndex.diffViewerAddedWord).bg
+    # "hello" is kept, "world"/"nim" start at column 7 ("-" prefix + 6 chars).
+    check buf.highlight.getSegmentBg(1, 1) == some(deletedLineBg)
+    check buf.highlight.getSegmentBg(1, 7) == some(deletedWordBg)
+    check buf.highlight.getSegmentBg(1, 11) == some(deletedWordBg)
+    check buf.highlight.getSegmentBg(2, 1) == some(addedLineBg)
+    check buf.highlight.getSegmentBg(2, 7) == some(addedWordBg)
+    check buf.highlight.getSegmentBg(2, 9) == some(addedWordBg)
+
+  test "Word highlight disabled keeps only the line background":
+    let state = newDiffViewerState()
+    state.wordHighlight = false
+    state.items = @[
+      DiffLine(text: "-hello world", kind: dlkDeleted),
+      DiffLine(text: "+hello nim", kind: dlkAdded),
+    ]
+
+    let buf = state.createDiffTextBuffer()
+
+    let
+      deletedLineBg = getThemeStyle(EditorColorPairIndex.diffViewerDeletedLineBg).bg
+      addedLineBg = getThemeStyle(EditorColorPairIndex.diffViewerAddedLineBg).bg
+      deletedWordBg = getThemeStyle(EditorColorPairIndex.diffViewerDeletedWord).bg
+      addedWordBg = getThemeStyle(EditorColorPairIndex.diffViewerAddedWord).bg
+    check buf.highlight.getSegmentBg(0, 7) == some(deletedLineBg)
+    check buf.highlight.getSegmentBg(0, 7) != some(deletedWordBg)
+    check buf.highlight.getSegmentBg(1, 7) == some(addedLineBg)
+    check buf.highlight.getSegmentBg(1, 7) != some(addedWordBg)
+
+  test "Long added line keeps the line background":
     let longLen = DefaultMaxHighlightLineLength + 500
     let state = newDiffViewerState()
     state.items = @[DiffLine(text: "+" & "a".repeat(longLen), kind: dlkAdded)]
 
     let buf = state.createDiffTextBuffer()
 
-    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
-    check buf.highlight.getColorPair(0, longLen) == EditorColorPairIndex.default
+    let addedLineBg = getThemeStyle(EditorColorPairIndex.diffViewerAddedLineBg).bg
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.default
+    check buf.highlight.getSegmentBg(0, 0) == some(addedLineBg)
+    check buf.highlight.getSegmentBg(0, longLen) == some(addedLineBg)
 
   test "Single line diff":
     let state = newDiffViewerState()

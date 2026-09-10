@@ -27,10 +27,10 @@ import pkg/results
 import
   ../[
     buffer, buffer_manager, bookmark_manager, editor, editor_callhierarchy,
-    editor_window_state, help_viewer, log_viewer, logger, lsp_service, message_log,
-    types, viewer_mode,
+    editor_window_layout, editor_window_state, help_viewer, log_viewer, logger,
+    lsp_service, message_log, types, viewer_mode,
   ]
-import ../[backup, backup_manager]
+import ../[backup, backup_manager, diff_viewer]
 
 import editor_ops, handler_result
 
@@ -229,6 +229,34 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     activeWin.cursor = BufferPosition(line: 0, column: 0)
     activeWin.viewport.resetViewportTop()
     activeWin.viewport.leftColumn = 0
+    return true
+  of hrDiffViewerToggleView, hrDiffViewerToggleWord:
+    # The state was already toggled in handleDiffViewerModeKey; only repaint.
+    let activeWin = e.activeWindow
+    if activeWin.modeState.kind == mskDiffViewer:
+      let dvState = activeWin.modeState.diffViewer
+      # Size by the text area (gutters excluded) so the right column is not
+      # clipped. refreshDiffTextBuffer clamps the selection to the rows it
+      # produced, covering the narrow-window fallback to unified.
+      let textWidth = e.diffViewerTextWidth(activeWin, dvState)
+      activeWin.buffer = dvState.refreshDiffTextBuffer(textWidth)
+      activeWin.cursor = BufferPosition(line: dvState.selectedIndex, column: 0)
+      if r.kind == hrDiffViewerToggleView:
+        if dvState.renderedSideBySide:
+          e.state.statusMessage = "Diff: side-by-side"
+        elif dvState.isSideBySide:
+          # Name both widths so the shortfall is visible.
+          e.state.statusMessage =
+            "Diff: unified (side-by-side needs " & $SideBySideMinWidth &
+            " columns, have " & $textWidth & ")"
+        else:
+          e.state.statusMessage = "Diff: unified"
+      else:
+        e.state.statusMessage =
+          if dvState.wordHighlight:
+            "Diff: word highlight on"
+          else:
+            "Diff: word highlight off"
     return true
   of hrEnterFiler:
     # Tear down the viewer so startPath resolves from the underlying file.

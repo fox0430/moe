@@ -36,6 +36,7 @@ import
   buffer/core,
   unicode_utils,
   command_completion,
+  diff_viewer,
   color,
   window_manager,
   popup_render
@@ -212,6 +213,17 @@ proc computeWindowLayout(
     renderMode: renderMode,
   )
 
+proc syncDiffViewerBuffer(e: Editor, window: EditorWindow) =
+  ## Rebuild a diff viewer buffer when the theme changed, or when a resize
+  ## gave it a text width that actually changes what is drawn. The unified
+  ## buffer is width-independent and re-running the whole diff is expensive.
+  let dvState = window.modeState.diffViewer
+  let textWidth = e.diffViewerTextWidth(window, dvState)
+  if dvState.needsRebuild(textWidth):
+    window.buffer = dvState.refreshDiffTextBuffer(textWidth)
+  else:
+    dvState.renderedWidth = textWidth
+
 proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
   ## Advance per-frame window-layout state so the draw pass can be a read-only
   ## projection: rebuild the layout on resize, sync selection-list cursors,
@@ -234,6 +246,8 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
   var activeCursorInViewport = true
 
   for i, window in e.windowManager.windows:
+    if window.modeState.kind == mskDiffViewer:
+      e.syncDiffViewerBuffer(window)
     let layout = e.computeWindowLayout(window, i, maxBottomY, tabLineOffset)
     # Mirror a selection-list mode's selected index onto the cursor *before* the
     # viewport pass so the viewport tracks the selection on the same frame

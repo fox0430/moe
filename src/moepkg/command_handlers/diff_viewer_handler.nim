@@ -29,6 +29,8 @@
 ## - G: Go to last line
 ## - Ctrl+d: Half page down
 ## - Ctrl+u: Half page up
+## - s: Toggle unified/side-by-side view
+## - w: Toggle word highlight
 ## - q/Esc: Close diff viewer
 ## - :: Enter command mode
 
@@ -41,6 +43,8 @@ type
     dvrHandled # Command was handled successfully
     dvrEnterCommand # Enter command mode
     dvrQuit # Close diff viewer and return to previous mode
+    dvrToggleView # Toggle unified/side-by-side presentation
+    dvrToggleWord # Toggle word highlight
     dvrUnhandled # Command was not handled
     dvrError # Error occurred
 
@@ -60,11 +64,30 @@ proc handleDiffViewerModeKey*(
 
   case dvState.handleListNavKey(viewportHeight, keyCombo)
   of lvaConsumed:
+    # The buffer actually on screen decides the valid range: a side-by-side
+    # request falls back to unified on narrow windows, so only clamp when the
+    # rendered buffer really is the paired two-column one.
+    if dvState.renderedSideBySide and dvState.sideRows.len > 0:
+      dvState.selectedIndex = clamp(dvState.selectedIndex, 0, dvState.sideRows.len - 1)
     DiffViewerResult(kind: dvrHandled)
   of lvaQuitKey, lvaEscape:
     DiffViewerResult(kind: dvrQuit)
   of lvaEnterCommand:
     DiffViewerResult(kind: dvrEnterCommand)
   of lvaSelect, lvaUnhandled:
+    # Mode-specific toggles before giving up. List nav leaves gg-pending
+    # handling to us only via lvaUnhandled; plain s/w must not clash with it.
+    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      case keyCombo.char
+      of "s":
+        dvState.waitingForG = false
+        dvState.toggleViewMode()
+        return DiffViewerResult(kind: dvrToggleView)
+      of "w":
+        dvState.waitingForG = false
+        dvState.toggleWordHighlight()
+        return DiffViewerResult(kind: dvrToggleWord)
+      else:
+        discard
     # The diff viewer has no selectable action; Enter and other keys are ignored.
     DiffViewerResult(kind: dvrUnhandled)

@@ -199,13 +199,19 @@ proc loadTheme*(
   ## Load theme based on config settings.
   ## Invalid keys/values from user theme files are recorded in `vr`.
 
-  case config.theme.kind
-  of tkDefault:
-    return Result[ThemeColors, string].ok(DefaultColors)
-  of tkConfig:
-    return loadThemeFromToml(config.theme.path, vr)
-  of tkVscode:
-    return loadVSCodeTheme()
+  let loaded =
+    case config.theme.kind
+    of tkDefault:
+      Result[ThemeColors, string].ok(DefaultColors)
+    of tkConfig:
+      loadThemeFromToml(config.theme.path, vr)
+    of tkVscode:
+      loadVSCodeTheme()
+  if loaded.isErr:
+    return loaded
+  var colors = loaded.get
+  colors.adaptDiffTintsToBackground()
+  return Result[ThemeColors, string].ok(colors)
 
 proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
   ## Backwards-compatible wrapper that discards validation errors.

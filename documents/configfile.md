@@ -1215,6 +1215,16 @@ Please check more [details](https://github.com/fox0430/moe/blob/develop/document
 <!-- AUTO-GEN:end FileTree -->
 
 
+### DiffViewer table
+
+<!-- AUTO-GEN:start DiffViewer -->
+| Name | Type | Default Value | Description |
+|:---|:---|:---|:---|
+| sideBySide | bool | false | Show diffs side-by-side by default in the diff viewer |
+| wordHighlight | bool | true | Highlight changed words inside changed lines in the diff viewer |
+<!-- AUTO-GEN:end DiffViewer -->
+
+
 ### StartUp.FileTree table
 
 <!-- AUTO-GEN:start StartUp.FileTree -->
@@ -1578,8 +1588,8 @@ with an unknown-key warning and can be removed.
 | gitConflictBase | Git conflict: diff3 "base" side |
 | gitConflictTheirs | Git conflict: "theirs" side |
 | backupManagerCurrentLine | Backup manager: current line |
-| diffViewerAddedLine | Diff viewer: added line |
-| diffViewerDeletedLine | Diff viewer: deleted line |
+| diffViewerAddedLine | Diff file buffer: added line |
+| diffViewerDeletedLine | Diff file buffer: deleted line |
 | configModeCurrentLine | Configuration mode: current line |
 | currentLine | Editor current line background (bg-only) |
 | currentColumn | Editor current column background (bg-only) |
@@ -1609,6 +1619,11 @@ with an unknown-key warning and can be removed.
 | configModePopupSelected | Configuration mode: popup selected entry |
 | diffViewerHeader | Diff viewer: header |
 | diffViewerMeta | Diff viewer: metadata line |
+| diffViewerAddedWord | Diff viewer: changed word background on added line |
+| diffViewerDeletedWord | Diff viewer: changed word background on deleted line |
+| diffViewerAddedLineBg | Diff viewer: added line background |
+| diffViewerDeletedLineBg | Diff viewer: deleted line background |
+| diffViewerFiller | Diff viewer: empty filler for side-by-side |
 | recentFileMissing | Recent file mode: missing file entry |
 | debugViewerSectionHeader | Debug viewer: section header |
 | referencesViewerHeader | References viewer: header |

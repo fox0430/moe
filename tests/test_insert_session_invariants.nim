@@ -189,7 +189,9 @@ let Invariants = @[
       ("moepkg/command_handlers/backup_ops.nim", 4),
       ("moepkg/command_handlers/editor_ops.nim", 1),
       ("moepkg/command_handlers/mode_dispatchers.nim", 2),
-      ("moepkg/command_handlers/viewer_ops.nim", 3),
+      ("moepkg/command_handlers/viewer_ops.nim", 4),
+      # Diff viewer buffer rebuild on resize (read-only viewer, no session).
+      ("moepkg/editor_render_views.nim", 1),
     ],
   ),
   Invariant(

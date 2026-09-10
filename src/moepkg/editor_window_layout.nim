@@ -22,6 +22,7 @@
 ## management layer and the rendering layer.
 
 import types/editor_types, render_utils, buffer/core, visible_rows
+import diff_viewer, types/diff_viewer_types
 
 proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
@@ -99,6 +100,34 @@ proc textAreaWidth*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
 proc textAreaWidth*(e: Editor, window: EditorWindow): int =
   ## `textAreaWidth` with the window's own line-number width.
   textAreaWidthFor(window.viewport.width, e.viewportOffsetFor(window))
+
+proc textAreaWidthForRows*(
+    e: Editor, window: EditorWindow, lineCount: int, isUtilityBuffer: bool = false
+): int =
+  ## Text width a buffer with `lineCount` lines would get in `window`, so a
+  ## generated buffer can be sized before it exists. `isUtilityBuffer` mirrors
+  ## `calculateLineNumOffset`: utility buffers get no line-number gutter.
+  let lineNumOffset =
+    if isUtilityBuffer:
+      0
+    else:
+      lineNumberOffsetFor(lineCount, e.showLineNumbers)
+  textAreaWidthFor(window.viewport.width, e.viewportOffsetFor(window, lineNumOffset))
+
+proc diffViewerTextWidth*(
+    e: Editor, window: EditorWindow, state: DiffViewerState
+): int =
+  ## Text width for the diff viewer's effective presentation. The gutter
+  ## depends on the row count, and the side-by-side buffer has fewer rows than
+  ## the unified one: measuring the wrong count leaves the rightmost column
+  ## outside the buffer. The lazy rows must be materialized for the same
+  ## reason, or the first side-by-side frame measures an empty `sideRows`.
+  if state.viewMode == dvmSideBySide:
+    state.ensureSideRows()
+    let sideBySideWidth = e.textAreaWidthForRows(window, max(1, state.sideRows.len))
+    if sideBySideWidth >= SideBySideMinWidth:
+      return sideBySideWidth
+  e.textAreaWidthForRows(window, max(1, state.items.len))
 
 proc wrapWidth*(e: Editor, window: EditorWindow, lineNumOffset: int): int =
   ## `textAreaWidth` clamped to at least one cell: the `WrapCountCache` key.

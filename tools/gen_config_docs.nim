@@ -140,6 +140,7 @@ defineSections:
   ("BuildOnSave", cfg.buildOnSave, BuildOnSaveConfig)
   ("Filer", cfg.filer, FilerConfig)
   ("FileTree", cfg.fileTree, FileTreeConfig)
+  ("DiffViewer", cfg.diffViewer, DiffViewerConfig)
   ("Autocomplete", cfg.autocomplete, AutocompleteConfig)
   ("AutoSave", cfg.autoSave, AutoSaveConfig)
   ("SmoothScroll", cfg.smoothScroll, SmoothScrollConfig)

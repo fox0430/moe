@@ -375,6 +375,11 @@ const DefaultColors*: ThemeColors = [
   # Diff viewer specific
   EditorColorPairIndex.diffViewerHeader: makeColorPairDefaultBg("#00afaf"),
   EditorColorPairIndex.diffViewerMeta: makeColorPairDefaultBg("#d7af00"),
+  EditorColorPairIndex.diffViewerAddedWord: makeColorPairTermDefaultFg("#2f6b3a"),
+  EditorColorPairIndex.diffViewerDeletedWord: makeColorPairTermDefaultFg("#74323a"),
+  EditorColorPairIndex.diffViewerAddedLineBg: makeColorPairTermDefaultFg("#17301c"),
+  EditorColorPairIndex.diffViewerDeletedLineBg: makeColorPairTermDefaultFg("#331a1d"),
+  EditorColorPairIndex.diffViewerFiller: makeColorPair("#585858", "#1c1c1c"),
 
   # Other viewers
   EditorColorPairIndex.recentFileMissing: makeColorPairDefaultBg("#606060"),
@@ -400,6 +405,45 @@ const DefaultColors*: ThemeColors = [
   # Temporary message area
   EditorColorPairIndex.tempMessageBorder: makeColorPairTermDefaultFg("#ffffff"),
 ]
+
+const LightDiffViewerTints = [
+  (EditorColorPairIndex.diffViewerAddedWord, "#a8f0b8"),
+  (EditorColorPairIndex.diffViewerDeletedWord, "#ffc4c9"),
+  (EditorColorPairIndex.diffViewerAddedLineBg, "#e6ffec"),
+  (EditorColorPairIndex.diffViewerDeletedLineBg, "#ffebe9"),
+]
+  ## Diff viewer tints for a light editor background, mirroring the bundled
+  ## light theme.
+
+proc isLightColor(c: Rgb): bool =
+  ## W3C perceived-brightness test.
+  (c.red.int * 299 + c.green.int * 587 + c.blue.int * 114) div 1000 > 128
+
+proc drawsOnLightSurface(colors: ThemeColors): bool =
+  ## Whether the editor paints on a light surface. With a `termDefault`
+  ## background the terminal color is unknown, so a dark explicit foreground is
+  ## the only remaining signal. With both at the default, assume dark.
+  let
+    bg = colors[EditorColorPairIndex.default].background.rgb
+    fg = colors[EditorColorPairIndex.default].foreground.rgb
+  if bg != TerminalDefaultRgb:
+    return isLightColor(bg)
+  if fg != TerminalDefaultRgb:
+    return not isLightColor(fg)
+  false
+
+proc adaptDiffTintsToBackground*(colors: var ThemeColors) =
+  ## The diff viewer marks lines with a background alone, so the bundled dark
+  ## tints are unreadable on a light theme. Swap in light ones when the theme
+  ## draws on a light surface and left the tints at their defaults.
+  if not colors.drawsOnLightSurface():
+    return
+  for (index, hex) in LightDiffViewerTints:
+    if colors[index] == DefaultColors[index]:
+      colors[index] = makeColorPairTermDefaultFg(hex)
+  if colors[EditorColorPairIndex.diffViewerFiller] ==
+      DefaultColors[EditorColorPairIndex.diffViewerFiller]:
+    colors[EditorColorPairIndex.diffViewerFiller] = makeColorPair("#808080", "#ededed")
 
 proc initDefaultTheme*() =
   ## Initialize the theme with default colors.
