@@ -1277,6 +1277,55 @@ suite "NormalModeHandler - Text Object Handling":
     check buf.getLine(0) == "obj{}"
     check state.cursor == BufferPosition(line: 0, column: 4)
 
+  test "Text object brace via B (iB)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "obj{a: 1, b: 2}")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    state.pendingInput.pendingTextObject =
+      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
+    state.pendingInput.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "B", modifiers: {})
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "obj{}"
+    check state.cursor == BufferPosition(line: 0, column: 4)
+
+  test "Text object brace via B (aB)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "obj{a: 1, b: 2}")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    state.pendingInput.pendingTextObject =
+      some(PendingTextObject(modifier: tomAround, operatorCount: 1))
+    state.pendingInput.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "B", modifiers: {})
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+
+    check r.kind == nmrHandled
+    check buf.getLine(0) == "obj"
+
   test "Text object angle bracket":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "<tag>content</tag>")
