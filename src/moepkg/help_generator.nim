@@ -294,6 +294,10 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "/", description: "Search forwards"),
     HelpEntry(syntax: "?", description: "Search backwards"),
     HelpEntry(syntax: "\\r", description: "QuickRun"),
+    HelpEntry(
+      syntax: "Ctrl-z",
+      description: "Suspend moe to the shell (resume with the shell's fg)",
+    ),
     HelpEntry(syntax: "ga", description: "Show current character info"),
     HelpEntry(syntax: ".", description: "Repeat the last normal mode command"),
     HelpEntry(syntax: "q any", description: "Start recording operations for Macros"),

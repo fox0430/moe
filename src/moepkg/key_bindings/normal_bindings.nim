@@ -152,6 +152,8 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("z D", "fold-delete-all"),
   ("z R", "fold-open-all"),
   ("z M", "fold-close-all"),
+  # Suspend to shell (same path as :bg)
+  ("C-z", "background"),
   # QuickRun
   ("\\ r", "quickrun"),
   # Operators

@@ -194,6 +194,7 @@
 | <kbd>**/**</kbd> | Search forwards |
 | <kbd>**?**</kbd> | Search backwards |
 | <kbd>**\\**</kbd> <kbd>**r**</kbd> | QuickRun |
+| <kbd>**Ctrl**</kbd> <kbd>**z**</kbd> | Suspend moe to the shell (resume with the shell's fg) |
 | <kbd>**g**</kbd> <kbd>**a**</kbd> | Show current character info |
 | <kbd>**.**</kbd> | Repeat the last normal mode command |
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd> | Start recording operations for Macros |

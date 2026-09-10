@@ -605,6 +605,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | file-open | Open file (enter filer) |
 | file-close | Close current buffer |
 | filer-open | Open file explorer |
+| background | Suspend moe to the shell |
 | buffer-next-tab | Switch to next buffer tab |
 | buffer-prev-tab | Switch to previous buffer tab |
 | window-next | Switch to next window |

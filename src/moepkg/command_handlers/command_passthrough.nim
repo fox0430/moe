@@ -56,6 +56,8 @@ type PassthroughKind* = enum
   ptBufferPrev
   # quickrun
   ptQuickRun
+  # editor.background
+  ptBackground
   # lsp.* (ctCustom)
   ptLspGotoDefinition
   ptLspGotoDeclaration
@@ -111,6 +113,8 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
     some(ptBufferPrev)
   of "quickrun":
     some(ptQuickRun)
+  of "editor.background":
+    some(ptBackground)
   of "lsp.goto.definition":
     some(ptLspGotoDefinition)
   of "lsp.goto.declaration":
@@ -181,6 +185,8 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrBufferPrev)
   of ptQuickRun:
     HandlerResult(kind: hrQuickRun)
+  of ptBackground:
+    HandlerResult(kind: hrBackground)
   of ptLspGotoDefinition:
     HandlerResult(kind: hrLspGotoDefinition)
   of ptLspGotoDeclaration:
