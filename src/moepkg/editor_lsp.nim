@@ -191,7 +191,9 @@ proc clampAllWindowCursors*(e: Editor) =
   ## is a no-op, so this is safe to call broadly.
   for window in e.windowManager.windows:
     let clamped = e.motionController.cursorManager.clampPosition(
-      CursorPosition(x: window.cursor.column, y: window.cursor.line), window.buffer
+      CursorPosition(x: window.cursor.column, y: window.cursor.line),
+      window.buffer,
+      some(window.mode),
     )
     window.cursor = BufferPosition(line: clamped.y, column: clamped.x)
 

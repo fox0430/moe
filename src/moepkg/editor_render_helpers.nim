@@ -74,12 +74,16 @@ proc analyzeIndentation*(lineText: string): IndentInfo =
     charIdx += 1
 
 proc isPositionInDocumentHighlight*(
-    state: EditorState, pos: BufferPosition
+    state: EditorState, bufferId: BufferId, pos: BufferPosition
 ): Option[int] =
   ## Check if position is within any document highlight range
   ## Returns the highlight kind (1=Text, 2=Read, 3=Write) if found, none otherwise
   ## Uses O(1) line lookup + O(m) column search where m is highlights on that line
-  if not state.showDocumentHighlight or not state.lspCache.documentHighlightCache.isValid:
+  ##
+  ## The cache holds one buffer's highlights at a time, keyed by line, so it
+  ## only applies to the buffer it was built from.
+  if not state.showDocumentHighlight or not state.lspCache.documentHighlightCache.isValid or
+      state.lspCache.documentHighlightCache.bufferId != bufferId:
     return none(int)
 
   # O(1) lookup by line

@@ -283,6 +283,17 @@ type
 
   RowColRemapCallback* = proc(b: TextBuffer, event: RowColRemapEvent) {.closure.}
 
+  BufferContentReplacedHook* = proc(b: TextBuffer) {.closure.}
+    ## Called once whenever the buffer's contents are replaced wholesale from
+    ## disk. Unlike the row/col remap stream, which describes edits, a
+    ## replacement invalidates positions rather than remapping them.
+
+  ContentFingerprint* = object
+    ## Identity of the exact bytes last read from, or written to, the file.
+    ## The size travels with the hash so a collision cannot pass as a match.
+    size*: int
+    hash*: Hash
+
   BufferTransaction* = object ## Transaction for grouping multiple changes
     changes*: seq[BufferChange]
     description*: string
@@ -329,8 +340,17 @@ type
       ## Volatile; re-derived on every load.
     lastFileModTime*: Option[Time]
       # File modification time when loaded (for external change detection)
+    lastFileSize*: Option[int64]
+      ## On-disk size from the same stat as `lastFileModTime`. Catches two
+      ## writes within the filesystem's timestamp granularity.
+    lastLoadedContent*: Option[ContentFingerprint]
+      ## Fingerprint of the bytes the buffer was last built from or saved as.
+      ## `none` reads as "assume the file differs".
     externalModWarned*: bool
       # Whether the user has been warned about external modification (reset on load/save)
+    reloadDeferred*: bool
+      ## An external change was detected while an edit group was open. The
+      ## reload runs as soon as the group closes, not at the next poll.
     pendingNotices*: seq[BufferNotice]
       ## Not yet reported to the user. Filled where the fact appears, drained
       ## when a window first shows the buffer.
@@ -396,6 +416,10 @@ type
     # because savedLineMarkers / savedModifiedLines restore them wholesale.
     remapCallbacks: seq[RowColRemapCallback]
     sideArrayCallbacks: seq[RowColRemapCallback]
+
+    # Wholesale content replacement subscriber. A single slot, so registering
+    # the buffer twice cannot accumulate duplicates.
+    contentReplacedHook: BufferContentReplacedHook
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -1287,6 +1311,21 @@ proc registerRowColRemapCallback*(b: TextBuffer, cb: RowColRemapCallback) =
   ## Register a callback to receive row/col remap events. All registered
   ## callbacks are invoked on every forward edit, before the frame repaints.
   b.remapCallbacks.add(cb)
+
+proc setContentReplacedHook*(b: TextBuffer, cb: BufferContentReplacedHook) =
+  ## Install the hook run after a wholesale content replacement. Replaces any
+  ## previous one.
+  b.contentReplacedHook = cb
+
+proc emitContentReplaced*(b: TextBuffer) =
+  ## Announce that `b` now holds different contents, invalidating every
+  ## position taken before this point. Called at the end of every load.
+  if b.contentReplacedHook == nil:
+    return
+  try:
+    b.contentReplacedHook(b)
+  except CatchableError as e:
+    logError("buffer", "contentReplacedHook raised: " & e.msg)
 
 # Memory usage monitoring
 proc estimateMemoryUsage*(buffer: TextBuffer): int =

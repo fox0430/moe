@@ -227,6 +227,7 @@ suite "Virtual text provider gating":
     e.activeBuffer().filePath = some("/test/current.nim")
     e.state.lspCache.inlayHintCache.isValid = true
     e.state.lspCache.inlayHintCache.filePath = "/test/current.nim"
+    e.state.lspCache.inlayHintCache.bufferId = e.activeBuffer.id
 
     check e.buildVirtualTextProviders().len == 1
 

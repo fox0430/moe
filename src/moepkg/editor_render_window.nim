@@ -60,6 +60,10 @@ type
     ##   `useTwoColor`, and `lineBg`; the remaining fields can be left at
     ##   their defaults.
     lineIndex*: int
+    bufferId*: BufferId
+      ## Buffer being rendered, checked by overlays cached for one buffer at a
+      ## time (document highlights). `BufferId(0)` on the partial construction
+      ## path, which reads none of them.
     isActiveWindow*: bool
     isCursorLine*: bool
     lineConflict*: ConflictMarkerKind
@@ -198,6 +202,11 @@ proc newLineStyleContext*(
 
   LineStyleContext(
     lineIndex: lineIndex,
+    bufferId:
+      if textBuffer != nil:
+        textBuffer.id
+      else:
+        BufferId(0),
     isActiveWindow: ctx.isActiveWindow,
     isCursorLine: lineIndex == ctx.cursorLine,
     lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
@@ -284,7 +293,7 @@ proc overlayPatchSyntax(
   ## Background overlay for the syntax-highlighted code path. Syntax fg and
   ## modifiers are preserved; only the bg may be overridden.
   ## Priority: documentHighlight > gitConflict > cursorLine > cursorColumn.
-  let highlightKind = e.state.isPositionInDocumentHighlight(pos)
+  let highlightKind = e.state.isPositionInDocumentHighlight(lineCtx.bufferId, pos)
   if highlightKind.isSome:
     return bgOnly(getDocumentHighlightStyle(highlightKind.get).bg)
   if lineCtx.gitConflictApplies:
@@ -326,7 +335,7 @@ proc baseStyleWithOverlay(
       e.overlayPatchSyntax(pos, lineCtx, displayCol, cursorDisplayCol, colorPair)
     )
   else:
-    let highlightKind = e.state.isPositionInDocumentHighlight(pos)
+    let highlightKind = e.state.isPositionInDocumentHighlight(lineCtx.bufferId, pos)
     if highlightKind.isSome:
       getDocumentHighlightStyle(highlightKind.get)
     elif lineCtx.gitConflictApplies:

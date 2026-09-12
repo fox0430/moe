@@ -72,6 +72,11 @@ type
       ## `runningBackgroundProcesses` because they own temporary files (temp
       ## source + build artifacts) that must be removed on editor exit/crash.
       ## Cleaned up via `cleanupQuickRunProcesses` on shutdown/emergency.
+    onBufferContentReplaced*: proc(e: Editor, buf: TextBuffer) {.closure.}
+      ## Run when any registered buffer's contents are replaced wholesale
+      ## (reload, `:e!`, a backup restore). Installed on every buffer by
+      ## `addBuffer` and set once during editor construction; a nil hook does
+      ## nothing, keeping buffers usable outside a full editor.
     when not defined(moe.embedded):
       terminalStates*: Table[BufferId, TerminalState]
         ## Live Terminal sessions keyed by their buffer id. The window's
@@ -138,10 +143,17 @@ proc bufferIndexById*(e: Editor, id: BufferId): int =
   return -1
 
 proc addBuffer*(e: Editor, buf: TextBuffer) =
-  ## Append `buf` to `e.buffers` and register it in `bufferIdIndex`.
+  ## Append `buf` to `e.buffers` and register it in `bufferIdIndex`, and
+  ## subscribe the editor to the buffer's wholesale content replacements.
   ## Use this instead of `e.buffers.add` so the lookup table stays in sync.
   e.buffers.add(buf)
   e.bufferIdIndex[buf.id] = buf
+  if e.onBufferContentReplaced != nil:
+    let editor = e
+    buf.setContentReplacedHook(
+      proc(b: TextBuffer) =
+        editor.onBufferContentReplaced(editor, b)
+    )
 
 proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from
@@ -152,7 +164,17 @@ proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   let id = buf.id
   e.buffers.delete(idx)
   e.bufferIdIndex.del(id)
+  # Unsubscribe: an untracked buffer must not keep reaching back into the
+  # editor, which the hook also keeps alive.
+  buf.setContentReplacedHook(nil)
   forgetSyncReport(id)
+
+proc unregisterBufferNoLsp*(e: Editor, buf: TextBuffer) =
+  ## Undo an `addBuffer` for a buffer that never became usable, e.g. one whose
+  ## load failed. Does nothing when `buf` is not registered.
+  let idx = e.bufferIndexById(buf.id)
+  if idx >= 0:
+    e.deleteBufferAtNoLsp(idx)
 
 proc pruneBufferIdFromAllWindows*(e: Editor, id: BufferId) =
   ## Remove `id` from every window's per-window tab list (`bufferIds`).

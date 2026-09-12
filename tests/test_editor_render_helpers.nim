@@ -132,9 +132,11 @@ suite "isPositionInDocumentHighlight - Detailed":
     let e = createTestEditor()
     e.state.showDocumentHighlight = false
     e.state.lspCache.documentHighlightCache.isValid = true
+    e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
 
-    let result =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 5))
+    let result = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 5)
+    )
     check result.isNone
 
   test "Returns none when cache invalid":
@@ -142,30 +144,35 @@ suite "isPositionInDocumentHighlight - Detailed":
     e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = false
 
-    let result =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 5))
+    let result = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 5)
+    )
     check result.isNone
 
   test "Returns none for line without highlights":
     let e = createTestEditor()
     e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
+    e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine =
       {0: @[DocumentHighlightItem(startColumn: 5, endColumn: 10, kind: 2)]}.toTable
 
-    let result =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 1, column: 5))
+    let result = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 1, column: 5)
+    )
     check result.isNone
 
   test "Returns kind for position in range":
     let e = createTestEditor()
     e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
+    e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine =
       {0: @[DocumentHighlightItem(startColumn: 5, endColumn: 10, kind: 2)]}.toTable
 
-    let result =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 5))
+    let result = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 5)
+    )
     check result.isSome
     check result.get == 2
 
@@ -173,23 +180,27 @@ suite "isPositionInDocumentHighlight - Detailed":
     let e = createTestEditor()
     e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
+    e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine =
       {0: @[DocumentHighlightItem(startColumn: 5, endColumn: 10, kind: 1)]}.toTable
 
     # Column 9 is the last included column
-    let resultIn =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 9))
+    let resultIn = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 9)
+    )
     check resultIn.isSome
 
     # Column 10 is excluded (endColumn is exclusive)
-    let resultOut =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 10))
+    let resultOut = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 10)
+    )
     check resultOut.isNone
 
   test "Multiple highlights on same line":
     let e = createTestEditor()
     e.state.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
+    e.state.lspCache.documentHighlightCache.bufferId = e.activeBuffer.id
     e.state.lspCache.documentHighlightCache.itemsByLine = {
       0: @[
         DocumentHighlightItem(startColumn: 0, endColumn: 5, kind: 1),
@@ -198,24 +209,28 @@ suite "isPositionInDocumentHighlight - Detailed":
       ]
     }.toTable
 
-    let result1 =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 2))
+    let result1 = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 2)
+    )
     check result1.isSome
     check result1.get == 1
 
-    let result2 =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 12))
+    let result2 = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 12)
+    )
     check result2.isSome
     check result2.get == 2
 
-    let result3 =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 22))
+    let result3 = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 22)
+    )
     check result3.isSome
     check result3.get == 3
 
     # Between highlights
-    let resultBetween =
-      e.state.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 7))
+    let resultBetween = e.state.isPositionInDocumentHighlight(
+      e.activeBuffer.id, BufferPosition(line: 0, column: 7)
+    )
     check resultBetween.isNone
 
 suite "getDocumentHighlightStyle":

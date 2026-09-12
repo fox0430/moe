@@ -20,7 +20,7 @@
 ## Backup manager side effects (refresh, restore, delete, diff), split
 ## out of result_processor.nim.
 
-import std/[options, os, times]
+import std/[os]
 import pkg/results
 
 import
@@ -76,14 +76,7 @@ proc refreshRollbackFileMetadata(
     buf.externalModWarned = false
     return
 
-  if fileExists(path):
-    try:
-      buf.lastFileModTime = some(getFileInfo(path).lastWriteTime)
-    except OSError:
-      buf.lastFileModTime = none(Time)
-  else:
-    buf.lastFileModTime = none(Time)
-  buf.externalModWarned = false
+  buf.noteFileStamp(path)
 
 proc processBackupResult*(e: Editor, r: HandlerResult): bool =
   ## Handle hrBackupManager* kinds (refresh, restore, delete, diff).
@@ -181,8 +174,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
             # Periodic LSP sync only covers the active buffer; the restored
             # buffer is in another split, so sync it explicitly.
             e.syncBufferAfterEdit(srcBuf)
-            # The restored file may be shorter; re-clamp cursors in other splits.
-            e.clampAllWindowCursors()
+            # The load itself invalidates the positions naming the old text.
             # Refresh the restored buffer's git-diff gutter and conflicts.
             e.refreshBufferGitAndConflicts(srcBuf)
             # Restore screen notification (controlled by config)

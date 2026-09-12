@@ -740,6 +740,10 @@ type
     itemsByLine*: Table[int, seq[CodeLensItem]] # Line number -> CodeLens items
     contentVersion*: int # Buffer contentVersion when cache was last updated
     filePath*: string # Path of the buffer this cache belongs to
+    bufferId*: BufferId
+      ## Buffer this cache was built from; `BufferId(0)` while unpopulated.
+      ## Held beside `filePath`, which is reused across loads and empty for a
+      ## buffer without a file.
     isValid*: bool # Whether the cache is valid
 
   CodeLensPicker* = object
@@ -760,6 +764,7 @@ type
     ## Cache for document highlights
     ## Uses Table for O(1) line lookup instead of O(n) sequential search
     itemsByLine*: Table[int, seq[DocumentHighlightItem]] # Line number -> items
+    bufferId*: BufferId # Buffer this cache was built from (see CodeLensCache)
     cursorLine*: int # Cursor line when highlights were requested
     cursorColumn*: int # Cursor column when highlights were requested
     contentVersion*: int # Buffer contentVersion when cache was last updated
@@ -770,6 +775,7 @@ type
     ## Actual SemanticTokens data is applied directly to buffer.highlight
     changeSeq*: int # Buffer changeSeq when semantic tokens were last applied
     filePath*: string # Path of the buffer this cache belongs to
+    bufferId*: BufferId # Buffer this cache was built from (see CodeLensCache)
     isValid*: bool # Whether semantic tokens have been applied to current highlight
     topLine*: int # Top visible line when tokens were requested
     bottomLine*: int # Bottom visible line when tokens were requested
@@ -788,6 +794,7 @@ type
     itemsByLine*: Table[int, seq[InlayHintItem]] # Line number -> inlay hints
     changeSeq*: int # Buffer changeSeq when cache was last updated
     filePath*: string # Path of the buffer this cache belongs to
+    bufferId*: BufferId # Buffer this cache was built from (see CodeLensCache)
     topLine*: int # Top visible line when hints were requested
     bottomLine*: int # Bottom visible line when hints were requested
     isValid*: bool # Whether the cache is valid
