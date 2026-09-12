@@ -41,9 +41,8 @@ const
   DescriptionGap* = 2 # Gap between command and description
 
 # Command descriptions — derived from the canonical `CommandLineCommandTable`
-# in `command_line_commands.nim` so the completion popup, the help text, and
-# the parser dispatch all share one source of truth. Specs with an empty
-# completionDescription (long forms used only by TOML config) are excluded.
+# in `command_line_commands.nim`. Specs with an empty completionDescription
+# are excluded.
 const CommandDescriptions*: Table[string, string] = block:
   var t: Table[string, string]
   for spec in CommandLineCommandTable:

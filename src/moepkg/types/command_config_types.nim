@@ -35,6 +35,8 @@ type
     shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
     disabledCommands*: seq[CommandLineAction] ## Disabled built-in commands
 
-  KeyMappableCommandAlias* = tuple[name, description: string]
-    ## (alias name, human-readable description) pair used when registering a
-    ## Command mode command alias as a keymap RHS target.
+  KeyMappableCommandAlias* = tuple[name, cmdlineName, description: string]
+    ## (alias name, runnable `:` command name, human-readable description)
+    ## used when registering a Command mode command alias as a keymap RHS
+    ## target. `cmdlineName` differs from `name` for TOML-only long forms
+    ## (`quit` dispatches `:q`).

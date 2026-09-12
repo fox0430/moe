@@ -24,6 +24,7 @@
 import std/[unittest, tables, options]
 
 import ../src/moepkg/command_line_commands
+import ../src/moepkg/command_config
 import ../src/moepkg/command_line/types
 import ../src/moepkg/help_description
 
@@ -48,10 +49,15 @@ suite "CommandLineCommandTable invariants":
     for action in seen.keys:
       check action in canonical
 
+  test "every keymap alias dispatches a runnable command name":
+    let config = newCommandConfig()
+    config.loadDefaultConfig()
+    for alias in keyMappableCommandModeAliases:
+      check alias.cmdlineName in config.aliases
+
   test "action.isNone entries have empty completionDescription":
-    ## Otherwise the loadDefaultConfig / CommandDescriptions key sets would
-    ## diverge (loadDefaultConfig filters on `action.isSome and desc.len > 0`,
-    ## CommandDescriptions filters on `desc.len > 0` only).
+    ## Display-only variants must not reach the completion popup, which
+    ## would offer a command the parser has no dispatch target for.
     for spec in CommandLineCommandTable:
       if spec.action.isNone:
         check spec.completionDescription.len == 0
@@ -62,6 +68,21 @@ suite "CommandLineCommandTable invariants":
     for spec in CommandLineCommandTable:
       if spec.action.isNone:
         check not spec.isCanonicalLong
+
+  test "isTomlOnly implies isCanonicalLong":
+    ## `loadDefaultConfig` skips it, so `CommandNameTable` membership is the
+    ## only thing that keeps the name reachable.
+    for spec in CommandLineCommandTable:
+      if spec.isTomlOnly:
+        check spec.isCanonicalLong
+
+  test "takesFilePath implies the command is runnable":
+    ## Otherwise completion would offer paths for a name the parser cannot
+    ## dispatch.
+    for spec in CommandLineCommandTable:
+      if spec.takesFilePath:
+        check not spec.isTomlOnly
+        check spec.action.isSome
 
   test "names are unique":
     var seen: Table[string, int]

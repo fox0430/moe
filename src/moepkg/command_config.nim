@@ -25,11 +25,11 @@
 ## Also re-exports `keyMappableCommandModeAliases` — the curated set of
 ## Command mode command aliases (`:bd`, `:q`, `:w`, ...) that may appear as
 ## RHS targets in a keymap config. `key_bindings.setupDefaultBindings`
-## registers each entry as a Command with commandId `exec.cmdline.<alias>` so
-## the keymap loader can resolve it; at dispatch time the bridge in
-## `command_handlers/*_handler.nim` rewrites the commandId back into
-## `:<alias>` so the full command-line parser (and its modified-buffer safety
-## checks) runs.
+## registers each entry as a Command with commandId
+## `exec.cmdline.<cmdlineName>` so the keymap loader can resolve it; at
+## dispatch time the bridge in `command_handlers/*_handler.nim` rewrites the
+## commandId back into `:<cmdlineName>` so the full command-line parser (and
+## its modified-buffer safety checks) runs.
 
 import std/[tables, sequtils, options, strutils]
 
@@ -57,15 +57,31 @@ const CommandNameTable*: Table[string, CommandLineAction] = block:
 #
 # Derived from the canonical `CommandLineCommandTable`: any spec carrying a
 # non-empty `keymapBaseDescription` becomes an entry here, with the full
-# description built as `<base> (:<name>)`. The set of registered Command-
+# description built as `<base> (:<cmdlineName>)`. The set of registered Command-
 # mode handlers is computed from this list in `setupDefaultBindings`, and
 # names that collide with a pre-existing Command (e.g. "save") are skipped
 # there so the original handler keeps its real `commandId`.
+#
+# An `isTomlOnly` spec has no runnable `:<name>`, so it dispatches the short
+# form of the same action instead (`quit` -> `:q`).
 const keyMappableCommandModeAliases*: seq[KeyMappableCommandAlias] = block:
   var s: seq[KeyMappableCommandAlias]
   for spec in CommandLineCommandTable:
-    if spec.keymapBaseDescription.len > 0:
-      s.add((spec.name, spec.keymapBaseDescription & " (:" & spec.name & ")"))
+    if spec.keymapBaseDescription.len == 0:
+      continue
+    var cmdlineName = spec.name
+    if spec.isTomlOnly:
+      var runnable: seq[string]
+      for other in CommandLineCommandTable:
+        if other.action.isSome and not other.isTomlOnly and other.action == spec.action:
+          runnable.add other.name
+      doAssert runnable.len == 1,
+        "keymap alias " & spec.name &
+          " needs exactly one runnable command-line name, got " & $runnable
+      cmdlineName = runnable[0]
+    s.add(
+      (spec.name, cmdlineName, spec.keymapBaseDescription & " (:" & cmdlineName & ")")
+    )
   s
 
 proc resolveCommandName*(name: string): Option[CommandLineAction] =
@@ -86,12 +102,11 @@ proc canonicalCommandName*(action: CommandLineAction): Option[string] =
   return none(string)
 
 proc isDefaultCommandAlias*(alias: string): bool =
-  ## True if `alias` names a built-in default command alias — the set
-  ## registered by `loadDefaultConfig` (specs with a non-empty
-  ## `completionDescription`).
+  ## True if `alias` names a built-in default command alias, i.e. the set
+  ## registered by `loadDefaultConfig`.
   let key = alias.toLowerAscii()
   for spec in CommandLineCommandTable:
-    if spec.action.isSome and spec.completionDescription.len > 0 and spec.name == key:
+    if spec.action.isSome and not spec.isTomlOnly and spec.name == key:
       return true
   return false
 
@@ -141,14 +156,11 @@ proc isCommandEnabled*(config: CommandConfig, action: CommandLineAction): bool =
   action notin config.disabledCommands
 
 proc loadDefaultConfig*(config: CommandConfig) =
-  ## Load default command configuration. Registers every alias defined in
-  ## `CommandLineCommandTable` that's intended as a runtime command (i.e.,
-  ## has a non-empty `completionDescription`). Long forms reserved purely
-  ## for TOML `[CommandAliases]` resolution (e.g. `quit`, `save`,
-  ## `buffermanager`) carry an empty `completionDescription` and are
-  ## skipped here — they are exposed via `CommandNameTable` instead.
+  ## Load default command configuration. Registers every action-bearing
+  ## alias in `CommandLineCommandTable` except `isTomlOnly` ones, which are
+  ## exposed via `CommandNameTable` instead.
   for spec in CommandLineCommandTable:
-    if spec.action.isSome and spec.completionDescription.len > 0:
+    if spec.action.isSome and not spec.isTomlOnly:
       config.addAlias(spec.name, spec.action.get)
 
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =

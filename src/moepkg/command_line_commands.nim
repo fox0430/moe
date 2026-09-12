@@ -28,7 +28,8 @@
 ##
 ## Adding a new command alias means appending one entry here. No other
 ## file needs to be updated unless a new `CommandLineAction` enum value is
-## also introduced (which still lives in `command_line/types.nim`).
+## also introduced (which still lives in `command_line/types.nim`). The
+## default field values make the entry a runnable `:name`.
 
 import std/[options, tables]
 
@@ -51,7 +52,8 @@ type
       ## Lookup key. Short alias (`q`) and long alias (`quit`) live as
       ## separate specs since they have different roles.
     completionDescription*: string
-      ## Shown in the completion popup. Empty string means "not in completion".
+      ## Shown in the completion popup. Empty string means "not in
+      ## completion".
     helpEntries*: seq[HelpEntry]
       ## Lines emitted in help text. Empty = no help line. Multi-usage
       ## families (e.g. `:e`) have multiple entries.
@@ -63,14 +65,20 @@ type
       ## When `true`, this spec's `name` is the canonical long form used
       ## in TOML `[CommandAliases]` config and exposed via `CommandNameTable`.
       ## Exactly one spec per action should set this to `true`.
+    isTomlOnly*: bool
+      ## When `true`, the name is not registered as a runtime `:name`
+      ## command; it exists purely as a TOML `[CommandAliases]` RHS target,
+      ## exposed via `CommandNameTable`. Implies `isCanonicalLong`.
     takesFilePath*: bool
       ## When `true`, completion offers file paths when the user types
-      ## `:<name> <prefix>`. Derived as
-      ## `command_completion.FilePathCommands`.
+      ## `:<name> <prefix>`. Must not be set on an `isTomlOnly` spec.
+      ## Derived as `command_completion.FilePathCommands`.
     keymapBaseDescription*: string
-      ## When non-empty, this spec is a `:<name>` keymap RHS target. The
-      ## description shown to users is built as
-      ## `keymapBaseDescription & " (:" & name & ")"`. Derived as
+      ## When non-empty, this spec is a keymap RHS target. The description
+      ## shown to users is built as
+      ## `keymapBaseDescription & " (:" & cmdlineName & ")"`, where
+      ## `cmdlineName` is this spec's own `name`, or for an `isTomlOnly`
+      ## spec the runnable name sharing its action. Derived as
       ## `command_config.keyMappableCommandModeAliases`.
 
 const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
@@ -89,6 +97,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claQuit),
     isCanonicalLong: true,
+    isTomlOnly: true,
     keymapBaseDescription: "Quit",
   ),
   CommandLineCommandSpec(
@@ -112,6 +121,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claQuitAll),
     isCanonicalLong: true,
+    isTomlOnly: true,
     keymapBaseDescription: "Quit all",
   ),
   CommandLineCommandSpec(
@@ -135,6 +145,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claCquit),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "w",
@@ -151,6 +162,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claSave),
     isCanonicalLong: true,
+    isTomlOnly: true,
     keymapBaseDescription: "Save current buffer",
   ),
   CommandLineCommandSpec(
@@ -174,15 +186,8 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claSaveAll),
     isCanonicalLong: true,
+    isTomlOnly: true,
     keymapBaseDescription: "Save all buffers",
-  ),
-  CommandLineCommandSpec(
-    name: "write",
-    completionDescription: "",
-    helpEntries: @[],
-    action: some(claSave),
-    isCanonicalLong: false,
-    takesFilePath: true,
   ),
   CommandLineCommandSpec(
     name: "wq",
@@ -198,6 +203,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claSaveAndQuit),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "wq!",
@@ -246,6 +252,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claSaveAllAndQuit),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "wqa!",
@@ -281,7 +288,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claEdit),
     isCanonicalLong: true,
-    takesFilePath: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "ene",
@@ -296,6 +303,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claEnew),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "new",
@@ -358,6 +366,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claSubstitute),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "delete",
@@ -388,7 +397,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claVSplit),
     isCanonicalLong: true,
-    takesFilePath: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "sp",
@@ -407,15 +416,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claHSplit),
     isCanonicalLong: true,
-    takesFilePath: true,
-  ),
-  CommandLineCommandSpec(
-    name: "split",
-    completionDescription: "",
-    helpEntries: @[],
-    action: some(claHSplit),
-    isCanonicalLong: false,
-    takesFilePath: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "only",
@@ -438,6 +439,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claBufferManager),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "b",
@@ -475,6 +477,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claBufferNext),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "bp",
@@ -507,6 +510,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claBufferPrev),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "bf",
@@ -538,6 +542,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claBufferFirst),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "bl",
@@ -561,6 +566,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claBufferLast),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "bd",
@@ -584,6 +590,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claBufferDelete),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   # File tree sidebar (multi-usage)
   CommandLineCommandSpec(
@@ -758,6 +765,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claEditConfigFile),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "quickrun",
@@ -812,6 +820,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claJumpList),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "changes",
@@ -882,6 +891,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claBackground),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "man",
@@ -903,6 +913,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claFiler),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   # Shell (TOML-only canonical name; help is in CommandLineSpecialHelp)
   CommandLineCommandSpec(
@@ -911,6 +922,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[],
     action: some(claShellCommand),
     isCanonicalLong: true,
+    isTomlOnly: true,
   ),
   # Runtime key mapping (the `noremap` aliases are documented under their
   # canonical-long counterpart; their `helpEntries` stay empty so the help
