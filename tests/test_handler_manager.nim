@@ -1656,7 +1656,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     enterInsertMode(buffer, state)
     manager.ctrlOToNormal(buffer, state)
 
-    # Press Ctrl-W (window command prefix, first key of "C-w k" sequence)
+    # Press Ctrl-W (window command prefix, first key of "C-w w" sequence)
     let ctrlW = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
     let r = manager.handleKeyCombo(
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), ctrlW
@@ -1683,10 +1683,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
       createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), ctrlW
     )
 
-    # Press 'k' to complete "Ctrl-W k" (window-next → hrNextWindow)
-    let kKey = KeyCombo(isSpecial: false, char: "k", modifiers: {})
+    # Press 'w' to complete "Ctrl-W w" (window-next → hrNextWindow)
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
     let r = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), wKey
     )
 
     check r.kind == hrNextWindow

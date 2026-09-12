@@ -609,7 +609,12 @@ Commands are grouped by category below. Any command name listed here can be used
 | buffer-next-tab | Switch to next buffer tab |
 | buffer-prev-tab | Switch to previous buffer tab |
 | window-next | Switch to next window |
-| window-prev | Switch to previous window |
+| window-prev | Switch to the last accessed window |
+| window-move-left | Move to the window on the left |
+| window-move-down | Move to the window below |
+| window-move-up | Move to the window above |
+| window-move-right | Move to the window on the right |
+| window-maximize-height | Maximize window height |
 | window-increase-height | Increase window height |
 | window-decrease-height | Decrease window height |
 | window-increase-width | Increase window width |

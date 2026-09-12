@@ -51,12 +51,31 @@ proc deactivateAllWindows*(wm: EditorWindowManager) =
 proc activateWindow*(wm: EditorWindowManager, index: int) =
   ## Activate a specific window by index and update activeWindowIndex
   if index >= 0 and index < wm.windows.len:
+    if index != wm.activeWindowIndex and wm.activeWindowIndex < wm.windows.len:
+      wm.previousWindow = wm.windows[wm.activeWindowIndex]
     wm.deactivateAllWindows()
     wm.windows[index].active = true
     wm.activeWindowIndex = index
 
+proc prunePreviousWindow*(wm: EditorWindowManager) =
+  ## Forget `previousWindow` when it no longer refers to a live window other
+  ## than the active one.
+  if wm.previousWindow == nil:
+    return
+
+  if wm.activeWindowIndex < wm.windows.len and
+      wm.windows[wm.activeWindowIndex] == wm.previousWindow:
+    wm.previousWindow = nil
+    return
+
+  for window in wm.windows:
+    if window == wm.previousWindow:
+      return
+
+  wm.previousWindow = nil
+
 proc switchToNextWindow*(wm: EditorWindowManager) =
-  ## Switch to the next window (Ctrl-w, k)
+  ## Switch to the next window (Ctrl-w w)
   if wm.windows.len <= 1:
     return
 
@@ -64,12 +83,104 @@ proc switchToNextWindow*(wm: EditorWindowManager) =
   wm.activateWindow(nextIndex)
 
 proc switchToPrevWindow*(wm: EditorWindowManager) =
-  ## Switch to the previous window (Ctrl-w, j)
-  if wm.windows.len <= 1:
+  ## Switch to the last accessed window (Ctrl-w p). Like Vim, this does nothing
+  ## when there is no such window left, rather than falling back to a neighbour.
+  if wm.windows.len <= 1 or wm.previousWindow == nil:
     return
 
-  let prevIndex = (wm.activeWindowIndex - 1 + wm.windows.len) mod wm.windows.len
-  wm.activateWindow(prevIndex)
+  for i, window in wm.windows:
+    if window == wm.previousWindow:
+      wm.activateWindow(i)
+      return
+
+proc moveToWindowDirection*(wm: EditorWindowManager, direction: WindowDirection): bool =
+  ## Move the focus to the nearest window in `direction` (Ctrl-w h/j/k/l).
+  ## Returns true when the focus moved.
+  if wm.windows.len <= 1 or wm.activeWindowIndex >= wm.windows.len:
+    return false
+
+  let
+    activeWindow = wm.windows[wm.activeWindowIndex]
+    active = activeWindow.viewport
+    # Vim moves to the window holding the cursor on the perpendicular axis.
+    # `screenCursor` is only set while rendering, so clamp it into the active
+    # viewport to stay meaningful before the first frame.
+    cursorY = clamp(activeWindow.screenCursor.y, active.y, active.y + active.height - 1)
+    cursorX = clamp(activeWindow.screenCursor.x, active.x, active.x + active.width - 1)
+  var
+    bestIndex = -1
+    bestDistance = 0
+    bestOverlap = 0
+    bestHasCursor = false
+
+  for i in 0 ..< wm.windows.len:
+    if i == wm.activeWindowIndex:
+      continue
+
+    let v = wm.windows[i].viewport
+    var
+      distance = -1
+      overlap = 0
+
+    case direction
+    of wdLeft:
+      if v.x + v.width <= active.x:
+        distance = active.x - (v.x + v.width)
+    of wdRight:
+      if v.x >= active.x + active.width:
+        distance = v.x - (active.x + active.width)
+    of wdUp:
+      if v.y + v.height <= active.y:
+        distance = active.y - (v.y + v.height)
+    of wdDown:
+      if v.y >= active.y + active.height:
+        distance = v.y - (active.y + active.height)
+
+    if distance < 0:
+      continue
+
+    # Overlap on the perpendicular axis: the window must actually share an
+    # edge with the active one, and among those prefer the largest overlap.
+    overlap =
+      case direction
+      of wdLeft, wdRight:
+        min(active.y + active.height, v.y + v.height) - max(active.y, v.y)
+      of wdUp, wdDown:
+        min(active.x + active.width, v.x + v.width) - max(active.x, v.x)
+
+    if overlap <= 0:
+      continue
+
+    # Among equally near candidates prefer the one the cursor points into,
+    # and only then the largest overlap.
+    let hasCursor =
+      case direction
+      of wdLeft, wdRight:
+        v.y <= cursorY and cursorY < v.y + v.height
+      of wdUp, wdDown:
+        v.x <= cursorX and cursorX < v.x + v.width
+
+    let better =
+      if bestIndex < 0 or distance < bestDistance:
+        true
+      elif distance > bestDistance:
+        false
+      elif hasCursor != bestHasCursor:
+        hasCursor
+      else:
+        overlap > bestOverlap
+
+    if better:
+      bestIndex = i
+      bestDistance = distance
+      bestOverlap = overlap
+      bestHasCursor = hasCursor
+
+  if bestIndex < 0:
+    return false
+
+  wm.activateWindow(bestIndex)
+  return true
 
 proc groupWindowsByY*(wm: EditorWindowManager): seq[seq[int]] =
   ## Group windows by their Y coordinate (horizontal groups)
@@ -662,6 +773,8 @@ proc closeWindow*(
   if wm.activeWindowIndex >= wm.windows.len:
     wm.activeWindowIndex = wm.windows.len - 1
 
+  wm.prunePreviousWindow()
+
   # Redistribute the closed window's space by re-equalizing the group it belonged to.
   # This correctly handles 3+ windows where the old per-window approach would cause
   # multiple windows to absorb the same space, resulting in overlapping viewports.
@@ -798,6 +911,7 @@ proc onlyWindow*(wm: EditorWindowManager, screenWidth: int, screenHeight: int) =
   wm.windows = @[activeWin]
   wm.activeWindowIndex = 0
   wm.activateWindow(0)
+  wm.prunePreviousWindow()
 
   # Resize viewport to fill the full screen
   activeWin.viewport.x = 0
@@ -879,6 +993,7 @@ proc vsplit*(
   )
 
   # Insert new window before the active window (left position)
+  wm.previousWindow = wm.windows[wm.activeWindowIndex]
   wm.windows.insert(newWindow, wm.activeWindowIndex)
 
   # Equalize widths of all windows at the same vertical position
@@ -956,6 +1071,7 @@ proc vsplitWithBuffer*(
   )
 
   # Insert new window before the active window (left position)
+  wm.previousWindow = wm.windows[wm.activeWindowIndex]
   wm.windows.insert(newWindow, wm.activeWindowIndex)
 
   # Equalize widths of all windows at the same vertical position
@@ -1071,6 +1187,7 @@ proc hsplit*(
   )
 
   # Insert new window before the active window (top position)
+  wm.previousWindow = wm.windows[wm.activeWindowIndex]
   wm.windows.insert(newWindow, wm.activeWindowIndex)
 
   # Equalize heights of all windows at the same horizontal position
@@ -1161,6 +1278,7 @@ proc hsplitWithBuffer*(
   )
 
   # Insert new window before the active window (top position)
+  wm.previousWindow = wm.windows[wm.activeWindowIndex]
   wm.windows.insert(newWindow, wm.activeWindowIndex)
 
   # Equalize heights of all windows at the same horizontal position
@@ -1181,6 +1299,12 @@ proc hsplitWithBuffer*(
       wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
 
   return ok(newBuffer)
+
+proc syncFixedWidth(wm: EditorWindowManager, indexes: varargs[int]) =
+  ## Keep fixedWidth in sync after a manual resize so relayouts do not revert it.
+  for idx in indexes:
+    if wm.windows[idx].fixedWidth.isSome:
+      wm.windows[idx].fixedWidth = some(wm.windows[idx].viewport.width)
 
 proc increaseWindowWidth*(wm: EditorWindowManager, delta: int = 1) =
   ## Increase active window width by delta, shrinking adjacent window
@@ -1245,6 +1369,8 @@ proc increaseWindowWidth*(wm: EditorWindowManager, delta: int = 1) =
     # Neighbor is to the left, shift active left
     wm.windows[activeIdx].viewport.x -= delta
 
+  wm.syncFixedWidth(activeIdx, neighborIdx)
+
 proc decreaseWindowWidth*(wm: EditorWindowManager, delta: int = 1) =
   ## Decrease active window width by delta, expanding adjacent window
   if wm.windows.len <= 1:
@@ -1308,6 +1434,8 @@ proc decreaseWindowWidth*(wm: EditorWindowManager, delta: int = 1) =
   else:
     # Neighbor is to the left, shift active right
     wm.windows[activeIdx].viewport.x += delta
+
+  wm.syncFixedWidth(activeIdx, neighborIdx)
 
 proc increaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
   ## Increase active window height by delta, shrinking adjacent window
@@ -1436,6 +1564,93 @@ proc decreaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
     # Neighbor is above, shift active down
     wm.windows[activeIdx].viewport.y += delta
 
+proc maximizeWindowHeight*(
+    wm: EditorWindowManager,
+    multiStatusLine: bool,
+    showTabLine: bool,
+    showStatusLine: bool = true,
+) =
+  ## Give the active window as much height as its vertical group allows,
+  ## shrinking the other windows in the group to their minimum (Ctrl-w _).
+  if wm.windows.len <= 1:
+    return
+
+  let activeIdx = wm.activeWindowIndex
+
+  let groups = wm.groupAdjacentWindowsVertically()
+  var myGroup: seq[int] = @[]
+  for group in groups:
+    for idx in group:
+      if idx == activeIdx:
+        myGroup = group
+        break
+    if myGroup.len > 0:
+      break
+
+  if myGroup.len <= 1:
+    return
+
+  var sortedGroup = myGroup
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+  )
+
+  proc minHeight(isBottomWindow: bool): int =
+    ## One content row plus whatever chrome the window carries: its own tab
+    ## line, its status line (always in multi status line mode, otherwise only
+    ## the bottom window) and the command line area below the bottom window.
+    result = 1
+    if showTabLine:
+      result += TabLineHeight
+    if showStatusLine and (multiStatusLine or isBottomWindow):
+      result += StatusLineHeight
+    if isBottomWindow:
+      result += steadyBottomAreaHeight()
+
+  let
+    firstWindow = wm.windows[sortedGroup[0]]
+    lastWindow = wm.windows[sortedGroup[^1]]
+    startY = firstWindow.viewport.y
+    totalHeight = (lastWindow.viewport.y + lastWindow.viewport.height) - startY
+    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorHeight
+
+  # The last window of a vertical group only carries the bottom chrome when the
+  # group actually reaches the bottom of the screen (side-by-side splits don't).
+  let
+    maxBottomY = findMaxBottomY(wm.windows)
+    groupReachesBottom =
+      lastWindow.viewport.y + lastWindow.viewport.height == maxBottomY
+
+  proc isBottom(i: int): bool =
+    groupReachesBottom and i == sortedGroup.len - 1
+
+  var othersHeight = (sortedGroup.len - 1) * separatorOffset
+  for i, idx in sortedGroup:
+    if idx != activeIdx:
+      othersHeight += minHeight(isBottom(i))
+
+  let activeHeight = totalHeight - othersHeight
+  var activePos = -1
+  for i, idx in sortedGroup:
+    if idx == activeIdx:
+      activePos = i
+      break
+
+  if activeHeight < minHeight(isBottom(activePos)):
+    # No room to grow without pushing a window out of the group.
+    return
+
+  var currentY = startY
+  for i, idx in sortedGroup:
+    wm.windows[idx].viewport.y = currentY
+    wm.windows[idx].viewport.height =
+      if idx == activeIdx:
+        activeHeight
+      else:
+        minHeight(isBottom(i))
+    currentY += wm.windows[idx].viewport.height + separatorOffset
+
 proc swapWindows*(wm: EditorWindowManager) =
   ## Swap the active window with the next window (Ctrl-w x)
   ## Swaps viewport positions while keeping buffer/cursor state with each window.
@@ -1477,6 +1692,24 @@ proc equalizeAllWindows*(wm: EditorWindowManager, multiStatusLine: bool) =
   if wm.windows.len <= 1:
     return
 
+  # Equalize heights first: the width pass groups by exact y, so the split rows
+  # moved by `C-w _`/`+`/`-` have to line up again before it runs.
+  let vGroups = wm.groupWindowsByXAndWidth()
+  for group in vGroups:
+    if group.len > 1:
+      var sortedGroup = group
+      sortedGroup.sort(
+        proc(a, b: int): int =
+          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+      )
+      let
+        firstWindow = wm.windows[sortedGroup[0]]
+        lastWindow = wm.windows[sortedGroup[^1]]
+        totalHeight =
+          (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
+        startY = firstWindow.viewport.y
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
+
   # Equalize widths in horizontal groups
   let hGroups = wm.groupWindowsByY()
   for group in hGroups:
@@ -1493,23 +1726,6 @@ proc equalizeAllWindows*(wm: EditorWindowManager, multiStatusLine: bool) =
           (lastWindow.viewport.x + lastWindow.viewport.width) - firstWindow.viewport.x
         startX = firstWindow.viewport.x
       wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
-
-  # Equalize heights in vertical groups
-  let vGroups = wm.groupWindowsByXAndWidth()
-  for group in vGroups:
-    if group.len > 1:
-      var sortedGroup = group
-      sortedGroup.sort(
-        proc(a, b: int): int =
-          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
-      )
-      let
-        firstWindow = wm.windows[sortedGroup[0]]
-        lastWindow = wm.windows[sortedGroup[^1]]
-        totalHeight =
-          (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
-        startY = firstWindow.viewport.y
-      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
 
 proc resizeWindows*(
     wm: EditorWindowManager,

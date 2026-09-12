@@ -610,14 +610,6 @@ proc handleFileTreeMode*(
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
-  of ftrNextWindow:
-    return HandlerResult(kind: hrNextWindow)
-  of ftrPrevWindow:
-    return HandlerResult(kind: hrPrevWindow)
-  of ftrIncreaseWindowWidth:
-    return HandlerResult(kind: hrIncreaseWindowWidth)
-  of ftrDecreaseWindowWidth:
-    return HandlerResult(kind: hrDecreaseWindowWidth)
   of ftrClearSearchHighlight:
     # Double-Escape: clear the persisted search highlight. FileTree search is
     # self-contained (its own match list, not the global hlsearch gate), so the

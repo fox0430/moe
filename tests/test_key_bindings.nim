@@ -1761,7 +1761,7 @@ suite "Macro/Register/Window commands registration":
     check registry.commandRegistry["register-select"].kind == ctOperatorPending
     check registry.commandRegistry["register-select"].operatorType == "register-select"
 
-  test "window-next is registered with C-w k binding":
+  test "window-next is registered with C-w w binding":
     let registry = newKeyBindingRegistry()
     registry.setupDefaultBindings()
 
@@ -1769,7 +1769,7 @@ suite "Macro/Register/Window commands registration":
     check registry.commandRegistry["window-next"].kind == ctAction
     check registry.commandRegistry["window-next"].commandId == "window.next"
 
-  test "window-prev is registered with C-w j binding":
+  test "window-prev is registered with C-w p binding":
     let registry = newKeyBindingRegistry()
     registry.setupDefaultBindings()
 

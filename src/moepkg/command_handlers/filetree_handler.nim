@@ -32,10 +32,6 @@ type
     ftrHandled # Command was handled
     ftrOpenFile # Open a file in the editor
     ftrEnterCommand # Enter command mode overlay
-    ftrNextWindow # Switch to next window
-    ftrPrevWindow # Switch to previous window
-    ftrIncreaseWindowWidth # Increase active window width
-    ftrDecreaseWindowWidth # Decrease active window width
     ftrClearSearchHighlight # Clear the persisted search highlight
     ftrUnhandled # Command was not handled
     ftrError # Error occurred
@@ -103,24 +99,6 @@ proc handleFileTreeModeKey*(
       return FileTreeResult(kind: ftrHandled)
     # Non-g key cancels the pending g and falls through to handle it normally
 
-  # Handle Ctrl-w + second key for window operations
-  if fileTreeState.waitingForCtrlW:
-    fileTreeState.waitingForCtrlW = false
-    if not keyCombo.isSpecial:
-      case keyCombo.char
-      of ">":
-        return FileTreeResult(kind: ftrIncreaseWindowWidth)
-      of "<":
-        return FileTreeResult(kind: ftrDecreaseWindowWidth)
-      of "w":
-        return FileTreeResult(kind: ftrNextWindow)
-      of "p":
-        return FileTreeResult(kind: ftrPrevWindow)
-      else:
-        return FileTreeResult(kind: ftrUnhandled)
-    else:
-      return FileTreeResult(kind: ftrUnhandled)
-
   # Double-Escape clears the search highlight (single Escape just arms it).
   # The handler only reports the intent; the dispatcher performs the clear,
   # mirroring the Config/Help handlers.
@@ -155,11 +133,6 @@ proc handleFileTreeModeKey*(
     else:
       discard
   else:
-    # Ctrl-w starts window command sequence
-    if kmCtrl in keyCombo.modifiers and keyCombo.char == "w":
-      fileTreeState.waitingForCtrlW = true
-      return FileTreeResult(kind: ftrHandled)
-
     case keyCombo.char
     of ":":
       return FileTreeResult(kind: ftrEnterCommand)

@@ -29,3 +29,12 @@ import ../types
 type EditorWindowManager* = ref object ## Manages multiple split windows
   windows*: seq[EditorWindow]
   activeWindowIndex*: int
+  previousWindow*: EditorWindow
+    ## Last accessed window, the target of Ctrl-w p. Held by reference so
+    ## closing and swapping windows cannot alias it to another window.
+
+type WindowDirection* = enum ## Direction of a Ctrl-w h/j/k/l window move
+  wdLeft
+  wdDown
+  wdUp
+  wdRight
