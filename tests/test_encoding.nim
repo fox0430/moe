@@ -224,8 +224,7 @@ suite "Encoding Detection":
     # character across the cut must still detect UTF-8.
     for pad in 0 .. 2:
       let text =
-        repeat("A", EncodingDetectionSampleSize - 2 + pad) &
-        repeat("\xE3\x81\x82", 100)
+        repeat("A", EncodingDetectionSampleSize - 2 + pad) & repeat("\xE3\x81\x82", 100)
       check detectCharacterEncoding(text) == CharacterEncoding.utf8
 
   test "UTF-8 detection survives a 4-byte character split at the sample cut":
@@ -238,8 +237,7 @@ suite "Encoding Detection":
   test "Truly invalid UTF-8 past the sample cut is still rejected":
     # Only a sequence truncated by the cut is forgiven; a bad leading byte
     # right before the cut must still fail the UTF-8 check.
-    let text =
-      repeat("A", EncodingDetectionSampleSize - 1) & "\xFF" & repeat("A", 100)
+    let text = repeat("A", EncodingDetectionSampleSize - 1) & "\xFF" & repeat("A", 100)
     check detectCharacterEncoding(text) != CharacterEncoding.utf8
 
   test "Detect UTF-8 with multi-byte characters":

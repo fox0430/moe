@@ -324,7 +324,10 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
   let utf8Sample =
     if s.len > EncodingDetectionSampleSize:
       let tailStart = sample.utf8TruncatedTailStart
-      if tailStart >= 0: sample[0 ..< tailStart] else: sample
+      if tailStart >= 0:
+        sample[0 ..< tailStart]
+      else:
+        sample
     else:
       sample
   if utf8Sample.invalidUtf8At == -1:
