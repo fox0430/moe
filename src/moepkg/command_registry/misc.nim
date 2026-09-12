@@ -254,7 +254,11 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       ctx: CommandContext,
       searchText: string,
       searchProc: proc(
-        b: TextBuffer, text: string, pos: BufferPosition, ignorecase: bool
+        b: TextBuffer,
+        text: string,
+        pos: BufferPosition,
+        ignorecase: bool,
+        wholeWord: bool,
       ): Option[BufferPosition],
   ): Result[(), string] =
     # Apply smartcase logic
@@ -262,13 +266,19 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       searchText, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
     )
 
-    # Validate regex
-    if compileSearchRegex(searchText, shouldIgnoreCase).isNone:
+    # Validate regex (whole word patterns are matched literally)
+    if not ctx.state.input.search.last.wholeWord and
+        compileSearchRegex(searchText, shouldIgnoreCase).isNone:
       ctx.state.statusMessage = "Invalid regex: " & searchText
       return err("Invalid regex")
 
     # Execute the search (findNext or findPrev)
-    let searchResult = searchProc(ctx.buffer, searchText, ctx.cursor, shouldIgnoreCase)
+    # n/N repeat the last search, whole word mode included, so they land only
+    # on the matches the highlighter draws.
+    let searchResult = searchProc(
+      ctx.buffer, searchText, ctx.cursor, shouldIgnoreCase,
+      ctx.state.input.search.last.wholeWord,
+    )
 
     if searchResult.isSome:
       let newPos = searchResult.get
@@ -303,7 +313,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Next",
     "Find next occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      if ctx.state.input.search.lastText.len == 0:
+      if ctx.state.input.search.last.pattern.len == 0:
         return err("No previous search")
 
       # Record jump before searching
@@ -312,7 +322,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       # Re-enable highlight when using n/N
       ctx.state.input.search.hlsearchTempDisabled = false
 
-      return executeSearch(ctx, ctx.state.input.search.lastText, findNext),
+      return executeSearch(ctx, ctx.state.input.search.last.pattern, findNext),
     0,
     0,
   )
@@ -322,7 +332,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
     "Search Previous",
     "Find previous occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      if ctx.state.input.search.lastText.len == 0:
+      if ctx.state.input.search.last.pattern.len == 0:
         return err("No previous search")
 
       # Record jump before searching
@@ -331,7 +341,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       # Re-enable highlight when using n/N
       ctx.state.input.search.hlsearchTempDisabled = false
 
-      return executeSearch(ctx, ctx.state.input.search.lastText, findPrev),
+      return executeSearch(ctx, ctx.state.input.search.last.pattern, findPrev),
     0,
     0,
   )
@@ -449,36 +459,6 @@ proc registerMiscCommands*(registry: CommandRegistry) =
 
     return some(WordInfo(word: word, startCol: startCol, endCol: endCol))
 
-  # Helper proc to check if a rune is a word character
-  proc isWordChar(r: Rune): bool =
-    let code = int(r)
-    r.isAlpha or (code >= ord('0') and code <= ord('9')) or r == Rune('_')
-
-  proc isWholeWordMatch(buffer: TextBuffer, pos: BufferPosition, wordLen: int): bool =
-    ## Helper proc to check if a match is at word boundary
-    if pos.line < 0 or pos.line >= buffer.len:
-      return false
-
-    let line = buffer.getLine(pos.line)
-    let runes = line.toCharRunes()
-
-    # Check bounds
-    if pos.column < 0 or pos.column >= runes.len:
-      return false
-
-    # Check character before match (must not be word char or at start)
-    if pos.column > 0:
-      if isWordChar(runes[pos.column - 1]):
-        return false
-
-    # Check character after match (must not be word char or at end)
-    let endCol = pos.column + wordLen
-    if endCol < runes.len:
-      if isWordChar(runes[endCol]):
-        return false
-
-    return true
-
   proc findMatchingBracketAtCursor(
       buffer: TextBuffer, cursor: BufferPosition
   ): Result[BufferPosition, string] =
@@ -574,76 +554,50 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         return err("No word under cursor")
 
       let info = wordInfo.get
-      let wordLen = info.word.charLen
 
       # Record jump before searching
       recordJump(ctx.state)
 
-      # Update last search text and set whole word mode
-      ctx.state.input.search.lastText = info.word
+      # * and # search the word under the cursor with word boundaries
+      ctx.state.input.search.last = SearchSpec(pattern: info.word, wholeWord: true)
       ctx.state.input.search.hlsearchTempDisabled = false
-      ctx.state.input.search.wholeWord = true
 
-      # Remember original word position to skip it after wrap-around
       let originalWordPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
 
       # Search from word end position to skip current word
-      var searchPos = BufferPosition(line: ctx.cursor.line, column: info.endCol)
+      let searchPos = BufferPosition(line: ctx.cursor.line, column: info.endCol)
       let ignoreCase = shouldIgnoreCase(
         info.word, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
       )
-      var wrapped = false
 
-      # Loop until we find a whole word match
-      while true:
-        let searchResult = findNext(ctx.buffer, info.word, searchPos, ignoreCase)
-        if searchResult.isNone:
-          ctx.state.statusMessage = "Pattern not found: " & info.word
-          return err("Pattern not found")
+      let searchResult = findNext(ctx.buffer, info.word, searchPos, ignoreCase, true)
+      if searchResult.isNone or searchResult.get == originalWordPos:
+        # Wrapping back to the word under the cursor means it is the only match.
+        ctx.state.statusMessage = "Pattern not found: " & info.word
+        return err("Pattern not found")
 
-        let newPos = searchResult.get
+      let newPos = searchResult.get
+      ctx.cursor = newPos
 
-        # Check if we've wrapped back to start
-        if newPos.line < searchPos.line or
-            (newPos.line == searchPos.line and newPos.column < searchPos.column):
-          wrapped = true
+      # Update viewport to follow cursor
+      let
+        lineCount = ctx.buffer.len
+        cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+        viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
-        # Skip if this is the original word position (after wrap-around)
-        if wrapped and newPos.line == originalWordPos.line and
-            newPos.column == originalWordPos.column:
-          ctx.state.statusMessage = "Pattern not found: " & info.word
-          return err("Pattern not found")
+      ctx.motionController.viewportManager.updateViewport(
+        cursorPos,
+        lineCount,
+        ctx.state.showStatusLine,
+        ctx.state.motionReservedLines(),
+        ctx.state.effectiveLineWrap(),
+        ctx.buffer,
+        viewportOffset,
+        ctx.state.tabStop,
+      )
 
-        # Check if this is a whole word match
-        if isWholeWordMatch(ctx.buffer, newPos, wordLen):
-          ctx.cursor = newPos
-
-          # Update viewport to follow cursor
-          let
-            lineCount = ctx.buffer.len
-            cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-            viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
-
-          ctx.motionController.viewportManager.updateViewport(
-            cursorPos,
-            lineCount,
-            ctx.state.showStatusLine,
-            ctx.state.motionReservedLines(),
-            ctx.state.effectiveLineWrap(),
-            ctx.buffer,
-            viewportOffset,
-            ctx.state.tabStop,
-          )
-
-          ctx.state.statusMessage = "Found: " & info.word
-          return Result[(), string].ok ()
-
-        # Continue searching from after this match
-        searchPos = BufferPosition(line: newPos.line, column: newPos.column + 1)
-
-      # No whole word match found
-      ctx.state.statusMessage = "Pattern not found: " & info.word
-      return err("Pattern not found"),
+      ctx.state.statusMessage = "Found: " & info.word
+      return Result[(), string].ok (),
     0,
     0,
   )
@@ -659,76 +613,50 @@ proc registerMiscCommands*(registry: CommandRegistry) =
         return err("No word under cursor")
 
       let info = wordInfo.get
-      let wordLen = info.word.charLen
 
       # Record jump before searching
       recordJump(ctx.state)
 
-      # Update last search text and set whole word mode
-      ctx.state.input.search.lastText = info.word
+      # * and # search the word under the cursor with word boundaries
+      ctx.state.input.search.last = SearchSpec(pattern: info.word, wholeWord: true)
       ctx.state.input.search.hlsearchTempDisabled = false
-      ctx.state.input.search.wholeWord = true
 
-      # Remember original word position to skip it after wrap-around
       let originalWordPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
 
       # Search from word start position to skip current word
-      var searchPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
+      let searchPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
       let ignoreCase = shouldIgnoreCase(
         info.word, ctx.state.input.search.ignorecase, ctx.state.input.search.smartcase
       )
-      var wrapped = false
 
-      # Loop until we find a whole word match
-      while true:
-        let searchResult = findPrev(ctx.buffer, info.word, searchPos, ignoreCase)
-        if searchResult.isNone:
-          ctx.state.statusMessage = "Pattern not found: " & info.word
-          return err("Pattern not found")
+      let searchResult = findPrev(ctx.buffer, info.word, searchPos, ignoreCase, true)
+      if searchResult.isNone or searchResult.get == originalWordPos:
+        # Wrapping back to the word under the cursor means it is the only match.
+        ctx.state.statusMessage = "Pattern not found: " & info.word
+        return err("Pattern not found")
 
-        let newPos = searchResult.get
+      let newPos = searchResult.get
+      ctx.cursor = newPos
 
-        # Check if we've wrapped back to start
-        if newPos.line > searchPos.line or
-            (newPos.line == searchPos.line and newPos.column > searchPos.column):
-          wrapped = true
+      # Update viewport to follow cursor
+      let
+        lineCount = ctx.buffer.len
+        cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+        viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
-        # Skip if this is the original word position (after wrap-around)
-        if wrapped and newPos.line == originalWordPos.line and
-            newPos.column == originalWordPos.column:
-          ctx.state.statusMessage = "Pattern not found: " & info.word
-          return err("Pattern not found")
+      ctx.motionController.viewportManager.updateViewport(
+        cursorPos,
+        lineCount,
+        ctx.state.showStatusLine,
+        ctx.state.motionReservedLines(),
+        ctx.state.effectiveLineWrap(),
+        ctx.buffer,
+        viewportOffset,
+        ctx.state.tabStop,
+      )
 
-        # Check if this is a whole word match
-        if isWholeWordMatch(ctx.buffer, newPos, wordLen):
-          ctx.cursor = newPos
-
-          # Update viewport to follow cursor
-          let
-            lineCount = ctx.buffer.len
-            cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-            viewportOffset = viewportOffsetFor(ctx.buffer, ctx.state)
-
-          ctx.motionController.viewportManager.updateViewport(
-            cursorPos,
-            lineCount,
-            ctx.state.showStatusLine,
-            ctx.state.motionReservedLines(),
-            ctx.state.effectiveLineWrap(),
-            ctx.buffer,
-            viewportOffset,
-            ctx.state.tabStop,
-          )
-
-          ctx.state.statusMessage = "Found: " & info.word
-          return Result[(), string].ok ()
-
-        # Continue searching from before this match
-        searchPos = BufferPosition(line: newPos.line, column: newPos.column)
-
-      # No whole word match found
-      ctx.state.statusMessage = "Pattern not found: " & info.word
-      return err("Pattern not found"),
+      ctx.state.statusMessage = "Found: " & info.word
+      return Result[(), string].ok (),
     0,
     0,
   )

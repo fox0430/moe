@@ -203,13 +203,13 @@ proc searchMatchAndSelect(
 ): NormalModeResult =
   ## Find a search match and enter Visual mode selecting it.
   ## Used by both gn (forward=true) and gN (forward=false).
-  if state.input.search.lastText.len == 0:
+  if state.input.search.last.pattern.len == 0:
     return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
-  let searchText = state.input.search.lastText
+  let searchText = state.input.search.last.pattern
   let ignoreCase = shouldIgnoreCase(
     searchText, state.input.search.ignorecase, state.input.search.smartcase
   )
-  let wholeWord = state.input.search.wholeWord
+  let wholeWord = state.input.search.last.wholeWord
   state.input.search.hlsearchTempDisabled = false
 
   var matchStart =
@@ -217,9 +217,9 @@ proc searchMatchAndSelect(
   if matchStart.isNone:
     matchStart =
       if forward:
-        findNext(buffer, searchText, state.cursor, ignoreCase)
+        findNext(buffer, searchText, state.cursor, ignoreCase, wholeWord)
       else:
-        findPrev(buffer, searchText, state.cursor, ignoreCase)
+        findPrev(buffer, searchText, state.cursor, ignoreCase, wholeWord)
   if matchStart.isNone:
     return
       NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)
@@ -238,13 +238,13 @@ proc searchMatchAndOperate(
     buffer: TextBuffer, state: EditorState, forward: bool, op: PendingOperator
 ): NormalModeResult =
   ## Find a search match and apply an operator (delete/change/yank) to it.
-  if state.input.search.lastText.len == 0:
+  if state.input.search.last.pattern.len == 0:
     return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
-  let searchText = state.input.search.lastText
+  let searchText = state.input.search.last.pattern
   let ignoreCase = shouldIgnoreCase(
     searchText, state.input.search.ignorecase, state.input.search.smartcase
   )
-  let wholeWord = state.input.search.wholeWord
+  let wholeWord = state.input.search.last.wholeWord
   state.input.search.hlsearchTempDisabled = false
 
   var matchStart =
@@ -252,9 +252,9 @@ proc searchMatchAndOperate(
   if matchStart.isNone:
     matchStart =
       if forward:
-        findNext(buffer, searchText, state.cursor, ignoreCase)
+        findNext(buffer, searchText, state.cursor, ignoreCase, wholeWord)
       else:
-        findPrev(buffer, searchText, state.cursor, ignoreCase)
+        findPrev(buffer, searchText, state.cursor, ignoreCase, wholeWord)
   if matchStart.isNone:
     return
       NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)

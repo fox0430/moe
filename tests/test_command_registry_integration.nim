@@ -4925,7 +4925,7 @@ suite "Handler - Search Commands":
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     ctx.setCursor(0, 0)
-    ctx.state.input.search.lastText = "hello"
+    ctx.state.input.search.last.pattern = "hello"
     let registry = createTestRegistry()
 
     discard registry.execute(ctx, custom("search.next"))
@@ -4937,7 +4937,7 @@ suite "Handler - Search Commands":
     let ctx = createTestContext(buffer)
     ctx.state.mode = EditorMode.Normal
     ctx.setCursor(0, 12)
-    ctx.state.input.search.lastText = "hello"
+    ctx.state.input.search.last.pattern = "hello"
     let registry = createTestRegistry()
 
     discard registry.execute(ctx, custom("search.prev"))
@@ -8430,3 +8430,58 @@ suite "Operator engine - read-only failure rolls back and reports":
     check buffer[0] == "hello"
     check buffer[1] == "world"
     check not buffer.inTransaction
+
+suite "Handler - Whole word search":
+  test "* skips a substring match":
+    let buffer = newTextBuffer("target targeted target")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("search.word.forward")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 16)
+
+  test "* reports not found when the word has no other whole word match":
+    let buffer = newTextBuffer("target targeted")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("search.word.forward")).isErr
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+
+  test "# skips a substring match":
+    let buffer = newTextBuffer("target targeted target")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 16)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("search.word.backward")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+
+  test "n after * keeps the word boundaries":
+    let buffer = newTextBuffer("target\ntargeted\ntarget")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("search.word.forward")).isOk
+    check ctx.cursor == BufferPosition(line: 2, column: 0)
+
+    check registry.execute(ctx, custom("search.next")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 0)
+
+  test "N after * keeps the word boundaries":
+    let buffer = newTextBuffer("target\ntargeted\ntarget")
+    let ctx = createTestContext(buffer)
+    ctx.state.mode = EditorMode.Normal
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("search.word.forward")).isOk
+    check registry.execute(ctx, custom("search.prev")).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 0)

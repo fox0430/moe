@@ -2343,7 +2343,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "hello"
+    state.input.search.last.pattern = "hello"
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2361,7 +2361,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 7)
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2376,7 +2376,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "xyz"
+    state.input.search.last.pattern = "xyz"
 
     let result = pressGn(handler, buf, state, viewport)
     check result.kind == nmrError
@@ -2387,7 +2387,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "ccc"
+    state.input.search.last.pattern = "ccc"
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2402,7 +2402,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "hello"
+    state.input.search.last.pattern = "hello"
     state.cursor = BufferPosition(line: 0, column: 8)
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2417,7 +2417,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 6)
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2431,7 +2431,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 10)
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2446,7 +2446,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "あいう"
+    state.input.search.last.pattern = "あいう"
     state.cursor = BufferPosition(line: 0, column: 4)
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2461,7 +2461,7 @@ suite "NormalModeHandler - gn (search next select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "hello"
+    state.input.search.last.pattern = "hello"
     state.input.search.hlsearchTempDisabled = true
 
     let result = pressGn(handler, buf, state, viewport)
@@ -2496,7 +2496,7 @@ suite "NormalModeHandler - gN (search prev select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "hello"
+    state.input.search.last.pattern = "hello"
     state.cursor = BufferPosition(line: 0, column: 16)
 
     let result = pressGN(handler, buf, state, viewport)
@@ -2514,7 +2514,7 @@ suite "NormalModeHandler - gN (search prev select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 8)
 
     let result = pressGN(handler, buf, state, viewport)
@@ -2529,7 +2529,7 @@ suite "NormalModeHandler - gN (search prev select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "xyz"
+    state.input.search.last.pattern = "xyz"
 
     let result = pressGN(handler, buf, state, viewport)
     check result.kind == nmrError
@@ -2540,7 +2540,7 @@ suite "NormalModeHandler - gN (search prev select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "aaa"
+    state.input.search.last.pattern = "aaa"
     state.cursor = BufferPosition(line: 2, column: 0)
 
     let result = pressGN(handler, buf, state, viewport)
@@ -2555,7 +2555,7 @@ suite "NormalModeHandler - gN (search prev select)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "bbb"
+    state.input.search.last.pattern = "bbb"
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = pressGN(handler, buf, state, viewport)
@@ -2594,7 +2594,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "hello"
+    state.input.search.last.pattern = "hello"
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = pressDgn(handler, buf, state, viewport)
@@ -2608,7 +2608,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 8)
 
     let result = pressDgn(handler, buf, state, viewport)
@@ -2621,7 +2621,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "xyz"
+    state.input.search.last.pattern = "xyz"
 
     let result = pressDgn(handler, buf, state, viewport)
     check result.kind == nmrError
@@ -2632,7 +2632,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = pressDgn(handler, buf, state, viewport)
@@ -2648,7 +2648,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 0)
     state.registers.setDeletedRegister("SEED", false)
     check buf.beginTransaction("outer").isOk
@@ -2664,7 +2664,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "hello"
+    state.input.search.last.pattern = "hello"
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = pressDgn(handler, buf, state, viewport)
@@ -2691,7 +2691,7 @@ suite "NormalModeHandler - dgN (delete search match backward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "hello"
+    state.input.search.last.pattern = "hello"
     state.cursor = BufferPosition(line: 0, column: 16)
 
     let result = pressDgN(handler, buf, state, viewport)
@@ -2718,7 +2718,7 @@ suite "NormalModeHandler - cgn (change search match forward)":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.input.search.lastText = "world"
+    state.input.search.last.pattern = "world"
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let result = pressCgn(handler, buf, state, viewport)
