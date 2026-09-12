@@ -198,7 +198,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         # Search state (grouped in SearchState)
         search: SearchState(
           text: "",
-          lastText: "",
           direction: Forward,
           history:
             if editorConfig.persist.search:

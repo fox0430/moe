@@ -31,6 +31,7 @@ import ../src/moepkg/config
 import ../src/moepkg/config_mode
 import ../src/moepkg/help_viewer
 import ../src/moepkg/search_utils
+import ../src/moepkg/key_bindings
 import ../src/moepkg/unicode_utils
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 
@@ -491,7 +492,7 @@ suite "Incremental search - case insensitive highlighting":
     # Verify findSearchMatchRanges finds BOTH uppercase and lowercase matches
     # This is what the rendering uses for highlighting
     let ranges = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, e.state.input.search.wholeWord
+      0, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
     )
     # Should find both "Hello" (col 0-5) and "hello" (col 12-17)
     check ranges.len == 2
@@ -527,7 +528,7 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 0 (uppercase "Hello")
     let ranges0 = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, e.state.input.search.wholeWord
+      0, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
     )
     check ranges0.len == 1
     check ranges0[0].startCol == 0
@@ -535,7 +536,7 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 1 (lowercase "hello")
     let ranges1 = e.activeBuffer.findSearchMatchRanges(
-      1, e.state.input.search.text, ignCase, e.state.input.search.wholeWord
+      1, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
     )
     check ranges1.len == 1
     check ranges1[0].startCol == 0
@@ -543,23 +544,23 @@ suite "Incremental search - case insensitive highlighting":
 
     # Verify highlighting on line 2 (all-caps "HELLO")
     let ranges2 = e.activeBuffer.findSearchMatchRanges(
-      2, e.state.input.search.text, ignCase, e.state.input.search.wholeWord
+      2, e.state.input.search.text, ignCase, e.state.input.search.last.wholeWord
     )
     check ranges2.len == 1
     check ranges2[0].startCol == 0
     check ranges2[0].endCol == 5
 
-  test "enterSearchOverlay resets wholeWord":
-    ## Regression test: wholeWord must be reset when entering search overlay
-    ## so that / and ? searches use consistent regex matching for both
-    ## cursor movement and highlighting.
+  test "A pattern being typed is a substring search after a * search":
+    ## Regression test: / and ? are substring searches, so a previous * must
+    ## not make the pattern being typed match whole words only, for either
+    ## cursor movement or highlighting.
     let e = createTestEditorWithBuffer("abc foobar foo baz")
-    # Simulate * command setting wholeWord=true
-    e.state.input.search.wholeWord = true
+    # Simulate * leaving a whole word search behind
+    e.state.input.search.last = SearchSpec(pattern: "abc", wholeWord: true)
 
-    # Enter search overlay - should reset wholeWord
     e.state.enterSearchOverlay(Forward)
-    check e.state.input.search.wholeWord == false
+    # The overlay does not touch the last search
+    check e.state.input.search.last == SearchSpec(pattern: "abc", wholeWord: true)
 
     e.state.input.search.incsearch = true
     e.state.input.search.ignorecase = true
@@ -577,11 +578,10 @@ suite "Incremental search - case insensitive highlighting":
       e.state.input.search.smartcase,
     )
 
-    # With wholeWord=false (reset by enterSearchOverlay), highlight also uses regex
-    # and finds both "foo" in "foobar" (col 4) and standalone "foo" (col 11)
-    let ranges = e.activeBuffer.findSearchMatchRanges(
-      0, e.state.input.search.text, ignCase, e.state.input.search.wholeWord
-    )
+    # The highlight is a substring search too, so it finds both "foo" in
+    # "foobar" (col 4) and standalone "foo" (col 11)
+    let ranges =
+      e.activeBuffer.findSearchMatchRanges(0, e.state.input.search.text, ignCase, false)
     check ranges.len == 2
     check ranges[0].startCol == 4
     check ranges[0].endCol == 7
@@ -770,3 +770,249 @@ suite "Search mode - enterSearchOverlay cursor init":
     e.state.input.search.cursor = 5
     e.state.enterSearchOverlay(Forward)
     check e.state.input.search.cursor == 0
+
+suite "Search mode - empty Enter repeats the last search":
+  test "Empty input repeats the previous search with incsearch":
+    let e = createTestEditorWithBuffer("alpha\ntarget\nbeta\ntarget\n")
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    e.setSearchText("target")
+    performIncrementalSearch(e)
+    finalizeSearch(e)
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+    e.state.enterSearchOverlay(Forward)
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 3, column: 0)
+    check e.state.input.search.last.pattern == "target"
+
+  test "Empty input repeats the previous search without incsearch":
+    let e = createTestEditorWithBuffer("alpha\ntarget\nbeta\ntarget\n")
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = false
+    e.setSearchText("target")
+    finalizeSearch(e)
+    check e.cursor == BufferPosition(line: 1, column: 0)
+
+    e.state.enterSearchOverlay(Forward)
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 3, column: 0)
+
+  test "Empty input repeats backward with ?":
+    let e = createTestEditorWithBuffer("target\nalpha\ntarget\nbeta\n")
+    e.cursor = BufferPosition(line: 3, column: 0)
+    e.state.enterSearchOverlay(Backward)
+    e.state.input.search.incsearch = true
+    e.setSearchText("target")
+    performIncrementalSearch(e)
+    finalizeSearch(e)
+    check e.cursor == BufferPosition(line: 2, column: 0)
+
+    e.state.enterSearchOverlay(Backward)
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "Empty input with no previous search reports E35":
+    let e = createTestEditorWithBuffer("alpha\ntarget\n")
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 0, column: 0)
+    check e.state.input.search.last.pattern == ""
+    check e.state.statusMessage == "E35: No previous regular expression"
+    check not e.state.isSearchOverlay
+
+  test "A repeat searches from the prompt anchor, not a stale incsearch match":
+    let e = createTestEditorWithBuffer("target A\nbeta\ntarget B\nqqq\n")
+    e.state.input.search.last.pattern = "target"
+    e.cursor = BufferPosition(line: 3, column: 0)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+
+    # Type a pattern that matches elsewhere, then erase it again
+    for ch in "beta":
+      handleSearchCharacterInput(e, $ch)
+    for _ in 0 ..< "beta".len:
+      handleSearchBackspace(e)
+
+    finalizeSearch(e)
+
+    # Wraps from line 3, so the first match is line 0 - not line 2, which is
+    # what searching from the erased "beta" match would have found.
+    check e.cursor == BufferPosition(line: 0, column: 0)
+
+  test "A repeat keeps the whole word mode of a * search":
+    let e = createTestEditorWithBuffer("target\ntargeted\ntarget\n")
+    e.state.input.search.last = SearchSpec(pattern: "target", wholeWord: true)
+    e.state.enterSearchOverlay(Forward)
+
+    finalizeSearch(e)
+
+    check e.state.input.search.last == SearchSpec(pattern: "target", wholeWord: true)
+
+  test "A cancelled search leaves the * search it was opened over":
+    let e = createTestEditorWithBuffer("target\ntargeted\n")
+    e.state.input.search.last = SearchSpec(pattern: "target", wholeWord: true)
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("targe")
+
+    cancelSearch(e)
+
+    check e.state.input.search.last == SearchSpec(pattern: "target", wholeWord: true)
+
+  test "A repeat does not push a duplicate history entry":
+    let e = createTestEditorWithBuffer("alpha\ntarget\nbeta\ntarget\n")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("target")
+    finalizeSearch(e)
+    let historyAfterSearch = e.state.input.search.history
+
+    e.state.enterSearchOverlay(Forward)
+    finalizeSearch(e)
+
+    check e.state.input.search.history == historyAfterSearch
+
+  test "A repeat records the prompt anchor in the jump list":
+    let e = createTestEditorWithBuffer("alpha\ntarget\nbeta\ntarget\n")
+    e.state.input.search.last.pattern = "target"
+    e.cursor = BufferPosition(line: 2, column: 0)
+    e.state.enterSearchOverlay(Forward)
+
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 3, column: 0)
+    check e.state.jumpList.list.len == 1
+    check e.state.jumpList.list[^1].line == 2
+
+  test "Config mode: a repeat advances to the next match":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    e.setSearchText("e")
+    finalizeSearch(e)
+    let firstMatch = cfg.selectedIndex
+
+    # Reopening the prompt re-anchors on the current selection, as the
+    # dispatcher does when / is pressed.
+    e.state.enterSearchOverlay(Forward)
+    cfg.searchStartIndex = cfg.selectedIndex
+    finalizeSearch(e)
+
+    check cfg.selectedIndex != firstMatch
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery("e")
+
+  test "Config mode: a backward repeat steps back to the previous match":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    e.setSearchText("e")
+    finalizeSearch(e)
+    let firstMatch = cfg.selectedIndex
+
+    e.state.enterSearchOverlay(Forward)
+    cfg.searchStartIndex = cfg.selectedIndex
+    finalizeSearch(e)
+    let secondMatch = cfg.selectedIndex
+
+    e.state.enterSearchOverlay(Backward)
+    cfg.searchStartIndex = cfg.selectedIndex
+    finalizeSearch(e)
+
+    check secondMatch != firstMatch
+    check cfg.selectedIndex == firstMatch
+
+suite "Search mode - jump list and viewport on a failed or erased search":
+  test "A failed search does not record a jump":
+    let e = createTestEditorWithBuffer("alpha\nbeta\n")
+    e.cursor = BufferPosition(line: 1, column: 0)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+    e.setSearchText("zzzz")
+    performIncrementalSearch(e)
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 1, column: 0)
+    check e.state.jumpList.list.len == 0
+
+  test "A failed search does not record a jump without incsearch":
+    let e = createTestEditorWithBuffer("alpha\nbeta\n")
+    e.cursor = BufferPosition(line: 1, column: 0)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = false
+    e.setSearchText("zzzz")
+    finalizeSearch(e)
+
+    check e.state.jumpList.list.len == 0
+
+  test "Erasing the pattern brings the viewport back to the anchor":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(if i == 150: "needle\n" else: "aaaa\n")
+    let e = createTestEditorWithBuffer(content)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+
+    for ch in "needle":
+      handleSearchCharacterInput(e, $ch)
+    check e.cursor.line == 150
+    check e.viewport.topLine > 0
+
+    for _ in 0 ..< "needle".len:
+      handleSearchBackspace(e)
+
+    check e.cursor.line == 0
+    check e.viewport.topLine == 0
+
+  test "A cancelled search brings the viewport back to the anchor":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(if i == 150: "needle\n" else: "aaaa\n")
+    let e = createTestEditorWithBuffer(content)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+
+    for ch in "needle":
+      handleSearchCharacterInput(e, $ch)
+    cancelSearch(e)
+
+    check e.cursor.line == 0
+    check e.viewport.topLine == 0
+
+  test "Clearing the prompt past the newest history entry restores the viewport":
+    var content = ""
+    for i in 0 ..< 200:
+      content.add(if i == 150: "needle\n" else: "aaaa\n")
+    let e = createTestEditorWithBuffer(content)
+    e.state.input.search.history = @["needle"]
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.incsearch = true
+
+    check handleSearchModeKeyCombo(
+      e, KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {})
+    )
+    check e.cursor.line == 150
+    check e.viewport.topLine > 0
+
+    check handleSearchModeKeyCombo(
+      e, KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
+    )
+
+    check e.state.input.search.text == ""
+    check e.cursor.line == 0
+    check e.viewport.topLine == 0
+
+  test "A repeat of a * search keeps the word boundaries":
+    let e = createTestEditorWithBuffer("target\ntargeted\ntarget\n")
+    e.state.input.search.last = SearchSpec(pattern: "target", wholeWord: true)
+    e.state.enterSearchOverlay(Forward)
+
+    finalizeSearch(e)
+
+    check e.cursor == BufferPosition(line: 2, column: 0)

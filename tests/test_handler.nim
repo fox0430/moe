@@ -80,7 +80,6 @@ proc createTestState(): EditorState =
       search: SearchState(
         direction: Forward,
         text: "",
-        lastText: "",
         startPos: BufferPosition(line: 0, column: 0),
         history: @[],
         historyIndex: -1,
@@ -89,7 +88,6 @@ proc createTestState(): EditorState =
         incsearch: true,
         hlsearch: true,
         hlsearchTempDisabled: false,
-        wholeWord: false,
       )
     ),
   )

@@ -796,6 +796,14 @@ suite "Buffer Search - Regex findSearchMatchRanges":
     check ranges[0].startCol == 7
     check ranges[0].endCol == 10
 
+  test "findSearchMatchRanges wholeWord ignorecase matches either case":
+    let buf = newTextBuffer("Foo foobar FOO")
+    let ranges =
+      buf.findSearchMatchRanges(0, "foo", ignorecase = true, wholeWord = true)
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[1].startCol == 11
+
   test "findSearchMatchRanges wholeWord with CJK respects Unicode word boundaries":
     # "日本" appears standalone at col 5 and as a prefix of "日本語" at col 12.
     # Because CJK ideographs are now word characters, the "日本語" occurrence
@@ -1031,3 +1039,59 @@ suite "Buffer Search - invalid UTF-8 lines":
     check result.isSome
     check result.get.line == 0
     check result.get.column == 1
+
+suite "Buffer search - whole word":
+  test "findNext wholeWord skips substring matches":
+    let buf = newTextBuffer("targeted\ntarget\n")
+    let result =
+      buf.findNext("target", BufferPosition(line: 0, column: -1), wholeWord = true)
+    check result.isSome
+    check result.get == BufferPosition(line: 1, column: 0)
+
+  test "findNext wholeWord wraps around":
+    let buf = newTextBuffer("target\ntargeted\n")
+    let result =
+      buf.findNext("target", BufferPosition(line: 1, column: 0), wholeWord = true)
+    check result.isSome
+    check result.get == BufferPosition(line: 0, column: 0)
+
+  test "findNext wholeWord finds a later match on the same line":
+    let buf = newTextBuffer("target targeted target\n")
+    let result =
+      buf.findNext("target", BufferPosition(line: 0, column: 0), wholeWord = true)
+    check result.isSome
+    check result.get == BufferPosition(line: 0, column: 16)
+
+  test "findNext wholeWord matches literally, not as a regex":
+    let buf = newTextBuffer("axb\na.b\n")
+    let result =
+      buf.findNext("a.b", BufferPosition(line: 0, column: -1), wholeWord = true)
+    check result.isSome
+    check result.get == BufferPosition(line: 1, column: 0)
+
+  test "findNext wholeWord returns none when only substrings match":
+    let buf = newTextBuffer("targeted\nretarget\n")
+    let result =
+      buf.findNext("target", BufferPosition(line: 0, column: -1), wholeWord = true)
+    check result.isNone
+
+  test "findPrev wholeWord skips substring matches":
+    let buf = newTextBuffer("target\ntargeted\n")
+    let result =
+      buf.findPrev("target", BufferPosition(line: 1, column: 8), wholeWord = true)
+    check result.isSome
+    check result.get == BufferPosition(line: 0, column: 0)
+
+  test "findPrev wholeWord wraps around":
+    let buf = newTextBuffer("targeted\ntarget\n")
+    let result =
+      buf.findPrev("target", BufferPosition(line: 0, column: 0), wholeWord = true)
+    check result.isSome
+    check result.get == BufferPosition(line: 1, column: 0)
+
+  test "findPrev wholeWord finds an earlier match on the same line":
+    let buf = newTextBuffer("target targeted target\n")
+    let result =
+      buf.findPrev("target", BufferPosition(line: 0, column: 16), wholeWord = true)
+    check result.isSome
+    check result.get == BufferPosition(line: 0, column: 0)

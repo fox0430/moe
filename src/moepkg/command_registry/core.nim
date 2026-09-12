@@ -426,13 +426,11 @@ proc parseBoolArg*(
     return default
 
 ## Jump list management functions
-proc recordJump*(state: EditorState) =
-  ## Record current cursor position as a jump point
-  ## This should be called before jumping to a different location
+proc recordJump*(state: EditorState, pos: BufferPosition) =
+  ## Record `pos` as a jump point. Callers that have already moved the cursor
+  ## (incremental search) pass the position the jump started from.
   let currentPos = JumpPosition(
-    bufferId: state.windowDisplay.currentBufferId,
-    line: state.cursor.line,
-    column: state.cursor.column,
+    bufferId: state.windowDisplay.currentBufferId, line: pos.line, column: pos.column
   )
 
   # Don't record if the position is the same as the last jump in the list
@@ -457,3 +455,8 @@ proc recordJump*(state: EditorState) =
 
   # Reset index to indicate we're not navigating the list
   state.jumpList.index = -1
+
+proc recordJump*(state: EditorState) =
+  ## Record current cursor position as a jump point
+  ## This should be called before jumping to a different location
+  state.recordJump(state.cursor)

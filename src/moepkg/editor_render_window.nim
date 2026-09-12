@@ -120,18 +120,26 @@ proc resolveLineBg(
   else:
     none(ColorValue)
 
-proc effectiveSearchPattern(state: EditorState): string =
-  ## Resolve the active hlsearch pattern based on overlay state.
-  ## - Search overlay: live text being typed
+proc effectiveSearchSpec(state: EditorState): SearchSpec =
+  ## Resolve the search the hlsearch highlight draws, based on overlay state.
+  ## - Search overlay: live text being typed, a substring search like / and ?
+  ##   An empty prompt means "repeat the last search", so it keeps showing the
+  ##   last search's highlights instead of blanking them.
   ## - Command overlay: substitute pattern if present, else last search
   ## - Otherwise: last search
   if state.isSearchOverlay:
-    state.input.search.text
+    if state.input.search.text.len > 0:
+      SearchSpec(pattern: state.input.search.text)
+    else:
+      state.input.search.last
   elif state.isCommandOverlay:
     let subPattern = extractSubstitutePattern(state.input.commandText)
-    if subPattern.len > 0: subPattern else: state.input.search.lastText
+    if subPattern.len > 0:
+      SearchSpec(pattern: subPattern)
+    else:
+      state.input.search.last
   else:
-    state.input.search.lastText
+    state.input.search.last
 
 proc newLineStyleContext*(
     e: Editor,
@@ -168,13 +176,13 @@ proc newLineStyleContext*(
   let searchRanges =
     if textBuffer != nil and e.state.input.search.hlsearch and
         not e.state.input.search.hlsearchTempDisabled:
-      let searchPattern = e.state.effectiveSearchPattern()
-      if searchPattern.len > 0:
+      let spec = e.state.effectiveSearchSpec()
+      if spec.pattern.len > 0:
         let shouldIgnoreCase = shouldIgnoreCase(
-          searchPattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
+          spec.pattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
         )
         textBuffer.findSearchMatchRanges(
-          lineIndex, searchPattern, shouldIgnoreCase, e.state.input.search.wholeWord
+          lineIndex, spec.pattern, shouldIgnoreCase, spec.wholeWord
         )
       else:
         @[]

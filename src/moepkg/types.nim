@@ -229,10 +229,17 @@ type
     Forward # Search forward (/)
     Backward # Search backward (?)
 
+  SearchSpec* = object
+    ## One executed search: the pattern and the options it ran with. n/N, gn,
+    ## an empty `/` and the highlighter all replay this value, so they cannot
+    ## disagree about what counts as a match.
+    pattern*: string
+    wholeWord*: bool # Match whole words only (* and #); matches literally
+
   SearchState* = object ## Search-related state grouped together for better organization
     text*: string # Text being typed in search mode
     cursor*: int # Cursor position within text (0-based character index)
-    lastText*: string # Last executed search text for n/N commands
+    last*: SearchSpec # Last executed search, replayed by n/N and an empty `/`
     direction*: SearchDirection # Direction of current search (/ or ?)
     history*: seq[string] # Search history (most recent first)
     historyIndex*: int # Current position in search history (-1 when not navigating)
@@ -243,7 +250,6 @@ type
     incsearch*: bool # Show search matches as you type
     hlsearch*: bool # Highlight all search matches in the buffer
     hlsearchTempDisabled*: bool # Temporarily disable highlight (like :nohlsearch)
-    wholeWord*: bool # Search for whole words only (* and # commands)
 
   CommandState* = object ## Command mode (ex-mode) state grouped together
     history*: seq[string] # Command history (most recent first)
@@ -1221,9 +1227,6 @@ proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   state.input.search.historyIndex = -1
   # Re-enable search highlight so incremental search results are visible
   state.input.search.hlsearchTempDisabled = false
-  # Reset whole word mode so / and ? use regex matching consistently
-  # (wholeWord may be true from a previous * or # command)
-  state.input.search.wholeWord = false
 
 proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   ## Enter rename mode overlay

@@ -31,6 +31,7 @@ import
     editor, key_bindings, modes, buffer, search_utils, types, help_viewer, config_mode,
     unicode_utils,
   ]
+import ../command_registry/core
 import command_mode_handler
 
 ## NOTE: While in Search Mode:
@@ -57,11 +58,12 @@ proc activeConfigState(e: Editor): ConfigModeState =
       return window.modeState.config
   return nil
 
-proc executeSearchFromCurrentPosition(e: Editor): bool =
-  ## Execute search from current position (used when incsearch is disabled)
+proc executeSearchFromCurrentPosition(e: Editor, pattern: string): bool =
+  ## Execute `pattern` from the current cursor position
   ##
   ## This is called when:
   ## - Enter is pressed in Search mode with incsearch disabled
+  ## - Enter is pressed on an empty prompt to repeat the last search
   ##
   ## Returns: true if search was successful, false otherwise
   ##
@@ -69,32 +71,46 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
   ## - Updates cursor position if match found
   ## - Updates viewport to follow cursor
   ## - Sets status message (success or failure)
-  let shouldIgnoreCase = shouldIgnoreCase(
-    e.state.input.search.text, e.state.input.search.ignorecase,
-    e.state.input.search.smartcase,
-  )
+  let
+    shouldIgnoreCase = shouldIgnoreCase(
+      pattern, e.state.input.search.ignorecase, e.state.input.search.smartcase
+    )
+    wholeWord = e.state.input.search.last.wholeWord
 
-  # Validate regex before searching
-  if compileSearchRegex(e.state.input.search.text, shouldIgnoreCase).isNone:
-    e.state.statusMessage = "Invalid regex: " & e.state.input.search.text
+  # Validate regex before searching (whole word patterns are matched literally)
+  if not wholeWord and compileSearchRegex(pattern, shouldIgnoreCase).isNone:
+    e.state.statusMessage = "Invalid regex: " & pattern
     return false
 
   let activeBuffer = e.activeBuffer()
   let searchResult =
     if e.state.input.search.direction == Forward:
-      activeBuffer.findNext(e.state.input.search.text, e.cursor, shouldIgnoreCase)
+      activeBuffer.findNext(pattern, e.cursor, shouldIgnoreCase, wholeWord)
     else:
-      activeBuffer.findPrev(e.state.input.search.text, e.cursor, shouldIgnoreCase)
+      activeBuffer.findPrev(pattern, e.cursor, shouldIgnoreCase, wholeWord)
 
   if searchResult.isSome:
     let pos = searchResult.get
     e.cursor = pos
     e.updateViewportForCursor(pos)
-    e.state.statusMessage = "Found: " & e.state.input.search.text
+    e.state.statusMessage = "Found: " & pattern
     return true
   else:
-    e.state.statusMessage = "Pattern not found: " & e.state.input.search.text
+    e.state.statusMessage = "Pattern not found: " & pattern
     return false
+
+proc addSearchHistory(e: Editor, pattern: string) =
+  ## Push `pattern` onto the search history, most recent first, dropping an
+  ## older duplicate and trimming to the configured limit.
+  for i in countdown(e.state.input.search.history.high, 0):
+    if e.state.input.search.history[i] == pattern:
+      e.state.input.search.history.delete(i)
+
+  e.state.input.search.history.insert(pattern, 0)
+
+  let historyLimit = e.config.persist.searchHistoryLimit
+  if e.state.input.search.history.len > historyLimit:
+    e.state.input.search.history.setLen(historyLimit)
 
 proc finalizeSearch(e: Editor) =
   ## Finalize search and return to Normal mode
@@ -102,55 +118,66 @@ proc finalizeSearch(e: Editor) =
   ## Called when: Enter is pressed in Search mode
   ##
   ## Behavior:
+  ## - Empty input repeats the last search (vim's `/<CR>` and `?<CR>`)
   ## - If incsearch enabled: Cursor already at match, just update viewport
   ## - If incsearch disabled: Execute search now from current position
   ## - Save searchText to lastSearchText for n/N commands
   ## - Re-enable search highlight (hlsearch)
   ## - Transition to Normal mode
   ## - Clear searchText buffer
-  if e.state.input.search.text.len > 0:
-    # Save search text for n/N commands
-    e.state.input.search.lastText = e.state.input.search.text
-    # Re-enable highlight for new search
+  let
+    typed = e.state.input.search.text
+    isRepeat = typed.len == 0 and e.state.input.search.last.pattern.len > 0
+    pattern = if isRepeat: e.state.input.search.last.pattern else: typed
+
+  if pattern.len == 0:
+    e.state.statusMessage = "E35: No previous regular expression"
+  else:
+    # Re-enable highlight for this search
     e.state.input.search.hlsearchTempDisabled = false
-    # Reset whole word mode (/ and ? are substring searches)
-    e.state.input.search.wholeWord = false
 
-    # Add to search history (avoid duplicates)
-    # Remove if already exists in history
-    let searchTextCopy = e.state.input.search.text
-    for i in countdown(e.state.input.search.history.high, 0):
-      if e.state.input.search.history[i] == searchTextCopy:
-        e.state.input.search.history.delete(i)
-
-    # Add to beginning of history (most recent first)
-    e.state.input.search.history.insert(searchTextCopy, 0)
-
-    # Limit history size to configured limit
-    let historyLimit = e.config.persist.searchHistoryLimit
-    if e.state.input.search.history.len > historyLimit:
-      e.state.input.search.history.setLen(historyLimit)
+    if not isRepeat:
+      # A repeat replays the previous search untouched, history entry and whole
+      # word mode included. A new one is a substring search (/ and ? are regex).
+      e.state.input.search.last = SearchSpec(pattern: pattern)
+      e.addSearchHistory(pattern)
 
     let cfg = e.activeConfigState()
     if cfg != nil:
       # Config mode: commit the query and move the selection to the first match,
       # anchored from where the search started.
-      cfg.setSearchQuery(e.state.input.search.text)
+      cfg.setSearchQuery(pattern)
       let forward = e.state.input.search.direction == Forward
-      discard cfg.searchItems(e.state.input.search.text, cfg.searchStartIndex, forward)
+      # searchItems scans inclusive of its start index, so a repeat, which
+      # opens with the selection already on a match, steps off it first.
+      let startIndex =
+        if not isRepeat:
+          cfg.searchStartIndex
+        elif forward:
+          cfg.searchStartIndex + 1
+        else:
+          cfg.searchStartIndex - 1
+      discard cfg.searchItems(pattern, startIndex, forward)
     else:
-      # If incsearch is enabled, cursor is already at the found position
-      if e.state.input.search.incsearch:
+      if e.state.input.search.incsearch and not isRepeat:
+        # Incremental search already left the cursor on the match
         e.updateViewportForCursor(e.cursor)
       else:
-        # If incsearch is disabled, perform search now
-        discard e.executeSearchFromCurrentPosition()
+        # A repeat never ran the incremental search, so it searches now.
+        if isRepeat:
+          e.cursor = e.state.input.search.startPos
+        discard e.executeSearchFromCurrentPosition(pattern)
+
+      # A search that found nothing left the cursor on the anchor, and vim does
+      # not record a jump for it.
+      if e.cursor != e.state.input.search.startPos:
+        recordJump(e.state, e.state.input.search.startPos)
 
       # Sync search query and position to help viewer state if in Help mode
       if e.state.mode == EditorMode.Help:
         let window = e.activeWindow
         if window.modeState.kind == mskHelp:
-          window.modeState.help.setSearchQuery(e.state.input.search.text)
+          window.modeState.help.setSearchQuery(pattern)
       e.syncHelpViewerIndex(e.cursor.line)
 
   # Exit overlay and return to base mode
@@ -173,6 +200,7 @@ proc cancelSearch(e: Editor) =
   ## - Exit overlay and return to base mode
   ## - Clear searchText buffer
   ## - Does NOT save to lastSearchText (search was cancelled)
+
   let cfg = e.activeConfigState()
   if cfg != nil:
     # Config mode: restore the selection that was active before the search.
@@ -180,6 +208,7 @@ proc cancelSearch(e: Editor) =
       cfg.selectedIndex = cfg.searchStartIndex
   elif e.state.input.search.incsearch:
     e.cursor = e.state.input.search.startPos
+    e.updateViewportForCursor(e.state.input.search.startPos)
     e.syncHelpViewerIndex(e.state.input.search.startPos.line)
   # Exit overlay and restore base mode
   e.state.exitOverlay()
@@ -220,6 +249,10 @@ proc performIncrementalSearch(e: Editor) =
     return
 
   if e.state.input.search.text.len == 0:
+    # Erasing the pattern restores the anchor, as the Config branch does.
+    e.cursor = e.state.input.search.startPos
+    e.updateViewportForCursor(e.state.input.search.startPos)
+    e.syncHelpViewerIndex(e.state.input.search.startPos.line)
     return
 
   # Apply smartcase logic to determine if we should ignore case
@@ -257,6 +290,7 @@ proc performIncrementalSearch(e: Editor) =
   else:
     # No match found, restore to start position
     e.cursor = e.state.input.search.startPos
+    e.updateViewportForCursor(e.state.input.search.startPos)
     e.syncHelpViewerIndex(e.state.input.search.startPos.line)
 
     e.state.statusMessage = "Pattern not found: " & e.state.input.search.text
@@ -373,14 +407,8 @@ proc handleSearchModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.input.search.historyIndex = -1
         e.state.input.search.text = ""
         e.state.input.search.cursor = 0
-        # Restore position to start if incsearch is enabled
-        if e.state.input.search.incsearch:
-          let cfg = e.activeConfigState()
-          if cfg != nil:
-            cfg.selectedIndex = cfg.searchStartIndex
-          else:
-            e.cursor = e.state.input.search.startPos
-            e.syncHelpViewerIndex(e.state.input.search.startPos.line)
+        # Empty text restores the anchor (cursor, viewport and Config index).
+        e.performIncrementalSearch()
     return true
 
   # Left arrow: Move cursor left within search text

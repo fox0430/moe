@@ -448,7 +448,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     e.state.showSyntax = false
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
-    e.state.input.search.lastText = "AA"
+    e.state.input.search.last.pattern = "AA"
     e.state.mode = EditorMode.Normal
 
     # 30 chars => 3 wrap segments at maxWidth 10, each starting with "AA".
@@ -2411,7 +2411,7 @@ suite "getSelectionStyle - Search highlight":
     let e = createTestEditor()
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = false
-    e.state.input.search.lastText = "hello"
+    e.state.input.search.last.pattern = "hello"
     e.state.mode = EditorMode.Normal
     e.state.showSyntax = false
     e.state.showCursorLine = false
@@ -2431,7 +2431,7 @@ suite "getSelectionStyle - Search highlight":
   test "No search highlight when hlsearch is disabled":
     let e = createTestEditor()
     e.state.input.search.hlsearch = false
-    e.state.input.search.lastText = "hello"
+    e.state.input.search.last.pattern = "hello"
     e.state.mode = EditorMode.Normal
     e.state.showSyntax = false
     e.state.showCursorLine = false
@@ -2451,7 +2451,7 @@ suite "getSelectionStyle - Search highlight":
     let e = createTestEditor()
     e.state.input.search.hlsearch = true
     e.state.input.search.hlsearchTempDisabled = true
-    e.state.input.search.lastText = "hello"
+    e.state.input.search.last.pattern = "hello"
     e.state.mode = EditorMode.Normal
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
@@ -4342,3 +4342,38 @@ suite "renderScrollbar - fold/wrap-aware display rows":
     # at the far bottom — pin the observable: it starts in the upper half.
     check firstThumbRow >= 0
     check firstThumbRow < 5
+
+suite "newLineStyleContext - search highlight":
+  proc searchRangesFor(e: Editor, line: string): seq[ColumnRange] =
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), line)
+    let ctx = RenderContext(windowMode: EditorMode.Normal)
+    e.newLineStyleContext(e.activeBuffer, 0, line, ctx).searchRanges
+
+  test "Highlight keeps the word boundaries of a * search":
+    let e = createTestEditor()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.last = SearchSpec(pattern: "foo", wholeWord: true)
+
+    check e.searchRangesFor("foobar foo") == @[ColumnRange(startCol: 7, endCol: 10)]
+
+  test "Highlight of a pattern being typed ignores a previous * search":
+    let e = createTestEditor()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.last = SearchSpec(pattern: "foo", wholeWord: true)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.text = "foo"
+
+    check e.searchRangesFor("foobar foo") ==
+      @[ColumnRange(startCol: 0, endCol: 3), ColumnRange(startCol: 7, endCol: 10)]
+
+  test "An empty prompt keeps the previous search highlighted":
+    let e = createTestEditor()
+    e.state.input.search.hlsearch = true
+    e.state.input.search.hlsearchTempDisabled = false
+    e.state.input.search.last = SearchSpec(pattern: "foo", wholeWord: true)
+    e.state.enterSearchOverlay(Forward)
+    e.state.input.search.text = ""
+
+    check e.searchRangesFor("foobar foo") == @[ColumnRange(startCol: 7, endCol: 10)]
