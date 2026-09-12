@@ -367,7 +367,7 @@ proc registerCommandModeAliases(reg: KeyBindingRegistry) =
         name: alias.name,
         description: alias.description,
         kind: ctAction,
-        commandId: ExecCmdlinePrefix & alias.name,
+        commandId: ExecCmdlinePrefix & alias.cmdlineName,
         args: @[],
       )
     )

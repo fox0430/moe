@@ -65,7 +65,7 @@ proc registeredCommands(): Table[string, string] =
     # The generated description ends in " (:<name>)"; the docs table drops it
     # because its own heading already says these are Command mode names.
     var description = alias.description
-    description.removeSuffix(" (:" & alias.name & ")")
+    description.removeSuffix(" (:" & alias.cmdlineName & ")")
     result[alias.name] = description
 
 iterator documentedRows(): tuple[name, description: string] =

@@ -858,15 +858,15 @@ suite "CommandCompletion - collectFilePaths":
 suite "CommandCompletion - FilePathCommands constant":
   test "FilePathCommands contains expected commands":
     check "e" in FilePathCommands
-    check "edit" in FilePathCommands
     check "w" in FilePathCommands
-    check "write" in FilePathCommands
     check "vs" in FilePathCommands
-    check "vsplit" in FilePathCommands
     check "sp" in FilePathCommands
-    check "split" in FilePathCommands
-    check "hsplit" in FilePathCommands
     check "filetree" in FilePathCommands
+
+  test "FilePathCommands excludes TOML-only names":
+    check "edit" notin FilePathCommands
+    check "vsplit" notin FilePathCommands
+    check "hsplit" notin FilePathCommands
 
 suite "CommandCompletion - popup constants":
   test "Constants have expected values":
@@ -1030,12 +1030,9 @@ suite "CommandCompletion - edge cases":
       check cmd.description.len > 0
 
   test "loadDefaultConfig aliases and CommandDescriptions are in sync":
-    ## Both `config.aliases` (from `loadDefaultConfig`) and
-    ## `CommandDescriptions` derive from `CommandLineCommandTable`, so the
-    ## key sets must match. Beyond that, every registered alias must carry
-    ## the description string declared in the canonical table — i.e. the
-    ## parser-side description (when not overridden) and the
-    ## completion-popup description point at the same string.
+    ## Both derive from `CommandLineCommandTable`, so the key sets must
+    ## match exactly: the popup must never offer a command the parser can't
+    ## dispatch, and a runnable command must never be missing from the popup.
     let config = newCommandConfig()
     config.loadDefaultConfig()
 
@@ -1053,7 +1050,7 @@ suite "CommandCompletion - edge cases":
 
     for alias in configAliases:
       check alias in CommandDescriptions
-      check CommandDescriptions[alias].len > 0
+      check CommandDescriptions.getOrDefault(alias).len > 0
 
   test "SetOptions contains common vim options":
     let options = collectSetOptions("")
