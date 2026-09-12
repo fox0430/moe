@@ -22,6 +22,7 @@ import std/[unittest, os, strutils]
 import pkg/chronos
 
 import ../src/moepkg/build {.all.}
+import ../src/moepkg/command_string
 import ../src/moepkg/syntax/tokenizer
 
 suite "Build - parseCommandString":
