@@ -217,6 +217,29 @@ suite "Encoding Detection":
       repeat("\x3D\xD8\x00\xDE", 20)
     check detectCharacterEncoding(text) == CharacterEncoding.unknown
 
+  test "UTF-8 detection survives a multi-byte character split at the sample cut":
+    # Regression: the sample cut used to split a multi-byte sequence, which
+    # the UTF-8 validation rejected, dropping the file through to UTF-16/32
+    # detection and ending in `unknown`. Every alignment of a 3-byte
+    # character across the cut must still detect UTF-8.
+    for pad in 0 .. 2:
+      let text =
+        repeat("A", EncodingDetectionSampleSize - 2 + pad) & repeat("\xE3\x81\x82", 100)
+      check detectCharacterEncoding(text) == CharacterEncoding.utf8
+
+  test "UTF-8 detection survives a 4-byte character split at the sample cut":
+    for pad in 0 .. 3:
+      let text =
+        repeat("A", EncodingDetectionSampleSize - 3 + pad) &
+        repeat("\xF0\x9F\x8E\x89", 100)
+      check detectCharacterEncoding(text) == CharacterEncoding.utf8
+
+  test "Truly invalid UTF-8 past the sample cut is still rejected":
+    # Only a sequence truncated by the cut is forgiven; a bad leading byte
+    # right before the cut must still fail the UTF-8 check.
+    let text = repeat("A", EncodingDetectionSampleSize - 1) & "\xFF" & repeat("A", 100)
+    check detectCharacterEncoding(text) != CharacterEncoding.utf8
+
   test "Detect UTF-8 with multi-byte characters":
     # Emoji (4-byte UTF-8 sequence)
     let text = "🎉"
@@ -339,3 +362,24 @@ suite "sanitizeInvalidUtf8":
   test "mixed valid and invalid text":
     check sanitizeInvalidUtf8("ok\xC0\x41ok") == "ok" & "\xEF\xBF\xBD" & "Aok"
     check sanitizeInvalidUtf8("a\xE3\x81\x82b") == "aあb"
+
+suite "invalidUtf8At":
+  test "valid UTF-8 reports no offset":
+    check invalidUtf8At("") == -1
+    check invalidUtf8At("plain ascii") == -1
+    check invalidUtf8At("aあb\xF0\x9F\x98\x80") == -1
+
+  test "the offset is the start of the first bad sequence":
+    check invalidUtf8At("ab\xC3") == 2
+    check invalidUtf8At("ab\xC3\x28") == 2
+    check invalidUtf8At("\x80") == 0
+    check invalidUtf8At("あ\xFF") == 3
+
+  test "overlong encodings, surrogates and out-of-range code points are not UTF-8":
+    check invalidUtf8At("\xC0\x80") == 0
+    check invalidUtf8At("\xE0\x80\x80") == 0
+    check invalidUtf8At("\xED\xA0\x80") == 0
+    check invalidUtf8At("\xF4\x90\x80\x80") == 0
+
+  test "a NUL is valid UTF-8, and refused elsewhere":
+    check invalidUtf8At("a\x00b") == -1
