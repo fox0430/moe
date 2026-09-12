@@ -130,7 +130,9 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       let parsed = parseSubstituteCommand(":" & cmd.args[0])
       if not parsed.isValid:
         return CommandLineResult(
-          kind: claUnknown, errorMessage: "Invalid substitute command format"
+          kind: claUnknown,
+          errorMessage:
+            "Invalid substitute command format. Usage: :s/pattern/replacement/flags",
         )
       if parsed.pattern.len == 0:
         return CommandLineResult(
@@ -148,7 +150,9 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       )
     else:
       return CommandLineResult(
-        kind: claUnknown, errorMessage: "Invalid substitute command format"
+        kind: claUnknown,
+        errorMessage:
+          "Invalid substitute command format. Usage: :s/pattern/replacement/flags",
       )
   of claHelp:
     return CommandLineResult(

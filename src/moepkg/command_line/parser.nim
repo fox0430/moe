@@ -54,11 +54,13 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
   result.rawText = input
 
   # Remove leading colon if present
-  let cleanInput =
+  var cleanInput =
     if input.startsWith(":"):
       input[1 ..^ 1]
     else:
       input
+
+  cleanInput = normalizeSubstituteLongForm(cleanInput)
 
   if cleanInput.len == 0:
     result.action = claUnknown

@@ -68,7 +68,10 @@ type
     isTomlOnly*: bool
       ## When `true`, the name is not registered as a runtime `:name`
       ## command; it exists purely as a TOML `[CommandAliases]` RHS target,
-      ## exposed via `CommandNameTable`. Implies `isCanonicalLong`.
+      ## exposed via `CommandNameTable`. Implies `isCanonicalLong`. Reserved
+      ## for moe-specific descriptive names (`save`, `buffernext`,
+      ## `editconfigfile`, ...); a long form that is also a real Vim command
+      ## name (`quit`, `edit`, `vsplit`, ...) stays runnable.
     takesFilePath*: bool
       ## When `true`, completion offers file paths when the user types
       ## `:<name> <prefix>`. Must not be set on an `isTomlOnly` spec.
@@ -78,8 +81,9 @@ type
       ## shown to users is built as
       ## `keymapBaseDescription & " (:" & cmdlineName & ")"`, where
       ## `cmdlineName` is this spec's own `name`, or for an `isTomlOnly`
-      ## spec the runnable name sharing its action. Derived as
-      ## `command_config.keyMappableCommandModeAliases`.
+      ## spec the shortest runnable name for the same action, preferring
+      ## the ones that declare this exact `keymapBaseDescription`.
+      ## Derived as `command_config.keyMappableCommandModeAliases`.
 
 const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   # Quit / save (Exiting section)
@@ -93,11 +97,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "quit",
-    completionDescription: "",
+    completionDescription: "Quit",
     helpEntries: @[],
     action: some(claQuit),
     isCanonicalLong: true,
-    isTomlOnly: true,
     keymapBaseDescription: "Quit",
   ),
   CommandLineCommandSpec(
@@ -117,11 +120,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "quitall",
-    completionDescription: "",
+    completionDescription: "Quit all windows",
     helpEntries: @[],
     action: some(claQuitAll),
     isCanonicalLong: true,
-    isTomlOnly: true,
     keymapBaseDescription: "Quit all",
   ),
   CommandLineCommandSpec(
@@ -141,11 +143,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "cquit",
-    completionDescription: "",
+    completionDescription: "Quit with non-zero exit code",
     helpEntries: @[],
     action: some(claCquit),
     isCanonicalLong: true,
-    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "w",
@@ -188,6 +189,14 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: true,
     isTomlOnly: true,
     keymapBaseDescription: "Save all buffers",
+  ),
+  CommandLineCommandSpec(
+    name: "write",
+    completionDescription: "Write file",
+    helpEntries: @[],
+    action: some(claSave),
+    isCanonicalLong: false,
+    takesFilePath: true,
   ),
   CommandLineCommandSpec(
     name: "wq",
@@ -284,11 +293,11 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "edit",
-    completionDescription: "",
+    completionDescription: "Open file",
     helpEntries: @[],
     action: some(claEdit),
     isCanonicalLong: true,
-    isTomlOnly: true,
+    takesFilePath: true,
   ),
   CommandLineCommandSpec(
     name: "ene",
@@ -299,11 +308,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "enew",
-    completionDescription: "",
+    completionDescription: "Create a new empty buffer",
     helpEntries: @[],
     action: some(claEnew),
     isCanonicalLong: true,
-    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "new",
@@ -362,11 +370,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "substitute",
-    completionDescription: "",
+    completionDescription: "Substitute",
     helpEntries: @[],
     action: some(claSubstitute),
     isCanonicalLong: true,
-    isTomlOnly: true,
   ),
   CommandLineCommandSpec(
     name: "delete",
@@ -393,11 +400,11 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "vsplit",
-    completionDescription: "",
+    completionDescription: "Vertical split window",
     helpEntries: @[],
     action: some(claVSplit),
     isCanonicalLong: true,
-    isTomlOnly: true,
+    takesFilePath: true,
   ),
   CommandLineCommandSpec(
     name: "sp",
@@ -412,11 +419,19 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "hsplit",
-    completionDescription: "",
+    completionDescription: "Horizontal split window",
     helpEntries: @[],
     action: some(claHSplit),
     isCanonicalLong: true,
-    isTomlOnly: true,
+    takesFilePath: true,
+  ),
+  CommandLineCommandSpec(
+    name: "split",
+    completionDescription: "Horizontal split window",
+    helpEntries: @[],
+    action: some(claHSplit),
+    isCanonicalLong: false,
+    takesFilePath: true,
   ),
   CommandLineCommandSpec(
     name: "only",
@@ -906,14 +921,21 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     action: some(claMan),
     isCanonicalLong: true,
   ),
-  # Filer (TOML-only canonical name)
+  # Filer
   CommandLineCommandSpec(
     name: "filer",
-    completionDescription: "",
-    helpEntries: @[],
+    completionDescription: "Open file explorer",
+    helpEntries: @[
+      HelpEntry(syntax: "filer", description: "Open file explorer"),
+      HelpEntry(
+        syntax: "filer path",
+        description:
+          "Open file explorer at specified path (a file opens its parent directory)",
+      ),
+    ],
     action: some(claFiler),
     isCanonicalLong: true,
-    isTomlOnly: true,
+    takesFilePath: true,
   ),
   # Shell (TOML-only canonical name; help is in CommandLineSpecialHelp)
   CommandLineCommandSpec(

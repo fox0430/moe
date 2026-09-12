@@ -330,6 +330,31 @@ suite "CommandLine - parseCommandLine":
     check cmd.action == claSubstitute
     check cmd.args == @["s/foo/bar/"]
 
+  test "Parse long form substitute :substitute/foo/bar/":
+    let cmd = parser.parseCommandLine(":substitute/foo/bar/")
+    check cmd.action == claSubstitute
+    check cmd.args == @["s/foo/bar/"]
+
+  test "Parse long form range substitute :%substitute/foo/bar/g":
+    let cmd = parser.parseCommandLine(":%substitute/foo/bar/g")
+    check cmd.action == claSubstitute
+    check cmd.args == @["%s/foo/bar/g"]
+
+  test "Parse abbreviated long form substitute :sub/foo/bar/":
+    for input in [":su/foo/bar/", ":sub/foo/bar/", ":substitut/foo/bar/"]:
+      let cmd = parser.parseCommandLine(input)
+      check cmd.action == claSubstitute
+      check cmd.args == @["s/foo/bar/"]
+
+  test "A command name that is not a `substitute` prefix is untouched":
+    let cmd = parser.parseCommandLine(":set/foo")
+    check cmd.action != claSubstitute
+
+  test "A command name merely containing `substitute/` is untouched":
+    let cmd = parser.parseCommandLine(":e substitute/foo")
+    check cmd.action == claEdit
+    check cmd.args == @["substitute/foo"]
+
   test "Parse global substitute :%s/foo/bar/g":
     let cmd = parser.parseCommandLine(":%s/foo/bar/g")
     check cmd.action == claSubstitute

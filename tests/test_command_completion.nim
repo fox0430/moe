@@ -861,12 +861,20 @@ suite "CommandCompletion - FilePathCommands constant":
     check "w" in FilePathCommands
     check "vs" in FilePathCommands
     check "sp" in FilePathCommands
+    check "split" in FilePathCommands
+    check "filer" in FilePathCommands
     check "filetree" in FilePathCommands
 
+  test "FilePathCommands contains the runnable long forms":
+    check "edit" in FilePathCommands
+    check "vsplit" in FilePathCommands
+    check "hsplit" in FilePathCommands
+
   test "FilePathCommands excludes TOML-only names":
-    check "edit" notin FilePathCommands
-    check "vsplit" notin FilePathCommands
-    check "hsplit" notin FilePathCommands
+    ## The parser rejects an `isTomlOnly` name, so offering path completion
+    ## for it leads to `Unknown command` on Enter.
+    check "save" notin FilePathCommands
+    check "editconfigfile" notin FilePathCommands
 
 suite "CommandCompletion - popup constants":
   test "Constants have expected values":

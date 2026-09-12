@@ -166,6 +166,18 @@ proc executeEdit*(
     return unsavedChangesErr()
   HandlerResult(kind: hrEdit, editFilename: none(string), forceEdit: force)
 
+proc executeFiler*(handler: CommandModeHandler, path: Option[string]): HandlerResult =
+  ## Execute filer command (:filer with optional path).
+  ## A regular file opens its parent directory.
+  if path.isNone:
+    return HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string))
+  let expanded = absolutePath(expandTilde(path.get))
+  if dirExists(expanded):
+    return HandlerResult(kind: hrEnterFiler, enterFilerPath: some(expanded))
+  if fileExists(expanded):
+    return HandlerResult(kind: hrEnterFiler, enterFilerPath: some(parentDir(expanded)))
+  HandlerResult(kind: hrError, errorMessage: "E344: Can't find directory: " & path.get)
+
 proc executeGotoLine*(
     handler: CommandModeHandler, buffer: TextBuffer, lineNumber: int
 ): HandlerResult =
@@ -607,7 +619,7 @@ proc handleCommandModeInput*(
   of claStripWhitespace:
     handler.executeStripWhitespace(buffer)
   of claFiler:
-    HandlerResult(kind: hrEnterFiler, enterFilerPath: cmdResult.filerPath)
+    handler.executeFiler(cmdResult.filerPath)
   of claLogViewer:
     HandlerResult(kind: hrEnterLogViewer)
   of claQuickRun:
