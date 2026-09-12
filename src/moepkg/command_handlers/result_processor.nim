@@ -158,7 +158,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.processGotoLineResult(r, activeBuffer)
     return true # Skip the epilogue's status-line overwrite, like ops-moved kinds
   of hrJumpToBuffer, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast, hrBuffer,
-      hrCloseWindow, hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight,
+      hrCloseWindow, hrNextWindow, hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown,
+      hrMoveWindowUp, hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
       hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
       hrEqualizeWindows, hrSwapWindow, hrOnlyWindow, hrBufferDelete, hrTerminalQuit,
       hrFileTreeQuit:

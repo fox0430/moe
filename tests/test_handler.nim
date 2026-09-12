@@ -4683,3 +4683,35 @@ suite "processMiscResult - hrDeleteLines":
 
     check e.processMiscResult(r, e.activeBuffer())
     check e.activeWindow.cursor.line == 0
+
+suite "Ctrl-w window commands in special modes":
+  proc createSplitEditorInFileTree(): Editor =
+    let e = createTestEditorWithBuffer("line0\nline1")
+    check e.vsplit().isOk
+    e.windowManager.windows[0].mode = EditorMode.FileTree
+    e.state.mode = EditorMode.FileTree
+    e
+
+  proc sendWindowCommand(e: Editor, key: string) =
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl}))
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: key, modifiers: {}))
+
+  test "Ctrl-w > widens the active window":
+    let e = createSplitEditorInFileTree()
+    let width =
+      e.windowManager.windows[e.windowManager.activeWindowIndex].viewport.width
+
+    e.sendWindowCommand(">")
+
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].viewport.width >
+      width
+
+  test "Ctrl-w < narrows the active window":
+    let e = createSplitEditorInFileTree()
+    let width =
+      e.windowManager.windows[e.windowManager.activeWindowIndex].viewport.width
+
+    e.sendWindowCommand("<")
+
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].viewport.width <
+      width

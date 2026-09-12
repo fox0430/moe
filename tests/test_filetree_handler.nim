@@ -32,9 +32,6 @@ proc createTestTree(): string =
 proc makeKeyCombo(ch: string): KeyCombo =
   KeyCombo(isSpecial: false, char: ch, modifiers: {})
 
-proc makeCtrlKeyCombo(ch: string): KeyCombo =
-  KeyCombo(isSpecial: false, char: ch, modifiers: {kmCtrl})
-
 proc makeSpecialKeyCombo(special: SpecialKey): KeyCombo =
   KeyCombo(isSpecial: true, special: special, fnNum: 0, modifiers: {})
 
@@ -46,7 +43,6 @@ suite "FileTree handler":
 
     let state = newFileTreeState(tmpDir)
     check state.waitingForG == false
-    check state.waitingForCtrlW == false
     check state.lastKeyWasEscape == false
     check state.isSearching == false
 
@@ -455,59 +451,3 @@ suite "FileTree handler":
     check r2.kind == ftrHandled
     check state.waitingForG == false
     check state.selectedIndex == startIdx + 1
-
-  test "Ctrl-w > returns ftrIncreaseWindowWidth":
-    let tmpDir = createTestTree()
-    defer:
-      removeDir(tmpDir)
-
-    let state = newFileTreeState(tmpDir)
-
-    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
-    let r = state.handleFileTreeModeKey(20, makeKeyCombo(">"))
-    check r.kind == ftrIncreaseWindowWidth
-
-  test "Ctrl-w < returns ftrDecreaseWindowWidth":
-    let tmpDir = createTestTree()
-    defer:
-      removeDir(tmpDir)
-
-    let state = newFileTreeState(tmpDir)
-
-    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
-    let r = state.handleFileTreeModeKey(20, makeKeyCombo("<"))
-    check r.kind == ftrDecreaseWindowWidth
-
-  test "Ctrl-w w returns ftrNextWindow":
-    let tmpDir = createTestTree()
-    defer:
-      removeDir(tmpDir)
-
-    let state = newFileTreeState(tmpDir)
-
-    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
-    let r = state.handleFileTreeModeKey(20, makeKeyCombo("w"))
-    check r.kind == ftrNextWindow
-
-  test "Ctrl-w p returns ftrPrevWindow":
-    let tmpDir = createTestTree()
-    defer:
-      removeDir(tmpDir)
-
-    let state = newFileTreeState(tmpDir)
-
-    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
-    let r = state.handleFileTreeModeKey(20, makeKeyCombo("p"))
-    check r.kind == ftrPrevWindow
-
-  test "Ctrl-w with unknown key returns ftrUnhandled":
-    let tmpDir = createTestTree()
-    defer:
-      removeDir(tmpDir)
-
-    let state = newFileTreeState(tmpDir)
-
-    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
-    let r = state.handleFileTreeModeKey(20, makeKeyCombo("z"))
-    check r.kind == ftrUnhandled
-    check state.waitingForCtrlW == false

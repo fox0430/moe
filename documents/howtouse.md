@@ -176,8 +176,12 @@
 | <kbd>**T**</kbd> | Move to the right of the back any character on the current line |
 | <kbd>**;**</kbd> | Repeat last f/F/t/T |
 | <kbd>**,**</kbd> | Repeat last f/F/t/T in reverse |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd> | Move to the next window |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd> | Move to the previous window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**w**</kbd> | Move to the next window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**p**</kbd> | Move to the last accessed window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**h**</kbd> | Move to the window on the left |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd> | Move to the window below |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd> | Move to the window above |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**l**</kbd> | Move to the window on the right |
 | <kbd>**z**</kbd> <kbd>**t**</kbd> | Scroll the screen so the cursor is at the top |
 | <kbd>**z**</kbd> <kbd>**b**</kbd> | Scroll the screen so the cursor is at the bottom |
 | <kbd>**z**</kbd> <kbd>**.**</kbd> | Center the screen on the cursor |
@@ -185,6 +189,7 @@
 | <kbd>**Z**</kbd> <kbd>**Z**</kbd> | Write current file and exit |
 | <kbd>**Z**</kbd> <kbd>**Q**</kbd> | Same as :q! |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> | Close current window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**_**</kbd> | Maximize window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**+**</kbd> | Increase window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**-**</kbd> | Decrease window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**>**</kbd> | Increase window width |
@@ -447,10 +452,20 @@ Open the fileTree sidebar with `:filetree` command. If already open, it will clo
 | <kbd>**R**</kbd> | Refresh tree |
 | <kbd>**:**</kbd> | Enter command mode |
 | <kbd>**Esc**</kbd> | Clear search highlight (press twice) |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**w**</kbd> | Move to next window |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**p**</kbd> | Move to previous window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**w**</kbd> | Move to the next window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**p**</kbd> | Move to the last accessed window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**h**</kbd> | Move to the window on the left |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd> | Move to the window below |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd> | Move to the window above |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**l**</kbd> | Move to the window on the right |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd> | Close current window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**_**</kbd> | Maximize window height |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**+**</kbd> | Increase window height |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**-**</kbd> | Decrease window height |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**>**</kbd> | Increase window width |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**<**</kbd> | Decrease window width |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**=**</kbd> | Equalize window sizes |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**x**</kbd> | Swap window with next window |
 <!-- AUTO-GEN:end FileTreeMode -->
 
 </details>

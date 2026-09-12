@@ -211,28 +211,30 @@ suite "switchToNextWindow":
     check e.windowManager.activeWindowIndex == 0
 
 suite "switchToPrevWindow":
-  test "switch to previous window in two-window setup":
+  test "a split leaves the window it was made from as the previous one":
     let e = createTestEditor()
     discard e.vsplit()
     check e.windowManager.windows.len == 2
-
-    # Start at window 1
-    e.windowManager.activeWindowIndex = 1
-    e.switchToPrevWindow()
-
     check e.windowManager.activeWindowIndex == 0
 
-  test "switch wraps around to last window":
+    e.switchToPrevWindow()
+
+    check e.windowManager.activeWindowIndex == 1
+
+  test "switch toggles between the two last accessed windows":
     let e = createTestEditor()
     discard e.vsplit()
     discard e.vsplit()
     check e.windowManager.windows.len == 3
 
-    # Start at window 0
-    e.windowManager.activeWindowIndex = 0
-    e.switchToPrevWindow()
+    e.windowManager.activateWindow(2)
+    e.windowManager.activateWindow(0)
 
+    e.switchToPrevWindow()
     check e.windowManager.activeWindowIndex == 2
+
+    e.switchToPrevWindow()
+    check e.windowManager.activeWindowIndex == 0
 
   test "does nothing with single window":
     let e = createTestEditor()

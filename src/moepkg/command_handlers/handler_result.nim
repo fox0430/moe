@@ -105,6 +105,11 @@ type
     hrRecentFileQuit # Quit recent file mode
     hrNextWindow # Move to next window
     hrPrevWindow # Move to previous window
+    hrMoveWindowLeft # Move to the window on the left
+    hrMoveWindowDown # Move to the window below
+    hrMoveWindowUp # Move to the window above
+    hrMoveWindowRight # Move to the window on the right
+    hrMaximizeWindowHeight # Maximize active window height
     hrIncreaseWindowHeight # Increase active window height
     hrDecreaseWindowHeight # Decrease active window height
     hrIncreaseWindowWidth # Increase active window width
@@ -291,10 +296,11 @@ type
       recentFilePath*: string
     of hrRecentFileQuit:
       discard
-    of hrNextWindow, hrPrevWindow:
+    of hrNextWindow, hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp,
+        hrMoveWindowRight:
       discard
     of hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-        hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow:
+        hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrMaximizeWindowHeight:
       discard
     of hrLspGotoDefinition:
       discard
@@ -489,7 +495,8 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
       hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
       hrDiffViewerToggleView, hrDiffViewerToggleWord, hrRecentFileOpenFile,
-      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight,
+      hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown,
+      hrMoveWindowUp, hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
       hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
       hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
       hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,

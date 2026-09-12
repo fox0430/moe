@@ -91,6 +91,21 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
   of hrPrevWindow:
     e.switchToPrevWindow()
     return true
+  of hrMoveWindowLeft:
+    e.moveToWindowDirection(wdLeft)
+    return true
+  of hrMoveWindowDown:
+    e.moveToWindowDirection(wdDown)
+    return true
+  of hrMoveWindowUp:
+    e.moveToWindowDirection(wdUp)
+    return true
+  of hrMoveWindowRight:
+    e.moveToWindowDirection(wdRight)
+    return true
+  of hrMaximizeWindowHeight:
+    e.maximizeWindowHeight()
+    return true
   of hrIncreaseWindowHeight:
     e.increaseWindowHeight()
     return true

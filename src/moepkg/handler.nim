@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, strutils, sequtils]
+import std/[options, os, strutils, sequtils, tables]
 
 when defined(posix):
   from std/posix import nil
@@ -229,21 +229,23 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
       hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager,
       hrDiffViewerQuit, hrDiffViewerToggleView, hrDiffViewerToggleWord, hrRecentFile,
-      hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
-      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
-      hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-      hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,
-      hrLspCallHierarchyOutgoing, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
-      hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrBackground,
-      hrJumpList, hrChanges, hrBuild, hrDebug, hrDebugViewerQuit, hrConfig,
-      hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat,
-      hrLspRestart, hrLspFold, hrLspExecuteCommand, hrSubstitute, hrDeleteLines, hrMan,
-      hrReferencesQuit, hrReferencesJumpTo, hrDocumentSymbolQuit,
-      hrDocumentSymbolJumpTo, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
-      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing, hrEnterTerminal,
-      hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
-      hrFileTreeQuit, hrOpenUri, hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd,
-      hrMapRemove, hrMapClear, hrMapList, hrPlaybackMacro, hrUndo, hrRedo:
+      hrNextWindow, hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown, hrMoveWindowUp,
+      hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,
+      hrDecreaseWindowHeight, hrIncreaseWindowWidth, hrDecreaseWindowWidth,
+      hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition, hrLspGotoDeclaration,
+      hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
+      hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
+      hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
+      hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList, hrChanges, hrBuild,
+      hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
+      hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
+      hrLspExecuteCommand, hrSubstitute, hrDeleteLines, hrMan, hrReferencesQuit,
+      hrReferencesJumpTo, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
+      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
+      hrCallHierarchyRequestOutgoing, hrEnterTerminal, hrTerminalQuit, hrExecCommand,
+      hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri,
+      hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear,
+      hrMapList, hrPlaybackMacro, hrUndo, hrRedo:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target
@@ -615,6 +617,8 @@ proc activatePointerWindow(e: Editor, windowIndex: int) =
   if windowIndex == e.windowManager.activeWindowIndex:
     return
   e.finalizeCurrentWindowForMouseJump()
+  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    e.windowManager.previousWindow = e.activeWindow
   e.windowManager.activeWindowIndex = windowIndex
   for i, window in e.windowManager.windows.mpairs:
     window.active = (i == windowIndex)
@@ -923,23 +927,65 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
   return false
 
 proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
-  ## Handle Ctrl-W window command second key (j/k/c).
+  ## Handle Ctrl-W window command second key. Mirrors the `C-w` key bindings of
+  ## the file edit modes (see `normal_bindings`).
   ## Returns some(true) if handled, some(false) if last window closed (quit),
   ## none if not a window command key.
   if e.state.pendingInput.pendingCommand == PendingWindowCmd:
     e.state.pendingInput.pendingCommand = PendingNone
     if not keyCombo.isSpecial:
-      if keyCombo.char == "j":
-        e.switchToPrevWindow
+      case keyCombo.char
+      of "h":
+        e.moveToWindowDirection(wdLeft)
         return some(true)
-      elif keyCombo.char == "k":
+      of "j":
+        e.moveToWindowDirection(wdDown)
+        return some(true)
+      of "k":
+        e.moveToWindowDirection(wdUp)
+        return some(true)
+      of "l":
+        e.moveToWindowDirection(wdRight)
+        return some(true)
+      of "w":
         e.switchToNextWindow
         return some(true)
-      elif keyCombo.char == "c":
+      of "p":
+        e.switchToPrevWindow
+        return some(true)
+      of "_":
+        e.maximizeWindowHeight
+        return some(true)
+      of "+":
+        e.increaseWindowHeight
+        return some(true)
+      of "-":
+        e.decreaseWindowHeight
+        return some(true)
+      of ">":
+        e.increaseWindowWidth
+        return some(true)
+      of "<":
+        e.decreaseWindowWidth
+        return some(true)
+      of "=":
+        e.equalizeWindowSizes
+        return some(true)
+      of "x":
+        e.swapWindow
+        return some(true)
+      of "c":
+        # Terminal owns a PTY in `e.terminalStates`; closing the window alone
+        # would strand it, so tear the session down first.
+        when not defined(moe.embedded):
+          if e.terminalStates.hasKey(e.activeWindow.buffer.id):
+            e.closeTerminalBuffer(e.activeWindow.buffer.id)
         let shouldQuit = e.closeWindow()
         if shouldQuit:
           return some(false)
         return some(true)
+      else:
+        discard
     return some(true) # Unknown window command, cancel
 
   # Check for Ctrl-w to enter window command mode

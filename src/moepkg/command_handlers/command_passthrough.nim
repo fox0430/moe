@@ -37,6 +37,11 @@ type PassthroughKind* = enum
   # window.*
   ptNextWindow
   ptPrevWindow
+  ptMoveWindowLeft
+  ptMoveWindowDown
+  ptMoveWindowUp
+  ptMoveWindowRight
+  ptMaximizeWindowHeight
   ptIncreaseWindowHeight
   ptDecreaseWindowHeight
   ptIncreaseWindowWidth
@@ -81,6 +86,16 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
     some(ptNextWindow)
   of "window.prev":
     some(ptPrevWindow)
+  of "window.move.left":
+    some(ptMoveWindowLeft)
+  of "window.move.down":
+    some(ptMoveWindowDown)
+  of "window.move.up":
+    some(ptMoveWindowUp)
+  of "window.move.right":
+    some(ptMoveWindowRight)
+  of "window.maximize-height":
+    some(ptMaximizeWindowHeight)
   of "window.increase-height":
     some(ptIncreaseWindowHeight)
   of "window.decrease-height":
@@ -151,6 +166,16 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrNextWindow)
   of ptPrevWindow:
     HandlerResult(kind: hrPrevWindow)
+  of ptMoveWindowLeft:
+    HandlerResult(kind: hrMoveWindowLeft)
+  of ptMoveWindowDown:
+    HandlerResult(kind: hrMoveWindowDown)
+  of ptMoveWindowUp:
+    HandlerResult(kind: hrMoveWindowUp)
+  of ptMoveWindowRight:
+    HandlerResult(kind: hrMoveWindowRight)
+  of ptMaximizeWindowHeight:
+    HandlerResult(kind: hrMaximizeWindowHeight)
   of ptIncreaseWindowHeight:
     HandlerResult(kind: hrIncreaseWindowHeight)
   of ptDecreaseWindowHeight:

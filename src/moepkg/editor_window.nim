@@ -334,7 +334,7 @@ proc vnew*(e: Editor): Result[(), string] =
 # Window navigation procedures
 
 proc switchToNextWindow*(e: Editor) =
-  ## Switch to the next window (Ctrl-w, k)
+  ## Switch to the next window (Ctrl-w, w)
   if e.windowManager.windows.len <= 1:
     return
 
@@ -352,7 +352,7 @@ proc switchToNextWindow*(e: Editor) =
     e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc switchToPrevWindow*(e: Editor) =
-  ## Switch to the previous window (Ctrl-w, j)
+  ## Switch to the last accessed window (Ctrl-w, p)
   if e.windowManager.windows.len <= 1:
     return
 
@@ -361,6 +361,24 @@ proc switchToPrevWindow*(e: Editor) =
 
   # Switch to previous window using window manager
   e.windowManager.switchToPrevWindow()
+
+  # Sync and restore the new active window state
+  e.syncActiveWindow()
+
+  # Update cursor position immediately to avoid visual glitch
+  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    e.setActiveWindowScreenCursor(e.activeWindow)
+
+proc moveToWindowDirection*(e: Editor, direction: WindowDirection) =
+  ## Move the focus to the nearest window in `direction` (Ctrl-w h/j/k/l)
+  if e.windowManager.windows.len <= 1:
+    return
+
+  # Save current window state before switching
+  e.saveActiveWindowState()
+
+  if not e.windowManager.moveToWindowDirection(direction):
+    return
 
   # Sync and restore the new active window state
   e.syncActiveWindow()
@@ -387,6 +405,13 @@ proc increaseWindowHeight*(e: Editor) =
 proc decreaseWindowHeight*(e: Editor) =
   ## Decrease the active window's height
   e.windowManager.decreaseWindowHeight()
+  e.syncActiveWindow()
+
+proc maximizeWindowHeight*(e: Editor) =
+  ## Maximize the active window's height within its vertical group
+  e.windowManager.maximizeWindowHeight(
+    e.multiStatusLine, e.showTabLine, e.showStatusLine
+  )
   e.syncActiveWindow()
 
 proc equalizeWindowSizes*(e: Editor) =

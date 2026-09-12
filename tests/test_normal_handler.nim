@@ -1869,7 +1869,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r.kind == nmrPassthrough
     check r.passthroughKind == ptBackground
 
-  test "window-next (C-w k) returns ptNextWindow":
+  test "window-next (C-w w) returns ptNextWindow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1881,13 +1881,13 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let r1 = handler.handleNormalModeKey(buf, state, viewport, cwKey)
     check r1.kind == nmrHandled # consumed as sequence prefix
 
-    # Press k
-    let kKey = KeyCombo(isSpecial: false, char: "k")
-    let r2 = handler.handleNormalModeKey(buf, state, viewport, kKey)
+    # Press w
+    let wKey = KeyCombo(isSpecial: false, char: "w")
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, wKey)
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptNextWindow
 
-  test "window-prev (C-w j) returns ptPrevWindow":
+  test "window-prev (C-w p) returns ptPrevWindow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1899,9 +1899,9 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let r1 = handler.handleNormalModeKey(buf, state, viewport, cwKey)
     check r1.kind == nmrHandled # consumed as sequence prefix
 
-    # Press j
-    let jKey = KeyCombo(isSpecial: false, char: "j")
-    let r2 = handler.handleNormalModeKey(buf, state, viewport, jKey)
+    # Press p
+    let pKey = KeyCombo(isSpecial: false, char: "p")
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, pKey)
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptPrevWindow
 

@@ -137,7 +137,7 @@ suite "EditorWindowManager - Window Switching":
     check wm.activeWindowIndex == 0
     check wm.windows[0].active == true
 
-  test "switchToPrevWindow cycles through windows":
+  test "switchToPrevWindow without a last accessed window does nothing":
     let wm = newEditorWindowManager()
     wm.windows.add(createTestWindow(0, 0, 40, 24, active = false))
     wm.windows.add(createTestWindow(41, 0, 39, 24, active = true))
@@ -145,21 +145,255 @@ suite "EditorWindowManager - Window Switching":
 
     wm.switchToPrevWindow()
 
+    check wm.activeWindowIndex == 1
+    check wm.windows[1].active == true
+
+  test "switchToPrevWindow returns to the last accessed window":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 26, 24, active = true))
+    wm.windows.add(createTestWindow(27, 0, 26, 24))
+    wm.windows.add(createTestWindow(54, 0, 26, 24))
+    wm.activateWindow(0)
+    wm.activateWindow(2)
+
+    wm.switchToPrevWindow()
+
     check wm.activeWindowIndex == 0
     check wm.windows[0].active == true
-    check wm.windows[1].active == false
 
-  test "switchToPrevWindow wraps around":
+  test "switchToPrevWindow toggles between the two last windows":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 26, 24, active = true))
+    wm.windows.add(createTestWindow(27, 0, 26, 24))
+    wm.windows.add(createTestWindow(54, 0, 26, 24))
+    wm.activateWindow(0)
+    wm.activateWindow(2)
+
+    wm.switchToPrevWindow()
+    wm.switchToPrevWindow()
+
+    check wm.activeWindowIndex == 2
+
+  test "switchToPrevWindow follows the window, not its index, after a swap":
     let wm = newEditorWindowManager()
     wm.windows.add(createTestWindow(0, 0, 40, 24, active = true))
-    wm.windows.add(createTestWindow(41, 0, 39, 24, active = false))
-    wm.activeWindowIndex = 0
+    wm.windows.add(createTestWindow(41, 0, 39, 24))
+    wm.activateWindow(0)
+    let previous = wm.windows[0]
+    wm.activateWindow(1)
+
+    wm.swapWindows()
+    wm.switchToPrevWindow()
+
+    check wm.windows[wm.activeWindowIndex] == previous
+
+  test "switchToPrevWindow does nothing after the last accessed window is gone":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 26, 24, active = true))
+    wm.windows.add(createTestWindow(27, 0, 26, 24))
+    wm.windows.add(createTestWindow(54, 0, 26, 24))
+    wm.activateWindow(0)
+    wm.activateWindow(2)
+
+    # A window can be dropped without going through closeWindow (the file tree
+    # pane does this), and the stale reference must not activate its successor.
+    wm.windows.delete(0)
+    wm.activeWindowIndex = 1
 
     wm.switchToPrevWindow()
 
     check wm.activeWindowIndex == 1
-    check wm.windows[0].active == false
-    check wm.windows[1].active == true
+
+suite "EditorWindowManager - Directional Window Movement":
+  proc createGridManager(): EditorWindowManager =
+    ## 2x2 grid: 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 12, active = true))
+    wm.windows.add(createTestWindow(41, 0, 39, 12))
+    wm.windows.add(createTestWindow(0, 13, 40, 11))
+    wm.windows.add(createTestWindow(41, 13, 39, 11))
+    wm.activeWindowIndex = 0
+    wm
+
+  test "moveToWindowDirection with single window does nothing":
+    let wm = createSingleWindowManager()
+
+    check not wm.moveToWindowDirection(wdRight)
+    check wm.activeWindowIndex == 0
+
+  test "moveToWindowDirection moves right and left":
+    let wm = createGridManager()
+
+    check wm.moveToWindowDirection(wdRight)
+    check wm.activeWindowIndex == 1
+    check wm.windows[1].active
+
+    check wm.moveToWindowDirection(wdLeft)
+    check wm.activeWindowIndex == 0
+    check wm.windows[0].active
+
+  test "moveToWindowDirection moves down and up":
+    let wm = createGridManager()
+
+    check wm.moveToWindowDirection(wdDown)
+    check wm.activeWindowIndex == 2
+
+    check wm.moveToWindowDirection(wdUp)
+    check wm.activeWindowIndex == 0
+
+  test "moveToWindowDirection stays when there is no window in the direction":
+    let wm = createGridManager()
+
+    check not wm.moveToWindowDirection(wdLeft)
+    check not wm.moveToWindowDirection(wdUp)
+    check wm.activeWindowIndex == 0
+
+  test "moveToWindowDirection keeps the column when moving vertically":
+    let wm = createGridManager()
+    wm.activateWindow(1)
+
+    check wm.moveToWindowDirection(wdDown)
+    check wm.activeWindowIndex == 3
+
+  test "moveToWindowDirection picks the neighbour holding the cursor row":
+    # Full-height window on the left, two stacked windows on the right.
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 24, active = true))
+    wm.windows.add(createTestWindow(41, 0, 39, 16))
+    wm.windows.add(createTestWindow(41, 17, 39, 7))
+    wm.activeWindowIndex = 0
+    wm.windows[0].screenCursor = CursorPosition(x: 0, y: 20)
+
+    check wm.moveToWindowDirection(wdRight)
+    check wm.activeWindowIndex == 2
+
+  test "moveToWindowDirection falls back to the largest overlap without a cursor row":
+    # Cursor row 12 sits in no right window's rows (they start at 14).
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 24, active = true))
+    wm.windows.add(createTestWindow(41, 14, 39, 4))
+    wm.windows.add(createTestWindow(41, 19, 39, 5))
+    wm.activeWindowIndex = 0
+    wm.windows[0].screenCursor = CursorPosition(x: 0, y: 12)
+
+    check wm.moveToWindowDirection(wdRight)
+    check wm.activeWindowIndex == 2
+
+  test "moveToWindowDirection stays when the candidate shares no rows":
+    # Top-right and bottom-left windows only touch diagonally.
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(41, 0, 39, 12, active = true))
+    wm.windows.add(createTestWindow(0, 13, 40, 11))
+    wm.activeWindowIndex = 0
+
+    check not wm.moveToWindowDirection(wdLeft)
+    check wm.activeWindowIndex == 0
+
+  test "moveToWindowDirection picks the nearest window in the direction":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 20, 24))
+    wm.windows.add(createTestWindow(21, 0, 20, 24))
+    wm.windows.add(createTestWindow(42, 0, 20, 24, active = true))
+    wm.activeWindowIndex = 2
+
+    check wm.moveToWindowDirection(wdLeft)
+    check wm.activeWindowIndex == 1
+
+suite "EditorWindowManager - maximizeWindowHeight":
+  proc createColumnManager(): EditorWindowManager =
+    ## Three windows stacked in one column, single status line layout
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 80, 7, active = true))
+    wm.windows.add(createTestWindow(0, 8, 80, 7))
+    wm.windows.add(createTestWindow(0, 16, 80, 8))
+    wm.activeWindowIndex = 0
+    wm
+
+  test "maximizeWindowHeight with single window does nothing":
+    let wm = createSingleWindowManager()
+
+    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+
+    check wm.windows[0].viewport.height == 24
+
+  test "maximizeWindowHeight grows the active window and shrinks the others":
+    let wm = createColumnManager()
+    let bottomEdge = wm.windows[^1].viewport.y + wm.windows[^1].viewport.height
+
+    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+
+    # Non-active windows keep only their minimum (one content row plus the
+    # status line / command line the bottom window carries).
+    check wm.windows[1].viewport.height == 1
+    check wm.windows[2].viewport.height ==
+      1 + StatusLineHeight + steadyBottomAreaHeight()
+    check wm.windows[0].viewport.height > 7
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[^1].viewport.y + wm.windows[^1].viewport.height == bottomEdge
+    checkNoOverlappingWindows(wm)
+
+  test "maximizeWindowHeight keeps a content row under the tab line":
+    let wm = createColumnManager()
+
+    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = true)
+
+    check wm.windows[1].viewport.height == 1 + TabLineHeight
+    check wm.windows[2].viewport.height ==
+      1 + TabLineHeight + StatusLineHeight + steadyBottomAreaHeight()
+    checkNoOverlappingWindows(wm)
+
+  test "maximizeWindowHeight works for the bottom window":
+    let wm = createColumnManager()
+    wm.activateWindow(2)
+    let bottomEdge = wm.windows[^1].viewport.y + wm.windows[^1].viewport.height
+
+    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+
+    check wm.windows[0].viewport.height == 1
+    check wm.windows[1].viewport.height == 1
+    check wm.windows[2].viewport.height > 8
+    check wm.windows[^1].viewport.y + wm.windows[^1].viewport.height == bottomEdge
+    checkNoOverlappingWindows(wm)
+
+  test "maximizeWindowHeight does not reserve bottom chrome above the screen bottom":
+    # Left column stops well above the bottom; the full height right window
+    # is the only one carrying the status and command line area.
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 7, active = true))
+    wm.windows.add(createTestWindow(0, 8, 40, 7))
+    wm.windows.add(createTestWindow(41, 0, 39, 24))
+    wm.activeWindowIndex = 0
+    let bottomEdge = wm.windows[1].viewport.y + wm.windows[1].viewport.height
+
+    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+
+    check wm.windows[1].viewport.height == 1
+    check wm.windows[0].viewport.height == bottomEdge - 1 - WindowSeparatorHeight
+    check wm.windows[1].viewport.y + wm.windows[1].viewport.height == bottomEdge
+    checkNoOverlappingWindows(wm)
+
+  test "maximizeWindowHeight reserves no status line when it is hidden":
+    let wm = createColumnManager()
+
+    wm.maximizeWindowHeight(
+      multiStatusLine = true, showTabLine = false, showStatusLine = false
+    )
+
+    check wm.windows[1].viewport.height == 1
+    check wm.windows[2].viewport.height == 1 + steadyBottomAreaHeight()
+    checkNoOverlappingWindows(wm)
+
+  test "maximizeWindowHeight ignores windows outside the vertical group":
+    # Side by side windows have no vertical group to redistribute.
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 40, 24, active = true))
+    wm.windows.add(createTestWindow(41, 0, 39, 24))
+    wm.activeWindowIndex = 0
+
+    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+
+    check wm.windows[0].viewport.height == 24
+    check wm.windows[1].viewport.height == 24
 
 suite "EditorWindowManager - closeWindow":
   test "closeWindow returns true for last window":
@@ -1805,6 +2039,44 @@ suite "EditorWindowManager - Window Resize":
     check wm.windows[0].viewport.width <= 40
     check wm.windows[1].viewport.width >= 39
     check wm.windows[1].viewport.width <= 40
+
+  test "equalizeAllWindows restores a 2x2 grid after maximizeWindowHeight":
+    proc grid(): EditorWindowManager =
+      result = newEditorWindowManager()
+      result.windows.add(createTestWindow(0, 0, 39, 12, active = true))
+      result.windows.add(createTestWindow(40, 0, 40, 12))
+      result.windows.add(createTestWindow(0, 13, 39, 11))
+      result.windows.add(createTestWindow(40, 13, 40, 11))
+      result.activeWindowIndex = 0
+
+    let baseline = grid()
+    baseline.equalizeAllWindows(multiStatusLine = false)
+
+    let wm = grid()
+    wm.maximizeWindowHeight(multiStatusLine = false, showTabLine = false)
+    wm.equalizeAllWindows(multiStatusLine = false)
+
+    for i in 0 ..< wm.windows.len:
+      check wm.windows[i].viewport == baseline.windows[i].viewport
+
+  test "increaseWindowWidth updates fixedWidth so relayout keeps the new width":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 20, 24, active = false))
+    wm.windows.add(createTestWindow(21, 0, 59, 24, active = true))
+    wm.windows[0].fixedWidth = some(20)
+    wm.activeWindowIndex = 0
+    wm.windows[0].active = true
+    wm.windows[1].active = false
+
+    wm.increaseWindowWidth(5)
+
+    check wm.windows[0].viewport.width == 25
+    check wm.windows[0].fixedWidth == some(25)
+
+    wm.decreaseWindowWidth(3)
+
+    check wm.windows[0].viewport.width == 22
+    check wm.windows[0].fixedWidth == some(22)
 
 suite "EditorWindowManager - Only Window":
   test "onlyWindow with single window does nothing":

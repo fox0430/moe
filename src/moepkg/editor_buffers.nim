@@ -699,6 +699,7 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
   )
 
   let ftIndex = e.windowManager.activeWindowIndex
+  e.windowManager.previousWindow = e.windowManager.windows[ftIndex]
   e.windowManager.windows.insert(newWindow, ftIndex + 1)
   e.windowManager.activeWindowIndex = ftIndex + 1
 
