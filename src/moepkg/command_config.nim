@@ -63,7 +63,10 @@ const CommandNameTable*: Table[string, CommandLineAction] = block:
 # there so the original handler keeps its real `commandId`.
 #
 # An `isTomlOnly` spec has no runnable `:<name>`, so it dispatches the short
-# form of the same action instead (`quit` -> `:q`).
+# form of the same action instead (`save` -> `:w`). An action can have
+# several runnable names (`:bn`, `:bnext`), so the counterpart is picked by
+# preferring the ones declaring the same `keymapBaseDescription` and then
+# taking the shortest (first wins on a tie).
 const keyMappableCommandModeAliases*: seq[KeyMappableCommandAlias] = block:
   var s: seq[KeyMappableCommandAlias]
   for spec in CommandLineCommandTable:
@@ -71,14 +74,21 @@ const keyMappableCommandModeAliases*: seq[KeyMappableCommandAlias] = block:
       continue
     var cmdlineName = spec.name
     if spec.isTomlOnly:
-      var runnable: seq[string]
+      var
+        runnable: seq[string]
+        sameDescription: seq[string]
       for other in CommandLineCommandTable:
         if other.action.isSome and not other.isTomlOnly and other.action == spec.action:
           runnable.add other.name
-      doAssert runnable.len == 1,
-        "keymap alias " & spec.name &
-          " needs exactly one runnable command-line name, got " & $runnable
-      cmdlineName = runnable[0]
+          if other.keymapBaseDescription == spec.keymapBaseDescription:
+            sameDescription.add other.name
+      let candidates = if sameDescription.len > 0: sameDescription else: runnable
+      doAssert candidates.len > 0,
+        "keymap alias " & spec.name & " has no runnable command-line name"
+      cmdlineName = candidates[0]
+      for name in candidates:
+        if name.len < cmdlineName.len:
+          cmdlineName = name
     s.add(
       (spec.name, cmdlineName, spec.keymapBaseDescription & " (:" & cmdlineName & ")")
     )

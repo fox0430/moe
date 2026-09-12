@@ -49,6 +49,26 @@ suite "CommandLineCommandTable invariants":
     for action in seen.keys:
       check action in canonical
 
+  test "every action-bearing spec is reachable from some consumer":
+    ## An `isTomlOnly` spec that isn't `isCanonicalLong` falls through both
+    ## `loadDefaultConfig` and `CommandNameTable`, so the command silently
+    ## does not exist. Checked against the real consumers rather than the
+    ## flags so it keeps holding if the derivation rules change.
+    let config = newCommandConfig()
+    config.loadDefaultConfig()
+    var unreachable: seq[string] = @[]
+    for spec in CommandLineCommandTable:
+      if spec.action.isNone:
+        continue
+      if spec.name notin config.aliases and spec.name notin CommandNameTable:
+        unreachable.add spec.name
+    if unreachable.len > 0:
+      echo "These specs carry an action but can't be invoked as `:name`"
+      echo "and can't be used as a TOML [CommandAliases] target:"
+      for n in unreachable:
+        echo "  - ", n
+    check unreachable.len == 0
+
   test "every keymap alias dispatches a runnable command name":
     let config = newCommandConfig()
     config.loadDefaultConfig()

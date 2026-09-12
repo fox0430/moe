@@ -65,8 +65,8 @@ const
   CommandModeTailNames = @[
     "build", "lspfold", "lspformat", "log", "lsplog", "lsprestart",
     "lspcallhierarchyincoming", "lspcallhierarchyoutgoing", "help", "putconfigfile",
-    "moerc", "quickrun", "recent", "backup", "config", "debug", "filetree", "jump",
-    "terminal", "changes", "bookmarks", "conflictnext", "conflictprev",
+    "moerc", "quickrun", "recent", "backup", "config", "debug", "filer", "filetree",
+    "jump", "terminal", "changes", "bookmarks", "conflictnext", "conflictprev",
   ]
 
   RuntimeKeyMapNames = @[

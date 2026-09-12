@@ -797,6 +797,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `backup` | Open backup file manager |
 | `config` | Open configuration mode |
 | `debug` | Open debug mode |
+| `filer` | Open file explorer |
+| `filer path` | Open file explorer at specified path (a file opens its parent directory) |
 | `filetree` | Toggle FileTree sidebar |
 | `filetree path` | Toggle FileTree sidebar with specified root path |
 | `jump` | Open Jump list viewer |

@@ -76,11 +76,11 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## - Pattern only (e.g. ":%s/foo"): jump cursor to first match (incsearch-like)
   ## - Pattern + replacement (e.g. ":%s/foo/bar"): also preview the replacement
   ##   in the buffer when config.highlight.replaceText is enabled.
-  if e.state.input.commandText.contains("s/"):
-    let pattern = extractSubstitutePattern(e.state.input.commandText)
-    let (replacement, hasReplacement) =
-      extractSubstituteReplacement(e.state.input.commandText)
-    let flags = extractSubstituteFlags(e.state.input.commandText)
+  let commandText = normalizeSubstituteLongForm(e.state.input.commandText)
+  if commandText.contains("s/"):
+    let pattern = extractSubstitutePattern(commandText)
+    let (replacement, hasReplacement) = extractSubstituteReplacement(commandText)
+    let flags = extractSubstituteFlags(commandText)
     let isGlobal = "g" in flags
     if pattern.len > 0:
       if not e.state.ui.substitutePreview.isActive:

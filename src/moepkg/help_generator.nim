@@ -883,7 +883,7 @@ proc renderCommandModeHead*(): string {.compileTime.} =
     helpEntriesFor("ls") & helpEntriesFor("bprev") & helpEntriesFor("bnext") &
       helpEntriesFor("bfirst") & helpEntriesFor("blast") & helpEntriesFor("bd") &
       helpEntriesFor("vs") & helpEntriesFor("sp") & helpEntriesFor("only") &
-      helpEntriesFor("filetree"),
+      helpEntriesFor("filetree") & helpEntriesFor("filer"),
     helpEntriesFor("theme") & helpEntriesFor("noh") & helpEntriesFor("stripwhitespace"),
   ]
   for i, entries in groups:

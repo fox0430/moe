@@ -2483,3 +2483,31 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     check result.kind == hrStripWhitespace
     check buffer.getLine(1) == "bbb"
     check buffer.foldState.getFoldAt(1).get.collapsed == true
+
+suite "CommandModeHandler - runnable long command forms":
+  test "Vim long forms reach their action":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    check handler.handleCommandModeInput(buffer, ":quit").kind ==
+      handler.handleCommandModeInput(buffer, ":q").kind
+    check handler.handleCommandModeInput(buffer, ":quitall").kind ==
+      handler.handleCommandModeInput(buffer, ":qa").kind
+    check handler.handleCommandModeInput(buffer, ":enew").kind == hrEnew
+    check handler.handleCommandModeInput(buffer, ":vsplit").kind == hrVSplit
+    check handler.handleCommandModeInput(buffer, ":hsplit").kind == hrHSplit
+
+  test "edit takes a file path":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":edit test.nim")
+    check result.kind == hrEdit
+    check result.editFilename.get.endsWith("test.nim")
+
+  test "substitute long form is rewritten to :s":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["foo"])
+
+    let result = handler.handleCommandModeInput(buffer, ":substitute/foo/bar/")
+    check result.kind == hrSubstitute

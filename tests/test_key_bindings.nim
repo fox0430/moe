@@ -827,15 +827,13 @@ suite "KeyBindingRegistry - setupDefaultBindings":
     # exec.cmdline.* bridge.
     let freshAliases = @[
       "bn", "bnext", "bp", "bprev", "bprevious", "bf", "bfirst", "bl", "blast", "bd",
-      "bdelete", "q", "qa", "w", "wa", "wq", "wqa",
+      "bdelete", "q", "qa", "quit", "quitall", "w", "wa", "wq", "wqa",
     ]
     for alias in freshAliases:
       check registry.commandRegistry[alias].commandId == "exec.cmdline." & alias
 
     # TOML-only long forms have no runnable `:<name>`, so they dispatch the
     # short form of the same action.
-    check registry.commandRegistry["quit"].commandId == "exec.cmdline.q"
-    check registry.commandRegistry["quitall"].commandId == "exec.cmdline.qa"
     check registry.commandRegistry["saveall"].commandId == "exec.cmdline.wa"
 
     # "save" predates the alias loop and keeps its original commandId.

@@ -47,6 +47,31 @@ proc processEscapeSequences*(s: string): string =
       result.add(s[i])
       i += 1
 
+const
+  SubstituteAddressChars* = {'.', '0' .. '9'}
+    ## Characters forming a single address atom in a substitute range.
+  SubstituteRangeChars* = SubstituteAddressChars + {'%', ','}
+    ## Characters allowed in the whole range prefix preceding `s/`.
+
+proc normalizeSubstituteLongForm*(commandText: string): string =
+  ## Rewrite the `:substitute/...` long form, or any unambiguous prefix of it
+  ## (`:su/`, `:subs/`, ...), to `:s/...`, with or without the leading `:`,
+  ## so the existing `s/` paths handle both.
+  const Long = "substitute"
+  let prefixStart = if commandText.len > 0 and commandText[0] == ':': 1 else: 0
+  var nameStart = prefixStart
+  while nameStart < commandText.len and commandText[nameStart] in SubstituteRangeChars:
+    nameStart.inc
+  var nameEnd = nameStart
+  while nameEnd < commandText.len and commandText[nameEnd] in {'a' .. 'z'}:
+    nameEnd.inc
+  let name = commandText[nameStart ..< nameEnd]
+  if name.len < 2 or name.len > Long.len or not Long.startsWith(name):
+    return commandText
+  if nameEnd >= commandText.len or commandText[nameEnd] != '/':
+    return commandText
+  commandText[0 ..< nameStart] & "s" & commandText[nameEnd ..^ 1]
+
 type SubstituteParseResult* = object ## Result of parsing a substitute command
   isValid*: bool # Whether this is a valid substitute command
   isGlobal*: bool # Whether the % prefix is present (all lines)
@@ -72,12 +97,14 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
   if commandText.len < 2:
     return
 
+  let normalized = normalizeSubstituteLongForm(commandText)
+
   # Remove leading ":"
   let cmd =
-    if commandText[0] == ':':
-      commandText[1 ..^ 1]
+    if normalized[0] == ':':
+      normalized[1 ..^ 1]
     else:
-      commandText
+      normalized
 
   # Check for substitute command patterns
   var startIdx = 0
@@ -107,7 +134,7 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
       elif c == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
         # Single line range (e.g., "5s/...")
         break
-      elif c in {'0' .. '9', '.'}:
+      elif c in SubstituteAddressChars:
         startStr.add(c)
         rangeEnd.inc
       else:
@@ -136,7 +163,7 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
         let c = cmd[rangeEnd]
         if c == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
           break
-        elif c in {'0' .. '9', '.'}:
+        elif c in SubstituteAddressChars:
           endStr.add(c)
           rangeEnd.inc
         else:
