@@ -141,6 +141,7 @@ proc processCodeLensResponse(
       itemsByLine: itemsByLine,
       contentVersion: activeBuffer.contentVersion,
       filePath: filePath,
+      bufferId: activeBuffer.id,
       isValid: true,
     )
     # Note: the debounce timer is advanced at request initiation in
@@ -246,7 +247,8 @@ proc getCodeLensItemsForCurrentLine*(e: Editor): seq[CodeLensItem] =
   ## file's lenses could surface on the new buffer. Mirrors the filePath gate in
   ## buildVirtualTextProviders.
   let cache = e.state.lspCache.codeLensCache
-  if not cache.isValid or some(cache.filePath) != e.activeBuffer().filePath:
+  if not cache.isValid or cache.bufferId != e.activeBuffer().id or
+      some(cache.filePath) != e.activeBuffer().filePath:
     return @[]
   e.state.lspCache.getCodeLensItemsForLine(e.cursor.line)
 
@@ -331,19 +333,32 @@ proc executeCodeLensItem*(
   except Exception as err:
     return err("Failed to execute CodeLens: " & err.msg)
 
-proc invalidateCodeLensCache*(lsp: LspIntegration, cache: var LspCacheState) =
+template belongsToScope(cacheBufferId: BufferId, scope: Option[BufferId]): bool =
+  ## Whether a cache built from `cacheBufferId` is covered by `scope`. An
+  ## unscoped invalidation covers every cache; a scoped one only the buffer it
+  ## names.
+  scope.isNone or cacheBufferId == scope.get
+
+proc invalidateCodeLensCache*(
+    lsp: LspIntegration, cache: var LspCacheState, scope = none(BufferId)
+) =
   ## Invalidate the CodeLens cache (call when buffer changes significantly).
   ## Also cancels any in-flight request so a late response cannot revive the
-  ## cache after the invalidation.
-  cache.codeLensCache.isValid = false
-  cancelPendingRequest(lsp, cache, lrfCodeLens)
+  ## cache after the invalidation. `scope` limits both to one buffer.
+  if cache.codeLensCache.bufferId.belongsToScope(scope):
+    cache.codeLensCache.isValid = false
+  cancelPendingRequest(lsp, cache, lrfCodeLens, scope)
 
 # Document Highlight support
-proc invalidateDocumentHighlightCache*(lsp: LspIntegration, cache: var LspCacheState) =
+proc invalidateDocumentHighlightCache*(
+    lsp: LspIntegration, cache: var LspCacheState, scope = none(BufferId)
+) =
   ## Invalidate the Document Highlight cache and cancel any in-flight request.
-  cache.documentHighlightCache.isValid = false
-  cache.documentHighlightCache.itemsByLine.clear()
-  cancelPendingRequest(lsp, cache, lrfDocumentHighlight)
+  ## `scope` limits both to one buffer.
+  if cache.documentHighlightCache.bufferId.belongsToScope(scope):
+    cache.documentHighlightCache.isValid = false
+    cache.documentHighlightCache.itemsByLine.clear()
+  cancelPendingRequest(lsp, cache, lrfDocumentHighlight, scope)
 
 proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlight]) =
   ## Internal: Process document highlights from LSP response.
@@ -414,6 +429,7 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
 
   e.state.lspCache.documentHighlightCache = DocumentHighlightCache(
     itemsByLine: itemsByLine,
+    bufferId: activeBuffer.id,
     cursorLine: e.cursor.line,
     cursorColumn: e.cursor.column,
     contentVersion: activeBuffer.contentVersion,
@@ -516,14 +532,21 @@ proc resetPendingSemanticTokens(cache: var LspCacheState) =
     viewportBottomLine: -1,
   )
 
-proc invalidateSemanticTokensCache*(lsp: LspIntegration, cache: var LspCacheState) =
-  ## Invalidate the semantic tokens cache, forcing re-request on next update
-  cache.semanticTokensCache = SemanticTokensCache(isValid: false)
-  cancelPendingRequest(lsp, cache, lrfSemanticTokens)
-  resetPendingSemanticTokens(cache)
-  # Explicit invalidation (buffer switch, register-capability etc.) is a fresh
-  # start; drop the backoff so the next request fires at the normal cadence.
-  cache.semanticTokensPoll.rejectStreak = 0
+proc invalidateSemanticTokensCache*(
+    lsp: LspIntegration, cache: var LspCacheState, scope = none(BufferId)
+) =
+  ## Invalidate the semantic tokens cache, forcing re-request on next update.
+  ## `scope` limits it to one buffer.
+  if cache.semanticTokensCache.bufferId.belongsToScope(scope):
+    cache.semanticTokensCache = SemanticTokensCache(isValid: false)
+    # Explicit invalidation (buffer switch, register-capability etc.) is a fresh
+    # start; drop the backoff so the next request fires at the normal cadence.
+    cache.semanticTokensPoll.rejectStreak = 0
+  # The extras describe the cancelled request, so they go with it.
+  let dropsExtras = cache.pendingMatchesScope(lrfSemanticTokens, scope)
+  cancelPendingRequest(lsp, cache, lrfSemanticTokens, scope)
+  if dropsExtras:
+    resetPendingSemanticTokens(cache)
 
 proc processSemanticTokensResponse(e: Editor, resp: JsonNode, ctx: LspRequestContext) =
   ## Build the semantic overlay from a `textDocument/semanticTokens` response
@@ -621,6 +644,7 @@ proc processSemanticTokensResponse(e: Editor, resp: JsonNode, ctx: LspRequestCon
   e.state.lspCache.semanticTokensCache = SemanticTokensCache(
     changeSeq: currentChangeSeq,
     filePath: activeBuffer.filePath.get(""),
+    bufferId: activeBuffer.id,
     isValid: true,
     topLine: extras.viewportTopLine,
     bottomLine: extras.viewportBottomLine,
@@ -775,21 +799,34 @@ proc hasInlayHintSupport*(e: Editor): bool =
     return false
   e.lsp.hasInlayHintSupport(e.activeBuffer())
 
-proc invalidateInlayHintCache*(lsp: LspIntegration, cache: var LspCacheState) =
-  ## Invalidate the inlay hint cache and cancel any in-flight request
-  cache.inlayHintCache = InlayHintCache(isValid: false)
-  cancelPendingRequest(lsp, cache, lrfInlayHint)
+proc invalidateInlayHintCache*(
+    lsp: LspIntegration, cache: var LspCacheState, scope = none(BufferId)
+) =
+  ## Invalidate the inlay hint cache and cancel any in-flight request.
+  ## `scope` limits both to one buffer.
+  if cache.inlayHintCache.bufferId.belongsToScope(scope):
+    cache.inlayHintCache = InlayHintCache(isValid: false)
+  cancelPendingRequest(lsp, cache, lrfInlayHint, scope)
+
+proc invalidateLspCaches(e: Editor, scope: Option[BufferId]) =
+  invalidateSemanticTokensCache(e.lsp, e.state.lspCache, scope)
+  invalidateInlayHintCache(e.lsp, e.state.lspCache, scope)
+  invalidateDocumentHighlightCache(e.lsp, e.state.lspCache, scope)
+  invalidateCodeLensCache(e.lsp, e.state.lspCache, scope)
 
 proc invalidateAllLspCaches*(e: Editor) =
   ## Drop the persistent overlay caches (SemanticTokens, InlayHint,
-  ## DocumentHighlight, CodeLens) and cancel their in-flight requests. Use after
-  ## buffer identity changes (loadFile, reload, LSP restart) so a pre-swap
-  ## response cannot paint stale coords onto the fresh buffer. Other features
-  ## have no such overlay and are guarded by `classifyResponse`.
-  invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
-  invalidateInlayHintCache(e.lsp, e.state.lspCache)
-  invalidateDocumentHighlightCache(e.lsp, e.state.lspCache)
-  invalidateCodeLensCache(e.lsp, e.state.lspCache)
+  ## DocumentHighlight, CodeLens) and cancel their in-flight requests, whichever
+  ## buffer they belong to. For events that invalidate every buffer's overlay at
+  ## once, such as an LSP restart. Other features have no such overlay and are
+  ## guarded by `classifyResponse`.
+  e.invalidateLspCaches(none(BufferId))
+
+proc invalidateLspCachesForBuffer*(e: Editor, buf: TextBuffer) =
+  ## Drop the overlay caches built from `buf` and cancel only the requests sent
+  ## against it, so reloading a background split leaves the active buffer's
+  ## highlighting and hints in place.
+  e.invalidateLspCaches(some(buf.id))
 
 proc processInlayHintResponse(e: Editor, hints: seq[InlayHint]) =
   ## Internal: convert an inlay hint response into the cached, per-line format.
@@ -837,6 +874,7 @@ proc processInlayHintResponse(e: Editor, hints: seq[InlayHint]) =
     itemsByLine: itemsByLine,
     changeSeq: activeBuffer.changeSeq,
     filePath: activeBuffer.filePath.get,
+    bufferId: activeBuffer.id,
     topLine: e.viewport.topLine,
     bottomLine: e.viewport.topLine + e.viewport.height,
     isValid: true,
@@ -938,7 +976,8 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
     # runs) it can still hold the previous file's hints. Gate on the owning
     # file once per frame instead of per line.
     let cache = e.state.lspCache.inlayHintCache
-    if cache.isValid and some(cache.filePath) == e.activeBuffer().filePath:
+    if cache.isValid and cache.bufferId == e.activeBuffer().id and
+        some(cache.filePath) == e.activeBuffer().filePath:
       result.add e.inlayHintVirtualTextProvider()
 
   if e.showCodeLens:
@@ -946,7 +985,8 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
     # a buffer switch it can still hold the previous file's lenses. Gate on the
     # owning file once per frame instead of per line.
     let cache = e.state.lspCache.codeLensCache
-    if cache.isValid and some(cache.filePath) == e.activeBuffer().filePath:
+    if cache.isValid and cache.bufferId == e.activeBuffer().id and
+        some(cache.filePath) == e.activeBuffer().filePath:
       result.add e.codeLensVirtualTextProvider()
 
 proc showCodeLensPicker*(e: Editor, items: seq[CodeLensItem]) =

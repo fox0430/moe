@@ -950,9 +950,16 @@ proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
 
 proc clampPosition*(
-    mgr: CursorManager, pos: CursorPosition, buf: core.TextBuffer
+    mgr: CursorManager,
+    pos: CursorPosition,
+    buf: core.TextBuffer,
+    mode = none(EditorMode),
 ): CursorPosition =
-  ## Ensure cursor position is within valid bounds
+  ## Ensure cursor position is within valid bounds.
+  ##
+  ## `mode` decides whether the cursor may rest one past the last character,
+  ## and defaults to the active window's mode; pass it when clamping another
+  ## window, or its Insert cursor moves a column.
   result = pos
 
   # Clamp line - don't allow cursor beyond last actual line
@@ -980,7 +987,8 @@ proc clampPosition*(
     let lineCharLen = buf.getLine(result.y).charLen # character count, not bytes
     # Insert/Replace may rest one past the last character (end of line); other
     # modes keep the cursor on the last character.
-    let maxCol = maxCursorColumn(lineCharLen, mgr.state.mode)
+    let maxCol =
+      maxCursorColumn(lineCharLen, if mode.isSome: mode.get else: mgr.state.mode)
     if result.x > maxCol:
       result.x = maxCol
     elif result.x < 0:

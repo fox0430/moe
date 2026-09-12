@@ -166,13 +166,45 @@ proc registerSplitBuffer(
     e.initLoadedBuffer(newBuffer)
   logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
 
+proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
+proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
+
+proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Create, register and load the buffer a `:vsplit path` / `:split path` will
+  ## show, with the same per-buffer setup every opened file gets. Registered
+  ## before the load so it announces itself through the content-replacement
+  ## hook `addBuffer` installs. A failed load is unregistered again.
+  let buf = newTextBuffer()
+  # Inherit the highlight cap from the current buffer BEFORE loadFile builds
+  # the first chunk; otherwise the applyHighlightConfig below nils the
+  # progressive cache when the cap differs, forcing a full reparse on open
+  # (mirrors the :e seed-before-load).
+  buf.maxHighlightLineLength = e.activeBuffer.maxHighlightLineLength
+  e.addBuffer(buf)
+
+  let loadResult = buf.loadFile(path)
+  if loadResult.isErr:
+    e.unregisterBufferNoLsp(buf)
+    return err(loadResult.error)
+
+  applyHighlightConfig(buf, e.config)
+  applyEditorConfigToBuffer(buf, e.config)
+  e.initLoadedBuffer(buf)
+  ok(buf)
+
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
-  ## Create a vertical split window
+  ## Create a vertical split window, showing `filename` when one is given and
+  ## the current buffer otherwise.
+  if filename.isSome:
+    let loaded = e.loadSplitBuffer(filename.get)
+    if loaded.isErr:
+      return err(loaded.error)
+    return e.vsplitWithBuffer(loaded.get)
+
   # Save current window state before splitting
   e.saveActiveWindowState()
 
-  let bufferResult =
-    e.windowManager.vsplit(e.activeBuffer, e.viewport, e.cursor, filename)
+  let bufferResult = e.windowManager.vsplit(e.activeBuffer, e.viewport, e.cursor)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -225,13 +257,19 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   ok(())
 
 proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
-  ## Create a horizontal split window (top and bottom)
+  ## Create a horizontal split window (top and bottom), showing `filename` when
+  ## one is given and the current buffer otherwise.
+  if filename.isSome:
+    let loaded = e.loadSplitBuffer(filename.get)
+    if loaded.isErr:
+      return err(loaded.error)
+    return e.hsplitWithBuffer(loaded.get)
+
   # Save current window state before splitting
   e.saveActiveWindowState()
 
-  let bufferResult = e.windowManager.hsplit(
-    e.activeBuffer, e.viewport, e.cursor, e.multiStatusLine, filename
-  )
+  let bufferResult =
+    e.windowManager.hsplit(e.activeBuffer, e.viewport, e.cursor, e.multiStatusLine)
   if bufferResult.isErr:
     return err(bufferResult.error)
 

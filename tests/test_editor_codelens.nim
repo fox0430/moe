@@ -81,6 +81,7 @@ suite "CodeLens Cache":
     e.activeBuffer().filePath = some("/test/file.nim")
     e.state.lspCache.codeLensCache.isValid = true
     e.state.lspCache.codeLensCache.filePath = "/test/file.nim"
+    e.state.lspCache.codeLensCache.bufferId = e.activeBuffer.id
     e.state.lspCache.codeLensCache.itemsByLine =
       {3: @[CodeLensItem(line: 3, title: "Test Item", command: "test")]}.toTable
 
@@ -828,6 +829,7 @@ suite "CodeLens Virtual Text Provider":
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
       filePath: "/test/current.nim",
+      bufferId: e.activeBuffer.id,
       itemsByLine: {
         0: @[CodeLensItem(line: 0, column: 4, title: "5 refs", command: "refs")]
       }.toTable,
@@ -867,6 +869,7 @@ suite "CodeLens Virtual Text Provider":
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
       filePath: "/test/current.nim",
+      bufferId: e.activeBuffer.id,
       itemsByLine: {
         0: @[CodeLensItem(line: 0, column: 4, title: "5 refs", command: "refs")]
       }.toTable,
@@ -889,11 +892,13 @@ suite "CodeLens Virtual Text Provider":
     e.state.lspCache.inlayHintCache = InlayHintCache(
       isValid: true,
       filePath: "/test/current.nim",
+      bufferId: e.activeBuffer.id,
       itemsByLine: {0: @[InlayHintItem(line: 0, column: 2, label: ": int")]}.toTable,
     )
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
       filePath: "/test/current.nim",
+      bufferId: e.activeBuffer.id,
       itemsByLine: {
         0: @[CodeLensItem(line: 0, column: 0, title: "5 refs", command: "refs")]
       }.toTable,
@@ -966,6 +971,7 @@ suite "CodeLens Execution":
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
       filePath: "/test/file.nim",
+      bufferId: e.activeBuffer.id,
       itemsByLine: {0: @[runnableItem("Run test")]}.toTable,
     )
     e.cursor = BufferPosition(line: 0, column: 0)
@@ -983,6 +989,7 @@ suite "CodeLens Execution":
     e.state.lspCache.codeLensCache = CodeLensCache(
       isValid: true,
       filePath: "/test/file.nim",
+      bufferId: e.activeBuffer.id,
       itemsByLine: {0: @[runnableItem("Run"), runnableItem("Debug")]}.toTable,
     )
     e.cursor = BufferPosition(line: 0, column: 0)

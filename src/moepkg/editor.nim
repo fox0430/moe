@@ -306,6 +306,10 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         initTable[string, seq[int]](),
   )
 
+  # Subscribe before the first buffer is registered; `addBuffer` installs the
+  # hook on each buffer as it joins.
+  result.onBufferContentReplaced = invalidateForReplacedContent
+
   # Add initial buffer to buffer list
   result.addBuffer(initialBuffer)
   logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)

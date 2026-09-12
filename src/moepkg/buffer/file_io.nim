@@ -23,7 +23,7 @@
 ## progressive syntax-highlight initialization for the first chunk of
 ## the file.
 
-import std/[options, os, strutils, times]
+import std/[hashes, options, os, strutils, times]
 
 import pkg/results
 
@@ -133,34 +133,84 @@ proc decodeFileContent(content: string): DecodedFileContent =
       result.encoding = CharacterEncoding.unknown
       result.hasBom = false
 
+type FileStamp* = object
+  ## The on-disk identity of a file at one instant. A value, so a load can
+  ## stamp the file as it was *before* it read the bytes.
+  modTime*: Option[Time]
+  size*: Option[int64]
+
 proc loadFileWithContent*(
-  b: TextBuffer, path: string, content: string, fileSize: int64 = -1
+  b: TextBuffer,
+  path: string,
+  content: string,
+  fileSize: int64 = -1,
+  stamp: Option[FileStamp] = none(FileStamp),
 ): Result[(), string]
+
+proc captureFileStamp*(path: string): FileStamp =
+  ## Read the on-disk identity of `path` now. Both halves come from one stat.
+  ## An unreadable or missing file yields an empty stamp.
+  if fileExists(path):
+    try:
+      let info = getFileInfo(path)
+      return FileStamp(modTime: some(info.lastWriteTime), size: some(info.size.int64))
+    except OSError:
+      discard
+  FileStamp()
+
+proc applyFileStamp*(b: TextBuffer, stamp: FileStamp) =
+  ## Adopt `stamp` as the baseline every later external-change check compares
+  ## against.
+  b.lastFileModTime = stamp.modTime
+  b.lastFileSize = stamp.size
+  b.externalModWarned = false
+  b.reloadDeferred = false
+
+proc noteFileStamp*(b: TextBuffer, path: string) =
+  ## Baseline `b` against the file as it is right now. Only correct when
+  ## nothing has been read from the file since; a load stamps before it reads,
+  ## or a write landing in between would go undetected for good.
+  b.applyFileStamp(captureFileStamp(path))
+
+proc fingerprint*(content: string): ContentFingerprint =
+  ContentFingerprint(size: content.len, hash: hash(content))
 
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   var content: string
-  var fileSize: int64 = 0
+
+  # Stamp before reading, so a write landing between the stat and the read is
+  # seen as a change on the next check instead of being hidden for good.
+  var stamp = captureFileStamp(path)
 
   # Check if file exists; if not, start with empty content
   if fileExists(path):
     # File exists, read its content
     try:
-      fileSize = getFileSize(path)
       content = readFile(path)
     except IOError as e:
       logError("buffer", "Failed to read file " & path & ": " & e.msg)
       return Result[(), string].err e.msg
+    if stamp.modTime.isNone:
+      # The file appeared between the stat and the read. An empty stamp would
+      # disable external-change detection for the buffer's life.
+      stamp = captureFileStamp(path)
   else:
     # File doesn't exist, start with empty content
     logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
-  return b.loadFileWithContent(path, content, fileSize)
+  return b.loadFileWithContent(path, content, content.len.int64, some(stamp))
 
 proc loadFileWithContent*(
-    b: TextBuffer, path: string, content: string, fileSize: int64 = -1
+    b: TextBuffer,
+    path: string,
+    content: string,
+    fileSize: int64 = -1,
+    stamp: Option[FileStamp] = none(FileStamp),
 ): Result[(), string] =
-  ## Init buffer from pre-read content.
+  ## Init buffer from pre-read content. `stamp` is the file's identity from
+  ## before `content` was read; without one the buffer is stamped against the
+  ## file as it is now.
   let effFileSize = if fileSize >= 0: fileSize else: content.len.int64
 
   var decoded = decodeFileContent(content)
@@ -196,14 +246,11 @@ proc loadFileWithContent*(
 
   b.filePath = some(path)
 
-  if fileExists(path):
-    try:
-      b.lastFileModTime = some(getFileInfo(path).lastWriteTime)
-    except OSError:
-      b.lastFileModTime = none(Time)
+  if stamp.isSome:
+    b.applyFileStamp(stamp.get)
   else:
-    b.lastFileModTime = none(Time)
-  b.externalModWarned = false
+    b.noteFileStamp(path)
+  b.lastLoadedContent = some(fingerprint(content))
 
   b.changeSeq = 0
   b.savedSeq = 0
@@ -287,6 +334,9 @@ proc loadFileWithContent*(
 
   b.highlightNeedsUpdate = false
 
+  # Last, so a subscriber can clamp against a fully consistent buffer.
+  b.emitContentReplaced()
+
   return Result[(), string].ok ()
 
 proc getFileContent*(buffer: TextBuffer): string =
@@ -364,8 +414,12 @@ proc isExternallyModified*(b: TextBuffer): bool =
     return false
 
   try:
-    let currentModTime = getFileInfo(path).lastWriteTime
-    return currentModTime > b.lastFileModTime.get
+    let info = getFileInfo(path)
+    # `!=` rather than `>`: a backup restore, a checkout of an older revision
+    # or a clock step can move the mtime backwards.
+    if info.lastWriteTime != b.lastFileModTime.get:
+      return true
+    return b.lastFileSize.isSome and info.size.int64 != b.lastFileSize.get
   except OSError:
     return false
 
@@ -402,12 +456,9 @@ proc saveFile*(
     buffer.markSaved()
     buffer.filePath = some(path)
 
-    # Update file modification time after saving
-    try:
-      buffer.lastFileModTime = some(getFileInfo(path).lastWriteTime)
-    except OSError:
-      buffer.lastFileModTime = none(Time)
-    buffer.externalModWarned = false
+    buffer.noteFileStamp(path)
+    # The bytes on disk are exactly the ones just written.
+    buffer.lastLoadedContent = some(fingerprint(content))
 
   return Result[(), string].ok ()
 
@@ -419,3 +470,38 @@ proc reloadFile*(b: TextBuffer): Result[(), string] =
 
   let path = b.filePath.get
   b.loadFile(path)
+
+proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
+  ## Reload `b` from disk unless the bytes on disk are the ones it already
+  ## holds, reporting whether the contents were replaced. A reload drops the
+  ## undo history and re-opens the LSP document, so an external write that
+  ## changed nothing (`touch`, a no-op formatter) is not worth one.
+  ##
+  ## The comparison is against the bytes the buffer was built from, not the
+  ## buffer re-serialized: a load normalizes (mixed line endings, an
+  ## undecodable encoding), so re-serializing would report a spurious change.
+  if b.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = b.filePath.get
+  if not fileExists(path):
+    return err("File does not exist: " & path)
+
+  let stamp = captureFileStamp(path)
+
+  var content: string
+  try:
+    content = readFile(path)
+  except IOError as e:
+    logError("buffer", "Failed to read file " & path & ": " & e.msg)
+    return err(e.msg)
+
+  if b.lastLoadedContent.isSome and fingerprint(content) == b.lastLoadedContent.get:
+    # Same bytes: only the stat moved, so re-baseline and leave the buffer be.
+    b.applyFileStamp(stamp)
+    return ok(false)
+
+  let loaded = b.loadFileWithContent(path, content, content.len.int64, some(stamp))
+  if loaded.isErr:
+    return err(loaded.error)
+  ok(true)

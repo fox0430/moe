@@ -4069,6 +4069,7 @@ suite "End-of-line virtual text - cursor line highlight":
     e.state.lspCache.inlayHintCache = InlayHintCache(
       isValid: true,
       filePath: "/test/file.nim",
+      bufferId: e.activeBuffer().id,
       changeSeq: e.activeBuffer().changeSeq,
       itemsByLine:
         {0: @[InlayHintItem(line: 0, column: 3, label: ":int", kind: 1)]}.toTable,

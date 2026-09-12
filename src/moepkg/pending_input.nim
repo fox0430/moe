@@ -31,6 +31,18 @@ proc isActive*(pi: PendingInputState, registry: KeyBindingRegistry): bool =
     pi.pendingTextObject.isSome or pi.pendingRegister.isSome or
     pi.pendingCommand != PendingNone or registry.hasActiveSequence()
 
+proc cancelOperatorPending*(pi: var PendingInputState): bool {.discardable.} =
+  ## Drop the operator-pending gesture, along with the text object that is the
+  ## second half of it. Returns true iff something was cleared.
+  var cleared = false
+  if pi.pendingOperator.isSome:
+    pi.pendingOperator = none(PendingOperator)
+    cleared = true
+  if pi.pendingTextObject.isSome:
+    pi.pendingTextObject = none(PendingTextObject)
+    cleared = true
+  cleared
+
 proc cancelAll*(
     pi: var PendingInputState, registry: KeyBindingRegistry
 ): bool {.discardable.} =
@@ -42,11 +54,7 @@ proc cancelAll*(
     pi.macroState.commandType = ""
     pi.macroState.pendingCount = 0
     cleared = true
-  if pi.pendingOperator.isSome:
-    pi.pendingOperator = none(PendingOperator)
-    cleared = true
-  if pi.pendingTextObject.isSome:
-    pi.pendingTextObject = none(PendingTextObject)
+  if pi.cancelOperatorPending():
     cleared = true
   if pi.pendingRegister.isSome:
     pi.pendingRegister = none(char)

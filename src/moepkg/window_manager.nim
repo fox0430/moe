@@ -24,7 +24,7 @@ import std/[options, algorithm]
 import pkg/results
 
 import logger, modes, render_utils, types
-import buffer/[core, file_io]
+import buffer/core
 
 import types/window_manager_types
 export window_manager_types
@@ -924,28 +924,14 @@ proc vsplit*(
     currentBuffer: TextBuffer,
     currentViewport: ViewPort,
     cursorPosition: BufferPosition,
-    filename: Option[string] = none(string),
 ): Result[TextBuffer, string] =
-  ## Create a vertical split window (side by side)
-  ## Returns the new buffer that should be used
-
-  # Create new buffer for the split
-  let newBuffer =
-    if filename.isSome:
-      let buf = newTextBuffer()
-      # Inherit the highlight cap from the current buffer BEFORE loadFile builds
-      # the first chunk; otherwise the post-split applyHighlightConfig nils the
-      # progressive cache when the cap differs, forcing a full reparse on open
-      # (mirrors the :e seed-before-load).
-      buf.maxHighlightLineLength = currentBuffer.maxHighlightLineLength
-
-      let loadResult = buf.loadFile(filename.get)
-      if loadResult.isErr:
-        return err(loadResult.error)
-
-      buf
-    else:
-      currentBuffer
+  ## Create a vertical split window (side by side) showing the current buffer.
+  ## Returns the buffer the new window shows.
+  ##
+  ## Opening a *file* in a split goes through `vsplitWithBuffer` with a buffer
+  ## the editor has already created, registered and loaded; reading a file is
+  ## not the window manager's job.
+  let newBuffer = currentBuffer
 
   let
     # Save original viewport dimensions before modification (ViewPort is ref object)
@@ -1099,28 +1085,12 @@ proc hsplit*(
     currentViewport: ViewPort,
     cursorPosition: BufferPosition,
     multiStatusLine: bool,
-    filename: Option[string] = none(string),
 ): Result[TextBuffer, string] =
-  ## Create a horizontal split window (top and bottom)
-  ## Returns the new buffer that should be used
-
-  # Create new buffer for the split
-  let newBuffer =
-    if filename.isSome:
-      let buf = newTextBuffer()
-      # Inherit the highlight cap from the current buffer BEFORE loadFile builds
-      # the first chunk; otherwise the post-split applyHighlightConfig nils the
-      # progressive cache when the cap differs, forcing a full reparse on open
-      # (mirrors the :e seed-before-load).
-      buf.maxHighlightLineLength = currentBuffer.maxHighlightLineLength
-
-      let loadResult = buf.loadFile(filename.get)
-      if loadResult.isErr:
-        return err(loadResult.error)
-
-      buf
-    else:
-      currentBuffer
+  ## Create a horizontal split window (top and bottom) showing the current
+  ## buffer. Returns the buffer the new window shows.
+  ##
+  ## Opening a *file* in a split goes through `hsplitWithBuffer`; see `vsplit`.
+  let newBuffer = currentBuffer
 
   let
     # Save original viewport dimensions before modification (ViewPort is ref object)

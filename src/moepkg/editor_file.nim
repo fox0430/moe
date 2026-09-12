@@ -31,7 +31,6 @@ import
   backup,
   search_utils,
   editorconfig_helper,
-  editor_codelens,
   editor_mode,
   highlight,
   highlight_config,
@@ -109,10 +108,6 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   e.activeBuffer.refreshConflicts()
   e.state.timing.lastConflictScanSeq = e.activeBuffer.changeSeq
   e.state.timing.lastConflictScan = getMonoTime()
-
-  # `loadFile` clears `highlightNeedsUpdate`, so the frame-loop invalidation
-  # cascade would not fire; drop caches directly to avoid stale-coord overlays.
-  e.invalidateAllLspCaches()
 
   # LSP initialization - non-blocking, will start in background
   discard e.lsp.onBufferOpen(e.activeBuffer) # onBufferOpen reports its own failure

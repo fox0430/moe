@@ -613,9 +613,13 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   # Seed the highlight cap before loadFile builds the first chunk, so the cap
   # is not changed afterwards (which would nil the progressive-load cache).
   newBuffer.applyHighlightCap(e.config)
+  # Register before loading so the load announces itself through the hook
+  # `addBuffer` installs. A failed load is unregistered again.
+  e.addBuffer(newBuffer)
   if fileExists(path):
     let loadResult = newBuffer.loadFile(path)
     if loadResult.isErr:
+      e.unregisterBufferNoLsp(newBuffer)
       return err(loadResult.error)
   else:
     newBuffer.filePath = some(path)
@@ -623,7 +627,6 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
 
   applyEditorConfigToBuffer(newBuffer, e.config)
   applyHighlightConfig(newBuffer, e.config)
-  e.addBuffer(newBuffer)
 
   # Mirror loadFile's per-buffer initialisation (bookmarks, git diff, conflict
   # markers, LSP didOpen) so files reached via :e, the FileTree opener and

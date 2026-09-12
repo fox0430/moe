@@ -116,13 +116,16 @@ proc loadAndRegisterBuffer(e: Editor, path: string): Result[TextBuffer, string] 
   # Seed the highlight cap before loadFile builds the first chunk, so the cap
   # is not changed afterwards (which would nil the progressive-load cache).
   newBuffer.applyHighlightCap(e.config)
+  # Register before loading so the load announces itself through the hook
+  # `addBuffer` installs. A failed load is unregistered again.
+  e.addBuffer(newBuffer)
   let loadResult = newBuffer.loadFile(path)
   if loadResult.isErr:
+    e.unregisterBufferNoLsp(newBuffer)
     return err(loadResult.error)
 
   applyEditorConfigToBuffer(newBuffer, e.config)
   applyHighlightConfig(newBuffer, e.config)
-  e.addBuffer(newBuffer)
   # Doing this by hand used to leave a file reached by go-to-definition without
   # its bookmarks, gutter or conflict blocks.
   e.initLoadedBuffer(newBuffer)

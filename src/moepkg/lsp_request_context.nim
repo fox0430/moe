@@ -36,6 +36,29 @@ proc cancelPendingRequest*(
       lsp.cancelRequest(ctx.requestId)
     cache.pending.del(feature)
 
+proc pendingMatchesScope*(
+    cache: LspCacheState, feature: LspRequestFeature, scope: Option[BufferId]
+): bool =
+  ## Whether the request in flight for `feature` is covered by `scope`. An
+  ## unscoped check always is; a scoped one needs a pending request sent
+  ## against the buffer it names.
+  if scope.isNone:
+    return true
+  cache.pending.hasKey(feature) and cache.pending[feature].bufferId == scope.get
+
+proc cancelPendingRequest*(
+    lsp: LspIntegration,
+    cache: var LspCacheState,
+    feature: LspRequestFeature,
+    scope: Option[BufferId],
+) =
+  ## Buffer-scoped overload: cancel the pending request for `feature` only when
+  ## it was sent against the buffer `scope` names, since one for another buffer
+  ## is still wanted. `scope = none` cancels regardless.
+  if not cache.pendingMatchesScope(feature, scope):
+    return
+  cancelPendingRequest(lsp, cache, feature)
+
 proc cancelIfPending*(e: Editor, feature: LspRequestFeature) =
   cancelPendingRequest(e.lsp, e.state.lspCache, feature)
 
