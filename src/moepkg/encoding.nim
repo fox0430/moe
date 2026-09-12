@@ -158,18 +158,93 @@ const EncodingDetectionSampleSize* = 8 * 1024
   ## detection. 8 KB is enough to reliably detect BOM markers and encoding
   ## patterns while avoiding full-file scans on large files.
 
+proc utf8SequenceLen(s: string, i: int): int =
+  ## Length of the UTF-8 sequence starting at byte `i`, or 0 when the bytes
+  ## there are not one: a bad leading byte, a truncated or mis-continued
+  ## sequence, an overlong encoding, a surrogate, or a code point past
+  ## U+10FFFF.
+  let b = ord(s[i])
+  if b < 0x80:
+    return 1
+
+  var byteLen = 0
+  if (b and 0xE0) == 0xC0:
+    byteLen = 2
+  elif (b and 0xF0) == 0xE0:
+    byteLen = 3
+  elif (b and 0xF8) == 0xF0:
+    byteLen = 4
+  if byteLen == 0 or i + byteLen > s.len:
+    # Invalid leading byte or truncated sequence
+    return 0
+
+  var cp: uint32 =
+    case byteLen
+    of 2:
+      uint32(b and 0x1F)
+    of 3:
+      uint32(b and 0x0F)
+    else:
+      uint32(b and 0x07)
+  for j in 1 ..< byteLen:
+    let cb = ord(s[i + j])
+    if (cb and 0xC0) != 0x80:
+      return 0
+    cp = (cp shl 6) or uint32(cb and 0x3F)
+
+  # Reject overlong encodings, surrogates, and code points above U+10FFFF
+  if byteLen == 2 and cp < 0x80:
+    return 0
+  if byteLen == 3 and (cp < 0x800 or cp in 0xD800'u32 .. 0xDFFF'u32):
+    return 0
+  if byteLen == 4 and (cp < 0x10000'u32 or cp > 0x10FFFF'u32):
+    return 0
+  byteLen
+
+proc invalidUtf8At*(s: string): int =
+  ## Byte offset of the first invalid UTF-8 sequence, or -1 if `s` is valid
+  ## UTF-8. `s` must be a complete string: a sequence truncated by the end of
+  ## `s` is reported as invalid, so a caller splitting a stream into chunks
+  ## must rejoin a split sequence before calling this.
+  var i = 0
+  while i < s.len:
+    let byteLen = utf8SequenceLen(s, i)
+    if byteLen == 0:
+      return i
+    i += byteLen
+  -1
+
 proc sanitizeInvalidUtf8*(s: string): string =
   ## Replace invalid UTF-8 sequences with U+FFFD. Applied at input boundaries
   ## (paste, clipboard, PTY) where untrusted text enters the editor.
   result = newStringOfCap(s.len)
   var i = 0
   while i < s.len:
-    let b = ord(s[i])
-    if b < 0x80:
+    let byteLen = utf8SequenceLen(s, i)
+    if byteLen == 0:
+      # Invalid sequence: substitute U+FFFD for the leading byte only, so a
+      # stray continuation byte is not consumed along with a valid one.
+      result.add("\xEF\xBF\xBD")
+      inc i
+    elif byteLen == 1:
+      # Fast path: appending a char avoids the allocation a slice would make.
       result.add(s[i])
       inc i
+    else:
+      result.add(s[i ..< i + byteLen])
+      inc i, byteLen
+
+const EncodingDetectionSampleLen = EncodingDetectionSampleSize div 4 * 4
+  ## Sample length for `detectCharacterEncoding`, 4-byte aligned.
+
+proc utf8TruncatedTailStart(s: string): int =
+  ## Start offset of a UTF-8 sequence cut short by the end of `s`, or -1 when
+  ## `s` does not end in one. Only the last 3 bytes can begin such a sequence.
+  for i in countdown(s.len - 1, max(0, s.len - 3)):
+    let b = ord(s[i])
+    if (b and 0xC0) == 0x80:
+      # Continuation byte: walk back to the leading byte.
       continue
-    # Expected length from the leading byte
     var byteLen = 0
     if (b and 0xE0) == 0xC0:
       byteLen = 2
@@ -177,48 +252,10 @@ proc sanitizeInvalidUtf8*(s: string): string =
       byteLen = 3
     elif (b and 0xF8) == 0xF0:
       byteLen = 4
-    if byteLen == 0 or i + byteLen > s.len:
-      # Invalid leading byte or truncated sequence
-      result.add("\xEF\xBF\xBD")
-      inc i
-      continue
-    # Validate continuation bytes and the decoded code point
-    var valid = true
-    var cp: uint32 = 0
-    case byteLen
-    of 2:
-      cp = uint32(b and 0x1F)
-    of 3:
-      cp = uint32(b and 0x0F)
-    of 4:
-      cp = uint32(b and 0x07)
-    else:
-      discard
-    for j in 1 ..< byteLen:
-      let cb = ord(s[i + j])
-      if (cb and 0xC0) != 0x80:
-        valid = false
-        break
-      cp = (cp shl 6) or uint32(cb and 0x3F)
-    if valid:
-      # Reject overlong encodings, surrogates, and code points above U+10FFFF
-      if byteLen == 2 and cp < 0x80:
-        valid = false
-      elif byteLen == 3 and (cp < 0x800 or cp in 0xD800'u32 .. 0xDFFF'u32):
-        valid = false
-      elif byteLen == 4 and (cp < 0x10000'u32 or cp > 0x10FFFF'u32):
-        valid = false
-    if valid:
-      result.add(s[i ..< i + byteLen])
-      inc i, byteLen
-    else:
-      # Invalid sequence: substitute U+FFFD for the leading byte only, so a
-      # stray continuation byte is not consumed along with a valid one.
-      result.add("\xEF\xBF\xBD")
-      inc i
-
-const EncodingDetectionSampleLen = EncodingDetectionSampleSize div 4 * 4
-  ## Sample length for `detectCharacterEncoding`, 4-byte aligned.
+    if byteLen > s.len - i:
+      return i
+    return -1
+  -1
 
 proc endsInHighSurrogateAt(s: string, endByte: int): bool =
   ## True if the two bytes before `endByte` form a high surrogate in BE or LE.
@@ -282,7 +319,15 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
 
   # Try UTF-8 validation first (most common). Uses the full validation
   # (overlongs, surrogates, > U+10FFFF rejected) shared with input sanitizing.
-  if sample.sanitizeInvalidUtf8 == sample:
+  # The sample cut can split a multi-byte sequence, which `invalidUtf8At`
+  # reports as invalid, so drop a truncated trailing sequence before the check.
+  let utf8Sample =
+    if s.len > EncodingDetectionSampleSize:
+      let tailStart = sample.utf8TruncatedTailStart
+      if tailStart >= 0: sample[0 ..< tailStart] else: sample
+    else:
+      sample
+  if utf8Sample.invalidUtf8At == -1:
     return CharacterEncoding.utf8
 
   # If the sample ends on a high surrogate, re-validate UTF-16 on the full

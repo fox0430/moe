@@ -865,7 +865,7 @@ proc processOutput*(grid: TerminalGrid, data: string) =
             let candidate = actualData[i ..< i + byteLen]
             # Reject invalid sequences; substitute only the leading byte so
             # the following bytes are reprocessed individually.
-            if candidate.sanitizeInvalidUtf8 == candidate:
+            if candidate.invalidUtf8At == -1:
               runeStr = candidate
               i += byteLen - 1 # -1 because the main loop increments
             else:
