@@ -230,11 +230,13 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
             parentDir(savedPath)
         e.state.pending.add PendingAsyncOp(
           kind: paoBuild,
+          epoch: e.state.commandEpoch,
           build: (
             path: savedPath,
             language: activeBuffer.language.ord,
             customCmd: customCmd,
             workspaceRoot: workspaceRoot,
+            automatic: true,
           ),
         )
         if e.config.notification.screenNotifications and
@@ -244,6 +246,7 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
           syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
         e.state.pending.add PendingAsyncOp(
           kind: paoSyntaxCheck,
+          epoch: e.state.commandEpoch,
           syntaxCheck: (path: savedPath, language: activeBuffer.language.ord),
         )
 

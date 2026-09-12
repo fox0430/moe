@@ -25,7 +25,7 @@
 ## async runtime procs. The async spawn/wait/kill procs stay in
 ## `background_process`.
 
-import std/options
+import std/[monotimes, options]
 
 import pkg/results
 import pkg/chronos/asyncproc
@@ -59,6 +59,14 @@ type
     proCompleted
     proTimedOut
     proCancelled
+
+  RunningCommand* = object
+    ## One external command the editor started, named and timed so a command
+    ## holding a file's claim can be reported and stopped.
+    process*: BackgroundProcess
+    label*: string ## What it is, in words the user would recognise.
+    path*: string ## The file it claimed, empty if it claimed none.
+    startedAt*: MonoTime
 
   StartProcessResult* = Result[BackgroundProcess, string]
 

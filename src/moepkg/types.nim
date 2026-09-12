@@ -810,7 +810,14 @@ type
     originalLeftColumn*: int # Viewport left column when preview started
 
   BuildInfo* =
-    tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
+    tuple
+      path: string
+      language: int
+      customCmd: string
+      workspaceRoot: string
+      # `automatic` marks a `buildOnSave` run, which keeps the user's focus
+      # and mode.
+      automatic: bool
   QuickRunInfo* =
     tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
   SyntaxCheckInfo* = tuple[path: string, language: int]
@@ -844,6 +851,10 @@ type
     ## TUI suspended, or when its runner lives above the enqueue site in the
     ## import graph (handler.nim owns the runners). Fire-and-forget work whose
     ## runner is importable uses `asyncSpawn` at the call site instead.
+    epoch*: uint64
+      # Command epoch captured when the op was queued. File-job runners (build,
+      # QuickRun, syntax check) check it, so a `:jobs!` between queueing and
+      # spawning still refuses the claim.
     case kind*: PendingAsyncOpKind
     of paoTerminalCommand, paoShellCommand, paoManPage:
       command*: string
@@ -950,6 +961,18 @@ type
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
     pending*: seq[PendingAsyncOp] # Async ops drained by the main event loop
+    fileJobs*: Table[string, seq[uint64]]
+      # Files an external command currently holds, by absolute path, mapped to
+      # the tickets waiting for them in arrival order (the head holds the file).
+    nextFileJobTicket*: uint64
+      # Hands out file-job tickets; monotonic, so a waiter keeps its place.
+    commandEpoch*: uint64
+      # Bumped when the user stops the external commands. Each command captures
+      # it when queued and re-checks after every await, so work in flight stops
+      # at its next step; emptying the queues cannot reach that work.
+    commandOutputBufferId*: BufferId
+      # Buffer a background command last wrote its output into; reused while a
+      # window shows it, so frequent runs do not add a split each time.
     frontend*: FrontendRequests # Frontend-side effect requests
     frontendSubscriptionsState: FrontendSubscriptions
     ui*: UiState # Transient UI display state (preview, progress, find char)

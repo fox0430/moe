@@ -30,7 +30,7 @@ const
     hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
     hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart,
     hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
-    hrLspCallHierarchyOutgoing,
+    hrLspCallHierarchyOutgoing, hrJobs,
   }
   ExitToNewModeKinds = {
     hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,

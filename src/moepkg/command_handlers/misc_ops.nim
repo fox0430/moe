@@ -23,13 +23,34 @@
 
 import std/os
 
-import ../[editor, logger, registers, types]
+import ../[editor, editor_file_jobs, editor_notify, logger, registers, types]
 
 import editor_ops, handler_result
+
+proc processJobsResult(e: Editor, r: HandlerResult) =
+  ## `:jobs` says what is still running; `:jobs!` ends it.
+  if r.hrStopJobs:
+    let stopped = e.stopRunningCommands()
+    e.state.statusMessage =
+      if stopped == 0:
+        "No external commands were running"
+      else:
+        $stopped & " stopped"
+    return
+
+  let running = e.runningCommands()
+  if running.len == 0:
+    e.state.statusMessage = "No external commands are running"
+  else:
+    # Through the notifier so the whole list reaches `:messages`.
+    e.notifyAll(running)
 
 proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool =
   ## Handle misc side-effect kinds. Returns true to continue.
   case r.kind
+  of hrJobs:
+    e.processJobsResult(r)
+    return true
   of hrClearSearchHighlight:
     e.state.input.search.hlsearch = false
     return true
@@ -85,11 +106,13 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
     else:
       e.state.pending.add PendingAsyncOp(
         kind: paoBuild,
+        epoch: e.state.commandEpoch,
         build: (
           path: filePath,
           language: activeBuffer.language.ord,
           customCmd: "",
           workspaceRoot: parentDir(filePath),
+          automatic: false,
         ),
       )
       e.state.statusMessage = "Building: " & filePath

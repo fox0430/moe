@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat, options, strutils]
+import std/[monotimes, os, strformat, options, strutils]
 
 import pkg/[results, chronos]
 
@@ -31,6 +31,8 @@ type QuickRunProcess* = object
   filePath*: string
   isTempFile*: bool
   process*: BackgroundProcess
+  startedAt*: MonoTime
+    ## So a run holding a file can be listed, and timed, beside the others.
 
 proc quickRunStartupMessage*(path: string): string =
   fmt"Start QuickRun: {path}..."
@@ -345,6 +347,7 @@ proc startBackgroundQuickRun*(
     filePath: prepared.filePath,
     isTempFile: prepared.isTempFile,
     process: backgroundProcess.get,
+    startedAt: getMonoTime(),
   )
 
 proc abandonQuickRunProcess*(p: QuickRunProcess) =

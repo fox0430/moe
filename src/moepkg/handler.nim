@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, strutils, sequtils, tables]
+import std/[monotimes, options, os, strutils, sequtils, tables]
 
 when defined(posix):
   from std/posix import nil
@@ -54,7 +54,11 @@ import
   encoding,
   unicode_utils,
   editor_mode,
-  editor_lsp_rename
+  editor_lsp_rename,
+  editor_file_jobs,
+  highlight_config,
+  highlight,
+  window_manager
 
 when not defined(moe.embedded):
   import terminal_mode
@@ -74,19 +78,22 @@ overlayPlaybackHook = proc(e: Editor, keyCombo: KeyCombo): Option[bool] =
     return some(e.handleSearchModeKeyCombo(keyCombo))
   return none(bool)
 
-proc addRunningProcess*(e: Editor, p: BackgroundProcess) =
-  e.runningBackgroundProcesses.add(p)
+proc addRunningProcess*(e: Editor, p: BackgroundProcess, label = "", path = "") =
+  e.runningBackgroundProcesses.add RunningCommand(
+    process: p, label: label, path: path, startedAt: getMonoTime()
+  )
 
 proc removeRunningProcess*(e: Editor, p: BackgroundProcess) =
-  let idx = e.runningBackgroundProcesses.find(p)
-  if idx >= 0:
-    e.runningBackgroundProcesses.delete(idx)
+  for i, running in e.runningBackgroundProcesses:
+    if running.process == p:
+      e.runningBackgroundProcesses.delete(i)
+      return
 
 proc cleanupBackgroundProcesses*(e: Editor) =
   ## Cancel all running background processes (call on editor exit)
-  for p in e.runningBackgroundProcesses:
-    if p.isRunning:
-      p.kill()
+  for running in e.runningBackgroundProcesses:
+    if running.process.isRunning:
+      running.process.kill()
   e.runningBackgroundProcesses = @[]
 
 proc addRunningQuickRun*(e: Editor, p: QuickRunProcess) =
@@ -245,7 +252,7 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrCallHierarchyRequestOutgoing, hrEnterTerminal, hrTerminalQuit, hrExecCommand,
       hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri,
       hrCquit, hrConflictNext, hrConflictPrev, hrMapAdd, hrMapRemove, hrMapClear,
-      hrMapList, hrPlaybackMacro, hrUndo, hrRedo:
+      hrMapList, hrPlaybackMacro, hrUndo, hrRedo, hrJobs:
     discard # Not expected from RecentFile mode handler
 
   # Route overlay/mode transitions through processResult so a viewer target
@@ -1521,7 +1528,76 @@ template withFrontendSuspend(frontend: FrontendHooks, e: Editor, body: untyped) 
     finally:
       await frontend.resume()
 
-proc runSyntaxCheckAsync(
+proc focusOutputWindow(
+    editor: Editor, target: EditorWindow, mode, previousMode: EditorMode
+) =
+  ## Move the focus to `target` and leave the editor in `mode`.
+  ## Unlike `hsplitWithBuffer`, reusing a window does not activate it.
+  for i, window in editor.windowManager.windows:
+    if window == target:
+      editor.windowManager.activateWindow(i)
+      # Sync first: `state.activeWindow` is cached, so `previousMode` would
+      # otherwise land on the window just left.
+      editor.syncActiveWindow()
+      editor.setMode(mode)
+      editor.state.previousMode = previousMode
+      editor.setActiveWindowScreenCursor(editor.activeWindow)
+      break
+
+proc showCommandOutput(
+    editor: Editor, output: seq[string], keepFocus: bool
+): bool {.discardable.} =
+  ## Show the output of a background command (build, QuickRun, hook) and report
+  ## whether the window could be opened. One window is reused for all of them,
+  ## since `buildOnSave` and hooks fire as often as the user writes.
+  ##
+  ## `keepFocus` keeps the focus and mode on the user's window, for a command
+  ## they did not start; an explicit `:QuickRun` or `:build` follows its
+  ## output.
+  let outputBuffer = newTextBuffer(output.join("\n"))
+  outputBuffer.readOnly = true
+
+  let staleIdx = editor.bufferIndexById(editor.state.commandOutputBufferId)
+  if staleIdx >= 0:
+    let stale = editor.buffers[staleIdx]
+    var outputWindow: EditorWindow = nil
+    for window in editor.windowManager.windows:
+      if window.buffer == stale:
+        outputWindow = window
+        break
+    if not outputWindow.isNil:
+      discard editor.removeBufferAt(staleIdx)
+      editor.addBuffer(outputBuffer)
+      applyHighlightConfig(outputBuffer, editor.config)
+      editor.redirectWindowsFromBuffer(stale, outputBuffer)
+      editor.state.commandOutputBufferId = outputBuffer.id
+      editor.syncActiveWindow()
+      if not keepFocus:
+        editor.focusOutputWindow(outputWindow, EditorMode.Normal, EditorMode.Normal)
+      editor.enforceModePolicy()
+      return true
+    else:
+      # The window is gone but its buffer is still listed; drop it, or every
+      # close-split-then-run cycle strands another one.
+      discard editor.removeBufferAt(staleIdx)
+      editor.state.commandOutputBufferId = BufferId(0)
+
+  let
+    previousWindow = editor.activeWindow
+    previousMode = editor.state.mode
+    previousPreviousMode = editor.state.previousMode
+  let splitResult = editor.hsplitWithBuffer(outputBuffer)
+  if splitResult.isErr:
+    editor.notify("Failed to open output window: " & splitResult.error, nlError)
+    return false
+  editor.state.commandOutputBufferId = outputBuffer.id
+
+  if keepFocus:
+    editor.focusOutputWindow(previousWindow, previousMode, previousPreviousMode)
+  editor.enforceModePolicy()
+  true
+
+proc runSyntaxCheckJob(
     editor: Editor, info: SyntaxCheckInfo
 ): Future[void] {.async: (raises: []).} =
   ## Run syntax check process in background and apply results to buffer
@@ -1533,11 +1609,17 @@ proc runSyntaxCheckAsync(
         editor.notify("Syntax check error: " & checkResult.error, nlError)
       else:
         let checkProcess = checkResult.get
-        editor.addRunningProcess(checkProcess.process)
-        let outputResult = await checkProcess.waitForAsync(
-          timeoutFromSeconds(editor.config.syntaxChecker.timeout)
-        )
-        editor.removeRunningProcess(checkProcess.process)
+        editor.addRunningProcess(checkProcess.process, "Syntax check", info.path)
+        # In a `finally`: the wait can raise, the `except` below swallows it,
+        # and a stale entry would hold its file in `:jobs` for the rest of the
+        # session.
+        let outputResult =
+          try:
+            await checkProcess.waitForAsync(
+              timeoutFromSeconds(editor.config.syntaxChecker.timeout)
+            )
+          finally:
+            editor.removeRunningProcess(checkProcess.process)
         if outputResult.isErr:
           editor.notify("Syntax check error: " & outputResult.error, nlError)
           return
@@ -1558,7 +1640,7 @@ proc runSyntaxCheckAsync(
     except Exception as ex:
       editor.notify("Syntax check error: " & ex.msg, nlError)
 
-proc runBuildAsync(
+proc runBuildJob(
     editor: Editor, info: BuildInfo
 ): Future[void] {.async: (raises: []).} =
   ## Run build process in background and display output when complete
@@ -1571,29 +1653,31 @@ proc runBuildAsync(
         editor.notify("Build error: " & buildResult.error, nlError)
       else:
         let buildProcess = buildResult.get
-        editor.addRunningProcess(buildProcess.process)
-        let outputResult = await buildProcess.waitForAsync(
-          timeoutFromSeconds(editor.config.buildOnSave.timeout)
-        )
-        editor.removeRunningProcess(buildProcess.process)
+        editor.addRunningProcess(buildProcess.process, "Build", info.path)
+        # In a `finally`, as with the syntax check.
+        let outputResult =
+          try:
+            await buildProcess.waitForAsync(
+              timeoutFromSeconds(editor.config.buildOnSave.timeout)
+            )
+          finally:
+            editor.removeRunningProcess(buildProcess.process)
         if outputResult.isErr:
           editor.notify("Build error: " & outputResult.error, nlError)
           return
-        let outputContent = outputResult.get.join("\n")
-        let outputBuffer = newTextBuffer(outputContent)
-        outputBuffer.readOnly = true
-        let splitResult = editor.hsplitWithBuffer(outputBuffer)
-        if splitResult.isErr:
-          editor.notify("Failed to open output window: " & splitResult.error, nlError)
-        else:
-          editor.enforceModePolicy()
-          if editor.config.notification.screenNotifications and
-              editor.config.notification.buildOnSaveScreenNotify:
-            editor.notify("Build completed: " & info.path)
+        # An automatic build keeps the user's focus; an explicit `:build`
+        # follows its output.
+        let shown =
+          editor.showCommandOutput(outputResult.get, keepFocus = info.automatic)
+        # Only when the output is on screen; otherwise this would replace the
+        # reason it could not be opened on the status line.
+        if shown and editor.config.notification.screenNotifications and
+            editor.config.notification.buildOnSaveScreenNotify:
+          editor.notify("Build completed: " & info.path)
     except Exception as ex:
       editor.notify("Build error: " & ex.msg, nlError)
 
-proc runQuickRunAsync(
+proc runQuickRunJob(
     editor: Editor, info: QuickRunInfo
 ): Future[void] {.async: (raises: []).} =
   ## Run QuickRun process in background and display output when complete
@@ -1613,25 +1697,22 @@ proc runQuickRunAsync(
         # editor exit/crash can also remove its temp files, not only kill the
         # process. See cleanupQuickRunProcesses.
         editor.addRunningQuickRun(qrProcess)
-        let outputResult = await qrProcess.waitForResultAsync(
-          timeoutFromSeconds(editor.config.quickRun.timeout)
-        )
-        editor.removeRunningQuickRun(qrProcess)
+        # In a `finally`, as with the syntax check; a stale entry would also
+        # keep the temporary file alive.
+        let outputResult =
+          try:
+            await qrProcess.waitForResultAsync(
+              timeoutFromSeconds(editor.config.quickRun.timeout)
+            )
+          finally:
+            editor.removeRunningQuickRun(qrProcess)
         if outputResult.isErr:
           editor.notify("QuickRun error: " & outputResult.error, nlError)
         else:
-          let output = outputResult.get
-          let outputContent = output.join("\n")
-          let outputBuffer = newTextBuffer(outputContent)
-          outputBuffer.readOnly = true
-          let splitResult = editor.hsplitWithBuffer(outputBuffer)
-          if splitResult.isErr:
-            editor.notify("Failed to open output window: " & splitResult.error, nlError)
-          else:
-            editor.enforceModePolicy()
-            if editor.config.notification.screenNotifications and
-                editor.config.notification.quickRunScreenNotify:
-              editor.notify("QuickRun completed: " & qrProcess.filePath)
+          let shown = editor.showCommandOutput(outputResult.get, keepFocus = false)
+          if shown and editor.config.notification.screenNotifications and
+              editor.config.notification.quickRunScreenNotify:
+            editor.notify("QuickRun completed: " & qrProcess.filePath)
     except Exception as ex:
       editor.notify("QuickRun error: " & ex.msg, nlError)
 
@@ -1666,7 +1747,9 @@ proc runFilterAsync(
         return
 
       let bp = startResult.get
-      editor.addRunningProcess(bp)
+      # Labelled but pathless: a filter rewrites the buffer, not a file, so it
+      # claims no job and only has to show up in `:jobs`.
+      editor.addRunningProcess(bp, "Filter")
       let filtered = await bp.filterOutput(
         input,
         timeoutFromSeconds(editor.config.filter.timeout),
@@ -1756,6 +1839,30 @@ proc runFilterAsync(
     except Exception as ex:
       editor.notify("Filter error: " & ex.msg, nlError)
 
+proc runSyntaxCheckAsync(
+    editor: Editor, info: SyntaxCheckInfo, epoch: uint64
+): Future[void] {.async: (raises: []).} =
+  ## Waits for the other jobs on the file: the checker reads it from disk, so a
+  ## formatter hook on the same write could leave it reading half-written text.
+  ## `epoch` is what the op carried when queued, so an earlier `:jobs!` refuses
+  ## the claim instead of starting late.
+  editor.withFileJob(info.path, epoch):
+    await runSyntaxCheckJob(editor, info)
+
+proc runBuildAsync(
+    editor: Editor, info: BuildInfo, epoch: uint64
+): Future[void] {.async: (raises: []).} =
+  ## Waits like the syntax check: the compiler reads the file, not the buffer.
+  editor.withFileJob(info.path, epoch):
+    await runBuildJob(editor, info)
+
+proc runQuickRunAsync(
+    editor: Editor, info: QuickRunInfo, epoch: uint64
+): Future[void] {.async: (raises: []).} =
+  ## Same wait, on the temporary copy when the run uses one.
+  editor.withFileJob(info.filePath, epoch):
+    await runQuickRunJob(editor, info)
+
 proc handlePendingAsyncOperationsImpl(
     e: Editor, frontend: FrontendHooks
 ): Future[void] {.async: (raises: [Exception]).} =
@@ -1806,19 +1913,18 @@ proc handlePendingAsyncOperationsImpl(
               stdout.flushFile()
               discard stdin.readLine()
         of paoBuild:
-          asyncSpawn runBuildAsync(e, op.build)
+          asyncSpawn runBuildAsync(e, op.build, op.epoch)
         of paoQuickRun:
-          asyncSpawn runQuickRunAsync(e, op.quickRun)
+          asyncSpawn runQuickRunAsync(e, op.quickRun, op.epoch)
         of paoSyntaxCheck:
-          asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck)
+          asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck, op.epoch)
         of paoFilter:
           asyncSpawn runFilterAsync(e, op.filter)
       except Exception as ex:
         logError("moe", "Pending async operation " & $op.kind & " failed: " & ex.msg)
         e.notify("Pending operation failed (" & $op.kind & "): " & ex.msg, nlError)
 
-        # Do not lose work queued behind a failed operation. Keep ops added by
-        # async tasks during this drain after the deferred FIFO entries.
+        # Do not lose work queued behind a failed operation.
         if index + 1 < ops.len:
           e.state.pending = ops[index + 1 .. ^1] & e.state.pending
         break

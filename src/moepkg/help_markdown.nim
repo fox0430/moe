@@ -63,7 +63,7 @@ const
   ]
 
   CommandModeTailNames = @[
-    "build", "lspfold", "lspformat", "log", "lsplog", "lsprestart",
+    "build", "jobs", "lspfold", "lspformat", "log", "lsplog", "lsprestart",
     "lspcallhierarchyincoming", "lspcallhierarchyoutgoing", "help", "putconfigfile",
     "moerc", "quickrun", "recent", "backup", "config", "debug", "filer", "filetree",
     "jump", "terminal", "changes", "bookmarks", "conflictnext", "conflictprev",

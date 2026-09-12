@@ -897,6 +897,7 @@ proc renderCommandModeTail*(): string {.compileTime.} =
   ## "# Command mode" groups that appear *after* the `set` options block.
   let groups: seq[seq[HelpEntry]] = @[
     helpEntriesFor("build") & helpEntriesFor("lspfold") & helpEntriesFor("lspformat"),
+    helpEntriesFor("jobs"),
     helpEntriesFor("log") & helpEntriesFor("lsplog"),
     helpEntriesFor("lsprestart") & helpEntriesFor("lspcallhierarchyincoming") &
       helpEntriesFor("lspcallhierarchyoutgoing"),

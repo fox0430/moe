@@ -784,6 +784,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `set scrollfriction=number` | Change smooth scroll friction; e.g. `set scrollfriction=80.0` (alias: `sfr`) |
 | `set scrollairdrag=number` | Change smooth scroll air drag; e.g. `set scrollairdrag=2.0` (alias: `sad`) |
 | `build` | Build the current buffer |
+| `jobs` | List the external commands still running |
+| `jobs!` | Stop every external command still running |
 | `lspfold` | LSP Folding Range |
 | `lspformat` | LSP Document Formatting |
 | `log` | Open a log viewer for editor log |
