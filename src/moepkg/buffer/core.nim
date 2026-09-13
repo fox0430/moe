@@ -1551,9 +1551,10 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
 
   if b.inTransaction and b.currentTransaction.isSome:
     # Inner changes carry id 0; the wrapper committed later gets the id.
-    var transaction = b.currentTransaction.get
-    transaction.changes.add(changeWithSnapshot)
-    b.currentTransaction = some(transaction)
+    # Appended in place: copying the transaction out and back would re-copy
+    # every change already in it, which is quadratic once an edit records one
+    # change per line.
+    b.currentTransaction.get.changes.add(changeWithSnapshot)
   elif b.pendingSnapshot.isSome:
     # PieceTable: convert to O(1) snapshot undo entry
     b.undoStack.addLast(
