@@ -210,12 +210,15 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
   if not b.inTransaction or b.currentTransaction.isNone:
     return err("No transaction in progress")
 
-  let transaction = b.currentTransaction.get
+  # Moved out, not copied: the changes seq holds one entry per inner change,
+  # so copying it out costs as much as the transaction itself.
+  var transaction = move(b.currentTransaction.get)
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
 
   # Add transaction as a single undo entry if it has changes
   if transaction.changes.len > 0:
+    let firstChangePos = getChangePosition(transaction.changes[0])
     # changeSeq was inc'd once per inner change in pushUndoChange. Snapshot the
     # post-commit value so undo() can restore the pre-transaction state in one
     # step, regardless of inner change count.
@@ -237,7 +240,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
             if transaction.cursorPos.isSome:
               transaction.cursorPos.get
             else:
-              getChangePosition(transaction.changes[0]),
+              firstChangePos,
           snapshotLineMarkers: b.pendingSnapshotMarkers,
           modifiedLinesDelta:
             computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
@@ -255,7 +258,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         endSeq: postTxnSeq,
         id: b.allocateChangeId(),
         kind: ckTransaction,
-        transactionChanges: transaction.changes,
+        transactionChanges: move(transaction.changes),
         transactionDescription: transaction.description,
         transactionCursorPos: transaction.cursorPos,
         namedMarkChanges:
@@ -267,7 +270,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
     # Note: redoStack was already cleared by the first change in pushUndoChange
 
     # Record transaction position in changelist
-    b.recordChangePosition(getChangePosition(transaction.changes[0]))
+    b.recordChangePosition(firstChangePos)
 
     # No lastChangedLines recompute needed: pushUndoChange min-merged each
     # inner change's line into the pending anchor via markLineChanged.
@@ -343,8 +346,9 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   if not b.inTransaction or b.currentTransaction.isNone:
     return err("No transaction in progress")
 
-  # Undo all changes in transaction in reverse order
-  let transaction = b.currentTransaction.get
+  # Undo all changes in transaction in reverse order. Moved out rather than
+  # copied: every exit path below clears currentTransaction anyway.
+  let transaction = move(b.currentTransaction.get)
 
   if b.pendingSnapshot.isSome:
     # PieceTable: O(1) restore from snapshot
