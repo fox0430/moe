@@ -1507,6 +1507,26 @@ suite "Buffer - Pending Snapshot Cleanup":
     check b.getLine(0) == "hello"
     check not b.isModified
 
+  test "a multi-change transaction restores markers and modified lines on undo":
+    # Only the first recorded change carries the pre-transaction side arrays;
+    # undo walks the inner changes back to it, so the later ones need none.
+    let b = newTextBuffer("aaa\nbbb\nccc\nddd")
+    b.setLineMarker(2, SessionModified)
+
+    check b.beginTransaction("rewrite").isOk
+    check b.replaceLine(0, "AAA").isOk
+    check b.replaceLine(1, "BBB").isOk
+    check b.replaceLine(3, "DDD").isOk
+    check b.commitTransaction().isOk
+    check b.getLineMarker(2) == some(SessionModified)
+
+    discard b.undo()
+    check b.getLine(0) == "aaa"
+    check b.getLine(1) == "bbb"
+    check b.getLine(3) == "ddd"
+    check b.getLineMarker(2) == some(SessionModified)
+    check not b.isModified
+
   test "PieceTable: failed edit does not leak pendingSnapshot":
     setConfiguredBackend(PieceTable)
     defer:

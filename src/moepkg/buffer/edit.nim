@@ -28,7 +28,8 @@ import pkg/results
 
 import ../[primitives, unicode_utils]
 from ../encoding import sanitizeInvalidUtf8
-import core, internal_mutations, undo
+import core, internal_mutations, line_diff, undo
+export LineEdit, LineDiff
 
 # NoUndo procs: skip undo/changeSeq but must shift semantic overlay / folds /
 # bookmarks. lineMarkers/modifiedLines are held back via includeSideArrays=false
@@ -294,6 +295,77 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
 
   return ok(())
 
+proc replaceLines*(
+    b: TextBuffer,
+    start: int,
+    delete: int,
+    lines: openArray[string],
+    keepRows: bool = true,
+): Result[(), string] =
+  ## Swap the `delete` lines at `start` for `lines`, as one change recorded and
+  ## reported to the row-remap subscribers once, so the per-line side arrays
+  ## shift once instead of once per rewritten line.
+  ##
+  ## `keepRows = false` gives the old rows up: their markers, folds and
+  ## bookmarks go with them instead of staying on unrelated replacement text.
+  ##
+  ## CR is stripped for decoded buffers; lines must not contain separators.
+  if b.readOnly:
+    return err("Buffer is read-only")
+  if start < 0 or start > b.len:
+    return err("Line index out of valid range [0.." & $b.len & "]: " & $start)
+  if delete < 0 or start + delete > b.len:
+    return err("Line range out of bounds: " & $start & " + " & $delete)
+
+  var normalized = newSeqOfCap[string](lines.len)
+  for i, line in lines:
+    if '\n' in line:
+      return err("Line " & $i & " of the replacement contains a line separator")
+    normalized.add b.stripCarriageReturns(line)
+  if delete == 0 and normalized.len == 0:
+    return ok(())
+  # A buffer always holds at least one line; a caller that means to clear one
+  # asks for a single empty line instead.
+  if b.len - delete + normalized.len == 0:
+    return err("Replacing the whole buffer with nothing would leave it empty")
+
+  var replaced = newSeqOfCap[string](delete)
+  for j in 0 ..< delete:
+    replaced.add b.getLine(start + j)
+
+  b.captureSnapshotIfNeeded()
+  let lenBefore = b.len
+  try:
+    b.backendReplaceLines(start, delete, normalized)
+  except CatchableError, IndexDefect:
+    # IndexDefect is included because the backends raise it on internal
+    # inconsistency. The span is rewritten by several backend calls, so a
+    # failure part way through leaves some applied; nothing is recorded yet, so
+    # putting the old span back restores the buffer.
+    let e = getCurrentException()
+    var rolledBack = true
+    try:
+      b.backendReplaceLines(start, delete + (b.len - lenBefore), replaced)
+    except CatchableError, IndexDefect:
+      rolledBack = false
+    b.discardPendingSnapshot()
+    if not rolledBack:
+      return err("Failed to replace lines, buffer left partially rewritten: " & e.msg)
+    return err("Failed to replace lines: " & e.msg)
+
+  # Side-array shifts run via the emitRowColRemapEvents subscribers.
+  b.pushUndoChange(
+    BufferChange(
+      kind: ckReplaceLines,
+      replaceLinesIdx: start,
+      replaceLinesOldText: replaced,
+      replaceLinesNewText: normalized,
+      replaceLinesKeepRows: keepRows,
+    )
+  )
+
+  return ok(())
+
 proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
   ## Get text from startPos to endPos (inclusive)
   ## Both positions use character indices (not byte indices)
@@ -543,3 +615,66 @@ proc replaceWholeLines*(
       if res.isErr:
         return err(res.error)
   ok(())
+
+proc replaceAllLines*(
+    b: TextBuffer,
+    newLines: openArray[string],
+    description: string = "replace lines",
+    requireExact: bool = false,
+): Result[LineDiff, string] =
+  ## Make the buffer hold exactly `newLines`, as one undo entry described by
+  ## `description`. Only the lines that actually differ are touched, so markers,
+  ## folds and bookmarks on the rest survive; returns the hunks applied, empty
+  ## when nothing changed. No replacement lines at all means one empty line.
+  ##
+  ## When the two sides are too far apart for a minimal edit, or share no line
+  ## at all, a whole span is rewritten and what was attached to it is lost.
+  ## `requireExact` refuses instead, for a caller that cannot afford that.
+  ##
+  ## `newLines` comes from outside the buffer, so it is sanitized like pasted
+  ## text (CR stripped, invalid UTF-8 replaced) before it is diffed; raw buffers
+  ## are refused.
+  if b.readOnly:
+    return err("Buffer is read-only")
+  if not b.allowsTextTransforms:
+    return err(rawBytesRejection("replace lines"))
+
+  var normalized = newSeqOfCap[string](max(newLines.len, 1))
+  for i, line in newLines:
+    if '\n' in line:
+      return err("Line " & $i & " of the replacement contains a line separator")
+    normalized.add b.stripCarriageReturns(line.sanitizeInvalidUtf8())
+  if normalized.len == 0:
+    # An empty buffer holds one empty line, so a filter that answered with
+    # nothing lands here rather than on an error.
+    normalized.add ""
+
+  var oldLines = newSeqOfCap[string](b.len)
+  for line in b.lines:
+    oldLines.add line
+
+  let diff = diffLines(oldLines, normalized)
+  if diff.hunks.len == 0:
+    return ok(LineDiff(hunks: @[], exact: true, coarse: false))
+  if requireExact and diff.coarse:
+    return err("Replacement is too far from the buffer for a minimal edit")
+
+  # Top down, carrying what the hunks above added or removed, since `start`
+  # indexes the old text; that way the undo entry takes the top-most changed
+  # line.
+  let txr = withTransaction(b, description):
+    var offset = 0
+    for hunk in diff.hunks:
+      # A coarse hunk puts unrelated text on the lines it covers, so what was
+      # attached to them goes with the old lines; a line-by-line script keeps
+      # the rows both sides share.
+      let r = b.replaceLines(
+        hunk.start + offset, hunk.delete, hunk.insert, keepRows = not diff.coarse
+      )
+      if r.isErr:
+        return err(r.error)
+      offset += hunk.insert.len - hunk.delete
+  if txr.isErr:
+    return err(txr.error)
+
+  ok(diff)

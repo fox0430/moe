@@ -3824,3 +3824,209 @@ suite "Buffer - loadFileWithContent equivalence":
       path, smallContent, AutoBackendLargeFileThreshold - 1
     ).isOk
     check buf3.backendKind == GapBuffer
+
+suite "Buffer - replaceAllLines":
+  proc bufferOf(lines: varargs[string]): TextBuffer =
+    result = newTextBuffer()
+    check result.replaceLine(0, lines[0]).isOk
+    for i in 1 ..< lines.len:
+      check result.insert(i, lines[i]).isOk
+
+  test "Identical content is not an edit":
+    let buf = bufferOf("a", "b", "c")
+    let seqBefore = buf.changeSeq
+    let changed = buf.replaceAllLines(["a", "b", "c"])
+    check changed.isOk
+    check changed.get.hunks.len == 0
+    check buf.changeSeq == seqBefore
+
+  test "Only the lines that differ are touched":
+    let buf = bufferOf("keep", "old", "tail")
+    check buf.replaceAllLines(["keep", "new", "tail"]).get.hunks.len > 0
+    check buf.len == 3
+    check buf[1] == "new"
+    # One undo entry covers it, however many lines moved.
+    check buf.undo().isOk
+    check buf[1] == "old"
+
+  test "The replacement may be longer or shorter than what it replaces":
+    let grown = bufferOf("a", "x", "z")
+    check grown.replaceAllLines(["a", "1", "2", "3", "z"]).get.hunks.len > 0
+    check grown.len == 5
+    check grown[2] == "2"
+
+    let shrunk = bufferOf("a", "x", "y", "z")
+    check shrunk.replaceAllLines(["a", "z"]).get.hunks.len > 0
+    check shrunk.len == 2
+    check shrunk[1] == "z"
+
+  test "Replacing every line works and stays one undo entry":
+    let buf = bufferOf("a", "b")
+    check buf.replaceAllLines(["x", "y", "z"]).get.hunks.len > 0
+    check buf.len == 3
+    check buf[0] == "x"
+    check buf.undo().isOk
+    check buf.len == 2
+    check buf[0] == "a"
+
+  test "A line between two changes keeps its marker":
+    # Scattered changes: everything in between comes through untouched.
+    let buf = bufferOf("head", "x", "middle", "y", "tail")
+    buf.setLineMarker(2, SyntaxError)
+    check buf.replaceAllLines(["head", "X", "middle", "Y", "tail"]).get.hunks.len == 2
+    check buf[2] == "middle"
+    check buf.getLineMarker(2) == some(SyntaxError)
+
+  test "A marker below an inserted line moves down with it":
+    let buf = bufferOf("a", "b", "c")
+    buf.setLineMarker(2, SyntaxError)
+    check buf.replaceAllLines(["a", "b", "new", "c"]).get.hunks.len == 1
+    check buf[3] == "c"
+    check buf.getLineMarker(3) == some(SyntaxError)
+
+  test "Scattered changes are applied as separate hunks":
+    let buf = bufferOf("a", "b", "c", "d", "e")
+    let hunks = buf.replaceAllLines(["a", "B", "c", "D", "e"])
+    check hunks.get.hunks.len == 2
+    check buf[0] == "a"
+    check buf[1] == "B"
+    check buf[2] == "c"
+    check buf[3] == "D"
+    check buf[4] == "e"
+    # Still one undo entry, however many hunks it took.
+    check buf.undo().isOk
+    check buf[1] == "b"
+    check buf[3] == "d"
+
+  test "An empty replacement leaves the empty buffer, which is one empty line":
+    let buf = bufferOf("a", "b")
+    check buf.replaceAllLines([]).isOk
+    check buf.len == 1
+    check buf[0] == ""
+    check buf.undo().isOk
+    check buf.len == 2
+    check buf[1] == "b"
+
+  test "A read-only buffer is refused":
+    let buf = bufferOf("a")
+    buf.readOnly = true
+    check buf.replaceAllLines(["b"]).isErr
+
+  test "Lines are sanitized before they are diffed, so CR is not a change":
+    # The buffer strips CR on the way in, so the diff has to see the stripped
+    # lines or it calls every line changed.
+    let buf = bufferOf("a", "b")
+    let seqBefore = buf.changeSeq
+    let diff = buf.replaceAllLines(["a\r", "b\r"])
+    check diff.isOk
+    check diff.get.hunks.len == 0
+    check buf.changeSeq == seqBefore
+    check buf[0] == "a"
+
+  test "A line separator in the replacement is refused":
+    let buf = bufferOf("a", "b")
+    check buf.replaceAllLines(["a", "b\nc"]).isErr
+    check buf.len == 2
+    check buf[1] == "b"
+
+  test "A raw buffer is refused":
+    let buf = bufferOf("a")
+    buf.keepRaw = true
+    check buf.replaceAllLines(["b"]).isErr
+    check buf[0] == "a"
+
+  test "The undo entry is described by the caller":
+    let buf = bufferOf("a", "b")
+    check buf.replaceAllLines(["a", "B"], "sort").isOk
+    let entry = buf.undoStack.peekLast
+    check entry.kind == ckTransaction
+    check entry.transactionDescription == "sort"
+
+  test "Scattered changes are reported as the minimal script":
+    let buf = bufferOf("a", "b", "c", "d", "e")
+    check buf.replaceAllLines(["a", "B", "c", "D", "e"]).get.exact
+
+  test "Undo and the changelist name the first changed line, not the last":
+    let buf = bufferOf("a", "b", "c", "d", "e", "f", "g", "h")
+    check buf.replaceAllLines(["A", "b", "c", "d", "e", "f", "G", "h"]).isOk
+    check buf.changeList[^1] == BufferPosition(line: 0, column: 0)
+    let undone = buf.undo()
+    check undone.isOk
+    check undone.get == BufferPosition(line: 0, column: 0)
+
+  test "requireExact refuses a coarse script instead of applying it":
+    var lines = newSeq[string](2000)
+    for i in 0 ..< lines.len:
+      lines[i] = "line " & $i
+    let buf = newTextBuffer(lines.join("\n"))
+    var replacement = newSeq[string](lines.len)
+    for i in 0 ..< lines.len:
+      # Half the lines survive, so a script exists, but it is far longer than
+      # the distance the diff will search.
+      replacement[i] = (if i mod 2 == 0: lines[i] else: "other " & $i)
+    let seqBefore = buf.changeSeq
+    let refused = buf.replaceAllLines(replacement, "filter", requireExact = true)
+    check refused.isErr
+    check buf.changeSeq == seqBefore
+    check buf[1] == "line 1"
+    # The same replacement goes in when the caller accepts a coarse script.
+    check buf.replaceAllLines(replacement, "filter").isOk
+    check buf[1] == "other 1"
+
+  test "A coarse script takes the attachments in the span with it":
+    # The rewritten lines hold unrelated text afterwards, so a marker or a
+    # bookmark left on them would point at something that never had it.
+    var lines = newSeq[string](2000)
+    for i in 0 ..< lines.len:
+      lines[i] = "line " & $i
+    let buf = newTextBuffer(lines.join("\n"))
+    buf.setLineMarker(701, LineMarkerKind.SyntaxError)
+    buf.toggleBookmark(701)
+    var replacement = newSeq[string](lines.len)
+    for i in 0 ..< lines.len:
+      replacement[i] = (if i mod 2 == 0: lines[i] else: "other " & $i)
+    let diff = buf.replaceAllLines(replacement, "filter")
+    check diff.isOk
+    check not diff.get.exact
+    check buf[701] == "other 701"
+    check buf.getLineMarker(701).isNone
+    check not buf.hasBookmark(701)
+    # Undo puts the text and its markers back. A bookmark on a deleted line
+    # does not survive undo anywhere in the buffer, so it is not checked here.
+    check buf.undo().isOk
+    check buf[701] == "line 701"
+    check buf.getLineMarker(701) == some(LineMarkerKind.SyntaxError)
+
+  test "A replacement sharing no line takes the attachments with it":
+    # The script is minimal -- deleting everything and inserting everything is
+    # all there is -- but every row still holds unrelated text afterwards, so
+    # nothing may stay behind on it.
+    var lines = newSeq[string](300)
+    for i in 0 ..< lines.len:
+      lines[i] = "line " & $i
+    let buf = newTextBuffer(lines.join("\n"))
+    buf.setLineMarker(150, LineMarkerKind.SyntaxError)
+    buf.toggleBookmark(150)
+    var replacement = newSeq[string](lines.len)
+    for i in 0 ..< lines.len:
+      replacement[i] = "new " & $i
+    # Refused outright for a caller that cannot afford to lose them.
+    let seqBefore = buf.changeSeq
+    check buf.replaceAllLines(replacement, "filter", requireExact = true).isErr
+    check buf.changeSeq == seqBefore
+    let diff = buf.replaceAllLines(replacement, "filter")
+    check diff.isOk
+    check diff.get.coarse
+    check buf[150] == "new 150"
+    check buf.getLineMarker(150).isNone
+    check not buf.hasBookmark(150)
+
+  test "An exact script keeps the attachments on the lines it does not touch":
+    let buf = bufferOf("a", "b", "c", "d", "e")
+    buf.setLineMarker(2, LineMarkerKind.SyntaxError)
+    buf.toggleBookmark(2)
+    let diff = buf.replaceAllLines(["a", "B", "c", "D", "e"])
+    check diff.get.exact
+    check not diff.get.coarse
+    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    check buf.hasBookmark(2)

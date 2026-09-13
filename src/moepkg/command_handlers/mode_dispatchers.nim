@@ -93,7 +93,7 @@ proc extractInsertedText*(transaction: buffer.BufferTransaction): string =
       # Range deletion - remove from end of accumulated text
       sb.removeLast(change.deletedRangeText.len)
       skipNextInsertText = false
-    of buffer.ckReplaceLine:
+    of buffer.ckReplaceLine, buffer.ckReplaceLines:
       discard # Line replacement doesn't contribute to inserted text tracking
       skipNextInsertText = false
     of buffer.ckSnapshot:
