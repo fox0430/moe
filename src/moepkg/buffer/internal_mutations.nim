@@ -72,6 +72,19 @@ proc backendReplaceLine*(b: TextBuffer, lineNumber: int, content: string) =
   of PieceTable:
     b.storage.pieceTable.replaceLine(lineNumber, content)
 
+proc backendReplaceLines*(
+    b: TextBuffer, start, deleteCount: int, lines: openArray[string]
+) =
+  ## Swap the `deleteCount` lines at `start` for `lines`. Rows both sides have
+  ## are overwritten in place, so the buffer never briefly holds both spans.
+  let overlap = min(deleteCount, lines.len)
+  for j in 0 ..< overlap:
+    b.backendReplaceLine(start + j, lines[j])
+  for j in overlap ..< lines.len:
+    b.backendInsertLine(start + j, lines[j])
+  for _ in overlap ..< deleteCount:
+    b.backendDeleteLine(start + overlap)
+
 proc deletableBytesFrom(b: TextBuffer, line, col, atLeast: int): int =
   ## Bytes from (line, col) to the buffer end, newlines included. Stops once
   ## `atLeast` is reached to avoid walking a large buffer.

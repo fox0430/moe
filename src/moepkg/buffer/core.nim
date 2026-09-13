@@ -163,6 +163,7 @@ type
     ckDeleteLine
     ckDeleteRange
     ckReplaceLine # Line content replaced
+    ckReplaceLines # A span of lines swapped for another, as one change
     ckTransaction # Transaction containing multiple changes
     ckSnapshot # PieceTable O(1) snapshot undo/redo
 
@@ -237,6 +238,19 @@ type
       replaceLineIdx*: int
       replaceLineOldText*: string
       replaceLineNewText*: string
+    of ckReplaceLines:
+      replaceLinesIdx*: int
+      replaceLinesOldText*: seq[string]
+      replaceLinesNewText*: seq[string]
+      replaceLinesKeepRows*: bool
+        ## True when the rows both sides share keep their identity, so what is
+        ## attached to them stays; false gives the old rows up with it.
+      replaceLinesSavedFolds*: FoldState
+        ## Folds as they stood before the span was rewritten. A row that leaves
+        ## takes its folds with it and the reversed events only put blank rows
+        ## back, so undo restores these wholesale.
+      replaceLinesSavedBookmarks*: seq[int]
+        ## Bookmarks before the rewrite; same reason as the folds above.
     of ckTransaction:
       transactionChanges*: seq[BufferChange]
       transactionDescription*: string
@@ -944,6 +958,8 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
     return change.deleteStartPos
   of ckReplaceLine:
     return BufferPosition(line: change.replaceLineIdx, column: 0)
+  of ckReplaceLines:
+    return BufferPosition(line: change.replaceLinesIdx, column: 0)
   of ckTransaction:
     # For transactions, return the saved cursor position if available,
     # otherwise fall back to the position of the first change
@@ -955,6 +971,26 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
       return BufferPosition(line: 0, column: 0)
   of ckSnapshot:
     return change.snapshotCursorPos
+
+proc modifiedLineSpan(change: BufferChange): Slice[int] =
+  ## The lines a change leaves marked modified in the sidebar. Every kind but
+  ## ckReplaceLines touches one line; that one marks what the insert/delete/
+  ## replace sequence it stands for would have: the rows overwritten in place
+  ## plus the row a shrinking span closed over. An empty slice marks nothing.
+  let pos = getChangePosition(change).line
+  if change.kind != ckReplaceLines:
+    return pos .. pos
+  let
+    oldCount = change.replaceLinesOldText.len
+    newCount = change.replaceLinesNewText.len
+  if change.replaceLinesKeepRows:
+    let overlap = min(oldCount, newCount)
+    pos .. (pos + overlap - 1 + ord(oldCount > newCount))
+  else:
+    # Nothing was overwritten in place: the old rows left and the replacement
+    # arrived as fresh ones, so the only mark is the one the departing rows
+    # leave on the row below them, as deleting them line by line would.
+    (pos + newCount) .. (pos + newCount - 1 + ord(oldCount > 0))
 
 proc countNewlines(s: string): int {.inline.} =
   for c in s:
@@ -1057,6 +1093,32 @@ proc namedMarkShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
             pos.line += delta
           mark = some(pos)
 
+proc insert[T](x: var seq[T], v: T, i, count: int) =
+  ## `count` copies of `v` at `i`, tail moved once. Plain-seq twin of the
+  ## CowSeq overload.
+  if count <= 0:
+    return
+  let oldLen = x.len
+  x.setLen(oldLen + count)
+  for j in countdown(oldLen - 1, i):
+    x[j + count] = x[j]
+  for j in 0 ..< count:
+    x[i + j] = v
+
+proc delete[T](x: var seq[T], i, count: int) =
+  ## `count` elements dropped from `i`, tail moved once. Stops at the end
+  ## rather than raising if `count` overruns.
+  if count <= 0:
+    return
+  let
+    oldLen = x.len
+    removable = min(count, oldLen - i)
+  if removable <= 0:
+    return
+  for j in i ..< oldLen - removable:
+    x[j] = x[j + removable]
+  x.setLen(oldLen - removable)
+
 template shiftPerLineArray(arr: untyped, freshValue: untyped, event: RowColRemapEvent) =
   ## Shift a per-line side array to match a line-count-changing edit. When
   ## `preservesFirstRow` is set, `firstAffectedRow` keeps its slot and the
@@ -1080,12 +1142,9 @@ template shiftPerLineArray(arr: untyped, freshValue: untyped, event: RowColRemap
       )
       return
     if delta > 0:
-      for _ in 0 ..< delta:
-        arr.insert(freshValue, idx)
+      arr.insert(freshValue, idx, delta)
     elif delta < 0:
-      let removable = min(-delta, arr.len - idx)
-      for _ in 0 ..< removable:
-        arr.delete(idx)
+      arr.delete(idx, -delta)
 
 proc lineMarkerShiftCallback(b: TextBuffer, event: RowColRemapEvent) =
   ## Shift per-line markers to follow their row across insert/delete edits.
@@ -1306,6 +1365,57 @@ proc emitRowColRemapEvents*(
         lastAffectedRowAfter: change.replaceLineIdx,
       )
     )
+  of ckReplaceLines:
+    # Two events at most, whatever the span's length: the per-line arrays shift
+    # once each instead of once per rewritten line.
+    let
+      start = change.replaceLinesIdx
+      oldCount = change.replaceLinesOldText.len
+      newCount = change.replaceLinesNewText.len
+    var events: seq[RowColRemapEvent]
+    if change.replaceLinesKeepRows:
+      let overlap = min(oldCount, newCount)
+      if overlap > 0:
+        # The shared rows keep their slot; only their content changed.
+        events.add RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: start,
+          lastAffectedRowBefore: start + overlap - 1,
+          lastAffectedRowAfter: start + overlap - 1,
+        )
+      if oldCount != newCount:
+        # The surplus at the end of the span arrives or leaves below them.
+        events.add RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: start + overlap,
+          lastAffectedRowBefore: start + oldCount - 1,
+          lastAffectedRowAfter: start + newCount - 1,
+        )
+    else:
+      # The old rows leave first and the replacement arrives in their place, so
+      # nothing attached to them lands on the new text or stretches over it.
+      if oldCount > 0:
+        events.add RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: start,
+          lastAffectedRowBefore: start + oldCount - 1,
+          lastAffectedRowAfter: start - 1,
+        )
+      if newCount > 0:
+        events.add RowColRemapEvent(
+          kind: rrekMultiLine,
+          firstAffectedRow: start,
+          lastAffectedRowBefore: start - 1,
+          lastAffectedRowAfter: start + newCount - 1,
+        )
+    if reverse:
+      # `dispatch` inverts each event; undoing the pair also needs them in the
+      # opposite order.
+      for j in countdown(events.high, 0):
+        dispatch(events[j])
+    else:
+      for ev in events:
+        dispatch(ev)
 
 proc registerRowColRemapCallback*(b: TextBuffer, cb: RowColRemapCallback) =
   ## Register a callback to receive row/col remap events. All registered
@@ -1396,12 +1506,18 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
     b.pendingSnapshotBookmarks = b.bookmarks
   # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry).
   # PieceTable diffs pendingSnapshotModifiedLines into a ckSnapshot delta instead.
-  if b.backendKind != PieceTable and not b.hasPendingModifiedLinesSnapshot:
-    b.pendingModifiedLinesSnapshot = b.modifiedLines
-    b.hasPendingModifiedLinesSnapshot = true
-  if b.backendKind != PieceTable and not b.hasPendingLineMarkersSnapshot:
-    b.pendingLineMarkersSnapshot = b.lineMarkers
-    b.hasPendingLineMarkersSnapshot = true
+  # A transaction is one undo entry whose first recorded change carries the
+  # pre-transaction arrays, so re-capturing would copy them per inner change.
+  let alreadyRecorded =
+    b.inTransaction and b.currentTransaction.isSome and
+    b.currentTransaction.get.changes.len > 0
+  if b.backendKind != PieceTable and not alreadyRecorded:
+    if not b.hasPendingModifiedLinesSnapshot:
+      b.pendingModifiedLinesSnapshot = b.modifiedLines
+      b.hasPendingModifiedLinesSnapshot = true
+    if not b.hasPendingLineMarkersSnapshot:
+      b.pendingLineMarkersSnapshot = b.lineMarkers
+      b.hasPendingLineMarkersSnapshot = true
 
 proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   ## Drop every pending snapshot artifact captured for a mutation that ended up
@@ -1476,6 +1592,20 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # reaches updateHighlight; without this the version bump above would trip
   # updateHighlight's mismatch guard and wipe the overlay every keystroke.
   let marksBefore = b.namedMarks
+  # Rows that leave a rewritten span take their folds and bookmarks with them
+  # and no reversed event brings them back, so the pre-edit state travels with
+  # the change when rows were given up.
+  let needsFoldBookmarkRestore =
+    change.kind == ckReplaceLines and (
+      not change.replaceLinesKeepRows or
+      change.replaceLinesOldText.len > change.replaceLinesNewText.len
+    )
+  var
+    foldsBefore: FoldState
+    bookmarksBefore: seq[int]
+  if needsFoldBookmarkRestore:
+    foldsBefore = b.foldState
+    bookmarksBefore = b.bookmarks
   b.emitRowColRemapEvents(change)
   # Row callbacks cannot express a split/merge column. Preserve exact marks
   # in the surviving tail using the original edit coordinates.
@@ -1525,13 +1655,14 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   let changePos = getChangePosition(change)
   b.markLineChanged(changePos.line)
 
-  # Mark the changed line as modified
+  # Mark the changed lines as modified
   b.ensureMarkersSize()
   b.ensureModifiedLinesSize()
-  if changePos.line >= 0 and changePos.line < b.modifiedLines.len:
+  let span = modifiedLineSpan(change)
+  for line in max(span.a, 0) .. min(span.b, b.modifiedLines.len - 1):
     # Only upgrade to lmkModified if not already marked as inserted
-    if b.modifiedLines[changePos.line] != lmkInserted:
-      b.modifiedLines[changePos.line] = lmkModified
+    if b.modifiedLines[line] != lmkInserted:
+      b.modifiedLines[line] = lmkModified
 
   # Record change position in changelist
   if not b.inTransaction:
@@ -1539,6 +1670,9 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
 
   # Attach pre-mutation modifiedLines snapshot to the change
   var changeWithSnapshot = change
+  if needsFoldBookmarkRestore:
+    changeWithSnapshot.replaceLinesSavedFolds = foldsBefore
+    changeWithSnapshot.replaceLinesSavedBookmarks = bookmarksBefore
   changeWithSnapshot.namedMarkChanges = namedMarkChanges
   changeWithSnapshot.startSeq = preSeq
   changeWithSnapshot.endSeq = postSeq

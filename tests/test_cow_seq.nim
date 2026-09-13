@@ -148,3 +148,77 @@ suite "CowSeq copy-on-write semantics":
     check a[1] == 99
     check snapshot.len == 3
     check snapshot[1] == 2
+
+suite "CowSeq bulk splice":
+  ## The per-line side arrays shift by a whole hunk at a time, so the bulk
+  ## overloads have to agree with a loop over the single-element ones.
+  proc toSeq(cs: CowSeq[int]): seq[int] =
+    for i in 0 ..< cs.len:
+      result.add cs[i]
+
+  test "insert of n copies matches n single inserts":
+    for i in 0 .. 4:
+      for count in 0 .. 3:
+        var bulk = initCowSeq(@[0, 1, 2, 3])
+        var oneByOne = initCowSeq(@[0, 1, 2, 3])
+        bulk.insert(9, i, count)
+        for _ in 0 ..< count:
+          oneByOne.insert(9, i)
+        check bulk.toSeq == oneByOne.toSeq
+
+  test "delete of n matches n single deletes":
+    for i in 0 .. 4:
+      for count in 0 .. 3:
+        var bulk = initCowSeq(@[0, 1, 2, 3])
+        var oneByOne = initCowSeq(@[0, 1, 2, 3])
+        bulk.delete(i, count)
+        for _ in 0 ..< min(count, 4 - i):
+          oneByOne.delete(i)
+        check bulk.toSeq == oneByOne.toSeq
+
+  test "delete past the end stops there instead of raising":
+    var cs = initCowSeq(@[0, 1, 2])
+    cs.delete(1, 99)
+    check cs.toSeq == @[0]
+
+  test "a zero count is a no-op":
+    var cs = initCowSeq(@[0, 1, 2])
+    cs.insert(9, 1, 0)
+    cs.delete(1, 0)
+    check cs.toSeq == @[0, 1, 2]
+
+  test "a delete with nothing to drop leaves the shared node alone":
+    # `shiftPerLineArray` deletes at the end of a shorter array on purpose, so
+    # a no-op delete is a normal event: it must not clone a node an undo
+    # snapshot shares, which is the whole point of the type.
+    var cs = initCowSeq(@[0, 1, 2])
+    let snapshot = cs
+    cs.delete(3, 2)
+    check cs.sharesStorage(snapshot)
+    check cs.toSeq == @[0, 1, 2]
+
+  test "an index past the end raises like the single-element overload":
+    # The single-element `delete` and `insert` delegate to seq, which raises
+    # IndexDefect out of range; the bulk overloads must not silently swallow
+    # it. Deleting from the very end is a no-op, not an error.
+    var cs = initCowSeq(@[0, 1, 2])
+    expect IndexDefect:
+      cs.delete(5, 2)
+    expect IndexDefect:
+      cs.insert(9, 5, 2)
+    expect IndexDefect:
+      cs.insert(9, -1, 2)
+    check cs.toSeq == @[0, 1, 2]
+
+  test "bulk writes after a copy clone instead of mutating the shared node":
+    var a = initCowSeq(@[1, 2, 3])
+    let afterInsert = a
+    a.insert(9, 1, 2)
+    check a.toSeq == @[1, 9, 9, 2, 3]
+    check afterInsert.toSeq == @[1, 2, 3]
+
+    var b = initCowSeq(@[1, 2, 3])
+    let afterDelete = b
+    b.delete(0, 2)
+    check b.toSeq == @[3]
+    check afterDelete.toSeq == @[1, 2, 3]

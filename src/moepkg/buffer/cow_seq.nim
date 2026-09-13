@@ -59,6 +59,11 @@ proc initCowSeq*[T](len: int): CowSeq[T] =
 proc initCowSeq*[T](s: sink seq[T]): CowSeq[T] =
   CowSeq[T](node: CowSeqNode[T](data: s, frozen: false))
 
+proc sharesStorage*[T](a, b: CowSeq[T]): bool =
+  ## Whether `a` and `b` still share storage, i.e. neither has written since
+  ## the copy. Lets a caller verify that a write it expected to be free was.
+  a.node == b.node
+
 proc len*[T](cs: CowSeq[T]): int {.inline.} =
   if cs.node == nil: 0 else: cs.node.data.len
 
@@ -85,9 +90,44 @@ proc insert*[T](cs: var CowSeq[T], v: T, i: int) =
   cs.ensureUnique()
   cs.node.data.insert(v, i)
 
+proc insert*[T](cs: var CowSeq[T], v: T, i, count: int) =
+  ## Insert `count` copies of `v` at `i`, moving the tail once; looping the
+  ## single-element overload would be quadratic on a whole-span rewrite. An `i`
+  ## outside 0..len raises like that overload.
+  if count <= 0:
+    return
+  let oldLen = cs.len
+  if i < 0 or i > oldLen:
+    raise newException(IndexDefect, "index out of range: " & $i)
+  cs.ensureUnique()
+  cs.node.data.setLen(oldLen + count)
+  for j in countdown(oldLen - 1, i):
+    cs.node.data[j + count] = cs.node.data[j]
+  for j in 0 ..< count:
+    cs.node.data[i + j] = v
+
 proc delete*[T](cs: var CowSeq[T], i: int) =
   cs.ensureUnique()
   cs.node.data.delete(i)
+
+proc delete*[T](cs: var CowSeq[T], i, count: int) =
+  ## Drop `count` elements from `i`, moving the tail once. Stops at the end
+  ## rather than raising if `count` overruns; an `i` past the end raises like
+  ## the single-element overload.
+  if count <= 0:
+    return
+  let oldLen = cs.len
+  if i < 0 or i > oldLen:
+    raise newException(IndexDefect, "index out of range: " & $i)
+  let removable = min(count, oldLen - i)
+  if removable <= 0:
+    # Nothing to drop: return before `ensureUnique` so a no-op never clones a
+    # frozen node shared with an undo snapshot.
+    return
+  cs.ensureUnique()
+  for j in i ..< oldLen - removable:
+    cs.node.data[j] = cs.node.data[j + removable]
+  cs.node.data.setLen(oldLen - removable)
 
 proc clear*[T](cs: var CowSeq[T]) {.inline.} =
   ## Drop the reference to the (possibly shared) storage, leaving an empty seq.
