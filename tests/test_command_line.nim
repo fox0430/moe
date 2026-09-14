@@ -308,6 +308,36 @@ suite "CommandLine - parseCommandLine":
     for input in [":.+3d", ":+2,+4d", ":$-1d", ":-d"]:
       check parser.parseCommandLine(input).action == claDeleteLines
 
+  test "Parse filter :%!sort":
+    # The same `!` as the shell escape. A range in front of it is the only
+    # thing that says the lines go through the command instead of the editor
+    # stepping aside for it.
+    let cmd = parser.parseCommandLine(":%!sort")
+    check cmd.action == claFilter
+    check cmd.args == @["sort"]
+    check cmd.range.kind == erkAll
+
+  test "Parse filter with a line range":
+    let cmd = parser.parseCommandLine(":1,5!sort -r")
+    check cmd.action == claFilter
+    check cmd.args == @["sort -r"]
+    check cmd.range == exAddresses(exLine(1), exLine(5))
+
+  test "Parse filter to the last line":
+    let cmd = parser.parseCommandLine(":1,$!fmt")
+    check cmd.action == claFilter
+    check cmd.range == exAddresses(exLine(1), exLast())
+
+  test "Parse filter on the current line":
+    let cmd = parser.parseCommandLine(":.!tr a-z A-Z")
+    check cmd.action == claFilter
+    check cmd.args == @["tr a-z A-Z"]
+    check cmd.range == exAddresses(exCurrent(), exCurrent())
+
+  test "A bare bang stays a shell escape":
+    for input in [":!ls", ":!ls -la"]:
+      check parser.parseCommandLine(input).action == claShellCommand
+
   test "Parse substitute :s/foo/bar/":
     let cmd = parser.parseCommandLine(":s/foo/bar/")
     check cmd.action == claSubstitute

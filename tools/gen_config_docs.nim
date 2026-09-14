@@ -152,6 +152,7 @@ defineSections:
   ("Persist", cfg.persist, PersistConfig)
   ("Log", cfg.log, LogConfig)
   ("Git", cfg.git, GitConfig)
+  ("Filter", cfg.filter, FilterConfig)
   ("SyntaxChecker", cfg.syntaxChecker, SyntaxCheckerConfig)
   ("StartUp.FileOpen", cfg.startUpFileOpen, StartUpFileOpenConfig)
   ("StartUp.FileTree", cfg.startUpFileTree, StartUpFileTreeConfig)

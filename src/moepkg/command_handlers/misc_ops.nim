@@ -43,6 +43,19 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
   of hrShellCommand:
     e.state.pending.add PendingAsyncOp(kind: paoShellCommand, command: r.shellCommand)
     return true
+  of hrFilter:
+    e.state.pending.add PendingAsyncOp(
+      kind: paoFilter,
+      filter: (
+        bufferId: r.hrFilterBufferId,
+        windowIndex: e.windowManager.activeWindowIndex,
+        command: r.hrFilterCommand,
+        first: r.hrFilterFirst,
+        last: r.hrFilterLast,
+        contentVersion: r.hrFilterVersion,
+      ),
+    )
+    return true
   of hrBackground:
     e.state.pending.add PendingAsyncOp(kind: paoBackground)
     return true

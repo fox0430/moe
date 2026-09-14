@@ -213,6 +213,7 @@ proc newEditorConfig*(): EditorConfig =
       bookmarks: true,
     ),
     git: GitConfig(showChangedLine: true, updateInterval: 1000),
+    filter: FilterConfig(timeout: 30, maxOutputSize: 64 * 1024 * 1024),
     syntaxChecker: SyntaxCheckerConfig(enable: false, timeout: 60),
     smoothScroll: SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     startUpFileOpen: StartUpFileOpenConfig(autoSplit: true, splitType: stVertical),

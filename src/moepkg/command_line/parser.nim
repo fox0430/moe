@@ -86,6 +86,11 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
       result.action = claSubstitute
       result.args = @[rest]
       return
+    if rest.startsWith("!"):
+      # A range before `!` filters those lines; a bare `!` drops to the shell.
+      result.action = claFilter
+      result.args = @[rest[1 ..^ 1].strip()]
+      return
     result.action = claUnknown
     return
 
@@ -93,8 +98,7 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
   if cleanInput.startsWith("!"):
     result.action = claShellCommand
     # Get the command after "!"
-    let shellCmd = cleanInput[1 ..^ 1].strip()
-    result.args = @[shellCmd]
+    result.args = @[cleanInput[1 ..^ 1].strip()]
     return
 
   if cleanInput == "d":

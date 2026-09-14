@@ -2264,9 +2264,9 @@ suite "ConfigMode - descriptor completeness":
     let tested = [
       "standard", "bufferBackend", "clipboard", "buildOnSave", "tabLine", "statusLine",
       "highlight", "autoBackup", "quickRun", "notification", "filer", "fileTree",
-      "diffViewer", "autocomplete", "autoSave", "persist", "git", "syntaxChecker",
-      "smoothScroll", "startUpFileOpen", "startUpFileTree", "editorConfig", "log",
-      "theme", "lsp",
+      "diffViewer", "autocomplete", "autoSave", "persist", "git", "filter",
+      "syntaxChecker", "smoothScroll", "startUpFileOpen", "startUpFileTree",
+      "editorConfig", "log", "theme", "lsp",
     ].toHashSet
     let excluded = [
       "debug", "keyMapping", "shellCommands", "commandAliases", "disabledCommandAliases"

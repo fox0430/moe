@@ -408,6 +408,35 @@ proc resolveExRange(
   # Re-clamp: a stale fold can name lines past the end of the buffer.
   ok (max(0, snapped.startLine), min(snapped.endLine, buffer.len - 1))
 
+proc executeFilter*(
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    command: string,
+    range: ExLineRange,
+    currentLine: int,
+): HandlerResult =
+  ## Describe a filter run for the editor to carry out asynchronously.
+  if buffer.readOnly:
+    return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
+  if not buffer.allowsTextTransforms:
+    return HandlerResult(kind: hrError, errorMessage: rawBytesRejection("filter"))
+  if command.len == 0:
+    return HandlerResult(kind: hrError, errorMessage: "Filter command required")
+
+  let resolved = buffer.resolveExRange(range, currentLine)
+  if resolved.isErr:
+    return HandlerResult(kind: hrError, errorMessage: resolved.error)
+  let (first, last) = resolved.get
+
+  HandlerResult(
+    kind: hrFilter,
+    hrFilterBufferId: buffer.id,
+    hrFilterCommand: command,
+    hrFilterFirst: first,
+    hrFilterLast: last,
+    hrFilterVersion: buffer.contentVersion,
+  )
+
 proc executeSubstitute*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -685,6 +714,10 @@ proc handleCommandModeInput*(
     handler.executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
       cmdResult.substituteRange, currentLine,
+    )
+  of claFilter:
+    handler.executeFilter(
+      buffer, cmdResult.filterCommand, cmdResult.filterRange, currentLine
     )
   of claDeleteLines:
     handler.executeDelete(buffer, cmdResult.deleteRange, currentLine)

@@ -1147,13 +1147,15 @@ const CommandLineSpecialHelp*:
     lineNumber: HelpEntry,
     lineAddress: HelpEntry,
     shellCommand: HelpEntry,
+    filter: HelpEntry,
     substitute: HelpEntry,
     deleteAll: HelpEntry,
     deleteRange: HelpEntry,
   ] = (
   ## Help-only entries with no alias. The parser handles these as special
   ## syntax (line number jump, `$` / `.` / `+N` / `-N` addresses, `!` shell
-  ## escape, `%s/.../.../` substitute, `%d` / `N,Md` range delete).
+  ## escape, `{range}!cmd` filter, `%s/.../.../` substitute, `%d` / `N,Md`
+  ## range delete).
   ## Named-field tuple so `help_generator.nim` references them by name rather
   ## than by index.
   lineNumber:
@@ -1166,6 +1168,12 @@ const CommandLineSpecialHelp*:
   ),
   shellCommand:
     HelpEntry(syntax: "! shell command", description: "Shell command execution"),
+  filter: HelpEntry(
+    syntax: "1,10!command",
+    description:
+      "Replace the lines in range with what `command` makes of them; " &
+      "either side may be an address, e.g. `:%!sort`",
+  ),
   substitute: HelpEntry(
     syntax: "%s/keyword1/keyword2/", description: "Replace text (normal mode only)"
   ),

@@ -501,6 +501,19 @@ type
       cfgDocDescription: "Interval for updating Git information. (Milli seconds)"
     .}: int
 
+  # Text filter settings (:{range}!cmd)
+  FilterConfig* {.cfgSection: "Filter".} = object
+    timeout* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDescription: "Filter command timeout (seconds, 0 = no timeout)"
+    .}: int
+    maxOutputSize* {.
+      cfg,
+      cfgMin: 0,
+      cfgDocDescription: "Largest output a filter may produce (bytes, 0 = no limit)"
+    .}: int
+
   # Syntax checker settings
   SyntaxCheckerConfig* {.cfgSection: "SyntaxChecker".} = object
     enable* {.cfg, cfgDocDescription: "Syntax checker".}: bool
@@ -787,6 +800,7 @@ type
     autoSave*: AutoSaveConfig
     persist*: PersistConfig
     git*: GitConfig
+    filter*: FilterConfig
     syntaxChecker*: SyntaxCheckerConfig
     smoothScroll*: SmoothScrollConfig
     startUpFileOpen*: StartUpFileOpenConfig

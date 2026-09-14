@@ -130,6 +130,7 @@ type
     hrLspSelectionRange # Execute LSP selection range
     hrLspDocumentLink # Execute LSP document link
     hrShellCommand # Execute shell command
+    hrFilter # Filter lines through a command (:{range}!cmd)
     hrBackground # Pause editor and show terminal (:bg)
     hrJumpList # Show jump list (:ju, :jump)
     hrChanges # Show change list (:changes)
@@ -330,6 +331,14 @@ type
       discard
     of hrShellCommand:
       shellCommand*: string
+    of hrFilter:
+      hrFilterBufferId*: BufferId
+      hrFilterCommand*: string
+      hrFilterFirst*: int
+      hrFilterLast*: int
+      hrFilterVersion*: int
+        ## The buffer version the range was resolved against. The output is
+        ## applied only if the buffer is still at it.
     of hrBackground:
       discard
     of hrJumpList:
@@ -471,7 +480,7 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
     hrgAppExit
   of hrHandled, hrUnhandled, hrError:
     hrgHandledGeneric
-  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrJumpList, hrChanges,
+  of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
       hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat,
       hrLspRestart, hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
       hrLspCallHierarchyOutgoing:

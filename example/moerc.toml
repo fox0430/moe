@@ -301,6 +301,15 @@ enable = false                         # Enable syntax checker in sidebar
 # A hung check is killed once this elapses (0 = wait forever)
 timeout = 60                           # Timeout in seconds
 
+[Filter]
+
+# A command still running after this is killed (0 = wait forever)
+timeout = 30                           # `:{range}!cmd` timeout in seconds
+
+# Output past this is refused rather than truncated: half of what a filter
+# wrote would delete the rest of the range (0 = no limit)
+maxOutputSize = 67108864               # Largest output a filter may produce, in bytes
+
 [SmoothScroll]
 
 enable = true                          # Smooth scrolling
