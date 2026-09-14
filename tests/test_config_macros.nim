@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, macros, options, sequtils, strutils, tables]
+import std/[unittest, macros, options, sequtils, sets, strutils, tables]
 
 import pkg/parsetoml
 
-import ../src/moepkg/[config_macros, config, help_description]
+import ../src/moepkg/[config_macros, config, config_schema, help_description]
+import ../tools/gen_config_docs
 import ../src/moepkg/config_loader {.all.}
 
 # Sample annotated type — proves the pragma vocabulary parses and is reflectable
@@ -134,13 +135,14 @@ suite "config_macros: generateConfigLoader":
     check c.mode == "y"
     check not vr.hasErrors
 
-  test "cfgEnumStrings rejects out-of-set value and falls back to first option":
+  test "cfgEnumStrings rejects an out-of-set value and keeps the default":
+    # A refused value keeps the default, as in every other load helper.
     let t = tomlTable("mode = \"bogus\"\n")
-    var c: MiniSection
+    var c = MiniSection(mode: "y")
     var vr = newValidationResult()
     loadMini(t, c, vr)
-    check vr.hasErrors
-    check c.mode == "x" # first option = fallback default
+    check vr.errors.anyIt(it.name == "Mini.mode" and it.val == "bogus")
+    check c.mode == "y"
 
 # Exercise the serializer against a section covering every supported field type,
 # then prove its output round-trips back through generateConfigLoader.
@@ -234,6 +236,111 @@ suite "config_macros: section serializer field-type coverage":
     loadSer(tomlTable(body), loaded, vr)
     check not vr.hasErrors
     check loaded == original
+
+# A conditional key: the serializer writes it only for the shape it belongs to,
+# and the loader rejects it on any other.
+type WwSection {.cfgSection: "Ww".} = object
+  flag {.cfg, cfgDocDescription: "Whether the note applies".}: bool
+  note {.cfg, cfgOnlyWhen(wwShowsNote, "flag is true"), cfgDocDescription: "A note".}:
+    string
+
+proc wwShowsNote(v: WwSection): bool =
+  v.flag
+
+# The same, with the conditional key declared *before* what its predicate
+# reads. The checks run after the whole object has loaded, so the declaration
+# order must not matter.
+type WwReordered {.cfgSection: "Ww".} = object
+  note {.
+    cfg, cfgOnlyWhen(wwReorderedShowsNote, "flag is true"), cfgDocDescription: "A note"
+  .}: string
+  flag {.cfg.}: bool
+
+proc wwReorderedShowsNote(v: WwReordered): bool =
+  v.flag
+
+proc loadWwReordered(t: TomlTableRef, c: var WwReordered, vr: var ValidationResult) =
+  generateConfigLoader(t, c, vr, WwReordered)
+
+type WwOuter = object
+  ww: WwSection
+
+proc serializeWw(lines: var seq[string], cfg: WwSection) =
+  let o = WwOuter(ww: cfg)
+  generateSectionSerializers(lines, o, WwOuter)
+
+proc loadWw(t: TomlTableRef, c: var WwSection, vr: var ValidationResult) =
+  generateConfigLoader(t, c, vr, WwSection)
+
+suite "config_macros: cfgOnlyWhen":
+  test "emits the key only when the predicate holds":
+    block:
+      var lines: seq[string]
+      serializeWw(lines, WwSection(flag: true, note: "hi"))
+      check "note = \"hi\"" in lines
+    block:
+      var lines: seq[string]
+      serializeWw(lines, WwSection(flag: false, note: "hi"))
+      check "flag = false" in lines
+      check not lines.anyIt(it.startsWith("note = "))
+
+  test "a file saved without the key loads back":
+    var lines: seq[string]
+    serializeWw(lines, WwSection(flag: false, note: "hi"))
+    let body = lines[1 ..< lines.len].join("\n")
+    var loaded: WwSection
+    var vr = newValidationResult()
+    loadWw(tomlTable(body), loaded, vr)
+    check not vr.hasErrors
+    check loaded.flag == false
+    check loaded.note == ""
+
+  test "the loader rejects the key on an object the serializer would not write it for":
+    # Rejected rather than silently ignored.
+    var loaded: WwSection
+    var vr = newValidationResult()
+    loadWw(tomlTable("flag = false\nnote = \"hi\"\n"), loaded, vr)
+    check vr.hasErrors
+    check vr.errors.anyIt(it.name == "Ww.note" and "flag is true" in it.expected)
+    # A rejected value does not stay in the field.
+    check loaded.note == ""
+
+  test "the loader accepts the key when the predicate holds":
+    var loaded: WwSection
+    var vr = newValidationResult()
+    loadWw(tomlTable("flag = true\nnote = \"hi\"\n"), loaded, vr)
+    check not vr.hasErrors
+    check loaded.note == "hi"
+
+  test "the condition reaches the schema, so completion need not guess":
+    # The loader refuses the key on the wrong object and the serializer omits
+    # it, so the schema has to carry the condition too.
+    var schema: seq[ConfigSchemaSection]
+    generateConfigSchema(schema, WwOuter)
+    let note = schema.filterIt(it.name == "Ww")[0].keys.filterIt(it.name == "note")
+    check note.len == 1
+    check note[0].condition == "only when flag is true"
+    let flag = schema.filterIt(it.name == "Ww")[0].keys.filterIt(it.name == "flag")
+    check flag[0].condition == ""
+
+  test "the condition reaches the docs next to the key it qualifies":
+    let table = generateSectionMarkdown(WwOuter(ww: WwSection()), ww, WwSection)
+    check "| note |" in table
+    check "(only when flag is true)" in table
+
+  test "the verdict does not depend on which field is declared first":
+    block:
+      var loaded: WwReordered
+      var vr = newValidationResult()
+      loadWwReordered(tomlTable("flag = true\nnote = \"hi\"\n"), loaded, vr)
+      check not vr.hasErrors
+      check loaded.note == "hi"
+    block:
+      var loaded: WwReordered
+      var vr = newValidationResult()
+      loadWwReordered(tomlTable("flag = false\nnote = \"hi\"\n"), loaded, vr)
+      check vr.errors.anyIt(it.name == "Ww.note" and "flag is true" in it.expected)
+      check loaded.note == ""
 
 # Single-source section registry: a mini "outer" type standing in for
 # EditorConfig, used to exercise the whole-config dispatch macros in isolation.
@@ -422,6 +529,9 @@ suite "config_macros: cfgDeprecated":
 # Exercise section groups: a parent table whose `{.cfgSubSection.}` fields are
 # `[Parent.Child]` sub-tables. Two fields share one type — the case the
 # `{.cfgSection.}` type pragma cannot express.
+const ElemModes = @["pipe", "none"]
+const ElemTags = @["fast", "slow"]
+
 type
   FeatureSub = object
     on {.cfg.}: bool
@@ -579,6 +689,366 @@ extra = 7
       )
     )
 
+type
+  ArrayElem = object
+    name {.cfg, cfgDocDescription: "Name".}: string
+    mode {.cfg, cfgEnumStrings: ElemModes, cfgDocDescription: "Mode".}: string = "none"
+    tags {.cfg, cfgEnumStrings: ElemTags, cfgDocDescription: "Tags".}: seq[string]
+
+  ArrayGroup {.cfgGroup: "Arr".} = object
+    top {.cfg.}: bool
+    entries {.
+      cfgArrayOfTables: "entries", cfgEntryRules: checkElem, cfgArrayRules: checkElems
+    .}: seq[ArrayElem]
+
+proc checkElem(
+    t: TomlTableRef, e: var ArrayElem, label: string, vr: var ValidationResult
+): bool =
+  # Only what a declaration cannot state; everything else comes off `ArrayElem`.
+  if not t.hasKey("name"):
+    vr.addError(label, "missing 'name' key", "table with 'name'")
+    return false
+  true
+
+proc checkElems(entries: var seq[ArrayElem], label: string, vr: var ValidationResult) =
+  # A rule about the entries together: names identify an entry, so they cannot
+  # repeat.
+  var seen: HashSet[string]
+  var kept: seq[ArrayElem]
+  for e in entries:
+    if e.name in seen:
+      vr.addError(label, e.name, "entry names that do not repeat")
+    else:
+      seen.incl e.name
+      kept.add e
+  entries = kept
+
+proc loadArrayGroup(t: TomlTableRef, c: var ArrayGroup, vr: var ValidationResult) =
+  generateSectionGroupLoader(t, c, vr, ArrayGroup)
+
+proc saveArrayGroup(lines: var seq[string], cfg: ArrayGroup) =
+  generateSectionGroupSerializer(lines, cfg, ArrayGroup)
+
+suite "config_macros: arrays of tables":
+  test "a present array replaces the field's default":
+    let t = tomlTable("[[entries]]\nname = \"a\"\n\n[[entries]]\nname = \"b\"\n")
+    var c = ArrayGroup(entries: @[ArrayElem(name: "default")])
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check not vr.hasErrors
+    check c.entries.mapIt(it.name) == @["a", "b"]
+
+  test "an absent array keeps the default":
+    let t = tomlTable("top = true\n")
+    var c = ArrayGroup(entries: @[ArrayElem(name: "default")])
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check c.entries.mapIt(it.name) == @["default"]
+
+  test "an entry the loader drops is not added":
+    let t = tomlTable("[[entries]]\nname = \"a\"\n\n[[entries]]\nmode = \"pipe\"\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check c.entries.mapIt(it.name) == @["a"]
+
+  test "a cfgEnumStrings violation is reported and the field keeps its default":
+    # An option set rejects; it does not choose a replacement.
+    let t = tomlTable("[[entries]]\nname = \"a\"\nmode = \"bogus\"\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.errors.anyIt(it.name == "Arr.entries[0].mode" and it.val == "bogus")
+    check c.entries.len == 1
+    check c.entries[0].mode == "none"
+
+  test "a valid cfgEnumStrings passes without errors":
+    let t = tomlTable("[[entries]]\nname = \"a\"\nmode = \"pipe\"\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check not vr.hasErrors
+    check c.entries[0].mode == "pipe"
+
+  test "an empty named option set is rejected":
+    # A set with no members accepts nothing, so the declaration is a mistake.
+    check not compiles(
+      (
+        block:
+          const EmptyModes = @[]
+
+          type EmptyValues {.cfgSection: "Empty".} = object
+            mode {.cfg, cfgEnumStrings: EmptyModes.}: string
+
+          var o: EmptyValues
+          var vr = newValidationResult()
+          generateConfigLoader(tomlTable("mode = \"x\"\n"), o, vr, EmptyValues)
+      )
+    )
+
+  test "an option set constrains each element of a seq[string]":
+    let t = tomlTable("[[entries]]\nname = \"a\"\ntags = [\"fast\", \"bogus\"]\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.hasErrors
+    check vr.errors.anyIt(it.name == "Arr.entries[0].tags[1]" and it.val == "bogus")
+    # One key is one value: a rejected element takes the whole array with it
+    # and the field keeps its default.
+    check c.entries[0].tags.len == 0
+
+  test "an option set is reported once against the value the user wrote":
+    # The set is checked on the parsed value, so a wrong-typed value is one
+    # error naming what the user typed, not a second one naming the default.
+    let t = tomlTable("[[entries]]\nname = \"a\"\nmode = 1\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.errors.filterIt(it.name == "Arr.entries[0].mode").len == 1
+    check vr.errors.anyIt(it.name == "Arr.entries[0].mode" and it.val == "1")
+    check c.entries[0].mode == "none"
+
+  test "an option set on a seq is not reported against a default that never loaded":
+    # The array case of the same rule: only `tags` itself is reported.
+    let t = tomlTable("[[entries]]\nname = \"a\"\ntags = 1\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.errors.filterIt(it.name.startsWith("Arr.entries[0].tags")).len == 1
+    check vr.errors.anyIt(it.name == "Arr.entries[0].tags")
+
+  test "a non-array value for an array field is reported":
+    let t = tomlTable("entries = 1\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.hasErrors
+
+  test "a non-table element is reported and skipped":
+    let t = tomlTable("entries = [1]\n")
+    var c = ArrayGroup(entries: @[])
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.hasErrors
+    check c.entries.len == 0
+
+  test "a value that is not an array leaves the field alone":
+    # A value that is not an array says nothing about the entries, so the
+    # default stands.
+    let t = tomlTable("entries = 1\n")
+    var c = ArrayGroup(entries: @[ArrayElem(name: "default")])
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.hasErrors
+    check vr.errors.anyIt(it.name == "Arr.entries" and it.val == "1")
+    check c.entries.mapIt(it.name) == @["default"]
+
+  test "an unknown key in an entry is reported":
+    let t = tomlTable("[[entries]]\nname = \"a\"\nbogus = 1\n")
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check c.entries.mapIt(it.name) == @["a"]
+    var sawUnknown = false
+    for e in vr.errors:
+      if e.kind == sikUnknownKey and "bogus" in e.name:
+        sawUnknown = true
+    check sawUnknown
+
+  test "the serializer emits one array header per element and round-trips":
+    let original = ArrayGroup(
+      top: true,
+      entries: @[ArrayElem(name: "a", mode: "pipe"), ArrayElem(name: "b", mode: "none")],
+    )
+    var lines: seq[string]
+    saveArrayGroup(lines, original)
+    check lines.count("[[Arr.entries]]") == 2
+    check "name = \"a\"" in lines
+    let parsed = tomlTable(lines.join("\n"))["Arr"].getTable()
+    var loaded: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(parsed, loaded, vr)
+    check not vr.hasErrors
+    check loaded == original
+
+  test "the schema reports a named option set as a closed set":
+    # A named `{.cfgEnumStrings.}` set must still read as an enum, or the
+    # popup and the docs advertise a free-form string.
+    var schema: seq[ConfigSchemaSection]
+    generateSectionGroupSchema(schema, ArrayGroup)
+    let entries = schema.filterIt(it.name == "Arr.entries")
+    check entries.len == 1
+    check entries[0].isArrayOfTables
+    let mode = entries[0].keys.filterIt(it.name == "mode")
+    check mode.len == 1
+    check mode[0].valueType == cvtEnum
+    check mode[0].values == ElemModes
+    check mode[0].typeLabel == "string (enum: pipe, none)"
+
+  test "an option set on a seq reads as an array of that set, not a free-form one":
+    # The set narrows what goes inside the array, so the shape stays an array
+    # while the label and the values say what may go in it.
+    var schema: seq[ConfigSchemaSection]
+    generateSectionGroupSchema(schema, ArrayGroup)
+    let tags =
+      schema.filterIt(it.name == "Arr.entries")[0].keys.filterIt(it.name == "tags")
+    check tags.len == 1
+    check tags[0].valueType == cvtStringArray
+    check tags[0].values == ElemTags
+    check tags[0].typeLabel == "string array (enum: fast, slow)"
+
+  test "a rule about the entries together runs once, after the per-entry rules":
+    let t = tomlTable(
+      "[[entries]]\nname = \"a\"\n\n[[entries]]\nname = \"a\"\n\n" &
+        "[[entries]]\nname = \"b\"\n"
+    )
+    var c: ArrayGroup
+    var vr = newValidationResult()
+    loadArrayGroup(t, c, vr)
+    check vr.errors.anyIt(it.name == "Arr.entries" and it.val == "a")
+    check c.entries.mapIt(it.name) == @["a", "b"]
+
+  test "a rule about the entries together is rejected without an array to run on":
+    check not compiles(
+      (
+        block:
+          type NoArray {.cfgGroup: "NoArray".} = object
+            sub {.cfgSubSection: "Sub".}: ArrayElem
+            stray {.cfg, cfgArrayRules: checkElems.}: string
+
+          var o: NoArray
+          var vr = newValidationResult()
+          generateSectionGroupLoader(tomlTable(""), o, vr, NoArray)
+      )
+    )
+
+  test "a rule about the entries is rejected on a single child table":
+    # Without the check the pragma sits on a {.cfgSubSection.} field and no
+    # predicate is ever emitted.
+    check not compiles(
+      (
+        block:
+          type SubRules {.cfgGroup: "SubRules".} = object
+            sub {.cfgSubSection: "Sub", cfgEntryRules: checkElem.}: ArrayElem
+
+          var o: SubRules
+          var vr = newValidationResult()
+          generateSectionGroupLoader(tomlTable(""), o, vr, SubRules)
+      )
+    )
+    check not compiles(
+      (
+        block:
+          type SubRules {.cfgGroup: "SubRules".} = object
+            sub {.cfgSubSection: "Sub", cfgArrayRules: checkElems.}: ArrayElem
+
+          var o: SubRules
+          var vr = newValidationResult()
+          generateSectionGroupLoader(tomlTable(""), o, vr, SubRules)
+      )
+    )
+
+  test "a ref element type is rejected":
+    # The generated loader declares `var entry: Elem` and writes through it,
+    # which for a ref type is nil. The shape walk sees through `ref`, so
+    # without this check the declaration compiles and segfaults.
+    check not compiles(
+      (
+        block:
+          type RefElem = ref object
+            name {.cfg.}: string
+
+          type RefGroup {.cfgGroup: "RefGroup".} = object
+            entries {.cfgArrayOfTables: "entries".}: seq[RefElem]
+
+          var o: RefGroup
+          var vr = newValidationResult()
+          generateSectionGroupLoader(tomlTable(""), o, vr, RefGroup)
+      )
+    )
+
+  test "a table below a repeated one is rejected":
+    # `[Parent.entries.sub]` does not say which element it belongs to.
+    check not compiles(
+      (
+        block:
+          type NestedElem = object
+            name {.cfg.}: string
+            sub {.cfgSubSection: "Sub".}: FeatureSub
+
+          type NestedGroup {.cfgGroup: "NestedGroup".} = object
+            entries {.cfgArrayOfTables: "entries".}: seq[NestedElem]
+
+          var o: NestedGroup
+          var vr = newValidationResult()
+          generateSectionGroupLoader(tomlTable(""), o, vr, NestedGroup)
+      )
+    )
+
+  test "an array of tables is rejected outside a section group":
+    # On a plain `{.cfgSection.}` type the pragma expands to nothing: the
+    # field would never load and its table would read as unknown.
+    check not compiles(
+      (
+        block:
+          type Bad {.cfgSection: "Bad".} = object
+            flag {.cfg.}: bool
+            entries {.cfgArrayOfTables: "entries".}: seq[ArrayElem]
+
+          var o: Bad
+          var vr = newValidationResult()
+          generateConfigLoader(tomlTable("flag = true\n"), o, vr, Bad)
+      )
+    )
+
+  test "a sub-table is rejected outside a section group":
+    check not compiles(
+      (
+        block:
+          type Bad {.cfgSection: "Bad".} = object
+            flag {.cfg.}: bool
+            sub {.cfgSubSection: "Sub".}: FeatureSub
+
+          var o: Bad
+          var vr = newValidationResult()
+          generateConfigLoader(tomlTable("flag = true\n"), o, vr, Bad)
+      )
+    )
+
+  test "a non-object array element is rejected":
+    check not compiles(
+      (
+        block:
+          type BadGroup {.cfgGroup: "Bad".} = object
+            entries {.cfgArrayOfTables: "entries".}: seq[SampleEnum]
+
+          const keys = generateSectionGroupKeys(BadGroup)
+      )
+    )
+
+  test "a non-object sub-table is rejected":
+    check not compiles(
+      (
+        block:
+          type BadGroup {.cfgGroup: "Bad".} = object
+            sub {.cfgSubSection: "Sub".}: SampleEnum
+
+          const keys = generateSectionGroupKeys(BadGroup)
+      )
+    )
+
+  test "a childless group schema is rejected":
+    check not compiles(
+      (
+        block:
+          type EmptyGroup {.cfgGroup: "Empty".} = object
+            top {.cfg.}: bool
+
+          var schema: seq[ConfigSchemaSection]
+          generateSectionGroupSchema(schema, EmptyGroup)
+      )
+    )
+
 suite "config_macros: escapeMdCell":
   test "passes through plain text unchanged":
     check escapeMdCell("hello world") == "hello world"
@@ -595,3 +1065,127 @@ suite "config_macros: escapeMdCell":
   test "collapses newlines to spaces so the row cannot break":
     check escapeMdCell("a\nb") == "a b"
     check escapeMdCell("a\r\nb") == "a  b"
+
+suite "config_loader: empty option set":
+  # A named option set whose length is not compile-time known slips past
+  # `optionSetNonEmptyCheck`, so the load site guards against an empty one.
+  test "a string key with an empty option set trips the guard":
+    let t = tomlTable("mode = \"x\"\n")
+    var
+      s = ""
+      vr = newValidationResult()
+    expect AssertionDefect:
+      loadEnumString(t, "mode", s, [], vr)
+
+  test "an array key with an empty option set trips the guard":
+    let t = tomlTable("modes = [\"x\"]\n")
+    var
+      s: seq[string] = @[]
+      vr = newValidationResult()
+    expect AssertionDefect:
+      loadEnumStringArray(t, "modes", s, [], vr)
+
+suite "config_loader: option set expectations":
+  test "a non-array value for an option-set array reads as a noun phrase":
+    let t = tomlTable("modes = \"pipe\"\n")
+    var
+      s: seq[string] = @[]
+      vr = newValidationResult()
+    loadEnumStringArray(t, "modes", s, ["pipe", "none"], vr)
+    check vr.toErrorMessages.len == 1
+    check "array of strings, each one of: pipe, none" in vr.toErrorMessages[0]
+
+type
+  DefaultedElem = object
+    name {.cfg, cfgDocDescription: "Name".}: string
+    enabled {.cfg, cfgDocDescription: "Enabled".}: bool = true
+    depth {.cfg, cfgDocDescription: "Depth".}: int = 3
+    label {.cfg, cfgDocDescription: "Label".}: string = "auto"
+
+  DefaultedGroup {.cfgGroup: "Def".} = object
+    entries {.cfgArrayOfTables: "entries".}: seq[DefaultedElem]
+
+proc loadDefaultedGroup(
+    t: TomlTableRef, c: var DefaultedGroup, vr: var ValidationResult
+) =
+  generateSectionGroupLoader(t, c, vr, DefaultedGroup)
+
+suite "config_macros: array element defaults":
+  # An entry is built per table, so the element type's field defaults are the
+  # only place its defaults can live.
+  test "a key an entry omits keeps the element type's default":
+    let t = tomlTable("[[entries]]\nname = \"a\"\n")
+    var c: DefaultedGroup
+    var vr = newValidationResult()
+    loadDefaultedGroup(t, c, vr)
+    check not vr.hasErrors
+    check c.entries.len == 1
+    check c.entries[0] ==
+      DefaultedElem(name: "a", enabled: true, depth: 3, label: "auto")
+
+  test "a key an entry writes overrides the default":
+    let t = tomlTable("[[entries]]\nname = \"a\"\nenabled = false\ndepth = 0\n")
+    var c: DefaultedGroup
+    var vr = newValidationResult()
+    loadDefaultedGroup(t, c, vr)
+    check not vr.hasErrors
+    check c.entries[0] ==
+      DefaultedElem(name: "a", enabled: false, depth: 0, label: "auto")
+
+  test "one entry's defaults do not leak into the next":
+    let t = tomlTable(
+      "[[entries]]\nname = \"a\"\nlabel = \"x\"\n\n[[entries]]\nname = \"b\"\n"
+    )
+    var c: DefaultedGroup
+    var vr = newValidationResult()
+    loadDefaultedGroup(t, c, vr)
+    check c.entries.mapIt(it.label) == @["x", "auto"]
+
+  test "the docs advertise the defaults the loader actually applies":
+    # The documented column and a freshly loaded entry read the same
+    # declaration.
+    let table = generateArrayTableMarkdown(typedesc[DefaultedElem])
+    check "| enabled | bool | true |" in table
+    check "| depth | integer | 3 |" in table
+    check "| label | string | \"auto\" |" in table
+
+type MixedGroup {.cfgGroup: "Mix".} = object
+  sub {.cfgSubSection: "Sub".}: FeatureSub
+  entries {.cfgArrayOfTables: "entries".}: seq[DefaultedElem]
+
+proc loadMixedGroup(t: TomlTableRef, c: var MixedGroup, vr: var ValidationResult) =
+  generateSectionGroupLoader(t, c, vr, MixedGroup)
+
+proc saveMixedGroup(lines: var seq[string], cfg: MixedGroup) =
+  generateSectionGroupSerializer(lines, cfg, MixedGroup)
+
+suite "config_macros: an emptied array of tables":
+  test "an empty array is written as a key, so the emptied state round-trips":
+    # With no `[[Mix.entries]]` blocks, a file silent about the field would
+    # load the default back and revive every deleted entry.
+    var lines: seq[string]
+    saveMixedGroup(lines, MixedGroup(sub: FeatureSub(on: true), entries: @[]))
+    check "entries = []" in lines
+    let parsed = tomlTable(lines.join("\n"))["Mix"].getTable()
+    var loaded = MixedGroup(entries: @[DefaultedElem(name: "default")])
+    var vr = newValidationResult()
+    loadMixedGroup(parsed, loaded, vr)
+    check not vr.hasErrors
+    check loaded.entries.len == 0
+    check loaded.sub.on
+
+  test "the marker is written into the parent table, not a later sub-table":
+    # The array field is declared after the sub-section, so a marker emitted
+    # in declaration order would land under `[Mix.Sub]`.
+    var lines: seq[string]
+    saveMixedGroup(lines, MixedGroup(entries: @[]))
+    check lines.find("entries = []") < lines.find("[Mix.Sub]")
+    let parsed = tomlTable(lines.join("\n"))
+    check parsed["Mix"].getTable().hasKey("entries")
+    check not parsed["Mix"]["Sub"].getTable().hasKey("entries")
+
+  test "a non-empty array still writes one header per element and no marker":
+    var lines: seq[string]
+    saveMixedGroup(lines, MixedGroup(entries: @[DefaultedElem(name: "a")]))
+    check "entries = []" notin lines
+    check lines.count("[[Mix.entries]]") == 1

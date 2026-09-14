@@ -644,22 +644,31 @@ proc isConfigFileBuffer*(buffer: TextBuffer): bool =
 
 proc enclosingSection(
     buffer: TextBuffer, line: int
-): tuple[name: string, headerLine: int] =
-  ## The `[Section]` header the line sits under and its line number;
-  ## ("", 0) above the first one.
-  for i in countdown(line, 0):
-    let header = parseSectionHeader(buffer.getLine(i))
-    if header.isSome:
-      return (header.get, i)
-  ("", 0)
-
-proc inOpenArray(buffer: TextBuffer, headerLine, cursorLine: int): bool =
-  ## True when the lines below the section header leave a multi-line array
-  ## open. A value cannot span sections, so the header is far enough back.
-  var depth = 0
-  for i in headerLine ..< cursorLine:
-    depth = arrayDepthAfter(buffer.getLine(i), depth)
-  depth > 0
+): tuple[name: string, inOpenArray: bool] =
+  ## The `[Section]` header the line sits under, and whether a multi-line array
+  ## is still open above it. ("", false) above the first header.
+  ##
+  ## Scanned downwards to carry the array depth: an array element (`[1]`) is
+  ## shaped like a header and is one only where no array is open.
+  var
+    name = ""
+    depth = 0
+    openAt = false
+  for i in 0 .. line:
+    let text = buffer.getLine(i)
+    openAt = depth > 0
+    let header = parseSectionHeader(text)
+    if header.isSome and (depth == 0 or isKnownSectionHeader(header.get.name)):
+      # A known header closes an array left open above it, so an unfinished
+      # bracket cannot swallow every section below it.
+      name = sectionForHeader(header.get.name, header.get.arrayOfTables)
+      depth = 0
+      continue
+    if depth == 0 and not text.opensArrayValue:
+      # Only a value opens an array, so anything else stays at depth zero.
+      continue
+    depth = arrayDepthAfter(text, depth)
+  (name, openAt)
 
 proc refreshSchemaEntries*(
     mgr: CompletionManager, buffer: TextBuffer, cursorLine, cursorCol: int
@@ -673,10 +682,7 @@ proc refreshSchemaEntries*(
 
   let section = buffer.enclosingSection(cursorLine)
   let ctx = analyzeLine(
-    buffer.getLine(cursorLine),
-    cursorCol,
-    section.name,
-    buffer.inOpenArray(section.headerLine, cursorLine),
+    buffer.getLine(cursorLine), cursorCol, section.name, section.inOpenArray
   )
   for c in ctx.candidates:
     let kind =

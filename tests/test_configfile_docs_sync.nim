@@ -23,10 +23,11 @@
 ## with the checked-in file; any diff means a config field was added or
 ## modified without running `nimble gendocs`.
 
-import std/[unittest, algorithm, strutils]
+import std/[unittest, algorithm, sets, strutils]
 
 import ../tools/gen_config_docs
 import ../src/moepkg/config_loader/lsp {.all.}
+import ../src/moepkg/config_schema
 
 suite "configfile.md auto-gen sync":
   test "regenerating produces no diff":
@@ -74,3 +75,21 @@ suite "configfile.md hand-written [Lsp.{languageId}] table":
         documented.add line.split('|')[1].strip
 
     check documented.sorted == @LspServerConfigKeys.sorted
+
+suite "every section the declarations produce is documented":
+  ## The suite above compares the generator's output with the checked-in file,
+  ## which says nothing about a section the generator never visits. This pins
+  ## it against the schema instead.
+  test "the docs cover exactly the derived sections":
+    let documented = (SectionNames & LspSectionNames).toHashSet
+    for name in DerivedSectionNames:
+      if name notin documented:
+        echo "section `", name, "` loads and completes but has no docs table."
+        echo "Add its AUTO-GEN marker pair to ", DocsPath, "."
+      check name in documented
+
+    let derived = DerivedSectionNames.toHashSet
+    for name in documented:
+      if name notin derived:
+        echo "`", name, "` has a docs table but no section in the schema."
+      check name in derived

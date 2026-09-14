@@ -280,6 +280,70 @@ proc loadStringArray*(
       if valid:
         target = r
 
+proc optionSetExpected*(opts: openArray[string]): string =
+  ## The `expected` text naming a `{.cfgEnumStrings.}` option set.
+  "one of: " & opts.join(", ")
+
+proc loadEnumString*(
+    table: TomlTableRef,
+    key: string,
+    target: var string,
+    opts: openArray[string],
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load a string restricted to a fixed option set. A rejected value leaves
+  ## the default in place, like every other helper here.
+  # An empty set would reject every value: a bug in the config type.
+  doAssert opts.len > 0, "cfgEnumStrings option set is empty for key: " & key
+  if not table.hasKey(key):
+    return
+  let val = table[key]
+  if val.kind != TomlValueKind.String:
+    vr.addError(fullKey(section, key), $val, optionSetExpected(opts))
+    return
+  let s = val.getStr
+  if s notin opts:
+    vr.addError(fullKey(section, key), s, optionSetExpected(opts))
+    return
+  target = s
+
+proc loadEnumStringArray*(
+    table: TomlTableRef,
+    key: string,
+    target: var seq[string],
+    opts: openArray[string],
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load a string array whose elements are restricted to a fixed option set.
+  ## A rejected element is reported under its index and leaves the whole array
+  ## at its default, as `loadStringArray` does.
+  doAssert opts.len > 0, "cfgEnumStrings option set is empty for key: " & key
+  if not table.hasKey(key):
+    return
+  let val = table[key]
+  if val.kind != TomlValueKind.Array:
+    vr.addError(
+      fullKey(section, key), $val, "array of strings, each " & optionSetExpected(opts)
+    )
+    return
+  var
+    valid = true
+    r: seq[string] = @[]
+  for i, item in val.getElems:
+    let indexed = fullKey(section, key) & "[" & $i & "]"
+    if item.kind != TomlValueKind.String:
+      vr.addError(indexed, $item, optionSetExpected(opts))
+      valid = false
+    elif item.getStr notin opts:
+      vr.addError(indexed, item.getStr, optionSetExpected(opts))
+      valid = false
+    else:
+      r.add item.getStr
+  if valid:
+    target = r
+
 proc loadFilePath*(
     table: TomlTableRef,
     key: string,

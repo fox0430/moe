@@ -165,11 +165,48 @@ defineSections:
   ("Debug.JumpList", cfg.debug.jumpList, DebugJumpListConfig)
   ("Debug.Lsp", cfg.debug.lsp, DebugLspConfig)
 
+proc addGroupSectionBranches(
+    node: ConfigNode, access, namesArr, caseStmt: NimNode
+) {.compileTime.} =
+  ## One name and one branch per table below `node`, whose value is reached
+  ## via `access`. Recurses, so a sub-section of a sub-section is documented
+  ## like any other table.
+  for child in node.children:
+    let subMarker = newLit(child.path)
+    namesArr.add subMarker
+    # Interpolate the type symbol the walk already resolved rather than
+    # rebuilding an ident from its name: a child table whose type this module
+    # does not import would otherwise fail with a bare "undeclared
+    # identifier", or bind to an unrelated same-named type in scope here.
+    let subType = nnkBracketExpr.newTree(ident"typedesc", child.typ)
+    let subjectLit = newLit(child.subject)
+    var body: NimNode
+    case child.kind
+    of cnkTable:
+      error("a root table cannot appear as a child table", child.typ)
+    of cnkSubSection:
+      body = newCall(
+        ident"generateSectionMarkdown",
+        access,
+        ident(child.field),
+        subType,
+        subjectLit,
+      )
+    of cnkArrayOfTables:
+      # A repeated table has no single value on `cfg` to read defaults off.
+      body = newCall(ident"generateArrayTableMarkdown", subType, subjectLit)
+    caseStmt.add nnkOfBranch.newTree(subMarker, newStmtList(body))
+    if child.kind == cnkSubSection:
+      # Only a sub-section can own child tables.
+      addGroupSectionBranches(
+        child, newDotExpr(access, ident(child.field)), namesArr, caseStmt
+      )
+
 macro defineGroupSections(ownerField: untyped, GroupT: typedesc): untyped =
   ## Counterpart of `defineSections` for a section group: the parent table
-  ## plus one `Marker.Sub` section per `{.cfgSubSection.}` field of `GroupT`.
-  ## Both the marker name and the sub-table list come from the type, so adding
-  ## a feature table needs no edit here — only its AUTO-GEN marker pair in the
+  ## plus one section per child table of `GroupT`, at any depth. Both the
+  ## marker name and the sub-table list come from the type, so adding a
+  ## feature table needs no edit here — only its AUTO-GEN marker pair in the
   ## markdown.
   ##
   ## Emits `<Marker>SectionNames*` and `<marker>BodyFor`, mirroring the
@@ -189,26 +226,7 @@ macro defineGroupSections(ownerField: untyped, GroupT: typedesc): untyped =
     newStmtList(newCall(ident"generateSectionMarkdown", cfgParam, ownerField, GroupT)),
   )
   let ownerAccess = newDotExpr(cfgParam, ownerField)
-  for (field, typ, subName, subject) in subSectionSpecs(GroupT):
-    let subMarker = newLit(marker & "." & subName)
-    namesArr.add subMarker
-    # Interpolate the type symbol the walk already resolved rather than
-    # rebuilding an ident from its name: a sub-table whose type this module
-    # does not import would otherwise fail with a bare "undeclared
-    # identifier", or bind to an unrelated same-named type in scope here.
-    let subType = nnkBracketExpr.newTree(ident"typedesc", typ)
-    caseStmt.add nnkOfBranch.newTree(
-      subMarker,
-      newStmtList(
-        newCall(
-          ident"generateSectionMarkdown",
-          ownerAccess,
-          ident(field),
-          subType,
-          newLit(subject),
-        )
-      ),
-    )
+  addGroupSectionBranches(groupTree(GroupT), ownerAccess, namesArr, caseStmt)
   caseStmt.add nnkElse.newTree(
     newStmtList(
       nnkRaiseStmt.newTree(

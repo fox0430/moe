@@ -2163,6 +2163,16 @@ enable = true
     check mgr.menu.entries[0].word == "Completion"
     check mgr.menu.entries[0].label == "Lsp.Completion"
 
+  test "An array element shaped like a header is not one":
+    # `[[1]]` inside a multi-line array is an element, not a section.
+    let buf = newTextBuffer(
+      "[Standard]\nbookmarkMarker = [\n  [[1]]\n]\nnumb",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 4, 4)
+    check "number" in mgr.words
+
   test "Enum values complete inside the quotes":
     let buf =
       newTextBuffer("[Standard]\ncolorMode = \"25", some(getTempDir() / "moerc.toml"))
@@ -2253,3 +2263,75 @@ enable = true
     mgr.triggerCompletion(buf, 1, 4)
     mgr.cancelCompletion()
     check mgr.schemaEntries.len == 0
+
+  test "A header still being typed does not swallow the sections below it":
+    # `[Hook` has an unmatched bracket. Counting it as an open array would
+    # hide every section below it until the `]` was typed.
+    let buf =
+      newTextBuffer("[Hook\n\n[Highlight]\ncurr", some(getTempDir() / "moerc.toml"))
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 3, 4)
+    check "currentLine" in mgr.words
+
+  test "An unclosed array stops at the next section header":
+    # An unclosed `[` leaves an array open; the next header the schema knows
+    # closes it, so one unfinished value cannot take the rest of the file.
+    let buf = newTextBuffer(
+      "[Standard]\nbookmarkMarker = [\n\n[Highlight]\ncurr",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 4, 4)
+    check "currentLine" in mgr.words
+
+  test "An array element shaped like a header does not close the array":
+    # Only a schema-known section closes an open array; `[1]` is an element.
+    let buf = newTextBuffer(
+      "[Highlight]\nreservedWord = [\n  [1],\n  curr",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 3, 6)
+    check "currentLine" notin mgr.words
+
+  test "A quoted name holding = is still a header being typed":
+    # `[KeyMapping."a=b"` has a `=`, but inside a string: it is still a
+    # half-typed header, not an assignment.
+    let buf = newTextBuffer(
+      "[KeyMapping.\"a=b\"\n\n[Highlight]\ncurr", some(getTempDir() / "moerc.toml")
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 3, 4)
+    check "currentLine" in mgr.words
+
+  test "A multi-line array below a half-typed header still reads as one":
+    # The guard only skips lines that cannot open an array; a `key = [` below
+    # one still opens it.
+    let buf = newTextBuffer(
+      "[Hook\n\n[Highlight]\nreservedWord = [\n  curr",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 4, 6)
+    check "currentLine" notin mgr.words
+
+  test "An array header does not offer single-table sections":
+    let single = newTextBuffer("[Lsp.", some(getTempDir() / "moerc.toml"))
+    let mgrSingle = newCompletionManager()
+    mgrSingle.triggerCompletion(single, 0, 5)
+    check "Completion" in mgrSingle.words
+    let arrayed = newTextBuffer("[[Lsp.", some(getTempDir() / "moerc.toml"))
+    let mgrArray = newCompletionManager()
+    mgrArray.triggerCompletion(arrayed, 0, 6)
+    check "Completion" notin mgrArray.words
+
+  test "A dynamic section header closes an open array":
+    # `[Lsp.python]` is caller-defined, but its parent `Lsp` is known, which
+    # is enough to end the value above it.
+    let buf = newTextBuffer(
+      "[Standard]\nbookmarkMarker = [\n\n[Lsp.python]\ncommand",
+      some(getTempDir() / "moerc.toml"),
+    )
+    let mgr = newCompletionManager()
+    mgr.triggerCompletion(buf, 4, 7)
+    check "number" notin mgr.words
