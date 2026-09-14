@@ -21,6 +21,8 @@
 
 import std/strutils
 
+import range_parser
+
 proc processEscapeSequences*(s: string): string =
   ## Process escape sequences in a string
   ## Converts \n to newline, \t to tab, \\ to backslash, \/ to slash
@@ -47,12 +49,6 @@ proc processEscapeSequences*(s: string): string =
       result.add(s[i])
       i += 1
 
-const
-  SubstituteAddressChars* = {'.', '0' .. '9'}
-    ## Characters forming a single address atom in a substitute range.
-  SubstituteRangeChars* = SubstituteAddressChars + {'%', ','}
-    ## Characters allowed in the whole range prefix preceding `s/`.
-
 proc normalizeSubstituteLongForm*(commandText: string): string =
   ## Rewrite the `:substitute/...` long form, or any unambiguous prefix of it
   ## (`:su/`, `:subs/`, ...), to `:s/...`, with or without the leading `:`,
@@ -60,7 +56,7 @@ proc normalizeSubstituteLongForm*(commandText: string): string =
   const Long = "substitute"
   let prefixStart = if commandText.len > 0 and commandText[0] == ':': 1 else: 0
   var nameStart = prefixStart
-  while nameStart < commandText.len and commandText[nameStart] in SubstituteRangeChars:
+  while nameStart < commandText.len and commandText[nameStart] in ExRangeChars:
     nameStart.inc
   var nameEnd = nameStart
   while nameEnd < commandText.len and commandText[nameEnd] in {'a' .. 'z'}:
@@ -106,93 +102,17 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
     else:
       normalized
 
-  # Check for substitute command patterns
-  var startIdx = 0
-
-  # Parse range prefix if present
-  # Formats: %, N,M, .,M, N,., .,.
-  if cmd.startsWith("%s/"):
-    startIdx = 3
-    result.isGlobal = true
-  elif cmd.startsWith("s/"):
-    startIdx = 2
-    result.isGlobal = false
-  else:
-    # Try to parse range: number/dot, comma, number/dot, then s/
-    var rangeEnd = 0
-    var foundComma = false
-    var startStr = ""
-    var endStr = ""
-
-    # Parse first part of range (before comma)
-    while rangeEnd < cmd.len:
-      let c = cmd[rangeEnd]
-      if c == ',':
-        foundComma = true
-        rangeEnd.inc
-        break
-      elif c == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
-        # Single line range (e.g., "5s/...")
-        break
-      elif c in SubstituteAddressChars:
-        startStr.add(c)
-        rangeEnd.inc
-      else:
-        return # Invalid character in range
-
-    if not foundComma and startStr.len > 0 and rangeEnd < cmd.len and
-        cmd[rangeEnd] == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
-      # Single line: "5s/..."
-      result.hasRange = true
-      if startStr == ".":
-        result.startLine = 0 # 0 means current line
-        result.endLine = 0
-      else:
-        try:
-          let lineNum = parseInt(startStr)
-          if lineNum < 1:
-            return # Line number 0 is invalid (mirrors parseDeleteCommand)
-          result.startLine = lineNum
-          result.endLine = lineNum
-        except ValueError:
-          return
-      startIdx = rangeEnd + 2
-    elif foundComma:
-      # Parse second part of range (after comma)
-      while rangeEnd < cmd.len:
-        let c = cmd[rangeEnd]
-        if c == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
-          break
-        elif c in SubstituteAddressChars:
-          endStr.add(c)
-          rangeEnd.inc
-        else:
-          return # Invalid character in range
-
-      if rangeEnd < cmd.len and cmd[rangeEnd] == 's' and rangeEnd + 1 < cmd.len and
-          cmd[rangeEnd + 1] == '/':
-        result.hasRange = true
-        # Parse start line
-        if startStr == "." or startStr.len == 0:
-          result.startLine = 0 # 0 means current line
-        else:
-          try:
-            result.startLine = parseInt(startStr)
-          except ValueError:
-            return
-        # Parse end line
-        if endStr == "." or endStr.len == 0:
-          result.endLine = 0 # 0 means current line
-        else:
-          try:
-            result.endLine = parseInt(endStr)
-          except ValueError:
-            return
-        startIdx = rangeEnd + 2
-      else:
-        return # No s/ found after range
-    else:
-      return # Not a valid substitute command
+  # The range, then `s` and the `/` opening its pattern.
+  let prefix = parseExRangePrefix(cmd)
+  if not prefix.isValid:
+    return
+  if not cmd.continuesWith("s/", prefix.rest):
+    return
+  result.isGlobal = prefix.range.isGlobal
+  result.hasRange = prefix.range.hasRange
+  result.startLine = prefix.range.startLine
+  result.endLine = prefix.range.endLine
+  let startIdx = prefix.rest + 2
 
   result.isValid = true
 

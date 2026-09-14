@@ -19,7 +19,7 @@
 
 ## Delete (:d) command parser with optional line range.
 
-import std/strutils
+import range_parser
 
 type DeleteParseResult* = object ## Result of parsing a delete command
   isValid*: bool # Whether this is a valid delete command
@@ -38,7 +38,7 @@ proc parseDeleteCommand*(commandText: string): DeleteParseResult =
   ##   :1,.d - delete from line 1 to current line
   result = DeleteParseResult(isValid: false)
 
-  if commandText.len < 1:
+  if commandText.len == 0:
     return
 
   # Remove leading ":"
@@ -48,88 +48,17 @@ proc parseDeleteCommand*(commandText: string): DeleteParseResult =
     else:
       commandText
 
-  if cmd.len == 0:
+  let prefix = parseExRangePrefix(cmd)
+  if not prefix.isValid:
+    return
+  # `d` takes no argument but the range.
+  if cmd[prefix.rest ..^ 1] != "d":
     return
 
-  # Check for simple :d
-  if cmd == "d":
-    result.isValid = true
-    return
-
-  # Check for :%d
-  if cmd == "%d":
-    result.isValid = true
-    result.isGlobal = true
-    return
-
-  # Try to parse range: number/dot, comma, number/dot, then d
-  var i = 0
-  var foundComma = false
-  var startStr = ""
-  var endStr = ""
-
-  # Parse first part of range (before comma)
-  while i < cmd.len:
-    let c = cmd[i]
-    if c == ',':
-      foundComma = true
-      i.inc
-      break
-    elif c == 'd' and i + 1 == cmd.len:
-      # Single line range (e.g., "5d")
-      break
-    elif c in {'0' .. '9', '.'}:
-      startStr.add(c)
-      i.inc
-    else:
-      return # Invalid character in range
-
-  if not foundComma and startStr.len > 0 and i < cmd.len and cmd[i] == 'd' and
-      i + 1 == cmd.len:
-    # Single line: "5d"
-    result.isValid = true
-    result.hasRange = true
-    if startStr == ".":
-      result.startLine = 0 # 0 means current line
-      result.endLine = 0
-    else:
-      try:
-        let lineNum = parseInt(startStr)
-        if lineNum < 1:
-          result.isValid = false
-          return
-        result.startLine = lineNum
-        result.endLine = lineNum
-      except ValueError:
-        return
-  elif foundComma:
-    # Parse second part of range (after comma)
-    while i < cmd.len:
-      let c = cmd[i]
-      if c == 'd' and i + 1 == cmd.len:
-        break
-      elif c in {'0' .. '9', '.'}:
-        endStr.add(c)
-        i.inc
-      else:
-        return # Invalid character in range
-
-    if i < cmd.len and cmd[i] == 'd' and i + 1 == cmd.len:
-      result.isValid = true
-      result.hasRange = true
-      # Parse start line
-      if startStr == "." or startStr.len == 0:
-        result.startLine = 0 # 0 means current line
-      else:
-        try:
-          result.startLine = parseInt(startStr)
-        except ValueError:
-          return
-      # Parse end line
-      if endStr == "." or endStr.len == 0:
-        result.endLine = 0 # 0 means current line
-      else:
-        try:
-          result.endLine = parseInt(endStr)
-        except ValueError:
-          return
+  result = DeleteParseResult(
+    isValid: true,
+    isGlobal: prefix.range.isGlobal,
+    hasRange: prefix.range.hasRange,
+    startLine: prefix.range.startLine,
+    endLine: prefix.range.endLine,
+  )
