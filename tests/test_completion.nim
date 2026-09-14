@@ -2287,8 +2287,7 @@ enable = true
   test "An array element shaped like a header does not close the array":
     # Only a schema-known section closes an open array; `[1]` is an element.
     let buf = newTextBuffer(
-      "[Highlight]\nreservedWord = [\n  [1],\n  curr",
-      some(getTempDir() / "moerc.toml"),
+      "[Highlight]\nreservedWord = [\n  [1],\n  curr", some(getTempDir() / "moerc.toml")
     )
     let mgr = newCompletionManager()
     mgr.triggerCompletion(buf, 3, 6)

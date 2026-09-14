@@ -186,11 +186,7 @@ proc addGroupSectionBranches(
       error("a root table cannot appear as a child table", child.typ)
     of cnkSubSection:
       body = newCall(
-        ident"generateSectionMarkdown",
-        access,
-        ident(child.field),
-        subType,
-        subjectLit,
+        ident"generateSectionMarkdown", access, ident(child.field), subType, subjectLit
       )
     of cnkArrayOfTables:
       # A repeated table has no single value on `cfg` to read defaults off.
