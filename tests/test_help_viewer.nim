@@ -438,12 +438,15 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     let state = newHelpViewerState()
     check state.items.contains("# Command mode")
 
-  test "head group 1 (jump/shell/bg/man) is aligned to width 15":
+  test "head group 1 (jump/shell/bg/man) is aligned to width 18":
     let state = newHelpViewerState()
-    check state.items.contains("number          - Jump to line number; e.g. :10")
-    check state.items.contains("! shell command - Shell command execution")
+    check state.items.contains("number             - Jump to line number; e.g. :10")
     check state.items.contains(
-      "bg              - Pause the editor and show the recent terminal output"
+      "$ or . or +N or -N - Jump to an address: $ last line, . current line, +N / -N relative; e.g. :.+3"
+    )
+    check state.items.contains("! shell command    - Shell command execution")
+    check state.items.contains(
+      "bg                 - Pause the editor and show the recent terminal output"
     )
 
   test "head group 2 (:e family) is aligned to width 11":
