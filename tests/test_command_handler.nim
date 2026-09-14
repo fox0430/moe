@@ -321,15 +321,36 @@ suite "CommandModeHandler - executeGotoLine":
     let handler = setupHandler()
     let buffer = setupBuffer(@["Line 1", "Line 2", "Line 3"])
 
-    let result = handler.executeGotoLine(buffer, 2)
+    let result = handler.executeGotoLine(buffer, exLine(2))
     check result.kind == hrGotoLine
     check result.lineNumber == 2
+
+  test "Goto the last line with $":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Line 1", "Line 2", "Line 3"])
+
+    check handler.executeGotoLine(buffer, exLast()).lineNumber == 3
+    check handler.executeGotoLine(buffer, exLast(-1)).lineNumber == 2
+
+  test "Goto an offset from the cursor":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Line 1", "Line 2", "Line 3", "Line 4"])
+
+    check handler.executeGotoLine(buffer, exCurrent(2), currentLine = 1).lineNumber == 4
+
+  test "Goto past the end lands on the last line rather than failing":
+    # Unlike a range: `:999` is how vim users ask for the end of the file.
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Line 1", "Line 2"])
+
+    check handler.executeGotoLine(buffer, exLine(999)).lineNumber == 2
+    check handler.executeGotoLine(buffer, exCurrent(high(int))).lineNumber == 2
 
   test "Goto line 0 returns error":
     let handler = setupHandler()
     let buffer = setupBuffer(@["Line 1"])
 
-    let result = handler.executeGotoLine(buffer, 0)
+    let result = handler.executeGotoLine(buffer, exLine(0))
     check result.kind == hrError
     check result.errorMessage == "Invalid line number"
 
@@ -337,7 +358,7 @@ suite "CommandModeHandler - executeGotoLine":
     let handler = setupHandler()
     let buffer = setupBuffer(@["Line 1", "Line 2"])
 
-    let result = handler.executeGotoLine(buffer, 100)
+    let result = handler.executeGotoLine(buffer, exLine(100))
     check result.kind == hrGotoLine
     check result.lineNumber == 2
 
@@ -1182,17 +1203,7 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "hello",
-      "hi",
-      "",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result = handler.executeSubstitute(buffer, "hello", "hi", "", currentLine = 0)
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 1
     check buffer.getLine(0) == "hi world"
@@ -1202,17 +1213,7 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello hello hello")
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "hello",
-      "hi",
-      "g",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result = handler.executeSubstitute(buffer, "hello", "hi", "g", currentLine = 0)
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 3
     check buffer.getLine(0) == "hi hi hi"
@@ -1222,17 +1223,7 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello hello hello")
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "hello",
-      "hi",
-      "",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result = handler.executeSubstitute(buffer, "hello", "hi", "", currentLine = 0)
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 1
     check buffer.getLine(0) == "hi hello hello"
@@ -1245,15 +1236,7 @@ suite "CommandModeHandler - executeSubstitute":
     discard buffer.insert(2, "foo")
 
     let result = handler.executeSubstitute(
-      buffer,
-      "foo",
-      "bar",
-      "",
-      hasRange = false,
-      isGlobalRange = true,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
+      buffer, "foo", "bar", "", range = ExLineRange(kind: erkAll), currentLine = 0
     )
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 3
@@ -1274,10 +1257,7 @@ suite "CommandModeHandler - executeSubstitute":
       "foo",
       "bar",
       "",
-      hasRange = true,
-      isGlobalRange = false,
-      startLine = 2,
-      endLine = 3,
+      range = exAddresses(exLine(2), exLine(3)),
       currentLine = 0,
     )
     check result.kind == hrSubstitute
@@ -1291,17 +1271,8 @@ suite "CommandModeHandler - executeSubstitute":
     let handler = setupHandler()
     let buffer = setupBuffer(@["hello"])
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "",
-      "replacement",
-      "",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result =
+      handler.executeSubstitute(buffer, "", "replacement", "", currentLine = 0)
     check result.kind == hrError
     check result.errorMessage == "Pattern required"
 
@@ -1309,17 +1280,8 @@ suite "CommandModeHandler - executeSubstitute":
     let handler = setupHandler()
     let buffer = setupBuffer(@["hello world"])
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "xyz",
-      "replacement",
-      "",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result =
+      handler.executeSubstitute(buffer, "xyz", "replacement", "", currentLine = 0)
     check result.kind == hrError
     check "Pattern not found" in result.errorMessage
 
@@ -1328,17 +1290,8 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "hello",
-      "hi\\nworld",
-      "",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result =
+      handler.executeSubstitute(buffer, "hello", "hi\\nworld", "", currentLine = 0)
     check result.kind == hrSubstitute
     check buffer.getLine(0) == "hi\nworld"
 
@@ -1354,10 +1307,7 @@ suite "CommandModeHandler - executeSubstitute":
       "foo",
       "replaced",
       "",
-      hasRange = true,
-      isGlobalRange = false,
-      startLine = 3,
-      endLine = 1,
+      range = exAddresses(exLine(3), exLine(1)),
       currentLine = 0,
     )
     check result.kind == hrError
@@ -1368,17 +1318,7 @@ suite "CommandModeHandler - executeSubstitute":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "hello ",
-      "",
-      "",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result = handler.executeSubstitute(buffer, "hello ", "", "", currentLine = 0)
     check result.kind == hrSubstitute
     check result.hrSubstituteCount == 1
     check buffer.getLine(0) == "world"
@@ -1389,17 +1329,7 @@ suite "CommandModeHandler - executeSubstitute":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
     buffer.readOnly = true
 
-    let result = handler.executeSubstitute(
-      buffer,
-      "hello",
-      "hi",
-      "",
-      hasRange = false,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
-    )
+    let result = handler.executeSubstitute(buffer, "hello", "hi", "", currentLine = 0)
     check result.kind == hrError
     check result.errorMessage == "Buffer is read-only"
     check buffer.getLine(0) == "hello world"
@@ -2117,6 +2047,82 @@ suite "CommandModeHandler - executeSet enum coverage":
     for v in FloatSettingOption:
       check v in coveredValues
 
+suite "CommandModeHandler - address resolution":
+  test "$ is the last line of the buffer":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two", "three", "four"])
+
+    let r = handler.executeDelete(
+      buffer, range = exAddresses(exLine(3), exLast()), currentLine = 0
+    )
+    check r.kind == hrDeleteLines
+    check buffer.len == 2
+    check buffer.getLine(0) == "one"
+    check buffer.getLine(1) == "two"
+
+  test "An offset counts from the address it follows":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two", "three", "four", "five"])
+
+    let r = handler.executeDelete(
+      buffer, range = exAddresses(exCurrent(1), exCurrent(2)), currentLine = 1
+    )
+    check r.kind == hrDeleteLines
+    check buffer.len == 3
+    check buffer.getLine(1) == "two"
+    check buffer.getLine(2) == "five"
+
+  test "An address outside the buffer is refused, not moved onto the edge":
+    # Clamping it would delete lines the user did not name.
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two"])
+
+    for range in [
+      exAddresses(exLine(1), exLast(99)),
+      exAddresses(exLine(1), exLine(100)),
+      exAddresses(exCurrent(-5), exLine(1)),
+      exAddresses(exLine(1, -2), exLine(1)),
+    ]:
+      let r = handler.executeDelete(buffer, range = range, currentLine = 0)
+      check r.kind == hrError
+      check buffer.len == 2
+
+  test "Line 0 beside a comma addresses the first line":
+    # The gap above the first line is not a line, but it starts a range at one:
+    # `:0,1d` deletes the first line rather than being refused.
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two"])
+
+    let r = handler.executeDelete(
+      buffer, range = exAddresses(exLine(0), exLine(1)), currentLine = 0
+    )
+    check r.kind == hrDeleteLines
+    check buffer.len == 1
+    check buffer.getLine(0) == "two"
+
+  test "The same line by two spellings gets the same answer":
+    # `:0` and `:1-1` both name the line above the first one.
+    let handler = setupHandler()
+
+    for range in [
+      exAddresses(exLine(0), exLine(1)), exAddresses(exLine(1, -1), exLine(1))
+    ]:
+      let buffer = setupBuffer(@["one", "two"])
+      let r = handler.executeDelete(buffer, range = range, currentLine = 0)
+      check r.kind == hrDeleteLines
+      check buffer.len == 1
+      check buffer.getLine(0) == "two"
+
+  test "An offset large enough to overflow saturates instead of trapping":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two"])
+
+    let r = handler.executeDelete(
+      buffer, range = exAddresses(exLine(1), exLast(high(int))), currentLine = 0
+    )
+    check r.kind == hrError
+    check buffer.len == 2
+
 suite "CommandModeHandler - executeDelete":
   test "Delete current line":
     let handler = setupHandler()
@@ -2125,9 +2131,7 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(1, "line2")
     discard buffer.insert(2, "line3")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = false, isGlobalRange = false, currentLine = 1
-    )
+    let result = handler.executeDelete(buffer, currentLine = 1)
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 1
     check result.hrDeletedText == "line2\n"
@@ -2142,7 +2146,7 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(1, "line2")
     discard buffer.insert(2, "line3")
 
-    let result = handler.executeDelete(buffer, hasRange = false, isGlobalRange = true)
+    let result = handler.executeDelete(buffer, range = ExLineRange(kind: erkAll))
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 3
     check result.hrDeletedText == "line1\nline2\nline3\n"
@@ -2159,7 +2163,7 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(2, "line3")
     check buffer.foldState.addFold(0, 2, collapsed = true)
 
-    let result = handler.executeDelete(buffer, hasRange = false, isGlobalRange = true)
+    let result = handler.executeDelete(buffer, range = ExLineRange(kind: erkAll))
     check result.kind == hrDeleteLines
     check buffer.len == 1
     check buffer.getLine(0) == ""
@@ -2176,12 +2180,7 @@ suite "CommandModeHandler - executeDelete":
     check buffer.foldState.addFold(0, 2, collapsed = true)
 
     let result = handler.executeDelete(
-      buffer,
-      hasRange = true,
-      startLine = 1,
-      endLine = 1,
-      isGlobalRange = false,
-      currentLine = 0,
+      buffer, range = exAddresses(exLine(1), exLine(1)), currentLine = 0
     )
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 3
@@ -2197,9 +2196,8 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(2, "line3")
     discard buffer.insert(3, "line4")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = true, isGlobalRange = false, startLine = 2, endLine = 3
-    )
+    let result =
+      handler.executeDelete(buffer, range = exAddresses(exLine(2), exLine(3)))
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 2
     check result.hrDeletedText == "line2\nline3\n"
@@ -2213,9 +2211,8 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
     discard buffer.insert(1, "line2")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = true, isGlobalRange = false, startLine = 3, endLine = 1
-    )
+    let result =
+      handler.executeDelete(buffer, range = exAddresses(exLine(3), exLine(1)))
     check result.kind == hrError
 
   test "Delete single line by range":
@@ -2225,9 +2222,8 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(1, "line2")
     discard buffer.insert(2, "line3")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = true, isGlobalRange = false, startLine = 2, endLine = 2
-    )
+    let result =
+      handler.executeDelete(buffer, range = exAddresses(exLine(2), exLine(2)))
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 1
     check buffer.len == 2
@@ -2239,9 +2235,7 @@ suite "CommandModeHandler - executeDelete":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "only line")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = false, isGlobalRange = false, currentLine = 0
-    )
+    let result = handler.executeDelete(buffer, currentLine = 0)
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 1
     check result.hrDeletedText == "only line\n"
@@ -2255,9 +2249,7 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(1, "line2")
     discard buffer.insert(2, "line3")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = false, isGlobalRange = false, currentLine = 0
-    )
+    let result = handler.executeDelete(buffer, currentLine = 0)
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 1
     check result.hrDeletedText == "line1\n"
@@ -2272,9 +2264,7 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(1, "line2")
     discard buffer.insert(2, "line3")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = false, isGlobalRange = false, currentLine = 2
-    )
+    let result = handler.executeDelete(buffer, currentLine = 2)
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 1
     check result.hrDeletedText == "line3\n"
@@ -2292,12 +2282,7 @@ suite "CommandModeHandler - executeDelete":
 
     # startLine=0 means current line, endLine=3 means line 3 (1-based)
     let result = handler.executeDelete(
-      buffer,
-      hasRange = true,
-      isGlobalRange = false,
-      startLine = 0,
-      endLine = 3,
-      currentLine = 1,
+      buffer, range = exAddresses(exCurrent(), exLine(3)), currentLine = 1
     )
     check result.kind == hrDeleteLines
     check result.hrDeletedLineCount == 2
@@ -2306,20 +2291,22 @@ suite "CommandModeHandler - executeDelete":
     check buffer.getLine(0) == "line1"
     check buffer.getLine(1) == "line4"
 
-  test "Delete with endLine beyond buffer is clamped":
+  test "Delete with endLine beyond buffer is refused":
+    # `$` is how the end of the buffer is named; a number past it is a typo,
+    # and clamping it would delete whatever happened to be in the way.
     let handler = setupHandler()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
     discard buffer.insert(1, "line2")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = true, isGlobalRange = false, startLine = 1, endLine = 100
-    )
-    check result.kind == hrDeleteLines
-    check result.hrDeletedLineCount == 2
-    check result.hrDeletedText == "line1\nline2\n"
-    check buffer.len == 1
-    check buffer.getLine(0) == ""
+    let result =
+      handler.executeDelete(buffer, range = exAddresses(exLine(1), exLine(100)))
+    check result.kind == hrError
+    check buffer.len == 2
+
+    let toLast = handler.executeDelete(buffer, range = exAddresses(exLine(1), exLast()))
+    check toLast.kind == hrDeleteLines
+    check toLast.hrDeletedLineCount == 2
 
   test "Delete with startLine beyond buffer returns error":
     let handler = setupHandler()
@@ -2327,9 +2314,8 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
     discard buffer.insert(1, "line2")
 
-    let result = handler.executeDelete(
-      buffer, hasRange = true, isGlobalRange = false, startLine = 10, endLine = 20
-    )
+    let result =
+      handler.executeDelete(buffer, range = exAddresses(exLine(10), exLine(20)))
     check result.kind == hrError
 
   test "Delete on read-only buffer reports error and does not populate deleted text":
@@ -2339,9 +2325,7 @@ suite "CommandModeHandler - executeDelete":
     discard buffer.insert(1, "line2")
     buffer.readOnly = true
 
-    let result = handler.executeDelete(
-      buffer, hasRange = false, isGlobalRange = false, currentLine = 0
-    )
+    let result = handler.executeDelete(buffer, currentLine = 0)
     # hrError instead of hrDeleteLines guarantees result_processor's
     # setDeletedRegister branch never fires -- the register cannot be polluted.
     check result.kind == hrError
@@ -2365,10 +2349,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
       "foo",
       "bar",
       "",
-      hasRange = true,
-      isGlobalRange = false,
-      startLine = 2,
-      endLine = 2,
+      range = exAddresses(exLine(2), exLine(2)),
       currentLine = 0,
     )
     check result.kind == hrSubstitute
@@ -2382,15 +2363,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     check buffer.foldState.addFold(1, 3, collapsed = true) # no 'foo' inside
     # :%s/foo/bar/ matches only line 0
     let result = handler.executeSubstitute(
-      buffer,
-      "foo",
-      "bar",
-      "",
-      hasRange = false,
-      isGlobalRange = true,
-      startLine = 0,
-      endLine = 0,
-      currentLine = 0,
+      buffer, "foo", "bar", "", range = ExLineRange(kind: erkAll), currentLine = 0
     )
     check result.kind == hrSubstitute
     check buffer.getLine(0) == "bar"
@@ -2403,12 +2376,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     # :3d -> 1-based line 3 == index 2, the fold start. The range widens to 2..4,
     # so the whole fold is deleted rather than one line out of the middle of it.
     let result = handler.executeDelete(
-      buffer,
-      hasRange = true,
-      isGlobalRange = false,
-      startLine = 3,
-      endLine = 3,
-      currentLine = 0,
+      buffer, range = exAddresses(exLine(3), exLine(3)), currentLine = 0
     )
     check result.kind == hrDeleteLines
     check buffer.len == 3
@@ -2425,12 +2393,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     let buffer = setupBuffer(@["a", "b", "c"])
     check buffer.foldState.addFold(1, 9, collapsed = true)
     let result = handler.executeDelete(
-      buffer,
-      hasRange = true,
-      isGlobalRange = false,
-      startLine = 2,
-      endLine = 2,
-      currentLine = 0,
+      buffer, range = exAddresses(exLine(2), exLine(2)), currentLine = 0
     )
     check result.kind == hrDeleteLines
     check buffer.len == 1
@@ -2445,10 +2408,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
       "foo",
       "bar",
       "",
-      hasRange = true,
-      isGlobalRange = false,
-      startLine = 2,
-      endLine = 2,
+      range = exAddresses(exLine(2), exLine(2)),
       currentLine = 0,
     )
     check result.kind == hrSubstitute
@@ -2464,12 +2424,7 @@ suite "CommandModeHandler - Ex ranges cover closed folds whole":
     check buffer.foldState.addFold(2, 4, collapsed = true)
     # :4d -> 1-based line 4 == index 3, in the middle of the fold.
     let result = handler.executeDelete(
-      buffer,
-      hasRange = true,
-      startLine = 4,
-      endLine = 4,
-      isGlobalRange = false,
-      currentLine = 3,
+      buffer, range = exAddresses(exLine(4), exLine(4)), currentLine = 3
     )
     check result.kind == hrDeleteLines
     check result.hrDeleteStartLine == 2

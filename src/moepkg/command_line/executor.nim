@@ -19,12 +19,12 @@
 
 ## Executes a ParsedCommand and returns a CommandLineResult variant. The
 ## large case dispatch lives here; pure pattern parsing lives in
-## substitute_parser/delete_parser, while string -> ParsedCommand conversion
-## lives in parser.
+## substitute_parser, while string -> ParsedCommand conversion lives in
+## parser.
 
 import std/[options, strutils]
 
-import types, substitute_parser, delete_parser
+import types, substitute_parser
 
 proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult =
   ## Execute a parsed command and return the result
@@ -86,15 +86,11 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
   of claRedo:
     return CommandLineResult(kind: claRedo)
   of claGoto:
-    if cmd.args.len > 0:
-      try:
-        let lineNum = parseInt(cmd.args[0])
-        return CommandLineResult(kind: claGoto, lineNumber: lineNum)
-      except ValueError:
-        return CommandLineResult(kind: claUnknown, errorMessage: "Invalid line number")
-    else:
+    if cmd.range.kind != erkAddresses:
       return
         CommandLineResult(kind: claUnknown, errorMessage: "No line number specified")
+    # `:1,5` moves to the last address, as in vim.
+    return CommandLineResult(kind: claGoto, gotoAddress: cmd.range.last)
   of claSet:
     if cmd.args.len > 0:
       let option = cmd.args[0]
@@ -107,23 +103,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     else:
       return CommandLineResult(kind: claUnknown, errorMessage: "No option specified")
   of claDeleteLines:
-    # Parse delete command using parseDeleteCommand
-    if cmd.args.len > 0:
-      let parsed = parseDeleteCommand(":" & cmd.args[0])
-      if not parsed.isValid:
-        return CommandLineResult(
-          kind: claUnknown, errorMessage: "Invalid delete command format"
-        )
-      return CommandLineResult(
-        kind: claDeleteLines,
-        deleteHasRange: parsed.hasRange,
-        deleteIsGlobal: parsed.isGlobal,
-        deleteStartLine: parsed.startLine,
-        deleteEndLine: parsed.endLine,
-      )
-    else:
-      # Simple :d with no range — delete current line
-      return CommandLineResult(kind: claDeleteLines)
+    return CommandLineResult(kind: claDeleteLines, deleteRange: cmd.range)
   of claSubstitute:
     # Parse substitute command using parseSubstituteCommand
     if cmd.args.len > 0:
@@ -143,10 +123,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         pattern: parsed.pattern,
         replacement: parsed.replacement,
         substituteFlags: parsed.flags,
-        hasRange: parsed.hasRange,
-        isGlobal: parsed.isGlobal,
-        startLine: parsed.startLine,
-        endLine: parsed.endLine,
+        substituteRange: cmd.range,
       )
     else:
       return CommandLineResult(

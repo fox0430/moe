@@ -179,14 +179,28 @@ proc executeFiler*(handler: CommandModeHandler, path: Option[string]): HandlerRe
   HandlerResult(kind: hrError, errorMessage: "E344: Can't find directory: " & path.get)
 
 proc executeGotoLine*(
-    handler: CommandModeHandler, buffer: TextBuffer, lineNumber: int
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    address: ExAddress,
+    currentLine: int = 0,
 ): HandlerResult =
-  ## Execute goto line command (:123)
-  if lineNumber <= 0:
+  ## Move to the line an address names.
+  ##
+  ## Unlike a range, an address past the end lands on the last line rather than
+  ## being refused, as in vim. Above the first line is still an error.
+  let base =
+    case address.base
+    of eabCurrent:
+      currentLine
+    of eabLine:
+      address.line - 1
+    of eabLast:
+      buffer.len - 1
+  # Saturating again: the offset may already be at the top.
+  let line = satAdd(satAdd(base, address.offset), 1)
+  if line <= 0:
     return HandlerResult(kind: hrError, errorMessage: "Invalid line number")
-  # Clamp to last line if lineNumber exceeds buffer length
-  let clampedLine = min(lineNumber, buffer.len)
-  HandlerResult(kind: hrGotoLine, lineNumber: clampedLine)
+  HandlerResult(kind: hrGotoLine, lineNumber: min(line, buffer.len))
 
 proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): HandlerResult =
   ## Validate and dispatch an integer-typed `:set X=N` option.
@@ -343,45 +357,51 @@ proc executeStripWhitespace*(
 proc executeQuickRun*(handler: CommandModeHandler): HandlerResult =
   HandlerResult(kind: hrQuickRun)
 
+proc resolveAddress(
+    a: ExAddress, buffer: TextBuffer, currentLine: int
+): Result[int, string] =
+  ## The 0-based line an address names, or why the buffer has none.
+  ##
+  ## The only place an address is judged: the parser cannot tell that `:0` and
+  ## `:1-1` name the same line.
+  let base =
+    case a.base
+    of eabCurrent:
+      currentLine
+    of eabLine:
+      a.line - 1
+    of eabLast:
+      buffer.len - 1
+  let line = satAdd(base, a.offset)
+  # Line 0 is the gap above the first line and addresses it: `:0,5d` and
+  # `:1-1,5d` both start at line 1. Anything further up is refused.
+  if line < -1 or line >= buffer.len:
+    return err("Line out of range")
+  ok max(line, 0)
+
 proc resolveExRange(
-    buffer: TextBuffer,
-    hasRange: bool,
-    isGlobalRange: bool,
-    startLine: int,
-    endLine: int,
-    currentLine: int,
+    buffer: TextBuffer, range: ExLineRange, currentLine: int
 ): Result[tuple[first, last: int], string] =
   ## Turn the range an Ex command was given into the 0-based span of lines it
   ## covers, or say why it covers none.
   ##
-  ## Resolves what the parser could not: 0 means the current line, no range
-  ## means that line alone, clamping to the buffer, and fold snapping.
+  ## `%` and fold snapping clamp to the buffer; a typed address is refused
+  ## rather than moved.
   var first, last: int
-  if isGlobalRange:
+  case range.kind
+  of erkAll:
     first = 0
     last = buffer.len - 1
-  elif hasRange:
-    first =
-      if startLine == 0:
-        currentLine
-      else:
-        startLine - 1
-    last =
-      if endLine == 0:
-        currentLine
-      else:
-        endLine - 1
-    first = max(first, 0)
-    last = max(last, 0)
-    last = min(last, buffer.len - 1)
+  of erkAddresses:
+    first = ?resolveAddress(range.first, buffer, currentLine)
+    last = ?resolveAddress(range.last, buffer, currentLine)
     if first > last:
       return err("Invalid range: start line > end line")
-  else:
+  of erkCurrent:
+    if currentLine < 0 or currentLine >= buffer.len:
+      return err("Line out of range")
     first = currentLine
     last = currentLine
-
-  if first >= buffer.len:
-    return err("Line out of range")
 
   # A range reaching into a closed fold covers all of its lines.
   let snapped = buffer.foldState.snapRangeToFolds(first, last)
@@ -394,10 +414,7 @@ proc executeSubstitute*(
     pattern: string,
     replacement: string,
     flags: string,
-    hasRange: bool = false,
-    isGlobalRange: bool = false,
-    startLine: int = 0,
-    endLine: int = 0,
+    range: ExLineRange = ExLineRange(),
     currentLine: int = 0,
 ): HandlerResult =
   ## Execute substitute command (:s, :%s/pattern/replacement/flags)
@@ -414,8 +431,7 @@ proc executeSubstitute*(
 
   let processedReplacement = processEscapeSequences(replacement)
 
-  let resolved =
-    buffer.resolveExRange(hasRange, isGlobalRange, startLine, endLine, currentLine)
+  let resolved = buffer.resolveExRange(range, currentLine)
   if resolved.isErr:
     return HandlerResult(kind: hrError, errorMessage: resolved.error)
   let (rangeStart, rangeEnd) = resolved.get
@@ -468,17 +484,13 @@ proc executeSubstitute*(
 proc executeDelete*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
-    hasRange: bool = false,
-    isGlobalRange: bool = false,
-    startLine: int = 0,
-    endLine: int = 0,
+    range: ExLineRange = ExLineRange(),
     currentLine: int = 0,
 ): HandlerResult =
   ## Execute delete command (:d, :%d, :1,10d)
   if buffer.readOnly:
     return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
-  let resolved =
-    buffer.resolveExRange(hasRange, isGlobalRange, startLine, endLine, currentLine)
+  let resolved = buffer.resolveExRange(range, currentLine)
   if resolved.isErr:
     return HandlerResult(kind: hrError, errorMessage: resolved.error)
   let (rangeStart, rangeEnd) = resolved.get
@@ -573,7 +585,7 @@ proc handleCommandModeInput*(
   of claEnew:
     handler.executeEnew()
   of claGoto:
-    handler.executeGotoLine(buffer, cmdResult.lineNumber)
+    handler.executeGotoLine(buffer, cmdResult.gotoAddress, currentLine)
   of claSet:
     handler.executeSet(cmdResult.option, cmdResult.value)
   of claHelp:
@@ -672,14 +684,10 @@ proc handleCommandModeInput*(
   of claSubstitute:
     handler.executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
-      cmdResult.hasRange, cmdResult.isGlobal, cmdResult.startLine, cmdResult.endLine,
-      currentLine,
+      cmdResult.substituteRange, currentLine,
     )
   of claDeleteLines:
-    handler.executeDelete(
-      buffer, cmdResult.deleteHasRange, cmdResult.deleteIsGlobal,
-      cmdResult.deleteStartLine, cmdResult.deleteEndLine, currentLine,
-    )
+    handler.executeDelete(buffer, cmdResult.deleteRange, currentLine)
   of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
     let modes = modesForMapAction(cmdResult.kind)
     if cmdResult.mapRhs == "":

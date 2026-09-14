@@ -24,6 +24,9 @@ import std/[tables, options]
 
 import pkg/results
 
+import range_parser
+export range_parser
+
 type
   CommandLineAction* = enum
     claQuit # :q
@@ -112,6 +115,8 @@ type
 
   ParsedCommand* = object
     action*: CommandLineAction
+    range*: ExLineRange
+      ## The range in front of the name, stripped by `parseCommandLine`.
     args*: seq[string]
     flags*: seq[string]
     rawText*: string
@@ -148,7 +153,7 @@ type
     of claEnew, claUndo, claRedo:
       discard
     of claGoto:
-      lineNumber*: int
+      gotoAddress*: ExAddress
     of claSet:
       option*: string
       value*: Option[string]
@@ -156,15 +161,9 @@ type
       pattern*: string
       replacement*: string
       substituteFlags*: string
-      hasRange*: bool # Whether a line range is specified
-      isGlobal*: bool # Whether % prefix (all lines)
-      startLine*: int # Start line (1-based, 0 means current line)
-      endLine*: int # End line (1-based, 0 means current line)
+      substituteRange*: ExLineRange
     of claDeleteLines:
-      deleteHasRange*: bool # Whether a line range is specified
-      deleteIsGlobal*: bool # Whether % prefix (all lines)
-      deleteStartLine*: int # Start line (1-based, 0 means current line)
-      deleteEndLine*: int # End line (1-based, 0 means current line)
+      deleteRange*: ExLineRange
     of claHelp:
       topic*: Option[string]
     of claVSplit:

@@ -259,10 +259,11 @@ proc renderSetOptionRows(): string =
 proc renderCommandModeTable*(): string =
   ## The full Command-mode table: number-jump + shell + head names + set
   ## options + tail names. Special syntax entries (`:N`, `:!cmd`,
-  ## `%s/.../.../`, `%d`, `1,10d`) are pulled from `CommandLineSpecialHelp`
+  ## `:$`, `%s/.../.../`, `%d`, `1,10d`) are pulled from `CommandLineSpecialHelp`
   ## so they round-trip with the same wording the TUI help uses.
   result = CommandTableHeader
   result.add renderCommandRow(CommandLineSpecialHelp.lineNumber)
+  result.add renderCommandRow(CommandLineSpecialHelp.lineAddress)
   result.add renderCommandRow(CommandLineSpecialHelp.shellCommand)
   for name in CommandModeHeadNames:
     for e in lookupHelpEntries(name):

@@ -27,13 +27,12 @@
 ##                        CommandLineParser, CommandLineResult,
 ##                        ArgumentRequiredActions, isNoArgumentAction
 ##   - substitute_parser: parseSubstituteCommand and extract* helpers
-##   - delete_parser:     parseDeleteCommand
 ##   - parser:            newCommandLineParser, addAlias/removeAlias/
 ##                        clearAliases, parseCommandLine
 ##   - executor:          execute (case dispatch -> CommandLineResult)
 
-import command_line/[types, substitute_parser, delete_parser, parser, executor]
-export types, substitute_parser, delete_parser, parser, executor
+import command_line/[types, substitute_parser, parser, executor]
+export types, substitute_parser, parser, executor
 
 proc parseAndExecute*(parser: CommandLineParser, input: string): CommandLineResult =
   ## Convenience function to parse and execute in one step

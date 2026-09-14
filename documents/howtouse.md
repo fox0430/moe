@@ -713,6 +713,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | Command | Description |
 |:---|:---|
 | `number` | Jump to line number; e.g. `:10` |
+| `$` or `.` or `+N` or `-N` | Jump to an address: `$` last line, `.` current line, `+N` / `-N` relative; e.g. `:.+3` |
 | `! shell command` | Shell command execution |
 | `bg` | Pause the editor and show the recent terminal output |
 | `man arguments` | Show the given UNIX manual page, if available; e.g. `:man man` |
@@ -742,7 +743,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `stripwhitespace` | Delete trailing spaces |
 | `%s/keyword1/keyword2/` | Replace text (normal mode only) |
 | `%d` | Delete all lines and copy to register |
-| `1,10d` | Delete lines in range and copy to register |
+| `1,10d` | Delete lines in range and copy to register; either side may be an address, e.g. `:.,$d` |
 | `set number` or `set nonumber` | Show/hide line numbers (alias: `nu`, `nonu`) |
 | `set relativenumber` or `set norelativenumber` | Show/hide relative line numbers (alias: `rnu`, `nornu`) |
 | `set cursorline` or `set nocursorline` | Highlight the current line (alias: `cul`, `nocul`) |

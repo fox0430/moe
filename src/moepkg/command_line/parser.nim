@@ -24,7 +24,7 @@ import std/[strutils, tables]
 
 import pkg/results
 
-import types, delete_parser, substitute_parser
+import types, substitute_parser
 
 proc newCommandLineParser*(): CommandLineParser =
   ## Create a new command line parser.
@@ -66,10 +66,27 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     result.action = claUnknown
     return
 
-  # Check if it's a line number (all digits)
-  if cleanInput.allCharsInSet({'0' .. '9'}):
-    result.action = claGoto
-    result.args = @[cleanInput]
+  # The range comes off once, before anything looks at a name.
+  let prefix = parseExRangePrefix(cleanInput).valueOr:
+    result.action = claUnknown
+    return
+  result.range = prefix.range
+  let rest = cleanInput[prefix.rest ..^ 1]
+
+  if result.range.kind != erkCurrent:
+    # A range was given, so only a command that takes one can follow it.
+    if rest.len == 0:
+      # A bare address moves the cursor there: `:5`, `:$`, `:.+3`.
+      result.action = if result.range.kind == erkAddresses: claGoto else: claUnknown
+      return
+    if rest == "d":
+      result.action = claDeleteLines
+      return
+    if rest.startsWith("s/"):
+      result.action = claSubstitute
+      result.args = @[rest]
+      return
+    result.action = claUnknown
     return
 
   # Check if it's a shell command (:!command)
@@ -80,33 +97,14 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     result.args = @[shellCmd]
     return
 
-  # Check if it's a delete command (:%d, or N,Md)
-  if cleanInput == "%d":
+  if cleanInput == "d":
     result.action = claDeleteLines
-    result.args = @[cleanInput]
     return
 
-  # Check for range-prefixed delete command (e.g., 1,10d, .d, .,10d)
-  if cleanInput.len > 1 and cleanInput[0] in {'0' .. '9', '.'}:
-    let parsed = parseDeleteCommand(":" & cleanInput)
-    if parsed.isValid:
-      result.action = claDeleteLines
-      result.args = @[cleanInput]
-      return
-
-  # Check if it's a substitute command (s/..., %s/..., or N,Ms/...)
-  if cleanInput.startsWith("%s/") or cleanInput.startsWith("s/"):
+  if cleanInput.startsWith("s/"):
     result.action = claSubstitute
-    # Store the full substitute command for parsing in execute()
     result.args = @[cleanInput]
     return
-
-  # Check for range-prefixed substitute command (e.g., 1,10s/..., .s/..., .,10s/...)
-  if cleanInput.len > 1 and cleanInput[0] in {'0' .. '9', '.'}:
-    if parseSubstituteCommand(":" & cleanInput).isValid:
-      result.action = claSubstitute
-      result.args = @[cleanInput]
-      return
 
   var parts = cleanInput.splitWhitespace()
   if parts.len == 0:
