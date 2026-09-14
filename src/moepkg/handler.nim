@@ -236,8 +236,8 @@ proc handleRecentFileModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
       hrLspFindReferences, hrLspDocumentSymbol, hrLspCodeLensExecute,
       hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
       hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
-      hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList, hrChanges, hrBuild,
-      hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
+      hrLspDocumentLink, hrShellCommand, hrFilter, hrBackground, hrJumpList, hrChanges,
+      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
       hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
       hrLspExecuteCommand, hrSubstitute, hrDeleteLines, hrMan, hrReferencesQuit,
       hrReferencesJumpTo, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
@@ -1635,6 +1635,127 @@ proc runQuickRunAsync(
     except Exception as ex:
       editor.notify("QuickRun error: " & ex.msg, nlError)
 
+proc runFilterAsync(
+    editor: Editor, info: FilterInfo
+): Future[void] {.async: (raises: []).} =
+  ## Run a command as a text filter and put its output back into the buffer.
+  {.cast(gcsafe).}:
+    try:
+      let before = editor.bufferById(info.bufferId)
+      if before.isNone:
+        editor.notify("Filter error: the buffer is gone", nlError)
+        return
+      if before.get.contentVersion != info.contentVersion:
+        editor.notify("Filter: the buffer changed before the command ran", nlError)
+        return
+
+      # Filters expect every line newline-terminated, the last one included.
+      # Read here rather than copied into the op: the version gate protects it.
+      var input = ""
+      for i in info.first .. info.last:
+        input.add before.get.getLine(i)
+        input.add '\n'
+
+      let startResult = await startFilterProcess(
+        BackgroundProcessCommand(
+          cmd: "sh", args: @["-c", info.command], workingDir: getCurrentDir()
+        )
+      )
+      if startResult.isErr:
+        editor.notify("Filter error: " & startResult.error, nlError)
+        return
+
+      let bp = startResult.get
+      editor.addRunningProcess(bp)
+      let filtered = await bp.filterOutput(
+        input,
+        timeoutFromSeconds(editor.config.filter.timeout),
+        editor.config.filter.maxOutputSize,
+      )
+      editor.removeRunningProcess(bp)
+      if filtered.isErr:
+        editor.notify("Filter error: " & filtered.error.message, nlError)
+        return
+
+      let buf = editor.bufferById(info.bufferId)
+      if buf.isNone:
+        editor.notify("Filter error: the buffer is gone", nlError)
+        return
+      let buffer = buf.get
+      if buffer.contentVersion != info.contentVersion:
+        # The output describes lines that are no longer there.
+        editor.notify("Filter: the buffer changed while the command ran", nlError)
+        return
+      if not buffer.allowsTextTransforms:
+        editor.notify("Filter error: " & rawBytesRejection("filter"), nlError)
+        return
+
+      # Use the output whatever the exit status, as `!` in vim does: `grep`
+      # with no match exits 1 having correctly produced nothing. The status
+      # only goes in the message. A trailing newline closes the last line
+      # rather than opening an empty one, and outside text is sanitized like
+      # a paste.
+      var produced: seq[string]
+      if filtered.get.output.len > 0:
+        let body =
+          if filtered.get.output.endsWith("\n"):
+            filtered.get.output[0 ..^ 2]
+          else:
+            filtered.get.output
+        for line in body.split('\n'):
+          produced.add line.sanitizeInvalidUtf8()
+
+      let replaced = info.last - info.first + 1
+      if buffer.len - replaced + produced.len == 0:
+        # A buffer always holds at least one line.
+        produced.add ""
+
+      # Replace the span rather than diffing a rebuilt buffer: the cost follows
+      # the range, and no line outside it can be rewritten. `keepRows = false`
+      # because the range is rewritten wholesale, leaving folds and bookmarks
+      # on it nothing to point at.
+      let applied =
+        buffer.replaceLines(info.first, replaced, produced, keepRows = false)
+      if applied.isErr:
+        editor.notify("Filter error: " & applied.error, nlError)
+        return
+
+      # Only the window the command was typed in jumps to the start of the
+      # range, as in vim, and it may be gone or showing something else by now.
+      # The rest are re-clamped: a filter can leave the buffer shorter.
+      let windows = editor.windowManager.windows
+      if info.windowIndex in 0 ..< windows.len and
+          windows[info.windowIndex].buffer.id == info.bufferId:
+        windows[info.windowIndex].cursor = BufferPosition(line: info.first, column: 0)
+      editor.clampAllWindowCursors()
+
+      # One report: separate notifications overwrite each other on the status
+      # line.
+      let
+        status = filtered.get.exitCode
+        ranCleanly = status.isSome and status.get == 0
+        howItEnded =
+          if status.isNone:
+            " (exit status unknown)"
+          elif ranCleanly:
+            ""
+          else:
+            " (exit " & $status.get & ")"
+      var report = @[
+        $replaced & " line" & (if replaced == 1: "" else: "s") & " filtered through " &
+          info.command & howItEnded
+      ]
+      for line in filtered.get.diagnostics:
+        # stderr goes straight to the status line, so strip escape sequences
+        # (a byte-bounded read can also cut one in half).
+        report.add line.sanitizeInvalidUtf8().sanitizeForDisplay()
+      if filtered.get.diagnosticsTruncated:
+        report.add "... the rest of what it wrote on stderr was dropped"
+      # stderr output is not failure; only the exit status decides.
+      editor.notifyAll(report, if ranCleanly: nlInfo else: nlError)
+    except Exception as ex:
+      editor.notify("Filter error: " & ex.msg, nlError)
+
 proc handlePendingAsyncOperationsImpl(
     e: Editor, frontend: FrontendHooks
 ): Future[void] {.async: (raises: [Exception]).} =
@@ -1690,6 +1811,8 @@ proc handlePendingAsyncOperationsImpl(
           asyncSpawn runQuickRunAsync(e, op.quickRun)
         of paoSyntaxCheck:
           asyncSpawn runSyntaxCheckAsync(e, op.syntaxCheck)
+        of paoFilter:
+          asyncSpawn runFilterAsync(e, op.filter)
       except Exception as ex:
         logError("moe", "Pending async operation " & $op.kind & " failed: " & ex.msg)
         e.notify("Pending operation failed (" & $op.kind & "): " & ex.msg, nlError)

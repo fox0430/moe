@@ -447,6 +447,16 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 <!-- AUTO-GEN:end Git -->
 
 
+### Filter table
+
+<!-- AUTO-GEN:start Filter -->
+| Name | Type | Default Value | Description |
+|:---|:---|:---|:---|
+| timeout | integer | 30 | Filter command timeout (seconds, 0 = no timeout) |
+| maxOutputSize | integer | 67108864 | Largest output a filter may produce (bytes, 0 = no limit) |
+<!-- AUTO-GEN:end Filter -->
+
+
 ### SyntaxChecker table
 
 <!-- AUTO-GEN:start SyntaxChecker -->

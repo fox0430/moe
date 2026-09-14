@@ -27,7 +27,7 @@ const
   AppExitKinds = {hrQuit, hrCquit}
   HandledGenericKinds = {hrHandled, hrUnhandled, hrError}
   ExitToNormalKinds = {
-    hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrJumpList, hrChanges,
+    hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
     hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat, hrLspRestart,
     hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
     hrLspCallHierarchyOutgoing,

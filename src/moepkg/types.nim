@@ -814,6 +814,20 @@ type
   QuickRunInfo* =
     tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
   SyntaxCheckInfo* = tuple[path: string, language: int]
+  FilterInfo* =
+    tuple[
+      bufferId: BufferId,
+      windowIndex: int,
+      command: string,
+      first: int,
+      last: int,
+      contentVersion: int,
+    ]
+    ## A buffer range to hand to a command. The run is asynchronous, so the
+    ## lines fed in and the output put back are gated on `contentVersion`.
+    ##
+    ## `windowIndex` is the window the command was typed in, the only one that
+    ## follows the output. It is a hint: splits can come and go meanwhile.
 
   PendingAsyncOpKind* = enum
     paoTerminalCommand
@@ -823,6 +837,7 @@ type
     paoBuild
     paoQuickRun
     paoSyntaxCheck
+    paoFilter
 
   PendingAsyncOp* = object
     ## One entry of `EditorState.pending`. Queue an op here when it needs the
@@ -840,6 +855,8 @@ type
       quickRun*: QuickRunInfo
     of paoSyntaxCheck:
       syntaxCheck*: SyntaxCheckInfo
+    of paoFilter:
+      filter*: FilterInfo
 
   FrontendRequests* = object
     ## Frontend-side effects requested by editor-core state changes.

@@ -217,7 +217,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrUndo, hrRedo:
     return e.processHistoryResult(r, activeBuffer)
   of hrClearSearchHighlight, hrStripWhitespace, hrShellCommand, hrBackground, hrMan,
-      hrSubstitute, hrDeleteLines, hrBuild:
+      hrSubstitute, hrDeleteLines, hrBuild, hrFilter:
     return e.processMiscResult(r, activeBuffer)
   of hrDebug:
     return e.processDebugResult(r)

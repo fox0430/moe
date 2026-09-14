@@ -64,6 +64,7 @@ type
     claRecentFile # :recent (open recent file selection mode)
     claClearSearchHighlight # :nohlsearch (clear search highlighting)
     claShellCommand # :! (execute shell command)
+    claFilter # :{range}! (filter lines through a command)
     claBackground # :bg (pause editor and show terminal)
     claJumpList # :jump (show jump list)
     claChanges # :changes (show change list)
@@ -198,6 +199,9 @@ type
       discard
     of claShellCommand:
       shellCommand*: string
+    of claFilter:
+      filterCommand*: string
+      filterRange*: ExLineRange
     of claBackground:
       discard
     of claJumpList:

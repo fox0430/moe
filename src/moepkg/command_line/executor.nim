@@ -208,6 +208,12 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     else:
       return
         CommandLineResult(kind: claUnknown, errorMessage: "No shell command specified")
+  of claFilter:
+    if cmd.args.len == 0 or cmd.args[0].len == 0:
+      return CommandLineResult(kind: claUnknown, errorMessage: "No filter command")
+    return CommandLineResult(
+      kind: claFilter, filterCommand: cmd.args[0], filterRange: cmd.range
+    )
   of claBackground:
     return CommandLineResult(kind: claBackground)
   of claJumpList:

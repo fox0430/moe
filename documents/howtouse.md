@@ -715,6 +715,7 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `number` | Jump to line number; e.g. `:10` |
 | `$` or `.` or `+N` or `-N` | Jump to an address: `$` last line, `.` current line, `+N` / `-N` relative; e.g. `:.+3` |
 | `! shell command` | Shell command execution |
+| `1,10!command` | Replace the lines in range with what `command` makes of them; either side may be an address, e.g. `:%!sort` |
 | `bg` | Pause the editor and show the recent terminal output |
 | `man arguments` | Show the given UNIX manual page, if available; e.g. `:man man` |
 | `e filename` | Open file |

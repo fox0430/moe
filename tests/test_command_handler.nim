@@ -2123,6 +2123,80 @@ suite "CommandModeHandler - address resolution":
     check r.kind == hrError
     check buffer.len == 2
 
+suite "CommandModeHandler - executeFilter":
+  test "The whole buffer is handed over with every line newline-terminated":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["b", "a", "c"])
+
+    let r = handler.executeFilter(
+      buffer, "sort", range = ExLineRange(kind: erkAll), currentLine = 0
+    )
+    check r.kind == hrFilter
+    check r.hrFilterFirst == 0
+    check r.hrFilterLast == 2
+    check r.hrFilterCommand == "sort"
+
+  test "A range takes only its lines":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two", "three", "four"])
+
+    let r = handler.executeFilter(
+      buffer, "cat", range = exAddresses(exLine(2), exLine(3)), currentLine = 0
+    )
+    check r.kind == hrFilter
+    check r.hrFilterFirst == 1
+    check r.hrFilterLast == 2
+
+  test "Without a range it is the current line alone":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two", "three"])
+
+    let r = handler.executeFilter(
+      buffer, "cat", range = ExLineRange(kind: erkCurrent), currentLine = 1
+    )
+    check r.hrFilterFirst == 1
+    check r.hrFilterLast == 1
+
+  test "Nothing is changed here, so the version is the one that was read":
+    # The command runs asynchronously; this only describes the run.
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["a"])
+
+    let r = handler.executeFilter(
+      buffer, "cat", range = ExLineRange(kind: erkAll), currentLine = 0
+    )
+    check r.hrFilterVersion == buffer.contentVersion
+    check r.hrFilterBufferId == buffer.id
+    check buffer.getLine(0) == "a"
+
+  test "A read-only buffer is refused before the command is started":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["a"])
+    buffer.readOnly = true
+
+    let r = handler.executeFilter(
+      buffer, "cat", range = ExLineRange(kind: erkAll), currentLine = 0
+    )
+    check r.kind == hrError
+
+  test "An empty command is refused":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["a"])
+
+    let r = handler.executeFilter(
+      buffer, "", range = ExLineRange(kind: erkAll), currentLine = 0
+    )
+    check r.kind == hrError
+
+  test "A range that ends before it starts is refused":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["one", "two", "three"])
+
+    let r = handler.executeFilter(
+      buffer, "cat", range = exAddresses(exLine(3), exLine(1)), currentLine = 0
+    )
+    check r.kind == hrError
+
 suite "CommandModeHandler - executeDelete":
   test "Delete current line":
     let handler = setupHandler()

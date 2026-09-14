@@ -912,6 +912,219 @@ suite "Background Process Management":
     # After cleanup, the list should be empty
     check editor.runningBackgroundProcesses.len == 0
 
+suite "Filter op":
+  proc filterEditor(lines: seq[string]): (Editor, TextBuffer) =
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let editor = newEditor(config)
+    let buf = newTextBuffer()
+    for i, line in lines:
+      if i == 0:
+        if line.len > 0:
+          discard buf.insertText(BufferPosition(line: 0, column: 0), line)
+      else:
+        discard buf.insert(i, line)
+    buf.markSaved()
+    editor.addBuffer(buf)
+    editor.activeWindow.buffer = buf
+    (editor, buf)
+
+  proc runFilter(
+      editor: Editor, buf: TextBuffer, command: string, first, last: int
+  ): Future[void] {.async.} =
+    ## Queue the op the command handler would have produced and let it finish.
+    ## The window it was typed in is the active one, as at the command line.
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoFilter,
+      filter: (
+        bufferId: buf.id,
+        windowIndex: editor.windowManager.activeWindowIndex,
+        command: command,
+        first: first,
+        last: last,
+        contentVersion: buf.contentVersion,
+      ),
+    )
+    await editor.handlePendingAsyncOperations(FrontendHooks())
+    # The run is spawned, not awaited, so wait for it to land.
+    for _ in 0 ..< 200:
+      if editor.state.statusMessage.len > 0 or
+          editor.state.notificationPopup.queue.len > 0:
+        break
+      await sleepAsync(25)
+
+  proc lines(buf: TextBuffer): seq[string] =
+    for i in 0 ..< buf.len:
+      result.add buf.getLine(i)
+
+  test "The command's output replaces the lines it was given":
+    let (editor, buf) = filterEditor(@["b", "a", "c"])
+    waitFor editor.runFilter(buf, "sort", 0, 2)
+    check buf.lines == @["a", "b", "c"]
+
+  test "Only the range is replaced, the rest is left alone":
+    let (editor, buf) = filterEditor(@["keep", "b", "a", "keep2"])
+    waitFor editor.runFilter(buf, "sort", 1, 2)
+    check buf.lines == @["keep", "a", "b", "keep2"]
+
+  test "A command that writes more lines than it was given grows the range":
+    let (editor, buf) = filterEditor(@["one", "x", "two"])
+    waitFor editor.runFilter(buf, "sh -c 'echo a; echo b; echo c'", 1, 1)
+    check buf.lines == @["one", "a", "b", "c", "two"]
+
+  test "A command that writes nothing removes the lines":
+    let (editor, buf) = filterEditor(@["one", "gone", "two"])
+    waitFor editor.runFilter(buf, "true", 1, 1)
+    check buf.lines == @["one", "two"]
+
+  test "The replacement is one undo entry":
+    let (editor, buf) = filterEditor(@["b", "a"])
+    waitFor editor.runFilter(buf, "sort", 0, 1)
+    check buf.lines == @["a", "b"]
+    discard buf.undo()
+    check buf.lines == @["b", "a"]
+
+  test "Output that arrives after the buffer changed is not applied":
+    # The editor stays live while the command runs, so what comes back can
+    # describe lines that are no longer there.
+    let (editor, buf) = filterEditor(@["b", "a"])
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoFilter,
+      filter: (
+        bufferId: buf.id,
+        windowIndex: 0,
+        command: "sh -c 'sleep 0.3; sort'",
+        first: 0,
+        last: 1,
+        contentVersion: buf.contentVersion,
+      ),
+    )
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+    discard buf.insert(0, "typed while it ran")
+    waitFor sleepAsync(1200)
+    check buf.lines == @["typed while it ran", "b", "a"]
+
+  test "A non-zero exit does not disqualify the output":
+    let (editor, buf) = filterEditor(@["x"])
+    waitFor editor.runFilter(buf, "sh -c 'echo formatted; exit 1'", 0, 0)
+    check buf.lines == @["formatted"]
+    check editor.state.statusMessage.contains("exit 1")
+
+  test "A command that matched nothing removes the lines it was given":
+    # `grep` exits 1 having correctly produced nothing.
+    let (editor, buf) = filterEditor(@["one", "drop me", "two"])
+    waitFor editor.runFilter(buf, "grep nomatchhere", 1, 1)
+    check buf.lines == @["one", "two"]
+
+  test "A command that does not exist is not told apart from one that matched nothing":
+    # Same empty output, same non-zero class of status. Vim applies both and
+    # leaves the undo to the user, and inventing the distinction here would
+    # get it wrong in whichever direction it guessed.
+    let (editor, buf) = filterEditor(@["b", "a"])
+    waitFor editor.runFilter(buf, "moe-no-such-command-here", 0, 1)
+    check buf.lines == @[""]
+    check editor.state.statusMessage.contains("exit 127")
+    discard buf.undo()
+    check buf.lines == @["b", "a"]
+
+  test "Only the window the filter was typed in follows the output":
+    # Vim moves the cursor of the window the command was given to. Another
+    # split on the same buffer keeps looking where its user left it.
+    let (editor, buf) = filterEditor(@["b", "a", "c"])
+    editor.activeWindow.cursor = BufferPosition(line: 2, column: 0)
+    let split = EditorWindow(buffer: buf)
+    split.cursor = BufferPosition(line: 2, column: 0)
+    editor.windowManager.windows.add split
+
+    waitFor editor.runFilter(buf, "sort", 0, 2)
+
+    check buf.lines == @["a", "b", "c"]
+    check editor.windowManager.windows[0].cursor == BufferPosition(line: 0, column: 0)
+    check split.cursor == BufferPosition(line: 2, column: 0)
+
+  test "A window that is no longer showing the buffer is left where it is":
+    # The run is asynchronous, so the window the filter was typed in can be
+    # showing something else by the time the output comes back.
+    let (editor, buf) = filterEditor(@["b", "a", "c"])
+    let other = newTextBuffer()
+    discard other.insertText(BufferPosition(line: 0, column: 0), "elsewhere")
+    editor.addBuffer(other)
+    let split = EditorWindow(buffer: other)
+    split.cursor = BufferPosition(line: 0, column: 3)
+    editor.windowManager.windows.add split
+    editor.windowManager.activeWindowIndex = 1
+
+    waitFor editor.runFilter(buf, "sort", 0, 2)
+
+    check buf.lines == @["a", "b", "c"]
+    check split.cursor == BufferPosition(line: 0, column: 3)
+
+  test "A filter that shrinks the buffer leaves no cursor past its end":
+    let (editor, buf) = filterEditor(@["a", "b", "c"])
+    editor.activeWindow.cursor = BufferPosition(line: 2, column: 0)
+
+    waitFor editor.runFilter(buf, "true", 2, 2)
+
+    check buf.lines == @["a", "b"]
+    check editor.activeWindow.cursor.line == 1
+
+  test "An inactive window on the filtered buffer is re-clamped too":
+    let (editor, buf) = filterEditor(@["a", "b", "c", "d"])
+    let split = EditorWindow(buffer: buf)
+    split.cursor = BufferPosition(line: 3, column: 0)
+    editor.windowManager.windows.add split
+
+    waitFor editor.runFilter(buf, "head -1", 0, 3)
+
+    check buf.lines == @["a"]
+    check split.cursor.line == 0
+
+  test "What the command wrote on stderr is reported alongside the summary":
+    let (editor, buf) = filterEditor(@["x"])
+    editor.config.notification.popupNotifications = false
+
+    waitFor editor.runFilter(buf, "sh -c 'echo careful >&2; cat'", 0, 0)
+
+    check buf.lines == @["x"]
+    check editor.state.statusMessage.contains("1 line filtered through")
+    check editor.state.statusMessage.contains("careful")
+
+  test "A command that exited cleanly is reported as such however chatty it was":
+    # A formatter may print a deprecation note and still have done its job.
+    let (editor, buf) = filterEditor(@["x"])
+    editor.config.notification.popupNotifications = true
+
+    waitFor editor.runFilter(buf, "sh -c 'echo note >&2; cat'", 0, 0)
+
+    check buf.lines == @["x"]
+    check editor.state.notificationPopup.queue.len == 1
+    check editor.state.notificationPopup.queue[0].level == nlInfo
+
+  test "Only the first lines of a torrent of diagnostics are kept":
+    # They go to the message log, which is never trimmed, so an unbounded
+    # standard error would grow it without bound.
+    let (editor, buf) = filterEditor(@["x"])
+    editor.config.notification.popupNotifications = false
+    clearMessageLog()
+
+    waitFor editor.runFilter(buf, "sh -c 'seq 1 5000 >&2; cat'", 0, 0)
+
+    check buf.lines == @["x"]
+    # The status line only has room for the first few, so the note about the
+    # rest lands in the log with them.
+    check getMessageLog().len < 20
+    check getMessageLog()[^1].contains("stderr was dropped")
+
+  test "Terminal escapes on stderr do not reach the status line":
+    let (editor, buf) = filterEditor(@["x"])
+    editor.config.notification.popupNotifications = false
+
+    waitFor editor.runFilter(buf, "printf '\\033[31mred\\n' >&2; cat", 0, 0)
+
+    check buf.lines == @["x"]
+    check editor.state.statusMessage.contains("red")
+    check not editor.state.statusMessage.contains("\e")
+
 suite "Pending async operations":
   test "Returns false when no pending operations":
     let editor = newEditor(newEditorConfig())

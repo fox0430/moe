@@ -875,7 +875,7 @@ proc renderCommandModeHead*(): string {.compileTime.} =
   let groups: seq[seq[HelpEntry]] = @[
     @[
       CommandLineSpecialHelp.lineNumber, CommandLineSpecialHelp.lineAddress,
-      CommandLineSpecialHelp.shellCommand,
+      CommandLineSpecialHelp.shellCommand, CommandLineSpecialHelp.filter,
     ] & helpEntriesFor("bg") & helpEntriesFor("man"),
     helpEntriesFor("e") & helpEntriesFor("ene") & helpEntriesFor("new") &
       helpEntriesFor("vnew"),
