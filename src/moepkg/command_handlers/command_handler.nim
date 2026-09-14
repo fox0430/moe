@@ -343,6 +343,51 @@ proc executeStripWhitespace*(
 proc executeQuickRun*(handler: CommandModeHandler): HandlerResult =
   HandlerResult(kind: hrQuickRun)
 
+proc resolveExRange(
+    buffer: TextBuffer,
+    hasRange: bool,
+    isGlobalRange: bool,
+    startLine: int,
+    endLine: int,
+    currentLine: int,
+): Result[tuple[first, last: int], string] =
+  ## Turn the range an Ex command was given into the 0-based span of lines it
+  ## covers, or say why it covers none.
+  ##
+  ## Resolves what the parser could not: 0 means the current line, no range
+  ## means that line alone, clamping to the buffer, and fold snapping.
+  var first, last: int
+  if isGlobalRange:
+    first = 0
+    last = buffer.len - 1
+  elif hasRange:
+    first =
+      if startLine == 0:
+        currentLine
+      else:
+        startLine - 1
+    last =
+      if endLine == 0:
+        currentLine
+      else:
+        endLine - 1
+    first = max(first, 0)
+    last = max(last, 0)
+    last = min(last, buffer.len - 1)
+    if first > last:
+      return err("Invalid range: start line > end line")
+  else:
+    first = currentLine
+    last = currentLine
+
+  if first >= buffer.len:
+    return err("Line out of range")
+
+  # A range reaching into a closed fold covers all of its lines.
+  let snapped = buffer.foldState.snapRangeToFolds(first, last)
+  # Re-clamp: a stale fold can name lines past the end of the buffer.
+  ok (max(0, snapped.startLine), min(snapped.endLine, buffer.len - 1))
+
 proc executeSubstitute*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -369,38 +414,11 @@ proc executeSubstitute*(
 
   let processedReplacement = processEscapeSequences(replacement)
 
-  var rangeStart, rangeEnd: int
-  if isGlobalRange:
-    rangeStart = 0
-    rangeEnd = buffer.len - 1
-  elif hasRange:
-    rangeStart =
-      if startLine == 0:
-        currentLine
-      else:
-        startLine - 1
-    rangeEnd =
-      if endLine == 0:
-        currentLine
-      else:
-        endLine - 1
-    if rangeStart < 0:
-      rangeStart = 0
-    if rangeEnd >= buffer.len:
-      rangeEnd = buffer.len - 1
-    if rangeStart > rangeEnd:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Invalid range: start line > end line"
-      )
-  else:
-    rangeStart = currentLine
-    rangeEnd = currentLine
-
-  # An Ex range reaching into a closed fold covers all of its lines.
-  let snapped = buffer.foldState.snapRangeToFolds(rangeStart, rangeEnd)
-  # Re-clamp: a stale fold can name lines past the end of the buffer.
-  rangeStart = max(0, snapped.startLine)
-  rangeEnd = min(snapped.endLine, buffer.len - 1)
+  let resolved =
+    buffer.resolveExRange(hasRange, isGlobalRange, startLine, endLine, currentLine)
+  if resolved.isErr:
+    return HandlerResult(kind: hrError, errorMessage: resolved.error)
+  let (rangeStart, rangeEnd) = resolved.get
 
   let txr =
     try:
@@ -459,43 +477,11 @@ proc executeDelete*(
   ## Execute delete command (:d, :%d, :1,10d)
   if buffer.readOnly:
     return HandlerResult(kind: hrError, errorMessage: "Buffer is read-only")
-  var rangeStart, rangeEnd: int
-  if isGlobalRange:
-    rangeStart = 0
-    rangeEnd = buffer.len - 1
-  elif hasRange:
-    rangeStart =
-      if startLine == 0:
-        currentLine
-      else:
-        startLine - 1
-    rangeEnd =
-      if endLine == 0:
-        currentLine
-      else:
-        endLine - 1
-    if rangeStart < 0:
-      rangeStart = 0
-    if rangeEnd < 0:
-      rangeEnd = 0
-    if rangeEnd >= buffer.len:
-      rangeEnd = buffer.len - 1
-    if rangeStart > rangeEnd:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Invalid range: start line > end line"
-      )
-  else:
-    rangeStart = currentLine
-    rangeEnd = currentLine
-
-  if rangeStart >= buffer.len:
-    return HandlerResult(kind: hrError, errorMessage: "Line out of range")
-
-  # An Ex range reaching into a closed fold covers all of its lines.
-  let snapped = buffer.foldState.snapRangeToFolds(rangeStart, rangeEnd)
-  # Re-clamp: a stale fold can name lines past the end of the buffer.
-  rangeStart = max(0, snapped.startLine)
-  rangeEnd = min(snapped.endLine, buffer.len - 1)
+  let resolved =
+    buffer.resolveExRange(hasRange, isGlobalRange, startLine, endLine, currentLine)
+  if resolved.isErr:
+    return HandlerResult(kind: hrError, errorMessage: resolved.error)
+  let (rangeStart, rangeEnd) = resolved.get
 
   var text = ""
   for lineIdx in rangeStart .. rangeEnd:
