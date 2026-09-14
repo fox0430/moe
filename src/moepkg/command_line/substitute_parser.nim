@@ -21,6 +21,8 @@
 
 import std/strutils
 
+import pkg/results
+
 import range_parser
 
 proc processEscapeSequences*(s: string): string =
@@ -70,10 +72,6 @@ proc normalizeSubstituteLongForm*(commandText: string): string =
 
 type SubstituteParseResult* = object ## Result of parsing a substitute command
   isValid*: bool # Whether this is a valid substitute command
-  isGlobal*: bool # Whether the % prefix is present (all lines)
-  hasRange*: bool # Whether a line range is specified (e.g., 1,10)
-  startLine*: int # Start line (1-based, 0 means current line)
-  endLine*: int # End line (1-based, 0 means current line)
   pattern*: string # Search pattern
   replacement*: string # Replacement text
   flags*: string # Flags (e.g., "g" for global within line)
@@ -103,15 +101,12 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
       normalized
 
   # The range, then `s` and the `/` opening its pattern.
-  let prefix = parseExRangePrefix(cmd)
-  if not prefix.isValid:
+  let prefix = parseExRangePrefix(cmd).valueOr:
     return
   if not cmd.continuesWith("s/", prefix.rest):
     return
-  result.isGlobal = prefix.range.isGlobal
-  result.hasRange = prefix.range.hasRange
-  result.startLine = prefix.range.startLine
-  result.endLine = prefix.range.endLine
+  # The range is skipped, not kept: `parseCommandLine` has already stripped it
+  # and it is the copy the executor reads.
   let startIdx = prefix.rest + 2
 
   result.isValid = true

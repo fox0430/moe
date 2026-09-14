@@ -1145,17 +1145,25 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
 const CommandLineSpecialHelp*:
   tuple[
     lineNumber: HelpEntry,
+    lineAddress: HelpEntry,
     shellCommand: HelpEntry,
     substitute: HelpEntry,
     deleteAll: HelpEntry,
     deleteRange: HelpEntry,
   ] = (
-  ## Help-only entries with no alias. The parser handles these as
-  ## special syntax (line number jump, `!` shell escape, `%s/.../.../`
-  ## substitute, `%d` / `N,Md` range delete). Named-field tuple so
-  ## `help_generator.nim` references them by name rather than by index.
+  ## Help-only entries with no alias. The parser handles these as special
+  ## syntax (line number jump, `$` / `.` / `+N` / `-N` addresses, `!` shell
+  ## escape, `%s/.../.../` substitute, `%d` / `N,Md` range delete).
+  ## Named-field tuple so `help_generator.nim` references them by name rather
+  ## than by index.
   lineNumber:
     HelpEntry(syntax: "number", description: "Jump to line number; e.g. `:10`"),
+  lineAddress: HelpEntry(
+    syntax: "$ or . or +N or -N",
+    description:
+      "Jump to an address: `$` last line, `.` current line, " &
+      "`+N` / `-N` relative; e.g. `:.+3`",
+  ),
   shellCommand:
     HelpEntry(syntax: "! shell command", description: "Shell command execution"),
   substitute: HelpEntry(
@@ -1164,7 +1172,10 @@ const CommandLineSpecialHelp*:
   deleteAll:
     HelpEntry(syntax: "%d", description: "Delete all lines and copy to register"),
   deleteRange: HelpEntry(
-    syntax: "1,10d", description: "Delete lines in range and copy to register"
+    syntax: "1,10d",
+    description:
+      "Delete lines in range and copy to register; either side may be an " &
+      "address, e.g. `:.,$d`",
   ),
 )
 

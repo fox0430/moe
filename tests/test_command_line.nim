@@ -53,8 +53,6 @@ suite "CommandLine - parseSubstituteCommand basic":
   test "Simple substitute command :s/foo/bar/":
     let result = parseSubstituteCommand(":s/foo/bar/")
     check result.isValid == true
-    check result.isGlobal == false
-    check result.hasRange == false
     check result.pattern == "foo"
     check result.replacement == "bar"
     check result.flags == ""
@@ -63,8 +61,6 @@ suite "CommandLine - parseSubstituteCommand basic":
   test "Global substitute command :%s/foo/bar/":
     let result = parseSubstituteCommand(":%s/foo/bar/")
     check result.isValid == true
-    check result.isGlobal == true
-    check result.hasRange == false
     check result.pattern == "foo"
     check result.replacement == "bar"
 
@@ -133,44 +129,24 @@ suite "CommandLine - parseSubstituteCommand with escapes":
     check result.pattern == "foo\\/bar"
     check result.replacement == ""
 
-suite "CommandLine - parseSubstituteCommand with ranges":
+suite "CommandLine - parseSubstituteCommand skips the range":
+  ## The range is `parseCommandLine`'s to strip and the executor reads it from
+  ## there; here it only has to be stepped over to find the pattern.
   test "Line range :1,10s/foo/bar/":
     let result = parseSubstituteCommand(":1,10s/foo/bar/")
     check result.isValid == true
-    check result.hasRange == true
-    check result.isGlobal == false
-    check result.startLine == 1
-    check result.endLine == 10
     check result.pattern == "foo"
     check result.replacement == "bar"
 
-  test "Single line :5s/foo/bar/":
-    let result = parseSubstituteCommand(":5s/foo/bar/")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 5
-    check result.endLine == 5
-
-  test "Current line to line N :.,10s/foo/bar/":
-    let result = parseSubstituteCommand(":.,10s/foo/bar/")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 0 # 0 means current line
-    check result.endLine == 10
-
-  test "Line N to current line :1,.s/foo/bar/":
-    let result = parseSubstituteCommand(":1,.s/foo/bar/")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 1
-    check result.endLine == 0 # 0 means current line
-
-  test "Current line only :.s/foo/bar/":
-    let result = parseSubstituteCommand(":.s/foo/bar/")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 0
-    check result.endLine == 0
+  test "Every address form is stepped over":
+    for input in [
+      ":5s/foo/bar/", ":.,10s/foo/bar/", ":1,.s/foo/bar/", ":.s/foo/bar/",
+      ":1,$s/foo/bar/", ":.+2,$-1s/foo/bar/", ":0s/foo/bar/",
+    ]:
+      let result = parseSubstituteCommand(input)
+      check result.isValid == true
+      check result.pattern == "foo"
+      check result.replacement == "bar"
 
 suite "CommandLine - parseSubstituteCommand invalid":
   test "Empty command":
@@ -189,10 +165,8 @@ suite "CommandLine - parseSubstituteCommand invalid":
     let result = parseSubstituteCommand(":q")
     check result.isValid == false
 
-  test ":0s/foo/bar/ (line number 0 is invalid)":
-    # Mirrors parseDeleteCommand: a single line 0 is rejected.
-    let result = parseSubstituteCommand(":0s/foo/bar/")
-    check result.isValid == false
+  test ":0s/foo/bar/ parses; the line it names is resolution's business":
+    check parseSubstituteCommand(":0s/foo/bar/").isValid == true
 
 suite "CommandLine - extractSubstitutePattern":
   test "Extract pattern from :%s/foo/bar/g":
@@ -318,12 +292,21 @@ suite "CommandLine - parseCommandLine":
   test "Parse line number :123":
     let cmd = parser.parseCommandLine(":123")
     check cmd.action == claGoto
-    check cmd.args == @["123"]
+    check cmd.range == exAddresses(exLine(123), exLine(123))
 
   test "Parse shell command :!ls -la":
     let cmd = parser.parseCommandLine(":!ls -la")
     check cmd.action == claShellCommand
     check cmd.args == @["ls -la"]
+
+  test "Parse a range that ends at the last line":
+    for input in [":1,$d", ":.,$d", ":$d"]:
+      check parser.parseCommandLine(input).action == claDeleteLines
+    check parser.parseCommandLine(":1,$s/a/b/").action == claSubstitute
+
+  test "Parse an address with an offset":
+    for input in [":.+3d", ":+2,+4d", ":$-1d", ":-d"]:
+      check parser.parseCommandLine(input).action == claDeleteLines
 
   test "Parse substitute :s/foo/bar/":
     let cmd = parser.parseCommandLine(":s/foo/bar/")
@@ -338,7 +321,8 @@ suite "CommandLine - parseCommandLine":
   test "Parse long form range substitute :%substitute/foo/bar/g":
     let cmd = parser.parseCommandLine(":%substitute/foo/bar/g")
     check cmd.action == claSubstitute
-    check cmd.args == @["%s/foo/bar/g"]
+    check cmd.args == @["s/foo/bar/g"]
+    check cmd.range.kind == erkAll
 
   test "Parse abbreviated long form substitute :sub/foo/bar/":
     for input in [":su/foo/bar/", ":sub/foo/bar/", ":substitut/foo/bar/"]:
@@ -358,27 +342,32 @@ suite "CommandLine - parseCommandLine":
   test "Parse global substitute :%s/foo/bar/g":
     let cmd = parser.parseCommandLine(":%s/foo/bar/g")
     check cmd.action == claSubstitute
-    check cmd.args == @["%s/foo/bar/g"]
+    check cmd.args == @["s/foo/bar/g"]
+    check cmd.range.kind == erkAll
 
   test "Parse range substitute :1,10s/foo/bar/":
     let cmd = parser.parseCommandLine(":1,10s/foo/bar/")
     check cmd.action == claSubstitute
-    check cmd.args == @["1,10s/foo/bar/"]
+    check cmd.args == @["s/foo/bar/"]
+    check cmd.range == exAddresses(exLine(1), exLine(10))
 
   test "Parse single numeric line substitute :5s/foo/bar/":
     let cmd = parser.parseCommandLine(":5s/foo/bar/")
     check cmd.action == claSubstitute
-    check cmd.args == @["5s/foo/bar/"]
+    check cmd.args == @["s/foo/bar/"]
+    check cmd.range == exAddresses(exLine(5), exLine(5))
 
   test "Parse current-to-N range substitute :.,10s/foo/bar/":
     let cmd = parser.parseCommandLine(":.,10s/foo/bar/")
     check cmd.action == claSubstitute
-    check cmd.args == @[".,10s/foo/bar/"]
+    check cmd.args == @["s/foo/bar/"]
+    check cmd.range == exAddresses(exCurrent(), exLine(10))
 
   test "Parse N-to-current range substitute :1,.s/foo/bar/":
     let cmd = parser.parseCommandLine(":1,.s/foo/bar/")
     check cmd.action == claSubstitute
-    check cmd.args == @["1,.s/foo/bar/"]
+    check cmd.args == @["s/foo/bar/"]
+    check cmd.range == exAddresses(exLine(1), exCurrent())
 
   test "Multi-comma range is not a substitute :1,2,3s/foo/bar/":
     # Vim ranges have at most start,end; the dedicated parser rejects a third
@@ -386,10 +375,9 @@ suite "CommandLine - parseCommandLine":
     let cmd = parser.parseCommandLine(":1,2,3s/foo/bar/")
     check cmd.action == claUnknown
 
-  test "Line number 0 is not a substitute :0s/foo/bar/":
-    # Aligned with :0d; line 0 is invalid so this is not a substitute.
+  test "Line number 0 is a substitute; the buffer decides whether it runs":
     let cmd = parser.parseCommandLine(":0s/foo/bar/")
-    check cmd.action == claUnknown
+    check cmd.action == claSubstitute
 
   test "Parse unknown command":
     let cmd = parser.parseCommandLine(":unknowncmd")
@@ -549,7 +537,15 @@ suite "CommandLine - execute":
   test "Execute goto line :123":
     let result = parser.parseAndExecute(":123")
     check result.kind == claGoto
-    check result.lineNumber == 123
+    check result.gotoAddress == exLine(123)
+
+  test "A bare address of any kind is a goto":
+    check parser.parseAndExecute(":$").gotoAddress == exLast()
+    check parser.parseAndExecute(":.+5").gotoAddress == exCurrent(5)
+    check parser.parseAndExecute(":$-3").gotoAddress == exLast(-3)
+
+  test "Two addresses move to the last of them, as in vim":
+    check parser.parseAndExecute(":1,5").gotoAddress == exLine(5)
 
   test "Execute :set number":
     let result = parser.parseAndExecute(":set number")
@@ -574,7 +570,7 @@ suite "CommandLine - execute":
     check result.pattern == "foo"
     check result.replacement == "bar"
     check result.substituteFlags == ""
-    check result.isGlobal == false
+    check result.substituteRange.kind != erkAll
 
   test "Execute global substitute :%s/foo/bar/g":
     let result = parser.parseAndExecute(":%s/foo/bar/g")
@@ -582,14 +578,14 @@ suite "CommandLine - execute":
     check result.pattern == "foo"
     check result.replacement == "bar"
     check result.substituteFlags == "g"
-    check result.isGlobal == true
+    check result.substituteRange.kind == erkAll
 
   test "Execute range substitute :1,10s/foo/bar/":
     let result = parser.parseAndExecute(":1,10s/foo/bar/")
     check result.kind == claSubstitute
-    check result.hasRange == true
-    check result.startLine == 1
-    check result.endLine == 10
+    check result.substituteRange.kind == erkAddresses
+    check result.substituteRange.first == exLine(1)
+    check result.substituteRange.last == exLine(10)
 
   test "Execute substitute with empty pattern returns error":
     let result = parser.parseAndExecute(":s//bar/")
@@ -1030,15 +1026,7 @@ suite "CommandLine - execute edge cases":
     check result.kind == claUnknown
     check "Not an editor command" in result.errorMessage
 
-  test "Execute goto with invalid line number":
-    # Create a parsed command manually with invalid line number
-    let cmd =
-      ParsedCommand(action: claGoto, args: @["abc"], flags: @[], rawText: ":abc")
-    let result = parser.execute(cmd)
-    check result.kind == claUnknown
-    check "Invalid line number" in result.errorMessage
-
-  test "Execute goto without args":
+  test "Execute goto without an address":
     let cmd = ParsedCommand(action: claGoto, args: @[], flags: @[], rawText: ":")
     let result = parser.execute(cmd)
     check result.kind == claUnknown
@@ -1049,78 +1037,65 @@ suite "CommandLine - execute edge cases":
     let result = parser.execute(cmd)
     check result.kind == claUnknown
 
-suite "CommandLine - parseDeleteCommand":
-  test "Simple :d":
-    let result = parseDeleteCommand(":d")
-    check result.isValid == true
-    check result.isGlobal == false
-    check result.hasRange == false
+suite "CommandLine - the range a delete command carries":
+  ## `parseCommandLine` strips the range once and hands it on; there is no
+  ## delete-specific range parser to test any more.
+  var parser: CommandLineParser
+
+  setup:
+    parser = newCommandLineParser()
+
+  test "Simple :d acts on the current line":
+    let cmd = parser.parseCommandLine(":d")
+    check cmd.action == claDeleteLines
+    check cmd.range.kind == erkCurrent
 
   test "Global :%d":
-    let result = parseDeleteCommand(":%d")
-    check result.isValid == true
-    check result.isGlobal == true
-    check result.hasRange == false
+    let cmd = parser.parseCommandLine(":%d")
+    check cmd.action == claDeleteLines
+    check cmd.range.kind == erkAll
 
   test "Single line :5d":
-    let result = parseDeleteCommand(":5d")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 5
-    check result.endLine == 5
+    let cmd = parser.parseCommandLine(":5d")
+    check cmd.action == claDeleteLines
+    check cmd.range == exAddresses(exLine(5), exLine(5))
 
   test "Range :1,10d":
-    let result = parseDeleteCommand(":1,10d")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 1
-    check result.endLine == 10
+    let cmd = parser.parseCommandLine(":1,10d")
+    check cmd.range == exAddresses(exLine(1), exLine(10))
 
   test "Current line range :.,.d":
-    let result = parseDeleteCommand(":.,.d")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 0
-    check result.endLine == 0
+    let cmd = parser.parseCommandLine(":.,.d")
+    check cmd.range == exAddresses(exCurrent(), exCurrent())
 
   test "Mixed range :.,10d":
-    let result = parseDeleteCommand(":.,10d")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 0
-    check result.endLine == 10
+    let cmd = parser.parseCommandLine(":.,10d")
+    check cmd.range == exAddresses(exCurrent(), exLine(10))
 
-  test ":0d (line number 0 is invalid)":
-    let result = parseDeleteCommand(":0d")
-    check result.isValid == false
+  test "To the last line :1,$d":
+    let cmd = parser.parseCommandLine(":1,$d")
+    check cmd.range == exAddresses(exLine(1), exLast())
+
+  test ":0d parses; whether line 0 exists is not the parser's to say":
+    # `:1-1d` names the same line, and the parser sees an offset there.
+    check parser.parseCommandLine(":0d").action == claDeleteLines
+    check parser.parseCommandLine(":1-1d").action == claDeleteLines
 
   test ":,5d (omitted start)":
-    let result = parseDeleteCommand(":,5d")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 0 # current line
-    check result.endLine == 5
+    let cmd = parser.parseCommandLine(":,5d")
+    check cmd.range == exAddresses(exCurrent(), exLine(5))
 
-  test ":10,5d (reverse range parses successfully)":
-    let result = parseDeleteCommand(":10,5d")
-    check result.isValid == true
-    check result.hasRange == true
-    check result.startLine == 10
-    check result.endLine == 5
+  test ":10,5d (a reverse range parses; resolution refuses it)":
+    let cmd = parser.parseCommandLine(":10,5d")
+    check cmd.action == claDeleteLines
+    check cmd.range == exAddresses(exLine(10), exLine(5))
 
-  test "d (without colon)":
-    let result = parseDeleteCommand("d")
-    check result.isValid == true
-    check result.isGlobal == false
-    check result.hasRange == false
+  test "A bare % is not a command":
+    check parser.parseCommandLine(":%").action == claUnknown
 
-  test "Invalid command":
-    let result = parseDeleteCommand(":xyz")
-    check result.isValid == false
-
-  test "Empty command":
-    let result = parseDeleteCommand("")
-    check result.isValid == false
+  test "A range in front of a name that takes none is not a command":
+    for input in [":1,10xyz", ":%zzz", ":5w"]:
+      check parser.parseCommandLine(input).action == claUnknown
 
 suite "CommandLine - parseCommandLine delete commands":
   var parser: CommandLineParser
@@ -1132,12 +1107,12 @@ suite "CommandLine - parseCommandLine delete commands":
   test "Parse :%d":
     let result = parser.parseCommandLine(":%d")
     check result.action == claDeleteLines
-    check result.args == @["%d"]
+    check result.range.kind == erkAll
 
   test "Parse :1,5d":
     let result = parser.parseCommandLine(":1,5d")
     check result.action == claDeleteLines
-    check result.args == @["1,5d"]
+    check result.range == exAddresses(exLine(1), exLine(5))
 
   test "Parse :delete (alias)":
     let result = parser.parseCommandLine(":delete")
@@ -1151,26 +1126,29 @@ suite "CommandLine - execute delete commands":
     parser.addAlias("delete", claDeleteLines)
 
   test "Execute :%d":
-    let cmd =
-      ParsedCommand(action: claDeleteLines, args: @["%d"], flags: @[], rawText: ":%d")
-    let result = parser.execute(cmd)
-    check result.kind == claDeleteLines
-    check result.deleteIsGlobal == true
-
-  test "Execute :1,10d":
     let cmd = ParsedCommand(
-      action: claDeleteLines, args: @["1,10d"], flags: @[], rawText: ":1,10d"
+      action: claDeleteLines, range: ExLineRange(kind: erkAll), rawText: ":%d"
     )
     let result = parser.execute(cmd)
     check result.kind == claDeleteLines
-    check result.deleteHasRange == true
-    check result.deleteStartLine == 1
-    check result.deleteEndLine == 10
+    check result.deleteRange.kind == erkAll
+
+  test "Execute :1,10d":
+    let cmd = ParsedCommand(
+      action: claDeleteLines,
+      range: exAddresses(exLine(1), exLine(10)),
+      rawText: ":1,10d",
+    )
+    let result = parser.execute(cmd)
+    check result.kind == claDeleteLines
+    check result.deleteRange.kind == erkAddresses
+    check result.deleteRange.first == exLine(1)
+    check result.deleteRange.last == exLine(10)
 
   test "Execute :d without args (current line)":
     let cmd =
       ParsedCommand(action: claDeleteLines, args: @[], flags: @[], rawText: ":d")
     let result = parser.execute(cmd)
     check result.kind == claDeleteLines
-    check result.deleteIsGlobal == false
-    check result.deleteHasRange == false
+    check result.deleteRange.kind != erkAll
+    check result.deleteRange.kind != erkAddresses

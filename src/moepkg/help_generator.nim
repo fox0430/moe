@@ -873,8 +873,10 @@ proc renderCommandModeHead*(): string {.compileTime.} =
   ## (for non-alias special syntax like `number`, `! shell command`,
   ## `%s/.../`) and per-name lookups from `CommandLineCommandTable`.
   let groups: seq[seq[HelpEntry]] = @[
-    @[CommandLineSpecialHelp.lineNumber, CommandLineSpecialHelp.shellCommand] &
-      helpEntriesFor("bg") & helpEntriesFor("man"),
+    @[
+      CommandLineSpecialHelp.lineNumber, CommandLineSpecialHelp.lineAddress,
+      CommandLineSpecialHelp.shellCommand,
+    ] & helpEntriesFor("bg") & helpEntriesFor("man"),
     helpEntriesFor("e") & helpEntriesFor("ene") & helpEntriesFor("new") &
       helpEntriesFor("vnew"),
     helpEntriesFor("undo") & helpEntriesFor("redo"),
