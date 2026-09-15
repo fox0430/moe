@@ -58,6 +58,7 @@ type
     claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
     claFiler # :filer (open file explorer)
     claLogViewer # :log (open log viewer)
+    claJobs # :jobs (list running external commands), :jobs! (stop them)
     claQuickRun # :run (quick run)
     claBufferManager # :buffers, :ls (open buffer manager)
     claBackupManager # :backup (open backup manager)
@@ -187,6 +188,8 @@ type
       filerPath*: Option[string] # Optional path to open in filer
     of claLogViewer:
       discard
+    of claJobs:
+      stopJobs*: bool # true for :jobs!
     of claQuickRun:
       discard
     of claBufferManager:

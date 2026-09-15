@@ -66,7 +66,9 @@ type
     lsp*: LspIntegration
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
-    runningBackgroundProcesses*: seq[BackgroundProcess]
+    runningBackgroundProcesses*: seq[RunningCommand]
+      ## External commands the editor started and can still stop, named and
+      ## timed so the user can see which one holds a file's claim.
     runningQuickRunProcesses*: seq[QuickRunProcess]
       ## In-flight QuickRun processes, tracked separately from
       ## `runningBackgroundProcesses` because they own temporary files (temp

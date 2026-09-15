@@ -80,6 +80,7 @@ type
     hrLogViewerQuit # Close log viewer window
     hrLogViewerRefresh # Refresh log viewer content
     hrEnterLogViewer # Enter log viewer mode
+    hrJobs # :jobs (list running external commands), :jobs! (stop them)
     hrHelpViewerQuit # Close help viewer and return to previous mode
     hrEnterHelpViewer # Enter help viewer mode
     hrQuickRun # Run the current buffer
@@ -252,6 +253,8 @@ type
       discard
     of hrEnterLogViewer:
       discard
+    of hrJobs:
+      hrStopJobs*: bool
     of hrHelpViewerQuit:
       discard
     of hrEnterHelpViewer:
@@ -483,7 +486,7 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
   of hrQuickRun, hrBuild, hrSubstitute, hrDeleteLines, hrFilter, hrJumpList, hrChanges,
       hrConflictNext, hrConflictPrev, hrTheme, hrPutConfigFile, hrLspFormat,
       hrLspRestart, hrLspFold, hrLspExecuteCommand, hrLspCallHierarchyIncoming,
-      hrLspCallHierarchyOutgoing:
+      hrLspCallHierarchyOutgoing, hrJobs:
     hrgExitToNormal
   of hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
       hrEnterBufferManager, hrEnterBackupManager, hrRecentFile, hrDebug,

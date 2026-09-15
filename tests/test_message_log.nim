@@ -19,7 +19,7 @@
 
 import std/unittest
 
-import ../src/moepkg/[types, message_log]
+import ../src/moepkg/[types, message_log, editor, config, editor_notify]
 
 suite "message_log - Message Log":
   setup:
@@ -171,4 +171,37 @@ suite "EditorState - statusMessage logging side effects":
     state.setStatusQuiet("quiet")
 
     check state.statusMessage == "quiet"
+    check messageLogLen() == 0
+
+suite "message_log - notify":
+  setup:
+    clearMessageLog()
+
+  test "A notification on the status line is recorded":
+    # The status line is gone at the next keystroke, so a background report is
+    # only readable afterwards because it also reaches the log. `notify` leaves
+    # that to the `statusMessage=` setter; recording it twice here is the
+    # failure this pins down.
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+
+    e.notify("hook failed", nlError)
+
+    check e.state.statusMessage == "hook failed"
+    check getMessageLog() == @["hook failed"]
+
+  test "A notification shown as a popup is recorded too":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = true
+
+    e.notify("hook failed", nlError)
+
+    check getMessageLog() == @["hook failed"]
+
+  test "Clearing the status line is not a message":
+    let e = newEditor(newEditorConfig())
+    e.config.notification.popupNotifications = false
+
+    e.notify("")
+
     check messageLogLen() == 0

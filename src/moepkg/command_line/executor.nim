@@ -192,6 +192,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     )
   of claLogViewer:
     return CommandLineResult(kind: claLogViewer)
+  of claJobs:
+    return CommandLineResult(kind: claJobs, stopJobs: "force" in cmd.flags)
   of claQuickRun:
     return CommandLineResult(kind: claQuickRun)
   of claBufferManager:

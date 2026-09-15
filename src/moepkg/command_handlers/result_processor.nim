@@ -217,7 +217,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrUndo, hrRedo:
     return e.processHistoryResult(r, activeBuffer)
   of hrClearSearchHighlight, hrStripWhitespace, hrShellCommand, hrBackground, hrMan,
-      hrSubstitute, hrDeleteLines, hrBuild, hrFilter:
+      hrSubstitute, hrDeleteLines, hrBuild, hrFilter, hrJobs:
     return e.processMiscResult(r, activeBuffer)
   of hrDebug:
     return e.processDebugResult(r)
@@ -601,6 +601,7 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
     let prepared = prepareResult.get
     e.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
+      epoch: e.state.commandEpoch,
       quickRun: (
         cmd: prepared.command.cmd,
         args: prepared.command.args,

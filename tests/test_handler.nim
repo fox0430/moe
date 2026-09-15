@@ -34,7 +34,7 @@ import config_test_helper
 import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
-    render_utils, clipboard, message_log, frontend_input,
+    render_utils, clipboard, message_log, frontend_input, editor_file_jobs,
   ]
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/command_handlers/result_processor
@@ -1150,7 +1150,13 @@ suite "Pending async operations":
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoBuild,
-      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+      build: (
+        path: "/tmp/x.nim",
+        language: 0,
+        customCmd: "",
+        workspaceRoot: "",
+        automatic: false,
+      ),
     )
 
     waitFor editor.handlePendingAsyncOperations(
@@ -1208,7 +1214,13 @@ proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception
   # from handler.nim after handleEvent has already returned.
   e.state.pending.add PendingAsyncOp(
     kind: paoBuild,
-    build: (path: "/tmp/detached.nim", language: 0, customCmd: "", workspaceRoot: ""),
+    build: (
+      path: "/tmp/detached.nim",
+      language: 0,
+      customCmd: "",
+      workspaceRoot: "",
+      automatic: false,
+    ),
   )
 
 proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception]).} =
@@ -1231,7 +1243,13 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoBuild,
-      build: (path: "/tmp/x.nim", language: 0, customCmd: "echo hi", workspaceRoot: ""),
+      build: (
+        path: "/tmp/x.nim",
+        language: 0,
+        customCmd: "echo hi",
+        workspaceRoot: "",
+        automatic: false,
+      ),
     )
 
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
@@ -1286,7 +1304,13 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
       kind: paoBuild,
-      build: (path: "/tmp/x.nim", language: 0, customCmd: "", workspaceRoot: ""),
+      build: (
+        path: "/tmp/x.nim",
+        language: 0,
+        customCmd: "",
+        workspaceRoot: "",
+        automatic: false,
+      ),
     )
     editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
@@ -1325,6 +1349,31 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
 
     check editor.state.pending.len == 0
 
+  test ":jobs! stops a build queued before the drain":
+    # The op carries the epoch from when it was queued; stopping the commands
+    # before the drain makes the spawned task refuse the claim.
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.state.pending.add PendingAsyncOp(
+      kind: paoBuild,
+      epoch: editor.commandEpoch,
+      build: (
+        path: "/tmp/x.nim",
+        language: 0,
+        customCmd: "echo hi",
+        workspaceRoot: "",
+        automatic: false,
+      ),
+    )
+
+    check editor.stopRunningCommands() == 0
+    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
+    # Let the spawned task reach its claim.
+    waitFor sleepAsync(200)
+
+    check editor.windowManager.windows.len == 1
+    check editor.state.fileJobs.len == 0
+
 suite "Background op failures route through notify":
   test "syntax check failure raises an error notification":
     # A bare statusMessage is wiped by prepareForInput on the next keystroke,
@@ -1335,7 +1384,9 @@ suite "Background op failures route through notify":
     editor.config.notification.popupNotifications = true
     editor.state.setStatusQuiet("")
 
-    waitFor runSyntaxCheckAsync(editor, (path: "/nonexistent.txt", language: 0))
+    waitFor runSyntaxCheckAsync(
+      editor, (path: "/nonexistent.txt", language: 0), editor.commandEpoch
+    )
 
     check editor.state.notificationPopup.queue.len == 1
     check editor.state.notificationPopup.queue[0].level == nlError
@@ -1347,7 +1398,9 @@ suite "Background op failures route through notify":
     editor.config.notification.popupNotifications = false
     editor.state.setStatusQuiet("")
 
-    waitFor runSyntaxCheckAsync(editor, (path: "/nonexistent.txt", language: 0))
+    waitFor runSyntaxCheckAsync(
+      editor, (path: "/nonexistent.txt", language: 0), editor.commandEpoch
+    )
 
     check editor.state.notificationPopup.queue.len == 0
     check "Syntax check error" in editor.state.statusMessage

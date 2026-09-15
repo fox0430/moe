@@ -165,6 +165,7 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
       let prepared = prepareResult.get
       e.state.pending.add PendingAsyncOp(
         kind: paoQuickRun,
+        epoch: e.state.commandEpoch,
         quickRun: (
           cmd: prepared.command.cmd,
           args: prepared.command.args,

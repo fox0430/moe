@@ -649,6 +649,8 @@ proc handleCommandModeInput*(
     handler.executeFiler(cmdResult.filerPath)
   of claLogViewer:
     HandlerResult(kind: hrEnterLogViewer)
+  of claJobs:
+    HandlerResult(kind: hrJobs, hrStopJobs: cmdResult.stopJobs)
   of claQuickRun:
     handler.executeQuickRun()
   of claBufferManager:

@@ -203,6 +203,8 @@ let Invariants = @[
     match: matchActivateWindow,
     allow: @[
       ("moepkg/viewer_mode.nim", 1),
+      # Handing the focus back to a reused command-output split.
+      ("moepkg/handler.nim", 1),
       ("moepkg/command_handlers/editor_ops.nim", 2),
       ("moepkg/command_handlers/file_ops.nim", 1),
     ],

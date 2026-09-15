@@ -696,6 +696,18 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: false,
   ),
   CommandLineCommandSpec(
+    name: "jobs",
+    completionDescription: "List the external commands still running",
+    helpEntries: @[
+      HelpEntry(syntax: "jobs", description: "List the external commands still running"),
+      HelpEntry(
+        syntax: "jobs!", description: "Stop every external command still running"
+      ),
+    ],
+    action: some(claJobs),
+    isCanonicalLong: true,
+  ),
+  CommandLineCommandSpec(
     name: "lsplog",
     completionDescription: "Open a log viewer for LSP log",
     helpEntries:
