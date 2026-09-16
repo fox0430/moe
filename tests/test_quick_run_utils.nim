@@ -488,6 +488,25 @@ suite "QuickRunUtils - prepareQuickRun":
     if fileExists("quickruntemp.py"):
       removeFile("quickruntemp.py")
 
+  test "The temp copy leaves an unsaved buffer unsaved and unnamed":
+    # saveFile would bind the buffer to a path QuickRun deletes after the run.
+    var buffer = newTextBuffer("print('hello')")
+    buffer.language = SourceLanguage.langPython
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "#")
+
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = true
+
+    let result = prepareQuickRun(buffer, config)
+    defer:
+      if fileExists("quickruntemp.py"):
+        removeFile("quickruntemp.py")
+    check result.isOk
+
+    check buffer.filePath.isNone
+    check buffer.isModified
+    check readFile("quickruntemp.py") == buffer.getFileContent
+
   test "Prepare QuickRun for unsupported language returns error":
     var buffer = newTextBuffer("<html></html>")
     buffer.language = SourceLanguage.langHtml
