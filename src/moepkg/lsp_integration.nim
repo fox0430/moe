@@ -21,11 +21,12 @@
 ## Connects LspService to Editor, TextBuffer, and UI components
 
 import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
-from std/os import absolutePath, normalizedPath, fileExists, isAbsolute
+from std/os import fileExists, isAbsolute
 
 import pkg/[results, chronos]
 
 import buffer, types, lsp_service, message_log, unicode_utils, highlight, logger
+import path_key
 import lsp/protocol/types as lspTypes
 
 import types/lsp_integration_types
@@ -97,11 +98,11 @@ const MaxProgressTextLen* = 50 ## Maximum display width for progress text
 const ProgressCleanupIntervalSeconds* = 1.0 ## Interval between stale progress checks
 
 proc canonicalPath(path: string): string =
-  ## One key for `lsp.documents` and the notify wire. Skips the syscall for absolute paths.
-  if path.isAbsolute:
-    normalizedPath(path)
-  else:
-    normalizedPath(absolutePath(path))
+  ## Key for `lsp.documents` and the notify wire. Raises when `path` cannot
+  ## be made absolute since the server needs a resolvable URI.
+  result = pathKey(path)
+  if not result.isAbsolute:
+    raise newException(OSError, "Cannot resolve path: " & path)
 
 proc lspDegradeReason*(status: LspResponseStatus, detail = ""): string =
   ## Human-readable reason for a failed or timed-out LSP response.
@@ -1647,16 +1648,8 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   var ignored: seq[TextEdit]
   applyTextEdits(buffer, edits, appliedEdits = ignored)
 
-proc samePath(a, b: string): bool =
-  ## Compare two file paths after normalizing to absolute form.
-  ## Buffers opened with a relative path (e.g. `moe foo.nim`) store that
-  ## relative path verbatim, whereas WorkspaceEdit URIs always decode to an
-  ## absolute path. Without normalization the two never match, so an edit for
-  ## an open buffer is mistaken for one targeting a file nobody has open.
-  canonicalPath(a) == canonicalPath(b)
-
 proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
-  ## Find buffer index by file path
+  ## Buffer index for `path`, compared with `samePath`.
   for i, buffer in buffers:
     if buffer.filePath.isSome and samePath(buffer.filePath.get, path):
       return some(i)
@@ -1687,10 +1680,8 @@ proc hasStaleTargetBuffer*(
   ## opened relative, one absolute), and a path-keyed baseline would let one
   ## buffer's contentVersion shadow the other's.
   for path in collectWorkspaceEditPaths(edit):
-    let absPath = normalizedPath(absolutePath(path))
     for buf in buffers:
-      if buf.filePath.isSome and
-          normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+      if buf.filePath.isSome and samePath(buf.filePath.get, path):
         if not baseline.hasKey(buf.id) or buf.contentVersion != baseline[buf.id]:
           return true
 
@@ -1701,10 +1692,8 @@ proc hasStaleServerEditTarget*(
 ): bool =
   ## True if a server edit would corrupt an open buffer.
   for path in collectWorkspaceEditPaths(edit):
-    let absPath = normalizedPath(absolutePath(path))
     for buf in buffers:
-      if buf.filePath.isSome and
-          normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+      if buf.filePath.isSome and samePath(buf.filePath.get, path):
         let canonPath = canonicalPath(buf.filePath.get)
         # No record means nothing sent; another buffer's attempt never counts.
         let attempt =

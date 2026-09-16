@@ -656,6 +656,28 @@ suite "Editor - saveFile":
     check result.isOk
     check fileExists(target)
 
+  test "A save path starting with a tilde is expanded":
+    let e = createTestEditor()
+    let home = getTempDir() / "moe_test_save_tilde_home"
+    let original = getTempDir() / "moe_test_save_tilde.txt"
+    let previousHome = getEnv("HOME")
+
+    createDir(home)
+    writeFile(original, "Original content")
+    defer:
+      putEnv("HOME", previousHome)
+      removeDir(home)
+      removeFile(original)
+
+    putEnv("HOME", home)
+    discard e.loadFile(original)
+
+    let result = e.saveFile(some("~" & $DirSep & "saved.txt"))
+    check result.isOk
+    # Written under the home directory, not into a literal "~" directory.
+    check fileExists(home / "saved.txt")
+    check not dirExists(getCurrentDir() / "~")
+
   test "Save read-only buffer succeeds with trim enabled (trim skipped)":
     let e = createTestEditor()
     let testFile = getTempDir() / "moe_test_save_readonly_trim.txt"
@@ -707,6 +729,38 @@ suite "Editor - saveFile":
     check e.activeBuffer.getLine(0) == beforeLine0
     check e.activeBuffer.getLine(0).endsWith("   ")
     # File on disk was not overwritten
+    check readFile(testFile) == "externally modified\n"
+
+  test "Save-as naming the buffer's own file is refused and does not trim":
+    # `:w ./a.txt` writes the file the buffer already holds. Compared as
+    # strings the two spellings differ, so the guard was skipped and the
+    # buffer was trimmed for a save that was refused further down.
+    let e = createTestEditor()
+    let name = "moe_test_save_alias_guard.txt"
+    let testFile = getTempDir() / name
+    # Built by hand rather than with `/`, which collapses `.` as it joins.
+    let alias = getTempDir() & "." & $DirSep & name
+
+    writeFile(testFile, "hello   \nworld   \n")
+    defer:
+      removeFile(testFile)
+
+    discard e.loadFile(testFile)
+    e.activeBuffer.editorConfig =
+      some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
+
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x")
+    let beforeLine0 = e.activeBuffer.getLine(0)
+    check beforeLine0.endsWith("   ")
+
+    e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 10))
+    writeFile(testFile, "externally modified\n")
+
+    let saveRes = e.saveFile(some(alias))
+    check saveRes.isErr
+    check "File was modified externally" in saveRes.error
+
+    check e.activeBuffer.getLine(0) == beforeLine0
     check readFile(testFile) == "externally modified\n"
 
   trimRevertSaveFileScenarios(createTestEditor(), " [GapBuffer]")

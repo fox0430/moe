@@ -1738,6 +1738,30 @@ suite "Buffer - saveFile external modification guard":
     check res.isOk
     check fileExists(target)
 
+  test "checkExternalMod guards a save-as that names the buffer's own file":
+    # `:w ./a.txt` writes the file the buffer already holds, so it must be
+    # refused like a bare `:w`. Compared as strings the two spellings differ
+    # and the guard never fired.
+    let name = "moe_test_saveFile_toctou_alias.txt"
+    let path = getTempDir() / name
+    # Built by hand rather than with `/`, which collapses `.` as it joins.
+    let alias = getTempDir() & "." & $DirSep & name
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+
+    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(path, "external change")
+
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "mine ")
+    let res = buf.saveFile(alias, checkExternalMod = true)
+    check res.isErr
+    check res.error == ExternalModErrorMsg
+    check readFile(path) == "external change"
+
 suite "Buffer - reloadFile":
   test "Returns error when buffer has no file path":
     let buf = newTextBuffer("hello")

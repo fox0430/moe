@@ -29,7 +29,8 @@ import
   lsp_service,
   lsp_integration,
   buffer,
-  editor_navigation
+  editor_navigation,
+  path_key
 import lsp/protocol/types as lspTypes
 
 const DocumentLinkValidModes* =
@@ -82,13 +83,14 @@ proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
     let path = pathRes.get
     let activeBuffer = e.activeBuffer()
 
-    # Add current position to jump list before jumping
-    e.addToJumpList()
-
-    # Check if it's the same file
-    if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+    # Compare as files: URIs are absolute while buffers keep the opened spelling.
+    # Check before touching the jump list; staying put is not a jump.
+    if activeBuffer.filePath.isSome and samePath(activeBuffer.filePath.get, path):
       e.state.statusMessage = "Already in this file"
       return true
+
+    # Add current position to jump list before jumping
+    e.addToJumpList()
 
     let opened = e.openFileInActiveWindow(path)
     if opened.isErr:

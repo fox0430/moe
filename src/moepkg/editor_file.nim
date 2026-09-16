@@ -329,23 +329,21 @@ proc saveFile*(
   ## If force is false, check if file was modified externally and refuse to save
   let activeBuffer = e.activeBuffer()
 
-  # Determine the file path to save to
+  # `:w ~/f` keeps the tilde, so expand it like the open commands do.
   let savePath =
     if path.isSome:
-      path.get
+      expandTilde(path.get)
     elif activeBuffer.filePath.isSome:
       activeBuffer.filePath.get
     else:
       logError("editor", "Save failed: No file path specified")
       return err("No file path specified")
 
-  # Check for external modification (unless force is true). Only guard saves
-  # that write back to the buffer's own file; a save-as to a different path
-  # has no external-mod baseline to compare against.
-  if not force and activeBuffer.filePath == some(savePath) and
-      activeBuffer.isExternallyModified():
+  # Check before trimming, and again just before writing.
+  let externalMod = externalModRefusal(activeBuffer, savePath, force)
+  if externalMod.len > 0:
     logError("editor", "Save failed: File was modified externally: " & savePath)
-    return err(ExternalModErrorMsg)
+    return err(externalMod)
 
   let insertBoundaryResult = e.commitForcedInsertBoundary(restart = false)
   if insertBoundaryResult.isErr:

@@ -19,11 +19,17 @@
 
 ## LSP-related procedures for the editor
 
-import std/[options, json, os, algorithm, strutils, tables]
+import std/[options, json, algorithm, strutils, tables]
 
 import pkg/[chronos, results]
 
-import types/editor_types, lsp_integration, motion, editor_codelens, lsp_request_context
+import
+  types/editor_types,
+  lsp_integration,
+  motion,
+  editor_codelens,
+  lsp_request_context,
+  path_key
 import command_handlers/[handler_manager, insert_handler]
 import buffer/undo
 import logger, message_log
@@ -134,13 +140,13 @@ proc applyDiagnosticsForUri*(
   if not e.config.lsp.diagnostics.enable:
     return
 
-  let path = normalizedPath(absolutePath(uriToPath(uri)))
+  let path = pathKey(uriToPath(uri))
   if version.isSome:
     let sent = e.lsp.sentDocumentVersion(path)
     if sent.isSome and version.get < sent.get:
       return
   for buf in e.buffers:
-    if buf.filePath.isSome and normalizedPath(absolutePath(buf.filePath.get)) == path:
+    if buf.filePath.isSome and samePath(buf.filePath.get, path):
       # Raw buffer has no version; drop diagnostics computed from decoded text.
       if not buf.isLspEligible:
         return
@@ -211,10 +217,8 @@ proc recoverFromFailedWorkspaceEdit*(
   ## A partial apply may also have shrunk a buffer, so cursors are re-clamped.
   if BufferStateInconsistentSuffix notin applyError:
     for path in collectWorkspaceEditPaths(edit):
-      let absPath = normalizedPath(absolutePath(path))
       for buf in e.buffers:
-        if buf.filePath.isSome and
-            normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+        if buf.filePath.isSome and samePath(buf.filePath.get, path):
           e.syncBufferAfterEdit(buf)
   e.clampAllWindowCursors()
 
