@@ -1842,26 +1842,27 @@ proc runFilterAsync(
 proc runSyntaxCheckAsync(
     editor: Editor, info: SyntaxCheckInfo, epoch: uint64
 ): Future[void] {.async: (raises: []).} =
-  ## Waits for the other jobs on the file: the checker reads it from disk, so a
-  ## formatter hook on the same write could leave it reading half-written text.
-  ## `epoch` is what the op carried when queued, so an earlier `:jobs!` refuses
-  ## the claim instead of starting late.
-  editor.withFileJob(info.path, epoch):
-    await runSyntaxCheckJob(editor, info)
+  ## `epoch` is what the op carried when queued, so an earlier `:jobs!` stops
+  ## the run rather than letting it start late.
+  if editor.commandsStoppedSince(epoch):
+    return
+  await runSyntaxCheckJob(editor, info)
 
 proc runBuildAsync(
     editor: Editor, info: BuildInfo, epoch: uint64
 ): Future[void] {.async: (raises: []).} =
-  ## Waits like the syntax check: the compiler reads the file, not the buffer.
-  editor.withFileJob(info.path, epoch):
-    await runBuildJob(editor, info)
+  ## As the syntax check: the compiler reads the file, not the buffer.
+  if editor.commandsStoppedSince(epoch):
+    return
+  await runBuildJob(editor, info)
 
 proc runQuickRunAsync(
     editor: Editor, info: QuickRunInfo, epoch: uint64
 ): Future[void] {.async: (raises: []).} =
-  ## Same wait, on the temporary copy when the run uses one.
-  editor.withFileJob(info.filePath, epoch):
-    await runQuickRunJob(editor, info)
+  ## The same check, on the temporary copy when the run uses one.
+  if editor.commandsStoppedSince(epoch):
+    return
+  await runQuickRunJob(editor, info)
 
 proc handlePendingAsyncOperationsImpl(
     e: Editor, frontend: FrontendHooks

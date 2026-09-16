@@ -1351,7 +1351,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
 
   test ":jobs! stops a build queued before the drain":
     # The op carries the epoch from when it was queued; stopping the commands
-    # before the drain makes the spawned task refuse the claim.
+    # before the drain makes the spawned task give up instead of starting.
     let config = newEditorConfig()
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
@@ -1372,7 +1372,7 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     waitFor sleepAsync(200)
 
     check editor.windowManager.windows.len == 1
-    check editor.state.fileJobs.len == 0
+    check editor.runningBackgroundProcesses.len == 0
 
 suite "Background op failures route through notify":
   test "syntax check failure raises an error notification":
