@@ -961,11 +961,6 @@ type
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
     pending*: seq[PendingAsyncOp] # Async ops drained by the main event loop
-    fileJobs*: Table[string, seq[uint64]]
-      # Files an external command currently holds, by absolute path, mapped to
-      # the tickets waiting for them in arrival order (the head holds the file).
-    nextFileJobTicket*: uint64
-      # Hands out file-job tickets; monotonic, so a waiter keeps its place.
     commandEpoch*: uint64
       # Bumped when the user stops the external commands. Each command captures
       # it when queued and re-checks after every await, so work in flight stops

@@ -17,16 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-## Seeing and ending the external commands that hold a file.
+## Seeing and ending the external commands the editor has started.
 ##
-## A command holds its file until it exits, and one with `timeout = 0` may hold
-## it for the rest of the session. `:jobs` reports it and `:jobs!` ends it.
+## A long-running command gives no sign of itself on the screen. `:jobs`
+## reports it and `:jobs!` ends it.
 
-import std/[unittest, os, strutils, tables]
+import std/[unittest, os, strutils]
 
 import pkg/chronos
 
-import ../src/moepkg/[editor, config, types, background_process, editor_file_jobs]
+import ../src/moepkg/[editor, config, background_process, editor_file_jobs]
 import ../src/moepkg/handler {.all.}
 
 proc startSleeper(e: Editor, label, path: string): BackgroundProcess =
@@ -68,27 +68,3 @@ suite "File jobs - visibility":
   test "Stopping with nothing running reports nothing":
     let e = newEditor(newEditorConfig())
     check e.stopRunningCommands() == 0
-
-  test "The wait notice names what is holding the file":
-    let e = newEditor(newEditorConfig())
-    let p = e.startSleeper("BufWritePre hook (nimpretty)", "/src/a.nim")
-    defer:
-      p.kill()
-
-    let notice = e.waitNotice("/src/a.nim")
-    check "BufWritePre hook (nimpretty)" in notice
-    check "/src/a.nim" in notice
-    # Named, so a stuck wait has somewhere to go.
-    check ":jobs" in notice
-
-  test "The wait notice matches on the file, not on how it was spelled":
-    let e = newEditor(newEditorConfig())
-    let p = e.startSleeper("Build", absolutePath("a.nim"))
-    defer:
-      p.kill()
-
-    check "Build" in e.waitNotice("./a.nim")
-
-  test "A file nothing named still gets an answer":
-    let e = newEditor(newEditorConfig())
-    check "Another command" in e.waitNotice("/src/a.nim")
