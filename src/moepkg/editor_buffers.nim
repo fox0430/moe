@@ -40,7 +40,8 @@ import
   logger,
   buffer,
   window_manager,
-  lsp_integration
+  lsp_integration,
+  path_key
 
 when not defined(moe.embedded):
   import terminal_mode
@@ -96,14 +97,9 @@ proc deleteBufferAt*(e: Editor, idx: int) =
   e.deleteBufferAtNoLsp(idx)
 
 proc findBufferByPath*(e: Editor, path: string): int =
-  ## Find a buffer in the buffer list by its file path
-  ## Returns the buffer index (0-based) or -1 if not found
-  ## Paths are compared by their normalized absolute form so a buffer opened
-  ## under a differently-spelled path (relative, `..` segments, trailing slash)
-  ## still matches — mirrors `sameFilePath` used by the navigation paths.
-  let normPath = normalizedPath(absolutePath(path))
+  ## Buffer index for `path`, or -1 if not found. Compared with `samePath`.
   for i, buf in e.buffers:
-    if buf.filePath.isSome and normalizedPath(absolutePath(buf.filePath.get)) == normPath:
+    if buf.filePath.isSome and samePath(buf.filePath.get, path):
       return i
   return -1
 

@@ -27,7 +27,7 @@ import std/[hashes, options, os, strutils, times]
 
 import pkg/results
 
-import ../[encoding, highlight, logger]
+import ../[encoding, highlight, logger, path_key]
 import core, atomic_write
 import highlight as buffer_highlight
 
@@ -423,6 +423,18 @@ proc isExternallyModified*(b: TextBuffer): bool =
   except OSError:
     return false
 
+proc externalModRefusal*(buffer: TextBuffer, savePath: string, force = false): string =
+  ## Reason writing `buffer` to `savePath` is refused, or "" when allowed.
+  ## Guards only writes back to the buffer's own file; called twice to shrink
+  ## the check-to-write window. Compared with `samePath`.
+  if force or buffer.isNil or buffer.filePath.isNone:
+    return ""
+  if not samePath(buffer.filePath.get, savePath):
+    return ""
+  if not buffer.isExternallyModified():
+    return ""
+  ExternalModErrorMsg
+
 proc saveFile*(
     buffer: TextBuffer, path: string, checkExternalMod: bool = false
 ): Result[(), string] =
@@ -437,13 +449,11 @@ proc saveFile*(
 
     let content = buffer.getFileContent
 
-    # Re-check external modification right before writing to shrink the
-    # check-to-write TOCTOU window (callers may have checked earlier).
-    # Only guards writes back to the buffer's own file; a save-as to a
-    # different path has no external-mod baseline to compare against.
-    if checkExternalMod and buffer.filePath == some(path) and
-        buffer.isExternallyModified():
-      return Result[(), string].err ExternalModErrorMsg
+    # Re-check just before writing; callers may have checked earlier.
+    if checkExternalMod:
+      let refusal = buffer.externalModRefusal(path)
+      if refusal.len > 0:
+        return Result[(), string].err refusal
 
     # Atomic-ish write: temp+rename with hardlink/symlink fallback plus fsync.
     # Guards against truncation on crash and durability loss on power failure.

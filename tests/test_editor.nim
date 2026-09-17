@@ -115,6 +115,26 @@ suite "Editor - findBufferByPath":
     let index = e.findBufferByPath("/nonexistent/path/file.txt")
     check index == -1
 
+  test "Find buffer by alias spelling":
+    # A buffer opened under one spelling must be found under another naming
+    # the same file. Compared as strings the two spellings differ and the
+    # lookup wrongly returns -1.
+    let e = createTestEditor()
+    let name = "moe_test_find_buffer_alias.txt"
+    let testFile = getTempDir() / name
+    # Built by hand rather than with `/`, which collapses `.` as it joins.
+    let alias = getTempDir() & "." & $DirSep & name
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    let result = e.editFile(testFile)
+    check result.isOk
+
+    check e.findBufferByPath(alias) >= 0
+    check e.findBufferByPath(testFile) >= 0
+
 suite "Editor - currentBufferIndex":
   test "Returns index of active buffer":
     let e = createTestEditor()
