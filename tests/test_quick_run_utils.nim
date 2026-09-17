@@ -483,6 +483,8 @@ suite "QuickRunUtils - prepareQuickRun":
     check result.get.isTempFile == true
     check result.get.filePath == "quickruntemp.py"
     check result.get.command.cmd == "python3"
+    # A temp copy only: no save, nothing owed.
+    check result.get.didSave == false
 
     # Cleanup temp file
     if fileExists("quickruntemp.py"):
@@ -532,6 +534,8 @@ suite "QuickRunUtils - prepareQuickRun":
     check result.isOk
     check result.get.filePath == getTempDir() / "test_nosave.nim"
     check result.get.isTempFile == false
+    # Saving disabled: no save, nothing owed.
+    check result.get.didSave == false
 
   test "Prepare QuickRun refuses to overwrite an externally modified file":
     let path = getTempDir() / "test_quickrun_ext_mod.nim"
@@ -572,6 +576,31 @@ suite "QuickRunUtils - prepareQuickRun":
     check result.get.filePath == path
     # The unsaved edit must have been written to disk.
     check "echo \"edited\"" in readFile(path)
+    # A real save was made, so the caller owes it what every write owes.
+    check result.get.didSave == true
+
+  test "Prepare QuickRun with an unrunnable language writes nothing":
+    # Assembly runs before any disk write: assembly failure must leave no
+    # bytes behind and owe no post-write effects.
+    let path = getTempDir() / "test_quickrun_unsupported.html"
+    writeFile(path, "<html>original</html>")
+    defer:
+      removeFile(path)
+
+    var buffer = newTextBuffer()
+    discard buffer.loadFile(path)
+    buffer.language = SourceLanguage.langHtml
+    discard buffer.insert(1, "<!-- edited -->")
+
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = true
+
+    let result = prepareQuickRun(buffer, config)
+    check result.isErr
+    check "Unsupported language" in result.error
+    # Nothing written: disk keeps the original, the buffer keeps its edit.
+    check readFile(path) == "<html>original</html>"
+    check buffer.isModified
 
   test "Prepare QuickRun with nonexistent file path uses temp file":
     var buffer = newTextBuffer("echo \"hello\"", some("/nonexistent/path/file.nim"))
@@ -729,6 +758,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         ),
         filePath: "test.nim",
         isTempFile: false,
+        didSave: false,
       )
 
       let r = await startBackgroundQuickRun(prepared)
@@ -755,6 +785,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         ),
         filePath: "test.nim",
         isTempFile: false,
+        didSave: false,
       )
 
       let r = await startBackgroundQuickRun(prepared)
@@ -776,6 +807,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         ),
         filePath: tempPath,
         isTempFile: true,
+        didSave: false,
       )
       let r = await startBackgroundQuickRun(prepared)
       return r.isErr
@@ -797,6 +829,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         ),
         filePath: keepPath,
         isTempFile: false,
+        didSave: false,
       )
       let r = await startBackgroundQuickRun(prepared)
       return r.isErr

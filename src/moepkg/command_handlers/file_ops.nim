@@ -157,7 +157,7 @@ proc processFileResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
   of hrQuickRun:
     # Mirror command_mode_handler.nim's hrQuickRun branch so Normal mode
     # keybindings (e.g. \r) run the same path as `:quickrun`.
-    let prepareResult = prepareQuickRun(activeBuffer, e.config)
+    let prepareResult = e.prepareQuickRun(activeBuffer)
     if prepareResult.isErr:
       e.state.statusMessage = "QuickRun error: " & prepareResult.error
       logError("handler", "QuickRun prepare failed: " & prepareResult.error)

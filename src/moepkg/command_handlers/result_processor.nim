@@ -593,7 +593,7 @@ proc tryHandleQuickRunRequest(e: Editor, activeBuffer: TextBuffer): bool =
   if not e.state.requestQuickRun:
     return false
   e.state.requestQuickRun = false
-  let prepareResult = prepareQuickRun(activeBuffer, e.config)
+  let prepareResult = e.prepareQuickRun(activeBuffer)
   if prepareResult.isErr:
     e.state.statusMessage = "QuickRun error: " & prepareResult.error
     logError("handler", "QuickRun prepare failed: " & prepareResult.error)
