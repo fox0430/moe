@@ -261,11 +261,16 @@ type QuickRunPrepareResult* = object
   command*: BackgroundProcessCommand
   filePath*: string
   isTempFile*: bool
+  didSave*: bool
+    ## True when staging saved the buffer to its real file.
+    ## The caller must then run `noteBufferSaved`.
 
 proc prepareQuickRun*(
     buffer: TextBuffer, settings: EditorConfig
 ): Result[QuickRunPrepareResult, string] =
-  ## Prepare QuickRun by saving file and creating command (sync).
+  ## Assemble the run command and stage its input.
+  ## The command is built before any disk write, so failure has no side effects.
+  ## Staging writes bytes directly without trim or mode handling.
 
   when defined(moe.embedded) and defined(windows):
     discard buffer
@@ -290,6 +295,13 @@ proc prepareQuickRun*(
       else:
         buffer.filePath.get
 
+  # Build the command before writing, so failure has no side effects.
+  let command = quickRunCommand(path, buffer.language, buffer, settings.quickRun)
+  if command.isErr:
+    return
+      Result[QuickRunPrepareResult, string].err fmt"QuickRun failed: {command.error}"
+
+  var didSave = false
   if useTempFile:
     # Temp copy only — saveFile would bind the buffer to this path.
     try:
@@ -301,14 +313,10 @@ proc prepareQuickRun*(
     let saveResult = buffer.saveFile(path, checkExternalMod = true)
     if saveResult.isErr:
       return Result[QuickRunPrepareResult, string].err fmt"Failed to save the current code: {saveResult.error}"
-
-  let command = quickRunCommand(path, buffer.language, buffer, settings.quickRun)
-  if command.isErr:
-    return
-      Result[QuickRunPrepareResult, string].err fmt"QuickRun failed: {command.error}"
+    didSave = true
 
   return Result[QuickRunPrepareResult, string].ok QuickRunPrepareResult(
-    command: command.get, filePath: path, isTempFile: useTempFile
+    command: command.get, filePath: path, isTempFile: useTempFile, didSave: didSave
   )
 
 proc cleanupTempFiles(filePath: string, isTempFile: bool) =

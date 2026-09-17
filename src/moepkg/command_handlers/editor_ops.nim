@@ -111,7 +111,8 @@ proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
     if discardErr.len > 0:
       e.state.statusMessage = discardErr
       return true
-  let saveResult = e.saveFile(r.saveAndQuitFilename, r.forceQuitAfterSave)
+  let saveResult =
+    e.saveFile(e.activeBuffer(), r.saveAndQuitFilename, r.forceQuitAfterSave)
   if saveResult.isErr:
     logError("handler", "Save and quit failed: " & saveResult.error)
     e.state.statusMessage = "Error: " & saveResult.error
@@ -205,7 +206,7 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
         e.state.statusMessage = "Failed to save config: " & saveResult.error
         logError("config", "Failed to save config: " & saveResult.error)
   else:
-    let saveResult = e.saveFile(r.saveFilename, r.forceSave)
+    let saveResult = e.saveFile(activeBuffer, r.saveFilename, r.forceSave)
     if saveResult.isErr:
       logError("handler", "Save command failed: " & saveResult.error)
       e.state.statusMessage = "Error: " & saveResult.error

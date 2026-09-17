@@ -64,7 +64,7 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     # Writing to a directory fails only after trim, so the revert branch runs.
     e.activeBuffer.filePath = some(dirPath)
 
-    let saveRes = e.saveFile()
+    let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
 
     # Trim must have been reverted...
@@ -101,7 +101,7 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     # Writing to a directory fails only after trim, so the revert branch runs.
     e.activeBuffer.filePath = some(dirPath)
 
-    let saveRes = e.saveFile()
+    let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
 
     check e.activeBuffer.getLine(0) == beforeLine0
@@ -145,7 +145,7 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     # Writing to a directory fails only after trim, so the revert branch runs.
     e.activeBuffer.filePath = some(dirPath)
 
-    let saveRes = e.saveFile()
+    let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
 
     # Trim must have been reverted...
@@ -180,7 +180,7 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     # Writing to a directory fails only after trim, so the revert branch runs.
     e.activeBuffer.filePath = some(dirPath)
 
-    let saveRes = e.saveFile()
+    let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
 
     # Trim must have been reverted...
@@ -223,7 +223,7 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     # Writing to a directory fails only after trim, so the revert branch runs.
     e.activeBuffer.filePath = some(dirPath)
 
-    let saveRes = e.saveFile()
+    let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
 
     # Trim must have been reverted...
@@ -557,7 +557,7 @@ suite "Editor - saveFile":
       some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
     check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
 
-    let saveResult = e.saveFile()
+    let saveResult = e.saveFile(e.activeBuffer())
 
     check saveResult.isOk
     check readFile(testFile) == "xhello\n"
@@ -578,7 +578,7 @@ suite "Editor - saveFile":
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Modified: ")
 
     # Save
-    let result = e.saveFile()
+    let result = e.saveFile(e.activeBuffer())
     check result.isOk
 
     # Verify file content
@@ -596,7 +596,7 @@ suite "Editor - saveFile":
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "New content")
 
     # Save with explicit path
-    let result = e.saveFile(some(testFile))
+    let result = e.saveFile(e.activeBuffer(), some(testFile))
     check result.isOk
 
     # Verify file was created
@@ -610,7 +610,7 @@ suite "Editor - saveFile":
     # Buffer has no file path
     check e.activeBuffer.filePath.isNone
 
-    let result = e.saveFile()
+    let result = e.saveFile(e.activeBuffer())
     check result.isErr
     check "No file path" in result.error
 
@@ -631,7 +631,7 @@ suite "Editor - saveFile":
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Buffer: ")
 
     # Force save should succeed
-    let result = e.saveFile(force = true)
+    let result = e.saveFile(e.activeBuffer(), force = true)
     check result.isOk
 
   test "Save-as to a different path is not blocked by external modification":
@@ -652,7 +652,7 @@ suite "Editor - saveFile":
     writeFile(original, "Externally modified")
 
     # Saving to a different path must succeed without force.
-    let result = e.saveFile(some(target))
+    let result = e.saveFile(e.activeBuffer(), some(target))
     check result.isOk
     check fileExists(target)
 
@@ -672,7 +672,7 @@ suite "Editor - saveFile":
     putEnv("HOME", home)
     discard e.loadFile(original)
 
-    let result = e.saveFile(some("~" & $DirSep & "saved.txt"))
+    let result = e.saveFile(e.activeBuffer(), some("~" & $DirSep & "saved.txt"))
     check result.isOk
     # Written under the home directory, not into a literal "~" directory.
     check fileExists(home / "saved.txt")
@@ -692,7 +692,7 @@ suite "Editor - saveFile":
     e.activeBuffer.editorConfig =
       some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
 
-    let result = e.saveFile()
+    let result = e.saveFile(e.activeBuffer())
     check result.isOk
 
     # Content is written as-is, without trimming.
@@ -721,7 +721,7 @@ suite "Editor - saveFile":
     writeFile(testFile, "externally modified\n")
     check e.activeBuffer.isExternallyModified()
 
-    let saveRes = e.saveFile()
+    let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
     check "File was modified externally" in saveRes.error
 
@@ -756,7 +756,7 @@ suite "Editor - saveFile":
     e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 10))
     writeFile(testFile, "externally modified\n")
 
-    let saveRes = e.saveFile(some(alias))
+    let saveRes = e.saveFile(e.activeBuffer(), some(alias))
     check saveRes.isErr
     check "File was modified externally" in saveRes.error
 
@@ -789,7 +789,7 @@ suite "Editor - saveFile":
       if e.activeBuffer.inTransaction:
         discard e.activeBuffer.commitTransaction()
 
-    let saveRes = e.saveFile()
+    let saveRes = e.saveFile(e.activeBuffer())
     # Save should not be blocked by "Transaction already in progress"
     check saveRes.isOk
     # Because trim was skipped, file still contains trailing spaces
@@ -1409,11 +1409,11 @@ suite "Editor - invalid bytes roundtrip":
         # First line must preserve bytes; splitLines()[0] mirrors the
         # spec's suggested check for single- and multi-line raws.
         check e.activeBuffer.getLine(0) == raw.splitLines()[0]
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
         # Overwrite via saveFile() to the buffer's own path (now dst, since
         # the save-as above re-pointed filePath) must also be exact.
-        check e.saveFile().isOk
+        check e.saveFile(e.activeBuffer()).isOk
         check readFile(dst) == raw
         removeFile(src)
         if fileExists(dst):
@@ -1430,7 +1430,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer.encoding == CharacterEncoding.unknown
         check e.activeBuffer.lineEnding == CRLF
         check e.activeBuffer.getFileContent() == raw
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
         removeFile(src)
         if fileExists(dst):
@@ -1447,7 +1447,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer.encoding == CharacterEncoding.unknown
         check e.activeBuffer.lineEnding == CR
         check e.activeBuffer.getFileContent() == raw
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
         removeFile(src)
         if fileExists(dst):
@@ -1464,7 +1464,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer.encoding == CharacterEncoding.unknown
         check e.activeBuffer.hasBinaryContent
         check e.activeBuffer.getFileContent() == raw
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
         removeFile(src)
         if fileExists(dst):
@@ -1487,7 +1487,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer.getLine(0) == "aX\xE3b"
         check e.activeBuffer.encoding == CharacterEncoding.unknown
         check e.activeBuffer.getFileContent() == "aX\xE3b\nc\xFFd"
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == "aX\xE3b\nc\xFFd"
 
       block crlfCase:
@@ -1504,7 +1504,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer.encoding == CharacterEncoding.unknown
         check e.activeBuffer.lineEnding == CRLF
         check e.activeBuffer.insertText(BufferPosition(line: 0, column: 1), "X").isOk
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == "aX\xE3\r\nb\xFF\r\n"
 
       block nulCase:
@@ -1520,7 +1520,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.loadFile(src).isOk
         check e.activeBuffer.hasBinaryContent
         check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Z").isOk
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == "Za\x00b\xE3c"
 
   template emptyAndBomRoundtripScenario(makeEditor: untyped, tag: string) =
@@ -1540,10 +1540,10 @@ suite "Editor - invalid bytes roundtrip":
       check e.activeBuffer.len == 1
       check e.activeBuffer[0] == ""
       check e.activeBuffer.getFileContent() == ""
-      check e.saveFile(some(dst)).isOk
+      check e.saveFile(e.activeBuffer(), some(dst)).isOk
       check readFile(dst) == ""
       # Overwrite via saveFile() to own path must stay empty.
-      check e.saveFile().isOk
+      check e.saveFile(e.activeBuffer()).isOk
       check readFile(dst) == ""
 
     test "BOM-only empty payload roundtrip" & tag:
@@ -1567,7 +1567,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer[0] == ""
         check not e.activeBuffer.endOfLine
         check e.activeBuffer.getFileContent() == original
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == original
         removeFile(src)
         if fileExists(dst):
@@ -1588,7 +1588,7 @@ suite "Editor - invalid bytes roundtrip":
         check not e.activeBuffer.keepRaw
         check e.activeBuffer.allowsTextTransforms
         check e.activeBuffer.getFileContent() == original
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == original
         removeFile(src)
         if fileExists(dst):
@@ -1607,7 +1607,7 @@ suite "Editor - invalid bytes roundtrip":
         check e.activeBuffer.keepRaw
         check not e.activeBuffer.allowsTextTransforms
         check e.activeBuffer.getFileContent() == raw
-        check e.saveFile(some(dst)).isOk
+        check e.saveFile(e.activeBuffer(), some(dst)).isOk
         check readFile(dst) == raw
         removeFile(src)
         if fileExists(dst):
@@ -1623,7 +1623,7 @@ suite "Editor - invalid bytes roundtrip":
       check e1.activeBuffer.encoding == CharacterEncoding.utf32Le
       check e1.activeBuffer.hasBom
       check e1.activeBuffer.getFileContent() == utf32BomOnly
-      check e1.saveFile(some(dst)).isOk
+      check e1.saveFile(e1.activeBuffer(), some(dst)).isOk
       check readFile(dst) == utf32BomOnly
       removeFile(src)
       if fileExists(dst):
@@ -1638,7 +1638,7 @@ suite "Editor - invalid bytes roundtrip":
       check not e2.activeBuffer.keepRaw
       check e2.activeBuffer[0] == "A"
       check e2.activeBuffer.getFileContent() == nonBom
-      check e2.saveFile(some(dst)).isOk
+      check e2.saveFile(e2.activeBuffer(), some(dst)).isOk
       check readFile(dst) == nonBom
       removeFile(src)
       if fileExists(dst):
@@ -1654,3 +1654,127 @@ suite "Editor - invalid bytes roundtrip":
   )
   shortBomBoundaryScenario(createTestEditor(), " [GapBuffer]")
   shortBomBoundaryScenario(createTestEditorWithBackend(bbcPieceTable), " [PieceTable]")
+
+suite "Editor - saveFile explicit buffer":
+  test "Saving a background buffer leaves the active buffer's file untouched":
+    # Regression guard for the explicit `buffer` parameter: an implementation
+    # that silently saves the active buffer instead must fail here.
+    let e = createTestEditor()
+    e.showGitDiff = true
+    let fgFile = getTempDir() / "moe_test_explicit_fg.txt"
+    let bgFile = getTempDir() / "moe_test_explicit_bg.txt"
+    writeFile(fgFile, "fg-original\n")
+    writeFile(bgFile, "bg-original\n")
+    defer:
+      removeFile(fgFile)
+      removeFile(bgFile)
+
+    check e.loadFile(fgFile).isOk
+    check e.activeBuffer.filePath.get == fgFile
+
+    let bgBuf = newTextBuffer("bg-original\n", some(bgFile))
+    e.addBuffer(bgBuf)
+    check e.activeBuffer.filePath.get == fgFile
+    check bgBuf.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
+
+    let fgBuf = e.activeBuffer
+    e.state.git.diffEntries.del(fgBuf.id)
+    e.state.git.diffEntries.del(bgBuf.id)
+
+    check e.saveFile(bgBuf).isOk
+    check readFile(bgFile) == "B:bg-original\n"
+    check readFile(fgFile) == "fg-original\n"
+    # Post-write effects must target the saved buffer, not the active one.
+    require e.state.git.diffEntries.hasKey(bgBuf.id)
+    check e.state.git.diffEntries[bgBuf.id].forced
+    check not e.state.git.diffEntries.hasKey(fgBuf.id)
+
+  test "Save-as redirects the passed buffer, not the active one":
+    let e = createTestEditor()
+    e.showGitDiff = true
+    let fgFile = getTempDir() / "moe_test_explicit_fg2.txt"
+    let bgFile = getTempDir() / "moe_test_explicit_bg2.txt"
+    let target = getTempDir() / "moe_test_explicit_target.txt"
+    writeFile(fgFile, "fg-original\n")
+    writeFile(bgFile, "bg-original\n")
+    defer:
+      removeFile(fgFile)
+      removeFile(bgFile)
+      if fileExists(target):
+        removeFile(target)
+
+    check e.loadFile(fgFile).isOk
+
+    let bgBuf = newTextBuffer("bg-original\n", some(bgFile))
+    e.addBuffer(bgBuf)
+    check bgBuf.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
+
+    let fgBuf = e.activeBuffer
+    e.state.git.diffEntries.del(fgBuf.id)
+    e.state.git.diffEntries.del(bgBuf.id)
+
+    check e.saveFile(bgBuf, some(target)).isOk
+    check readFile(target) == "B:bg-original\n"
+    check bgBuf.filePath.get == target
+    # Neither the active buffer nor its file is affected.
+    check e.activeBuffer.filePath.get == fgFile
+    check readFile(fgFile) == "fg-original\n"
+    check readFile(bgFile) == "bg-original\n"
+    # Post-write effects must target the saved buffer, not the active one.
+    require e.state.git.diffEntries.hasKey(bgBuf.id)
+    check e.state.git.diffEntries[bgBuf.id].forced
+    check not e.state.git.diffEntries.hasKey(fgBuf.id)
+
+suite "Editor - prepareQuickRun":
+  test "Real save performs post-write effects (git refresh)":
+    # The wrapper must translate `didSave` into `noteBufferSaved`; dropping
+    # that call must fail here via the missing git refresh mark.
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = true
+    let e = createTestEditorWithConfig(config)
+    e.showGitDiff = true
+
+    let path = getTempDir() / "moe_test_editor_quickrun_save.nim"
+    writeFile(path, "echo \"original\"\n")
+    defer:
+      removeFile(path)
+
+    check e.loadFile(path).isOk
+    e.activeBuffer.language = SourceLanguage.langNim
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "edited ").isOk
+
+    let buf = e.activeBuffer
+    e.state.git.diffEntries.del(buf.id)
+
+    let prepared = e.prepareQuickRun(buf)
+    check prepared.isOk
+    check prepared.get.didSave
+    check "edited" in readFile(path)
+    require e.state.git.diffEntries.hasKey(buf.id)
+    check e.state.git.diffEntries[buf.id].forced
+
+  test "Staging without a real save performs no post-write effects":
+    # Guards the other direction: an unconditional `noteBufferSaved` must
+    # fail here via the unexpected git refresh mark.
+    var config = newEditorConfig()
+    config.quickRun.saveBufferWhenQuickRun = false
+    let e = createTestEditorWithConfig(config)
+    e.showGitDiff = true
+
+    let path = getTempDir() / "moe_test_editor_quickrun_nosave.nim"
+    writeFile(path, "echo \"original\"\n")
+    defer:
+      removeFile(path)
+
+    check e.loadFile(path).isOk
+    e.activeBuffer.language = SourceLanguage.langNim
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "edited ").isOk
+
+    let buf = e.activeBuffer
+    e.state.git.diffEntries.del(buf.id)
+
+    let prepared = e.prepareQuickRun(buf)
+    check prepared.isOk
+    check not prepared.get.didSave
+    check readFile(path) == "echo \"original\"\n"
+    check not e.state.git.diffEntries.hasKey(buf.id)

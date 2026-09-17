@@ -36,7 +36,8 @@ import
   highlight_config,
   persist,
   buffer,
-  lsp_integration
+  lsp_integration,
+  quick_run_utils
 
 type SaveAllBuffersResult* = object
   savedCount*: int
@@ -321,26 +322,45 @@ proc revertTrimIfNeeded(
   buffer.changeListIndex = changeListIndexBefore
   ok(())
 
+proc noteBufferSaved*(e: Editor, buffer: TextBuffer) =
+  ## Refresh git gutter and notify LSP after `buffer` was written.
+  if e.showGitDiff:
+    e.state.git.requestGitRefresh(buffer)
+  if e.lsp.enabled:
+    e.lsp.onBufferSave(buffer)
+
+proc prepareQuickRun*(
+    e: Editor, buffer: TextBuffer
+): Result[QuickRunPrepareResult, string] =
+  ## Prepare QuickRun for `buffer` and run `noteBufferSaved` when staging saved the file.
+  let prepared = quick_run_utils.prepareQuickRun(buffer, e.config)
+  if prepared.isErr:
+    return Result[QuickRunPrepareResult, string].err prepared.error
+  if prepared.get.didSave:
+    e.noteBufferSaved(buffer)
+  return Result[QuickRunPrepareResult, string].ok prepared.get
+
 proc saveFile*(
-    e: Editor, path: Option[string] = none(string), force: bool = false
+    e: Editor,
+    buffer: TextBuffer,
+    path: Option[string] = none(string),
+    force: bool = false,
 ): Result[(), string] =
-  ## Save the active buffer to file
-  ## If path is provided, save to that path, otherwise use buffer's current file path
-  ## If force is false, check if file was modified externally and refuse to save
-  let activeBuffer = e.activeBuffer()
+  ## Write `buffer` to file. If `path` is given, save there (`:w <name>`).
+  ## Without `force`, refuse when the target was modified externally.
 
   # `:w ~/f` keeps the tilde, so expand it like the open commands do.
   let savePath =
     if path.isSome:
       expandTilde(path.get)
-    elif activeBuffer.filePath.isSome:
-      activeBuffer.filePath.get
+    elif buffer.filePath.isSome:
+      buffer.filePath.get
     else:
       logError("editor", "Save failed: No file path specified")
       return err("No file path specified")
 
   # Check before trimming, and again just before writing.
-  let externalMod = externalModRefusal(activeBuffer, savePath, force)
+  let externalMod = externalModRefusal(buffer, savePath, force)
   if externalMod.len > 0:
     logError("editor", "Save failed: File was modified externally: " & savePath)
     return err(externalMod)
@@ -352,7 +372,7 @@ proc saveFile*(
     e.enforceModePolicy()
 
   # Trim trailing whitespace if EditorConfig says so; reverted on save failure.
-  let didTrimRes = trimTrailingWhitespaceTracked(activeBuffer)
+  let didTrimRes = trimTrailingWhitespaceTracked(buffer)
   if didTrimRes.isErr:
     logError(
       "editor",
@@ -363,10 +383,10 @@ proc saveFile*(
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)
-  let saveResult = activeBuffer.saveFile(savePath, checkExternalMod = not force)
+  let saveResult = buffer.saveFile(savePath, checkExternalMod = not force)
   if saveResult.isErr:
     let revertRes =
-      revertTrimIfNeeded(activeBuffer, didTrim, changeListBefore, changeListIndexBefore)
+      revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
     if revertRes.isErr:
       logError(
         "editor",
@@ -380,11 +400,7 @@ proc saveFile*(
 
   logInfo("editor", "Successfully saved file: " & savePath)
 
-  e.refreshGitDiff()
-
-  # Notify LSP that a document was saved
-  if e.lsp.enabled:
-    e.lsp.onBufferSave(activeBuffer)
+  e.noteBufferSaved(buffer)
 
   ok(())
 
@@ -451,11 +467,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
     result.savedPaths.add(savePath)
     logInfo("editor", "Saved file: " & savePath)
 
-    if e.showGitDiff:
-      e.state.git.requestGitRefresh(buffer)
-
-    if e.lsp.enabled:
-      e.lsp.onBufferSave(buffer)
+    e.noteBufferSaved(buffer)
 
 proc autoSave*(e: Editor) =
   ## Automatically save modified buffers if auto save is enabled and interval has passed
@@ -539,12 +551,7 @@ proc autoSave*(e: Editor) =
         savedCount += 1
         savedPaths.add(savePath)
 
-        if e.showGitDiff:
-          e.state.git.requestGitRefresh(buffer)
-
-        # Notify LSP that a document was saved
-        if e.lsp.enabled:
-          e.lsp.onBufferSave(buffer)
+        e.noteBufferSaved(buffer)
 
   # Update last auto save time
   e.state.timing.lastAutoSave = now
