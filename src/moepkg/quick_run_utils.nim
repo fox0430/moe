@@ -290,11 +290,14 @@ proc prepareQuickRun*(
       else:
         buffer.filePath.get
 
-  if settings.quickRun.saveBufferWhenQuickRun or useTempFile:
-    # Create and use a temporary file if the source code file does not exist.
-    # `checkExternalMod` refuses to overwrite a file that was modified by
-    # another program since the buffer last read it; it only guards writes
-    # back to the buffer's own path (temp saves are unaffected).
+  if useTempFile:
+    # Temp copy only — saveFile would bind the buffer to this path.
+    try:
+      writeFile(path, buffer.getFileContent)
+    except IOError, OSError:
+      return Result[QuickRunPrepareResult, string].err fmt"Failed to write the temporary file: {getCurrentExceptionMsg()}"
+  elif settings.quickRun.saveBufferWhenQuickRun:
+    # Real save; checkExternalMod refuses overwrite if the file changed externally.
     let saveResult = buffer.saveFile(path, checkExternalMod = true)
     if saveResult.isErr:
       return Result[QuickRunPrepareResult, string].err fmt"Failed to save the current code: {saveResult.error}"
