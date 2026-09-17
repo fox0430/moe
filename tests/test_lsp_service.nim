@@ -364,6 +364,15 @@ suite "LspService - Worker Management (without actual workers)":
     let worker = result1.get
     check worker.waitForState(lwsCrashed)
 
+    # Restart into a server that lingers before dying, so the published
+    # lwsStarting stays observable instead of racing the next crash.
+    svc.setConfig(
+      "crashlang",
+      LanguageServerConfig(
+        command: "sleep", args: @["1"], extensions: @["crashext"], enabled: true
+      ),
+    )
+
     # First call after the crash triggers a restart on the same thread
     let result2 = svc.startWorker("crashlang")
     check result2.isOk
