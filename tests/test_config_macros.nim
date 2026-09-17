@@ -1189,3 +1189,71 @@ suite "config_macros: an emptied array of tables":
     saveMixedGroup(lines, MixedGroup(entries: @[DefaultedElem(name: "a")]))
     check "entries = []" notin lines
     check lines.count("[[Mix.entries]]") == 1
+
+const SuggestedKinds = @["Nim", "C++"]
+
+type
+  SuggestSection {.cfgSection: "Sug".} = object
+    kind {.cfg, cfgSuggest: SuggestedKinds, cfgDocDescription: "Kind".}: string
+    kinds {.cfg, cfgSuggest: SuggestedKinds, cfgDocDescription: "Kinds".}: seq[string]
+
+  SuggestOuter = object
+    sug: SuggestSection
+
+proc loadSuggest(t: TomlTableRef, c: var SuggestSection, vr: var ValidationResult) =
+  generateConfigLoader(t, c, vr, SuggestSection)
+
+suite "config_macros: cfgSuggest":
+  test "a value outside the set loads, since the field validates itself":
+    # The point of the pragma: the spellings a key accepts are wider than the
+    # ones worth offering, so the loader must not hold the value to the list.
+    let t = tomlTable("kind = \"nim\"\nkinds = [\"cpp\", \"py\"]\n")
+    var c: SuggestSection
+    var vr = newValidationResult()
+    loadSuggest(t, c, vr)
+    check not vr.hasErrors
+    check c.kind == "nim"
+    check c.kinds == @["cpp", "py"]
+
+  test "the values reach the completion while the type stays free-form":
+    # Offered, not enforced: a popup with candidates, and a label that does not
+    # claim the list is all a user may write.
+    var schema: seq[ConfigSchemaSection]
+    generateConfigSchema(schema, SuggestOuter)
+    let keys = schema.filterIt(it.name == "Sug")[0].keys
+    let kind = keys.filterIt(it.name == "kind")[0]
+    check kind.values == SuggestedKinds
+    check kind.valueType == cvtString
+    check kind.typeLabel == "string"
+    let kinds = keys.filterIt(it.name == "kinds")[0]
+    check kinds.values == SuggestedKinds
+    check kinds.valueType == cvtStringArray
+    check kinds.typeLabel == "string array"
+
+  test "one set cannot be both offered and enforced":
+    check not compiles(
+      (
+        block:
+          type Bad {.cfgSection: "Bad".} = object
+            kind {.cfg, cfgEnumStrings: SuggestedKinds, cfgSuggest: SuggestedKinds.}:
+              string
+
+          var c: Bad
+          var vr = newValidationResult()
+          generateConfigLoader(tomlTable(""), c, vr, Bad)
+      )
+    )
+
+  test "an offered set may not be empty either":
+    check not compiles(
+      (
+        block:
+          const NoKinds: seq[string] = @[]
+          type Bad {.cfgSection: "Bad".} = object
+            kind {.cfg, cfgSuggest: NoKinds.}: string
+
+          var c: Bad
+          var vr = newValidationResult()
+          generateConfigLoader(tomlTable(""), c, vr, Bad)
+      )
+    )

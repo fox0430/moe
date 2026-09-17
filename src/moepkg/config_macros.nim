@@ -80,6 +80,10 @@
 ##                                                         or seq[string] field
 ##                                                         against an option set,
 ##                                                         written out or named)
+##                     cfgSuggest: ["a", "b"] | Const      (offer these values for a
+##                                                         string or seq[string]
+##                                                         field the loader does not
+##                                                         constrain)
 ##                     cfgDeprecated: "msg"                (transitional deprecation:
 ##                                                         loader accepts the value
 ##                                                         but records a notice;
@@ -208,6 +212,15 @@ template cfgEnum*(opts: untyped) {.pragma.}
 ## docs list it, whichever form it takes. A value outside the set is reported
 ## and the field keeps its default, as every other load helper does.
 template cfgEnumStrings*(opts: untyped) {.pragma.}
+
+## Name the values to offer for a `string` or `seq[string]` field whose own
+## rules decide what is accepted, when the two are not the same list:
+##   filetype* {.cfg, cfgSuggest: sourceLanguageToStr.}: seq[string]
+##
+## The completion popup offers the set and the UI leaves the field free text;
+## the loader does not enforce it. For a field whose set is exactly what it
+## accepts, use `{.cfgEnumStrings.}` instead, which says so on every surface.
+template cfgSuggest*(opts: untyped) {.pragma.}
 
 ## Override the TOML key when it differs from the Nim identifier.
 template cfgKey*(name: string) {.pragma.}
@@ -685,6 +698,7 @@ type FieldSpec = object
   pragmas: NimNode
   optionSet: NimNode ## `{.cfgEnumStrings.}` set expression, nil without one
   optionSetLits: seq[string] ## its members; empty when the set is only named
+  optionSetAdvisory: bool ## The set came from `{.cfgSuggest.}`: offered, not enforced
   onlyWhen: NimNode ## `{.cfgOnlyWhen.}` predicate, nil without one
   onlyWhenNote: string ## when the key applies, in words
   deprecated: string
@@ -707,14 +721,28 @@ proc describeField(name: string, typ, pragmas: NimNode, key: string): FieldSpec 
     docSkip: hasPragma(pragmas, "cfgDocSkip"),
   )
 
-  let enumStrP = findPragma(pragmas, "cfgEnumStrings")
-  if enumStrP != nil:
-    # An option set constrains free text, so it applies only to `string` and,
-    # element by element, to `seq[string]`.
+  let
+    enumStrP = findPragma(pragmas, "cfgEnumStrings")
+    suggestP = findPragma(pragmas, "cfgSuggest")
+  if enumStrP != nil and suggestP != nil:
+    error(
+      "a field takes either {.cfgEnumStrings.} or {.cfgSuggest.}: one set " &
+        "cannot be both what the loader enforces and what it only offers",
+      suggestP,
+    )
+  let setP = if enumStrP != nil: enumStrP else: suggestP
+  if setP != nil:
+    # An option set constrains or completes free text, so it applies only to
+    # `string` and, element by element, to `seq[string]`.
     if result.kind notin {cfkString, cfkSeqString}:
-      error("cfgEnumStrings requires a string or seq[string] field", enumStrP)
-    result.optionSet = optionSetNode(enumStrP)
-    result.optionSetLits = optionSetLiterals(enumStrP)
+      error(
+        (if enumStrP != nil: "cfgEnumStrings" else: "cfgSuggest") &
+          " requires a string or seq[string] field",
+        setP,
+      )
+    result.optionSet = optionSetNode(setP)
+    result.optionSetLits = optionSetLiterals(setP)
+    result.optionSetAdvisory = enumStrP == nil
 
   let onlyWhenP = findPragma(pragmas, "cfgOnlyWhen")
   if onlyWhenP != nil:
@@ -758,7 +786,13 @@ proc optionSetNonEmptyCheck(spec: FieldSpec): NimNode =
   ## statement list when the field has no set to check.
   if spec.optionSet == nil:
     return newStmtList()
-  optionSetNonEmptyCheck(findPragma(spec.pragmas, "cfgEnumStrings"))
+  let name = if spec.optionSetAdvisory: "cfgSuggest" else: "cfgEnumStrings"
+  optionSetNonEmptyCheck(findPragma(spec.pragmas, name))
+
+proc enforcedOptionSet(spec: FieldSpec): NimNode =
+  ## The set the loader holds the field to, or nil when the field carries only
+  ## a `{.cfgSuggest.}` set, which every surface but the completion ignores.
+  if spec.optionSetAdvisory: nil else: spec.optionSet
 
 proc optionSetDefaultCheck(spec: FieldSpec, elem: NimNode): NimNode =
   ## A stanza rejecting, at compile time, a `{.cfgEnumStrings.}` field of the
@@ -768,7 +802,7 @@ proc optionSetDefaultCheck(spec: FieldSpec, elem: NimNode): NimNode =
   ## Only element types are checked: a section starts from `newEditorConfig`,
   ## not from the field default the macro can see. A named set whose length is
   ## not compile-time known falls through, as in `optionSetNonEmptyCheck`.
-  if spec.optionSet == nil:
+  if spec.enforcedOptionSet == nil:
     return newStmtList()
   let
     optionSet = spec.optionSet
@@ -798,7 +832,7 @@ proc typeLabelExpr(spec: FieldSpec): NimNode =
   ## popup, with any option set folded in (`string array (enum: ...)`).
   ## An expression, because a named set is only a value at the call site.
   let base = docTypeLabel(spec.typ)
-  if spec.optionSet == nil:
+  if spec.enforcedOptionSet == nil:
     return newLit(base)
   if spec.optionSetLits.len > 0:
     return newLit(optionSetLabel(base, spec.optionSetLits))
@@ -911,7 +945,7 @@ proc buildLoaderBody(
       pragmas = spec.pragmas
       fieldAcc = newDotExpr(cfgVar, ident(fieldName))
       keyLit = newLit(spec.key)
-      optionSet = spec.optionSet
+      optionSet = spec.enforcedOptionSet
 
     # A conditional field needs its pre-load value, to put back when the
     # predicate does not hold.
@@ -1364,7 +1398,7 @@ proc buildDescriptorsBody(target, innerTd, base: NimNode, sec: string): NimNode 
           floatStep: `stepVal`,
         )
     of cfkString:
-      if spec.optionSet != nil:
+      if spec.enforcedOptionSet != nil:
         let optsExpr = valuesExpr(spec)
         result.add optionSetNonEmptyCheck(spec)
         result.add quote do:
@@ -2027,7 +2061,7 @@ proc schemaValueTypeIdent(spec: FieldSpec): NimNode =
   of cfkFloat:
     ident("cvtFloat")
   of cfkString:
-    if spec.optionSet != nil:
+    if spec.enforcedOptionSet != nil:
       ident("cvtEnum")
     else:
       ident("cvtString")
