@@ -331,6 +331,26 @@ const
     langZsh: "Zsh",
   ]
 
+const sourceLanguageToFiletype*: array[SourceLanguage, string] = block:
+  ## The `${filetype}` spelling of each language: the enum name without its
+  ## `lang` prefix, lowercased (langJavaScript -> "javascript"). Unlike the
+  ## display name above (`C++`, `C#`) it is a stable, shell-safe token, which is
+  ## what a command line and a config value want.
+  var names: array[SourceLanguage, string]
+  for language in SourceLanguage:
+    names[language] = ($language)[4 ..^ 1].toLowerAscii
+  names
+
+const filetypeNames*: seq[string] = block:
+  ## Every filetype token a user can name, for the surfaces that offer them.
+  ## `langNone` is left out: "no language" is what an unmatched file has, not
+  ## something to write in a config.
+  var names: seq[string]
+  for language in SourceLanguage:
+    if language != langNone:
+      names.add sourceLanguageToFiletype[language]
+  names
+
 proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
     if cmpIgnoreStyle(name, sourceLanguageToStr[i]) == 0:

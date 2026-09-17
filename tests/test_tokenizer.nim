@@ -1231,3 +1231,20 @@ suite "tokenizer - getNextToken dispatch":
     g.initGeneralTokenizer("const x = <div/>")
     g.javaScriptNextToken()
     check (g.kind, g.length, g.pos, g.state) == viaDispatch
+
+suite "tokenizer - filetype tokens":
+  test "The enum name without its lang prefix, lowercased":
+    check sourceLanguageToFiletype[langNim] == "nim"
+    check sourceLanguageToFiletype[langJavaScript] == "javascript"
+    check sourceLanguageToFiletype[langCpp] == "cpp"
+    check sourceLanguageToFiletype[langNone] == "none"
+
+  test "Every language has a distinct token":
+    var seen: HashSet[string]
+    for language in SourceLanguage:
+      check not seen.containsOrIncl(sourceLanguageToFiletype[language])
+
+  test "The offered names are every language but langNone":
+    check filetypeNames.len == SourceLanguage.high.int
+    check "nim" in filetypeNames
+    check "none" notin filetypeNames
