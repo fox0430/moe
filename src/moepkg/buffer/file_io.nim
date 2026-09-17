@@ -435,9 +435,10 @@ proc externalModRefusal*(buffer: TextBuffer, savePath: string, force = false): s
     return ""
   ExternalModErrorMsg
 
-proc saveFile*(
-    buffer: TextBuffer, path: string, checkExternalMod: bool = false
-): Result[(), string] =
+proc putBufferOnFile(
+    buffer: TextBuffer, path: string, checkExternalMod: bool
+): Result[string, string] =
+  ## Write the buffer bytes to `path`; file half of a save without bookkeeping.
   case buffer.backendKind
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
     # Use debug to avoid spam from autoSave; decode failure already warned at load.
@@ -453,22 +454,31 @@ proc saveFile*(
     if checkExternalMod:
       let refusal = buffer.externalModRefusal(path)
       if refusal.len > 0:
-        return Result[(), string].err refusal
+        return Result[string, string].err refusal
 
     # Atomic-ish write: temp+rename with hardlink/symlink fallback plus fsync.
     # Guards against truncation on crash and durability loss on power failure.
     let wr = writeAtomic(path, content)
     if wr.isErr:
       logError("buffer", "Failed to write file " & path & ": " & wr.error)
-      return Result[(), string].err wr.error
+      return Result[string, string].err wr.error
     logDebug("buffer", "File written successfully: " & path)
 
-    buffer.markSaved()
-    buffer.filePath = some(path)
+    return Result[string, string].ok content
 
-    buffer.noteFileStamp(path)
-    # The bytes on disk are exactly the ones just written.
-    buffer.lastLoadedContent = some(fingerprint(content))
+proc saveFile*(
+    buffer: TextBuffer, path: string, checkExternalMod: bool = false
+): Result[(), string] =
+  let written = buffer.putBufferOnFile(path, checkExternalMod)
+  if written.isErr:
+    return Result[(), string].err written.error
+
+  buffer.markSaved()
+  buffer.filePath = some(path)
+
+  buffer.noteFileStamp(path)
+  # The bytes on disk are exactly the ones just written.
+  buffer.lastLoadedContent = some(fingerprint(written.get))
 
   return Result[(), string].ok ()
 
