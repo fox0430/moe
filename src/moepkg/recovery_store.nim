@@ -24,7 +24,7 @@
 
 import std/[algorithm, json, options, os, sets, tables, times]
 
-import buffer/file_io, path_key, recovery_format, unicode_utils
+import buffer/[core, file_io], path_key, recovery_format, unicode_utils
 
 type RecoveredFile* = object
   path*: string ## Copy inside the session directory.
@@ -303,10 +303,11 @@ proc stampHeld(stamp: OriginStamp, origin: string): bool =
   if stamp.mtime.isNone and stamp.size.isNone:
     return false
   let current = captureFileStamp(origin)
-  if stamp.mtime.isSome and
-      (current.modTime.isNone or current.modTime.get != stamp.mtime.get):
+  if current.observed != fileObservedPresent:
     return false
-  if stamp.size.isSome and (current.size.isNone or current.size.get != stamp.size.get):
+  if stamp.mtime.isSome and current.modTime != stamp.mtime.get:
+    return false
+  if stamp.size.isSome and current.size != stamp.size.get:
     return false
   return true
 

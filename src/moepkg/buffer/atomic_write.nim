@@ -22,7 +22,7 @@
 ## for durability across power loss.
 ##
 ## Strategy follows Vim's `bkc=auto` + `writebackup` semantics:
-##   - New file → plain write + fsync + fsync(dir).
+##   - New file → exclusive create + fsync + fsync(dir).
 ##   - Symlink or hardlinked target → in-place with `<path>~` backup so the
 ##     link relationship (target of the symlink, or the shared inode of a
 ##     hardlink group) is preserved.
@@ -32,7 +32,7 @@
 ## filesystem, which is why the temp is always created in the target's
 ## own directory.
 
-import std/os
+import std/[options, os, times]
 
 import pkg/results
 
@@ -44,6 +44,27 @@ when defined(posix):
 const
   TmpPrefix = ".moe.tmp."
   BackupSuffix = "~"
+
+const FileAppearedErrorMsg* =
+  "A file appeared at this path while saving. Use :w! to overwrite it."
+
+const TargetChangedErrorMsg* =
+  "File changed during save; please retry (use :w! to force save, or :e! to reload)."
+
+type WritePremise* = enum
+  ## What the gate approved, carried to the writer. No default fail-open.
+  wpOverwrite ## Existing file. A disappearance still exclusive-creates.
+  wpCreateExclusive ## Nothing was there; refuse if something is there now.
+  wpForce ## `:w!` — write even if a file appeared.
+
+proc writePremise*(expectAbsent: bool, force: bool): WritePremise =
+  ## Gate flags → the premise `writeAtomic` requires.
+  if force:
+    wpForce
+  elif expectAbsent:
+    wpCreateExclusive
+  else:
+    wpOverwrite
 
 when not defined(posix):
   var tmpCounter {.threadvar.}: uint64
@@ -91,6 +112,36 @@ proc classifyTarget*(path: string): TargetClass =
     except OSError:
       discard
 
+type TargetSnapshot* = tuple[modTime: times.Time, size: int64, dev: uint64, ino: uint64]
+  ## Follow-stat identity of the write target. Re-checked with `classifyTarget`
+  ## just before the write so a moved target does not get a stale strategy.
+
+proc snapshotTarget*(path: string): Option[TargetSnapshot] =
+  ## Follow-stat snapshot of `path`, or none when it cannot be resolved.
+  try:
+    let info = getFileInfo(path, followSymlink = true)
+    if info.kind notin {pcFile, pcLinkToFile}:
+      return none(TargetSnapshot)
+    some(
+      (
+        modTime: info.lastWriteTime,
+        size: info.size.int64,
+        dev: info.id.device.uint64,
+        ino: info.id.file.uint64,
+      )
+    )
+  except CatchableError:
+    none(TargetSnapshot)
+
+proc writeTargetMoved*(
+    expected: Option[TargetSnapshot], expectedCls: TargetClass, path: string
+): bool =
+  ## True when `path` is no longer the file the write strategy was chosen for.
+  ## Fail closed if the initial snapshot could not be taken: proceeding would
+  ## apply a stale decision to whatever is there now.
+  expected.isNone or snapshotTarget(path) != expected or
+    classifyTarget(path) != expectedCls
+
 proc writeAndFsync(path: string, content: string): Result[(), string] =
   ## Write `content` to `path` (truncating), flush userspace buffers, and
   ## fsync the descriptor before close. `path` must not exist as a directory.
@@ -117,21 +168,8 @@ proc writeAndFsync(path: string, content: string): Result[(), string] =
   Result[(), string].ok ()
 
 when defined(posix):
-  proc writeTempExclusive(
-      dir: string, base: string, content: string, tmpPath: var string
-  ): Result[(), string] =
-    ## Create a same-dir temp file via mkstemp (kernel-random name opened
-    ## with O_EXCL), write `content`, fsync, and close. The kernel never
-    ## follows a pre-existing symlink, so a planted link at a guessable
-    ## temp name cannot redirect the write. On error no temp file remains.
-    var tmpl = dir / (TmpPrefix & base & ".XXXXXX")
-    let fd = posix.mkstemp(tmpl.cstring)
-    if fd < 0:
-      let e = errno
-      return
-        Result[(), string].err("cannot create temporary file: " & $posix.strerror(e))
-    tmpPath = tmpl
-
+  proc writeFdAndFsync(fd: cint, content: string): Result[(), string] =
+    ## Write `content` to `fd` and fsync. Leaves `fd` open.
     var written = 0
     while written < content.len:
       let n = posix.write(
@@ -141,34 +179,40 @@ when defined(posix):
         let e = errno
         if e == EINTR:
           continue
-        discard posix.close(fd)
-        try:
-          removeFile(tmpPath)
-        except CatchableError:
-          discard
-        return
-          Result[(), string].err("cannot write temporary file: " & $posix.strerror(e))
+        return Result[(), string].err("cannot write: " & $posix.strerror(e))
       if n == 0:
-        discard posix.close(fd)
-        try:
-          removeFile(tmpPath)
-        except CatchableError:
-          discard
-        return Result[(), string].err("cannot write temporary file: " & tmpPath)
+        return Result[(), string].err("cannot write: no progress")
       written += n
 
     var rc = posix.fsync(fd)
     while rc != 0 and errno == EINTR:
       rc = posix.fsync(fd)
     if rc != 0:
+      return Result[(), string].err("fsync failed: " & $posix.strerror(errno))
+
+    Result[(), string].ok ()
+
+  proc writeTempExclusive(
+      dir: string, base: string, content: string, tmpPath: var string
+  ): Result[(), string] =
+    ## Same-dir temp via mkstemp (kernel-random, O_EXCL). A planted symlink
+    ## cannot redirect the write. On error no temp file remains.
+    var tmpl = dir / (TmpPrefix & base & ".XXXXXX")
+    let fd = posix.mkstemp(tmpl.cstring)
+    if fd < 0:
       let e = errno
-      discard posix.close(fd)
+      return
+        Result[(), string].err("cannot create temporary file: " & $posix.strerror(e))
+    tmpPath = tmpl
+
+    let wr = writeFdAndFsync(fd, content)
+    discard posix.close(fd)
+    if wr.isErr:
       try:
         removeFile(tmpPath)
       except CatchableError:
         discard
-      return Result[(), string].err("fsync failed: " & $posix.strerror(e))
-    discard posix.close(fd)
+      return Result[(), string].err(wr.error & ": " & tmpPath)
 
     Result[(), string].ok ()
 
@@ -214,10 +258,41 @@ proc restoreOwner(path: string, cls: TargetClass) =
       if e != EPERM and e != EACCES:
         logWarn("buffer", "atomic write: chown failed on " & path)
 
-proc writeNewFile(path: string, content: string): Result[(), string] =
+proc createExclusively*(path: string, content: string): Result[(), string] =
+  ## Create `path` with `content`; fail if it already exists (O_EXCL).
+  when defined(posix):
+    let fd = posix.open(path.cstring, O_WRONLY or O_CREAT or O_EXCL, 0o666.Mode)
+    if fd < 0:
+      let e = errno
+      if e == EEXIST:
+        return Result[(), string].err(FileAppearedErrorMsg)
+      return Result[(), string].err("cannot create " & path & ": " & $strerror(e))
+    let wr = writeFdAndFsync(fd, content)
+    discard posix.close(fd)
+    if wr.isErr:
+      try:
+        removeFile(path)
+      except CatchableError:
+        discard
+      return Result[(), string].err(wr.error & ": " & path)
+    Result[(), string].ok ()
+  else:
+    # No O_EXCL outside POSIX; check-then-create only.
+    if fileExists(path) or symlinkExists(path):
+      return Result[(), string].err(FileAppearedErrorMsg)
+    writeAndFsync(path, content)
+
+proc writeNewFile(
+    path: string, content: string, refuseIfAppeared: bool
+): Result[(), string] =
   ## Create-a-new-file path. No rename gain (nothing to swap), but still
   ## fsync file + parent dir so the new inode is durable.
-  let wr = writeAndFsync(path, content)
+  let wr =
+    if refuseIfAppeared:
+      createExclusively(path, content)
+    else:
+      # Forced overwrite; existing file may go.
+      writeAndFsync(path, content)
   if wr.isErr:
     return wr
   if not fsyncDir(path.parentDir):
@@ -229,6 +304,10 @@ proc writeInPlace(path: string, content: string, cls: TargetClass): Result[(), s
   ## Vim `bkc=yes` + `writebackup`: copy current content to `<path>~`, write
   ## in place, fsync, drop backup on success. Preserves hardlinks and the
   ## symlink target since neither the inode nor the link itself is replaced.
+  let expected = snapshotTarget(path)
+  let expectedCls = classifyTarget(path)
+  if expected.isNone:
+    return Result[(), string].err(TargetChangedErrorMsg)
   let backup = path & BackupSuffix
   try:
     # copy — not rename — so hardlinks stay linked and symlinks stay
@@ -238,6 +317,14 @@ proc writeInPlace(path: string, content: string, cls: TargetClass): Result[(), s
     return Result[(), string].err("cannot create backup " & backup & ": " & e.msg)
   except CatchableError as e:
     return Result[(), string].err("cannot create backup " & backup & ": " & e.msg)
+
+  if writeTargetMoved(expected, expectedCls, path):
+    # Target changed after the strategy was chosen; drop the backup of the new content.
+    try:
+      removeFile(backup)
+    except CatchableError:
+      discard
+    return Result[(), string].err(TargetChangedErrorMsg)
 
   let wr = writeAndFsync(path, content)
   if wr.isErr:
@@ -264,6 +351,10 @@ proc writeTempRename(
 ): Result[(), string] =
   ## Vim `bkc=no`: write same-dir temp with restored mode/owner, then rename
   ## over the target. Rename is atomic on POSIX within a filesystem.
+  let expected = snapshotTarget(path)
+  let expectedCls = classifyTarget(path)
+  if expected.isNone:
+    return Result[(), string].err(TargetChangedErrorMsg)
   let dir = if path.parentDir.len == 0: "." else: path.parentDir
   let base = path.extractFilename
   var tmp: string
@@ -276,6 +367,15 @@ proc writeTempRename(
   except CatchableError as e:
     logWarn("buffer", "atomic write: chmod failed on tmp " & tmp & ": " & e.msg)
   restoreOwner(tmp, cls)
+
+  if writeTargetMoved(expected, expectedCls, path):
+    # Target changed after the strategy was chosen. classifyTarget also catches
+    # chmod/chown/hardlink, which the byte snapshot cannot.
+    try:
+      removeFile(tmp)
+    except CatchableError:
+      discard
+    return Result[(), string].err(TargetChangedErrorMsg)
 
   try:
     moveFile(tmp, path)
@@ -297,15 +397,29 @@ proc writeTempRename(
 
   Result[(), string].ok ()
 
-proc writeAtomic*(path: string, content: string): Result[(), string] =
+proc writeAtomic*(
+    path: string, content: string, premise = wpOverwrite
+): Result[(), string] =
   ## Save `content` to `path` with crash/power-loss resistance. Picks the
   ## write strategy per Vim `bkc=auto`:
-  ##   - No existing file → plain write + fsync + fsync(dir).
+  ##   - No existing file → exclusive create + fsync + fsync(dir).
   ##   - Symlink or hardlinked → in-place with `<path>~` backup.
   ##   - Otherwise → same-dir temp + rename with permissions/owner restore.
+  ##
+  ## `premise` is what the gate approved and must be passed explicitly;
+  ## omitting it is overwrite of an existing file, not "nothing was there".
   let cls = classifyTarget(path)
-  if not cls.exists:
-    return writeNewFile(path, content)
+  case premise
+  of wpForce:
+    if not cls.exists:
+      return writeNewFile(path, content, refuseIfAppeared = false)
+  of wpCreateExclusive:
+    if cls.exists:
+      return Result[(), string].err(FileAppearedErrorMsg)
+    return writeNewFile(path, content, refuseIfAppeared = true)
+  of wpOverwrite:
+    if not cls.exists:
+      return writeNewFile(path, content, refuseIfAppeared = true)
   if cls.isSymlink or cls.linkCount > 1:
     return writeInPlace(path, content, cls)
   writeTempRename(path, content, cls)

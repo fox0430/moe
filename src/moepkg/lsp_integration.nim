@@ -1649,11 +1649,12 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   applyTextEdits(buffer, edits, appliedEdits = ignored)
 
 proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
-  ## Buffer index for `path`, compared with `samePath`.
-  for i, buffer in buffers:
-    if buffer.filePath.isSome and samePath(buffer.filePath.get, path):
-      return some(i)
-  return none(int)
+  ## Buffer index for `path`.
+  let i = indexOfBufferHoldingPath(buffers, path)
+  if i < 0:
+    none(int)
+  else:
+    some(i)
 
 proc collectWorkspaceEditPaths*(edit: WorkspaceEdit): seq[string] =
   ## All target file paths of a WorkspaceEdit, in application order.
@@ -1681,7 +1682,7 @@ proc hasStaleTargetBuffer*(
   ## buffer's contentVersion shadow the other's.
   for path in collectWorkspaceEditPaths(edit):
     for buf in buffers:
-      if buf.filePath.isSome and samePath(buf.filePath.get, path):
+      if buf.filePath.isSome and buf.bufferHoldsFile(path):
         if not baseline.hasKey(buf.id) or buf.contentVersion != baseline[buf.id]:
           return true
 
@@ -1690,10 +1691,10 @@ proc hasStaleTargetBuffer*(
 proc hasStaleServerEditTarget*(
     lsp: LspIntegration, buffers: seq[TextBuffer], edit: WorkspaceEdit
 ): bool =
-  ## True if a server edit would corrupt an open buffer.
+  ## True if a server edit would corrupt an open buffer (matched by file).
   for path in collectWorkspaceEditPaths(edit):
     for buf in buffers:
-      if buf.filePath.isSome and samePath(buf.filePath.get, path):
+      if buf.filePath.isSome and buf.bufferHoldsFile(path):
         let canonPath = canonicalPath(buf.filePath.get)
         # No record means nothing sent; another buffer's attempt never counts.
         let attempt =
@@ -1775,12 +1776,21 @@ proc applyWorkspaceEdit*(
   # text, so merge them into the single back-to-front pass `applyTextEdits`
   # already does. Overlapping ranges have no well-defined combined result and
   # refuse the whole edit instead.
-  var targetIndexes = initTable[string, int]()
+  #
+  # Keyed by the holder buffer, not the URI spelling: a symlink and its target
+  # are one file, and findBufferByPath already resolves both to that buffer.
+  var targetIndexes = initTable[int, int]()
 
   template collectTarget(path: string, newEdits: seq[TextEdit]): untyped =
-    let key = canonicalPath(path)
-    if key in targetIndexes:
-      let idx = targetIndexes[key]
+    let bufferIdxOpt = findBufferByPath(buffers, path)
+    if bufferIdxOpt.isNone:
+      return err(
+        "Edit targets a file not open in the editor: " & sanitizeEditPath(path) &
+          "; edit discarded"
+      )
+    let bufferIdx = bufferIdxOpt.get
+    if bufferIdx in targetIndexes:
+      let idx = targetIndexes[bufferIdx]
       if overlaps(openBuffersToModify[idx].edits, newEdits):
         return err(
           "Edit targets " & sanitizeEditPath(path) &
@@ -1788,14 +1798,8 @@ proc applyWorkspaceEdit*(
         )
       openBuffersToModify[idx].edits.add(newEdits)
     else:
-      let bufferIdxOpt = findBufferByPath(buffers, path)
-      if bufferIdxOpt.isNone:
-        return err(
-          "Edit targets a file not open in the editor: " & sanitizeEditPath(path) &
-            "; edit discarded"
-        )
-      targetIndexes[key] = openBuffersToModify.len
-      openBuffersToModify.add((bufferIdxOpt.get, newEdits))
+      targetIndexes[bufferIdx] = openBuffersToModify.len
+      openBuffersToModify.add((bufferIdx, newEdits))
 
   # Per LSP specification, documentChanges takes precedence over changes
   if edit.documentChanges.isSome:

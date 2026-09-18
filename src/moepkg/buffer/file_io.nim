@@ -23,13 +23,18 @@
 ## progressive syntax-highlight initialization for the first chunk of
 ## the file.
 
-import std/[hashes, options, os, strutils, times]
+import std/[hashes, options, os, strutils]
 
 import pkg/results
 
 import ../[encoding, highlight, logger, path_key]
+
+when defined(posix):
+  import std/posix
 import core, atomic_write, edit
 import highlight as buffer_highlight
+
+export WritePremise, writePremise
 
 type
   DecodedFileContent = object ## Result of `decodeFileContent`.
@@ -65,15 +70,18 @@ type
     attemptedEncoding*: Option[CharacterEncoding]
       ## The encoding a decode was attempted as, `none` where none was.
 
-  FileStamp* = object
-    ## The on-disk identity of a file at one instant. A value, so a load can
-    ## stamp the file as it was *before* it read the bytes.
-    modTime*: Option[Time]
-    size*: Option[int64]
-
 const
   ExternalModErrorMsg* =
     "File was modified externally. Use :w! to force save, or :e! to reload."
+
+  UnreadFileErrorMsg* =
+    "File exists but was never read here. Use :w! to overwrite, or :e! to load it."
+
+  UnverifiedFileErrorMsg* = "File on disk could not be checked. Use :w! to save anyway."
+
+  TargetExistsErrorMsg* = "File exists (add ! to override)."
+
+  HeldByAnotherBufferMsg* = "File is loaded in another buffer. Use :w! to force save."
 
   TranscodedEncodings = {
     CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
@@ -285,35 +293,42 @@ proc loadFileWithContent*(
     fileSize: int64 = -1,
     stamp: Option[FileStamp] = none(FileStamp),
 ): Result[(), string] =
-  ## Init buffer from pre-read content. `stamp` is the file's identity from
-  ## before `content` was read; without one the buffer is stamped against the
-  ## file as it is now.
+  ## Init buffer from pre-read content. `stamp` is identity from before the
+  ## read; omitted means stamp against the file as it is now.
   var decoded = decodeForBuffer(content)
   b.loadFileWithDecoded(path, content, decoded, fileSize, stamp)
 
 proc captureFileStamp*(path: string): FileStamp =
-  ## Read the on-disk identity of `path` now. Both halves come from one stat.
-  ## An unreadable or missing file yields an empty stamp.
-  if fileExists(path):
-    try:
-      let info = getFileInfo(path)
-      return FileStamp(modTime: some(info.lastWriteTime), size: some(info.size.int64))
-    except OSError:
-      discard
-  FileStamp()
+  ## Current state of `path`. Only a missing-file stat is `fileObservedAbsent`.
+  try:
+    let info = getFileInfo(path)
+    if info.kind in {pcFile, pcLinkToFile}:
+      presentStamp(
+        info.lastWriteTime, info.size.int64, info.id.device.uint64, info.id.file.uint64
+      )
+    else:
+      FileStamp(observed: fileNeverObserved)
+  except OSError as e:
+    when defined(posix):
+      if e.errorCode.cint in [ENOENT, ENOTDIR]:
+        FileStamp(observed: fileObservedAbsent)
+      else:
+        FileStamp(observed: fileNeverObserved)
+    else:
+      if fileExists(path):
+        FileStamp(observed: fileNeverObserved)
+      else:
+        FileStamp(observed: fileObservedAbsent)
 
 proc applyFileStamp*(b: TextBuffer, stamp: FileStamp) =
-  ## Adopt `stamp` as the baseline every later external-change check compares
-  ## against.
-  b.lastFileModTime = stamp.modTime
-  b.lastFileSize = stamp.size
+  ## Set `stamp` as the baseline for external-change checks.
+  b.fileBaseline = stamp
   b.externalModWarned = false
+  b.autoSaveSkipWarned = false
   b.reloadDeferred = false
 
 proc noteFileStamp*(b: TextBuffer, path: string) =
-  ## Baseline `b` against the file as it is right now. Only correct when
-  ## nothing has been read from the file since; a load stamps before it reads,
-  ## or a write landing in between would go undetected for good.
+  ## Baseline `b` against the file as it is now. A load stamps before reading.
   b.applyFileStamp(captureFileStamp(path))
 
 proc fingerprint*(content: string): ContentFingerprint =
@@ -322,8 +337,7 @@ proc fingerprint*(content: string): ContentFingerprint =
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   var content: string
 
-  # Stamp before reading, so a write landing between the stat and the read is
-  # seen as a change on the next check instead of being hidden for good.
+  # Stamp before reading so a write in between is seen as a later change.
   var stamp = captureFileStamp(path)
 
   # Check if file exists; if not, start with empty content
@@ -334,9 +348,8 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     except IOError as e:
       logError("buffer", "Failed to read file " & path & ": " & e.msg)
       return Result[(), string].err e.msg
-    if stamp.modTime.isNone:
-      # The file appeared between the stat and the read. An empty stamp would
-      # disable external-change detection for the buffer's life.
+    if stamp.observed != fileObservedPresent:
+      # Re-stat: appeared after the first lookup, or the lookup failed.
       stamp = captureFileStamp(path)
   else:
     # File doesn't exist, start with empty content
@@ -355,9 +368,8 @@ proc loadFileWithDecoded*(
 ): Result[(), string] =
   ## Init buffer from `content` already run through `decodeForBuffer`, for a
   ## caller that had to read the decoded text to decide whether to load at all.
-  ## `decoded.text` is moved into the buffer. `stamp` is the file's identity
-  ## from before `content` was read; without one the buffer is stamped against
-  ## the file as it is now.
+  ## `decoded.text` is moved into the buffer. `stamp` is identity from before
+  ## the read; omitted means stamp against the file as it is now.
   let effFileSize = if fileSize >= 0: fileSize else: content.len.int64
 
   if decoded.decodeFailed:
@@ -530,43 +542,127 @@ proc getFileContent*(buffer: TextBuffer): string =
   if buffer.hasBom:
     result = bomBytes(buffer.encoding) & result
 
-proc isExternallyModified*(b: TextBuffer): bool =
-  ## Check if the file was modified externally (outside the editor)
-  ## Returns true if:
-  ##   - Buffer has a file path
-  ##   - File exists on disk
-  ##   - File's modification time is newer than when we last loaded/saved it
+proc bufferHoldsFile*(buf: TextBuffer, path: string): bool =
+  ## Whether `buf` holds the file at `path` (spelling or entity).
+  ## This is the "same file?" predicate: overwrite, holder lookup, save-as.
+  if buf.isNil or buf.filePath.isNone or path.len == 0:
+    return false
+  let held = buf.filePath.get
+  samePath(held, path) or sameFileEntity(held, path)
+
+proc indexOfBufferHoldingPath*(
+    buffers: openArray[TextBuffer], path: string, excluding: TextBuffer = nil
+): int =
+  ## Index of the buffer holding the file at `path`, or -1. Skips utility and directory buffers.
+  for i, buf in buffers:
+    if buf.isNil or buf.isUtilityBuffer or buf.filePath.isNone:
+      continue
+    if not excluding.isNil and buf.id == excluding.id:
+      continue
+    if buf.bufferHoldsFile(path):
+      return i
+  -1
+
+proc bufferHoldingPath*(
+    buffers: openArray[TextBuffer], path: string, excluding: TextBuffer = nil
+): Option[TextBuffer] =
+  ## The buffer holding the file at `path`, if any.
+  let i = indexOfBufferHoldingPath(buffers, path, excluding)
+  if i < 0:
+    none(TextBuffer)
+  else:
+    some(buffers[i])
+
+proc editedBufferHoldingPath*(
+    buffers: openArray[TextBuffer], path: string, excluding: TextBuffer = nil
+): Option[TextBuffer] =
+  ## Buffer holding `path` with unsaved edits, if any. Clean duplicates don't block writes.
+  for buf in buffers:
+    if buf.isNil or buf.isUtilityBuffer or buf.filePath.isNone:
+      continue
+    if not excluding.isNil and buf.id == excluding.id:
+      continue
+    if buf.isModified and buf.bufferHoldsFile(path):
+      return some(buf)
+  none(TextBuffer)
+
+proc diskChangeSince*(b: TextBuffer): DiskChange =
+  ## Compare the file at `b`'s path now against its baseline.
   if b.filePath.isNone:
-    return false
+    return diskUnknown
 
-  let path = b.filePath.get
-  if not fileExists(path):
-    return false
+  let now = captureFileStamp(b.filePath.get)
+  case b.fileBaseline.observed
+  of fileNeverObserved:
+    diskUnknown
+  of fileObservedAbsent:
+    case now.observed
+    of fileNeverObserved: diskUnknown
+    of fileObservedAbsent: diskUnchanged
+    of fileObservedPresent: diskAppeared
+  of fileObservedPresent:
+    case now.observed
+    of fileNeverObserved:
+      diskUnknown
+    of fileObservedAbsent:
+      diskVanished
+    of fileObservedPresent:
+      # `!=`, not "newer than": mtime can move backwards (restore, checkout, clock step).
+      if now == b.fileBaseline: diskUnchanged else: diskChanged
 
-  if b.lastFileModTime.isNone:
-    return false
+proc isExternallyModified*(b: TextBuffer): bool =
+  ## Whether on-disk content differs from what this buffer read. Appeared
+  ## counts; vanished does not.
+  b.diskChangeSince in {diskChanged, diskAppeared}
 
-  try:
-    let info = getFileInfo(path)
-    # `!=` rather than `>`: a backup restore, a checkout of an older revision
-    # or a clock step can move the mtime backwards.
-    if info.lastWriteTime != b.lastFileModTime.get:
-      return true
-    return b.lastFileSize.isSome and info.size.int64 != b.lastFileSize.get
-  except OSError:
-    return false
+proc targetExistsOnDisk*(path: string): bool =
+  ## Whether anything is at `path` (lstat-based; also matches FIFOs, dirs, dangling links).
+  classifyTarget(path).exists
 
-proc externalModRefusal*(buffer: TextBuffer, savePath: string, force = false): string =
-  ## Reason writing `buffer` to `savePath` is refused, or "" when allowed.
-  ## Guards only writes back to the buffer's own file; called twice to shrink
-  ## the check-to-write window. Compared with `samePath`.
-  if force or buffer.isNil or buffer.filePath.isNone:
-    return ""
-  if not samePath(buffer.filePath.get, savePath):
-    return ""
-  if not buffer.isExternallyModified():
-    return ""
-  ExternalModErrorMsg
+proc writeGate*(
+    buffer: TextBuffer, savePath: string, force = false
+): tuple[refusal: WriteRefusal, expectAbsent: bool] =
+  ## Whether `buffer` may be written to `savePath`, and whether that rests on
+  ## the path being empty. Own path uses the baseline; other paths only if empty.
+  if force or buffer.isNil:
+    return (writeAllowed, false)
+
+  if buffer.bufferHoldsFile(savePath):
+    case buffer.diskChangeSince
+    of diskUnchanged:
+      # Unchanged covers "still absent" and "still same file"; only absent expects emptiness.
+      (writeAllowed, buffer.fileBaseline.observed == fileObservedAbsent)
+    of diskVanished:
+      # Vanished: `:w` recreates the file, as Vim does.
+      (writeAllowed, true)
+    of diskChanged:
+      (writeRefusedChangedOnDisk, false)
+    of diskAppeared:
+      (writeRefusedUnreadFile, false)
+    of diskUnknown:
+      # Uncheckable: allow only when there is nothing to lose.
+      if targetExistsOnDisk(savePath):
+        (writeRefusedUnverifiedFile, false)
+      else:
+        (writeAllowed, true)
+  elif targetExistsOnDisk(savePath):
+    (writeRefusedTargetExists, false)
+  else:
+    (writeAllowed, true)
+
+proc writeRefusal*(buffer: TextBuffer, savePath: string, force = false): WriteRefusal =
+  ## Whether `buffer` may be written to `savePath`, and if not, why.
+  buffer.writeGate(savePath, force).refusal
+
+proc message*(refusal: WriteRefusal): string =
+  ## User message for a refusal; "" when allowed.
+  case refusal
+  of writeAllowed: ""
+  of writeRefusedChangedOnDisk: ExternalModErrorMsg
+  of writeRefusedUnreadFile: UnreadFileErrorMsg
+  of writeRefusedUnverifiedFile: UnverifiedFileErrorMsg
+  of writeRefusedHeldByAnotherBuffer: HeldByAnotherBufferMsg
+  of writeRefusedTargetExists: TargetExistsErrorMsg
 
 proc putBufferOnFile(
     buffer: TextBuffer, path: string, checkExternalMod: bool
@@ -583,15 +679,17 @@ proc putBufferOnFile(
 
     let content = buffer.getFileContent
 
-    # Re-check just before writing; callers may have checked earlier.
-    if checkExternalMod:
-      let refusal = buffer.externalModRefusal(path)
-      if refusal.len > 0:
-        return Result[string, string].err refusal
+    # Re-check just before writing; pass the gate's premise, not a default.
+    let premise =
+      if not checkExternalMod:
+        wpForce
+      else:
+        let gate = buffer.writeGate(path)
+        if gate.refusal != writeAllowed:
+          return Result[string, string].err gate.refusal.message
+        writePremise(gate.expectAbsent, force = false)
 
-    # Atomic-ish write: temp+rename with hardlink/symlink fallback plus fsync.
-    # Guards against truncation on crash and durability loss on power failure.
-    let wr = writeAtomic(path, content)
+    let wr = writeAtomic(path, content, premise)
     if wr.isErr:
       logError("buffer", "Failed to write file " & path & ": " & wr.error)
       return Result[string, string].err wr.error

@@ -40,8 +40,7 @@ import
   logger,
   buffer,
   window_manager,
-  lsp_integration,
-  path_key
+  lsp_integration
 
 when not defined(moe.embedded):
   import terminal_mode
@@ -97,11 +96,8 @@ proc deleteBufferAt*(e: Editor, idx: int) =
   e.deleteBufferAtNoLsp(idx)
 
 proc findBufferByPath*(e: Editor, path: string): int =
-  ## Buffer index for `path`, or -1 if not found. Compared with `samePath`.
-  for i, buf in e.buffers:
-    if buf.filePath.isSome and samePath(buf.filePath.get, path):
-      return i
-  return -1
+  ## Buffer index for `path`, or -1 if not found.
+  indexOfBufferHoldingPath(e.buffers, path)
 
 proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
   ## Append `buffer.id` to the active window's per-window tab list if absent.
@@ -710,6 +706,8 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   # Register before loading so the load announces itself through the hook
   # `addBuffer` installs. A failed load is unregistered again.
   e.addBuffer(newBuffer)
+  # Stamp before the existence check, as loadFile does.
+  var stamp = captureFileStamp(path)
   if fileExists(path):
     let loadResult = newBuffer.loadFile(path)
     if loadResult.isErr:
@@ -718,6 +716,16 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   else:
     newBuffer.filePath = some(path)
     newBuffer.language = detectLanguage(path)
+    if stamp.observed == fileObservedPresent:
+      # File vanished between stat and check; fail closed so unread bytes are not truncated.
+      let again = captureFileStamp(path)
+      stamp =
+        if again.observed == fileObservedPresent:
+          FileStamp(observed: fileNeverObserved)
+        else:
+          again
+    # Baseline absent so a later appearing file reads as created externally.
+    newBuffer.applyFileStamp(stamp)
 
   applyEditorConfigToBuffer(newBuffer, e.config)
   applyHighlightConfig(newBuffer, e.config)

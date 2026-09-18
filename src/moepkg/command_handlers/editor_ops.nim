@@ -121,6 +121,26 @@ proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
     logInfo("handler", "File saved, quitting editor")
     return false
 
+proc skippedSummary(skipped: seq[SkippedSave]): string =
+  ## Batch skip reasons, counted per reason.
+  var counts: array[WriteRefusal, int]
+  for (_, _, reason) in skipped:
+    counts[reason] += 1
+  var parts: seq[string]
+  for reason, count in counts.pairs:
+    if count == 0:
+      continue
+    let what =
+      case reason
+      of writeAllowed: ""
+      of writeRefusedChangedOnDisk: "changed on disk"
+      of writeRefusedUnreadFile: "appeared on disk unread"
+      of writeRefusedUnverifiedFile: "could not be checked on disk"
+      of writeRefusedHeldByAnotherBuffer: "open in another modified buffer"
+      of writeRefusedTargetExists: "already exists"
+    parts.add $count & " " & what
+  parts.join(", ")
+
 proc saveAllStatusMessage(saveResult: SaveAllBuffersResult): string =
   ## Build a status message summarising a saveAllBuffers result.
   if saveResult.failures.len > 0:
@@ -133,9 +153,15 @@ proc saveAllStatusMessage(saveResult: SaveAllBuffersResult): string =
   if saveResult.savedCount == 0:
     if saveResult.skippedExternal.len > 0:
       return
-        "No files saved (" & $saveResult.skippedExternal.len &
-        " externally modified, use :wa! to override)"
+        "No files saved (" & skippedSummary(saveResult.skippedExternal) &
+        ", use :wa! to override)"
     return "No modified files to save"
+  let leftUnsaved =
+    if saveResult.unwritten.len > 0:
+      # Loser's edits remain in its buffer.
+      "; " & $saveResult.unwritten.len & " left unsaved (another buffer holds the file)"
+    else:
+      ""
   var msg =
     if saveResult.savedCount == 1:
       "Saved: " & saveResult.savedPaths[0]
@@ -143,10 +169,10 @@ proc saveAllStatusMessage(saveResult: SaveAllBuffersResult): string =
       "Saved " & $saveResult.savedCount & " files"
   if saveResult.skippedExternal.len > 0:
     msg.add(
-      " (" & $saveResult.skippedExternal.len &
-        " skipped: externally modified, use :wa! to override)"
+      " (skipped: " & skippedSummary(saveResult.skippedExternal) &
+        ", use :wa! to override)"
     )
-  msg
+  msg & leftUnsaved
 
 proc processSaveAllResult*(e: Editor, r: HandlerResult) =
   ## Save all modified buffers and report the outcome.
@@ -155,7 +181,7 @@ proc processSaveAllResult*(e: Editor, r: HandlerResult) =
   let msg = saveAllStatusMessage(saveResult)
   # Surface failures / skips / no-op; gate the success summary on saveScreenNotify.
   if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0 or
-      saveResult.savedCount == 0:
+      saveResult.unwritten.len > 0 or saveResult.savedCount == 0:
     e.state.statusMessage = msg
   elif e.config.notification.screenNotifications and
       e.config.notification.saveScreenNotify:
@@ -171,10 +197,18 @@ proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
   ## Save all and quit: false on full success, true if any save failed or
   ## was skipped for external modification without force.
   let saveResult = e.saveAllBuffers(r.forceSaveAllAndQuitAfter)
+  # Quitting discards unwritten buffers, so stay without `!` and say why.
   if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0:
     e.state.statusMessage = saveAllStatusMessage(saveResult)
     logError("handler", "Save all and quit aborted: " & e.state.statusMessage)
     return true
+  if saveResult.unwritten.len > 0:
+    # Forced quit discards the edits that lost the race; leave a trace.
+    logWarn(
+      "handler",
+      "Quitting with " & $saveResult.unwritten.len &
+        " buffer(s) left unsaved on files another buffer wrote",
+    )
   logInfo("handler", "All files saved, quitting editor")
   false
 

@@ -2487,6 +2487,85 @@ suite "LspIntegration - applyWorkspaceEdit":
     check result.get.modifiedCount == 1
     check buffer.getLine(0) == "HI THERE"
 
+  test "applyWorkspaceEdit merges disjoint groups aimed at a symlink alias":
+    # Lookup is by file entity; merge must use the holder, not URI spelling.
+    when defined(posix):
+      let targetPath = tmpDir / "moe_ws_alias_real.txt"
+      let linkPath = tmpDir / "moe_ws_alias_link.txt"
+      writeFile(targetPath, "hello world")
+      createSymlink(targetPath, linkPath)
+      defer:
+        removeFile(linkPath)
+        removeFile(targetPath)
+
+      let buffer = newTextBuffer("hello world", some(linkPath))
+      var buffers = @[buffer]
+      let edit = WorkspaceEdit(
+        changes: none(Table[string, seq[TextEdit]]),
+        documentChanges: some(
+          @[
+            TextDocumentEdit(
+              textDocument: OptionalVersionedTextDocumentIdentifier(
+                uri: pathToUri(linkPath), version: some(1)
+              ),
+              edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "HI")],
+            ),
+            TextDocumentEdit(
+              textDocument: OptionalVersionedTextDocumentIdentifier(
+                uri: pathToUri(targetPath), version: some(1)
+              ),
+              edits: @[TextEdit(range: newRange(0, 6, 0, 11), newText: "THERE")],
+            ),
+          ]
+        ),
+      )
+
+      let result = applyWorkspaceEdit(buffers, edit)
+      check result.isOk
+      check result.get.modifiedCount == 1
+      check buffer.getLine(0) == "HI THERE"
+    else:
+      skip()
+
+  test "applyWorkspaceEdit refuses overlapping groups aimed at a symlink alias":
+    when defined(posix):
+      let targetPath = tmpDir / "moe_ws_overlap_real.txt"
+      let linkPath = tmpDir / "moe_ws_overlap_link.txt"
+      writeFile(targetPath, "hello")
+      createSymlink(targetPath, linkPath)
+      defer:
+        removeFile(linkPath)
+        removeFile(targetPath)
+
+      let buffer = newTextBuffer("hello", some(linkPath))
+      var buffers = @[buffer]
+      let edit = WorkspaceEdit(
+        changes: none(Table[string, seq[TextEdit]]),
+        documentChanges: some(
+          @[
+            TextDocumentEdit(
+              textDocument: OptionalVersionedTextDocumentIdentifier(
+                uri: pathToUri(linkPath), version: some(1)
+              ),
+              edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "world")],
+            ),
+            TextDocumentEdit(
+              textDocument: OptionalVersionedTextDocumentIdentifier(
+                uri: pathToUri(targetPath), version: some(2)
+              ),
+              edits: @[TextEdit(range: newRange(0, 0, 0, 5), newText: "other")],
+            ),
+          ]
+        ),
+      )
+
+      let result = applyWorkspaceEdit(buffers, edit)
+      check result.isErr
+      check "more than once" in result.error
+      check buffer.getLine(0) == "hello"
+    else:
+      skip()
+
   test "applyWorkspaceEdit refuses a file no buffer holds":
     # Nothing is rewritten on disk: a target no buffer holds refuses the whole
     # edit, and nothing is modified.

@@ -322,6 +322,41 @@ type
     size*: int
     hash*: Hash
 
+  FileObservation* = enum
+    ## Path lookup result. Only `fileObservedAbsent` treats a later file as a change.
+    fileNeverObserved ## Never looked, or the look failed.
+    fileObservedAbsent ## Looked, and nothing was there.
+    fileObservedPresent ## Looked, and this is what was there.
+
+  FileStamp* = object
+    ## On-disk identity at one instant. A load stamps this before reading.
+    case observed*: FileObservation
+    of fileObservedPresent:
+      modTime*: Time
+      size*: int64 ## Same stat as `modTime`; catches sub-timestamp rewrites.
+      dev*: uint64 ## With `ino`, a replacement that reuses mtime/size still differs.
+      ino*: uint64 ## Zero when unresolvable; such stamps only match on the stat halves.
+    else:
+      discard
+
+  DiskChange* = enum
+    ## How the file at a buffer's path compares with its baseline.
+    diskUnknown ## No usable baseline, or the file cannot be checked now.
+    diskUnchanged
+    diskChanged ## Present both times, but no longer the same file.
+    diskAppeared ## Absent at baseline; something is there now.
+    diskVanished ## Present at baseline; gone now.
+
+  WriteRefusal* = enum
+    ## Why a write to a path is refused.
+    writeAllowed
+    writeRefusedChangedOnDisk ## The file changed since the buffer read it.
+    writeRefusedUnreadFile ## Own file, but nothing here has read it.
+    writeRefusedUnverifiedFile
+      ## Own file with content on disk that could not be checked.
+    writeRefusedHeldByAnotherBuffer ## Another buffer in this session holds the file.
+    writeRefusedTargetExists ## Another path, and a file is already there.
+
   BufferTransaction* = object ## Transaction for grouping multiple changes
     changes*: seq[BufferChange]
     description*: string
@@ -366,16 +401,15 @@ type
     keepRaw*: bool
       ## Raw bytes kept after UTF-16/32 decode failure; no transforms allowed.
       ## Volatile; re-derived on every load.
-    lastFileModTime*: Option[Time]
-      # File modification time when loaded (for external change detection)
-    lastFileSize*: Option[int64]
-      ## On-disk size from the same stat as `lastFileModTime`. Catches two
-      ## writes within the filesystem's timestamp granularity.
+    fileBaseline*: FileStamp
+      ## File state at last read/write; compared against a fresh lookup.
     lastLoadedContent*: Option[ContentFingerprint]
       ## Fingerprint of the bytes the buffer was last built from or saved as.
       ## `none` reads as "assume the file differs".
     externalModWarned*: bool
-      # Whether the user has been warned about external modification (reset on load/save)
+      ## Whether the reload watcher already reported the change (reset on load/save).
+    autoSaveSkipWarned*: bool
+      ## Whether auto save already reported skipping this buffer (reset on load/save).
     reloadDeferred*: bool
       ## An external change was detected while an edit group was open. The
       ## reload runs as soon as the group closes, not at the next poll.
@@ -523,6 +557,23 @@ proc unusualContentKind*(b: TextBuffer): UnusualContentKind =
     if b.hasBinaryContent: ucBinary else: ucOrdinary
   else:
     if b.hasBinaryContent: ucRawBinary else: ucRaw
+
+proc presentStamp*(
+    modTime: Time, size: int64, dev: uint64 = 0, ino: uint64 = 0
+): FileStamp =
+  ## Stamp for a present file. Entity defaults to unknown for time-only test baselines.
+  FileStamp(
+    observed: fileObservedPresent, modTime: modTime, size: size, dev: dev, ino: ino
+  )
+
+proc `==`*(a, b: FileStamp): bool =
+  ## Structural equality for a case object. Present stamps include the entity.
+  if a.observed != b.observed:
+    return false
+  if a.observed == fileObservedPresent:
+    return
+      a.modTime == b.modTime and a.size == b.size and a.dev == b.dev and a.ino == b.ino
+  true
 
 proc `==`*(a, b: BufferNotice): bool =
   ## Structural equality. Nim's generic `==` cannot compare a case object.

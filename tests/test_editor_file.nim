@@ -19,9 +19,11 @@
 
 ## Tests for editor_file.nim
 
-import std/[unittest, os, options, monotimes, times, strutils, tables]
+import std/[unittest, os, options, monotimes, times, posix, strutils, tables]
 import pkg/results
 import ../src/moepkg/[editor, buffer, config, config_loader, highlight]
+import ../src/moepkg/command_handlers/editor_ops
+import ../src/moepkg/command_handlers/handler_result
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -61,8 +63,8 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     let beforeLine0 = e.activeBuffer.getLine(0)
     check beforeLine0.endsWith("   ")
 
-    # Writing to a directory fails only after trim, so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath)
+    # Writing fails only after trim (missing parent), so the revert branch runs.
+    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
 
     let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
@@ -98,8 +100,8 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     let beforeLine0 = e.activeBuffer.getLine(0)
     check beforeLine0.endsWith("   ")
 
-    # Writing to a directory fails only after trim, so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath)
+    # Writing fails only after trim (missing parent), so the revert branch runs.
+    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
 
     let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
@@ -142,8 +144,8 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     let beforeLine0 = e.activeBuffer.getLine(0)
     check beforeLine0.endsWith("   ")
 
-    # Writing to a directory fails only after trim, so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath)
+    # Writing fails only after trim (missing parent), so the revert branch runs.
+    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
 
     let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
@@ -177,8 +179,8 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     check e.activeBuffer.changeList.len == 0
     check e.activeBuffer.changeListIndex == 0
 
-    # Writing to a directory fails only after trim, so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath)
+    # Writing fails only after trim (missing parent), so the revert branch runs.
+    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
 
     let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
@@ -220,8 +222,8 @@ template trimRevertSaveFileScenarios(makeEditor: untyped, tag: string) =
     let lineBefore = e.activeBuffer.getLine(0)
     check lineBefore.endsWith("   ")
 
-    # Writing to a directory fails only after trim, so the revert branch runs.
-    e.activeBuffer.filePath = some(dirPath)
+    # Writing fails only after trim (missing parent), so the revert branch runs.
+    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
 
     let saveRes = e.saveFile(e.activeBuffer())
     check saveRes.isErr
@@ -648,7 +650,9 @@ suite "Editor - saveFile":
     discard e.loadFile(original)
 
     # Simulate external modification of the original file.
-    e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    e.activeBuffer.applyFileStamp(
+      presentStamp(getTime() - initDuration(seconds = 2), 0)
+    )
     writeFile(original, "Externally modified")
 
     # Saving to a different path must succeed without force.
@@ -717,7 +721,9 @@ suite "Editor - saveFile":
     check beforeLine0.endsWith("   ")
 
     # Simulate external modification after load
-    e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 10))
+    e.activeBuffer.applyFileStamp(
+      presentStamp(getTime() - initDuration(seconds = 10), 0)
+    )
     writeFile(testFile, "externally modified\n")
     check e.activeBuffer.isExternallyModified()
 
@@ -753,7 +759,9 @@ suite "Editor - saveFile":
     let beforeLine0 = e.activeBuffer.getLine(0)
     check beforeLine0.endsWith("   ")
 
-    e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 10))
+    e.activeBuffer.applyFileStamp(
+      presentStamp(getTime() - initDuration(seconds = 10), 0)
+    )
     writeFile(testFile, "externally modified\n")
 
     let saveRes = e.saveFile(e.activeBuffer(), some(alias))
@@ -815,12 +823,12 @@ template saveAllBuffersTrimRevertScenario(makeEditor: untyped, tag: string) =
     let before = e.activeBuffer.getLine(0)
     check before.endsWith("   ")
 
-    # Force save failure by pointing filePath to a directory (writeAtomic fails)
-    e.activeBuffer.filePath = some(dirPath)
+    # Force save failure by pointing filePath under a missing dir (writeAtomic fails)
+    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
 
     let res = e.saveAllBuffers(force = false)
     check res.failures.len == 1
-    check res.failures[0].path == dirPath
+    check res.failures[0].path == dirPath / "missing_subdir" / "file.txt"
     # Trim must have been reverted
     check e.activeBuffer.getLine(0) == before
     check e.activeBuffer.getLine(0).endsWith("   ")
@@ -862,7 +870,8 @@ template autoSaveTrimRevertScenario(makeEditor: untyped, tag: string) =
       some(BufferEditorConfig(trimTrailingWhitespace: some(true)))
     let before = e.activeBuffer.getLine(0)
     check before.endsWith("   ")
-    e.activeBuffer.filePath = some(dirPath) # force write failure
+    e.activeBuffer.filePath = some(dirPath / "missing_subdir" / "file.txt")
+      # force write failure
     e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
     e.autoSave()
     # Trim must be reverted, file not written
@@ -1210,7 +1219,9 @@ suite "Editor - autoSave":
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "F:")
 
     # Background buffer: registered in e.buffers but not shown in any window.
+    # Stamped like a real load, so the write gate sees a file this buffer read.
     let bgBuf = newTextBuffer("bg-original", some(bgFile))
+    bgBuf.noteFileStamp(bgFile)
     e.addBuffer(bgBuf)
     discard bgBuf.insertText(BufferPosition(line: 0, column: 0), "B:")
     check bgBuf.isModified
@@ -1673,6 +1684,8 @@ suite "Editor - saveFile explicit buffer":
     check e.activeBuffer.filePath.get == fgFile
 
     let bgBuf = newTextBuffer("bg-original\n", some(bgFile))
+    # Stamped like a real load: the write gate refuses a file no one read.
+    bgBuf.noteFileStamp(bgFile)
     e.addBuffer(bgBuf)
     check e.activeBuffer.filePath.get == fgFile
     check bgBuf.insertText(BufferPosition(line: 0, column: 0), "B:").isOk
@@ -1724,6 +1737,82 @@ suite "Editor - saveFile explicit buffer":
     require e.state.git.diffEntries.hasKey(bgBuf.id)
     check e.state.git.diffEntries[bgBuf.id].forced
     check not e.state.git.diffEntries.hasKey(fgBuf.id)
+
+suite "Editor - save-as onto a path another buffer holds":
+  test "Refused without force":
+    let e = createTestEditor()
+    let srcFile = getTempDir() / "moe_test_saveas_conflict_src.txt"
+    let heldFile = getTempDir() / "moe_test_saveas_conflict_held.txt"
+    writeFile(srcFile, "src\n")
+    writeFile(heldFile, "held\n")
+    defer:
+      removeFile(srcFile)
+      removeFile(heldFile)
+
+    check e.loadFile(srcFile).isOk
+    let heldBuf = newTextBuffer("held\n", some(heldFile))
+    e.addBuffer(heldBuf)
+
+    check e.saveFile(e.activeBuffer(), some(heldFile)).isErr
+    # The buffer keeps its own path and the held file is untouched.
+    check e.activeBuffer.filePath.get == srcFile
+    check readFile(heldFile) == "held\n"
+
+  test "Allowed with force":
+    let e = createTestEditor()
+    let srcFile = getTempDir() / "moe_test_saveas_force_src.txt"
+    let heldFile = getTempDir() / "moe_test_saveas_force_held.txt"
+    writeFile(srcFile, "src\n")
+    writeFile(heldFile, "held\n")
+    defer:
+      removeFile(srcFile)
+      removeFile(heldFile)
+
+    check e.loadFile(srcFile).isOk
+    let heldBuf = newTextBuffer("held\n", some(heldFile))
+    e.addBuffer(heldBuf)
+
+    check e.saveFile(e.activeBuffer(), some(heldFile), force = true).isOk
+    check readFile(heldFile) == "src\n"
+    check e.activeBuffer.filePath.get == heldFile
+
+  test "A plain save to the buffer's own path is unaffected":
+    # Guard is save-as, not a duplicate already on the path.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_saveas_own_path.txt"
+    writeFile(path, "original\n")
+    defer:
+      removeFile(path)
+
+    check e.loadFile(path).isOk
+    let dupBuf = newTextBuffer("original\n", some(path))
+    e.addBuffer(dupBuf)
+
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+    check e.saveFile(e.activeBuffer()).isOk
+    check readFile(path) == "A:original\n"
+    check e.saveFile(e.activeBuffer(), some(path)).isOk
+
+suite "Editor - save through a file alias":
+  test "`:w` of the real path is the buffer's own file, not save-as":
+    when defined(posix):
+      let e = createTestEditor()
+      let dir = getTempDir() / "moe_test_save_alias"
+      createDir(dir)
+      defer:
+        removeDir(dir)
+      let real = dir / "real.txt"
+      let link = dir / "link.txt"
+      writeFile(real, "original\n")
+      createSymlink(real, link)
+
+      check e.loadFile(link).isOk
+      check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:").isOk
+      check e.saveFile(e.activeBuffer(), some(real)).isOk
+      check readFile(real) == "A:original\n"
+      check readFile(link) == "A:original\n"
+    else:
+      skip()
 
 suite "Editor - prepareQuickRun":
   test "Real save performs post-write effects (git refresh)":
@@ -1778,3 +1867,521 @@ suite "Editor - prepareQuickRun":
     check not prepared.get.didSave
     check readFile(path) == "echo \"original\"\n"
     check not e.state.git.diffEntries.hasKey(buf.id)
+
+suite "Editor - buffersToSave":
+  test "A file two modified buffers hold is written by neither":
+    # Both buffers are edited; writing one must report the other as unwritten.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_save_targets_twice.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    let selected = e.buffersToSave(force = false)
+    check selected.targets.len == 0
+    check selected.skippedExternal.len == 1
+    check selected.skippedExternal[0].reason == writeRefusedHeldByAnotherBuffer
+    check selected.unwritten.len == 1
+    check selected.unwritten[0].buffer == second
+
+  test "An unedited duplicate does not stand in the way":
+    # A clean duplicate has no edits to lose, so it must not block `:wa`.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_save_targets_clean_dup.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    let edited = e.activeBuffer
+    discard edited.insertText(BufferPosition(line: 0, column: 0), "A:")
+    e.addBuffer(newTextBuffer("original", some(path)))
+
+    let selected = e.buffersToSave(force = false)
+    check selected.skippedExternal.len == 0
+    check selected.targets.len == 1
+    check selected.targets[0].buffer == edited
+
+  test "The skip names the buffer that was refused, not the first on the file":
+    # The skip latch belongs on the refused buffer, not the first on the path.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_save_targets_skip_buffer.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    let first = e.activeBuffer
+    discard first.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    let selected = e.buffersToSave(force = false)
+    check selected.skippedExternal.len == 1
+    check selected.skippedExternal[0].buffer == first
+
+  test "Forced, the file is written once by the first buffer holding it":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_save_targets_twice_force.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    let selected = e.buffersToSave(force = true)
+    check selected.targets.len == 1
+    check selected.targets[0].buffer == e.activeBuffer
+    check selected.skippedExternal.len == 0
+
+  test "One file open twice under two spellings is reported once":
+    # Report per file, not per spelling.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_save_targets_spellings.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    for spelling in [path, path.parentDir / "." / path.extractFilename]:
+      let buf = newTextBuffer("original", some(spelling))
+      e.addBuffer(buf)
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    let selected = e.buffersToSave(force = false)
+    check selected.targets.len == 0
+    check selected.skippedExternal.len == 1
+    # Passed-over spellings are unwritten; the file is refused once.
+    check selected.unwritten.len == 2
+
+  test "One file open through an alias is one file to the batch":
+    # An alias is the same file; refuse once, do not write last-wins.
+    when defined(posix):
+      let e = createTestEditor()
+      let dir = getTempDir() / "moe_test_save_targets_alias"
+      createDir(dir)
+      let path = dir / "real.txt"
+      let link = dir / "link.txt"
+      writeFile(path, "original")
+      createSymlink(path, link)
+      defer:
+        removeFile(link)
+        removeFile(path)
+        removeDir(dir)
+
+      discard e.loadFile(path)
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+      let second = newTextBuffer("original", some(link))
+      e.addBuffer(second)
+      discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+      let selected = e.buffersToSave(force = false)
+      check selected.targets.len == 0
+      check selected.skippedExternal.len == 1
+      check selected.skippedExternal[0].reason == writeRefusedHeldByAnotherBuffer
+      check selected.unwritten.len == 1
+      check selected.unwritten[0].buffer == second
+    else:
+      skip()
+
+  test "Forced, an aliased file is written once by the first buffer holding it":
+    when defined(posix):
+      let e = createTestEditor()
+      let dir = getTempDir() / "moe_test_save_targets_alias_force"
+      createDir(dir)
+      let path = dir / "real.txt"
+      let link = dir / "link.txt"
+      writeFile(path, "original")
+      createSymlink(path, link)
+      defer:
+        removeFile(link)
+        removeFile(path)
+        removeDir(dir)
+
+      discard e.loadFile(path)
+      discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+      let second = newTextBuffer("original", some(link))
+      e.addBuffer(second)
+      discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+      let selected = e.buffersToSave(force = true)
+      check selected.targets.len == 1
+      check selected.targets[0].buffer == e.activeBuffer
+      check selected.skippedExternal.len == 0
+      check selected.unwritten.len == 1
+      check selected.unwritten[0].buffer == second
+    else:
+      skip()
+
+  test "A file one buffer is stale for is refused for the fresh buffer too":
+    # A stale buffer's edits are as real as a fresh one's; neither may write alone.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_save_targets_external.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    # Stale timestamp: this buffer reads as externally modified.
+    let stale = newTextBuffer("original", some(path))
+    stale.applyFileStamp(presentStamp(fromUnix(0), 0))
+    e.addBuffer(stale)
+    discard stale.insertText(BufferPosition(line: 0, column: 0), "A:")
+    check stale.isExternallyModified()
+
+    let fresh = newTextBuffer("original", some(path))
+    fresh.noteFileStamp(path)
+    e.addBuffer(fresh)
+    discard fresh.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    let selected = e.buffersToSave(force = false)
+    check selected.targets.len == 0
+    # Reported once under the first reason; the other buffer is unwritten.
+    check selected.skippedExternal.len == 1
+    check selected.skippedExternal[0].path == path
+    check selected.unwritten.len == 1
+    check selected.unwritten[0].buffer == fresh
+
+  test "A file every buffer on it is stale for is reported once":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_save_targets_all_stale.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    for _ in 0 .. 1:
+      let buf = newTextBuffer("original", some(path))
+      buf.applyFileStamp(presentStamp(fromUnix(0), 0))
+      e.addBuffer(buf)
+      discard buf.insertText(BufferPosition(line: 0, column: 0), "A:")
+
+    let selected = e.buffersToSave(force = false)
+    check selected.targets.len == 0
+    check selected.skippedExternal.len == 1
+    check selected.unwritten.len == 1
+
+  test "A write that failed is reported as a failure, not as a file passed over":
+    when defined(posix):
+      if getuid() != 0:
+        let e = createTestEditor()
+        let dir = getTempDir() / "moe_test_save_targets_unwritable"
+        createDir(dir)
+        let path = dir / "file.txt"
+        writeFile(path, "original")
+        defer:
+          setFilePermissions(dir, {fpUserRead, fpUserWrite, fpUserExec})
+          removeFile(path)
+          removeDir(dir)
+
+        discard e.loadFile(path)
+        discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+
+        # No write permission on the directory: the temp-and-rename write fails.
+        setFilePermissions(dir, {fpUserRead, fpUserExec})
+
+        let r = e.saveAllBuffers()
+        check r.savedCount == 0
+        check r.failures.len == 1
+        check r.skippedExternal.len == 0
+
+  test "Auto save leaves a file two modified buffers hold alone":
+    # Auto save must not pick whose edits survive.
+    var config = newEditorConfig()
+    config.autoSave.enable = true
+    config.autoSave.interval = 1
+    let e = createTestEditorWithConfig(config)
+
+    let path = getTempDir() / "moe_test_autosave_twice.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    second.noteFileStamp(path)
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
+    e.autoSave()
+
+    check readFile(path) == "original"
+    check e.activeBuffer.isModified
+    check second.isModified
+    check "Auto save skipped" in e.state.statusMessage
+
+  test "Auto save names the buffer it left unwritten":
+    # Auto save shares `:wa`'s unwritten report, or the loser looks saved.
+    var config = newEditorConfig()
+    config.autoSave.enable = true
+    config.autoSave.interval = 1
+    let e = createTestEditorWithConfig(config)
+
+    let path = getTempDir() / "moe_test_autosave_unwritten.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    second.noteFileStamp(path)
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
+    e.autoSave()
+
+    check readFile(path) == "original"
+    check "Auto save skipped" in e.state.statusMessage
+    check path in e.state.statusMessage
+    check e.activeBuffer.autoSaveSkipWarned
+    check second.autoSaveSkipWarned
+    check second.isModified
+
+  test "Auto save says so when it is not allowed to write a file":
+    # A silent skip would leave the buffer looking saved-in-a-minute.
+    var config = newEditorConfig()
+    config.autoSave.enable = true
+    config.autoSave.interval = 1
+    let e = createTestEditorWithConfig(config)
+
+    let path = getTempDir() / "moe_test_autosave_skip_notice.txt"
+    removeFile(path)
+    defer:
+      removeFile(path)
+
+    check e.editFile(path).isOk
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "mine").isOk
+    writeFile(path, "theirs\n")
+
+    e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
+    e.autoSave()
+
+    check readFile(path) == "theirs\n"
+    check "Auto save skipped" in e.state.statusMessage
+    check path in e.state.statusMessage
+
+    # Once per buffer, not on every tick.
+    e.state.statusMessage = ""
+    e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
+    e.autoSave()
+    check e.state.statusMessage.len == 0
+
+suite "Editor - save-as onto a file nothing here has read":
+  test "Refused without force":
+    # Same rule as `:w`: do not write a file no one here has read.
+    let e = createTestEditor()
+    let source = getTempDir() / "moe_test_saveas_unread_source.txt"
+    let target = getTempDir() / "moe_test_saveas_unread_target.txt"
+    writeFile(source, "mine\n")
+    writeFile(target, "theirs\n")
+    defer:
+      removeFile(source)
+      removeFile(target)
+
+    check e.loadFile(source).isOk
+    let saved = e.saveFile(e.activeBuffer, some(target))
+    check saved.isErr
+    check readFile(target) == "theirs\n"
+    # The buffer keeps its own name rather than half-moving to the target.
+    check e.activeBuffer.filePath == some(source)
+
+  test "Forced overwrites it":
+    let e = createTestEditor()
+    let source = getTempDir() / "moe_test_saveas_unread_force_source.txt"
+    let target = getTempDir() / "moe_test_saveas_unread_force_target.txt"
+    writeFile(source, "mine\n")
+    writeFile(target, "theirs\n")
+    defer:
+      removeFile(source)
+      removeFile(target)
+
+    check e.loadFile(source).isOk
+    check e.saveFile(e.activeBuffer, some(target), force = true).isOk
+    check readFile(target) == "mine\n"
+
+  test "A path with nothing at it is written as before":
+    let e = createTestEditor()
+    let source = getTempDir() / "moe_test_saveas_free_source.txt"
+    let target = getTempDir() / "moe_test_saveas_free_target.txt"
+    writeFile(source, "mine\n")
+    removeFile(target)
+    defer:
+      removeFile(source)
+      removeFile(target)
+
+    check e.loadFile(source).isOk
+    check e.saveFile(e.activeBuffer, some(target)).isOk
+    check readFile(target) == "mine\n"
+
+suite "Editor - a file that appeared after the buffer took its name":
+  test "A save does not write over it without force":
+    # `:e nofile` baselines against absence; an appearing file is unread content.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_unread_file.txt"
+    removeFile(path)
+    defer:
+      removeFile(path)
+
+    check e.editFile(path).isOk
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "mine").isOk
+
+    writeFile(path, "theirs\n")
+
+    let r = e.saveAllBuffers()
+    check r.savedCount == 0
+    check r.skippedExternal.len == 1
+    check r.skippedExternal[0].path == path
+    check r.skippedExternal[0].reason == writeRefusedUnreadFile
+    check readFile(path) == "theirs\n"
+
+    # `:wa!` overwrites, as it does for a file changed under the buffer.
+    let forced = e.saveAllBuffers(force = true)
+    check forced.savedCount == 1
+    check readFile(path) == "mine\n"
+
+  test "A save writes it when the file is still not there":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_unread_file_absent.txt"
+    removeFile(path)
+    defer:
+      removeFile(path)
+
+    check e.editFile(path).isOk
+    check e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "mine").isOk
+
+    let r = e.saveAllBuffers()
+    check r.savedCount == 1
+    check readFile(path) == "mine\n"
+
+suite "Editor - a buffer created for a name nothing is on":
+  test "The baseline says the file was absent, not that it was read":
+    # Stamp before the existence check so a raced create is not treated as read.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_new_buffer_baseline.txt"
+    removeFile(path)
+    defer:
+      removeFile(path)
+
+    check e.editFile(path).isOk
+    check e.activeBuffer.fileBaseline.observed == fileObservedAbsent
+    check e.activeBuffer.diskChangeSince == diskUnchanged
+
+    writeFile(path, "theirs\n")
+    check e.activeBuffer.diskChangeSince == diskAppeared
+
+suite "Editor - opening one file through an alias":
+  test "Reuses the buffer already holding the file":
+    # Dedup by entity so an alias does not grow a second buffer.
+    when defined(posix):
+      let e = createTestEditor()
+      let dir = getTempDir() / "moe_test_alias_open"
+      createDir(dir)
+      let path = dir / "real.txt"
+      let link = dir / "link.txt"
+      writeFile(path, "original\n")
+      createSymlink(path, link)
+      defer:
+        removeFile(link)
+        removeFile(path)
+        removeDir(dir)
+
+      discard e.loadFile(path)
+      let before = e.buffers.len
+      check e.editFile(link).isOk
+      check e.buffers.len == before
+      check e.activeBuffer.filePath == some(path)
+    else:
+      skip()
+
+suite "Editor - save all and quit":
+  test "A file two modified buffers hold keeps the session open":
+    # Neither buffer is written, so quitting would discard both sets of edits.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_wqa_duplicate.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    second.noteFileStamp(path)
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    check e.processSaveAllAndQuitResult(HandlerResult(kind: hrSaveAllAndQuit))
+    check second.isModified
+    check e.state.statusMessage.len > 0
+
+  test "A forced quit goes although a duplicate is left unsaved":
+    # `:wqa!` writes the first holder and ends the session.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_wqa_duplicate_force.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    second.noteFileStamp(path)
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    check not e.processSaveAllAndQuitResult(
+      HandlerResult(kind: hrSaveAllAndQuit, forceSaveAllAndQuitAfter: true)
+    )
+    check readFile(path).startsWith("A:")
+
+  test "A forced save reports the buffers it left unsaved":
+    # `!` picks the writer; a bare "Saved" would hide the leftover edits.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_wa_duplicate_unwritten.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    second.noteFileStamp(path)
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    let r = e.saveAllBuffers(force = true)
+    check r.savedCount == 1
+    check r.unwritten.len == 1
+    check r.unwritten[0].buffer.id == second.id
+    check r.unwritten[0].path == path
+    check second.isModified
+
+  test "The forced status message says how many were left unsaved":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_wa_duplicate_unwritten_msg.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    discard e.loadFile(path)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "A:")
+    let second = newTextBuffer("original", some(path))
+    second.noteFileStamp(path)
+    e.addBuffer(second)
+    discard second.insertText(BufferPosition(line: 0, column: 0), "B:")
+
+    e.processSaveAllResult(HandlerResult(kind: hrSaveAll, forceSaveAll: true))
+    check "left unsaved" in e.state.statusMessage

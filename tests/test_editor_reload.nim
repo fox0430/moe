@@ -90,12 +90,41 @@ suite "editor_reload - maybeReloadExternallyModifiedFile":
     defer:
       removeFile(path)
     discard e.loadFile(path)
-    e.activeBuffer.lastFileModTime = some(getTime() - 24.hours)
+    e.activeBuffer.applyFileStamp(presentStamp(getTime() - 24.hours, 0))
     writeFile(path, "changed on disk")
     e.state.timing.lastFileModCheck = pastMonoTime(5000)
     e.maybeReloadExternallyModifiedFile()
     check e.activeBuffer.getLine(0) == "changed on disk"
     check e.state.statusMessage == "File reloaded: " & path
+
+  test "reloads a clean buffer when a file appears under its name":
+    # `:e nofile` baselines against absence; an appearing file is a change.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_appeared.txt"
+    removeFile(path)
+    defer:
+      removeFile(path)
+    discard e.loadFile(path)
+    writeFile(path, "written by someone else")
+    e.state.timing.lastFileModCheck = pastMonoTime(5000)
+    e.maybeReloadExternallyModifiedFile()
+    check e.activeBuffer.getLine(0) == "written by someone else"
+
+  test "warns when a file appears under a modified buffer's name":
+    # Otherwise the first sign is `:w` failing, too late to cheaply recover.
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_appeared_modified.txt"
+    removeFile(path)
+    defer:
+      removeFile(path)
+    discard e.loadFile(path)
+    discard e.activeBuffer.insert(0, "mine")
+    writeFile(path, "written by someone else")
+    e.state.timing.lastFileModCheck = pastMonoTime(5000)
+    e.maybeReloadExternallyModifiedFile()
+    check e.activeBuffer.getLine(0) == "mine"
+    check "Warning:" in e.state.statusMessage
+    check e.activeBuffer.externalModWarned
 
   test "warns instead of reloading when the buffer has unsaved changes":
     let e = createTestEditor()
@@ -105,7 +134,7 @@ suite "editor_reload - maybeReloadExternallyModifiedFile":
       removeFile(path)
     discard e.loadFile(path)
     discard e.activeBuffer.insert(1, "unsaved")
-    e.activeBuffer.lastFileModTime = some(getTime() - 24.hours)
+    e.activeBuffer.applyFileStamp(presentStamp(getTime() - 24.hours, 0))
     writeFile(path, "changed on disk")
     e.state.timing.lastFileModCheck = pastMonoTime(5000)
     e.maybeReloadExternallyModifiedFile()
@@ -124,7 +153,7 @@ suite "editor_reload - maybeReloadExternallyModifiedFile":
     # buffer is unmodified and the unsaved-changes branch above does not apply.
     check e.activeBuffer.beginTransaction("Insert mode edit").isOk
     e.activeWindow.mode = EditorMode.Insert
-    e.activeBuffer.lastFileModTime = some(getTime() - 24.hours)
+    e.activeBuffer.applyFileStamp(presentStamp(getTime() - 24.hours, 0))
     writeFile(path, "changed on disk")
     e.state.timing.lastFileModCheck = pastMonoTime(5000)
     e.maybeReloadExternallyModifiedFile()
@@ -435,7 +464,7 @@ suite "editor_reload - external change detection":
       removeFile(path)
     discard e.loadFile(path)
     let buf = e.activeBuffer
-    let stamp = buf.lastFileModTime.get
+    let stamp = buf.fileBaseline.modTime
 
     # Two writes inside the filesystem's timestamp granularity look alike.
     writeFile(path, "a good deal longer than before")

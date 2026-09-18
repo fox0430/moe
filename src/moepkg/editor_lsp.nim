@@ -31,7 +31,7 @@ import
   lsp_request_context,
   path_key
 import command_handlers/[handler_manager, insert_handler]
-import buffer/undo
+import buffer/[undo, file_io]
 import logger, message_log
 
 export lsp_request_context
@@ -141,17 +141,20 @@ proc applyDiagnosticsForUri*(
     return
 
   let path = pathKey(uriToPath(uri))
-  if version.isSome:
-    let sent = e.lsp.sentDocumentVersion(path)
-    if sent.isSome and version.get < sent.get:
-      return
   for buf in e.buffers:
-    if buf.filePath.isSome and samePath(buf.filePath.get, path):
-      # Raw buffer has no version; drop diagnostics computed from decoded text.
-      if not buf.isLspEligible:
+    if buf.filePath.isNone or not buf.bufferHoldsFile(path):
+      continue
+    # Version is the didOpen key (buffer spelling), not the publish URI.
+    # A server that names the real path still compares against the holder.
+    if version.isSome:
+      let sent = e.lsp.sentDocumentVersion(buf.filePath.get)
+      if sent.isSome and version.get < sent.get:
         return
-      applyDiagnosticsToBuffer(buf, diagnostics)
+    # Raw buffer has no version; drop diagnostics computed from decoded text.
+    if not buf.isLspEligible:
       return
+    applyDiagnosticsToBuffer(buf, diagnostics)
+    return
   # No matching open buffer: drop. The server only publishes for documents
   # we opened (didOpen), so this is the closed-in-the-meantime case.
 
@@ -218,7 +221,8 @@ proc recoverFromFailedWorkspaceEdit*(
   if BufferStateInconsistentSuffix notin applyError:
     for path in collectWorkspaceEditPaths(edit):
       for buf in e.buffers:
-        if buf.filePath.isSome and samePath(buf.filePath.get, path):
+        # Match by file, as the apply path does, so an alias is resynced too.
+        if buf.filePath.isSome and buf.bufferHoldsFile(path):
           e.syncBufferAfterEdit(buf)
   e.clampAllWindowCursors()
 

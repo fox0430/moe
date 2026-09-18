@@ -116,9 +116,7 @@ suite "Editor - findBufferByPath":
     check index == -1
 
   test "Find buffer by alias spelling":
-    # A buffer opened under one spelling must be found under another naming
-    # the same file. Compared as strings the two spellings differ and the
-    # lookup wrongly returns -1.
+    # Lookup is by file, not raw spelling.
     let e = createTestEditor()
     let name = "moe_test_find_buffer_alias.txt"
     let testFile = getTempDir() / name
@@ -2537,6 +2535,8 @@ suite "Editor - BackupManager restore failure":
     # The buffer remains clean while the on-disk file is changed externally.
     writeFile(sourceFile, "external content")
     setFilePermissions(sourceFile, {fpUserWrite})
+    # Re-baseline so the write gate does not refuse before the snapshot is tried.
+    sourceBuffer.noteFileStamp(sourceFile)
     var canRead = true
     try:
       discard readFile(sourceFile)
@@ -2728,7 +2728,7 @@ suite "Editor - BackupManager restore failure":
 
     # Keep the in-memory buffer clean while making the disk content external.
     writeFile(sourceFile, "external content")
-    sourceBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    sourceBuffer.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     let win = e.activeWindow
     let bkState = BackupManagerState(
       items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
@@ -2754,6 +2754,95 @@ suite "Editor - BackupManager restore failure":
     let saveResult = sourceBuffer.saveFile(sourceFile, checkExternalMod = true)
     check saveResult.isErr
     check readFile(sourceFile) == "external content"
+
+  test "refuses to restore over a file that changed on disk":
+    # Restore rewrites the file; unread on-disk bytes must not be destroyed.
+    let e = createTestEditor()
+    let
+      sourceFile = getTempDir() / "moe_test_backup_restore_external_refused.txt"
+      backupFile = getTempDir() / "moe_test_backup_restore_external_refused.bak"
+      backupDir = getTempDir() / "moe_test_backup_restore_external_refused_backups"
+    removeFile(sourceFile)
+    removeFile(backupFile)
+    removeDir(backupDir)
+    writeFile(sourceFile, "original content")
+    writeFile(backupFile, "restored content")
+    defer:
+      removeFile(sourceFile)
+      removeFile(backupFile)
+      removeDir(backupDir)
+
+    check e.editFile(sourceFile).isOk
+    # A safety backup that succeeds, so nothing rolls the restore back.
+    e.config.autoBackup.backupDir = some(backupDir)
+    e.config.autoBackup.dirToExclude = @[]
+    let sourceBuffer = e.activeBuffer()
+
+    # Clean buffer, but the file moved under it.
+    writeFile(sourceFile, "external content")
+    sourceBuffer.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
+    check sourceBuffer.isExternallyModified()
+
+    let win = e.activeWindow
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+    win.setView(newTextBuffer("backup list"))
+    win.mode = EditorMode.BackupManager
+    e.setMode(EditorMode.BackupManager)
+    win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+    let result = e.processResult(
+      HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: 0),
+      e.activeBuffer(),
+    )
+
+    check result == true
+    check readFile(sourceFile) == "external content"
+    check e.state.statusMessage.contains("Cannot restore")
+    check e.state.statusMessage.contains(":e!")
+
+  test "refuses to restore while another edited buffer holds the file":
+    # Restore is editor-driven like `:wa`: it must not pick whose edits survive.
+    let e = createTestEditor()
+    let
+      sourceFile = getTempDir() / "moe_test_backup_restore_held.txt"
+      backupFile = getTempDir() / "moe_test_backup_restore_held.bak"
+    removeFile(sourceFile)
+    removeFile(backupFile)
+    writeFile(sourceFile, "original content")
+    writeFile(backupFile, "restored content")
+    defer:
+      removeFile(sourceFile)
+      removeFile(backupFile)
+
+    check e.editFile(sourceFile).isOk
+    let other = newTextBuffer("original content", some(sourceFile))
+    e.addBuffer(other)
+    discard other.insertText(BufferPosition(line: 0, column: 0), "other ")
+
+    let win = e.activeWindow
+    let bkState = BackupManagerState(
+      items: @[BackupEntry(filename: "backup", timestamp: now(), fullPath: backupFile)],
+      selectedIndex: 0,
+      sourceFilePath: sourceFile,
+    )
+    win.setView(newTextBuffer("backup list"))
+    win.mode = EditorMode.BackupManager
+    e.setMode(EditorMode.BackupManager)
+    win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
+
+    let result = e.processResult(
+      HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: 0),
+      e.activeBuffer(),
+    )
+
+    check result == true
+    check readFile(sourceFile) == "original content"
+    check e.state.statusMessage.contains("Cannot restore")
+    check e.state.statusMessage.contains("another buffer")
 
 suite "Editor - list viewer quit restores origin cursor/viewport":
   # Regression: hrFilerQuit/hrBufferManagerQuit/hrBookmarkManagerQuit

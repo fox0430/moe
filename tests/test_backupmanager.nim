@@ -20,6 +20,7 @@
 import std/[unittest, os, options, json, times, posix]
 
 import ../src/moepkg/backup_manager
+import ../src/moepkg/buffer/atomic_write
 
 let TestBackupDir = getTempDir() / "moe_test_backup_manager"
 
@@ -555,3 +556,15 @@ suite "backup_manager - restoreBackup (edge cases)":
     check state.restoreBackup(0) == true
     check symlinkExists(sourcePath)
     check readFile(realPath) == "backup content"
+
+  test "Create-exclusive restore refuses a file that appeared":
+    let
+      sourcePath = TestBackupDir / "appeared.txt"
+      backupDir = createBackupSubDir("restore_excl", sourcePath)
+    createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00", "backup content")
+    writeFile(sourcePath, "appeared")
+
+    let state = initBackupManagerState(TestBackupDir, sourcePath)
+    var restored: string
+    check state.restoreBackup(0, restored, wpCreateExclusive) == false
+    check readFile(sourcePath) == "appeared"
