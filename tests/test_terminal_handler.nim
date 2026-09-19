@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, times, deques]
+import std/[unittest, options, os, times, deques, strutils, tables]
 import pkg/results
-import ../src/moepkg/[terminal_mode, key_bindings]
+import ../src/moepkg/[terminal_mode, key_bindings, editor, config, handler, types]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/command_handlers/terminal_handler
 import ../src/moepkg/terminal/[pty, ansi_parser]
@@ -29,6 +29,16 @@ proc charKey(c: string, mods: set[KeyModifier] = {}): KeyCombo =
 
 proc specialKey(sk: SpecialKey, mods: set[KeyModifier] = {}): KeyCombo =
   KeyCombo(isSpecial: true, special: sk, modifiers: mods)
+
+proc fillWriteBuffer(ts: TerminalState) =
+  ## `sleep` never reads stdin, so once the kernel PTY buffer is full the bytes
+  ## a keystroke sends stay visible in the write buffer. Pad well past what a
+  ## later write can drain back out, so the tail stays observable.
+  for _ in 0 ..< 64:
+    ts.feedInput("x".repeat(4096))
+    if ts.pty.writeBuffer.len >= 32768:
+      break
+  doAssert ts.pty.writeBuffer.len >= 32768
 
 suite "keyComboToBytes - Regular characters":
   test "Simple character 'a'":
@@ -366,3 +376,94 @@ suite "pollOutput drains multi-chunk bursts in one tick (regression)":
     # Draining thousands of "x\n" via the ANSI parser stays well under a
     # frame budget.
     check elapsed < 1.0
+
+suite "A doubled Ctrl-backslash sends one quit character":
+  test "The second press releases the held one and arms nothing further":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    require termState.isOk
+    let ts = termState.get
+    defer:
+      ts.cleanup()
+    fillWriteBuffer(ts)
+
+    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    require ts.waitingForCtrlN
+
+    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    # One \x1c, and nothing left waiting to fire against a later key.
+    check ts.pty.writeBuffer.endsWith("\x1c")
+    check not ts.pty.writeBuffer.endsWith("\x1c\x1c")
+    check not ts.waitingForCtrlN
+
+    # A following Ctrl-N is an ordinary keystroke, not the idiom.
+    check handleTerminalModeKey(ts, charKey("n", {kmCtrl})).kind == trHandled
+    check ts.pty.writeBuffer.endsWith("\x1c\x0e")
+
+suite "A held Ctrl-backslash and the keys that never reach the terminal handler":
+  proc editorWithTerminal(ts: TerminalState): Editor =
+    result = newEditor(newEditorConfig())
+    result.syncActiveWindow()
+    let buf = newTextBuffer("")
+    buf.displayName = some("[Terminal: sleep]")
+    result.addBuffer(buf)
+    result.addBufferToWindowList(buf)
+    result.terminalStates[buf.id] = ts
+    result.activeWindow.buffer = buf
+    result.activeWindow.modeState = ModeState(kind: mskTerminal, terminal: ts)
+    result.activeWindow.mode = EditorMode.Terminal
+    result.setMode(EditorMode.Terminal)
+
+  test "Ctrl-C through handleInterrupt releases the held one":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    require termState.isOk
+    let ts = termState.get
+    defer:
+      ts.cleanup()
+    fillWriteBuffer(ts)
+
+    let e = editorWithTerminal(ts)
+    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    require ts.waitingForCtrlN
+
+    check e.handleInterrupt()
+    check not ts.waitingForCtrlN
+    check ts.pty.writeBuffer.endsWith("\x1c\x03")
+
+  test "A Ctrl-W window command releases it instead of holding it":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    require termState.isOk
+    let ts = termState.get
+    defer:
+      ts.cleanup()
+    fillWriteBuffer(ts)
+
+    let e = editorWithTerminal(ts)
+    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    require ts.waitingForCtrlN
+
+    check e.handleKeyCombo(charKey("w", {kmCtrl}))
+    # The editor consumes the key, but the hold is still spent on it: the
+    # quit character reaches the shell now rather than at some later keystroke.
+    check not ts.waitingForCtrlN
+    check ts.pty.writeBuffer.endsWith("\x1c")
+
+  test "A consumed key does not leave the hold armed for a later Ctrl-N":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    require termState.isOk
+    let ts = termState.get
+    defer:
+      ts.cleanup()
+    fillWriteBuffer(ts)
+
+    let e = editorWithTerminal(ts)
+    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    check e.handleKeyCombo(charKey("w", {kmCtrl}))
+    check e.handleKeyCombo(specialKey(skEscape))
+    require not ts.waitingForCtrlN
+    let afterCancel = ts.pty.writeBuffer.len
+
+    # The idiom now starts from scratch: Terminal-Normal, no second quit.
+    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    require ts.waitingForCtrlN
+    check handleTerminalModeKey(ts, charKey("n", {kmCtrl})).kind == trSwitchToNormal
+    check ts.pty.writeBuffer.len == afterCancel

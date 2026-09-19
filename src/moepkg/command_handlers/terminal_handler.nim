@@ -46,6 +46,9 @@ type
     else:
       discard
 
+func isCtrlChar(keyCombo: KeyCombo, chars: openArray[string]): bool =
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char in chars
+
 proc keyComboToBytes*(keyCombo: KeyCombo): string =
   ## Convert a KeyCombo to raw terminal bytes for PTY forwarding.
   if keyCombo.isSpecial:
@@ -121,7 +124,7 @@ proc keyComboToBytes*(keyCombo: KeyCombo): string =
       elif ch >= 'A' and ch <= 'Z':
         return $chr(ch.ord - 'A'.ord + 1)
       elif ch == '\\':
-        return "\x1c" # FS
+        return TtyQuitChar
       elif ch == ']':
         return "\x1d" # GS
       elif ch == '^':
@@ -143,6 +146,15 @@ proc keyComboToBytes*(keyCombo: KeyCombo): string =
     else:
       return keyCombo.char
 
+proc releaseHeldQuitForKey*(termState: TerminalState, keyCombo: KeyCombo) =
+  ## A held Ctrl-\ lives exactly one keystroke. Ctrl-N and a second Ctrl-\
+  ## complete the idiom in `handleTerminalModeKey`; every other key delivers
+  ## the quit character now, even when the editor consumes the key and the
+  ## shell never sees it.
+  if keyCombo.isCtrlChar(["n", "N"]) or keyCombo.isCtrlChar(["\\", TtyQuitChar]):
+    return
+  termState.releaseHeldQuit()
+
 proc handleTerminalModeKey*(
     termState: TerminalState, keyCombo: KeyCombo
 ): TerminalResult =
@@ -152,29 +164,23 @@ proc handleTerminalModeKey*(
   of tsmInput:
     # Terminal-Input sub-mode: forward almost everything to PTY
 
-    # Check for Ctrl-\ (escape sequence to enter Normal sub-mode)
-    if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
-        keyCombo.char in ["\\", "\x1c"]:
-      termState.waitingForCtrlN = true
-      return TerminalResult(kind: trHandled)
-
-    # If waiting for Ctrl-N after Ctrl-\
-    if termState.waitingForCtrlN:
+    # Ctrl-\ is held back rather than swallowed: only Ctrl-N completes the
+    # idiom, and every other key releases it first.
+    if termState.waitingForCtrlN and keyCombo.isCtrlChar(["n", "N"]):
       termState.waitingForCtrlN = false
-      if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
-          keyCombo.char in ["n", "N"]:
-        return TerminalResult(kind: trSwitchToNormal)
-      # Not Ctrl-N, forward the original Ctrl-\ and this key
-      termState.feedInput("\x1c")
-      let bytes = keyComboToBytes(keyCombo)
-      if bytes.len > 0:
-        termState.feedInput(bytes)
+      return TerminalResult(kind: trSwitchToNormal)
+
+    # Check for Ctrl-\ (escape sequence to enter Normal sub-mode)
+    if keyCombo.isCtrlChar(["\\", TtyQuitChar]):
+      # A doubled Ctrl-\ is the whole idiom: it delivers the held quit
+      # character and arms nothing further.
+      if termState.waitingForCtrlN:
+        termState.releaseHeldQuit()
+      else:
+        termState.waitingForCtrlN = true
       return TerminalResult(kind: trHandled)
 
-    # Forward key to PTY
-    let bytes = keyComboToBytes(keyCombo)
-    if bytes.len > 0:
-      termState.feedInput(bytes)
+    termState.sendInput(keyComboToBytes(keyCombo))
     return TerminalResult(kind: trHandled)
   of tsmNormal:
     # Terminal-Normal sub-mode: Vim-like scrollback navigation

@@ -520,7 +520,10 @@ const TerminalInputCommands*: HelpGroup = HelpGroup(
   entries: @[
     HelpEntry(
       syntax: "Ctrl-\\ Ctrl-n", description: "Switch to Terminal-Normal sub-mode"
-    )
+    ),
+    HelpEntry(
+      syntax: "Ctrl-\\ Ctrl-\\", description: "Send one quit character to the program"
+    ),
   ]
 )
 

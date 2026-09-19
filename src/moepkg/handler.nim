@@ -1101,7 +1101,7 @@ proc handleInterruptCore(e: Editor): bool =
       if activeWin.modeState.kind == mskTerminal:
         let termState = activeWin.modeState.terminal
         if termState.subMode == tsmInput:
-          termState.feedInput("\x03")
+          termState.sendInput("\x03")
           return true
 
   # Search overlay: cancel search and exit overlay
@@ -1407,6 +1407,13 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   ## input into Moe's `KeyCombo` type. Terminal-specific events such as Quit,
   ## paste, and mouse input remain handled by `handleEvent`.
   e.prepareForKeyCombo()
+
+  when not defined(moe.embedded):
+    # Before any dispatch, so a key the editor consumes never leaves a Ctrl-\
+    # held past the keystroke it was pressed for.
+    for win in e.windowManager.windows:
+      if win.modeState.kind == mskTerminal:
+        win.modeState.terminal.releaseHeldQuitForKey(keyCombo)
 
   # Single point where a user-driven keystroke is appended to the active
   # macro register. Playback loops enter `runNestedKeyCombo` directly and

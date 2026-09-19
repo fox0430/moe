@@ -28,6 +28,9 @@ import std/options
 import ../terminal/[pty, ansi_parser]
 import ../buffer/core
 
+const TtyQuitChar* = "\x1c"
+  ## The byte Ctrl-\ produces (FS), which a tty delivers as SIGQUIT.
+
 type
   TerminalSubMode* = enum
     tsmInput # All keystrokes forwarded to PTY (default)
