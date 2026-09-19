@@ -152,17 +152,6 @@ proc dropSentResponses*(grid: TerminalGrid, count: int) =
     grid.pendingResponseBytes -= grid.pendingResponses[i].len
   grid.pendingResponses = grid.pendingResponses[count ..< grid.pendingResponses.len]
 
-proc trimHeadResponse*(grid: TerminalGrid, bytes: int) =
-  ## Drop the first `bytes` of the head answer: the PTY already took them.
-  if bytes <= 0 or grid.pendingResponses.len == 0:
-    return
-  let head = grid.pendingResponses[0]
-  if bytes >= head.len:
-    grid.dropSentResponses(1)
-    return
-  grid.pendingResponses[0] = head[bytes ..< head.len]
-  grid.pendingResponseBytes -= bytes
-
 proc defaultColor*(): TerminalColor =
   TerminalColor(kind: ckDefault)
 

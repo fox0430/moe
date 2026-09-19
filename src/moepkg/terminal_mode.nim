@@ -60,30 +60,69 @@ proc newTerminalState*(
 
   ok(state)
 
-proc flushPendingResponses(state: TerminalState): bool {.discardable.} =
-  ## Write any pending terminal query responses back to the PTY. Returns false
-  ## if one could not be written; what the PTY did not take of it and the
-  ## answers after it stay queued.
+proc flushWrites(state: TerminalState, budget: var int) =
+  ## Push the queue a little further, spending `budget` - what one poll may
+  ## write in total, across all the flushes it makes.
+  if budget <= 0:
+    return
+  let pending = state.pty.pendingWriteBytes
+  let flushResult = state.pty.flushWrites(budget)
+  budget -= pending - state.pty.pendingWriteBytes
+  if flushResult.isErr:
+    logError "terminal", flushResult.error
+
+proc flushWrites*(state: TerminalState) =
+  ## Push the queue a little further on a budget of its own, for the callers
+  ## outside a poll.
+  var budget = maxPtyWriteBytesPerFlush
+  state.flushWrites(budget)
+
+proc queueBytes(state: TerminalState, data: string): bool {.discardable.} =
+  ## Queue bytes for the child. Returns whether they were queued.
+  let writeResult = state.pty.queueWrite(data)
+  if writeResult.isErr:
+    logError "terminal", writeResult.error
+    return false
+  true
+
+proc feedInput*(state: TerminalState, data: string) =
+  ## Queue raw bytes for the child (keystrokes) and push what we can now.
+  if state.pty.closed:
+    return
+  state.queueBytes(data)
+  state.flushWrites()
+
+proc flushPendingResponses(
+    state: TerminalState, budget: var int
+): bool {.discardable.} =
+  ## Queue any pending terminal query responses back to the PTY, ahead of the
+  ## droppable bytes already queued. Returns false if one was refused; it and
+  ## the answers after it stay queued, since the child pairs answers with its
+  ## queries by order.
   if state.pty.closed:
     return true
+  if state.pty.writeFailed:
+    # Nothing can reach the child any more, so stop retrying these forever.
+    state.grid.clearPendingResponses()
+    state.responseFlushBlocked = false
+    return true
+
   var sent = 0
-  var consumedOfFailed = 0
   result = true
   for response in state.grid.pendingResponses:
-    let (consumed, writeErr) = state.pty.writeToPtyCounted(response)
-    if writeErr.len > 0:
-      # Stop rather than skip this answer: writeToPty drains the buffer on
-      # every call, so a later one could get through and be read as this
-      # one's. A failed write can still have handed the child a prefix.
+    # The queue takes an answer whole or not at all, so a refusal leaves the
+    # child owed all of it and there is no prefix to account for.
+    let queued = state.pty.queueResponse(response)
+    if queued.isErr:
       if not state.responseFlushBlocked:
-        logError "terminal", writeErr
+        logError "terminal", queued.error
         state.responseFlushBlocked = true
-      consumedOfFailed = consumed
       result = false
       break
     sent.inc
   state.grid.dropSentResponses(sent)
-  state.grid.trimHeadResponse(consumedOfFailed)
+  if sent > 0:
+    state.flushWrites(budget)
   if result:
     state.responseFlushBlocked = false
 
@@ -93,15 +132,14 @@ proc pollOutput*(state: TerminalState): bool =
   if state.pty.closed:
     return false
 
-  let drainResult = state.pty.drainWriteBuffer()
-  if drainResult.isErr:
-    logError "terminal", drainResult.error
+  var writeBudget = maxPtyWriteBytesPerFlush
+  state.flushWrites(writeBudget)
 
   # Answers kept by a failed flush are only sent from here: a child waiting on
   # them produces no output to drive a flush.
   var flushBlocked = false
   if state.grid.pendingResponses.len > 0:
-    flushBlocked = not state.flushPendingResponses()
+    flushBlocked = not state.flushPendingResponses(writeBudget)
 
   var updated = false
   var bytesRead = 0
@@ -116,7 +154,7 @@ proc pollOutput*(state: TerminalState): bool =
     # hit MaxPendingResponseBytes and drop answers the child waits on. Once a
     # flush fails nothing frees up within this poll, so stop retrying.
     if not flushBlocked and state.grid.pendingResponses.len > 0:
-      flushBlocked = not state.flushPendingResponses()
+      flushBlocked = not state.flushPendingResponses(writeBudget)
 
   if updated:
     state.needsBufferRefresh = true
@@ -132,19 +170,12 @@ proc pollOutput*(state: TerminalState): bool =
         state.grid.processOutput(remaining)
         remaining = state.pty.readFromPty()
 
-      state.flushPendingResponses()
+      state.flushPendingResponses(writeBudget)
       state.exitCode = code
       state.needsBufferRefresh = true
       return true
 
   false
-
-proc feedInput*(state: TerminalState, data: string) =
-  ## Forward raw bytes to the PTY (keystrokes).
-  if not state.pty.closed:
-    let writeResult = state.pty.writeToPty(data)
-    if writeResult.isErr:
-      logError "terminal", writeResult.error
 
 proc releaseHeldQuit*(state: TerminalState) =
   ## Send the Ctrl-\ that a pending Terminal-Normal switch is holding back.
@@ -159,6 +190,11 @@ proc sendInput*(state: TerminalState, data: string) =
   state.releaseHeldQuit()
   if data.len > 0:
     state.feedInput(data)
+
+proc interrupt*(state: TerminalState) =
+  ## Ctrl-C: drop what the interrupt is allowed to drop, then send it.
+  state.pty.cancelDroppable()
+  state.sendInput("\x03")
 
 proc enterNormalSubMode*(state: TerminalState): TextBuffer =
   ## Switch to Terminal-Normal sub-mode.

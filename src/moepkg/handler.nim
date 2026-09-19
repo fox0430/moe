@@ -1101,7 +1101,7 @@ proc handleInterruptCore(e: Editor): bool =
       if activeWin.modeState.kind == mskTerminal:
         let termState = activeWin.modeState.terminal
         if termState.subMode == tsmInput:
-          termState.sendInput("\x03")
+          termState.interrupt()
           return true
 
   # Search overlay: cancel search and exit overlay

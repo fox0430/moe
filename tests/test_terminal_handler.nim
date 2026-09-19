@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, times, deques, strutils, tables]
+import std/[unittest, options, os, posix, times, deques, strutils, tables]
 import pkg/results
 import ../src/moepkg/[terminal_mode, key_bindings, editor, config, handler, types]
 import ../src/moepkg/buffer/core
@@ -30,15 +30,25 @@ proc charKey(c: string, mods: set[KeyModifier] = {}): KeyCombo =
 proc specialKey(sk: SpecialKey, mods: set[KeyModifier] = {}): KeyCombo =
   KeyCombo(isSpecial: true, special: sk, modifiers: mods)
 
-proc fillWriteBuffer(ts: TerminalState) =
+proc queuedBytes(pty: PtyHandle): string =
+  ## What is still queued for the child, in order.
+  var isFront = true
+  for chunk in pty.writeQueue.items:
+    if isFront:
+      result.add chunk.data[pty.writeOffset ..< chunk.data.len]
+      isFront = false
+    else:
+      result.add chunk.data
+
+proc fillWriteQueue(ts: TerminalState) =
   ## `sleep` never reads stdin, so once the kernel PTY buffer is full the bytes
-  ## a keystroke sends stay visible in the write buffer. Pad well past what a
-  ## later write can drain back out, so the tail stays observable.
+  ## a keystroke sends stay visible in the queue. Pad well past what a later
+  ## write can drain back out, so the tail stays observable.
   for _ in 0 ..< 64:
     ts.feedInput("x".repeat(4096))
-    if ts.pty.writeBuffer.len >= 32768:
+    if ts.pty.pendingWriteBytes >= 32768:
       break
-  doAssert ts.pty.writeBuffer.len >= 32768
+  doAssert ts.pty.pendingWriteBytes >= 32768
 
 suite "keyComboToBytes - Regular characters":
   test "Simple character 'a'":
@@ -384,20 +394,20 @@ suite "A doubled Ctrl-backslash sends one quit character":
     let ts = termState.get
     defer:
       ts.cleanup()
-    fillWriteBuffer(ts)
+    fillWriteQueue(ts)
 
     discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
     require ts.waitingForCtrlN
 
     discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
     # One \x1c, and nothing left waiting to fire against a later key.
-    check ts.pty.writeBuffer.endsWith("\x1c")
-    check not ts.pty.writeBuffer.endsWith("\x1c\x1c")
+    check ts.pty.queuedBytes.endsWith("\x1c")
+    check not ts.pty.queuedBytes.endsWith("\x1c\x1c")
     check not ts.waitingForCtrlN
 
     # A following Ctrl-N is an ordinary keystroke, not the idiom.
     check handleTerminalModeKey(ts, charKey("n", {kmCtrl})).kind == trHandled
-    check ts.pty.writeBuffer.endsWith("\x1c\x0e")
+    check ts.pty.queuedBytes.endsWith("\x1c\x0e")
 
 suite "A held Ctrl-backslash and the keys that never reach the terminal handler":
   proc editorWithTerminal(ts: TerminalState): Editor =
@@ -419,7 +429,7 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     let ts = termState.get
     defer:
       ts.cleanup()
-    fillWriteBuffer(ts)
+    fillWriteQueue(ts)
 
     let e = editorWithTerminal(ts)
     discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
@@ -427,7 +437,22 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
 
     check e.handleInterrupt()
     check not ts.waitingForCtrlN
-    check ts.pty.writeBuffer.endsWith("\x1c\x03")
+    check ts.pty.queuedBytes.endsWith("\x1c\x03")
+
+  test "Ctrl-C drops a queued paste the child never read":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    require termState.isOk
+    let ts = termState.get
+    defer:
+      ts.cleanup()
+    fillWriteQueue(ts)
+    require ts.pty.queueWrite("pasted\n", wcDroppable).isOk
+
+    let e = editorWithTerminal(ts)
+    check e.handleInterrupt()
+    check ts.pty.droppableBytes == 0
+    check not ts.pty.queuedBytes.contains("pasted")
+    check ts.pty.queuedBytes.endsWith("\x03")
 
   test "A Ctrl-W window command releases it instead of holding it":
     let termState = newTerminalState("sleep 3", 80, 24)
@@ -435,7 +460,7 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     let ts = termState.get
     defer:
       ts.cleanup()
-    fillWriteBuffer(ts)
+    fillWriteQueue(ts)
 
     let e = editorWithTerminal(ts)
     discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
@@ -445,7 +470,7 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     # The editor consumes the key, but the hold is still spent on it: the
     # quit character reaches the shell now rather than at some later keystroke.
     check not ts.waitingForCtrlN
-    check ts.pty.writeBuffer.endsWith("\x1c")
+    check ts.pty.queuedBytes.endsWith("\x1c")
 
   test "A consumed key does not leave the hold armed for a later Ctrl-N":
     let termState = newTerminalState("sleep 3", 80, 24)
@@ -453,17 +478,70 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     let ts = termState.get
     defer:
       ts.cleanup()
-    fillWriteBuffer(ts)
+    fillWriteQueue(ts)
 
     let e = editorWithTerminal(ts)
     discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
     check e.handleKeyCombo(charKey("w", {kmCtrl}))
     check e.handleKeyCombo(specialKey(skEscape))
     require not ts.waitingForCtrlN
-    let afterCancel = ts.pty.writeBuffer.len
+    let afterCancel = ts.pty.pendingWriteBytes
 
     # The idiom now starts from scratch: Terminal-Normal, no second quit.
     discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
     require ts.waitingForCtrlN
     check handleTerminalModeKey(ts, charKey("n", {kmCtrl})).kind == trSwitchToNormal
-    check ts.pty.writeBuffer.len == afterCancel
+    check ts.pty.pendingWriteBytes == afterCancel
+
+suite "Query answers the write queue could not take":
+  test "A query answer the queue refused is kept for the next tick":
+    let termState = newTerminalState("cat", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      # A full pipe stands in for a child that stopped reading: every write
+      # EAGAINs, so the queue fills to the cap and nothing drains it again.
+      var fds: array[2, cint]
+      require pipe(fds) == 0
+      require fcntl(fds[1], F_SETFL, fcntl(fds[1], F_GETFL) or O_NONBLOCK) == 0
+      let realFd = ts.pty.masterFd
+      ts.pty.masterFd = fds[1]
+
+      for _ in 0 ..< 200:
+        let room = maxPtyWriteQueueBytes - ts.pty.pendingWriteBytes
+        if room == 0:
+          break
+        ts.feedInput("x".repeat(min(room, 64 * 1024)))
+      require ts.pty.pendingWriteBytes == maxPtyWriteQueueBytes
+      require ts.pty.queueWrite("z").isErr
+
+      ts.grid.pendingResponses = @["\x1b[?1;2c"]
+      discard ts.pollOutput()
+
+      # The child may be blocking on that answer, so it is not thrown away.
+      check ts.grid.pendingResponses == @["\x1b[?1;2c"]
+
+      ts.pty.masterFd = realFd
+      discard close(fds[0])
+      discard close(fds[1])
+      ts.cleanup()
+
+  test "A query answer is retried on a tick that brings no new output":
+    let termState = newTerminalState("cat", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      # `cat` echoes only what it is fed, so nothing arrives on its own.
+      ts.grid.pendingResponses = @["\x1b[?1;2c"]
+      discard ts.pollOutput()
+      check ts.grid.pendingResponses.len == 0
+      ts.cleanup()
+
+  test "A query answer is dropped once the fd is gone for good":
+    let termState = newTerminalState("cat", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.pty.writeFailed = true
+      ts.grid.pendingResponses = @["\x1b[?1;2c"]
+      discard ts.pollOutput()
+      # Retrying it forever would only relog the same failure every tick.
+      check ts.grid.pendingResponses.len == 0
+      ts.cleanup()
