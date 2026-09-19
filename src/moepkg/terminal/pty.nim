@@ -146,34 +146,51 @@ proc drainWriteBuffer*(pty: PtyHandle): Result[void, string] =
     return err(err)
   ok()
 
-proc writeToPty*(pty: PtyHandle, data: string): Result[void, string] =
+proc writeToPtyCounted*(
+    pty: PtyHandle, data: string
+): tuple[consumed: int, err: string] =
   ## Non-blocking write to the PTY master fd. Any bytes the kernel cannot
   ## accept immediately are appended to pty.writeBuffer and flushed later by
   ## drainWriteBuffer, so a SIGSTOP'd or ^S-paused child can never freeze the
   ## caller.
+  ##
+  ## `consumed` is how many leading bytes the PTY took, written or buffered. An
+  ## err can still come with consumed > 0 (short write, then a real failure), so
+  ## a caller that retries must drop that prefix or the child gets it twice.
   if pty.closed:
-    return err("PTY is closed")
+    return (0, "PTY is closed")
   if data.len == 0:
-    return ok()
+    return (0, "")
 
-  ?pty.drainWriteBuffer()
+  let drainResult = pty.drainWriteBuffer()
+  if drainResult.isErr:
+    return (0, drainResult.error)
 
   var startOffset = 0
-  var writeErr = ""
   if pty.writeBuffer.len == 0:
     let (written, err) = tryWriteNonblock(pty.masterFd, data, 0)
     startOffset = written
-    writeErr = err
+    if err.len > 0:
+      # Buffer nothing past a real failure: the fd is broken, so the tail would
+      # just fail again on every drain.
+      return (written, err)
 
   if startOffset < data.len:
     let remaining = data.len - startOffset
     if pty.writeBuffer.len + remaining > maxPtyWriteBufferBytes:
-      return err(
+      return (
+        startOffset,
         "PTY write buffer full (" & $pty.writeBuffer.len &
-          " bytes pending); child is not consuming input"
+          " bytes pending); child is not consuming input",
       )
     pty.writeBuffer.add data[startOffset ..< data.len]
 
+  (data.len, "")
+
+proc writeToPty*(pty: PtyHandle, data: string): Result[void, string] =
+  ## writeToPtyCounted for callers that never retry, so consumed tells them
+  ## nothing.
+  let (_, writeErr) = pty.writeToPtyCounted(data)
   if writeErr.len > 0:
     return err(writeErr)
   ok()

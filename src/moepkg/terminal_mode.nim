@@ -60,15 +60,32 @@ proc newTerminalState*(
 
   ok(state)
 
-proc flushPendingResponses(state: TerminalState) =
-  ## Write any pending terminal query responses back to the PTY.
+proc flushPendingResponses(state: TerminalState): bool {.discardable.} =
+  ## Write any pending terminal query responses back to the PTY. Returns false
+  ## if one could not be written; what the PTY did not take of it and the
+  ## answers after it stay queued.
   if state.pty.closed:
-    return
+    return true
+  var sent = 0
+  var consumedOfFailed = 0
+  result = true
   for response in state.grid.pendingResponses:
-    let writeResult = state.pty.writeToPty(response)
-    if writeResult.isErr:
-      logError "terminal", writeResult.error
-  state.grid.pendingResponses.setLen(0)
+    let (consumed, writeErr) = state.pty.writeToPtyCounted(response)
+    if writeErr.len > 0:
+      # Stop rather than skip this answer: writeToPty drains the buffer on
+      # every call, so a later one could get through and be read as this
+      # one's. A failed write can still have handed the child a prefix.
+      if not state.responseFlushBlocked:
+        logError "terminal", writeErr
+        state.responseFlushBlocked = true
+      consumedOfFailed = consumed
+      result = false
+      break
+    sent.inc
+  state.grid.dropSentResponses(sent)
+  state.grid.trimHeadResponse(consumedOfFailed)
+  if result:
+    state.responseFlushBlocked = false
 
 proc pollOutput*(state: TerminalState): bool =
   ## Drain the PTY through the ANSI parser (up to maxPtyReadBytesPerPoll
@@ -80,6 +97,12 @@ proc pollOutput*(state: TerminalState): bool =
   if drainResult.isErr:
     logError "terminal", drainResult.error
 
+  # Answers kept by a failed flush are only sent from here: a child waiting on
+  # them produces no output to drive a flush.
+  var flushBlocked = false
+  if state.grid.pendingResponses.len > 0:
+    flushBlocked = not state.flushPendingResponses()
+
   var updated = false
   var bytesRead = 0
   while bytesRead < maxPtyReadBytesPerPoll:
@@ -89,9 +112,13 @@ proc pollOutput*(state: TerminalState): bool =
     state.grid.processOutput(data)
     bytesRead += data.len
     updated = true
+    # Flush inside the loop: a query flood answered only after the drain would
+    # hit MaxPendingResponseBytes and drop answers the child waits on. Once a
+    # flush fails nothing frees up within this poll, so stop retrying.
+    if not flushBlocked and state.grid.pendingResponses.len > 0:
+      flushBlocked = not state.flushPendingResponses()
 
   if updated:
-    state.flushPendingResponses()
     state.needsBufferRefresh = true
     return true
 

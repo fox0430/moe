@@ -1280,3 +1280,76 @@ suite "TerminalGrid - Charset designation across chunk boundaries":
     check grid.currentFg.kind == ckIndexed
     check grid.currentFg.index == 1
     check grid.cells[0][0].ch == "R"
+
+suite "TerminalGrid - Pending query answers":
+  test "A realistic batch of queries is answered in full":
+    # Width detection loops probe a few thousand times before reading back.
+    let grid = newTerminalGrid(10, 3)
+    for _ in 0 ..< 2000:
+      grid.processOutput("\x1b[6n")
+    check grid.pendingResponses.len == 2000
+
+  test "Query answers stop piling up at the cap":
+    let grid = newTerminalGrid(10, 3)
+    let answerLen = "\x1b[1;1R".len
+    for _ in 0 ..< (MaxPendingResponseBytes div answerLen) + 100:
+      grid.processOutput("\x1b[6n")
+    check grid.pendingResponses.len == MaxPendingResponseBytes div answerLen
+
+    # The answers kept are the first ones asked for, still in query order.
+    grid.processOutput("\x1b[c")
+    check grid.pendingResponses[^1] == "\x1b[1;1R"
+
+    # A shorter answer does not slip past the cap either; taking it would pair
+    # it with the query whose answer was dropped.
+    grid.processOutput("\x1b[5n")
+    check grid.pendingResponses[^1] == "\x1b[1;1R"
+
+  test "Clearing the answers lets the next poll fill again":
+    let grid = newTerminalGrid(10, 3)
+    for _ in 0 ..< MaxPendingResponseBytes:
+      grid.processOutput("\x1b[6n")
+    grid.clearPendingResponses()
+    grid.processOutput("\x1b[c")
+    check grid.pendingResponses == @["\x1b[?6c"]
+
+  test "Dropping the answers that were written keeps the rest in order":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("\x1b[6n\x1b[c\x1b[5n")
+    grid.dropSentResponses(1)
+    check grid.pendingResponses == @["\x1b[?6c", "\x1b[0n"]
+
+  test "Trimming the head answer keeps only what the PTY did not take":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("\x1b[6n\x1b[c")
+    grid.trimHeadResponse(2)
+    check grid.pendingResponses == @["1;1R", "\x1b[?6c"]
+
+  test "Trimming a whole head answer drops it":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("\x1b[6n\x1b[c")
+    grid.trimHeadResponse(grid.pendingResponses[0].len)
+    check grid.pendingResponses == @["\x1b[?6c"]
+
+  test "A trimmed answer only counts for its remaining bytes":
+    let grid = newTerminalGrid(10, 3)
+    let answerLen = "\x1b[1;1R".len
+    let capacity = MaxPendingResponseBytes div answerLen
+    for _ in 0 ..< capacity:
+      grid.processOutput("\x1b[6n")
+    grid.dropSentResponses(1)
+    grid.trimHeadResponse(answerLen - 1)
+    # The trim freed all but one byte of the head, so one more answer fits.
+    grid.processOutput("\x1b[6n")
+    grid.processOutput("\x1b[6n")
+    check grid.pendingResponses.len == capacity + 1
+
+  test "An unsent tail still counts against the cap":
+    let grid = newTerminalGrid(10, 3)
+    let answerLen = "\x1b[1;1R".len
+    let capacity = MaxPendingResponseBytes div answerLen
+    for _ in 0 ..< capacity:
+      grid.processOutput("\x1b[6n")
+    grid.dropSentResponses(1)
+    grid.processOutput("\x1b[6n")
+    check grid.pendingResponses.len == capacity

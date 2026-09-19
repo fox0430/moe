@@ -44,3 +44,6 @@ type
     exitCode*: Option[int]
     waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
     needsBufferRefresh*: bool
+    responseFlushBlocked*: bool
+      ## Set while a query answer is stuck unwritten, so the retry each poll
+      ## makes is not logged once per render frame.
