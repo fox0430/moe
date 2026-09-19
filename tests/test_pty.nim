@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, posix, os, strutils, times]
+import std/[unittest, posix, os, strutils, times, deques]
 
 import pkg/results
 
@@ -145,9 +145,9 @@ suite "closePty - bounded teardown":
     pty.closePty() # must not raise or block
     check pty.closed
 
-suite "writeToPty - non-blocking against a stopped child":
+suite "queueWrite - non-blocking against a stopped child":
   test "Returns promptly when the child is SIGSTOP'd (EAGAIN never spins)":
-    # Regression: writeToPty used to loop on poll(POLLOUT, 100ms) forever if
+    # Regression: the write path used to loop on poll(POLLOUT, 100ms) if
     # EAGAIN persisted, so a SIGSTOP'd or ^S-paused child froze the UI thread
     # until the child was killed. Now it must buffer and return.
     let ptyResult = openPtyAndSpawn("cat")
@@ -162,24 +162,22 @@ suite "writeToPty - non-blocking against a stopped child":
 
     let payload = "x".repeat(1024)
     let start = epochTime()
-    var lastResult = pty.writeToPty(payload)
+    var lastResult = pty.queueWrite(payload)
     # Keep writing until we overflow the userspace cap or run out of budget.
     # Every individual call MUST return without blocking.
     for _ in 0 ..< 200:
       if lastResult.isErr:
         break
-      lastResult = pty.writeToPty(payload)
+      discard pty.flushWrites()
+      lastResult = pty.queueWrite(payload)
     let elapsed = epochTime() - start
 
-    # 200 * 1KiB well exceeds the 64 KiB userspace cap on top of any kernel
-    # PTY buffer, so we should have hit the overflow err.
-    check lastResult.isErr
     # Must be dramatically faster than the old poll(100ms) * many iterations.
     check elapsed < 1.0
-    # Buffer never grew past its documented cap.
-    check pty.writeBuffer.len <= maxPtyWriteBufferBytes
+    # Queue never grew past its documented cap.
+    check pty.pendingWriteBytes <= maxPtyWriteQueueBytes
 
-  test "drainWriteBuffer flushes pending bytes once the child resumes":
+  test "flushWrites pushes pending bytes once the child resumes":
     let ptyResult = openPtyAndSpawn("cat")
     require ptyResult.isOk
     let pty = ptyResult.get
@@ -193,23 +191,33 @@ suite "writeToPty - non-blocking against a stopped child":
     # Fill until we buffer something in userspace.
     let payload = "y".repeat(4096)
     for _ in 0 ..< 32:
-      if pty.writeToPty(payload).isErr:
+      if pty.queueWrite(payload).isErr:
         break
-    require pty.writeBuffer.len > 0
+      discard pty.flushWrites()
+    require pty.pendingWriteBytes > 0
 
-    # Resume the child; cat starts consuming, so drainWriteBuffer should
-    # eventually push everything through.
+    # Resume the child; cat starts consuming, so flushWrites should eventually
+    # push everything through.
     require kill(pty.childPid, SIGCONT) == 0
     let deadline = epochTime() + 2.0
-    while pty.writeBuffer.len > 0 and epochTime() < deadline:
-      discard pty.drainWriteBuffer()
+    while pty.pendingWriteBytes > 0 and epochTime() < deadline:
+      discard pty.flushWrites()
       # Read the echoed bytes so the kernel keeps making room.
       discard pty.readFromPty(65536)
       sleep(10)
 
-    check pty.writeBuffer.len == 0
+    check pty.pendingWriteBytes == 0
 
-  test "writeToPtyCounted reports the bytes the PTY kept when it fails":
+  test "queueWrite on empty data succeeds without touching the fd":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.queueWrite("").isOk
+
+  test "queueWrite on a closed handle returns err":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: true)
+    let r = pty.queueWrite("hello")
+    check r.isErr
+
+  test "A rejected write queues nothing, so the queue stays intact":
     let ptyResult = openPtyAndSpawn("cat")
     require ptyResult.isOk
     let pty = ptyResult.get
@@ -220,23 +228,241 @@ suite "writeToPty - non-blocking against a stopped child":
     require kill(pty.childPid, SIGSTOP) == 0
     sleep(50)
 
-    let payload = "z".repeat(1024)
-    var last = pty.writeToPtyCounted(payload)
-    for _ in 0 ..< 200:
-      if last.err.len > 0:
-        break
-      check last.consumed == payload.len
-      last = pty.writeToPtyCounted(payload)
+    while pty.queueWrite("x".repeat(65536)).isOk:
+      discard pty.flushWrites()
+    let pending = pty.pendingWriteBytes
+    check pty.queueWrite("y".repeat(maxPtyWriteQueueBytes)).isErr
+    check pty.pendingWriteBytes == pending
 
-    require last.err.len > 0
-    # The overflow err queues nothing, so the caller owes the child all of it.
-    check last.consumed == 0
-
-  test "writeToPty on an empty buffer succeeds without touching the fd":
+  test "A failing write is reported by flushWrites, not by queueWrite":
+    # fd -1 fails for real (EBADF) rather than with EAGAIN, like a master fd
+    # whose slave side is gone.
     let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
-    check pty.writeToPty("").isOk
 
-  test "writeToPty on a closed handle returns err":
-    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: true)
-    let r = pty.writeToPty("hello")
+    # Accepting the bytes succeeds; the write behind it is not the queuer's
+    # verdict to report.
+    check pty.queueWrite("x").isOk
+    check not pty.writeFailed
+    check pty.flushWrites().isErr
+    check pty.writeFailed
+    check pty.pendingWriteBytes == 0
+
+    # The handle now refuses bytes instead of taking them for a dead fd.
+    let refused = pty.queueWrite("y")
+    check refused.isErr
+    check pty.pendingWriteBytes == 0
+
+  test "A droppable write past its budget is refused whole, never cut":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    let r = pty.queueWrite("z".repeat(maxPtyDroppableBytes + 1), wcDroppable)
     check r.isErr
+    check pty.pendingWriteBytes == 0
+
+  test "The droppable budget bounds the queue, not just one write":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    let half = "z".repeat(maxPtyDroppableBytes div 2 + 1)
+    check pty.queueWrite(half, wcDroppable).isOk
+    check pty.queueWrite(half, wcDroppable).isErr
+    check pty.pendingWriteBytes == half.len
+
+  test "A queued droppable write never makes a keystroke refused":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.queueWrite("z".repeat(maxPtyWriteQueueBytes + 1024 * 1024), wcDroppable).isOk
+    # The keystroke budget is measured over keystrokes alone.
+    check pty.queueWrite("K").isOk
+
+  test "cancelDroppable drops the pasted bytes and keeps the keystrokes":
+    let ptyResult = openPtyAndSpawn("cat")
+    require ptyResult.isOk
+    let pty = ptyResult.get
+    defer:
+      discard kill(pty.childPid, SIGCONT)
+      pty.closePty()
+
+    require kill(pty.childPid, SIGSTOP) == 0
+    sleep(50)
+
+    discard pty.queueWrite("z".repeat(1024 * 1024), wcDroppable, tailBytes = 6)
+    discard pty.flushWrites()
+    # Part of the paste reached the child before the kernel buffer filled, so
+    # the child is inside it.
+    require pty.writeOffset > 0
+    require pty.queueWrite("K").isOk
+
+    check pty.cancelDroppable()
+    # What is left is the tail in the dropped chunk's place, then the keystroke
+    # that was typed behind it.
+    check pty.pendingWriteBytes == 6 + 1
+
+  test "A cancel inside the tail sends only the rest of it":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    let data = "zzzz" & "\x1b[201~"
+    check pty.queueWrite(data, wcDroppable, tailBytes = 6).isOk
+    # The fd stopped two bytes into the closing marker.
+    pty.writeOffset = data.len - 4
+
+    check pty.cancelDroppable()
+    check pty.writeQueue.len == 1
+    check pty.writeQueue.peekFirst.data == "201~"
+    check pty.pendingWriteBytes == 4
+
+  test "A cancel inside the opening marker finishes it before the tail":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    let data = "\x1b[200~" & "zzzz" & "\x1b[201~"
+    check pty.queueWrite(data, wcDroppable, headBytes = 6, tailBytes = 6).isOk
+    # The fd stopped three bytes into the opening marker, so the child holds a
+    # truncated CSI that would swallow whatever is queued next.
+    pty.writeOffset = 3
+
+    check pty.cancelDroppable()
+    check pty.writeQueue.len == 1
+    check pty.writeQueue.peekFirst.data == "00~" & "\x1b[201~"
+    check pty.writeQueue.peekFirst.kind == wcEssential
+    check pty.pendingWriteBytes == 9
+
+  test "A cancel inside an unbracketed paste kills the line it truncated":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    # No markers: the child never asked for bracketed paste.
+    check pty.queueWrite("rm -rf /home/user/project", wcDroppable).isOk
+    pty.writeOffset = 20
+
+    check pty.cancelDroppable()
+    check pty.writeQueue.len == 1
+    # Nothing to close, so the truncated line is killed instead of left for the
+    # next Enter to run.
+    check pty.writeQueue.peekFirst.data == "\x15"
+    check pty.writeQueue.peekFirst.kind == wcEssential
+    check pty.pendingWriteBytes == 1
+
+  test "A cancel before an unbracketed paste started owes the child nothing":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.queueWrite("rm -rf /home/user/project", wcDroppable).isOk
+
+    check pty.cancelDroppable()
+    check pty.writeQueue.len == 0
+    check pty.pendingWriteBytes == 0
+
+  test "One flushWrites never pushes more than a tick's worth":
+    let ptyResult = openPtyAndSpawn("cat > /dev/null")
+    require ptyResult.isOk
+    let pty = ptyResult.get
+    defer:
+      pty.closePty()
+
+    let total = 4 * maxPtyWriteBytesPerFlush
+    require pty.queueWrite("z".repeat(total), wcDroppable).isOk
+
+    # A child that drains as fast as we write must not take the whole queue in
+    # one frame; the rest goes out on later ticks.
+    require pty.flushWrites().isOk
+    check pty.pendingWriteBytes >= total - maxPtyWriteBytesPerFlush
+
+    var ticks = 0
+    while pty.pendingWriteBytes > 0 and ticks < 1000:
+      require pty.flushWrites().isOk
+      inc ticks
+      sleep(1)
+    check pty.pendingWriteBytes == 0
+
+  test "clearWriteQueue drops the backlog and leaves the queue usable":
+    let ptyResult = openPtyAndSpawn("cat")
+    require ptyResult.isOk
+    let pty = ptyResult.get
+    defer:
+      discard kill(pty.childPid, SIGCONT)
+      pty.closePty()
+
+    require kill(pty.childPid, SIGSTOP) == 0
+    sleep(50)
+
+    while pty.queueWrite("x".repeat(65536)).isOk:
+      discard pty.flushWrites()
+    require pty.pendingWriteBytes > 0
+
+    pty.clearWriteQueue()
+    check pty.pendingWriteBytes == 0
+    check pty.queueWrite("z").isOk
+
+suite "queueResponse":
+  test "An answer goes ahead of a queued paste":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.queueWrite("K").isOk
+    check pty.queueWrite("paste", wcDroppable).isOk
+
+    check pty.queueResponse("\x1b[0n").isOk
+    check pty.writeQueue.len == 3
+    check pty.writeQueue[0].data == "K"
+    check pty.writeQueue[1].data == "\x1b[0n"
+    check pty.writeQueue[2].data == "paste"
+
+  test "An answer mid-paste closes the bracket and re-opens it after":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    let paste = "\x1b[200~paste\x1b[201~"
+    check pty.queueWrite(paste, wcDroppable, headBytes = 6, tailBytes = 6).isOk
+    # The fd stopped inside the body.
+    pty.writeOffset = 8
+    pty.droppableBytes = paste.len - 8
+
+    check pty.queueResponse("\x1b[0n").isOk
+    check pty.writeOffset == 0
+    check pty.writeQueue.len == 3
+    check pty.writeQueue[0].data == "\x1b[201~"
+    check pty.writeQueue[1].data == "\x1b[0n"
+    check pty.writeQueue[2].data == "\x1b[200~ste\x1b[201~"
+    check pty.writeQueue[2].kind == wcDroppable
+    check pty.essentialBytes == 10
+    check pty.droppableBytes == pty.writeQueue[2].data.len
+
+  test "An answer inside the opening marker finishes it before closing it":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    let paste = "\x1b[200~paste\x1b[201~"
+    check pty.queueWrite(paste, wcDroppable, headBytes = 6, tailBytes = 6).isOk
+    pty.writeOffset = 3
+    pty.droppableBytes = paste.len - 3
+
+    check pty.queueResponse("\x1b[0n").isOk
+    check pty.writeQueue.len == 3
+    check pty.writeQueue[0].data == "00~\x1b[201~"
+    check pty.writeQueue[1].data == "\x1b[0n"
+    # No body byte reached the child, so the paste starts over whole.
+    check pty.writeQueue[2].data == paste
+
+  test "An answer inside the closing marker needs no re-open":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    let paste = "\x1b[200~paste\x1b[201~"
+    check pty.queueWrite(paste, wcDroppable, headBytes = 6, tailBytes = 6).isOk
+    pty.writeOffset = 13
+    pty.droppableBytes = paste.len - 13
+
+    check pty.queueResponse("\x1b[0n").isOk
+    check pty.writeQueue.len == 2
+    check pty.writeQueue[0].data == "201~"
+    check pty.writeQueue[1].data == "\x1b[0n"
+    check pty.droppableBytes == 0
+
+  test "An answer stays behind an unbracketed paste the fd is inside":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.queueWrite("paste", wcDroppable).isOk
+    pty.writeOffset = 2
+    pty.droppableBytes = 3
+
+    check pty.queueResponse("\x1b[0n").isOk
+    check pty.writeQueue.len == 2
+    check pty.writeQueue[0].data == "paste"
+    check pty.writeQueue[1].data == "\x1b[0n"
+    check pty.writeOffset == 2
+
+  test "An empty answer leaves the queue untouched":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.queueWrite("K").isOk
+    check pty.queueWrite("paste", wcDroppable).isOk
+
+    check pty.queueResponse("").isOk
+    check pty.writeQueue.len == 2
+    check pty.writeQueue[0].data == "K"
+    check pty.writeQueue[1].data == "paste"
+
+  test "An empty answer on an empty queue is a no-op":
+    let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check pty.queueResponse("").isOk
+    check pty.writeQueue.len == 0

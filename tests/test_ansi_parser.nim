@@ -1334,31 +1334,6 @@ suite "TerminalGrid - Pending query answers":
     grid.dropSentResponses(1)
     check grid.pendingResponses == @["\x1b[?6c", "\x1b[0n"]
 
-  test "Trimming the head answer keeps only what the PTY did not take":
-    let grid = newTerminalGrid(10, 3)
-    grid.processOutput("\x1b[6n\x1b[c")
-    grid.trimHeadResponse(2)
-    check grid.pendingResponses == @["1;1R", "\x1b[?6c"]
-
-  test "Trimming a whole head answer drops it":
-    let grid = newTerminalGrid(10, 3)
-    grid.processOutput("\x1b[6n\x1b[c")
-    grid.trimHeadResponse(grid.pendingResponses[0].len)
-    check grid.pendingResponses == @["\x1b[?6c"]
-
-  test "A trimmed answer only counts for its remaining bytes":
-    let grid = newTerminalGrid(10, 3)
-    let answerLen = "\x1b[1;1R".len
-    let capacity = MaxPendingResponseBytes div answerLen
-    for _ in 0 ..< capacity:
-      grid.processOutput("\x1b[6n")
-    grid.dropSentResponses(1)
-    grid.trimHeadResponse(answerLen - 1)
-    # The trim freed all but one byte of the head, so one more answer fits.
-    grid.processOutput("\x1b[6n")
-    grid.processOutput("\x1b[6n")
-    check grid.pendingResponses.len == capacity + 1
-
   test "An unsent tail still counts against the cap":
     let grid = newTerminalGrid(10, 3)
     let answerLen = "\x1b[1;1R".len

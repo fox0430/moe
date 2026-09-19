@@ -20,25 +20,62 @@
 ## POSIX pseudo-terminal (PTY) wrapper for terminal emulation.
 ## Provides PTY creation, non-blocking I/O, resize, and process lifecycle.
 
-import std/[os, posix, options]
+import std/[deques, os, posix, options]
 
 import pkg/results
 
-type PtyHandle* = ref object
-  masterFd*: cint
-  childPid*: Pid
-  closed*: bool
-  writeBuffer*: string
-    ## Bytes accepted by writeToPty that the kernel PTY buffer could not take
-    ## yet (EAGAIN). Drained non-blockingly by drainWriteBuffer from the outer
-    ## poll loop, so a stopped or flow-controlled child cannot wedge the UI.
+type
+  WriteChunkKind* = enum
+    wcEssential ## Bytes the child must receive: a keystroke or a query answer.
+    wcDroppable ## Bytes an interrupt is allowed to drop, such as a paste.
 
-const maxPtyWriteBufferBytes* = 64 * 1024
-  ## Bound on writeBuffer so a wedged child can't grow it without limit.
+  WriteChunk* = object
+    data*: string
+    kind*: WriteChunkKind
+    headBytes*: int
+      ## How many bytes at the start of `data` the child must have received in
+      ## full before the tail below means anything to it.
+    tailBytes*: int
+      ## How many bytes at the end of `data` the child is owed even if the
+      ## chunk is dropped after it already received part of it.
 
-const maxPtyReadBytesPerPoll* = 256 * 1024
-  ## Byte cap for one pollOutput drain. Bounds tick cost so a runaway
-  ## child (`yes`, `cat` big file) can't monopolize a render frame.
+  PtyHandle* = ref object
+    masterFd*: cint
+    childPid*: Pid
+    closed*: bool
+    writeQueue*: Deque[WriteChunk]
+      ## The one queue of bytes bound for the child. Everything goes through
+      ## queueWrite, so the child sees bytes in the order they were queued.
+      ## Chunked rather than flat, so an interrupt can drop what is droppable
+      ## and leave the rest in place.
+    writeOffset*: int ## How much of the front chunk the fd has already taken.
+    essentialBytes*: int ## Queued wcEssential bytes the fd has not taken yet.
+    droppableBytes*: int ## Queued wcDroppable bytes the fd has not taken yet.
+    writeFailed*: bool
+      ## A write to the master fd failed for real (not EAGAIN), so the fd is
+      ## gone and nothing more can reach the child.
+
+const
+  maxPtyWriteQueueBytes* = 4 * 1024 * 1024
+    ## Bound on what the unbounded producers - keystrokes and query responses -
+    ## can make a wedged child's queue hold. Measured over wcEssential bytes
+    ## alone, so a queued paste can never make us refuse a keystroke.
+
+  maxPtyDroppableBytes* = 64 * 1024 * 1024
+    ## Bound on the droppable bytes queued at once. These are user-sized amounts
+    ## that already exist in memory and that an interrupt can drop, so they get a
+    ## budget of their own; one past what is left of it is refused whole, never
+    ## cut, because half a pasted command is worse than none of it.
+
+  maxPtyReadBytesPerPoll* = 256 * 1024
+    ## Byte cap for one pollOutput drain. Bounds tick cost so a runaway
+    ## child (`yes`, `cat` big file) can't monopolize a render frame.
+
+  maxPtyWriteBytesPerFlush* = 256 * 1024
+    ## Byte cap for one poll's writes, the mirror of the read cap above. The
+    ## queue holds up to maxPtyDroppableBytes, so a child that drains as fast as
+    ## we write (`cat > /dev/null`) would otherwise take a whole paste in one
+    ## frame; the rest goes out on the next tick.
 
 # POSIX PTY bindings
 when defined(macosx):
@@ -112,87 +149,239 @@ proc openPtyAndSpawn*(
   ok(PtyHandle(masterFd: masterFd, childPid: pid, closed: false))
 
 proc tryWriteNonblock(
-    fd: cint, data: string, offset: int
+    fd: cint, data: string, offset: int, maxBytes: int
 ): tuple[written: int, err: string] =
-  ## Write as much of data[offset ..< len] as the kernel will take without
-  ## blocking. Returns bytes written and an empty err on EAGAIN, or a
-  ## populated err on a real failure.
+  ## Write as much of data[offset ..< len], up to maxBytes of it, as the kernel
+  ## will take without blocking. Returns bytes written and an empty err on
+  ## EAGAIN, or a populated err on a real failure.
   var written = 0
-  while offset + written < data.len:
-    let n = write(fd, unsafeAddr data[offset + written], data.len - offset - written)
+  let stop = min(data.len, offset + maxBytes)
+  while offset + written < stop:
+    let n = write(fd, unsafeAddr data[offset + written], stop - offset - written)
     if n < 0:
       if errno == EINTR:
         continue
       if errno == EAGAIN or errno == EWOULDBLOCK:
         return (written, "")
       return (written, "write to PTY failed: " & $strerror(errno))
+    if n == 0:
+      # No error and no progress: leave rather than spin.
+      return (written, "")
     written += n.int
   (written, "")
 
-proc drainWriteBuffer*(pty: PtyHandle): Result[void, string] =
-  ## Try to push any buffered bytes to the PTY without blocking. Safe to call
-  ## every UI tick — a stopped or flow-controlled child just leaves the buffer
-  ## in place.
-  if pty.closed or pty.writeBuffer.len == 0:
+proc pendingWriteBytes*(pty: PtyHandle): int =
+  ## Bytes queued for the child that the fd has not taken yet.
+  pty.essentialBytes + pty.droppableBytes
+
+proc clearWriteQueue*(pty: PtyHandle) =
+  ## Drop everything still queued.
+  pty.writeQueue.clear()
+  pty.writeOffset = 0
+  pty.essentialBytes = 0
+  pty.droppableBytes = 0
+
+proc cancelDroppable*(pty: PtyHandle): bool {.discardable.} =
+  ## Drop every droppable chunk and keep the rest of the queue in order. A chunk
+  ## the child is already inside still owes it the tail it was queued with, in
+  ## the chunk's own place, so what was queued after it is not misread.
+  ## Returns true if anything was dropped.
+  var
+    kept = initDeque[WriteChunk]()
+    essential = 0
+    isFront = true
+  for chunk in pty.writeQueue.items:
+    let started = isFront and pty.writeOffset > 0
+    isFront = false
+    if chunk.kind == wcDroppable:
+      result = true
+      if started:
+        # What is owed depends on how far the fd got. Stopped inside the
+        # opening marker, the child holds a truncated escape sequence that
+        # would eat whatever we queue next, so finish the marker before
+        # closing it; past the head, the tail alone (or the rest of it).
+        # With no markers at all there is nothing to close, and the child is
+        # left holding a truncated line it would run on the next Enter, so
+        # kill the line instead.
+        let owed =
+          if chunk.tailBytes == 0:
+            "\x15"
+          elif pty.writeOffset < chunk.headBytes:
+            chunk.data[pty.writeOffset ..< chunk.headBytes] &
+              chunk.data[chunk.data.len - chunk.tailBytes ..^ 1]
+          else:
+            chunk.data[max(pty.writeOffset, chunk.data.len - chunk.tailBytes) ..^ 1]
+        if owed.len > 0:
+          kept.addLast WriteChunk(data: owed, kind: wcEssential)
+          essential += owed.len
+    else:
+      var keep = chunk
+      if started:
+        keep.data = chunk.data[pty.writeOffset ..< chunk.data.len]
+      kept.addLast keep
+      essential += keep.data.len
+
+  pty.writeQueue = kept
+  pty.writeOffset = 0
+  pty.essentialBytes = essential
+  pty.droppableBytes = 0
+
+proc flushWrites*(
+    pty: PtyHandle, maxBytes: int = maxPtyWriteBytesPerFlush
+): Result[void, string] =
+  ## Try to push the queue to the PTY without blocking. Safe to call every UI
+  ## tick - a stopped or flow-controlled child just leaves the queue in place.
+  ## Written bytes are accounted for before an error is reported, so nothing is
+  ## sent twice. This is the only place a write failure is reported: it means
+  ## the fd is gone, not that the child is slow, so the queue is dropped and
+  ## the handle stops accepting bytes rather than retrying a broken fd.
+  if pty.closed or pty.pendingWriteBytes == 0:
     return ok()
 
-  let (written, err) = tryWriteNonblock(pty.masterFd, pty.writeBuffer, 0)
-  if written > 0:
-    if written >= pty.writeBuffer.len:
-      pty.writeBuffer.setLen(0)
-    else:
-      pty.writeBuffer = pty.writeBuffer[written ..< pty.writeBuffer.len]
-  if err.len > 0:
-    return err(err)
+  var budget = maxBytes
+  while pty.writeQueue.len > 0 and budget > 0:
+    let (written, err) = tryWriteNonblock(
+      pty.masterFd, pty.writeQueue.peekFirst.data, pty.writeOffset, budget
+    )
+    budget -= written
+    pty.writeOffset += written
+    case pty.writeQueue.peekFirst.kind
+    of wcEssential:
+      pty.essentialBytes -= written
+    of wcDroppable:
+      pty.droppableBytes -= written
+
+    let chunkDone = pty.writeOffset >= pty.writeQueue.peekFirst.data.len
+    if chunkDone:
+      pty.writeQueue.popFirst()
+      pty.writeOffset = 0
+
+    if err.len > 0:
+      pty.writeFailed = true
+      pty.clearWriteQueue()
+      return err(err)
+    if not chunkDone:
+      # EAGAIN, or the tick's budget ran out mid-chunk.
+      break
   ok()
 
-proc writeToPtyCounted*(
-    pty: PtyHandle, data: string
-): tuple[consumed: int, err: string] =
-  ## Non-blocking write to the PTY master fd. Any bytes the kernel cannot
-  ## accept immediately are appended to pty.writeBuffer and flushed later by
-  ## drainWriteBuffer, so a SIGSTOP'd or ^S-paused child can never freeze the
-  ## caller.
-  ##
-  ## `consumed` is how many leading bytes the PTY took, written or buffered. An
-  ## err can still come with consumed > 0 (short write, then a real failure), so
-  ## a caller that retries must drop that prefix or the child gets it twice.
+proc queueWrite*(
+    pty: PtyHandle,
+    data: string,
+    kind: WriteChunkKind = wcEssential,
+    headBytes: int = 0,
+    tailBytes: int = 0,
+): Result[void, string] =
+  ## Queue bytes for the child. About acceptance only: err means the budget for
+  ## `kind` had no room for all of `data` (or the PTY is gone), and then nothing
+  ## was queued. Queuing does not touch the fd; flushWrites pushes the queue out
+  ## and owns whatever the write reports.
+  ## The budgets are checked here only; the few bytes cancelDroppable and
+  ## queueResponse add to close or re-open a bracket ride past them.
   if pty.closed:
-    return (0, "PTY is closed")
+    return err("PTY is closed")
+  if pty.writeFailed:
+    return err("Terminal is no longer reachable")
   if data.len == 0:
-    return (0, "")
+    return ok()
 
-  let drainResult = pty.drainWriteBuffer()
-  if drainResult.isErr:
-    return (0, drainResult.error)
-
-  var startOffset = 0
-  if pty.writeBuffer.len == 0:
-    let (written, err) = tryWriteNonblock(pty.masterFd, data, 0)
-    startOffset = written
-    if err.len > 0:
-      # Buffer nothing past a real failure: the fd is broken, so the tail would
-      # just fail again on every drain.
-      return (written, err)
-
-  if startOffset < data.len:
-    let remaining = data.len - startOffset
-    if pty.writeBuffer.len + remaining > maxPtyWriteBufferBytes:
-      return (
-        startOffset,
-        "PTY write buffer full (" & $pty.writeBuffer.len &
-          " bytes pending); child is not consuming input",
+  case kind
+  of wcEssential:
+    if pty.essentialBytes + data.len > maxPtyWriteQueueBytes:
+      return err(
+        "PTY write queue full (" & $pty.essentialBytes &
+          " bytes pending); child is not consuming input"
       )
-    pty.writeBuffer.add data[startOffset ..< data.len]
+  of wcDroppable:
+    if pty.droppableBytes + data.len > maxPtyDroppableBytes:
+      return err(
+        "Write of " & $data.len & " bytes does not fit the " & $maxPtyDroppableBytes &
+          " byte budget (" & $pty.droppableBytes & " bytes already queued)"
+      )
 
-  (data.len, "")
+  pty.writeQueue.addLast WriteChunk(
+    data: data, kind: kind, headBytes: headBytes, tailBytes: tailBytes
+  )
+  case kind
+  of wcEssential:
+    pty.essentialBytes += data.len
+  of wcDroppable:
+    pty.droppableBytes += data.len
+  ok()
 
-proc writeToPty*(pty: PtyHandle, data: string): Result[void, string] =
-  ## writeToPtyCounted for callers that never retry, so consumed tells them
-  ## nothing.
-  let (_, writeErr) = pty.writeToPtyCounted(data)
-  if writeErr.len > 0:
-    return err(writeErr)
+proc queueResponse*(pty: PtyHandle, data: string): Result[void, string] =
+  ## Queue an answer to a query the child made. Bounded and counted like any
+  ## other essential write, but placed ahead of the queued pastes: the child
+  ## may be blocked on the answer, and under bracketed paste an answer that
+  ## landed after the closing marker would be read as typed input.
+  if data.len == 0:
+    # queueWrite takes an empty write without queuing anything, so there would
+    # be no chunk of ours to move.
+    return ok()
+
+  if pty.droppableBytes == 0:
+    # Nothing queued to be placed ahead of, so the tail is already the spot.
+    return pty.queueWrite(data)
+
+  let queued = pty.queueWrite(data)
+  if queued.isErr:
+    return queued
+
+  let answer = pty.writeQueue.popLast
+  var
+    rebuilt = initDeque[WriteChunk]()
+    placed = false
+    isFront = true
+  for chunk in pty.writeQueue.items:
+    let started = isFront and pty.writeOffset > 0
+    isFront = false
+    if placed or chunk.kind != wcDroppable:
+      rebuilt.addLast chunk
+      continue
+
+    if not started:
+      rebuilt.addLast answer
+      placed = true
+      rebuilt.addLast chunk
+    elif chunk.tailBytes > 0:
+      # The fd is inside a bracketed paste, so there is no spot ahead of it to
+      # move to. Close the bracket where the fd stands, answer outside it, and
+      # re-open it for what is left, as the sequence the child reads is what
+      # decides whether the answer is text.
+      let
+        off = pty.writeOffset
+        bodyEnd = chunk.data.len - chunk.tailBytes
+        closer =
+          if off < chunk.headBytes:
+            chunk.data[off ..< chunk.headBytes] & chunk.data[bodyEnd ..^ 1]
+          else:
+            chunk.data[max(off, bodyEnd) ..^ 1]
+        restStart = max(off, chunk.headBytes)
+
+      pty.droppableBytes -= chunk.data.len - off
+      rebuilt.addLast WriteChunk(data: closer, kind: wcEssential)
+      pty.essentialBytes += closer.len
+      rebuilt.addLast answer
+      placed = true
+      if restStart < bodyEnd:
+        let rest =
+          chunk.data[0 ..< chunk.headBytes] & chunk.data[restStart ..< bodyEnd] &
+          chunk.data[bodyEnd ..^ 1]
+        rebuilt.addLast WriteChunk(
+          data: rest,
+          kind: wcDroppable,
+          headBytes: chunk.headBytes,
+          tailBytes: chunk.tailBytes,
+        )
+        pty.droppableBytes += rest.len
+      pty.writeOffset = 0
+    else:
+      # Unbracketed: the child reads the paste as typed bytes either way, so
+      # there is nothing to place the answer ahead of.
+      rebuilt.addLast chunk
+  if not placed:
+    rebuilt.addLast answer
+  pty.writeQueue = rebuilt
   ok()
 
 proc readFromPty*(pty: PtyHandle, maxBytes: int = 4096): string =
