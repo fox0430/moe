@@ -656,6 +656,7 @@ All keystrokes are forwarded to the running shell/command.
 | Keys | Description |
 |:---|:---|
 | <kbd>**Ctrl**</kbd> <kbd>**\\**</kbd> <kbd>**Ctrl**</kbd> <kbd>**n**</kbd> | Switch to Terminal-Normal sub-mode |
+| <kbd>**Ctrl**</kbd> <kbd>**\\**</kbd> <kbd>**Ctrl**</kbd> <kbd>**\\**</kbd> | Send one quit character to the program |
 <!-- AUTO-GEN:end TerminalInput -->
 
 ### Terminal-Normal sub-mode

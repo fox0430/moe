@@ -119,6 +119,20 @@ proc feedInput*(state: TerminalState, data: string) =
     if writeResult.isErr:
       logError "terminal", writeResult.error
 
+proc releaseHeldQuit*(state: TerminalState) =
+  ## Send the Ctrl-\ that a pending Terminal-Normal switch is holding back.
+  if state.waitingForCtrlN:
+    state.waitingForCtrlN = false
+    state.feedInput(TtyQuitChar)
+
+proc sendInput*(state: TerminalState, data: string) =
+  ## Forward keystroke bytes, releasing a held Ctrl-\ ahead of them. Keys the
+  ## editor consumes release it too, before dispatch, so the hold never
+  ## outlives the keystroke it was pressed for.
+  state.releaseHeldQuit()
+  if data.len > 0:
+    state.feedInput(data)
+
 proc enterNormalSubMode*(state: TerminalState): TextBuffer =
   ## Switch to Terminal-Normal sub-mode.
   ## Creates a snapshot of the grid as a TextBuffer for scrollback browsing.
