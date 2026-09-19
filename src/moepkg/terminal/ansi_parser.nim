@@ -90,6 +90,8 @@ type
     pendingResponsesFull: bool
     # Alternate screen buffer (DEC private modes 47/1047/1049)
     altScreenActive*: bool
+    # Bracketed paste mode (DEC private mode 2004)
+    bracketedPaste*: bool
     inactiveCells: seq[seq[TerminalCell]] # The other screen buffer while one is active
     # Scrolling region (DECSTBM), 0-based inclusive
     scrollTop*: int
@@ -200,6 +202,7 @@ proc newTerminalGrid*(cols, rows: int): TerminalGrid =
     escapeBuffer: "",
     pendingResponses: @[],
     altScreenActive: false,
+    bracketedPaste: false,
     inactiveCells: @[],
     scrollTop: 0,
     scrollBottom: rows - 1,
@@ -525,6 +528,8 @@ proc processCsi(grid: TerminalGrid, buf: string) =
           if not grid.altScreenActive:
             grid.saveCursor()
             grid.enterAltScreen()
+        of 2004:
+          grid.bracketedPaste = true
         else:
           discard
     of 'l':
@@ -546,6 +551,8 @@ proc processCsi(grid: TerminalGrid, buf: string) =
           if grid.altScreenActive:
             grid.exitAltScreen()
             grid.restoreCursor()
+        of 2004:
+          grid.bracketedPaste = false
         else:
           discard
     else:
@@ -958,6 +965,7 @@ proc processOutput*(grid: TerminalGrid, data: string) =
         grid.cursorCol = 0
         grid.cursorVisible = true
         grid.altScreenActive = false
+        grid.bracketedPaste = false
         grid.inactiveCells = @[]
         grid.scrollTop = 0
         grid.scrollBottom = grid.rows - 1

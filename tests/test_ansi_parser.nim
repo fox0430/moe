@@ -1281,6 +1281,21 @@ suite "TerminalGrid - Charset designation across chunk boundaries":
     check grid.currentFg.index == 1
     check grid.cells[0][0].ch == "R"
 
+suite "TerminalGrid - Bracketed paste mode":
+  test "2004h enables and 2004l disables bracketed paste":
+    let grid = newTerminalGrid(10, 3)
+    check grid.bracketedPaste == false
+    grid.processOutput("\x1b[?2004h")
+    check grid.bracketedPaste == true
+    grid.processOutput("\x1b[?2004l")
+    check grid.bracketedPaste == false
+
+  test "RIS resets bracketed paste":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("\x1b[?2004h")
+    grid.processOutput("\x1bc")
+    check grid.bracketedPaste == false
+
 suite "TerminalGrid - Pending query answers":
   test "A realistic batch of queries is answered in full":
     # Width detection loops probe a few thousand times before reading back.
