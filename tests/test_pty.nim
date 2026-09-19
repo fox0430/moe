@@ -209,6 +209,29 @@ suite "writeToPty - non-blocking against a stopped child":
 
     check pty.writeBuffer.len == 0
 
+  test "writeToPtyCounted reports the bytes the PTY kept when it fails":
+    let ptyResult = openPtyAndSpawn("cat")
+    require ptyResult.isOk
+    let pty = ptyResult.get
+    defer:
+      discard kill(pty.childPid, SIGCONT)
+      pty.closePty()
+
+    require kill(pty.childPid, SIGSTOP) == 0
+    sleep(50)
+
+    let payload = "z".repeat(1024)
+    var last = pty.writeToPtyCounted(payload)
+    for _ in 0 ..< 200:
+      if last.err.len > 0:
+        break
+      check last.consumed == payload.len
+      last = pty.writeToPtyCounted(payload)
+
+    require last.err.len > 0
+    # The overflow err queues nothing, so the caller owes the child all of it.
+    check last.consumed == 0
+
   test "writeToPty on an empty buffer succeeds without touching the fd":
     let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
     check pty.writeToPty("").isOk

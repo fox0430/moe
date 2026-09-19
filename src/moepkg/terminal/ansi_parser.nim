@@ -86,6 +86,8 @@ type
     utf8Buffer*: string # Incomplete UTF-8 bytes from previous read
     # Responses to write back to PTY (e.g. DA1, DA2, DSR replies)
     pendingResponses*: seq[string]
+    pendingResponseBytes: int
+    pendingResponsesFull: bool
     # Alternate screen buffer (DEC private modes 47/1047/1049)
     altScreenActive*: bool
     inactiveCells: seq[seq[TerminalCell]] # The other screen buffer while one is active
@@ -113,6 +115,51 @@ const
   # parameter/intermediate bytes (\x20-\x3f) with no final byte would grow the
   # buffer unboundedly. Realistic CSI sequences are tiny, so abort well below it.
   MaxCsiLength* = 1024
+  # Cap the answers held for the child. pollOutput flushes as it reads, so this
+  # is only reached when the PTY stops accepting writes; the extra are dropped.
+  MaxPendingResponseBytes* = 64 * 1024
+
+proc addPendingResponse(grid: TerminalGrid, response: string) =
+  # The child reads answers in the order it asked, so keep the first ones and
+  # drop the newest: every survivor stays paired with its query.
+  if grid.pendingResponsesFull or
+      grid.pendingResponseBytes + response.len > MaxPendingResponseBytes:
+    # Latch until the queue drains: a later shorter answer would otherwise fit
+    # and take the dropped one's place in the order the child reads.
+    grid.pendingResponsesFull = true
+    return
+  grid.pendingResponses.add(response)
+  grid.pendingResponseBytes += response.len
+
+proc clearPendingResponses*(grid: TerminalGrid) =
+  grid.pendingResponses.setLen(0)
+  grid.pendingResponseBytes = 0
+  grid.pendingResponsesFull = false
+
+proc dropSentResponses*(grid: TerminalGrid, count: int) =
+  ## Drop the first `count` answers, keeping the rest queued in order: the
+  ## child pairs answers with its queries by order.
+  if count <= 0:
+    return
+  if count >= grid.pendingResponses.len:
+    # Lifts the drop latch too: once dropped, answers are unpaired for good,
+    # and a waiting child is better served by later ones than by silence.
+    grid.clearPendingResponses()
+    return
+  for i in 0 ..< count:
+    grid.pendingResponseBytes -= grid.pendingResponses[i].len
+  grid.pendingResponses = grid.pendingResponses[count ..< grid.pendingResponses.len]
+
+proc trimHeadResponse*(grid: TerminalGrid, bytes: int) =
+  ## Drop the first `bytes` of the head answer: the PTY already took them.
+  if bytes <= 0 or grid.pendingResponses.len == 0:
+    return
+  let head = grid.pendingResponses[0]
+  if bytes >= head.len:
+    grid.dropSentResponses(1)
+    return
+  grid.pendingResponses[0] = head[bytes ..< head.len]
+  grid.pendingResponseBytes -= bytes
 
 proc defaultColor*(): TerminalColor =
   TerminalColor(kind: ckDefault)
@@ -509,7 +556,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
   if paramStr.len > 0 and paramStr[0] == '>':
     if finalByte == 'c':
       # Reply: VT100, firmware version 0, ROM cartridge 0
-      grid.pendingResponses.add("\x1b[>0;0;0c")
+      grid.addPendingResponse("\x1b[>0;0;0c")
     return
 
   let params = parseCsiParams(paramStr)
@@ -763,7 +810,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
   of 'c':
     # DA1 - Primary Device Attributes
     # Reply: VT102 with no options
-    grid.pendingResponses.add("\x1b[?6c")
+    grid.addPendingResponse("\x1b[?6c")
   of 'n':
     # DSR - Device Status Report
     let mode =
@@ -774,12 +821,12 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     case mode
     of 6:
       # CPR - Cursor Position Report (1-based)
-      grid.pendingResponses.add(
+      grid.addPendingResponse(
         "\x1b[" & $(grid.cursorRow + 1) & ";" & $(grid.cursorCol + 1) & "R"
       )
     of 5:
       # Device status: "OK"
-      grid.pendingResponses.add("\x1b[0n")
+      grid.addPendingResponse("\x1b[0n")
     else:
       discard
   of 'r':
