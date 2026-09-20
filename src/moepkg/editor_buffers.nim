@@ -283,6 +283,8 @@ when not defined(moe.embedded):
 
     e.pruneBufferIdFromAllWindows(bufId)
     let bidx = e.bufferIndexById(bufId)
+    # Snapshot before delete so the viewer branch can re-anchor originalBuffer.
+    let deletedOpt = e.bufferById(bufId)
     if bidx >= 0:
       # Mirror removeBufferAt: evict before delete so the buffer's pointer can't
       # alias a future buffer via a leftover cache entry.
@@ -306,8 +308,19 @@ when not defined(moe.embedded):
             fu.tabIdx
           else:
             w.bufferIds.len - 1
-        # Only the active window owns the global Insert session.
-        if fu.winIdx == prevActive:
+        # Overlay owns the view: retab only, keep mode/undo.
+        if w.viewerEntry.isSome:
+          let targetId = w.bufferIds[newIdx]
+          let targetOpt = e.bufferById(targetId)
+          if targetOpt.isSome:
+            let target = targetOpt.get
+            if deletedOpt.isSome and w.originalBuffer == deletedOpt.get:
+              w.originalBuffer = target
+            w.retabTo(target)
+          else:
+            w.bufferIds.delete(newIdx)
+        elif fu.winIdx == prevActive:
+          # Only the active window owns the global Insert session.
           e.switchToWindowBuffer(newIdx)
         else:
           # Non-active window: reassign the buffer without finalizing.
@@ -327,23 +340,47 @@ when not defined(moe.embedded):
           else:
             w.bufferIds.delete(newIdx)
       else:
-        let blank = newTextBuffer("")
-        e.addBuffer(blank)
-        e.addBufferToWindowList(blank)
-        if fu.winIdx == prevActive:
-          e.finalizeInsertSessionForBufferSwitch(w.buffer)
-        w.setTab(blank)
-        w.cursor = BufferPosition(line: 0, column: 0)
-        w.viewport.resetViewportTop()
-        w.viewport.leftColumn = 0
-        w.originalBuffer = nil
-        w.modeState = ModeState(kind: mskNone)
-        w.mode = EditorMode.Normal
-        e.setMode(EditorMode.Normal)
-        # Same forceInsertMode alignment as the branches above.
-        e.enforceModePolicy()
-        e.syncActiveWindow()
-        e.setActiveWindowScreenCursor(w)
+        # No tabs left: adopt a global survivor, else a blank.
+        if e.buffers.len > 0:
+          let survivor = e.buffers[min(max(bidx, 0), e.buffers.len - 1)]
+          if survivor.id notin w.bufferIds:
+            w.bufferIds.add(survivor.id)
+          if fu.winIdx == prevActive:
+            e.finalizeInsertSessionForBufferSwitch(w.buffer)
+          w.setTab(survivor)
+          w.cursor = BufferPosition(line: 0, column: 0)
+          w.viewport.resetViewportTop()
+          w.viewport.leftColumn = 0
+          w.originalBuffer = nil
+          # Drop overlay undo so leaveViewerMode cannot restore the deleted tab.
+          discard w.takeViewerEntry()
+          discard w.takeSuspendedMode()
+          # Re-derive mode; a hardcoded Normal would desync a Terminal survivor.
+          e.applyBufferMode(survivor)
+          e.enforceModePolicy()
+          e.syncActiveWindow()
+          e.setActiveWindowScreenCursor(w)
+        else:
+          let blank = newTextBuffer("")
+          e.addBuffer(blank)
+          e.addBufferToWindowList(blank)
+          if fu.winIdx == prevActive:
+            e.finalizeInsertSessionForBufferSwitch(w.buffer)
+          w.setTab(blank)
+          w.cursor = BufferPosition(line: 0, column: 0)
+          w.viewport.resetViewportTop()
+          w.viewport.leftColumn = 0
+          w.originalBuffer = nil
+          # Drop overlay undo so leaveViewerMode cannot restore onto this blank.
+          discard w.takeViewerEntry()
+          discard w.takeSuspendedMode()
+          w.modeState = ModeState(kind: mskNone)
+          w.mode = EditorMode.Normal
+          e.setMode(EditorMode.Normal)
+          # Same forceInsertMode alignment as the branches above.
+          e.enforceModePolicy()
+          e.syncActiveWindow()
+          e.setActiveWindowScreenCursor(w)
     e.windowManager.activeWindowIndex = prevActive
     # Followup loop may have re-synced `state.windowDisplay.currentBufferId`
     # to the last visited window. Re-anchor it to the (restored) active one.
@@ -557,7 +594,7 @@ proc redirectWindowsFromBuffer*(
     if newBuf.id notin window.bufferIds:
       window.bufferIds.add(newBuf.id)
 
-proc deleteBufferById(e: Editor, id: BufferId): Result[(), string] =
+proc deleteBufferById*(e: Editor, id: BufferId): Result[(), string] =
   when not defined(moe.embedded):
     if e.terminalStates.hasKey(id):
       # Terminal sessions need PTY cleanup; delegate to the dedicated path

@@ -19,13 +19,16 @@
 
 ## Tests for editor_navigation.nim
 
-import std/[unittest, os, strutils, options, importutils, json, tables]
+import std/[unittest, os, strutils, options, importutils, json, tables, posix]
 
 import pkg/results
 
-import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
+import
+  ../src/moepkg/
+    [editor, config, config_loader, types, lsp_service, terminal_mode, modes]
 import ../src/moepkg/buffer/core
 import ../src/moepkg/editor_navigation
+import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
 proc createTestEditor(): Editor =
@@ -440,6 +443,51 @@ suite "editor_navigation - switchToBufferForLsp":
     e.switchToBufferForLsp(initialIndex)
 
     check e.state.windowDisplay.currentBufferId == initialBufferId
+
+  test "applyBufferMode clears Terminal when jumping to a text buffer":
+    when defined(moe.embedded):
+      skip()
+    else:
+      let e = createTestEditor()
+      let textIdx = e.buffers.high
+      let termBuf = newTextBuffer("")
+      termBuf.displayName = some("[Terminal: test]")
+      e.addBuffer(termBuf)
+      e.addBufferToWindowList(termBuf)
+      let term = TerminalState(
+        pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
+        grid: newTerminalGrid(80, 24),
+        subMode: tsmInput,
+        exitCode: none(int),
+        waitingForCtrlN: false,
+        needsBufferRefresh: false,
+      )
+      e.terminalStates[termBuf.id] = term
+      e.activeWindow.setTab(termBuf)
+      e.applyBufferMode(termBuf)
+      require e.state.mode == EditorMode.Terminal
+      require e.activeWindow.modeState.kind == mskTerminal
+
+      e.switchToBufferForLsp(textIdx)
+
+      check e.activeWindow.tabBufferId == e.buffers[textIdx].id
+      check e.state.mode == EditorMode.Normal
+      check e.activeWindow.modeState.kind == mskNone
+      check e.terminalStates.hasKey(termBuf.id)
+
+  test "switchToBufferForLsp re-enters Insert under forceInsertMode":
+    let e = createTestEditor()
+    e.config.standard.forceInsertMode = true
+    e.state.config.standard.forceInsertMode = true
+    let buf2 = newTextBuffer("hello\n")
+    e.addBuffer(buf2)
+    e.addBufferToWindowList(buf2)
+    e.setMode(EditorMode.Normal)
+
+    e.switchToBufferForLsp(1)
+
+    check e.activeWindow.tabBufferId == buf2.id
+    check e.state.mode == EditorMode.Insert
 
 suite "editor_navigation - addToJumpList":
   test "Adds position to jump list":

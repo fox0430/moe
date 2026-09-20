@@ -150,37 +150,25 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       e.switchToBufferByIndex(bufferIndex)
     return true
   of hrBufferManagerDeleteBuffer:
-    # Delete the buffer from the buffer list
+    # deleteBufferById also tears down a Terminal PTY.
     let bufferIndex = r.deleteBufferIdx
     if e.buffers.len > 1:
       # Can only delete if there's more than one buffer
       if bufferIndex >= 0 and bufferIndex < e.buffers.len:
-        let deletedBuffer = e.removeBufferAt(bufferIndex)
-        let deletedId = deletedBuffer.id
-
-        # The outer `if e.buffers.len > 1` guarantees `e.buffers.len >= 1` here.
-        let newBuf = e.buffers[min(bufferIndex, e.buffers.len - 1)]
-        e.redirectWindowsFromBuffer(deletedBuffer, newBuf)
-
-        # Update executor if current buffer was deleted
-        if e.activeBuffer() != e.motionController.buffer:
-          e.motionController.setBuffer(e.activeBuffer())
-
-        # Point currentBufferId at the replacement buffer so Jump List
-        # (Ctrl-o/Ctrl-i) can't false-match the dead id; the BufferManager
-        # overlay replaces activeWindow.buffer next.
-        if e.state.windowDisplay.currentBufferId == deletedId:
-          e.state.windowDisplay.currentBufferId = newBuf.id
-
-        # Update buffer manager entries and regenerate TextBuffer
-        let activeWin = e.activeWindow
-        if activeWin.modeState.kind == mskBufferManager:
-          let bmState = activeWin.modeState.bufferManager
-          bmState.updateEntries(e.getBufferInfos())
-          activeWin.setView(bmState.createBufferManagerTextBuffer())
-          activeWin.cursor.line =
-            min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
-          activeWin.cursor.column = 0
+        let deletedId = e.buffers[bufferIndex].id
+        let deleteResult = e.deleteBufferById(deletedId)
+        if deleteResult.isErr:
+          e.state.statusMessage = deleteResult.error
+        else:
+          # Update buffer manager entries and regenerate TextBuffer
+          let activeWin = e.activeWindow
+          if activeWin.modeState.kind == mskBufferManager:
+            let bmState = activeWin.modeState.bufferManager
+            bmState.updateEntries(e.getBufferInfos())
+            activeWin.setView(bmState.createBufferManagerTextBuffer())
+            activeWin.cursor.line =
+              min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
+            activeWin.cursor.column = 0
     else:
       # Cannot delete the only buffer
       e.state.statusMessage = "Cannot delete the last buffer"

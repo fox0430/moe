@@ -21,14 +21,14 @@
 ## closeTerminalBuffer keep `e.terminalStates`, `bufferIds`, and the
 ## active window's mode in sync as Terminal buffers come and go.
 
-import std/[unittest, options, posix, tables, sequtils]
+import std/[unittest, options, posix, tables]
 
 import pkg/results
 
 import
   ../src/moepkg/[
     editor, config, types, modes, terminal_mode, editor_window, editor_window_state,
-    handler, key_bindings,
+    handler, key_bindings, viewer_mode, buffer_manager,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
@@ -413,3 +413,155 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     check session.scrollbackSnapshot == nil
     # The session is still alive, just not on screen.
     check e.terminalStates.hasKey(termBuf.id)
+
+  test "closing the only Terminal tab drops viewerEntry and suspendedMode":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let termId = termBuf.id
+    # Only-tab case: after prune the window has no sibling to switch to.
+    e.activeWindow.bufferIds = @[termId]
+    e.activeWindow.setTab(termBuf)
+    e.activeWindow.viewerEntry = some(
+      ViewerEntry(
+        mode: EditorMode.BufferManager,
+        placement: vpInPlace,
+        returnMode: EditorMode.Normal,
+        bufferId: termId,
+        originCursor: BufferPosition(line: 0, column: 0),
+        originTopLine: 0,
+        originTopWrapOffset: 0,
+        originLeftColumn: 0,
+      )
+    )
+    e.activeWindow.suspendedMode =
+      some(SuspendedMode(mode: EditorMode.Filer, modeState: ModeState(kind: mskNone)))
+
+    e.closeTerminalBuffer(termId)
+
+    check e.activeWindow.viewerEntry.isNone
+    check e.activeWindow.suspendedMode.isNone
+    check e.state.mode == EditorMode.Normal
+    check not e.terminalStates.hasKey(termId)
+
+  test "BufferManager delete of a Terminal tears down the PTY session":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termState = safeOpenFakeTerminalState()
+    let termBuf = registerFakeTerminal(e, "bash", termState)
+    let termId = termBuf.id
+    require e.terminalStates.hasKey(termId)
+    require not termState.pty.closed
+    require e.buffers.len >= 2
+
+    var termIdx = -1
+    for i, buf in e.buffers:
+      if buf.id == termId:
+        termIdx = i
+        break
+    require termIdx >= 0
+
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: termIdx)
+    discard e.processResult(r, textBuf)
+
+    check not e.terminalStates.hasKey(termId)
+    check e.bufferById(termId).isNone
+    check termState.pty.closed
+
+  test "BufferManager overlay survives delete of its origin Terminal tab":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termState = safeOpenFakeTerminalState()
+    let termBuf = registerFakeTerminal(e, "bash", termState)
+    let termId = termBuf.id
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    require e.activeWindow.tabBufferId == termId
+    require e.activeWindow.modeState.kind == mskBufferManager
+    var termIdx = -1
+    for i, buf in e.buffers:
+      if buf.id == termId:
+        termIdx = i
+        break
+    require termIdx >= 0
+
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: termIdx)
+    discard e.processResult(r, textBuf)
+
+    check not e.terminalStates.hasKey(termId)
+    check termState.pty.closed
+    check e.activeWindow.modeState.kind == mskBufferManager
+    check e.activeWindow.viewerEntry.isSome
+
+  test "closing a per-window-only Terminal tab adopts a global survivor":
+    let e = createTestEditor()
+    let textId = e.buffers[0].id
+    let termBuf = registerFakeTerminal(e, "bash")
+    let termId = termBuf.id
+    e.activeWindow.bufferIds = @[termId]
+    e.activeWindow.setTab(termBuf)
+
+    e.closeTerminalBuffer(termId)
+
+    check not e.terminalStates.hasKey(termId)
+    check e.bufferById(termId).isNone
+    check e.bufferById(textId).isSome
+    check e.activeWindow.tabBufferId == textId
+
+  test "leaving the viewer after deleting its origin Terminal tab restores the retabbed survivor":
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termState = safeOpenFakeTerminalState()
+    let termBuf = registerFakeTerminal(e, "bash", termState)
+    let termId = termBuf.id
+    let bmState = newBufferManagerState()
+    bmState.updateEntries(e.getBufferInfos())
+    discard e.enterViewerMode(
+      EditorMode.BufferManager,
+      ModeState(kind: mskBufferManager, bufferManager: bmState),
+      bmState.createBufferManagerTextBuffer(),
+      vpInPlace,
+    )
+    require e.activeWindow.tabBufferId == termId
+    var termIdx = -1
+    for i, buf in e.buffers:
+      if buf.id == termId:
+        termIdx = i
+        break
+    require termIdx >= 0
+
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: termIdx)
+    discard e.processResult(r, textBuf)
+    require e.bufferById(termId).isNone
+
+    e.leaveViewerMode(EditorMode.BufferManager)
+
+    check e.activeWindow.tabBufferId != termId
+    check e.activeWindow.buffer.id != termId
+    check e.bufferById(e.activeWindow.tabBufferId).isSome
+
+  test "closing a per-window-only Terminal tab onto a live Terminal survivor re-enters Terminal mode":
+    let e = createTestEditor()
+    let termBuf1 = registerFakeTerminal(e, "bash")
+    let termId1 = termBuf1.id
+    let termBuf2 = registerFakeTerminal(e, "bash")
+    let termId2 = termBuf2.id
+    require termId1 != termId2
+    e.activeWindow.bufferIds = @[termId1]
+    e.activeWindow.setTab(termBuf1)
+    e.applyBufferMode(termBuf1)
+    require e.state.mode == EditorMode.Terminal
+
+    e.closeTerminalBuffer(termId1)
+
+    check not e.terminalStates.hasKey(termId1)
+    check e.bufferById(termId1).isNone
+    check e.terminalStates.hasKey(termId2)
+    check e.activeWindow.tabBufferId == termId2
+    check e.state.mode == EditorMode.Terminal
+    check e.activeWindow.modeState.kind == mskTerminal
