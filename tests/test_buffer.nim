@@ -4054,3 +4054,91 @@ suite "Buffer - replaceAllLines":
     check not diff.get.coarse
     check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
     check buf.hasBookmark(2)
+
+suite "Buffer - decodeForBuffer":
+  test "Lines come back the way a load reads them":
+    let decoded = decodeForBuffer("alpha\nbeta\n")
+    check decoded.lines == @["alpha", "beta"]
+    check decoded.shape.encoding == CharacterEncoding.utf8
+    check decoded.shape.lineEnding == LF
+    check decoded.shape.endOfLine
+    check not decoded.decodeFailed
+
+  test "A trailing newline terminates the last line, it does not start one":
+    check decodeForBuffer("alpha\n").lines == @["alpha"]
+    check decodeForBuffer("alpha").lines == @["alpha"]
+    check not decodeForBuffer("alpha").shape.endOfLine
+
+  test "An empty file is one empty line":
+    let decoded = decodeForBuffer("")
+    check decoded.lines == @[""]
+    check not decoded.shape.endOfLine
+
+  test "Every line ending style normalizes and is reported":
+    let crlf = decodeForBuffer("a\r\nb\r\n")
+    check crlf.lines == @["a", "b"]
+    check crlf.shape.lineEnding == CRLF
+
+    let cr = decodeForBuffer("a\rb\r")
+    check cr.lines == @["a", "b"]
+    check cr.shape.lineEnding == CR
+
+  test "A BOM is stripped and remembered":
+    let decoded = decodeForBuffer("\xEF\xBB\xBFalpha\n")
+    check decoded.lines == @["alpha"]
+    check decoded.shape.hasBom
+    check decoded.shape.encoding == CharacterEncoding.utf8
+
+  test "UTF-16 is decoded to UTF-8":
+    let decoded = decodeForBuffer("\xFF\xFE" & "h\x00i\x00\n\x00")
+    check decoded.lines == @["hi"]
+    check decoded.shape.hasBom
+    check decoded.shape.encoding == CharacterEncoding.utf16Le
+    check not decoded.decodeFailed
+
+  test "A load holds what the reader read":
+    let path = getTempDir() / "moe_test_decode_for_buffer.txt"
+    # Backend selection is process-wide; pin it and restore the defaults.
+    setAutoBackendMode(false)
+    defer:
+      setAutoBackendMode(false)
+      setConfiguredBackend(GapBuffer)
+      removeFile(path)
+    # Every backend splits the text itself, so check `lines` against all of
+    # them, not only the default a small file would pick.
+    for backend in BufferBackend:
+      setConfiguredBackend(backend)
+      for content in [
+        "alpha\nbeta\n",
+        "alpha",
+        "",
+        "a\r\nb\r\n",
+        "a\rb\r",
+        "a\n\n",
+        "\xEF\xBB\xBFalpha\n",
+        "\xFF\xFE" & "h\x00i\x00\n\x00",
+        "alpha\x00beta\n",
+        "\xFF\xFE" & "odd",
+      ]:
+        writeFile(path, content)
+        let loaded = newTextBuffer()
+        check loaded.loadFile(path).isOk
+        check loaded.backendKind == backend
+
+        let decoded = decodeForBuffer(content)
+        var loadedLines: seq[string]
+        for line in loaded.lines:
+          loadedLines.add line
+        check loadedLines == decoded.lines
+        check loaded.encoding == decoded.shape.encoding
+        check loaded.hasBom == decoded.shape.hasBom
+        check loaded.lineEnding == decoded.shape.lineEnding
+        check loaded.endOfLine == decoded.shape.endOfLine
+        check loaded.hasBinaryContent == decoded.hasBinaryContent
+        check loaded.keepRaw == decoded.decodeFailed
+
+  test "Bytes nothing decodes are kept verbatim":
+    let raw = "\xFF\xFE" & "odd"
+    let decoded = decodeForBuffer(raw)
+    check decoded.decodeFailed
+    check decoded.lines.join("\n") == raw

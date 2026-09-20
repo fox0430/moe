@@ -31,14 +31,45 @@ import ../[encoding, highlight, logger, path_key]
 import core, atomic_write
 import highlight as buffer_highlight
 
-type DecodedFileContent = object ## Result of `decodeFileContent`.
-  text: string ## Decoded UTF-8, or the original bytes when decoding failed.
-  encoding: CharacterEncoding
-  hasBom: bool
-  decodeFailed: bool
-  decodeError: string ## Only set when `decodeFailed`.
-  attemptedEncoding: CharacterEncoding
-    ## Encoding attempted; `encoding` is reset to unknown on failure.
+type
+  DecodedFileContent = object ## Result of `decodeFileContent`.
+    text: string ## Decoded UTF-8, or the original bytes when decoding failed.
+    encoding: CharacterEncoding
+    hasBom: bool
+    decodeFailed: bool
+    decodeError: string ## Only set when `decodeFailed`.
+    attemptedEncoding: Option[CharacterEncoding]
+      ## `none` when no decode was attempted; `encoding` is reset to unknown on
+      ## failure.
+
+  FileShape* = object
+    ## How a file was written, and so what a save of it has to put back. A
+    ## buffer option rather than part of its text: like vim's `fileformat` and
+    ## `fileencoding`, these survive an undo.
+    encoding*: CharacterEncoding
+    hasBom*: bool
+    lineEnding*: LineEnding
+    endOfLine*: bool
+
+  DecodedText* = object
+    ## File bytes read the way a buffer takes them, carrying the shape so bytes
+    ## that reach a buffer without going through a load still have something to
+    ## be saved by.
+    text*: string ## Decoded UTF-8, normalized to \n, or raw bytes on failure.
+    shape*: FileShape
+    hasBinaryContent*: bool ## NUL near the start.
+    decodeFailed*: bool
+      ## No decoding accepted these bytes, so `text` holds them verbatim. Only
+      ## UTF-16/32 can fail this way; anything else comes back as `unknown`.
+    decodeError*: string ## Only set when `decodeFailed`.
+    attemptedEncoding*: Option[CharacterEncoding]
+      ## The encoding a decode was attempted as, `none` where none was.
+
+  FileStamp* = object
+    ## The on-disk identity of a file at one instant. A value, so a load can
+    ## stamp the file as it was *before* it read the bytes.
+    modTime*: Option[Time]
+    size*: Option[int64]
 
 const ExternalModErrorMsg* =
   "File was modified externally. Use :w! to force save, or :e! to reload."
@@ -52,16 +83,10 @@ const TranscodeCandidates =
   TranscodedEncodings + {CharacterEncoding.utf16, CharacterEncoding.utf32}
   ## Like `TranscodedEncodings` plus BOM forms that `decodeFileContent` narrows.
 
-proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
-  ## Detect line ending style and normalize to \n in a single pass.
-  ## Each \r is classified per-occurrence: \r\n pairs are stripped to \n,
-  ## standalone \r is converted to \n. Mixed line endings are preserved
-  ## as separate line breaks instead of being lost or duplicated.
-
-  b.endOfLine =
-    content.len > 0 and
-    (content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r"))
-
+proc normalizeLineEndings(content: var string): LineEnding =
+  ## Convert every line ending to \n in a single pass and report the style
+  ## found. Each \r is classified per-occurrence, so mixed line endings stay
+  ## separate line breaks instead of being lost or duplicated.
   var hasCR = false
   var hasCRLF = false
   var writePos = 0
@@ -86,11 +111,11 @@ proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
   content.setLen(writePos)
 
   if hasCRLF:
-    b.lineEnding = CRLF
+    CRLF
   elif hasCR:
-    b.lineEnding = CR
+    CR
   else:
-    b.lineEnding = LF
+    LF
 
 proc decodeFileContent(content: string): DecodedFileContent =
   ## Strip BOM and decode `content` to UTF-8. On failure, return raw bytes
@@ -123,7 +148,7 @@ proc decodeFileContent(content: string): DecodedFileContent =
     discard
 
   if result.encoding in TranscodedEncodings:
-    result.attemptedEncoding = result.encoding
+    result.attemptedEncoding = some(result.encoding)
     let decoded = decodeToUtf8(result.text[bomLen .. ^1], result.encoding)
     if decoded.isOk:
       result.text = decoded.get
@@ -133,11 +158,55 @@ proc decodeFileContent(content: string): DecodedFileContent =
       result.encoding = CharacterEncoding.unknown
       result.hasBom = false
 
-type FileStamp* = object
-  ## The on-disk identity of a file at one instant. A value, so a load can
-  ## stamp the file as it was *before* it read the bytes.
-  modTime*: Option[Time]
-  size*: Option[int64]
+proc decodeForBuffer*(content: string): DecodedText =
+  ## Turn file bytes into buffer content: BOM stripped, UTF-16/32 decoded to
+  ## UTF-8, every line ending style normalized, and a trailing newline read as
+  ## terminating the last line rather than starting an empty one.
+  ##
+  ## The one reader: every path from file bytes to buffer content comes
+  ## through here, so no two ways in can drift apart.
+  var decoded = decodeFileContent(content)
+  result.text = move decoded.text
+  result.shape.encoding = decoded.encoding
+  result.shape.hasBom = decoded.hasBom
+  result.decodeFailed = decoded.decodeFailed
+  result.decodeError = move decoded.decodeError
+  result.attemptedEncoding = decoded.attemptedEncoding
+  # NUL near start indicates binary (git/grep/vim convention), sampled before
+  # normalization so the window covers the bytes as decoded.
+  result.hasBinaryContent =
+    '\0' in
+    result.text.toOpenArray(0, min(result.text.high, EncodingDetectionSampleSize - 1))
+  if result.decodeFailed:
+    # Raw bytes: keep verbatim. `lineEnding` is unused (shows RAW);
+    # `endOfLine` is preserved for round-trip.
+    result.shape.lineEnding = LF
+    result.shape.endOfLine = result.text.len > 0 and result.text[^1] == '\n'
+  else:
+    result.shape.endOfLine =
+      result.text.len > 0 and (result.text.endsWith("\n") or result.text.endsWith("\r"))
+    result.shape.lineEnding = normalizeLineEndings(result.text)
+
+proc lines*(decoded: DecodedText): seq[string] =
+  ## `decoded.text` split the way buffer storage splits it on load.
+  result = decoded.text.split('\n')
+  if result.len > 1 and result[^1].len == 0:
+    result.setLen(result.len - 1)
+
+proc adoptFileShape(b: TextBuffer, shape: FileShape) =
+  ## Make `b` save its text back the way `shape` was written.
+  b.encoding = shape.encoding
+  b.hasBom = shape.hasBom
+  b.lineEnding = shape.lineEnding
+  b.endOfLine = shape.endOfLine
+
+proc noteDecodedContent(b: TextBuffer, decoded: DecodedText) =
+  ## Record what the bytes `b` now holds turned out to be, and queue the notice
+  ## if that is not ordinary text. `keepRaw` is set here: undecoded bytes must
+  ## never reach a buffer that still allows text transforms.
+  b.keepRaw = decoded.decodeFailed
+  b.hasBinaryContent = decoded.hasBinaryContent
+  b.noteContent()
 
 proc loadFileWithContent*(
   b: TextBuffer,
@@ -213,35 +282,22 @@ proc loadFileWithContent*(
   ## file as it is now.
   let effFileSize = if fileSize >= 0: fileSize else: content.len.int64
 
-  var decoded = decodeFileContent(content)
+  var decoded = decodeForBuffer(content)
   if decoded.decodeFailed:
     logWarn(
       "buffer",
-      "Failed to decode " & path & " as " & encodingToString(decoded.attemptedEncoding) &
-        ": " & decoded.decodeError & "; keeping raw bytes",
+      "Failed to decode " & path & " as " &
+        encodingToString(decoded.attemptedEncoding.get(CharacterEncoding.unknown)) & ": " &
+        decoded.decodeError & "; keeping raw bytes",
     )
-  var contentMut = move decoded.text
 
-  b.encoding = decoded.encoding
-  b.hasBom = decoded.hasBom
-  b.keepRaw = decoded.decodeFailed
-  # NUL near start indicates binary (git/grep/vim convention).
-  b.hasBinaryContent =
-    '\0' in
-    contentMut.toOpenArray(0, min(contentMut.high, EncodingDetectionSampleSize - 1))
   if b.filePath != some(path):
     b.clearNotices()
-  b.noteContent()
-  if decoded.decodeFailed:
-    # Raw bytes: keep verbatim. `lineEnding` is unused (shows RAW);
-    # `endOfLine` is preserved for round-trip.
-    b.lineEnding = LF
-    b.endOfLine = contentMut.len > 0 and contentMut[^1] == '\n'
-  else:
-    b.detectAndNormalizeLineEnding(contentMut)
+  b.adoptFileShape(decoded.shape)
+  b.noteDecodedContent(decoded)
 
   let newBackend = chooseBackendForFile(effFileSize)
-  b.storage = newBufferStorage(newBackend, move contentMut)
+  b.storage = newBufferStorage(newBackend, move decoded.text)
   b.advanceContentVersion()
 
   b.filePath = some(path)
@@ -494,8 +550,9 @@ proc reloadFile*(b: TextBuffer): Result[(), string] =
 proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
   ## Reload `b` from disk unless the bytes on disk are the ones it already
   ## holds, reporting whether the contents were replaced. A reload drops the
-  ## undo history and re-opens the LSP document, so an external write that
-  ## changed nothing (`touch`, a no-op formatter) is not worth one.
+  ## undo history, re-opens the LSP document and invalidates every held
+  ## position, so an external write that changed nothing (`touch`, a no-op
+  ## formatter) is not worth one.
   ##
   ## The comparison is against the bytes the buffer was built from, not the
   ## buffer re-serialized: a load normalizes (mixed line endings, an
