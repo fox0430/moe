@@ -191,7 +191,7 @@ proc sendInput*(state: TerminalState, data: string) =
   if data.len > 0:
     state.feedInput(data)
 
-proc sanitizePastedText(text: string): string =
+proc sanitizePastedText*(text: string): string =
   ## Drop control bytes and normalize newlines to CR. The CRs are kept: a
   ## child without bracketed paste runs those lines.
   result = newStringOfCap(text.len)

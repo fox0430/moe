@@ -179,10 +179,13 @@ let Invariants = @[
     skipFiles: @[],
     match: matchWindowViewReplace,
     allow: @[
-      # 4 tab switches, the two `syncTerminalView` arms (Terminal windows hold
-      # no Insert session), and the view-only arm of `redirectWindowsFromBuffer`
-      # (session finalized just above, shared with the tab-switch arm).
-      ("moepkg/editor_buffers.nim", 7),
+      # 5 tab switches (activateBufferInWindow, closeTerminalBuffer's
+      # non-active / survivor / blank arms, redirectWindowsFromBuffer's
+      # tab-deleted arm), the two `syncTerminalView` arms (Terminal windows
+      # hold no Insert session), and the view-only arm of
+      # `redirectWindowsFromBuffer` (session finalized just above, shared
+      # with the tab-switch arm).
+      ("moepkg/editor_buffers.nim", 8),
       ("moepkg/editor_frame.nim", 1),
       ("moepkg/editor_navigation.nim", 1),
       ("moepkg/editor_window.nim", 1),
@@ -236,7 +239,9 @@ let Invariants = @[
     skipFiles: @[],
     match: matchFinalizeForBufferSwitch,
     allow: @[
-      ("moepkg/editor_buffers.nim", 3),
+      # activateBufferInWindow, closeTerminalBuffer survivor/blank,
+      # redirectWindowsFromBuffer.
+      ("moepkg/editor_buffers.nim", 4),
       ("moepkg/editor_navigation.nim", 1),
       ("moepkg/editor_window.nim", 1),
       ("moepkg/handler.nim", 1),

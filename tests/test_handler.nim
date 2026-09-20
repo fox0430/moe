@@ -5302,6 +5302,48 @@ suite "middleClickPaste - the click picks the target":
     check e.activeWindow == e.windowManager.windows[0]
     check e.state.statusMessage == "Buffer is read-only"
 
+  test "a click in the terminal delivers the selection to the child":
+    if not primarySelectionHolds("term-ok"):
+      skip()
+    else:
+      var fds: array[2, cint]
+      require pipe(fds) == 0
+      # Non-blocking read so a failed paste cannot hang the suite.
+      discard fcntl(fds[0], F_SETFL, O_NONBLOCK)
+      defer:
+        discard close(fds[0])
+        discard close(fds[1])
+
+      let e = createTestEditorForMiddleClick("")
+      let win = e.windowManager.windows[0]
+      win.viewport =
+        ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+
+      let term = TerminalState(
+        pty: PtyHandle(masterFd: fds[1], childPid: Pid(999999), closed: false),
+        grid: newTerminalGrid(80, 24),
+        subMode: tsmInput,
+        exitCode: none(int),
+        waitingForCtrlN: false,
+        needsBufferRefresh: false,
+      )
+      e.terminalStates[win.buffer.id] = term
+      win.modeState = ModeState(kind: mskTerminal, terminal: term)
+      win.mode = EditorMode.Terminal
+      e.state.mode = EditorMode.Terminal
+      e.state.setStatusQuiet("")
+
+      # Inside the terminal content area (not the status/command reserve).
+      e.middleClickPaste(row = 5, col = 10)
+
+      var buf = newString(64)
+      let n = read(fds[0], addr buf[0], cint(buf.len))
+      require n > 0
+      buf.setLen(n)
+      check buf == "term-ok"
+      check e.activeBuffer().getLine(0).len == 0
+      check e.state.mode == EditorMode.Terminal
+
 suite "pointerPositionInWindow":
   proc singleWindowEditor(showTabLine: bool): Editor =
     let e = createTestEditorForMiddleClick("aaa\nbbb\nccc")

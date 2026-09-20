@@ -39,7 +39,8 @@ import
   unicode_utils,
   editorconfig_helper,
   highlight_config,
-  path_key
+  path_key,
+  editor_buffers
 import lsp/protocol/types as lspTypes
 
 const
@@ -84,10 +85,14 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
   activeWindow.cursor = BufferPosition(line: 0, column: 0)
   activeWindow.viewport.resetViewportTop()
   activeWindow.viewport.leftColumn = 0
+  # Re-derive mode so a jump off a Terminal tab cannot leave a stale variant.
+  e.applyBufferMode(targetBuffer)
 
   # Re-sync executor, motion controller, jump-list anchor and per-buffer
   # EditorConfig now that the active window's buffer changed.
   e.syncActiveWindow()
+  e.enforceModePolicy()
+  e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc bufferIndexForFile(e: Editor, path: string): int =
   ## Index of the buffer holding `path`, or -1. Uses `samePath` to avoid

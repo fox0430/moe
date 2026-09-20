@@ -853,3 +853,32 @@ suite "pasteInput forwards pasted text to the PTY":
       ts.cleanup()
       discard ts.handleTerminalModeKey(charKey("a"))
       check not ts.waitingForCtrlN
+
+suite "sanitizePastedText":
+  test "CRLF collapses to a single CR":
+    check sanitizePastedText("a\r\nb") == "a\rb"
+
+  test "a lone CR is kept":
+    check sanitizePastedText("a\rb") == "a\rb"
+
+  test "LF becomes CR":
+    check sanitizePastedText("a\nb") == "a\rb"
+
+  test "tabs are kept":
+    check sanitizePastedText("a\tb") == "a\tb"
+
+  test "printable non-ASCII is kept":
+    check sanitizePastedText("café — 日本語") == "café — 日本語"
+
+  test "control bytes and DEL are dropped":
+    # ESC is dropped; the CSI payload stays as plain text.
+    check sanitizePastedText("a\x01b\x1b[31mc\x7fd") == "ab[31mcd"
+
+  test "an empty string stays empty":
+    check sanitizePastedText("") == ""
+
+  test "control-only input sanitizes to nothing":
+    check sanitizePastedText("\x01\x02\x1b") == ""
+
+  test "NUL is dropped":
+    check sanitizePastedText("a\x00b") == "ab"
