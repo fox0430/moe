@@ -28,7 +28,7 @@ import std/[hashes, options, os, strutils, times]
 import pkg/results
 
 import ../[encoding, highlight, logger, path_key]
-import core, atomic_write
+import core, atomic_write, edit
 import highlight as buffer_highlight
 
 type
@@ -71,17 +71,34 @@ type
     modTime*: Option[Time]
     size*: Option[int64]
 
-const ExternalModErrorMsg* =
-  "File was modified externally. Use :w! to force save, or :e! to reload."
+const
+  ExternalModErrorMsg* =
+    "File was modified externally. Use :w! to force save, or :e! to reload."
 
-const TranscodedEncodings = {
-  CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
-  CharacterEncoding.utf32Be,
-} ## Encodings that `decodeFileContent` decodes; only these can fail.
+  TranscodedEncodings = {
+    CharacterEncoding.utf16Le, CharacterEncoding.utf16Be, CharacterEncoding.utf32Le,
+    CharacterEncoding.utf32Be,
+  } ## Encodings that `decodeFileContent` decodes; only these can fail.
 
-const TranscodeCandidates =
-  TranscodedEncodings + {CharacterEncoding.utf16, CharacterEncoding.utf32}
-  ## Like `TranscodedEncodings` plus BOM forms that `decodeFileContent` narrows.
+  TranscodeCandidates =
+    TranscodedEncodings + {CharacterEncoding.utf16, CharacterEncoding.utf32}
+    ## Like `TranscodedEncodings` plus BOM forms that `decodeFileContent` narrows.
+
+  UndoableReloadMaxLines* = 10000
+    ## Per-reload line cap (both sides); past this, drop undo history.
+    ## Same idea as vim's `undoreload`.
+
+  UndoableReloadBudgetLines* = 100000
+    ## Cap on lines all reload entries may hold on the undo stack. Per-history:
+    ## an overrun drops and refills the budget. Head-room is both whole buffers;
+    ## the actual charge is the entry after the diff.
+
+  UndoableReloadMaxBytes* = 1024 * 1024
+    ## Byte counterpart of `UndoableReloadMaxLines`, for files of a few very
+    ## long lines.
+
+  UndoableReloadBudgetBytes* = 16 * 1024 * 1024
+    ## Byte counterpart of `UndoableReloadBudgetLines`.
 
 proc normalizeLineEndings(content: var string): LineEnding =
   ## Convert every line ending to \n in a single pass and report the style
@@ -163,8 +180,8 @@ proc decodeForBuffer*(content: string): DecodedText =
   ## UTF-8, every line ending style normalized, and a trailing newline read as
   ## terminating the last line rather than starting an empty one.
   ##
-  ## The one reader: every path from file bytes to buffer content comes
-  ## through here, so no two ways in can drift apart.
+  ## The one reader: a load and a whole-file replacement both come through
+  ## here, so neither can drift from the other.
   var decoded = decodeFileContent(content)
   result.text = move decoded.text
   result.shape.encoding = decoded.encoding
@@ -193,6 +210,18 @@ proc lines*(decoded: DecodedText): seq[string] =
   if result.len > 1 and result[^1].len == 0:
     result.setLen(result.len - 1)
 
+proc lineCount*(decoded: DecodedText): int =
+  ## How many lines `lines` would return, without building them.
+  result = decoded.text.count('\n') + 1
+  if decoded.text.len > 0 and decoded.text[^1] == '\n':
+    dec result
+
+proc replacementSanitizesBytes*(decoded: DecodedText): bool =
+  ## True if a replacement would rewrite bytes (invalid UTF-8 to U+FFFD). A load
+  ## keeps such bytes verbatim. Scanned here, not at decode, so a plain load
+  ## does not pay for it.
+  decoded.decodeFailed or invalidUtf8At(decoded.text) != -1
+
 proc adoptFileShape(b: TextBuffer, shape: FileShape) =
   ## Make `b` save its text back the way `shape` was written.
   b.encoding = shape.encoding
@@ -208,13 +237,59 @@ proc noteDecodedContent(b: TextBuffer, decoded: DecodedText) =
   b.hasBinaryContent = decoded.hasBinaryContent
   b.noteContent()
 
-proc loadFileWithContent*(
+proc replaceWithDecodedText*(
+    b: TextBuffer,
+    decoded: DecodedText,
+    description: string,
+    adoptShape = false,
+    sanitizesBytes = none(bool),
+): Result[LineDiff, string] =
+  ## Make `b` hold `decoded` as one undo entry named `description`.
+  ## Undecodable bytes are refused rather than sanitized into U+FFFD.
+  ##
+  ## `adoptShape` takes the file's encoding/EOL (reload / initial content).
+  ## Leave it off when the buffer already has its own shape. Undo restores
+  ## the old lines under the new shape. Content kind is always recorded.
+  ##
+  ## `sanitizesBytes` reuses a prior scan; omitted means scan here.
+  if sanitizesBytes.get(decoded.replacementSanitizesBytes):
+    return err(
+      "Cannot " & description & ": the replacement text holds bytes no decoding read"
+    )
+  let replaced = b.replaceAllLines(decoded.lines, description)
+  if replaced.isErr:
+    return err(replaced.error)
+  # Diagnostics have no remap path; drop them when lines moved. An empty diff
+  # (EOL-only rewrite) moved none.
+  if replaced.get.hunks.len > 0:
+    b.diagnostics.setLen(0)
+    b.diagnosticsDirty = true
+  b.noteDecodedContent(decoded)
+  if adoptShape:
+    b.adoptFileShape(decoded.shape)
+  ok(replaced.get)
+
+proc loadFileWithDecoded*(
   b: TextBuffer,
   path: string,
   content: string,
+  decoded: var DecodedText,
   fileSize: int64 = -1,
   stamp: Option[FileStamp] = none(FileStamp),
 ): Result[(), string]
+
+proc loadFileWithContent*(
+    b: TextBuffer,
+    path: string,
+    content: string,
+    fileSize: int64 = -1,
+    stamp: Option[FileStamp] = none(FileStamp),
+): Result[(), string] =
+  ## Init buffer from pre-read content. `stamp` is the file's identity from
+  ## before `content` was read; without one the buffer is stamped against the
+  ## file as it is now.
+  var decoded = decodeForBuffer(content)
+  b.loadFileWithDecoded(path, content, decoded, fileSize, stamp)
 
 proc captureFileStamp*(path: string): FileStamp =
   ## Read the on-disk identity of `path` now. Both halves come from one stat.
@@ -270,19 +345,21 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   return b.loadFileWithContent(path, content, content.len.int64, some(stamp))
 
-proc loadFileWithContent*(
+proc loadFileWithDecoded*(
     b: TextBuffer,
     path: string,
     content: string,
+    decoded: var DecodedText,
     fileSize: int64 = -1,
     stamp: Option[FileStamp] = none(FileStamp),
 ): Result[(), string] =
-  ## Init buffer from pre-read content. `stamp` is the file's identity from
-  ## before `content` was read; without one the buffer is stamped against the
-  ## file as it is now.
+  ## Init buffer from `content` already run through `decodeForBuffer`, for a
+  ## caller that had to read the decoded text to decide whether to load at all.
+  ## `decoded.text` is moved into the buffer. `stamp` is the file's identity
+  ## from before `content` was read; without one the buffer is stamped against
+  ## the file as it is now.
   let effFileSize = if fileSize >= 0: fileSize else: content.len.int64
 
-  var decoded = decodeForBuffer(content)
   if decoded.decodeFailed:
     logWarn(
       "buffer",
@@ -547,16 +624,44 @@ proc reloadFile*(b: TextBuffer): Result[(), string] =
   let path = b.filePath.get
   b.loadFile(path)
 
+proc undoBytesAtMost(b: TextBuffer, cap: int): int =
+  ## Byte size of `b` (each line plus its break), stopping once past `cap`.
+  for line in b.lines:
+    result += line.len + 1
+    if result > cap:
+      return
+
+proc remapThroughHunks(
+    b: TextBuffer, positions: seq[BufferPosition], hunks: seq[LineEdit]
+): seq[BufferPosition] =
+  ## Remap `positions` through `hunks`. A hit inside a rewritten span snaps to
+  ## the span's first line so the changelist index stays valid.
+  result = newSeqOfCap[BufferPosition](positions.len)
+  let lastLine = max(0, b.len - 1)
+  for pos in positions:
+    var
+      line = pos.line
+      column = pos.column
+      offset = 0
+      snapped = false
+    for hunk in hunks:
+      if pos.line < hunk.start:
+        break
+      if pos.line < hunk.start + hunk.delete:
+        line = hunk.start + offset
+        column = 0
+        snapped = true
+        break
+      offset += hunk.insert.len - hunk.delete
+    if not snapped:
+      line = pos.line + offset
+    line = clamp(line, 0, lastLine)
+    result.add BufferPosition(line: line, column: min(column, b.getLineLen(line)))
+
 proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
-  ## Reload `b` from disk unless the bytes on disk are the ones it already
-  ## holds, reporting whether the contents were replaced. A reload drops the
-  ## undo history, re-opens the LSP document and invalidates every held
-  ## position, so an external write that changed nothing (`touch`, a no-op
-  ## formatter) is not worth one.
-  ##
-  ## The comparison is against the bytes the buffer was built from, not the
-  ## buffer re-serialized: a load normalizes (mixed line endings, an
-  ## undecodable encoding), so re-serializing would report a spurious change.
+  ## Reload `b` from disk if the on-disk bytes differ from last load/save.
+  ## Compared against stored bytes, not a re-serialize (normalization would
+  ## look like a change). A no-op write (`touch`) is skipped.
   if b.filePath.isNone:
     return err("Buffer has no file path")
 
@@ -573,12 +678,89 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
     logError("buffer", "Failed to read file " & path & ": " & e.msg)
     return err(e.msg)
 
-  if b.lastLoadedContent.isSome and fingerprint(content) == b.lastLoadedContent.get:
+  let onDisk = fingerprint(content)
+  if b.lastLoadedContent.isSome and onDisk == b.lastLoadedContent.get:
     # Same bytes: only the stat moved, so re-baseline and leave the buffer be.
     b.applyFileStamp(stamp)
     return ok(false)
 
-  let loaded = b.loadFileWithContent(path, content, content.len.int64, some(stamp))
+  # Both ways in decode, so decode once and hand the result to whichever runs.
+  var decoded = decodeForBuffer(content)
+
+  # Prefer a minimal edit so undo history and per-line state survive.
+  # Fallback is a wholesale load. Binary content rides no undo entry.
+  let oldLineCount = b.len
+  var landsAsEdit =
+    b.allowsTextTransforms and not b.readOnly and oldLineCount <= UndoableReloadMaxLines and
+    decoded.lineCount <= UndoableReloadMaxLines and
+    decoded.text.len <= UndoableReloadMaxBytes and
+    b.reloadUndoLines + oldLineCount + decoded.lineCount <= UndoableReloadBudgetLines and
+    chooseBackendForFile(content.len.int64) == b.backendKind and
+    decoded.hasBinaryContent == b.hasBinaryContent
+  # UTF-8 scan walks the whole text: do it after cheaper checks, and reuse.
+  var sanitizesBytes = none(bool)
+  if landsAsEdit:
+    sanitizesBytes = some(decoded.replacementSanitizesBytes)
+    landsAsEdit = not sanitizesBytes.get
+  if landsAsEdit:
+    # Walk the buffer only after cheaper checks pass. Head-room is both whole
+    # buffers; count a trailing break the new text may omit.
+    let oldBytes = b.undoBytesAtMost(UndoableReloadMaxBytes)
+    landsAsEdit =
+      oldBytes <= UndoableReloadMaxBytes and
+      b.reloadUndoBytes + oldBytes + decoded.text.len + 1 <= UndoableReloadBudgetBytes
+  if landsAsEdit:
+    # A reload is not a user change, so keep the changelist as-is.
+    let
+      changeListBefore = b.changeList
+      changeListIndexBefore = b.changeListIndex
+    # Transaction rollback failure falls back to a wholesale load; a Defect
+    # still propagates (the process is already unsound).
+    let newestEntryBefore = b.currentChangeId
+    var replaced: Result[LineDiff, string]
+    try:
+      replaced = b.replaceWithDecodedText(
+        decoded, "reload", adoptShape = true, sanitizesBytes = sanitizesBytes
+      )
+    except CatchableError as e:
+      replaced = Result[LineDiff, string].err(e.msg)
+    if replaced.isOk:
+      # Charge only if this reload pushed an entry. An empty/swallowed diff
+      # has nothing to bill; charging the previous entry would overwrite its
+      # still-owed charge.
+      if replaced.get.hunks.len > 0 and b.currentChangeId != newestEntryBefore:
+        var
+          chargedLines = 0
+          chargedBytes = 0
+        for hunk in replaced.get.hunks:
+          chargedLines += hunk.delete + hunk.insert.len
+          chargedBytes += hunk.deleteBytes
+          for line in hunk.insert:
+            chargedBytes += line.len + 1
+        b.chargeReloadUndoBudget(chargedLines, chargedBytes)
+        b.changeList = changeListBefore
+        b.changeListIndex = changeListIndexBefore
+        b.dropChangeListFuture()
+        let changeListOnOldLines = b.changeList
+        b.changeList = b.remapThroughHunks(changeListOnOldLines, replaced.get.hunks)
+        b.detachLastEntryFromChangeList(changeListOnOldLines, b.changeListIndex)
+      b.conflictBlocks.setLen(0)
+      b.applyFileStamp(stamp)
+      b.lastLoadedContent = some(onDisk)
+      b.markSaved()
+      if replaced.get.hunks.len > 0:
+        # Positions held outside the buffer (selection, jumplist) need this.
+        b.emitContentReplaced()
+      return ok(true)
+    # Edit path failed; fall back to a wholesale load.
+    logWarn(
+      "buffer",
+      "Could not reload " & path & " as an edit: " & replaced.error &
+        "; replacing the contents wholesale",
+    )
+
+  let loaded =
+    b.loadFileWithDecoded(path, content, decoded, content.len.int64, some(stamp))
   if loaded.isErr:
     return err(loaded.error)
   ok(true)

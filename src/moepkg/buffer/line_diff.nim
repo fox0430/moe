@@ -31,6 +31,10 @@ type
     start*: int
     delete*: int
     insert*: seq[string]
+    deleteBytes*: int
+      ## Bytes the replaced lines held, including trailing breaks. Filled by
+      ## `diffLines` so a budget charge can be computed after the old lines
+      ## are gone.
 
   LineDiff* = object
     ## The hunks that turn one text into another. `exact = false`: the search gave
@@ -151,9 +155,8 @@ proc lowerBoundDistance(
       inc shared
   (n - shared) + (m - shared)
 
-proc diffLines*(old, new: openArray[string], maxDistance = MaxDiffDistance): LineDiff =
-  ## The hunks that turn `old` into `new`; empty when they already agree. The
-  ## common head and tail are trimmed by scan before the distance is measured.
+proc diffLinesUncharged(old, new: openArray[string], maxDistance: int): LineDiff =
+  ## `diffLines` before charging `deleteBytes`.
   let
     oldLen = old.len
     newLen = new.len
@@ -233,3 +236,16 @@ proc diffLines*(old, new: openArray[string], maxDistance = MaxDiffDistance): Lin
     exact: true,
     coarse: sharesNoLine,
   )
+
+proc chargeDeleteBytes(hunks: var seq[LineEdit], old: openArray[string]) =
+  for hunk in hunks.mitems:
+    var bytes = 0
+    for i in hunk.start ..< hunk.start + hunk.delete:
+      bytes += old[i].len + 1
+    hunk.deleteBytes = bytes
+
+proc diffLines*(old, new: openArray[string], maxDistance = MaxDiffDistance): LineDiff =
+  ## The hunks that turn `old` into `new`; empty when they already agree. The
+  ## common head and tail are trimmed by scan before the distance is measured.
+  result = diffLinesUncharged(old, new, maxDistance)
+  result.hunks.chargeDeleteBytes(old)

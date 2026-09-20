@@ -175,6 +175,11 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     snapshotFoldState: b.foldState,
     snapshotBookmarks: b.bookmarks,
     namedMarkChanges: change.namedMarkChanges,
+    noChangeListPosition: change.noChangeListPosition,
+    changeListAcross: change.changeListAcross,
+    changeListIndexAcross: change.changeListIndexAcross,
+    reloadChargeLines: change.reloadChargeLines,
+    reloadChargeBytes: change.reloadChargeBytes,
   )
 
 proc clearMarkersIfAtSavedState(b: TextBuffer) {.inline.} =
@@ -422,6 +427,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   var poppedOriginals: seq[BufferChange] = @[]
   let initialChangeSeq = b.changeSeq
   let initialChangeListIndex = b.changeListIndex
+  let initialChangeList = b.changeList
 
   # Undo 'count' changes
   for i in 0 ..< count:
@@ -457,11 +463,20 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
           )
       b.changeSeq = initialChangeSeq
       b.advanceContentVersion()
+      b.changeList = initialChangeList
       b.changeListIndex = initialChangeListIndex
       b.undoStack.addLast(change)
       for j in countdown(poppedOriginals.len - 1, 0):
         b.undoStack.addLast(poppedOriginals[j])
       return err("Undo failed: " & r.error)
+
+    # Swap changeList with the other side of this entry; the index travels
+    # with the list because the two can differ in length.
+    if change.changeListAcross.isSome:
+      redoEntry.changeListAcross = some(b.changeList)
+      redoEntry.changeListIndexAcross = b.changeListIndex
+      b.changeList = change.changeListAcross.get
+      b.changeListIndex = change.changeListIndexAcross
 
     undoneChanges.add(redoEntry)
     poppedOriginals.add(change)
@@ -472,8 +487,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     b.changeSeq = change.startSeq
     b.advanceContentVersion()
 
-    # Adjust changelist index
-    if b.changeListIndex > 0:
+    # Adjust changelist index, unless this entry recorded no position
+    if not change.noChangeListPosition and b.changeListIndex > 0:
       b.changeListIndex.dec
 
   # Add all undone changes to redo stack in the order they were undone
@@ -515,7 +530,7 @@ proc discardRedoEntry*(b: TextBuffer, changeId: int64): bool =
   ## Remove the newest redo entry when it matches changeId, without applying
   ## it. Used to keep the user from redoing a rolled-back trim.
   if b.redoStack.len > 0 and b.redoStack.peekLast.id == changeId:
-    discard b.redoStack.popLast()
+    b.refundReloadUndoBudget(b.redoStack.popLast())
     return true
 
 proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
@@ -620,6 +635,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   var poppedOriginals: seq[BufferChange] = @[]
   let initialChangeSeq = b.changeSeq
   let initialChangeListIndex = b.changeListIndex
+  let initialChangeList = b.changeList
 
   # Redo 'count' changes
   for i in 0 ..< count:
@@ -655,11 +671,20 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
           )
       b.changeSeq = initialChangeSeq
       b.advanceContentVersion()
+      b.changeList = initialChangeList
       b.changeListIndex = initialChangeListIndex
       b.redoStack.addLast(change)
       for j in countdown(poppedOriginals.len - 1, 0):
         b.redoStack.addLast(poppedOriginals[j])
       return err("Redo failed: " & r.error)
+
+    # Swap changeList with the other side of this entry; the index travels
+    # with the list because the two can differ in length.
+    if change.changeListAcross.isSome:
+      undoEntry.changeListAcross = some(b.changeList)
+      undoEntry.changeListIndexAcross = b.changeListIndex
+      b.changeList = change.changeListAcross.get
+      b.changeListIndex = change.changeListIndexAcross
 
     redoneChanges.add(undoEntry)
     poppedOriginals.add(change)
@@ -668,8 +693,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     b.changeSeq = change.endSeq
     b.advanceContentVersion()
 
-    # Adjust changelist index
-    if b.changeListIndex < b.changeList.len - 1:
+    # Adjust changelist index, unless this entry recorded no position
+    if not change.noChangeListPosition and b.changeListIndex < b.changeList.len - 1:
       b.changeListIndex.inc
 
   # Symmetric with undo(): push in the order the changes were redone so the
