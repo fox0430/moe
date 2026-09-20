@@ -970,6 +970,10 @@ proc handleRecoveryManagerMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
+  of rcmrRestore:
+    return HandlerResult(
+      kind: hrRecoveryManagerRestore, restoreRecoveryIndex: r.restoreIndex
+    )
   of rcmrDiscard:
     return HandlerResult(
       kind: hrRecoveryManagerDiscard, discardRecoveryIndex: r.discardIndex

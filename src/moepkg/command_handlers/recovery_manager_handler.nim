@@ -28,6 +28,7 @@ export handler_types
 type
   RecoveryManagerResultKind* = enum
     rcmrHandled
+    rcmrRestore ## Restore the selected copy into the buffer
     rcmrDiscard
     rcmrArmDiscard ## Ask before discarding the selected copy
     rcmrRefresh
@@ -36,6 +37,8 @@ type
 
   RecoveryManagerResult* = object
     case kind*: RecoveryManagerResultKind
+    of rcmrRestore:
+      restoreIndex*: int
     of rcmrDiscard, rcmrArmDiscard:
       discardIndex*: int
     else:
@@ -66,12 +69,19 @@ proc handleRecoveryManagerModeKey*(
   of lvaEnterCommand:
     return RecoveryManagerResult(kind: rcmrEnterCommand)
   of lvaSelect:
+    # Enter only looks at the highlighted row; a restore replaces the whole
+    # buffer, so it asks for `R`, as in the backup manager.
     return RecoveryManagerResult(kind: rcmrHandled)
   of lvaUnhandled:
     discard # Fall through to recovery-manager-specific keys
 
   if not keyCombo.isSpecial:
     case keyCombo.char
+    of "R":
+      if rcState.getSelectedItem().isSome:
+        return
+          RecoveryManagerResult(kind: rcmrRestore, restoreIndex: rcState.selectedIndex)
+      return RecoveryManagerResult(kind: rcmrHandled)
     of "D":
       if rcState.getSelectedItem().isSome:
         if armed == some(rcState.selectedIndex):

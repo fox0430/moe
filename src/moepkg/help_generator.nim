@@ -372,6 +372,7 @@ const RecoveryModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "k", description: "Go up"),
     HelpEntry(syntax: "gg", description: "Go to the first line"),
     HelpEntry(syntax: "G", description: "Go to the last line"),
+    HelpEntry(syntax: "R", description: "Restore the preserved copy"),
     HelpEntry(syntax: "DD", description: "Discard the preserved copy"),
     HelpEntry(syntax: "r", description: "Reload the preserved copies"),
   ]
