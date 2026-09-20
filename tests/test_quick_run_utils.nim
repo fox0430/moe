@@ -461,6 +461,8 @@ suite "QuickRunUtils - prepareQuickRun":
 
     # Create temp file
     writeFile(getTempDir() / "test.nim", "echo \"hello\"")
+    # Stamped like a real load: the write gate refuses a file no one read.
+    buffer.noteFileStamp(getTempDir() / "test.nim")
     defer:
       removeFile(getTempDir() / "test.nim")
 
@@ -548,7 +550,7 @@ suite "QuickRunUtils - prepareQuickRun":
     buffer.language = SourceLanguage.langNim
 
     # Simulate external modification after load.
-    buffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    buffer.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(path, "echo \"external change\"")
 
     let config = newEditorConfig()

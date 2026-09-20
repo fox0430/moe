@@ -2633,7 +2633,9 @@ suite "handleCommandModeEvent - exitOverlay after command execution":
 
     # Edit the buffer, then simulate an external write newer than our baseline.
     discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "X")
-    e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    e.activeBuffer.applyFileStamp(
+      presentStamp(getTime() - initDuration(seconds = 2), 0)
+    )
     writeFile(testFile, "Externally modified")
 
     e.state.enterCommandOverlay()

@@ -39,7 +39,6 @@ import
   unicode_utils,
   editorconfig_helper,
   highlight_config,
-  path_key,
   editor_buffers
 import lsp/protocol/types as lspTypes
 
@@ -95,12 +94,8 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
   e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc bufferIndexForFile(e: Editor, path: string): int =
-  ## Index of the buffer holding `path`, or -1. Uses `samePath` to avoid
-  ## opening a second buffer for an already-open file.
-  for i, buf in e.buffers:
-    if buf.filePath.isSome and samePath(buf.filePath.get, path):
-      return i
-  -1
+  ## Index of the buffer holding `path`, or -1.
+  indexOfBufferHoldingPath(e.buffers, path)
 
 proc loadAndRegisterBuffer(e: Editor, path: string): Result[TextBuffer, string] =
   ## Load `path` into a fresh buffer and register it in the global buffer list
@@ -238,8 +233,8 @@ proc jumpToLspLocation*(
   if openWindow and not e.splitWindowForJump():
     return false
 
-  # Check if it's the same file
-  if activeBuffer.filePath.isSome and samePath(activeBuffer.filePath.get, path):
+  # Same file (spelling or entity), not merely the same typed path.
+  if activeBuffer.bufferHoldsFile(path):
     # Same file - just move cursor with boundary checks
     e.moveCursorToLspPosition(
       activeBuffer, loc.range.start.line, loc.range.start.character
@@ -331,8 +326,8 @@ proc openFileAndJumpTo*(
   if openWindow and not e.splitWindowForJump():
     return false
 
-  # Check if it's the same file
-  if activeBuffer.filePath.isSome and samePath(activeBuffer.filePath.get, path):
+  # Same file (spelling or entity), not merely the same typed path.
+  if activeBuffer.bufferHoldsFile(path):
     # Same file - just move cursor with boundary checks
     e.moveCursorToLspPosition(activeBuffer, line, column)
   else:

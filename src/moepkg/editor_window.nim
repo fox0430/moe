@@ -171,10 +171,11 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
 proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string]
 
 proc loadSplitBuffer(e: Editor, path: string): Result[TextBuffer, string] =
-  ## Create, register and load the buffer a `:vsplit path` / `:split path` will
-  ## show, with the same per-buffer setup every opened file gets. Registered
-  ## before the load so it announces itself through the content-replacement
-  ## hook `addBuffer` installs. A failed load is unregistered again.
+  ## Buffer for a split on `path`: reuse the holder if open, else load a new one.
+  let existing = bufferHoldingPath(e.buffers, path)
+  if existing.isSome:
+    return ok(existing.get)
+
   let buf = newTextBuffer()
   # Inherit the highlight cap from the current buffer BEFORE loadFile builds
   # the first chunk; otherwise the applyHighlightConfig below nils the

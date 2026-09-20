@@ -89,6 +89,41 @@ suite "vsplitWithBuffer":
     check result.isOk
     check e.buffers.len == initialBufferCount + 1
 
+suite "a split on a file that is already open":
+  test "shows the buffer already holding it, not a second copy":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_split_reuse.txt"
+    writeFile(path, "a\nb\nc")
+    defer:
+      removeFile(path)
+
+    check e.vsplit(some(path)).isOk
+    let opened = e.activeWindow.buffer
+    let bufferCount = e.buffers.len
+
+    check e.hsplit(some(path)).isOk
+    # One buffer in three windows; a second copy could not both be written back.
+    check e.buffers.len == bufferCount
+    check e.activeWindow.buffer == opened
+    check e.windowManager.windows.len == 3
+
+  test "a split on a different file still opens its own buffer":
+    let e = createTestEditor()
+    let pathA = getTempDir() / "moe_test_split_reuse_a.txt"
+    let pathB = getTempDir() / "moe_test_split_reuse_b.txt"
+    writeFile(pathA, "a\n")
+    writeFile(pathB, "b\n")
+    defer:
+      removeFile(pathA)
+      removeFile(pathB)
+
+    check e.vsplit(some(pathA)).isOk
+    let bufferCount = e.buffers.len
+
+    check e.vsplit(some(pathB)).isOk
+    check e.buffers.len == bufferCount + 1
+    check e.activeWindow.buffer.filePath == some(pathB)
+
 suite "hsplit":
   test "horizontal split creates two windows":
     let e = createTestEditor()

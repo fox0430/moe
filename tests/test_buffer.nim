@@ -1644,17 +1644,17 @@ suite "Buffer - isExternallyModified":
 
   test "Returns false when file does not exist":
     let buf = newTextBuffer("hello", some(getTempDir() / "nonexistent_test_file_12345"))
-    buf.lastFileModTime = some(getTime())
+    buf.applyFileStamp(presentStamp(getTime(), 0))
     check not buf.isExternallyModified()
 
-  test "Returns false when lastFileModTime is none":
+  test "Returns false when the file was never looked at":
     let path = getTempDir() / "test_isExternallyModified_none.txt"
     writeFile(path, "hello")
     defer:
       removeFile(path)
 
     let buf = newTextBuffer("hello", some(path))
-    buf.lastFileModTime = none(Time)
+    buf.applyFileStamp(FileStamp(observed: fileNeverObserved))
     check not buf.isExternallyModified()
 
   test "Returns false when file has not been modified":
@@ -1676,11 +1676,171 @@ suite "Buffer - isExternallyModified":
     let buf = newTextBuffer()
     discard buf.loadFile(path)
 
-    # Set lastFileModTime to the past so any write will be newer
-    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    # Baseline against the past so any write will be newer
+    buf.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(path, "modified")
 
     check buf.isExternallyModified()
+
+suite "Buffer - file entity stamps":
+  test "Stamps of one file through two spellings compare equal":
+    when defined(posix):
+      let dir = getTempDir() / "moe_test_stamp_entity"
+      createDir(dir)
+      let path = dir / "real.txt"
+      let link = dir / "link.txt"
+      writeFile(path, "hello")
+      createSymlink(path, link)
+      defer:
+        removeFile(link)
+        removeFile(path)
+        removeDir(dir)
+
+      check captureFileStamp(path) == captureFileStamp(link)
+    else:
+      skip()
+
+  test "Same stat halves on another inode compare as changed":
+    let a = presentStamp(fromUnix(100), 8, 1, 11)
+    check a == presentStamp(fromUnix(100), 8, 1, 11)
+    check a != presentStamp(fromUnix(100), 8, 1, 12)
+    check a != presentStamp(fromUnix(100), 8, 2, 11)
+
+  test "A replacement reusing timestamp and size reads as changed":
+    # Same size and mtime on another inode must still count as changed.
+    let dir = getTempDir() / "moe_test_stamp_replacement"
+    createDir(dir)
+    let path = dir / "file.txt"
+    let other = dir / "other.txt"
+    writeFile(path, "AAAA")
+    defer:
+      removeFile(path)
+      removeFile(other)
+      removeDir(dir)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check not buf.isExternallyModified()
+
+    writeFile(other, "BBBB")
+    setLastModificationTime(other, buf.fileBaseline.modTime)
+    moveFile(other, path)
+
+    check buf.isExternallyModified()
+
+suite "Buffer - a file that could not be looked at":
+  test "The refusal says the file could not be checked, not that it was unread":
+    # Bytes were read; an unverified file must not be reported as never read.
+    let path = getTempDir() / "moe_test_unverified_file.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    buf.applyFileStamp(FileStamp(observed: fileNeverObserved))
+
+    let refusal = buf.writeRefusal(path)
+    check refusal == writeRefusedUnverifiedFile
+    check refusal.message == UnverifiedFileErrorMsg
+
+  test "It is allowed when there is nothing at the path to lose":
+    let path = getTempDir() / "moe_test_unverified_file_absent.txt"
+    removeFile(path)
+
+    let buf = newTextBuffer("hello", some(path))
+    buf.applyFileStamp(FileStamp(observed: fileNeverObserved))
+    check buf.writeRefusal(path) == writeAllowed
+
+suite "Buffer - write gate existence":
+  test "Save-as to a directory is refused, not attempted":
+    let dirPath = getTempDir() / "moe_test_gate_dir_exists"
+    createDir(dirPath)
+    defer:
+      removeDir(dirPath)
+
+    let src = getTempDir() / "moe_test_gate_dir_src.txt"
+    writeFile(src, "hello")
+    defer:
+      removeFile(src)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(src)
+    check buf.writeRefusal(dirPath) == writeRefusedTargetExists
+    let gate = buf.writeGate(dirPath)
+    check gate.refusal == writeRefusedTargetExists
+    check not gate.expectAbsent
+
+  test "Save-as to an absent path carries the absent premise":
+    let target = getTempDir() / "moe_test_gate_absent_premise.txt"
+    removeFile(target)
+
+    let src = getTempDir() / "moe_test_gate_absent_src.txt"
+    writeFile(src, "hello")
+    defer:
+      removeFile(src)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(src)
+    let gate = buf.writeGate(target)
+    check gate.refusal == writeAllowed
+    check gate.expectAbsent
+
+suite "Buffer - write gate own file vs save-as":
+  test "Saving through a symlink alias is the buffer's own file":
+    # Own vs save-as is the file, not the typed path.
+    when defined(posix):
+      let dir = getTempDir() / "moe_test_gate_own_alias"
+      createDir(dir)
+      defer:
+        removeDir(dir)
+      let real = dir / "real.txt"
+      let link = dir / "link.txt"
+      writeFile(real, "hello")
+      createSymlink(real, link)
+
+      let buf = newTextBuffer()
+      discard buf.loadFile(link)
+      let gate = buf.writeGate(real)
+      check gate.refusal == writeAllowed
+      check not gate.expectAbsent
+      check buf.writeRefusal(real) == writeAllowed
+    else:
+      skip()
+
+suite "Buffer - vanished file save":
+  test ":w recreates a file that disappeared after load":
+    let path = getTempDir() / "moe_test_vanished_recreate.txt"
+    writeFile(path, "hello")
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    removeFile(path)
+
+    let gate = buf.writeGate(path)
+    check gate.refusal == writeAllowed
+    check gate.expectAbsent
+    let res = buf.saveFile(path, checkExternalMod = true)
+    check res.isOk
+    check readFile(path) == buf.getFileContent
+    removeFile(path)
+
+  test "a file that appears after vanish is refused":
+    # Baseline present, then gone, then a different file: diskChanged.
+    let path = getTempDir() / "moe_test_vanished_then_appeared.txt"
+    writeFile(path, "hello")
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    removeFile(path)
+    writeFile(path, "someone else's bytes")
+    defer:
+      removeFile(path)
+
+    check buf.diskChangeSince == diskChanged
+    check buf.writeRefusal(path) == writeRefusedChangedOnDisk
+    let res = buf.saveFile(path, checkExternalMod = true)
+    check res.isErr
+    check readFile(path) == "someone else's bytes"
 
 suite "Buffer - saveFile external modification guard":
   test "Refuses save when checkExternalMod and file changed externally":
@@ -1693,7 +1853,7 @@ suite "Buffer - saveFile external modification guard":
     discard buf.loadFile(path)
 
     # Simulate external modification after load.
-    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    buf.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(path, "external change")
 
     discard buf.insertText(BufferPosition(line: 0, column: 0), "mine ")
@@ -1711,7 +1871,7 @@ suite "Buffer - saveFile external modification guard":
 
     let buf = newTextBuffer()
     discard buf.loadFile(path)
-    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    buf.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(path, "external change")
 
     # checkExternalMod defaults to false, so the write proceeds.
@@ -1730,7 +1890,7 @@ suite "Buffer - saveFile external modification guard":
     let buf = newTextBuffer()
     discard buf.loadFile(original)
     # The original file changes externally...
-    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    buf.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(original, "external change")
 
     # ...but we are saving to a different path, so it must not be blocked.
@@ -1753,7 +1913,7 @@ suite "Buffer - saveFile external modification guard":
     let buf = newTextBuffer()
     discard buf.loadFile(path)
 
-    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    buf.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(path, "external change")
 
     discard buf.insertText(BufferPosition(line: 0, column: 0), "mine ")
@@ -1783,7 +1943,7 @@ suite "Buffer - reloadFile":
     check res.isOk
     check buf[0] == "updated"
 
-  test "Updates lastFileModTime after reload":
+  test "Updates the baseline after reload":
     let path = getTempDir() / "test_reloadFile_modtime.txt"
     writeFile(path, "v1")
     defer:
@@ -1793,7 +1953,7 @@ suite "Buffer - reloadFile":
     discard buf.loadFile(path)
 
     # Force old timestamp
-    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    buf.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(path, "v2")
 
     check buf.isExternallyModified()
@@ -1811,7 +1971,7 @@ suite "Buffer - externalModWarned":
     discard buf.loadFile(path)
 
     # Simulate external modification
-    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    buf.applyFileStamp(presentStamp(getTime() - initDuration(seconds = 2), 0))
     writeFile(path, "modified")
 
     buf.externalModWarned = true

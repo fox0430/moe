@@ -117,7 +117,10 @@ proc deleteBackup*(state: BackupManagerState, index: int): bool =
     return false
 
 proc restoreBackup*(
-    state: BackupManagerState, index: int, restoredContent: var string
+    state: BackupManagerState,
+    index: int,
+    restoredContent: var string,
+    premise = wpOverwrite,
 ): bool =
   ## Restore a backup file to its source atomically.
   ## Returns true on success.
@@ -143,7 +146,7 @@ proc restoreBackup*(
     return false
 
   restoredContent = content
-  not writeAtomic(state.sourceFilePath, content).isErr
+  not writeAtomic(state.sourceFilePath, content, premise).isErr
 
 proc restoreBackup*(state: BackupManagerState, index: int): bool =
   var restoredContent: string

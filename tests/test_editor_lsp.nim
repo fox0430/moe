@@ -528,6 +528,30 @@ suite "editor_lsp - applyDiagnosticsForUri":
     e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("untagged"), none(int))
     check activeBuffer.diagnostics.len == 1
 
+  test "routes diagnostics aimed at a symlink's real path to the holder":
+    when defined(posix):
+      let e = createTestEditor()
+      e.lsp.enabled = true
+      let dir = getTempDir() / "moe_test_diag_alias"
+      createDir(dir)
+      defer:
+        removeDir(dir)
+      let real = dir / "real.nim"
+      let link = dir / "link.nim"
+      writeFile(real, "x\n")
+      createSymlink(real, link)
+
+      let activeBuffer = e.activeBuffer()
+      activeBuffer.filePath = some(link)
+      let didOpenKey = normalizedPath(absolutePath(link))
+      e.lsp.documents[didOpenKey] = initLspDocumentState(1, "", delivered = true)
+
+      e.applyDiagnosticsForUri(pathToUri(real), oneDiagnostic("via real"), some(1))
+      check activeBuffer.diagnostics.len == 1
+      check activeBuffer.diagnostics[0].message == "via real"
+    else:
+      skip()
+
 suite "editor_lsp - clearAllDiagnostics":
   test "clears stored diagnostics and markers from all buffers":
     let e = createTestEditor()

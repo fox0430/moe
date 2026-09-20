@@ -100,12 +100,11 @@ proc originEntry(buf: TextBuffer, name: string): JsonNode =
   result[ManifestOriginKey] = %pathKey(buf.filePath.get)
   # Stamp: tell unsaved work apart from later writes to the file.
   let stamp = captureFileStamp(buf.filePath.get)
-  if stamp.modTime.isSome:
-    let mtimeNs = toUnixNano(stamp.modTime.get)
+  if stamp.observed == fileObservedPresent:
+    let mtimeNs = toUnixNano(stamp.modTime)
     if mtimeNs.isSome:
       result[ManifestOriginMtimeNsKey] = %mtimeNs.get
-  if stamp.size.isSome:
-    result[ManifestOriginSizeKey] = %stamp.size.get
+    result[ManifestOriginSizeKey] = %stamp.size
 
 proc boundedDetail(detail: string): string =
   if detail.len <= MaxDetailBytes:

@@ -59,3 +59,48 @@ suite "path_key - samePath":
     check not samePath("", getTempDir() / "a.txt")
     check not samePath(getTempDir() / "a.txt", "")
     check not samePath("", "")
+
+suite "path_key - sameFileEntity":
+  test "An alias and its target are one entity":
+    when defined(posix):
+      let dir = getTempDir() / "moe_test_entity"
+      createDir(dir)
+      let real = dir / "real.txt"
+      let link = dir / "link.txt"
+      writeFile(real, "hello")
+      createSymlink(real, link)
+      defer:
+        removeFile(link)
+        removeFile(real)
+        removeDir(dir)
+
+      check sameFileEntity(real, link)
+      check sameFileEntity(link, real)
+    else:
+      skip()
+
+  test "Different files are not one entity":
+    let dir = getTempDir() / "moe_test_entity_two"
+    createDir(dir)
+    let a = dir / "a.txt"
+    let b = dir / "b.txt"
+    writeFile(a, "hello")
+    writeFile(b, "hello")
+    defer:
+      removeFile(a)
+      removeFile(b)
+      removeDir(dir)
+
+    check not sameFileEntity(a, b)
+
+  test "Unresolvable paths never match, even each other":
+    let missing = getTempDir() / "moe_test_entity_missing.txt"
+    removeFile(missing)
+    let dir = getTempDir() / "moe_test_entity_dir"
+    createDir(dir)
+    defer:
+      removeDir(dir)
+
+    check not sameFileEntity(missing, missing)
+    check not sameFileEntity(missing, dir)
+    check not sameFileEntity(dir, missing)

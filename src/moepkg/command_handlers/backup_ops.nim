@@ -78,6 +78,23 @@ proc refreshRollbackFileMetadata(
 
   buf.noteFileStamp(path)
 
+proc restoreRefusalMessage(refusal: WriteRefusal): string =
+  ## Restore refusal; `:e!` needs leaving the backup list.
+  case refusal
+  of writeAllowed:
+    ""
+  of writeRefusedChangedOnDisk:
+    "the file changed on disk since it was read. Close the backup manager and " &
+      "reload it with :e! first."
+  of writeRefusedUnreadFile, writeRefusedTargetExists:
+    "a file is there that nothing here has read. Close the backup manager and " &
+      "reload it with :e! first."
+  of writeRefusedUnverifiedFile:
+    "the file on disk could not be checked. Close the backup manager and " &
+      "reload it with :e! first."
+  of writeRefusedHeldByAnotherBuffer:
+    "the file is open in another buffer."
+
 proc processBackupResult*(e: Editor, r: HandlerResult): bool =
   ## Handle hrBackupManager* kinds (refresh, restore, delete, diff).
   ## Returns true to continue.
@@ -111,6 +128,19 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
         e.state.statusMessage = "Cannot restore: source buffer not found"
         return true
       let srcBuf = e.buffers[srcIdx]
+
+      # Same write gate as `:wa`: restore must not pick which buffer's edits survive.
+      let decision =
+        e.writeDecisionInSession(srcBuf, sourcePath, choice = chosenByEditor)
+      if decision.refusal != writeAllowed:
+        logError(
+          "restore",
+          "Restore refused for " & sourcePath & ": " & decision.refusal.message,
+        )
+        e.state.statusMessage =
+          "Cannot restore: " & restoreRefusalMessage(decision.refusal)
+        return true
+
       let previousContent = srcBuf.getFileContent()
       let sourceExisted = fileExists(sourcePath)
       var previousDiskContent = ""
@@ -129,7 +159,20 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
           return true
       let sourceWasExternallyModified = srcBuf.isExternallyModified()
       var restoredContent: string
-      if bkState.restoreBackup(backupIndex, restoredContent):
+      # Re-gate immediately before the write, as save does, so the premise
+      # matches the disk as it is now — not as it was when the session refused.
+      let writeGateNow = srcBuf.writeGate(sourcePath)
+      if writeGateNow.refusal != writeAllowed:
+        logError(
+          "restore",
+          "Restore refused for " & sourcePath & ": " & writeGateNow.refusal.message,
+        )
+        e.state.statusMessage =
+          "Cannot restore: " & restoreRefusalMessage(writeGateNow.refusal)
+        return true
+      if bkState.restoreBackup(
+        backupIndex, restoredContent, writePremise(writeGateNow.expectAbsent, false)
+      ):
         # Take the safety backup after the restore so its cleanup can't delete
         # the entry being restored; the disk-only copy leaves srcBuf holding
         # the pre-restore content as the undo snapshot.

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils]
+import std/[unittest, os, strutils, options]
 
 import pkg/results
 
@@ -197,6 +197,129 @@ when defined(posix):
       check stat(path.cstring, st) == 0
       check (st.st_mode.int and 0o777) == 0o640
 
+suite "atomic_write - gate premise":
+  test "refuses when the gate expected nothing but something is there":
+    let dir = mkTmpDir("premise")
+    defer:
+      rmTree(dir)
+    let path = dir / "a.txt"
+    writeFile(path, "before")
+
+    let r = writeAtomic(path, "after", wpCreateExclusive)
+    check r.isErr
+    check r.error == FileAppearedErrorMsg
+    check readFile(path) == "before"
+
+  test "creates when the gate expected nothing and nothing is there":
+    let dir = mkTmpDir("premiseabsent")
+    defer:
+      rmTree(dir)
+    let path = dir / "fresh.txt"
+
+    let r = writeAtomic(path, "hello", wpCreateExclusive)
+    check r.isOk
+    check readFile(path) == "hello"
+
+  test "forced save ignores the gate premise":
+    let dir = mkTmpDir("premiseforce")
+    defer:
+      rmTree(dir)
+    let path = dir / "a.txt"
+    writeFile(path, "before")
+
+    let r = writeAtomic(path, "after", wpForce)
+    check r.isOk
+    check readFile(path) == "after"
+
+suite "atomic_write - strategy premise":
+  test "a chmod changes the re-check premise":
+    # chmod changes restore strategy, so it must count as a different target.
+    when defined(posix):
+      let dir = mkTmpDir("premisechmod")
+      defer:
+        rmTree(dir)
+      let path = dir / "a.txt"
+      writeFile(path, "content")
+      setFilePermissions(path, {fpUserRead, fpUserWrite, fpGroupRead, fpOthersRead})
+
+      let expected = snapshotTarget(path)
+      let before = classifyTarget(path)
+      setFilePermissions(path, {fpUserRead, fpUserWrite})
+
+      check writeTargetMoved(expected, before, path)
+    else:
+      skip()
+
+  test "a new hardlink changes the re-check premise":
+    # Same bytes and inode; only the link count says rename would split the group.
+    when defined(posix):
+      let dir = mkTmpDir("premiselink")
+      defer:
+        rmTree(dir)
+      let path = dir / "a.txt"
+      let alias = dir / "b.txt"
+      writeFile(path, "content")
+
+      let expected = snapshotTarget(path)
+      let before = classifyTarget(path)
+      createHardlink(path, alias)
+      defer:
+        removeFile(alias)
+
+      check writeTargetMoved(expected, before, path)
+    else:
+      skip()
+
+  test "an untouched file keeps the same premise":
+    let dir = mkTmpDir("premisestable")
+    defer:
+      rmTree(dir)
+    let path = dir / "a.txt"
+    writeFile(path, "content")
+
+    let expected = snapshotTarget(path)
+    let cls = classifyTarget(path)
+    check not writeTargetMoved(expected, cls, path)
+    check classifyTarget(path) == classifyTarget(path)
+
+  test "a missing initial snapshot is a moved target":
+    check writeTargetMoved(none(TargetSnapshot), TargetClass(exists: true), "unused")
+
+  test "writing through a dangling symlink is refused":
+    # lstat sees a link so the in-place path is chosen; follow-stat cannot
+    # name a file. Fail closed so the dangling link is not replaced.
+    when defined(posix):
+      let dir = mkTmpDir("premisedangle")
+      defer:
+        rmTree(dir)
+      let path = dir / "link"
+      createSymlink(dir / "missing", path)
+
+      let r = writeAtomic(path, "after")
+      check r.isErr
+      check r.error == TargetChangedErrorMsg
+      check symlinkExists(path)
+      check not fileExists(path)
+    else:
+      skip()
+
+  test "a save after an external chmod keeps the new mode":
+    # Strategy is chosen at save time, so a prior chmod is restored, not reverted.
+    when defined(posix):
+      let dir = mkTmpDir("premisechmodsave")
+      defer:
+        rmTree(dir)
+      let path = dir / "a.txt"
+      writeFile(path, "before")
+      setFilePermissions(path, {fpUserRead, fpUserWrite})
+
+      let r = writeAtomic(path, "after")
+      check r.isOk
+      check readFile(path) == "after"
+      check getFilePermissions(path) == {fpUserRead, fpUserWrite}
+    else:
+      skip()
+
 suite "atomic_write - error paths":
   test "returns err when parent directory does not exist":
     let dir = mkTmpDir("noparent")
@@ -221,3 +344,27 @@ suite "atomic_write - error paths":
     check r.isErr
     # The blocker file must be untouched.
     check readFile(blocker) == "content"
+
+suite "atomic_write - createExclusively":
+  test "refuses a path that is already there without touching it":
+    # Pins createExclusively; `writeAtomic` hits the gate check first.
+    let dir = mkTmpDir("excl")
+    defer:
+      rmTree(dir)
+    let path = dir / "taken.txt"
+    writeFile(path, "before")
+
+    let r = createExclusively(path, "after")
+    check r.isErr
+    check r.error == FileAppearedErrorMsg
+    check readFile(path) == "before"
+
+  test "creates a fresh path":
+    let dir = mkTmpDir("exclfresh")
+    defer:
+      rmTree(dir)
+    let path = dir / "fresh.txt"
+
+    let r = createExclusively(path, "hello")
+    check r.isOk
+    check readFile(path) == "hello"

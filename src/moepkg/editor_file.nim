@@ -31,7 +31,9 @@ import
   backup,
   search_utils,
   editorconfig_helper,
+  path_key,
   editor_mode,
+  editor_notify,
   highlight,
   highlight_config,
   persist,
@@ -39,10 +41,26 @@ import
   lsp_integration,
   quick_run_utils
 
+type SkippedSave* = tuple[path: string, buffer: TextBuffer, reason: WriteRefusal]
+  ## File a batch save skipped.
+
+type
+  BufferSaveTarget* = tuple[buffer: TextBuffer, path: string]
+    ## One file to write and the buffer supplying its text.
+
+  BatchSaveSelection* =
+    tuple[
+      targets: seq[BufferSaveTarget],
+      skippedExternal: seq[SkippedSave],
+      unwritten: seq[BufferSaveTarget],
+    ] ## Files to write, refusals, and buffers left unwritten.
+
 type SaveAllBuffersResult* = object
   savedCount*: int
   savedPaths*: seq[string]
-  skippedExternal*: seq[string] ## Buffers skipped because of external changes
+  skippedExternal*: seq[SkippedSave] ## Files no buffer could write.
+  unwritten*: seq[BufferSaveTarget]
+    ## Modified buffers another buffer already wrote (`force` only).
   failures*: seq[tuple[path: string, error: string]]
 
 proc refreshGitDiff*(e: Editor) =
@@ -340,6 +358,57 @@ proc prepareQuickRun*(
     e.noteBufferSaved(buffer)
   return Result[QuickRunPrepareResult, string].ok prepared.get
 
+type
+  SaveChoice* = enum
+    ## Who picked the buffer to write.
+    chosenByUser ## Explicit `:w`.
+    chosenByEditor ## `:wa` or auto save.
+
+  WriteDecision* = object
+    ## Session gate result. `premise` is meaningful when `refusal == writeAllowed`.
+    refusal*: WriteRefusal
+    premise*: WritePremise
+
+proc writeDecisionInSession*(
+    e: Editor,
+    buffer: TextBuffer,
+    savePath: string,
+    force = false,
+    choice = chosenByUser,
+): WriteDecision =
+  ## Session-aware write gate. `:wa`/auto save refuse a file two edited buffers
+  ## hold; `:w` writes this buffer; save-as refuses any holder. `!` overrides.
+  ## Own vs save-as is the file, not the spelling.
+  if force or buffer.isNil:
+    return WriteDecision(refusal: writeAllowed, premise: wpForce)
+
+  let gate = writeGate(buffer, savePath, force)
+  let premise = writePremise(gate.expectAbsent, force)
+  if gate.refusal != writeAllowed:
+    return WriteDecision(refusal: gate.refusal, premise: premise)
+
+  let isSaveAs = not buffer.bufferHoldsFile(savePath)
+  if choice == chosenByEditor or isSaveAs:
+    let holder =
+      if isSaveAs:
+        bufferHoldingPath(e.buffers, savePath, excluding = buffer)
+      else:
+        editedBufferHoldingPath(e.buffers, savePath, excluding = buffer)
+    if holder.isSome:
+      return WriteDecision(refusal: writeRefusedHeldByAnotherBuffer, premise: premise)
+
+  WriteDecision(refusal: writeAllowed, premise: premise)
+
+proc writeRefusalInSession*(
+    e: Editor,
+    buffer: TextBuffer,
+    savePath: string,
+    force = false,
+    choice = chosenByUser,
+): WriteRefusal =
+  ## `writeDecisionInSession` without the premise; for callers that only refuse.
+  e.writeDecisionInSession(buffer, savePath, force, choice).refusal
+
 proc saveFile*(
     e: Editor,
     buffer: TextBuffer,
@@ -347,7 +416,8 @@ proc saveFile*(
     force: bool = false,
 ): Result[(), string] =
   ## Write `buffer` to file. If `path` is given, save there (`:w <name>`).
-  ## Without `force`, refuse when the target was modified externally.
+  ## Without `force`, refuse when the target was modified externally or is
+  ## already held by another buffer.
 
   # `:w ~/f` keeps the tilde, so expand it like the open commands do.
   let savePath =
@@ -360,10 +430,10 @@ proc saveFile*(
       return err("No file path specified")
 
   # Check before trimming, and again just before writing.
-  let externalMod = externalModRefusal(buffer, savePath, force)
-  if externalMod.len > 0:
-    logError("editor", "Save failed: File was modified externally: " & savePath)
-    return err(externalMod)
+  let refusal = e.writeRefusalInSession(buffer, savePath, force)
+  if refusal != writeAllowed:
+    logError("editor", "Save refused for " & savePath & ": " & refusal.message)
+    return err(refusal.message)
 
   let insertBoundaryResult = e.commitForcedInsertBoundary(restart = false)
   if insertBoundaryResult.isErr:
@@ -404,13 +474,45 @@ proc saveFile*(
 
   ok(())
 
+proc batchFileKey(path: string): string =
+  ## Batch key for `path`: entity when resolvable, else spelling.
+  let id = fileEntityId(path)
+  if id.isSome:
+    "entity:" & $id.get.dev & ":" & $id.get.ino
+  else:
+    "path:" & pathKey(path)
+
+proc buffersToSave*(e: Editor, force: bool): BatchSaveSelection =
+  ## One write per file for `:wa`/auto save, first-seen in `e.buffers`.
+  ## Losers go in `unwritten` even if the winner was refused (`skippedExternal`
+  ## names the winner). First-seen is shared with auto save, which has no focus.
+  var seen: seq[string]
+  for buffer in e.buffers:
+    if buffer.isUtilityBuffer or not buffer.isModified or buffer.filePath.isNone:
+      continue
+
+    let path = buffer.filePath.get
+    let key = batchFileKey(path)
+    if key in seen:
+      # Already decided; report the loser so the first-seen pick is not silent.
+      logDebug(
+        "editor",
+        "Batch save leaves unwritten " & path & ": another buffer holds the file",
+      )
+      result.unwritten.add (buffer: buffer, path: path)
+      continue
+    seen.add key
+
+    let refusal = e.writeRefusalInSession(buffer, path, force, chosenByEditor)
+    if refusal != writeAllowed:
+      logDebug("editor", "Batch save skipped " & path & ": " & refusal.message)
+      result.skippedExternal.add (path: path, buffer: buffer, reason: refusal)
+      continue
+
+    result.targets.add (buffer: buffer, path: path)
+
 proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
-  ## Save every modified buffer that has a file path.
-  ##
-  ## Buffers without a file path are silently skipped (matches Vim's `:wa`).
-  ## When `force` is false, buffers whose underlying file was changed externally
-  ## are skipped and reported via `skippedExternal`. When true, those changes
-  ## are overwritten.
+  ## Save every modified file-backed buffer (`:wa`). Each path is written once.
   let insertBoundaryResult = e.commitForcedInsertBoundary(restart = false)
   if insertBoundaryResult.isErr:
     result.failures.add((path: "", error: insertBoundaryResult.error))
@@ -418,18 +520,11 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
   defer:
     e.enforceModePolicy()
 
-  for buffer in e.buffers:
-    if not buffer.isModified:
-      continue
-    if buffer.filePath.isNone:
-      continue
+  let selected = e.buffersToSave(force)
+  result.skippedExternal = selected.skippedExternal
+  result.unwritten = selected.unwritten
 
-    let savePath = buffer.filePath.get
-    if not force and buffer.isExternallyModified():
-      logError("editor", "Save all skipped externally modified file: " & savePath)
-      result.skippedExternal.add(savePath)
-      continue
-
+  for (buffer, savePath) in selected.targets:
     # Mirror saveFile: trim per buffer, reverted on save failure.
     let didTrimRes = trimTrailingWhitespaceTracked(buffer)
     if didTrimRes.isErr:
@@ -501,57 +596,45 @@ proc autoSave*(e: Editor) =
   defer:
     e.enforceModePolicy()
 
-  # Iterate `e.buffers`, not windows: windows only expose foreground tabs,
-  # so background-tab buffers would silently miss auto save.
+  # All buffers, not just visible windows, so background tabs are covered.
   var savedCount = 0
   var savedPaths: seq[string] = @[]
 
-  for buffer in e.buffers:
-    # Check if buffer is modified and has a file path
-    if buffer.isModified and buffer.filePath.isSome:
-      let savePath = buffer.filePath.get
+  # Same set as `:wa`: one write per file.
+  let selected = e.buffersToSave(force = false)
+  for (buffer, savePath) in selected.targets:
+    # Mirror saveFile: trim per buffer, reverted on save failure.
+    let didTrimRes = trimTrailingWhitespaceTracked(buffer)
+    if didTrimRes.isErr:
+      logError(
+        "editor", "Auto save trim failed for " & savePath & ": " & didTrimRes.error
+      )
+      continue
+    let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
 
-      # Skip externally modified files to avoid overwriting external changes
-      if buffer.isExternallyModified():
-        logDebug(
-          "editor", "Skipping auto save for externally modified file: " & savePath
-        )
-        continue
-
-      # Mirror saveFile: trim per buffer, reverted on save failure.
-      let didTrimRes = trimTrailingWhitespaceTracked(buffer)
-      if didTrimRes.isErr:
+    let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
+    if saveResult.isErr:
+      let revertRes =
+        revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
+      if revertRes.isErr:
         logError(
-          "editor", "Auto save trim failed for " & savePath & ": " & didTrimRes.error
+          "editor",
+          "Failed to revert trim after auto save failure for " & savePath & ": " &
+            revertRes.error,
         )
-        continue
-      let (didTrim, changeListBefore, changeListIndexBefore) = didTrimRes.get
+        logError(
+          "editor",
+          "Auto save failed for " & savePath & ": " & saveResult.error &
+            " (failed to revert trim: " & revertRes.error & ")",
+        )
+      else:
+        logError("editor", "Auto save failed for " & savePath & ": " & saveResult.error)
+      continue
 
-      let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
-      if saveResult.isErr:
-        let revertRes =
-          revertTrimIfNeeded(buffer, didTrim, changeListBefore, changeListIndexBefore)
-        if revertRes.isErr:
-          logError(
-            "editor",
-            "Failed to revert trim after auto save failure for " & savePath & ": " &
-              revertRes.error,
-          )
-          logError(
-            "editor",
-            "Auto save failed for " & savePath & ": " & saveResult.error &
-              " (failed to revert trim: " & revertRes.error & ")",
-          )
-        else:
-          logError(
-            "editor", "Auto save failed for " & savePath & ": " & saveResult.error
-          )
+    savedCount += 1
+    savedPaths.add(savePath)
 
-      if saveResult.isOk:
-        savedCount += 1
-        savedPaths.add(savePath)
-
-        e.noteBufferSaved(buffer)
+    e.noteBufferSaved(buffer)
 
   # Update last auto save time
   e.state.timing.lastAutoSave = now
@@ -572,6 +655,28 @@ proc autoSave*(e: Editor) =
         e.state.statusMessage = "Auto saved: " & savedPaths[0]
       else:
         e.state.statusMessage = "Auto saved " & $savedCount & " files"
+
+  # Skips outrank saves. One latch per buffer; skipped and unwritten share a
+  # report so they do not overwrite each other on the status line.
+  var skipNotes: seq[string] = @[]
+  for (skippedPath, skippedBuffer, reason) in selected.skippedExternal:
+    if skippedBuffer.isNil or skippedBuffer.autoSaveSkipWarned:
+      continue
+    skippedBuffer.autoSaveSkipWarned = true
+    let msg = "Auto save skipped " & skippedPath & ": " & reason.message
+    logWarn("editor", msg)
+    skipNotes.add msg
+  for (unwrittenBuffer, unwrittenPath) in selected.unwritten:
+    if unwrittenBuffer.isNil or unwrittenBuffer.autoSaveSkipWarned:
+      continue
+    unwrittenBuffer.autoSaveSkipWarned = true
+    let msg =
+      "Auto save skipped " & unwrittenPath &
+      ": another buffer holds the file with unsaved edits"
+    logWarn("editor", msg)
+    skipNotes.add msg
+  if skipNotes.len > 0:
+    e.notifyAll(skipNotes, nlError)
 
 proc updateInputTime*(e: Editor) =
   ## Update the last input time (called when user provides input)
