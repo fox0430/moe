@@ -164,6 +164,8 @@ proc syncSelectionCursor(window: EditorWindow) =
     window.cursor.line = window.modeState.bookmarkManager.selectedIndex + 1
   of mskBackupManager:
     window.cursor.line = window.modeState.backupManager.selectedIndex + 1
+  of mskRecoveryManager:
+    window.cursor.line = window.modeState.recoveryManager.selectedIndex + 1
   of mskReferences:
     window.cursor.line = window.modeState.references.selectedIndex + 1
   of mskDocumentSymbol:
@@ -308,9 +310,9 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
     of EditorMode.Config:
       discard
     of EditorMode.BufferManager, EditorMode.BookmarkManager, EditorMode.Help,
-        EditorMode.BackupManager, EditorMode.DiffViewer, EditorMode.Debug,
-        EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
-        EditorMode.RecentFile, EditorMode.FileTree:
+        EditorMode.BackupManager, EditorMode.RecoveryManager, EditorMode.DiffViewer,
+        EditorMode.Debug, EditorMode.References, EditorMode.DocumentSymbol,
+        EditorMode.CallHierarchy, EditorMode.RecentFile, EditorMode.FileTree:
       # Show cursor when an overlay (command/search/rename) is active
       e.state.cursorVisible = e.state.hasOverlay
     of EditorMode.Terminal:
@@ -383,9 +385,10 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
     # that need a dedicated render proc.
     case layout.renderMode
     of EditorMode.Filer, EditorMode.FileTree, EditorMode.Help, EditorMode.BufferManager,
-        EditorMode.BookmarkManager, EditorMode.BackupManager, EditorMode.DiffViewer,
-        EditorMode.Debug, EditorMode.References, EditorMode.DocumentSymbol,
-        EditorMode.CallHierarchy, EditorMode.RecentFile:
+        EditorMode.BookmarkManager, EditorMode.BackupManager,
+        EditorMode.RecoveryManager, EditorMode.DiffViewer, EditorMode.Debug,
+        EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
+        EditorMode.RecentFile:
       e.renderWindow(
         buffer, window, layout.lineNumOffset, layout.isBottomWindow,
         layout.isActiveWindow, tabLineOffset,

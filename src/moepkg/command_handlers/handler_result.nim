@@ -98,6 +98,10 @@ type
     hrBackupManagerRefresh # Refresh backup list
     hrBackupManagerQuit # Close backup manager and return to previous mode
     hrEnterBackupManager # Enter backup manager mode
+    hrRecoveryManagerDiscard # Discard a preserved copy
+    hrRecoveryManagerRefresh # Refresh the preserved-work list
+    hrRecoveryManagerQuit # Close recovery manager and return to previous mode
+    hrEnterRecoveryManager # Enter recovery manager mode
     hrDiffViewerQuit # Close diff viewer and return to previous mode
     hrDiffViewerToggleView # Toggle unified/side-by-side in diff viewer
     hrDiffViewerToggleWord # Toggle word highlight in diff viewer
@@ -290,6 +294,14 @@ type
       discard
     of hrEnterBackupManager:
       discard
+    of hrRecoveryManagerDiscard:
+      discardRecoveryIndex*: int
+    of hrRecoveryManagerRefresh:
+      discard
+    of hrRecoveryManagerQuit:
+      discard
+    of hrEnterRecoveryManager:
+      allRecovery*: bool ## List every preserved copy rather than only the active file's.
     of hrDiffViewerQuit:
       discard
     of hrDiffViewerToggleView, hrDiffViewerToggleWord:
@@ -489,8 +501,8 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrLspCallHierarchyOutgoing, hrJobs:
     hrgExitToNormal
   of hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
-      hrEnterBufferManager, hrEnterBackupManager, hrRecentFile, hrDebug,
-      hrEnterBookmarkManager, hrConfig:
+      hrEnterBufferManager, hrEnterBackupManager, hrEnterRecoveryManager, hrRecentFile,
+      hrDebug, hrEnterBookmarkManager, hrConfig:
     hrgExitToNewMode
   of hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrNew, hrVnew, hrEdit,
       hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
@@ -505,7 +517,8 @@ proc group*(k: HandlerResultKind): HandlerResultGroup =
       hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
       hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
       hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-      hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
+      hrBackupManagerRefresh, hrBackupManagerQuit, hrRecoveryManagerDiscard,
+      hrRecoveryManagerRefresh, hrRecoveryManagerQuit, hrDiffViewerQuit,
       hrDiffViewerToggleView, hrDiffViewerToggleWord, hrRecentFileOpenFile,
       hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrMoveWindowLeft, hrMoveWindowDown,
       hrMoveWindowUp, hrMoveWindowRight, hrMaximizeWindowHeight, hrIncreaseWindowHeight,

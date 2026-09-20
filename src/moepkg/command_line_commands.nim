@@ -821,6 +821,19 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
+    name: "recover",
+    completionDescription: "Open crash recovery manager",
+    helpEntries: @[
+      HelpEntry(syntax: "recover", description: "Open crash recovery manager"),
+      HelpEntry(
+        syntax: "recover!",
+        description: "List every preserved copy, not only the current file's",
+      ),
+    ],
+    action: some(claRecoveryManager),
+    isCanonicalLong: true,
+  ),
+  CommandLineCommandSpec(
     name: "config",
     completionDescription: "Open configuration mode",
     helpEntries: @[HelpEntry(syntax: "config", description: "Open configuration mode")],

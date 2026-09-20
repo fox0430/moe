@@ -34,11 +34,11 @@ const HelpSentences* =
   "\n# Register\n\n" & renderRegisterSection() & "\n# Visual mode\n\n" &
   renderVisualModeSection() & "\n# Replace mode\n\n" & renderReplaceModeSection() &
   "\n# Insert mode\n\n" & renderInsertModeSection() & "\n# Backup mode\n\n" &
-  renderBackupModeSection() & "\n# Diff mode\n\n" & renderDiffModeSection() &
-  "\n# References mode\n\n" & renderReferencesModeSection() &
-  "\n# Call hierarchy viewer mode\n\n" & renderCallHierarchyModeSection() &
-  "\n# Filer mode\n\n" & renderFilerModeSection() & "\n# FileTree mode\n\n" &
-  renderFileTreeModeSection() & "\n# Buffer manager mode\n\n" &
+  renderBackupModeSection() & "\n# Recovery mode\n\n" & renderRecoveryModeSection() &
+  "\n# Diff mode\n\n" & renderDiffModeSection() & "\n# References mode\n\n" &
+  renderReferencesModeSection() & "\n# Call hierarchy viewer mode\n\n" &
+  renderCallHierarchyModeSection() & "\n# Filer mode\n\n" & renderFilerModeSection() &
+  "\n# FileTree mode\n\n" & renderFileTreeModeSection() & "\n# Buffer manager mode\n\n" &
   renderBufferManagerModeSection() & "\n# Bookmark manager mode\n\n" &
   renderBookmarkManagerModeSection() & "\n# Document symbol viewer mode\n\n" &
   renderDocumentSymbolModeSection() & "\n# Log viewer mode\n\n" &

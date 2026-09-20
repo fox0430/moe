@@ -30,7 +30,7 @@ import
     editor_window_layout, editor_window_state, help_viewer, log_viewer, logger,
     lsp_service, message_log, types, viewer_mode,
   ]
-import ../[backup, backup_manager, diff_viewer]
+import ../[backup, backup_manager, diff_viewer, recovery_format, recovery_manager]
 
 import editor_ops, handler_result
 
@@ -201,6 +201,9 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
   of hrBackupManagerQuit:
     e.leaveViewerMode(EditorMode.BackupManager)
     return true
+  of hrRecoveryManagerQuit:
+    e.leaveViewerMode(EditorMode.RecoveryManager)
+    return true
   of hrDiffViewerQuit:
     # Resume the suspended mode; clearModeState already restored the swapped
     # buffer, and syncSelectionCursor re-places the cursor on the next render.
@@ -367,6 +370,45 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     )
     if enterResult.isErr:
       e.state.statusMessage = "Failed to open backup manager: " & enterResult.error
+    return true
+  of hrEnterRecoveryManager:
+    # An unnamed buffer has no file to ask about, so the list widens to every
+    # preserved copy. `:recover!` widens it the same way from a named buffer,
+    # the only way to reach a copy whose origin was unnamed.
+    #
+    # The scope comes from the window the command was typed in, before any
+    # focus change. A `:recover` issued in the viewer itself means "refresh".
+    let fromRecoveryViewer =
+      e.activeWindow.viewerEntry.isSome and
+      e.activeWindow.viewerEntry.get.mode == EditorMode.RecoveryManager
+    var sourceFilePath = ""
+    if not r.allRecovery and not fromRecoveryViewer and e.activeBuffer.filePath.isSome:
+      sourceFilePath = absolutePath(e.activeBuffer.filePath.get)
+    if e.focusExistingViewerWindow(EditorMode.RecoveryManager):
+      # Re-scope, not just focus: focusing alone would make `:recover!` a
+      # no-op, leaving the unnamed copies it exists to reach unreachable.
+      let win = e.activeWindow
+      let rescope = r.allRecovery or not fromRecoveryViewer
+      if win.modeState.kind == mskRecoveryManager:
+        # Without a re-scope, re-read under the scope it already has: another
+        # editor may have discarded a session since the list was built.
+        let scope =
+          if rescope: sourceFilePath else: win.modeState.recoveryManager.sourceFilePath
+        let openState = initRecoveryManagerState(getCrashRecoveryBaseDir(), scope)
+        win.modeState = ModeState(kind: mskRecoveryManager, recoveryManager: openState)
+        win.setView(openState.createRecoveryManagerTextBuffer())
+        win.cursor.line = min(1, win.buffer.len - 1)
+        win.cursor.column = 0
+      return true
+    let rcState = initRecoveryManagerState(getCrashRecoveryBaseDir(), sourceFilePath)
+    let enterResult = e.enterViewerMode(
+      EditorMode.RecoveryManager,
+      ModeState(kind: mskRecoveryManager, recoveryManager: rcState),
+      rcState.createRecoveryManagerTextBuffer(),
+      vpVSplit,
+    )
+    if enterResult.isErr:
+      e.state.statusMessage = "Failed to open recovery manager: " & enterResult.error
     return true
   of hrEnterTerminal:
     # Capture previousMode before teardown.

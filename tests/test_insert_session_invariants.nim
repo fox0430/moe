@@ -192,8 +192,11 @@ let Invariants = @[
       ("moepkg/editor_window_state.nim", 1),
       ("moepkg/viewer_mode.nim", 1),
       ("moepkg/command_handlers/backup_ops.nim", 4),
+      # Recovery viewer list rebuild (read-only viewer, no session).
+      ("moepkg/command_handlers/recovery_ops.nim", 1),
       ("moepkg/command_handlers/editor_ops.nim", 1),
-      ("moepkg/command_handlers/viewer_ops.nim", 4),
+      # One of the five re-scopes an open recovery list (read-only viewer).
+      ("moepkg/command_handlers/viewer_ops.nim", 5),
       # Filer / FileTree listing rebuilds. These were invisible to the old
       # line-based `.buffer =` matcher because the RHS sat on the next line.
       ("moepkg/command_handlers/result_processor.nim", 2),

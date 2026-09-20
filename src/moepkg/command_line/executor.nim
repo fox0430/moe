@@ -200,6 +200,9 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claBufferManager)
   of claBackupManager:
     return CommandLineResult(kind: claBackupManager)
+  of claRecoveryManager:
+    return
+      CommandLineResult(kind: claRecoveryManager, allRecovery: "force" in cmd.flags)
   of claRecentFile:
     return CommandLineResult(kind: claRecentFile)
   of claClearSearchHighlight:

@@ -112,6 +112,14 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.statusLineBackupManagerModeInactive:
     makeColorPair("#61afef", "#ffffff"),
 
+  # Status line - Recovery manager mode
+  EditorColorPairIndex.statusLineRecoveryManagerMode:
+    makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineRecoveryManagerModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineRecoveryManagerModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
   # Status line - Diff viewer mode
   EditorColorPairIndex.statusLineDiffViewerMode: makeColorPair("#ffffff", "#61afef"),
   EditorColorPairIndex.statusLineDiffViewerModeLabel:
@@ -326,6 +334,9 @@ const DefaultColors*: ThemeColors = [
 
   # Backup manager
   EditorColorPairIndex.backupManagerCurrentLine: makeColorPair("#ffffff", "#008080"),
+
+  # Recovery manager
+  EditorColorPairIndex.recoveryManagerCurrentLine: makeColorPair("#ffffff", "#008080"),
 
   # Diff viewer
   EditorColorPairIndex.diffViewerAddedLine: makeColorPair("#98c379", "#000000"),

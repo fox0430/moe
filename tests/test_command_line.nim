@@ -780,6 +780,7 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("buffers", claBufferManager)
     parser.addAlias("ls", claBufferManager)
     parser.addAlias("backup", claBackupManager)
+    parser.addAlias("recover", claRecoveryManager)
     parser.addAlias("recent", claRecentFile)
     parser.addAlias("bg", claBackground)
     parser.addAlias("ju", claJumpList)
@@ -901,6 +902,17 @@ suite "CommandLine - execute additional commands":
   test "Execute :backup":
     let result = parser.parseAndExecute(":backup")
     check result.kind == claBackupManager
+
+  test "Execute :recover":
+    let result = parser.parseAndExecute(":recover")
+    check result.kind == claRecoveryManager
+    check not result.allRecovery
+
+  test "Execute :recover!":
+    # The only way to reach a copy whose origin was an unnamed buffer.
+    let result = parser.parseAndExecute(":recover!")
+    check result.kind == claRecoveryManager
+    check result.allRecovery
 
   test "Execute :recent":
     let result = parser.parseAndExecute(":recent")

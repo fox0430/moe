@@ -46,6 +46,7 @@ let Sections: seq[tuple[name: string, body: proc(): string]] = @[
   (name: "ReplaceMode", body: renderReplaceModeTable),
   (name: "InsertMode", body: renderInsertModeTable),
   (name: "BackupManagerMode", body: renderBackupModeTable),
+  (name: "RecoveryManagerMode", body: renderRecoveryModeTable),
   (name: "ReferencesMode", body: renderReferencesModeTable),
   (name: "CallHierarchyMode", body: renderCallHierarchyModeTable),
   (name: "FilerMode", body: renderFilerModeTable),

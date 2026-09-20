@@ -103,6 +103,8 @@ proc toStatusLineModeColorIndex(mode: EditorMode): EditorColorPairIndex =
     EditorColorPairIndex.statusLineBookmarkManagerMode
   of EditorMode.BackupManager:
     EditorColorPairIndex.statusLineBackupManagerMode
+  of EditorMode.RecoveryManager:
+    EditorColorPairIndex.statusLineRecoveryManagerMode
   of EditorMode.DiffViewer:
     EditorColorPairIndex.statusLineDiffViewerMode
   of EditorMode.RecentFile:

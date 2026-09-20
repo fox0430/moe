@@ -35,6 +35,7 @@ import
   types/buffer_manager_types,
   types/bookmark_manager_types,
   types/backup_manager_types,
+  types/recovery_manager_types,
   types/diff_viewer_types,
   types/debug_viewer_types,
   types/config_mode_types,
@@ -57,10 +58,11 @@ from lsp/protocol/types import SemanticTokensLegend
 export
   buffer.LineMarkerKind, registers_types, command_completion_types, filer_types,
   filetree_types, log_viewer_types, help_viewer_types, buffer_manager_types,
-  bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
-  config_mode_types, references_viewer_types, documentsymbol_viewer_types,
-  callhierarchy_viewer_types, hover_popup_types, notification_popup_types, primitives,
-  syntax_checker_types, recent_file_mode_types, config.BracketSplitMode
+  bookmark_manager_types, backup_manager_types, recovery_manager_types,
+  diff_viewer_types, debug_viewer_types, config_mode_types, references_viewer_types,
+  documentsymbol_viewer_types, callhierarchy_viewer_types, hover_popup_types,
+  notification_popup_types, primitives, syntax_checker_types, recent_file_mode_types,
+  config.BracketSplitMode
 
 when not defined(moe.embedded):
   export terminal_mode_types
@@ -122,6 +124,7 @@ type
     mskBufferManager
     mskBookmarkManager
     mskBackupManager
+    mskRecoveryManager
     mskDiffViewer
     mskDebug
     mskConfig
@@ -157,6 +160,7 @@ type
     of mskBufferManager: bufferManager*: BufferManagerState
     of mskBookmarkManager: bookmarkManager*: BookmarkManagerState
     of mskBackupManager: backupManager*: BackupManagerState
+    of mskRecoveryManager: recoveryManager*: RecoveryManagerState
     of mskDiffViewer: diffViewer*: DiffViewerState
     of mskDebug: debug*: DebugViewerState
     of mskConfig: config*: ConfigModeState
@@ -1336,6 +1340,7 @@ proc modeStateKind*(mode: EditorMode): ModeStateKind =
   of EditorMode.BufferManager: mskBufferManager
   of EditorMode.BookmarkManager: mskBookmarkManager
   of EditorMode.BackupManager: mskBackupManager
+  of EditorMode.RecoveryManager: mskRecoveryManager
   of EditorMode.DiffViewer: mskDiffViewer
   of EditorMode.Debug: mskDebug
   of EditorMode.Config: mskConfig
