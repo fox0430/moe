@@ -2035,26 +2035,40 @@ suite "Visual Commands - visualPaste":
     if not available:
       skip()
     else:
-      let buf = newTextBuffer()
-      discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
-      let state = createTestState()
-      # No register set — unnamed register is empty.
-
       let testText = "FROM_CLIPBOARD"
       check writeToClipboardSync(tool, testText).isOk
       let ready = readClipboardWithRetry(tool, testText)
       check ready.isOk and ready.get() == testText
 
-      state.visualSelection = VisualSelection(
-        start: BufferPosition(line: 0, column: 0),
-        current: BufferPosition(line: 0, column: 4),
-        active: true,
-        kind: vskChar,
-      )
-
+      # visualPaste runs its own bounded clipboard read, and a loaded CI box can
+      # starve the X round trip past that budget. Retry the whole paste the way
+      # the read above is retried, so a slow tool is not reported as a missing
+      # fallback.
       let cfg = ClipboardConfig(enable: true, tool: tool)
-      discard visualPaste(buf, state, cfg)
+      var
+        buf: TextBuffer
+        state: EditorState
+        pasted = Result[(), string].ok(())
+      for _ in 0 ..< 10:
+        buf = newTextBuffer()
+        discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+        state = createTestState()
+        # No register set — unnamed register is empty.
+        state.visualSelection = VisualSelection(
+          start: BufferPosition(line: 0, column: 0),
+          current: BufferPosition(line: 0, column: 4),
+          active: true,
+          kind: vskChar,
+        )
 
+        pasted = visualPaste(buf, state, cfg)
+        if pasted.isOk and buf.getLine(0) == "FROM_CLIPBOARD world":
+          break
+        sleep(100)
+
+      if pasted.isErr:
+        checkpoint("visualPaste failed: " & pasted.error)
+      check pasted.isOk
       check buf.getLine(0) == "FROM_CLIPBOARD world"
       check state.visualSelection.active == false
 
