@@ -936,6 +936,8 @@ suite "Filter op":
   ): Future[void] {.async.} =
     ## Queue the op the command handler would have produced and let it finish.
     ## The window it was typed in is the active one, as at the command line.
+    let statusBefore = editor.state.statusMessage
+    let queueBefore = editor.state.notificationPopup.queue.len
     editor.state.pending.add PendingAsyncOp(
       kind: paoFilter,
       filter: (
@@ -950,8 +952,8 @@ suite "Filter op":
     await editor.handlePendingAsyncOperations(FrontendHooks())
     # The run is spawned, not awaited, so wait for it to land.
     for _ in 0 ..< 200:
-      if editor.state.statusMessage.len > 0 or
-          editor.state.notificationPopup.queue.len > 0:
+      if editor.state.statusMessage != statusBefore or
+          editor.state.notificationPopup.queue.len != queueBefore:
         break
       await sleepAsync(25)
 

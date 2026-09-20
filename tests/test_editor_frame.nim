@@ -230,6 +230,7 @@ suite "buffer content notices":
     e.config.notification.popupNotifications = false
     let buf = e.activeBuffer
     buf.filePath = some(getTempDir() / "moe-text-notify.txt")
+    e.state.setStatusQuiet("")
     clearMessageLog()
 
     buf.noteContent()
