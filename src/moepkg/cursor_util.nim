@@ -18,10 +18,11 @@
 #[############################################################################]#
 
 ## Small cursor helpers shared between `handler.nim` and the command-handler
-## result processor. Kept here (depending only on `primitives.BufferPosition`)
-## to avoid a circular import between `handler.nim` and
-## `command_handlers/result_processor.nim`.
+## result processor. Isolated here to avoid a circular import.
 
+import std/strutils
+
+import unicode_utils
 import primitives
 
 proc adjustCursorAfterInsertExit*(cursor: var BufferPosition, lineCharLen: int) =
@@ -31,3 +32,17 @@ proc adjustCursorAfterInsertExit*(cursor: var BufferPosition, lineCharLen: int) 
     cursor.column = 0
   elif cursor.column > 0:
     cursor.column = min(cursor.column - 1, lineCharLen - 1)
+
+proc pasteEndPos*(startPos: BufferPosition, pasteText: string): BufferPosition =
+  ## Position just after inserting `pasteText` at `startPos`. Newlines start a new line.
+  let nlCount = pasteText.count('\n')
+  if nlCount == 0:
+    BufferPosition(line: startPos.line, column: startPos.column + pasteText.charLen)
+  else:
+    let lastSeg = pasteText.substr(pasteText.rfind('\n') + 1)
+    BufferPosition(line: startPos.line + nlCount, column: lastSeg.charLen)
+
+proc clampCursorToLastChar*(cursor: var BufferPosition, lineCharLen: int) =
+  ## Normal mode cannot rest one past the last character (unlike Insert).
+  if cursor.column >= lineCharLen:
+    cursor.column = max(0, lineCharLen - 1)

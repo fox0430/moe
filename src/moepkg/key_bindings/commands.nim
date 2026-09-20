@@ -187,6 +187,10 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("visual-change", "Delete selection and enter insert mode", "visual.change"),
   ("visual-block-append", "Append after visual block selection", "visual.block.append"),
   ("visual-paste", "Delete selection and paste register content", "visual.paste"),
+  (
+    "visual-paste-end", "Delete selection, paste, and leave cursor after pasted text",
+    "visual.paste.end",
+  ),
 ]
 
 const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
@@ -195,6 +199,14 @@ const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("yank-line", "Yank (copy) line", "yank.line"),
   ("paste-after", "Paste after cursor", "paste.after"),
   ("paste-before", "Paste before cursor", "paste.before"),
+  (
+    "paste-after-end", "Paste after cursor and leave cursor after pasted text",
+    "paste.after.end",
+  ),
+  (
+    "paste-before-end", "Paste before cursor and leave cursor after pasted text",
+    "paste.before.end",
+  ),
   ("join-lines", "Join current line with next line", "join.lines"),
   (
     "show-char-info", "Show ASCII/Unicode value of character under cursor",

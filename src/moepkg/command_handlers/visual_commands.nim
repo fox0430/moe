@@ -26,7 +26,7 @@ import std/[options, strutils]
 
 import pkg/results
 
-import ../[types, registers, motion, modes, config, unicode_utils]
+import ../[cursor_util, types, registers, motion, modes, config, unicode_utils]
 import ../buffer/[core, edit, fold, undo]
 import insert_commands
 
@@ -813,6 +813,7 @@ proc visualPaste*(
     buffer: TextBuffer,
     state: EditorState,
     clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
+    cursorAfter: bool = false,
 ): Result[(), string] =
   ## Delete selection and paste register content.
   result = Result[(), string].ok ()
@@ -854,6 +855,9 @@ proc visualPaste*(
     var deletedText = ""
     var deletedIsLine = false
     let cursorBeforePaste = state.cursor
+    let selKind = state.visualSelection.kind
+    var pasteStart = BufferPosition()
+    var pastedLineCount = 0
 
     template checkPasteErr(r: Result[(), string]) =
       ## Like checkVisualEditErr but also restores cursor for rollback.
@@ -870,8 +874,8 @@ proc visualPaste*(
           min(state.visualSelection.start.column, state.visualSelection.current.column)
         let startLine =
           min(state.visualSelection.start.line, state.visualSelection.current.line)
-        state.cursor.line = startLine
-        state.cursor.column = startCol
+        pasteStart = BufferPosition(line: startLine, column: startCol)
+        state.cursor = pasteStart
         checkPasteErr(buffer.insertText(state.cursor, pasteText))
       of vskLine:
         let
@@ -891,6 +895,8 @@ proc visualPaste*(
         var lines = pasteText.split('\n')
         if lines.len > 1 and lines[^1].len == 0:
           lines.setLen(lines.len - 1)
+        pastedLineCount = lines.len
+        pasteStart = BufferPosition(line: startLine, column: 0)
         for i, line in lines:
           checkPasteErr(buffer.insert(startLine + i, line))
         state.cursor.line = startLine
@@ -903,6 +909,7 @@ proc visualPaste*(
 
         checkPasteErr(buffer.deleteRange(selStart, selEnd))
 
+        pasteStart = selStart
         state.cursor = selStart
         checkPasteErr(buffer.insertText(state.cursor, pasteText))
     if txr.isErr:
@@ -919,6 +926,29 @@ proc visualPaste*(
     state.visualSelection.active = false
     state.statusMessage = ""
     state.mode = state.previousMode
+
+    if cursorAfter and buffer.len > 0:
+      case selKind
+      of vskLine:
+        let lastPastedEndLine = pasteStart.line + max(pastedLineCount, 1) - 1
+        let afterLine = lastPastedEndLine + 1
+        if afterLine < buffer.len:
+          state.cursor.line = afterLine
+          state.cursor.column = 0
+        else:
+          # Unlike Normal gp: col 0 unless the put replaced the whole buffer
+          # (then last char).
+          state.cursor.line = min(lastPastedEndLine, buffer.len - 1)
+          if pasteStart.line == 0:
+            let lineLen = buffer.getLine(state.cursor.line).charLen
+            state.cursor.column = lineLen
+            clampCursorToLastChar(state.cursor, lineLen)
+          else:
+            state.cursor.column = 0
+      of vskChar, vskBlock:
+        state.cursor = pasteEndPos(pasteStart, pasteText)
+        if buffer.len > 0:
+          clampCursorToLastChar(state.cursor, buffer.getLine(state.cursor.line).charLen)
 
 const SurroundPairs = [
   ("(", ")"),

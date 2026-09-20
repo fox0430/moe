@@ -71,6 +71,8 @@ const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   ("o", "visual-swap-selection"),
   ("p", "visual-paste"),
   ("P", "visual-paste"),
+  ("g p", "visual-paste-end"),
+  ("g P", "visual-paste-end"),
   # Fold
   ("z f", "fold-create"),
   # Adjust + LSP

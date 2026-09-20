@@ -112,6 +112,13 @@ const NormalModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "yt any", description: "Yank characters to a any character"),
     HelpEntry(syntax: "p", description: "Paste the clipboard"),
     HelpEntry(syntax: "P", description: "Paste the clipboard before the cursor"),
+    HelpEntry(
+      syntax: "gp", description: "Paste and leave the cursor after the pasted text"
+    ),
+    HelpEntry(
+      syntax: "gP",
+      description: "Paste before the cursor and leave the cursor after the pasted text",
+    ),
     HelpEntry(syntax: "n", description: "Search forwards"),
     HelpEntry(syntax: "N", description: "Search backwards"),
     HelpEntry(
@@ -453,16 +460,20 @@ const RegisterCommands*: HelpGroup = HelpGroup(
   ]
 )
 
-# `minWidth: 7` matches the hand-written original, which padded one column
-# beyond the longest entry (`d or x` / `Ctrl-a` / ...) for breathing room.
+# `minWidth: 9` pads one past the longest entry (`gp or gP`).
 const VisualModeCommands*: HelpGroup = HelpGroup(
-  minWidth: 7,
+  minWidth: 9,
   entries: @[
     HelpEntry(syntax: "d or x", description: "Delete text"),
     HelpEntry(
       syntax: "c", description: "Change (delete selection and enter insert mode)"
     ),
     HelpEntry(syntax: "y", description: "Copy text"),
+    HelpEntry(
+      syntax: "gp or gP",
+      description:
+        "Paste over the selection and leave the cursor after the pasted text (replacing the whole buffer parks on the last pasted character)",
+    ),
     HelpEntry(syntax: "r", description: "Replace character"),
     HelpEntry(syntax: "S", description: "Surround selection with character"),
     HelpEntry(syntax: "J", description: "Join lines"),

@@ -1827,6 +1827,230 @@ suite "Handler - Paste operations":
     check ctx.cursor.line == 0
     check ctx.cursor.column == 1
 
+  test "gp characterwise leaves cursor after pasted text":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    ctx.state.registers.setYankedRegister("XYZ", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer[0] == "helloXYZ world"
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 8
+
+  test "gP characterwise leaves cursor after pasted text":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 5)
+    ctx.state.registers.setYankedRegister("XYZ", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before.end")).isOk
+    check buffer[0] == "helloXYZ world"
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 8
+
+  test "gp characterwise at end of line leaves cursor on last pasted char":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    ctx.state.registers.setYankedRegister("XY", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer[0] == "helloXY"
+    # Normal mode parks on 'Y', not past EOL.
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 6
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == "helloX"
+
+  test "gp characterwise multibyte":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    ctx.state.registers.setYankedRegister("あいう", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer[0] == "helloあいう world"
+    check ctx.cursor.column == 8
+
+  test "gp characterwise multi-line":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("xy\nab", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer.len == 2
+    check buffer[0] == "hxy"
+    check buffer[1] == "abello"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 2
+
+  test "gp characterwise with count":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    ctx.state.registers.setYankedRegister("X", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end"), @["3"]).isOk
+    check buffer[0] == "helloXXX"
+    check ctx.cursor.column == 7
+
+  test "gp linewise leaves cursor on the line after pasted text":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("  indented", true)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer.len == 3
+    check buffer[1] == "  indented"
+    check ctx.cursor.line == 2
+    check ctx.cursor.column == 0
+
+  test "gp linewise parks on column 0 of an indented following line":
+    let buffer = newTextBuffer("line1\n    next")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("X", true)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer.len == 3
+    check buffer[1] == "X"
+    check buffer[2] == "    next"
+    check ctx.cursor.line == 2
+    check ctx.cursor.column == 0
+
+  test "gP linewise leaves cursor on the line after pasted text":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    ctx.state.registers.setYankedRegister("\tindented", true)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before.end")).isOk
+    check buffer.len == 3
+    check buffer[1] == "\tindented"
+    check ctx.cursor.line == 2
+    check ctx.cursor.column == 0
+
+  test "gp linewise at last line stays on pasted line":
+    let buffer = newTextBuffer("line1")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("  pasted", true)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer.len == 2
+    check buffer[1] == "  pasted"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 0
+
+  test "gp linewise with count leaves cursor after all copies":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("X", true)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end"), @["2"]).isOk
+    check buffer.len == 4
+    check buffer[1] == "X"
+    check buffer[2] == "X"
+    check ctx.cursor.line == 3
+    check ctx.cursor.column == 0
+
+  test "gP linewise with count leaves cursor after all copies":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("X", true)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before.end"), @["2"]).isOk
+    check buffer.len == 4
+    check buffer[0] == "X"
+    check buffer[1] == "X"
+    check buffer[2] == "line1"
+    check ctx.cursor.line == 2
+    check ctx.cursor.column == 0
+
+  test "gp then . repeats paste-after-end":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("XY", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer[0] == "hXYello"
+    check ctx.cursor.column == 3
+    check registry.execute(ctx, custom("edit.repeat")).isOk
+    check buffer[0] == "hXYeXYllo"
+    check ctx.cursor.column == 6
+
+  test "gP then . repeats paste-before-end":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("XY", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before.end")).isOk
+    check buffer[0] == "XYhello"
+    check ctx.cursor.column == 2
+    check registry.execute(ctx, custom("edit.repeat")).isOk
+    check buffer[0] == "XYXYhello"
+    check ctx.cursor.column == 4
+
+  test "linewise gp on a closed fold pastes below the whole fold":
+    let buffer = newTextBuffer("head\n1\n2\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.state.registers.setNoNamedRegister("X\n", true)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer[3] == "X"
+    check buffer[4] == "tail"
+    check ctx.cursor.line == 4
+    check ctx.cursor.column == 0
+
+  test "gp linewise with an empty register inserts a blank line and moves after it":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.registers.setYankedRegister("", true)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isOk
+    check buffer.len == 3
+    check buffer[1] == ""
+    check ctx.cursor.line == 2
+    check ctx.cursor.column == 0
+
+  test "gp with an empty characterwise register reports an error":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.registers.setYankedRegister("", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after.end")).isErr
+    check buffer[0] == "hello"
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 1
+
 suite "Handler - Delete char operations":
   test "delete char at cursor (x)":
     let buffer = newTextBuffer("hello")
@@ -5597,6 +5821,20 @@ suite "Cursor clamping - Visual operations sync ctx.cursor":
     check ctx.state.mode == EditorMode.Normal
     # ctx.cursor should be synced
     check ctx.cursor.line == 0
+
+  test "visual gp leaves cursor after pasted text":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    ctx.state.registers.setYankedRegister("XYZ", false)
+    ctx.state.registers.setDeletedRegister("XYZ", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("visual.paste.end")).isOk
+    check buffer[0] == "XYZ world"
+    check ctx.state.mode == EditorMode.Normal
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 3
 suite "Handler - Indent/Outdent operator with text objects":
   test "operator.indent sets pending operator":
     let buffer = newTextBuffer("hello world")

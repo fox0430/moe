@@ -40,10 +40,10 @@ export core, operator_engine, clipboard, motion_scroll, visual, edit, misc
 const EditCommandIds = [
   "delete.char", "delete.char.before", "delete.line", "delete.word",
   "operator.delete.to.end", "operator.change.to.end", "paste.after", "paste.before",
-  "edit.paste", "join.lines", "substitute.char", "substitute.line", "toggle.case",
-  "operator.delete", "operator.change", "operator.indent", "operator.outdent",
-  "operator.lowercase", "operator.uppercase", "autoindent.line", "edit.increment",
-  "edit.decrement", "edit.repeat",
+  "paste.after.end", "paste.before.end", "edit.paste", "join.lines", "substitute.char",
+  "substitute.line", "toggle.case", "operator.delete", "operator.change",
+  "operator.indent", "operator.outdent", "operator.lowercase", "operator.uppercase",
+  "autoindent.line", "edit.increment", "edit.decrement", "edit.repeat",
 ]
   ## Built-in command ids (dotted form, as carried by Command.commandId) that
   ## modify the buffer at the cursor, used to classify a command for the
@@ -67,7 +67,7 @@ const EditOperatorTypes = ["replace"]
 const VisualEditCommandIds = [
   "visual.delete", "visual.indent", "visual.dedent", "visual.lowercase",
   "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
-  "visual.change", "visual.block.append", "visual.paste",
+  "visual.change", "visual.block.append", "visual.paste", "visual.paste.end",
 ]
   ## Visual-mode command ids that modify the selection. The selection is snapped
   ## to fold boundaries before the edit, and gated on read-only buffers.
