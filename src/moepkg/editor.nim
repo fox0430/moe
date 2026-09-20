@@ -44,8 +44,7 @@ import
   editor_reload,
   editor_config_reload,
   editor_frame,
-  editor_init,
-  emergency
+  editor_init
 
 import
   render_utils, git_conflict, logger, config_loader, search_utils, hover_popup,
@@ -375,13 +374,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       result.state.statusMessage = "Config notice: " & deprecationMessages[0]
     for msg in deprecationMessages:
       addMessageLog("Config notice: " & msg)
-
-  # Check for crash recovery files from a previous crash
-  if hasCrashRecoveryFiles():
-    let msg = "Crash recovery files found. See " & getCrashRecoveryBaseDir()
-    if result.state.statusMessage.len == 0:
-      result.state.statusMessage = msg
-    addMessageLog(msg)
 
 proc newEditor*(editorConfig: EditorConfig): Editor =
   ## Create a new Editor with the given configuration.

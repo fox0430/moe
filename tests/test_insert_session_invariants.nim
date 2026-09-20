@@ -179,9 +179,10 @@ let Invariants = @[
     skipFiles: @[],
     match: matchWindowViewReplace,
     allow: @[
-      # 4 tab switches, plus the two `syncTerminalView` arms — Terminal windows
-      # hold no Insert session, so there is nothing to finalize there.
-      ("moepkg/editor_buffers.nim", 6),
+      # 4 tab switches, the two `syncTerminalView` arms (Terminal windows hold
+      # no Insert session), and the view-only arm of `redirectWindowsFromBuffer`
+      # (session finalized just above, shared with the tab-switch arm).
+      ("moepkg/editor_buffers.nim", 7),
       ("moepkg/editor_frame.nim", 1),
       ("moepkg/editor_navigation.nim", 1),
       ("moepkg/editor_window.nim", 1),

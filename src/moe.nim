@@ -292,6 +292,7 @@ proc main() =
 
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
+  editor.noteCrashRecoveryFiles()
 
   # Always capture mouse events so the terminal doesn't convert wheel events
   # to arrow key sequences. When mouse is disabled in config, events are
