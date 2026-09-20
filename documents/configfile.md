@@ -493,7 +493,7 @@ Persistent key remappings per editor mode. Uses the same key notation as `:nmap`
 
 Values can be a command name (e.g., `"save"`), a command with arguments (`"<command> <args...>"`), a key sequence (e.g., `"Escape"`), a mode switch (`"mode_switch <mode>"`), or an overlay switch (`"overlay_switch command|search|rename"`). See [How to use - Runtime Key Mapping](howtouse.md#runtime-key-mapping) for the full list of right-hand-side forms.
 
-Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree`.
+Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `RecoveryManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree`.
 
 The legacy mode name `quickrun` (the QuickRun mode no longer exists) is still accepted in `mode_switch` values and runtime mapping commands, and is treated as an alias for `Normal`. Note that a `[KeyMapping.QuickRun]` section header is not accepted; use `[KeyMapping.Normal]` instead.
 
@@ -503,7 +503,7 @@ The legacy mode name `quickrun` (the QuickRun mode no longer exists) is still ac
 
 `[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, and `[KeyMapping.VisualBlock]` apply to the specific visual mode only and override `VisualAll`.
 
-Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`) apply mappings to the corresponding special mode and override `All`.
+Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `RecoveryManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`) apply mappings to the corresponding special mode and override `All`.
 
 ```toml
 # Apply to all modes (except CommandLine)
@@ -956,7 +956,7 @@ Entries here are merged on top of `moerc.toml`'s `[KeyMapping]` section. When bo
 
 #### Format
 
-Each section is a mode name (`All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree` — the same set as `[KeyMapping]`). Each entry maps a key (left-hand side) to a right-hand side that is either a bare string or an inline table, identical to the `[KeyMapping]` value forms (bare command name / key sequence / `"mode_switch <mode>"` / `"overlay_switch <overlay>"`, or `{ command = …, args = […] }` / `{ keys = …, noremap = … }`). See [KeyMapping table](#keymapping-table) for the full description of the value forms and the inline-table fields.
+Each section is a mode name (`All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BookmarkManager`, `BackupManager`, `RecoveryManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`, `FileTree` — the same set as `[KeyMapping]`). Each entry maps a key (left-hand side) to a right-hand side that is either a bare string or an inline table, identical to the `[KeyMapping]` value forms (bare command name / key sequence / `"mode_switch <mode>"` / `"overlay_switch <overlay>"`, or `{ command = …, args = […] }` / `{ keys = …, noremap = … }`). See [KeyMapping table](#keymapping-table) for the full description of the value forms and the inline-table fields.
 
 #### Examples
 
@@ -1457,6 +1457,9 @@ with an unknown-key warning and can be removed.
 | statusLineBackupManagerMode | Status line in Backup manager mode (active) |
 | statusLineBackupManagerModeLabel | Status line mode label in Backup manager mode |
 | statusLineBackupManagerModeInactive | Status line in Backup manager mode (inactive) |
+| statusLineRecoveryManagerMode | Status line in Recovery manager mode (active) |
+| statusLineRecoveryManagerModeLabel | Status line mode label in Recovery manager mode |
+| statusLineRecoveryManagerModeInactive | Status line in Recovery manager mode (inactive) |
 | statusLineDiffViewerMode | Status line in Diff viewer mode (active) |
 | statusLineDiffViewerModeLabel | Status line mode label in Diff viewer mode |
 | statusLineDiffViewerModeInactive | Status line in Diff viewer mode (inactive) |
@@ -1607,6 +1610,7 @@ with an unknown-key warning and can be removed.
 | gitConflictBase | Git conflict: diff3 "base" side |
 | gitConflictTheirs | Git conflict: "theirs" side |
 | backupManagerCurrentLine | Backup manager: current line |
+| recoveryManagerCurrentLine | Recovery manager: current line |
 | diffViewerAddedLine | Diff file buffer: added line |
 | diffViewerDeletedLine | Diff file buffer: deleted line |
 | configModeCurrentLine | Configuration mode: current line |

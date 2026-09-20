@@ -34,8 +34,8 @@ const
   }
   ExitToNewModeKinds = {
     hrEnterFiler, hrEnterTerminal, hrEnterLogViewer, hrLspLog, hrEnterHelpViewer,
-    hrEnterBufferManager, hrEnterBackupManager, hrRecentFile, hrDebug,
-    hrEnterBookmarkManager, hrConfig,
+    hrEnterBufferManager, hrEnterBackupManager, hrEnterRecoveryManager, hrRecentFile,
+    hrDebug, hrEnterBookmarkManager, hrConfig,
   }
   NonResyncKinds =
     AppExitKinds + HandledGenericKinds + ExitToNormalKinds + ExitToNewModeKinds

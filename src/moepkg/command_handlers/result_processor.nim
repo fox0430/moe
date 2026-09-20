@@ -33,7 +33,8 @@ import
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
-  handler_manager, list_ops, lsp_ops, misc_ops, option_ops, viewer_ops, window_ops
+  handler_manager, list_ops, lsp_ops, misc_ops, option_ops, recovery_ops, viewer_ops,
+  window_ops
 
 type
   ReplayOutcome* = enum
@@ -76,6 +77,8 @@ proc modeSwitchEntry(mode: EditorMode): Option[HandlerResult] =
     some(HandlerResult(kind: hrEnterLogViewer))
   of EditorMode.BackupManager:
     some(HandlerResult(kind: hrEnterBackupManager))
+  of EditorMode.RecoveryManager:
+    some(HandlerResult(kind: hrEnterRecoveryManager))
   of EditorMode.RecentFile:
     some(HandlerResult(kind: hrRecentFile))
   of EditorMode.Debug:
@@ -177,14 +180,17 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrBufferManagerQuit, hrBufferManagerSelectBuffer,
       hrBufferManagerDeleteBuffer, hrBookmarkManagerQuit, hrBookmarkManagerJump,
-      hrBookmarkManagerDelete, hrBackupManagerQuit, hrDiffViewerQuit,
-      hrDiffViewerToggleView, hrDiffViewerToggleWord, hrFilerQuit, hrLspLog:
+      hrBookmarkManagerDelete, hrBackupManagerQuit, hrRecoveryManagerQuit,
+      hrDiffViewerQuit, hrDiffViewerToggleView, hrDiffViewerToggleWord, hrFilerQuit,
+      hrLspLog:
     return e.processViewerResult(r)
   of hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile:
     return e.processConfigResult(r)
   of hrBackupManagerRefresh, hrBackupManagerRestore, hrBackupManagerDelete,
       hrBackupManagerOpenDiff:
     return e.processBackupResult(r)
+  of hrRecoveryManagerRefresh, hrRecoveryManagerDiscard:
+    return e.processRecoveryResult(r)
   of hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
       hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,
       hrLspCallHierarchyOutgoing, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
@@ -197,7 +203,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.state.statusMessage = r.errorMessage
   of hrEnterFiler, hrEnterFileTree, hrRecentFile, hrEnterLogViewer, hrEnterHelpViewer,
       hrEnterBufferManager, hrEnterBookmarkManager, hrEnterBackupManager,
-      hrEnterTerminal:
+      hrEnterRecoveryManager, hrEnterTerminal:
     return e.processViewerResult(r)
   of hrExecCommand:
     # @: - repeat last Command mode command via the shared overlay wrapper.

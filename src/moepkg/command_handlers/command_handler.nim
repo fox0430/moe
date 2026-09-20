@@ -654,6 +654,8 @@ proc handleCommandModeInput*(
     HandlerResult(kind: hrEnterBufferManager)
   of claBackupManager:
     HandlerResult(kind: hrEnterBackupManager)
+  of claRecoveryManager:
+    HandlerResult(kind: hrEnterRecoveryManager, allRecovery: cmdResult.allRecovery)
   of claRecentFile:
     when defined(macosx):
       HandlerResult(kind: hrError, errorMessage: ":recent is not supported on macOS")

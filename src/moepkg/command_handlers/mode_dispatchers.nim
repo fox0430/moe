@@ -956,6 +956,42 @@ proc handleBackupManagerMode*(
   of bkmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleRecoveryManagerMode*(
+    manager: HandlerManager,
+    rcState: RecoveryManagerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle Recovery Manager mode input
+  let r = handleRecoveryManagerModeKey(rcState, viewportHeight, keyCombo)
+  case r.kind
+  of rcmrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of rcmrDiscard:
+    return HandlerResult(
+      kind: hrRecoveryManagerDiscard, discardRecoveryIndex: r.discardIndex
+    )
+  of rcmrArmDiscard:
+    return HandlerResult(
+      kind: hrHandled,
+      modeTransition: none(EditorMode),
+      statusMessage:
+        "Discard this preserved copy? It is unsaved work. Press D again to confirm",
+    )
+  of rcmrRefresh:
+    return HandlerResult(kind: hrRecoveryManagerRefresh)
+  of rcmrEnterCommand:
+    state.input.commandText = ":"
+    state.input.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
+    )
+  of rcmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+
 proc handleDiffViewerMode*(
     manager: HandlerManager,
     diffState: DiffViewerState,
@@ -1149,9 +1185,9 @@ proc dispatchSubStateMode*(
   ## object on `EditorWindow` (via the `modeState` variant). Called from the
   ## Editor-based handleKeyCombo for any mode it does not handle directly.
   ##
-  ## 11 sub-state modes (Filer, FileTree, Help, BufferManager, BookmarkManager,
-  ## BackupManager, DiffViewer, Config, References, DocumentSymbol,
-  ## CallHierarchy) share the same dispatch shape and use the
+  ## 12 sub-state modes (Filer, FileTree, Help, BufferManager, BookmarkManager,
+  ## BackupManager, RecoveryManager, DiffViewer, Config, References,
+  ## DocumentSymbol, CallHierarchy) share the same dispatch shape and use the
   ## `dispatchSubState` template. LogViewer and Terminal have non-standard
   ## handler signatures and remain as explicit branches.
   let buffer = editor.activeBuffer
@@ -1193,6 +1229,10 @@ proc dispatchSubStateMode*(
   of EditorMode.BackupManager:
     dispatchSubState(
       mskBackupManager, backupManager, handleBackupManagerMode, "Backup manager"
+    )
+  of EditorMode.RecoveryManager:
+    dispatchSubState(
+      mskRecoveryManager, recoveryManager, handleRecoveryManagerMode, "Recovery manager"
     )
   of EditorMode.DiffViewer:
     dispatchSubState(mskDiffViewer, diffViewer, handleDiffViewerMode, "Diff viewer")

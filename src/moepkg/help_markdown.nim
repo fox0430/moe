@@ -65,8 +65,9 @@ const
   CommandModeTailNames = @[
     "build", "jobs", "lspfold", "lspformat", "log", "lsplog", "lsprestart",
     "lspcallhierarchyincoming", "lspcallhierarchyoutgoing", "help", "putconfigfile",
-    "moerc", "quickrun", "recent", "backup", "config", "debug", "filer", "filetree",
-    "jump", "terminal", "changes", "bookmarks", "conflictnext", "conflictprev",
+    "moerc", "quickrun", "recent", "backup", "recover", "config", "debug", "filer",
+    "filetree", "jump", "terminal", "changes", "bookmarks", "conflictnext",
+    "conflictprev",
   ]
 
   RuntimeKeyMapNames = @[
@@ -314,6 +315,9 @@ proc renderInsertModeTable*(): string =
 
 proc renderBackupModeTable*(): string =
   renderKbdHelpGroup(BackupModeCommands)
+
+proc renderRecoveryModeTable*(): string =
+  renderKbdHelpGroup(RecoveryModeCommands)
 
 proc renderReferencesModeTable*(): string =
   renderKbdHelpGroup(ReferencesModeCommands)

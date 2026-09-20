@@ -41,6 +41,7 @@ type
     BufferManager
     BookmarkManager
     BackupManager
+    RecoveryManager
     DiffViewer
     RecentFile
     Debug
@@ -91,6 +92,8 @@ proc modeLabel*(m: EditorMode, insertNormal: bool = false): string =
     "BOOKMARKS"
   of EditorMode.BackupManager:
     "BACKUPS"
+  of EditorMode.RecoveryManager:
+    "RECOVERY"
   of EditorMode.DiffViewer:
     "DIFF"
   of EditorMode.RecentFile:

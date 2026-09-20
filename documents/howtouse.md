@@ -9,6 +9,7 @@
 - [Replace Mode](#replace-mode)
 - [Insert Mode](#insert-mode)
 - [Backupmanager Mode](#backupmanager-mode)
+- [Recoverymanager Mode](#recoverymanager-mode)
 - [References Mode](#references-mode)
 - [Call Hierarchy Mode](#call-hierarchy-mode)
 - [Filer Mode](#filer-mode)
@@ -362,6 +363,25 @@
 | <kbd>**D**</kbd> | Delete backup file |
 | <kbd>**r**</kbd> | Reload backup files |
 <!-- AUTO-GEN:end BackupManagerMode -->
+
+</details>
+
+
+## Recoverymanager mode
+
+<details open>
+  <summary>Crash Recovery Manager</summary>
+
+<!-- AUTO-GEN:start RecoveryManagerMode -->
+| Keys | Description |
+|:---|:---|
+| <kbd>**j**</kbd> | Go down |
+| <kbd>**k**</kbd> | Go up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first line |
+| <kbd>**G**</kbd> | Go to the last line |
+| <kbd>**D**</kbd> <kbd>**D**</kbd> | Discard the preserved copy |
+| <kbd>**r**</kbd> | Reload the preserved copies |
+<!-- AUTO-GEN:end RecoveryManagerMode -->
 
 </details>
 
@@ -803,6 +823,8 @@ bool, open the enum popup, or start editing an int/float/string/color.
 | `quickrun` | Quick run |
 | `recent` | Open recent file selection mode (Only supported on Linux) |
 | `backup` | Open backup file manager |
+| `recover` | Open crash recovery manager |
+| `recover!` | List every preserved copy, not only the current file's |
 | `config` | Open configuration mode |
 | `debug` | Open debug mode |
 | `filer` | Open file explorer |

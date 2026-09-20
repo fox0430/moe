@@ -108,6 +108,11 @@ type
     statusLineBackupManagerModeLabel
     statusLineBackupManagerModeInactive
 
+    # Status line - Recovery manager mode
+    statusLineRecoveryManagerMode
+    statusLineRecoveryManagerModeLabel
+    statusLineRecoveryManagerModeInactive
+
     # Status line - Diff viewer mode
     statusLineDiffViewerMode
     statusLineDiffViewerModeLabel
@@ -311,6 +316,9 @@ type
     # Backup manager
     backupManagerCurrentLine
 
+    # Recovery manager
+    recoveryManagerCurrentLine
+
     # Diff viewer
     diffViewerAddedLine
     diffViewerDeletedLine
@@ -473,6 +481,12 @@ const
       "Status line mode label in Backup manager mode",
     EditorColorPairIndex.statusLineBackupManagerModeInactive:
       "Status line in Backup manager mode (inactive)",
+    EditorColorPairIndex.statusLineRecoveryManagerMode:
+      "Status line in Recovery manager mode (active)",
+    EditorColorPairIndex.statusLineRecoveryManagerModeLabel:
+      "Status line mode label in Recovery manager mode",
+    EditorColorPairIndex.statusLineRecoveryManagerModeInactive:
+      "Status line in Recovery manager mode (inactive)",
     EditorColorPairIndex.statusLineDiffViewerMode:
       "Status line in Diff viewer mode (active)",
     EditorColorPairIndex.statusLineDiffViewerModeLabel:
@@ -656,6 +670,7 @@ const
     EditorColorPairIndex.gitConflictBase: "Git conflict: diff3 \"base\" side",
     EditorColorPairIndex.gitConflictTheirs: "Git conflict: \"theirs\" side",
     EditorColorPairIndex.backupManagerCurrentLine: "Backup manager: current line",
+    EditorColorPairIndex.recoveryManagerCurrentLine: "Recovery manager: current line",
     EditorColorPairIndex.diffViewerAddedLine: "Diff file buffer: added line",
     EditorColorPairIndex.diffViewerDeletedLine: "Diff file buffer: deleted line",
     EditorColorPairIndex.configModeCurrentLine: "Configuration mode: current line",

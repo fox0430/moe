@@ -62,6 +62,7 @@ type
     claQuickRun # :run (quick run)
     claBufferManager # :buffers, :ls (open buffer manager)
     claBackupManager # :backup (open backup manager)
+    claRecoveryManager # :recover (open crash recovery manager)
     claRecentFile # :recent (open recent file selection mode)
     claClearSearchHighlight # :nohlsearch (clear search highlighting)
     claShellCommand # :! (execute shell command)
@@ -196,6 +197,8 @@ type
       discard
     of claBackupManager:
       discard
+    of claRecoveryManager:
+      allRecovery*: bool # true for :recover!
     of claRecentFile:
       discard
     of claClearSearchHighlight:

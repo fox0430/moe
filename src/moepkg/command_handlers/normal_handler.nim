@@ -417,6 +417,10 @@ proc handleModeSwitch*(
   of EditorMode.BackupManager:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.BackupManager))
+  of EditorMode.RecoveryManager:
+    return NormalModeResult(
+      kind: nmrHandled, modeTransition: some(EditorMode.RecoveryManager)
+    )
   of EditorMode.DiffViewer:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.DiffViewer))

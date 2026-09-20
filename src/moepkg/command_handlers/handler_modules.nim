@@ -38,15 +38,17 @@ import
   handler_types, handler_result, normal_handler, insert_handler, insert_commands,
   command_handler, visual_handler, replace_handler, filer_handler, filetree_handler,
   log_viewer_handler, help_handler, buffer_manager_handler, bookmark_manager_handler,
-  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
+  backup_manager_handler, recovery_manager_handler, diff_viewer_handler,
+  recent_file_mode_handler, debug_handler, config_handler, references_handler,
+  documentsymbol_handler, callhierarchy_handler
 
 export
   handler_types, handler_result, normal_handler, insert_handler, insert_commands,
   command_handler, visual_handler, replace_handler, filer_handler, filetree_handler,
   log_viewer_handler, help_handler, buffer_manager_handler, bookmark_manager_handler,
-  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
+  backup_manager_handler, recovery_manager_handler, diff_viewer_handler,
+  recent_file_mode_handler, debug_handler, config_handler, references_handler,
+  documentsymbol_handler, callhierarchy_handler
 
 when not defined(moe.embedded):
   import terminal_handler

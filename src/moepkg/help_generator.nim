@@ -21,7 +21,8 @@
 ##
 ## The simple key→description sections of `HelpSentences` (`# Exiting`,
 ## `# Changing modes`, `# Normal mode`, `# Register`, `# Visual mode`,
-## `# Replace mode`, `# Insert mode`, `# Backup mode`, `# Diff mode`,
+## `# Replace mode`, `# Insert mode`, `# Backup mode`, `# Recovery mode`,
+## `# Diff mode`,
 ## `# References mode`, `# Call hierarchy viewer mode`, `# Filer mode`,
 ## and the two `# Terminal mode` sub-modes) are built from the
 ## corresponding `XxxCommands*` `HelpGroup` constants. The
@@ -362,6 +363,17 @@ const BackupModeCommands*: HelpGroup = HelpGroup(
     HelpEntry(syntax: "R", description: "Restore backup file"),
     HelpEntry(syntax: "D", description: "Delete backup file"),
     HelpEntry(syntax: "r", description: "Reload backup files"),
+  ]
+)
+
+const RecoveryModeCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "j", description: "Go down"),
+    HelpEntry(syntax: "k", description: "Go up"),
+    HelpEntry(syntax: "gg", description: "Go to the first line"),
+    HelpEntry(syntax: "G", description: "Go to the last line"),
+    HelpEntry(syntax: "DD", description: "Discard the preserved copy"),
+    HelpEntry(syntax: "r", description: "Reload the preserved copies"),
   ]
 )
 
@@ -808,6 +820,10 @@ proc renderBackupModeSection*(): string {.compileTime.} =
   ## The "# Backup mode" section body.
   renderGroup(BackupModeCommands)
 
+proc renderRecoveryModeSection*(): string {.compileTime.} =
+  ## The "# Recovery mode" section body.
+  renderGroup(RecoveryModeCommands)
+
 proc renderDiffModeSection*(): string {.compileTime.} =
   ## The "# Diff mode" section body.
   renderGroup(DiffModeCommands)
@@ -921,6 +937,7 @@ proc renderCommandModeTail*(): string {.compileTime.} =
     helpEntriesFor("quickrun"),
     helpEntriesFor("recent"),
     helpEntriesFor("backup"),
+    helpEntriesFor("recover"),
     helpEntriesFor("config"),
     helpEntriesFor("debug"),
     helpEntriesFor("jump"),

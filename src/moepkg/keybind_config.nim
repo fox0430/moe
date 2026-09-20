@@ -63,6 +63,8 @@ proc parseModes(s: string): seq[EditorMode] =
     @[EditorMode.BookmarkManager]
   of "backupmanager":
     @[EditorMode.BackupManager]
+  of "recoverymanager":
+    @[EditorMode.RecoveryManager]
   of "diffviewer":
     @[EditorMode.DiffViewer]
   of "recentfile":

@@ -311,6 +311,14 @@ proc stampHeld(stamp: OriginStamp, origin: string): bool =
     return false
   return true
 
+proc originalChangedSince*(c: PreservedCopy): bool =
+  ## Whether the original moved on disk after the copy was preserved, so a
+  ## row can say the copy is not simply the newer of the two. True when there
+  ## is no stamp to compare against: unknown is not the same as unchanged.
+  if c.file.origin.isNone or c.file.origin.get.len == 0:
+    return false
+  not stampHeld(c.file.originStamp, c.file.origin.get)
+
 proc verdict*(c: PreservedCopy): CopyVerdict =
   ## Whether the original already holds what was preserved.
   ##

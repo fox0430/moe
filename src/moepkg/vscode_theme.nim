@@ -616,6 +616,8 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.currentLineNum].foreground = ThemeColor(rgb: fg)
     result[EditorColorPairIndex.backupManagerCurrentLine].foreground =
       ThemeColor(rgb: fg)
+    result[EditorColorPairIndex.recoveryManagerCurrentLine].foreground =
+      ThemeColor(rgb: fg)
     result[EditorColorPairIndex.configModeCurrentLine].foreground = ThemeColor(rgb: fg)
 
   # Suggest widget (popup window)
