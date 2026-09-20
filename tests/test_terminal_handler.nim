@@ -218,7 +218,7 @@ suite "checkExitStatus - single waitpid call (regression)":
 
 suite "pollOutput sets exitCode on process exit (regression)":
   ## Regression test: pollOutput must set TerminalState.exitCode when the
-  ## shell process exits, so pollTerminalWindows can detect it and close
+  ## shell process exits, so pollTerminalSessions can detect it and close
   ## the terminal window. A `:terminal` session always runs a persistent
   ## interactive shell, so the exit happens when the user quits the shell.
 
@@ -418,7 +418,7 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     result.addBuffer(buf)
     result.addBufferToWindowList(buf)
     result.terminalStates[buf.id] = ts
-    result.activeWindow.buffer = buf
+    result.activeWindow.setTab(buf)
     result.activeWindow.modeState = ModeState(kind: mskTerminal, terminal: ts)
     result.activeWindow.mode = EditorMode.Terminal
     result.setMode(EditorMode.Terminal)
@@ -545,3 +545,311 @@ suite "Query answers the write queue could not take":
       # Retrying it forever would only relog the same failure every tick.
       check ts.grid.pendingResponses.len == 0
       ts.cleanup()
+
+suite "pasteInput forwards pasted text to the PTY":
+  ## A paste in Terminal-Input sub-mode belongs to the child process: the text
+  ## goes to the PTY with newlines normalized to CR, wrapped in the bracketed
+  ## paste markers when the child asked for them (DECSET 2004).
+
+  test "Pasted command reaches the shell and runs":
+    let termState = newTerminalState("", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.pasteInput("echo PASTEOK\n")
+
+      var found = false
+      for _ in 0 ..< 100:
+        discard ts.pollOutput()
+        if "PASTEOK" in ts.grid.toPlainText():
+          found = true
+          break
+        sleep(20)
+
+      check found
+      ts.cleanup()
+  test "Bracketed paste wraps the text in the paste markers":
+    let termState = newTerminalState("cat -v", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      # `cat -v` renders the markers as printable text, so what the child
+      # actually received is observable in the grid.
+      ts.grid.bracketedPaste = true
+      ts.pasteInput("hi\n")
+
+      var found = false
+      for _ in 0 ..< 100:
+        discard ts.pollOutput()
+        if "^[[200~hi" in ts.grid.toPlainText():
+          found = true
+          break
+        sleep(20)
+
+      check found
+      ts.cleanup()
+  test "Escape sequences in the pasted text are dropped":
+    let termState = newTerminalState("cat -v", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.pasteInput("a\x1b[31mb\n")
+
+      var found = false
+      for _ in 0 ..< 100:
+        discard ts.pollOutput()
+        if "a[31mb" in ts.grid.toPlainText():
+          found = true
+          break
+        sleep(20)
+
+      check found
+      ts.cleanup()
+  test "A paste larger than the kernel PTY buffer is delivered in full":
+    let termState = newTerminalState("cat -v", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      # Well past the kernel PTY buffer, so the paste cannot go out in one
+      # write and has to be flushed across poll ticks.
+      let payload = "z\n".repeat(35000)
+      ts.pasteInput(payload)
+      # Typed after the paste, so the tty echoes it only once every byte of the
+      # paste has gone out ahead of it. Unlike the paste's own closing marker,
+      # it is the last thing on screen and cannot scroll off the grid.
+      ts.feedInput("PASTE-END\r")
+
+      var found = false
+      for _ in 0 ..< 400:
+        discard ts.pollOutput()
+        if "PASTE-END" in ts.grid.toPlainText():
+          found = true
+          break
+        sleep(20)
+
+      check found
+      check ts.pty.pendingWriteBytes == 0
+      ts.cleanup()
+  test "A paste is queued, not dropped, while the child is not reading":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      # `sleep` never reads stdin, so the PTY buffer fills and the rest of the
+      # paste has to wait instead of being thrown away.
+      ts.pasteInput("z\n".repeat(200000))
+      check ts.pty.pendingWriteBytes > 0
+      ts.cleanup()
+  test "A paste past the keystroke queue cap is queued whole, not cut":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      # The cap bounds what keystrokes can pile up, not one paste: cutting it
+      # would split a UTF-8 sequence and leave a half-typed command behind.
+      # A megabyte past the cap, so the kernel taking a bufferful up front
+      # cannot be mistaken for the queue having cut the paste.
+      let payload = "z".repeat(maxPtyWriteQueueBytes + 1024 * 1024)
+      check ts.pasteInput(payload).isOk
+      check ts.pty.pendingWriteBytes > maxPtyWriteQueueBytes
+      ts.cleanup()
+  test "A keystroke after a paste stays behind it instead of overtaking it":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.pasteInput("z".repeat(200000))
+      let queuedAfterPaste = ts.pty.pendingWriteBytes
+      require queuedAfterPaste > 0
+
+      ts.feedInput("K")
+      # The keystroke went on the same queue, behind the paste, rather than
+      # straight to the fd.
+      check ts.pty.pendingWriteBytes == queuedAfterPaste + 1
+      ts.cleanup()
+  test "Ctrl-C cancels the rest of a queued paste":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      ts.pasteInput("z".repeat(200000))
+      require ts.pty.pendingWriteBytes > 0
+
+      ts.interrupt()
+      # Only the paste terminator and \x03 are left; the rest is gone.
+      check ts.pty.pendingWriteBytes <= 7
+      ts.cleanup()
+  test "A paste can be cancelled from the Normal sub-mode without an interrupt":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      ts.pasteInput("z".repeat(1024 * 1024))
+      discard ts.enterNormalSubMode()
+      require ts.pty.writeOffset > 0
+
+      ts.cancelQueuedPastes()
+      # The child is closed out of the paste, but no \x03 is typed at it: the
+      # keys belong to the editor while the scrollback is being browsed.
+      check ts.pty.queuedBytes == "\x1b[201~"
+      ts.cleanup()
+  test "Ctrl-C closes the paste the child is still inside after a second paste":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      # Far past any kernel PTY buffer and the child never reads, so the first
+      # paste is still open when the second one is queued behind it.
+      ts.pasteInput("z".repeat(1024 * 1024))
+      ts.pasteInput("y".repeat(1024))
+      require ts.pty.writeOffset > 0
+
+      ts.interrupt()
+      # The second paste did not make the editor forget that the child is
+      # still inside the first one.
+      check ts.pty.queuedBytes == "\x1b[201~\x03"
+      ts.cleanup()
+  test "Ctrl-C drops the paste and keeps what the user typed after it":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      ts.pasteInput("z".repeat(1024 * 1024))
+      ts.feedInput("K")
+      require ts.pty.writeOffset > 0
+
+      ts.interrupt()
+      # The closing marker takes the dropped paste's place, so the keystroke
+      # behind it cannot be read as pasted text.
+      check ts.pty.queuedBytes == "\x1b[201~K\x03"
+      ts.cleanup()
+  test "A paste keeps moving while the user browses the scrollback":
+    let termState = newTerminalState("cat", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      discard ts.enterNormalSubMode()
+      # `cat` echoes every byte back, so the paste only drains as long as the
+      # output is drained too - which pollOutput does in either sub-mode.
+      ts.pasteInput("z\n".repeat(35000))
+
+      for _ in 0 ..< 400:
+        discard ts.pollOutput()
+        if ts.pty.pendingWriteBytes == 0:
+          break
+        sleep(20)
+
+      check ts.pty.pendingWriteBytes == 0
+      ts.cleanup()
+  test "A query answer goes out ahead of the pastes still queued":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      ts.pasteInput("z".repeat(1024 * 1024))
+      require ts.pty.writeOffset > 0
+      ts.pasteInput("y".repeat(1024))
+
+      # A query the child made mid-paste: it may be blocked on the answer, and
+      # under bracketed paste an answer behind a closer is read as input.
+      ts.grid.processOutput("\x1b[c")
+      require ts.grid.pendingResponses.len == 1
+      # Queued without flushing, so the order is still the queue's to show.
+      check ts.pty.queueResponse(ts.grid.pendingResponses[0]).isOk
+
+      let queued = ts.pty.queuedBytes
+      let answer = queued.find("\x1b[?6c")
+      check answer > -1
+      # After the closer of the paste the child is inside, so it is not read as
+      # pasted text, and before the paste it re-opens for the rest.
+      check answer > queued.find("\x1b[201~")
+      check answer < queued.find("\x1b[200~")
+      ts.cleanup()
+  test "Ctrl-C sends the Ctrl-backslash held for Ctrl-N ahead of the interrupt":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      ts.pasteInput("z".repeat(1024 * 1024))
+      require ts.pty.writeOffset > 0
+
+      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      require ts.waitingForCtrlN
+
+      ts.interrupt()
+      check not ts.waitingForCtrlN
+      # The held byte was typed before Ctrl-C, so it goes out before it.
+      check ts.pty.queuedBytes == "\x1b[201~\x1c\x03"
+      ts.cleanup()
+  test "A paste reports a dead fd instead of reporting success":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      let realFd = ts.pty.masterFd
+      # Writes to fd -1 fail for real, like a master whose slave side is gone.
+      ts.pty.masterFd = -1
+
+      let r = ts.pasteInput("hi\n")
+      check r.isErr
+      check "no longer reachable" in r.error
+
+      ts.pty.masterFd = realFd
+      ts.cleanup()
+  test "A paste flushes the Ctrl-backslash held back for Ctrl-N":
+    let termState = newTerminalState("cat -v", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      check ts.waitingForCtrlN
+
+      ts.pasteInput("hi\n")
+      check not ts.waitingForCtrlN
+
+      var found = false
+      for _ in 0 ..< 100:
+        discard ts.pollOutput()
+        if "^\\hi" in ts.grid.toPlainText():
+          found = true
+          break
+        sleep(20)
+
+      check found
+      ts.cleanup()
+  test "A keystroke is still accepted while a paste past that cap is queued":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      require ts.pasteInput("z".repeat(maxPtyWriteQueueBytes + 1024 * 1024)).isOk
+
+      ts.feedInput("K")
+      # A paste has a budget of its own, so it cannot make a keystroke refused.
+      check ts.pty.queuedBytes.endsWith("K")
+      ts.cleanup()
+  test "Ctrl-C keeps the held Ctrl-backslash when the paste is past that cap":
+    let termState = newTerminalState("sleep 3", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      ts.grid.bracketedPaste = true
+      ts.pasteInput("z".repeat(maxPtyWriteQueueBytes + 1024 * 1024))
+      require ts.pty.writeOffset > 0
+
+      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      require ts.waitingForCtrlN
+
+      ts.interrupt()
+      check ts.pty.queuedBytes == "\x1b[201~\x1c\x03"
+      ts.cleanup()
+  test "A paste that sanitizes to nothing still flushes the held Ctrl-backslash":
+    let termState = newTerminalState("cat -v", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      require ts.waitingForCtrlN
+
+      # A clipboard of control bytes alone: nothing is queued, but the wait is
+      # over all the same, or the next key drags a stray \x1c in front of it.
+      check ts.pasteInput("\x01\x02").isOk
+      check not ts.waitingForCtrlN
+      ts.cleanup()
+  test "The Ctrl-backslash wait ends even after the terminal is gone":
+    let termState = newTerminalState("cat", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      discard ts.handleTerminalModeKey(charKey("\\", {kmCtrl}))
+      require ts.waitingForCtrlN
+      ts.cleanup()
+      discard ts.handleTerminalModeKey(charKey("a"))
+      check not ts.waitingForCtrlN

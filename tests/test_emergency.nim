@@ -20,8 +20,10 @@
 import std/[unittest, os, options, json, strutils, sequtils]
 
 import
-  ../src/moepkg/
-    [editor, editor_buffers, editor_window, buffer, config, config_loader, emergency]
+  ../src/moepkg/[
+    editor, editor_buffers, editor_window, buffer, config, config_loader, emergency,
+    message_log,
+  ]
 import ../src/moepkg/types/editor_types
 
 let TestRecoveryDir = getTempDir() / "moe_test_crash_recovery"
@@ -284,3 +286,51 @@ suite "emergency - hasCrashRecoveryFiles":
 
     discard e.emergencySaveBuffers(TestRecoveryDir)
     check hasCrashRecoveryFiles(TestRecoveryDir)
+
+suite "emergency - noteCrashRecoveryFiles":
+  setup:
+    cleanupTestDir()
+    clearMessageLog()
+
+  teardown:
+    cleanupTestDir()
+
+  proc preserveOne(e: Editor) =
+    let buf = e.activeBuffer()
+    buf.changeSeq = buf.savedSeq + 1
+    discard e.emergencySaveBuffers(TestRecoveryDir)
+
+  test "Leaves the status line alone when the directory is empty":
+    let e = createTestEditor()
+    e.state.setStatusQuiet("")
+    clearMessageLog()
+
+    e.noteCrashRecoveryFiles(TestRecoveryDir)
+
+    check e.state.statusMessage == ""
+    check getMessageLog().len == 0
+
+  test "Names the directory on an empty status line, once":
+    let e = createTestEditor()
+    e.preserveOne()
+    e.state.setStatusQuiet("")
+    clearMessageLog()
+
+    e.noteCrashRecoveryFiles(TestRecoveryDir)
+
+    check "Crash recovery files found" in e.state.statusMessage
+    check TestRecoveryDir in e.state.statusMessage
+    check getMessageLog() == @[e.state.statusMessage]
+
+  test "Keeps a standing status line and still logs":
+    let e = createTestEditor()
+    e.preserveOne()
+    e.state.setStatusQuiet("Config error: x")
+    clearMessageLog()
+
+    e.noteCrashRecoveryFiles(TestRecoveryDir)
+
+    check e.state.statusMessage == "Config error: x"
+    check getMessageLog().len == 1
+    check "Crash recovery files found" in getMessageLog()[0]
+    check TestRecoveryDir in getMessageLog()[0]

@@ -131,6 +131,13 @@ proc bufferById*(e: Editor, id: BufferId): Option[TextBuffer] =
   else:
     none(TextBuffer)
 
+proc tabBuffer*(e: Editor, win: EditorWindow): TextBuffer =
+  ## The buffer `win` is parked on. Use this, not `win.buffer`, wherever the
+  ## tab matters (tab line, `:bd`, `:bnext`, terminal teardown): a mode may
+  ## have swapped an unregistered view in. Falls back to the view if the tab
+  ## is gone.
+  e.bufferById(win.tabBufferId).get(win.buffer)
+
 proc bufferIndexById*(e: Editor, id: BufferId): int =
   ## Get the index of the buffer with the given BufferId in e.buffers.
   ## Returns -1 if not found.

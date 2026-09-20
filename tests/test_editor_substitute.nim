@@ -31,7 +31,7 @@ proc createTestEditor(): Editor =
   result = newEditor(config, vr)
 
 proc setBufferContent(e: Editor, content: string) =
-  e.activeWindow.buffer = newTextBuffer(content)
+  e.activeWindow.setTab(newTextBuffer(content))
 
 suite "editor_substitute":
   test "startSubstitutePreview snapshots the buffer":

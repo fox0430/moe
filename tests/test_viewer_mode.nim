@@ -26,7 +26,7 @@ import pkg/results
 import
   ../src/moepkg/[
     editor, config, config_loader, viewer_mode, help_viewer, editor_buffers,
-    window_manager,
+    editor_window_state, window_manager, backup_manager, diff_viewer,
   ]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/buffer
@@ -201,3 +201,34 @@ suite "viewer_mode - leaveViewerModeForJump":
     let entry = e.leaveViewerModeForJump(EditorMode.Help)
     check entry.isSome
     check e.activeWindow.mode == EditorMode.Normal
+
+suite "viewer_mode - tab switch teardown":
+  test "a tab switch drops a viewer entry owned by a suspended mode":
+    # Regression: `clearModeState` only drops the entry belonging to the mode
+    # it tears down, so the DiffViewer-over-BackupManager overlay left the
+    # BackupManager's entry behind on a window now showing an unrelated tab.
+    let (e, path) = editorOnFile("moe_viewer_tabswitch.txt")
+    defer:
+      removeFile(path)
+    let listing = newTextBuffer("backups")
+    let entered = e.enterViewerMode(
+      EditorMode.BackupManager,
+      ModeState(kind: mskBackupManager, backupManager: newBackupManagerState()),
+      listing,
+      vpInPlace,
+    )
+    check entered.isOk
+    # The diff overlays the listing: (mode, modeState) are suspended and the
+    # BackupManager's entry stays on the window.
+    e.activeWindow.suspendMode()
+    e.activeWindow.modeState =
+      ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
+    e.setMode(EditorMode.DiffViewer)
+
+    e.switchToBufferByIndex(0)
+
+    check e.activeWindow.viewerEntry.isNone
+    check e.activeWindow.suspendedMode.isNone
+    check e.activeWindow.modeState.kind == mskNone
+    check e.activeWindow.mode == EditorMode.Normal
+    check not e.focusExistingViewerWindow(EditorMode.BackupManager)

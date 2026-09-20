@@ -327,7 +327,8 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
   e.windowManager.deactivateAllWindows()
 
   let ftWindow = EditorWindow(
-    buffer: ftBuffer,
+    viewBuffer: ftBuffer,
+    tabBufferId: ftBuffer.id,
     bufferIds: @[ftBuffer.id], # FileTree pane has its own single-tab list
     viewport: ViewPort(
       topLine: 0, leftColumn: 0, width: ftWidth, height: fullHeight, x: startX, y: minY
@@ -360,33 +361,44 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
 
   e.syncActiveWindow()
 
+when not defined(moe.embedded):
+  proc installTerminalSession*(
+      e: Editor, termState: TerminalState, command: string
+  ): TextBuffer =
+    ## Register `termState` as a new tab and hand the active window over to it.
+    ## The PTY is tracked in `e.terminalStates` by buffer id, so the session
+    ## survives view swaps and tab switches. Returns the session's buffer.
+    let activeWin = e.activeWindow
+    result = newTextBuffer("")
+    result.displayName = some("[Terminal: " & command & "]")
+
+    e.addBuffer(result)
+    e.addBufferToWindowList(result)
+    e.terminalStates[result.id] = termState
+
+    activeWin.setTab(result)
+    activeWin.cursor = BufferPosition(line: 0, column: 0)
+    activeWin.viewport.resetViewportTop()
+    activeWin.viewport.leftColumn = 0
+    # Drop the bookkeeping of what the window was showing: a viewer entry would
+    # later undo itself on top of the live session.
+    discard activeWin.takeViewerEntry()
+    discard activeWin.takeSuspendedMode()
+    # Drops any handed-over `originalBuffer` and derives Terminal mode.
+    e.applyBufferMode(result)
+
 proc enterTerminalInActiveWindow*(e: Editor, command: string) =
   when defined(moe.embedded):
     e.state.statusMessage = "Terminal mode is unavailable in embedded builds"
   else:
-    ## Open a new Terminal session as a tab in the active window; the PTY is
-    ## tracked in `e.terminalStates` by buffer id so tabs survive switching.
-    let activeWin = e.activeWindow
-    let (cols, rows) = e.calculateTerminalAreaDimensions(activeWin)
+    ## Open a new Terminal session as a tab in the active window.
+    let (cols, rows) = e.calculateTerminalAreaDimensions(e.activeWindow)
     let termResult = newTerminalState(command, cols, rows)
     if termResult.isErr:
       e.state.statusMessage = "Terminal error: " & termResult.error
       return
 
-    let termState = termResult.get
-    let termBuf = newTextBuffer("")
-    termBuf.displayName = some("[Terminal: " & command & "]")
-
-    e.addBuffer(termBuf)
-    e.addBufferToWindowList(termBuf)
-    e.terminalStates[termBuf.id] = termState
-
-    activeWin.buffer = termBuf
-    activeWin.modeState = ModeState(kind: mskTerminal, terminal: termState)
-    activeWin.cursor = BufferPosition(line: 0, column: 0)
-    activeWin.viewport.resetViewportTop()
-    activeWin.viewport.leftColumn = 0
-    e.setMode(EditorMode.Terminal)
+    discard e.installTerminalSession(termResult.get, command)
 
 proc applyThemeCommand*(e: Editor, themeName: string) =
   ## Apply a `:theme` selection via `initTheme` so `config.theme` and

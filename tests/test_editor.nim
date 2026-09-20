@@ -405,7 +405,8 @@ suite "Editor - isBufferShared":
     # Add a second window with the same buffer
     e.windowManager.windows.add(
       EditorWindow(
-        buffer: buffer,
+        viewBuffer: buffer,
+        tabBufferId: buffer.id,
         viewport: e.viewport,
         cursor: BufferPosition(line: 0, column: 0),
         active: false,
@@ -2069,7 +2070,7 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
     # Force the "orphan" state: window has f1 and f2 as tabs but active
     # buffer is the initial textBuffer (not in bufferIds).
     e.activeWindow.bufferIds = @[e.buffers[1].id, e.buffers[2].id]
-    e.activeWindow.buffer = e.buffers[0]
+    e.activeWindow.setTab(e.buffers[0])
     check e.windowBufferIndex() == -1
 
     e.switchToNextBuffer()
@@ -2088,7 +2089,7 @@ suite "Editor - Per-window :bnext / :bprev wrapping":
     discard e.editFile(f1)
     discard e.editFile(f2)
     e.activeWindow.bufferIds = @[e.buffers[1].id, e.buffers[2].id]
-    e.activeWindow.buffer = e.buffers[0]
+    e.activeWindow.setTab(e.buffers[0])
     check e.windowBufferIndex() == -1
 
     e.switchToPrevBuffer()
@@ -2247,12 +2248,27 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     let f2Id = e.activeBuffer().id
     let windowCountBefore = e.windowManager.windows.len
 
-    e.deleteCurrentBuffer()
+    check e.deleteCurrentBuffer().isOk
 
     check e.windowManager.windows.len == windowCountBefore # window stays open
     check e.buffers.len == 2 # f2 removed from the buffer list
     check e.bufferById(f2Id).isNone
     check e.activeBuffer().id != f2Id # active window moved to another buffer
+
+  test "refuses a modified buffer without force":
+    let e = createTestEditor()
+    let originalId = e.activeBuffer().id
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "x")
+
+    let refused = e.deleteCurrentBuffer()
+
+    check refused.isErr
+    check refused.error == "No write since last change (add ! to override)"
+    check e.bufferById(originalId).isSome
+
+    check e.deleteCurrentBuffer(force = true).isOk
+
+    check e.bufferById(originalId).isNone
 
   test "replaces the last buffer with a fresh [No Name] enew buffer":
     let e = createTestEditor()
@@ -2260,7 +2276,7 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     check e.buffers.len == 1
     let originalId = e.activeBuffer().id
 
-    e.deleteCurrentBuffer()
+    check e.deleteCurrentBuffer().isOk
 
     check e.windowManager.windows.len == 1 # window stays open
     check e.buffers.len == 1 # enew added a replacement
@@ -2291,7 +2307,7 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     let otherBufferRef = e.windowManager.windows[otherIdx].buffer
     check otherBufferRef.id != f2Id
 
-    e.deleteCurrentBuffer()
+    check e.deleteCurrentBuffer().isOk
 
     check e.windowManager.windows.len == 2
     check e.bufferById(f2Id).isNone
@@ -2318,7 +2334,7 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     check e.windowManager.windows[0].buffer.id == f2Id
     check e.windowManager.windows[1].buffer.id == f2Id
 
-    e.deleteCurrentBuffer()
+    check e.deleteCurrentBuffer().isOk
 
     check e.bufferById(f2Id).isNone
     for w in e.windowManager.windows:
@@ -2339,7 +2355,7 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     let f2Id = e.activeBuffer().id
     check f2Id in e.activeWindow.bufferIds
 
-    e.deleteCurrentBuffer()
+    check e.deleteCurrentBuffer().isOk
 
     for w in e.windowManager.windows:
       check f2Id notin w.bufferIds
@@ -2361,7 +2377,7 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     let f2Id = e.activeBuffer().id
     check e.state.windowDisplay.currentBufferId == f2Id
 
-    e.deleteCurrentBuffer()
+    check e.deleteCurrentBuffer().isOk
 
     check e.bufferById(f2Id).isNone
     check e.state.windowDisplay.currentBufferId != f2Id
@@ -2450,7 +2466,7 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let diffBuf = newTextBuffer("diff")
-    win.buffer = diffBuf
+    win.setView(diffBuf)
     win.originalBuffer = origBuf
     win.mode = EditorMode.DiffViewer
     e.setMode(EditorMode.DiffViewer)
@@ -2476,7 +2492,7 @@ suite "Editor - BackupManager <-> DiffViewer round-trip":
     let e = createTestEditor()
     let win = e.activeWindow
     let diffBuf = newTextBuffer("diff")
-    win.buffer = diffBuf
+    win.setTab(diffBuf)
     win.mode = EditorMode.DiffViewer
     e.setMode(EditorMode.DiffViewer)
     win.modeState = ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
@@ -2530,7 +2546,7 @@ suite "Editor - BackupManager restore failure":
       setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
       skip()
     else:
-      win.buffer = newTextBuffer("backup list")
+      win.setTab(newTextBuffer("backup list"))
       win.mode = EditorMode.BackupManager
       e.setMode(EditorMode.BackupManager)
       win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
@@ -2585,7 +2601,7 @@ suite "Editor - BackupManager restore failure":
       setFilePermissions(sourceFile, {fpUserRead, fpUserWrite})
       skip()
     else:
-      win.buffer = newTextBuffer("backup list")
+      win.setTab(newTextBuffer("backup list"))
       win.mode = EditorMode.BackupManager
       e.setMode(EditorMode.BackupManager)
       win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
@@ -2630,7 +2646,7 @@ suite "Editor - BackupManager restore failure":
       sourceFilePath: sourceFile,
     )
 
-    win.buffer = newTextBuffer("backup list")
+    win.setTab(newTextBuffer("backup list"))
     win.mode = EditorMode.BackupManager
     e.setMode(EditorMode.BackupManager)
     win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
@@ -2673,7 +2689,7 @@ suite "Editor - BackupManager restore failure":
       sourceFilePath: sourceFile,
     )
 
-    win.buffer = newTextBuffer("backup list")
+    win.setTab(newTextBuffer("backup list"))
     win.mode = EditorMode.BackupManager
     e.setMode(EditorMode.BackupManager)
     win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)
@@ -2720,7 +2736,7 @@ suite "Editor - BackupManager restore failure":
       sourceFilePath: sourceFile,
     )
 
-    win.buffer = newTextBuffer("backup list")
+    win.setTab(newTextBuffer("backup list"))
     win.mode = EditorMode.BackupManager
     e.setMode(EditorMode.BackupManager)
     win.modeState = ModeState(kind: mskBackupManager, backupManager: bkState)

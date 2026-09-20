@@ -20,7 +20,7 @@
 when not defined(posix):
   {.error: "moe supports POSIX platforms only".}
 
-import std/[strformat, os, options]
+import std/[strformat, os, options, tables]
 
 import pkg/[celina, results, chronos]
 
@@ -40,29 +40,44 @@ proc toCursorStyle(ct: CursorType): CursorStyle =
   of ctNonBlinkBlock: CursorStyle.SteadyBlock
   of ctNonBlinkIbeam: CursorStyle.SteadyBar
 
-proc pollTerminalWindows*(e: Editor) =
-  ## Poll PTY output for all windows in Terminal mode.
-  ## Called on every render frame to ensure terminal output is up-to-date.
-  ## Also handles automatic cleanup when the shell process exits.
+proc terminalWindowFor(e: Editor, id: BufferId): EditorWindow =
+  ## The window showing the session parked on `id`, or nil for a background tab.
   for window in e.windowManager.windows:
-    if window.mode == EditorMode.Terminal and window.modeState.kind == mskTerminal:
-      let termState = window.modeState.terminal
-      if termState.subMode == tsmInput:
-        # Resize terminal if window dimensions changed
-        let (expectedCols, expectedRows) = e.calculateTerminalAreaDimensions(window)
-        if expectedCols != termState.grid.cols or expectedRows != termState.grid.rows:
-          if expectedCols > 0 and expectedRows > 0:
-            termState.resize(expectedCols, expectedRows)
+    if window.mode == EditorMode.Terminal and window.modeState.kind == mskTerminal and
+        window.tabBufferId == id:
+      return window
+  nil
 
-        discard termState.pollOutput()
+proc pollTerminalSessions*(e: Editor) =
+  ## Drain every live Terminal session's PTY and resize the ones on screen.
+  ## Called on every render frame.
+  ##
+  ## Follows `e.terminalStates`, not the windows: a backgrounded session is in
+  ## no window, and a child whose output nobody drains blocks in write().
+  var exited: seq[BufferId]
+  for id, session in e.terminalStates:
+    discard session.pollOutput()
 
-        if termState.exitCode.isSome:
-          # The session always runs as a persistent interactive shell (even
-          # `:terminal ls` runs the command and then drops into a live shell),
-          # so an exit only happens when the user quits the shell itself.
-          # Tear down the tab in every case.
-          e.closeTerminalBuffer(window.buffer.id)
-          continue
+    let window = e.terminalWindowFor(id)
+    if window == nil:
+      # Backgrounded: no size to follow, and no teardown behind the user's back.
+      continue
+
+    # Sizing follows the window, not the sub-mode: output drained while the
+    # user browses the scrollback still lands in the grid.
+    let (expectedCols, expectedRows) = e.calculateTerminalAreaDimensions(window)
+    if expectedCols > 0 and expectedRows > 0 and
+        (expectedCols != session.grid.cols or expectedRows != session.grid.rows):
+      session.resize(expectedCols, expectedRows)
+
+    # A shell only exits when the user quits it, so the tab always goes — but
+    # not while the user is browsing the scrollback of one that just exited.
+    if session.subMode == tsmInput and session.exitCode.isSome:
+      # After the loop: teardown mutates the table this one is walking.
+      exited.add(id)
+
+  for id in exited:
+    e.closeTerminalBuffer(id)
 
 proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
   ## Execute startup window actions on first render when terminal size is known.
@@ -200,7 +215,7 @@ proc runEditor(
           editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
 
         # Poll terminal output for all windows in Terminal mode
-        editor.pollTerminalWindows()
+        editor.pollTerminalSessions()
 
         editor.render(buffer)
         editor.applyFrontendRequests(app)
@@ -277,6 +292,7 @@ proc main() =
 
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
+  editor.noteCrashRecoveryFiles()
 
   # Always capture mouse events so the terminal doesn't convert wheel events
   # to arrow key sequences. When mouse is disabled in config, events are

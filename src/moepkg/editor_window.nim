@@ -30,6 +30,7 @@ import
   editorconfig_helper,
   highlight_config,
   editor_window_layout,
+  editor_window_state,
   editor_lsp,
   editor_mode,
   git_cache,
@@ -61,7 +62,7 @@ proc syncActiveWindow*(e: Editor) =
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
   # anchor without each call site having to remember to update it.
-  e.state.windowDisplay.currentBufferId = e.activeWindow.buffer.id
+  e.state.windowDisplay.currentBufferId = e.activeWindow.tabBufferId
 
 proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   ## Calculate and set screen cursor position for the active window
@@ -343,7 +344,25 @@ proc enew*(e: Editor): Result[(), string] =
 
   # Replace the buffer in the active window
   e.finalizeInsertSessionForBufferSwitch(e.activeWindow.buffer)
-  e.activeWindow.buffer = newBuffer
+  # Not routed through applyBufferMode, so drop the buffer-swap mode state here.
+  let win = e.activeWindow
+  win.originalBuffer = nil
+  # Same ownership gap as in `applyBufferMode`: `clearModeState` keeps a viewer
+  # entry / suspension owned by another mode.
+  discard win.takeViewerEntry()
+  discard win.takeSuspendedMode()
+  let wasSpecialMode = win.modeState.kind != mskNone
+  when not defined(moe.embedded):
+    # As on a tab switch: the session resumes live, not mid-scrollback.
+    win.leaveTerminalSession()
+  if win.modeState.kind != mskTerminal:
+    win.clearModeState(win.mode)
+  win.modeState = ModeState(kind: mskNone)
+  if wasSpecialMode:
+    # `clearModeState` leaves `win.mode` alone and is skipped for Terminal, so
+    # drop the mode here as applyBufferMode does.
+    e.setMode(EditorMode.Normal)
+  e.activeWindow.setTab(newBuffer)
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
   e.activeWindow.viewport.resetViewportTop()
   e.activeWindow.viewport.leftColumn = 0

@@ -21,12 +21,18 @@
 ## closeTerminalBuffer keep `e.terminalStates`, `bufferIds`, and the
 ## active window's mode in sync as Terminal buffers come and go.
 
-import std/[unittest, options, posix, tables]
+import std/[unittest, options, posix, tables, sequtils]
 
-import ../src/moepkg/[editor, config, types, modes, terminal_mode]
+import pkg/results
+
+import
+  ../src/moepkg/[
+    editor, config, types, modes, terminal_mode, editor_window, editor_window_state,
+    handler, key_bindings,
+  ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
-import ../src/moepkg/command_handlers/[handler_result, result_processor]
+import ../src/moepkg/command_handlers/[editor_ops, handler_result, result_processor]
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -70,23 +76,25 @@ proc safeOpenFakeTerminalState(): TerminalState =
 proc registerFakeTerminal(
     e: Editor, command: string = "bash", state: TerminalState = nil
 ): TextBuffer =
-  ## Mimic enterTerminalInActiveWindow without touching real PTY plumbing.
-  ## `state` defaults to a pre-closed fake (cleanup() is a no-op); pass a
-  ## `safeOpenFakeTerminalState()` to exercise teardown.
-  result = newTextBuffer("")
-  result.displayName = some("[Terminal: " & command & "]")
-  e.addBuffer(result)
-  e.addBufferToWindowList(result)
-  e.terminalStates[result.id] =
+  ## Open a Terminal tab through the real `installTerminalSession` path,
+  ## without touching real PTY plumbing. `state` defaults to a pre-closed fake
+  ## (cleanup() is a no-op); pass a `safeOpenFakeTerminalState()` to exercise
+  ## teardown.
+  e.installTerminalSession(
     if state != nil:
       state
     else:
-      fakeTerminalState()
-  e.activeWindow.buffer = result
-  e.activeWindow.modeState =
-    ModeState(kind: mskTerminal, terminal: e.terminalStates[result.id])
-  e.activeWindow.mode = EditorMode.Terminal
-  e.setMode(EditorMode.Terminal)
+      fakeTerminalState(),
+    command,
+  )
+
+proc enterNormal(e: Editor): TextBuffer =
+  ## Ctrl-\ Ctrl-N through the real key path: the dispatcher sets the sub-mode,
+  ## the result epilogue derives the view from it. Returns the scrollback
+  ## snapshot the window ends up showing.
+  discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "\\", modifiers: {kmCtrl}))
+  discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl}))
+  e.activeWindow.modeState.terminal.scrollbackSnapshot
 
 suite "Terminal tabs - applyBufferMode":
   test "Activating a Terminal buffer restores Terminal mode":
@@ -183,7 +191,7 @@ suite "Terminal tabs - deleteCurrentBuffer":
     let termBuf = registerFakeTerminal(e, "bash")
     let termBufId = termBuf.id
 
-    e.deleteCurrentBuffer()
+    check e.deleteCurrentBuffer().isOk
 
     # PTY state and buffer registration were torn down.
     check not e.terminalStates.hasKey(termBufId)
@@ -256,3 +264,152 @@ suite "Terminal tabs - hrCloseWindow via processResult":
     check e.terminalStates.len == 0
     check not e.terminalStates.hasKey(termBufId)
     check e.activeWindow.mode != EditorMode.Terminal
+
+suite "Terminal tabs - Terminal-Normal browses an unregistered snapshot":
+  test "bdelete closes the session instead of failing on the snapshot":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let termBufId = termBuf.id
+    let snapshot = e.enterNormal()
+
+    check snapshot.id != termBufId
+
+    # A terminal buffer is exempt from the modified check, so the snapshot the
+    # window is showing must not make `:bd` refuse.
+    check e.deleteCurrentBuffer().isOk
+
+    check not e.terminalStates.hasKey(termBufId)
+    check e.activeWindow.mode != EditorMode.Terminal
+
+  test "enew from Terminal-Normal detaches the window from the session":
+    # Regression: the window's tab identity used to be derived from
+    # `modeState.kind`, which `enew` leaves on mskTerminal, so `:bd` killed
+    # the shell instead of the buffer the window had moved to.
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let termBufId = termBuf.id
+    discard e.enterNormal()
+
+    discard e.enew()
+    let newBufId = e.activeBuffer().id
+    check newBufId != termBufId
+    check e.activeWindow.tabBufferId == newBufId
+
+    check e.deleteCurrentBuffer().isOk
+
+    check e.terminalStates.hasKey(termBufId)
+    check e.bufferById(newBufId).isNone
+
+  test "A second terminal detaches the window from the previous session":
+    # Regression: the window's tab identity used to be guessed from
+    # `originalBuffer`, which still pointed at the session the window was
+    # browsing, so every teardown path (PTY close, `:bd`, `Ctrl-w c`) hit the
+    # wrong session.
+    let e = createTestEditor()
+    let termA = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    # Browsing the scrollback is a view swap, so the tab does not move.
+    check e.activeWindow.tabBufferId == termA.id
+
+    let termB = registerFakeTerminal(e, "bash")
+
+    check e.activeWindow.tabBufferId == termB.id
+
+    # The shell in B exits: only B's tab and state go away.
+    e.closeTerminalBuffer(e.activeWindow.tabBufferId)
+
+    check not e.terminalStates.hasKey(termB.id)
+    check e.terminalStates.hasKey(termA.id)
+
+  test "The tab list still finds the session's tab":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+
+    check e.windowBufferIndex() == e.activeWindow.bufferIds.find(termBuf.id)
+    check e.windowBufferIndex() >= 0
+    # What the tab line marks as the current tab.
+    check e.tabBuffer(e.activeWindow) == termBuf
+
+suite "Terminal tabs - a session takes the window over":
+  test "The viewer bookkeeping the window was carrying is dropped":
+    # A viewer entry would undo its placement on top of the live session, and a
+    # suspended mode would resume into it.
+    let e = createTestEditor()
+    let originBuf = e.activeWindow.buffer
+    e.activeWindow.viewerEntry = some(
+      ViewerEntry(
+        mode: EditorMode.BufferManager,
+        placement: vpInPlace,
+        returnMode: EditorMode.Normal,
+        bufferId: originBuf.id,
+      )
+    )
+    e.activeWindow.suspendMode()
+
+    discard registerFakeTerminal(e, "bash")
+
+    check e.activeWindow.viewerEntry.isNone
+    check e.activeWindow.suspendedMode.isNone
+    check e.activeWindow.mode == EditorMode.Terminal
+
+suite "Terminal tabs - the view is derived from the sub-mode":
+  proc plainKey(c: string): KeyCombo =
+    KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+  test "the sub-mode round trip swaps the view, not the tab":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let session = e.terminalStates[termBuf.id]
+    check e.activeWindow.buffer == termBuf
+
+    let snapshot = e.enterNormal()
+    check session.subMode == tsmNormal
+    check e.activeWindow.buffer == snapshot
+    check e.activeWindow.tabBufferId == termBuf.id
+
+    # `i` returns to Terminal-Input; the session's own tab buffer comes back
+    # under the live grid.
+    discard e.handleKeyCombo(plainKey("i"))
+    check session.subMode == tsmInput
+    check e.activeWindow.buffer == termBuf
+    check e.activeWindow.tabBufferId == termBuf.id
+
+  test "a backgrounded Terminal-Normal tab resumes live":
+    # Regression: the sub-mode was per-session state that survived a tab
+    # switch while the view was rebuilt from scratch, so the window came back
+    # in TERMINAL mode showing neither the live grid nor the snapshot.
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let session = e.terminalStates[termBuf.id]
+    discard e.enterNormal()
+    require session.subMode == tsmNormal
+
+    let other = newTextBuffer("")
+    e.addBuffer(other)
+    e.addBufferToWindowList(other)
+    check e.activateBuffer(other.id)
+
+    # Leaving the tab ends the browsing session; nothing is carried across.
+    check session.subMode == tsmInput
+    check session.scrollbackSnapshot == nil
+
+    check e.activateBuffer(termBuf.id)
+    check e.activeWindow.mode == EditorMode.Terminal
+    check e.activeWindow.modeState.kind == mskTerminal
+    check e.activeWindow.buffer == termBuf
+    check e.activeWindow.tabBufferId == termBuf.id
+
+  test "enew from Terminal-Normal ends the browsing session too":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let session = e.terminalStates[termBuf.id]
+    discard e.enterNormal()
+    require session.subMode == tsmNormal
+
+    discard e.enew()
+
+    check session.subMode == tsmInput
+    check session.scrollbackSnapshot == nil
+    # The session is still alive, just not on screen.
+    check e.terminalStates.hasKey(termBuf.id)

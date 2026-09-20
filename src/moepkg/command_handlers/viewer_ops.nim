@@ -62,7 +62,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       let newBuffer = newTextBuffer(logContent)
       newBuffer.readOnly = true
       # Replace the window's buffer
-      activeWin.buffer = newBuffer
+      activeWin.setView(newBuffer)
       # Clamp cursor if needed
       let maxLine = max(0, newBuffer.len - 1)
       if e.activeWindow.cursor.line > maxLine:
@@ -177,7 +177,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
         if activeWin.modeState.kind == mskBufferManager:
           let bmState = activeWin.modeState.bufferManager
           bmState.updateEntries(e.getBufferInfos())
-          activeWin.buffer = bmState.createBufferManagerTextBuffer()
+          activeWin.setView(bmState.createBufferManagerTextBuffer())
           activeWin.cursor.line =
             min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
           activeWin.cursor.column = 0
@@ -206,7 +206,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     if activeWin.modeState.kind == mskBookmarkManager:
       let bmState = activeWin.modeState.bookmarkManager
       bmState.deleteSelectedBookmark(e.buffers)
-      activeWin.buffer = bmState.createBookmarkManagerTextBuffer()
+      activeWin.setView(bmState.createBookmarkManagerTextBuffer())
       activeWin.cursor.line = min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
       activeWin.cursor.column = 0
     return true
@@ -239,7 +239,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       # clipped. refreshDiffTextBuffer clamps the selection to the rows it
       # produced, covering the narrow-window fallback to unified.
       let textWidth = e.diffViewerTextWidth(activeWin, dvState)
-      activeWin.buffer = dvState.refreshDiffTextBuffer(textWidth)
+      activeWin.setView(dvState.refreshDiffTextBuffer(textWidth))
       activeWin.cursor = BufferPosition(line: dvState.selectedIndex, column: 0)
       if r.kind == hrDiffViewerToggleView:
         if dvState.renderedSideBySide:

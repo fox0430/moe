@@ -88,7 +88,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
     if activeWin.modeState.kind == mskBackupManager:
       let bkState = activeWin.modeState.backupManager
       bkState.refresh()
-      activeWin.buffer = bkState.createBackupManagerTextBuffer()
+      activeWin.setView(bkState.createBackupManagerTextBuffer())
       activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
       activeWin.cursor.column = 0
     return true
@@ -215,7 +215,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
                 "Restored but failed to reload or roll back: " & textResult.error
         # Refresh the list so the new safety backup is visible.
         bkState.refresh()
-        activeWin.buffer = bkState.createBackupManagerTextBuffer()
+        activeWin.setView(bkState.createBackupManagerTextBuffer())
         activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
         activeWin.cursor.column = 0
       else:
@@ -230,7 +230,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
       if bkState.deleteBackup(backupIndex):
         e.state.statusMessage = "Backup deleted"
         # Regenerate TextBuffer after deletion
-        activeWin.buffer = bkState.createBackupManagerTextBuffer()
+        activeWin.setView(bkState.createBackupManagerTextBuffer())
         activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
         activeWin.cursor.column = 0
       else:
@@ -257,7 +257,7 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
         activeWin.suspendMode()
         # Size by the text area so the gutter cannot clip the right column.
         let textWidth = e.diffViewerTextWidth(activeWin, dvState)
-        activeWin.buffer = dvState.refreshDiffTextBuffer(textWidth)
+        activeWin.setView(dvState.refreshDiffTextBuffer(textWidth))
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.resetViewportTop()
         activeWin.viewport.leftColumn = 0

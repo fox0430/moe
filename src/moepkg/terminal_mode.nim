@@ -191,9 +191,78 @@ proc sendInput*(state: TerminalState, data: string) =
   if data.len > 0:
     state.feedInput(data)
 
+proc sanitizePastedText(text: string): string =
+  ## Drop control bytes and normalize newlines to CR. The CRs are kept: a
+  ## child without bracketed paste runs those lines.
+  result = newStringOfCap(text.len)
+  var i = 0
+  while i < text.len:
+    let c = text[i]
+    case c
+    of '\r':
+      result.add('\r')
+      if i + 1 < text.len and text[i + 1] == '\n':
+        inc i
+    of '\n':
+      result.add('\r')
+    of '\t':
+      result.add('\t')
+    else:
+      if c >= ' ' and c != '\x7f':
+        result.add(c)
+    inc i
+
+proc pasteInput*(
+    state: TerminalState, text: string
+): Result[void, string] {.discardable.} =
+  ## Queue pasted text for the child, bracketed when it enabled DECSET 2004.
+  ## Queued in one piece, so no later keystroke lands in the middle of it.
+  ## Returns err when the paste was refused before queuing, and then none of it
+  ## was queued, or when the fd died flushing it - the queue is dropped then,
+  ## though a head of the paste may already have reached the child.
+  ## A paste releases a held Ctrl-\ even when it queues nothing.
+  state.releaseHeldQuit()
+
+  if state.pty.closed:
+    return err("Terminal has exited")
+
+  let payload = sanitizePastedText(text)
+  if payload.len == 0:
+    return ok()
+
+  let
+    openMarker = if state.grid.bracketedPaste: "\x1b[200~" else: ""
+    closeMarker = if state.grid.bracketedPaste: "\x1b[201~" else: ""
+
+  # Queued whole: cutting a paste to fit would split a UTF-8 sequence and hand
+  # the child a half-typed command it may well run.
+  let queued = state.pty.queueWrite(
+    openMarker & payload & closeMarker,
+    wcDroppable,
+    headBytes = openMarker.len,
+    tailBytes = closeMarker.len,
+  )
+  if queued.isErr:
+    return err("Paste refused: " & queued.error)
+
+  let flushResult = state.pty.flushWrites()
+  if flushResult.isErr:
+    # The queue took the bytes, but the fd died trying to send them.
+    return err("Paste dropped: the terminal is no longer reachable")
+
+  ok()
+
+proc cancelQueuedPastes*(state: TerminalState) =
+  ## Drop the pastes still queued so an aborted paste stops here. What the user
+  ## typed - a held Ctrl-\ included - and the answers the child asked for stay
+  ## queued. A bracketed paste gets its closing marker; an unbracketed one has
+  ## no marker to close, so the child is sent Ctrl-U to kill the half-pasted
+  ## line instead.
+  state.pty.cancelDroppable()
+
 proc interrupt*(state: TerminalState) =
   ## Ctrl-C: drop what the interrupt is allowed to drop, then send it.
-  state.pty.cancelDroppable()
+  state.cancelQueuedPastes()
   state.sendInput("\x03")
 
 proc enterNormalSubMode*(state: TerminalState): TextBuffer =

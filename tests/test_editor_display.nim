@@ -104,7 +104,7 @@ suite "Editor display status queries":
       GitRepositoryCacheEntry(name: "inactive", populated: true)
     e.state.git.repositories["/active"] =
       GitRepositoryCacheEntry(name: "active", populated: true)
-    e.activeWindow.buffer = activeBuffer
+    e.activeWindow.setTab(activeBuffer)
 
     check e.activeGitStatus.branch == "active"
 

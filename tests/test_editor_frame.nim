@@ -308,7 +308,7 @@ suite "tickBufferNotes":
     # are due now rather than when the user steps across.
     let e = newEditor(newEditorConfig())
     e.config.notification.popupNotifications = false
-    let split = EditorWindow(buffer: rawBufferNamed("moe-tick-split.txt"))
+    let split = EditorWindow(viewBuffer: rawBufferNamed("moe-tick-split.txt"))
     e.windowManager.windows.add split
     clearMessageLog()
 
@@ -333,7 +333,7 @@ suite "tickBufferNotes":
     let e = newEditor(newEditorConfig())
     e.config.notification.popupNotifications = false
     e.windowManager.windows.add EditorWindow(
-      buffer: rawBufferNamed("moe-tick-drained.txt")
+      viewBuffer: rawBufferNamed("moe-tick-drained.txt")
     )
 
     e.tickBufferNotes()
@@ -630,7 +630,7 @@ suite "updateForFrame - split buffer re-parse budget":
     e.addBuffer(buf)
     # Make it the active buffer so the frame drives it from the active-buffer
     # branch instead of the inactive-buffer loop.
-    e.activeWindow.buffer = buf
+    e.activeWindow.setTab(buf)
 
     discard buf.beginTransaction()
     discard buf.insert(0, "let inserted = 1;")
@@ -686,7 +686,7 @@ suite "updateForFrame - split buffer re-parse budget":
     while buf.continueInitialHighlight():
       discard
     e.addBuffer(buf)
-    e.activeWindow.buffer = buf
+    e.activeWindow.setTab(buf)
 
     discard buf.beginTransaction()
     discard buf.insert(0, "let inserted = 1;")
@@ -1024,7 +1024,7 @@ suite "updateForFrame - split buffer re-parse budget":
     while buf.continueInitialHighlight():
       discard
     e.addBuffer(buf)
-    e.activeWindow.buffer = buf
+    e.activeWindow.setTab(buf)
 
     discard buf.beginTransaction()
     discard buf.insert(0, "let inserted = 1;")
@@ -1064,7 +1064,7 @@ suite "updateForFrame - split buffer re-parse budget":
     while buf.continueInitialHighlight():
       discard
     e.addBuffer(buf)
-    e.activeWindow.buffer = buf
+    e.activeWindow.setTab(buf)
 
     discard e.vsplit()
     check e.windowManager.windows.len == 2
@@ -1106,14 +1106,14 @@ suite "updateForFrame - split buffer re-parse budget":
     while buf.continueInitialHighlight():
       discard
     e.addBuffer(buf)
-    e.activeWindow.buffer = buf
+    e.activeWindow.setTab(buf)
 
     # Simulate an open debug viewer: the new split window becomes the active
     # one and shows a generated (read-only) listing, as `:debug` does.
     discard e.vsplit()
     var debugBuf = newTextBuffer()
     debugBuf.readOnly = true
-    e.activeWindow.buffer = debugBuf
+    e.activeWindow.setView(debugBuf)
     e.state.windowDisplay.debugBuffer = debugBuf
     e.state.timing.lastDebugUpdate = getMonoTime()
     e.state.timing.debugUpdateInterval = 60 * 60 * 1000
@@ -1157,7 +1157,7 @@ suite "updateForFrame - LSP overlay invalidation":
     while buf.continueInitialHighlight():
       discard
     e.addBuffer(buf)
-    e.activeWindow.buffer = buf
+    e.activeWindow.setTab(buf)
 
     e.state.lspCache.inlayHintCache.isValid = true
 

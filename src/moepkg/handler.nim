@@ -285,12 +285,41 @@ proc handleDebugModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   of dvrHandled, dvrUnhandled, dvrError:
     return true
 
+when not defined(moe.embedded):
+  proc pasteIntoTerminal(e: Editor, text: string): Result[void, string] =
+    ## Send a paste to the child process. The caller reports the error, since
+    ## the Terminal and its overlays do not share a place to show a message.
+    let activeWin = e.activeWindow
+    if activeWin.modeState.kind != mskTerminal or
+        activeWin.modeState.terminal.subMode != tsmInput:
+      return err("Paste not supported in this mode")
+    activeWin.modeState.terminal.pasteInput(text.sanitizeInvalidUtf8())
+
+type PasteSink = enum
+  ## Where a paste goes. One precedence list for both paste paths.
+  psOverlay ## The Command / Search line, which owns the keys while it is up
+  psTerminal ## The child process of a Terminal window
+  psBuffer ## The window's text buffer
+
+proc pasteSinkOf(e: Editor, window: EditorWindow): PasteSink =
+  ## Where a paste into `window` would go. `window` need not hold the keys yet:
+  ## a click resolves its target before it moves the focus there.
+  if e.state.isCommandOverlay or e.state.isSearchOverlay:
+    return psOverlay
+  when not defined(moe.embedded):
+    if window.mode == EditorMode.Terminal:
+      return psTerminal
+  psBuffer
+
+proc resolvePasteSink(e: Editor): PasteSink =
+  ## The sink for the window that has the keys.
+  e.pasteSinkOf(e.activeWindow)
+
 proc handlePasteText(e: Editor, text: string): bool =
   ## Insert pasted text without triggering auto-indentation.
-  # Command / Search overlay takes precedence over the base mode.
-  # Only the first line is inserted since both are single-line.
-  # Overlays are always character fields, so they normalize unconditionally.
-  if e.state.isCommandOverlay or e.state.isSearchOverlay:
+  case e.resolvePasteSink()
+  of psOverlay:
+    # Single-line character fields, so normalize unconditionally.
     let overlayText = text.sanitizeInvalidUtf8().normalizeNewlines()
     if overlayText.len == 0:
       return true
@@ -299,6 +328,15 @@ proc handlePasteText(e: Editor, text: string): bool =
     else:
       e.insertPastedTextInSearch(overlayText)
     return true
+  of psTerminal:
+    when not defined(moe.embedded):
+      # A paste belongs to the child process, not the buffer.
+      let pasteResult = e.pasteIntoTerminal(text)
+      if pasteResult.isErr:
+        e.state.statusMessage = pasteResult.error
+    return true
+  of psBuffer:
+    discard
 
   let activeBuffer = e.activeBuffer()
 
@@ -391,97 +429,6 @@ proc screenToBufferPosition(
     )
   )
 
-proc middleClickPaste(e: Editor) =
-  ## Paste clipboard content at current cursor position for middle-click.
-  if not e.config.clipboard.enable:
-    return
-
-  # Overlay: paste into command/search line.
-  if e.state.isCommandOverlay or e.state.isSearchOverlay:
-    let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
-    if readResult.isErr:
-      # The overlay draws over the status row, so the message must go to the popup.
-      e.notifyPopup("Paste failed: " & readResult.error, nlError)
-      return
-    # Normalize for single-line field.
-    let pastedText = readResult.get().normalizeNewlines()
-    if pastedText.len == 0:
-      return
-    if e.state.isCommandOverlay:
-      e.insertPastedTextInCommand(pastedText)
-    else:
-      e.insertPastedTextInSearch(pastedText)
-    return
-
-  # Prevent Insert entry via middle-click on read-only buffer.
-  if e.activeBuffer().readOnly:
-    e.notify("Buffer is read-only", nlError)
-    return
-
-  if e.state.mode != EditorMode.Normal and e.state.mode != EditorMode.Insert:
-    return
-
-  # Use PRIMARY selection; read before mode change to avoid stray Insert state.
-  let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
-  if readResult.isErr:
-    e.notify("Paste failed: " & readResult.error, nlError)
-    return
-
-  let activeBuffer = e.activeBuffer()
-
-  # Sanitize paste; skipped for raw buffers.
-  let pastedText = activeBuffer.preparePastedText(readResult.get())
-  if pastedText.len == 0:
-    return
-
-  let enteringInsertFromNormal = e.state.mode == EditorMode.Normal
-
-  if enteringInsertFromNormal:
-    let insertTransaction = activeBuffer.beginTransaction(
-      "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
-    )
-    if insertTransaction.isErr:
-      e.notify("Paste failed: " & insertTransaction.error, nlError)
-      return
-    e.setMode(EditorMode.Insert)
-    e.state.statusMessage = "-- INSERT --"
-
-  # Reuse existing Insert transaction if any.
-  let ownTransaction = not activeBuffer.inTransaction
-  if ownTransaction:
-    let transactionResult = activeBuffer.beginTransaction("Middle-click paste")
-    if transactionResult.isErr:
-      e.notify("Paste failed: " & transactionResult.error, nlError)
-      return
-
-  let pos = e.cursor
-  let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
-  if insertResult.isErr:
-    var msg = "Paste failed: " & insertResult.error
-    # Roll back the transaction we opened; a joined session transaction is
-    # left untouched for the mode's own commit path.
-    if ownTransaction or enteringInsertFromNormal:
-      let rollbackResult = activeBuffer.rollbackTransaction()
-      if rollbackResult.isErr:
-        logError "handler",
-          "Failed to rollback paste transaction: " & rollbackResult.error
-        msg &= " (rollback failed: " & rollbackResult.error & ")"
-      if enteringInsertFromNormal:
-        # The Insert session never started: return to Normal mode and drop the
-        # "-- INSERT --" indicator this paste put on the status row.
-        e.setMode(EditorMode.Normal)
-        e.state.statusMessage = ""
-    e.notify(msg, nlError)
-    return
-
-  e.activeWindow.cursor = insertResult.get.cursor
-
-  if ownTransaction:
-    let commitResult = activeBuffer.commitTransaction()
-    if commitResult.isErr:
-      logError "handler", "Failed to commit paste transaction: " & commitResult.error
-      e.notify("Paste failed: " & commitResult.error, nlError)
-
 proc finalizeCurrentWindowForMouseJump(e: Editor) =
   ## Exit the current mode before a mouse click hands focus to another window.
   ## visualSelection and pendingOperator carry no buffer identity, and an open
@@ -513,9 +460,11 @@ proc finalizeCurrentWindowForMouseJump(e: Editor) =
     e.state.pendingInput.macroState.pendingCount = 0
 
   # state.mode aliases activeWindow.mode; the subsequent swap re-aliases to
-  # the target window's own saved mode.
+  # the target window's own saved mode. Only an edit mode is rewound: Normal
+  # in a Terminal or viewer window would disagree with its modeState.
   e.state.previousMode = e.state.mode
-  e.state.mode = EditorMode.Normal
+  if e.state.mode.isFileEditMode:
+    e.state.mode = EditorMode.Normal
 
 proc scrollTargetIndex(e: Editor, input: ScrollInput): int =
   ## Resolve the window under a cell-coordinate scroll, falling back to active.
@@ -684,37 +633,40 @@ proc pointerPositionInWindow(
   if input.column < vp.x or input.column >= vp.x + vp.width:
     return none(BufferPosition)
 
+  # The tab line is part of the window's rows, and `screenToBufferPosition`
+  # bounds the row against `vp.height - reservedLines`, so the offset comes off
+  # the reserve as well as off the row — otherwise the status/command row is
+  # accepted and clamped onto the last buffer line.
+  let
+    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+    adjustedRow = input.row - tabLineOffset
+
   if e.windowManager.windows.len > 1:
     if input.row < vp.y or input.row >= vp.y + vp.height:
       return none(BufferPosition)
     let
       maxBottomY = findMaxBottomY(e.windowManager.windows)
       reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
-      tabLineOffset = if e.showTabLine: TabLineHeight else: 0
-      adjustedRow = input.row - tabLineOffset
     return screenToBufferPosition(
       vp,
       window.buffer,
       input.column,
       adjustedRow,
       e.gutterWidth(window),
-      reservedLines,
+      reservedLines + tabLineOffset,
       e.lineWrap,
       e.tabStop,
       e.wrapWidth(window),
       window.wrapCountCache,
     )
 
-  let
-    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
-    adjustedRow = input.row - tabLineOffset
   screenToBufferPosition(
     vp,
     window.buffer,
     input.column,
     adjustedRow,
     e.gutterWidth(window),
-    steadyBottomAreaHeight(),
+    steadyBottomAreaHeight() + tabLineOffset,
     e.lineWrap,
     e.tabStop,
     e.wrapWidth(window),
@@ -727,6 +679,154 @@ proc pointerTextHit(e: Editor, input: PointerInput): Option[PointerTextHit] =
     if position.isSome:
       return some(PointerTextHit(windowIndex: i, position: position.get))
   none(PointerTextHit)
+
+proc windowIndexAtCell(e: Editor, row, col: int): int =
+  ## Index of the window whose text area contains this screen cell, or -1 for
+  ## the tab line, the command line, or a gap between windows. Geometry only:
+  ## a Terminal window draws its grid, not its buffer, so
+  ## `screenToBufferPosition` would miss it.
+  let
+    tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+    maxBottomY = findMaxBottomY(e.windowManager.windows)
+  for i, window in e.windowManager.windows:
+    let
+      vp = window.viewport
+      # Same text area as pointerPositionInWindow: the bottom rows are the
+      # status/command area, not the window's text.
+      reservedLines = e.steadyReservedLines(vp.y + vp.height == maxBottomY)
+    if col < vp.x or col >= vp.x + vp.width:
+      continue
+    if row < vp.y + tabLineOffset or row >= vp.y + vp.height - reservedLines:
+      continue
+    return i
+  -1
+
+proc middleClickPaste(e: Editor, row, col: int) =
+  ## Paste the PRIMARY selection for a middle-click at this screen cell.
+  if not e.config.clipboard.enable:
+    return
+
+  # An overlay owns the keys wherever the click landed, so it keeps the focus.
+  # Otherwise the click picks the target window, not the focused one.
+  let overlayHasKeys = e.resolvePasteSink() == psOverlay
+  var windowIndex = -1
+  if not overlayHasKeys:
+    windowIndex = e.windowIndexAtCell(row, col)
+    if windowIndex < 0:
+      return
+
+  # The sink is resolved before the focus moves: taking the focus finalizes the
+  # old window's Insert session, so nothing below may bail out after that.
+  let
+    targetWindow =
+      if overlayHasKeys:
+        e.activeWindow
+      else:
+        e.windowManager.windows[windowIndex]
+    sink = e.pasteSinkOf(targetWindow)
+
+  if sink == psBuffer:
+    # Before the read, so a rejected paste costs no clipboard round trip.
+    if targetWindow.buffer.readOnly:
+      e.notify("Buffer is read-only", nlError)
+      return
+    if targetWindow.mode != EditorMode.Normal and targetWindow.mode != EditorMode.Insert:
+      return
+
+  # Before any mode change, so a failure leaves no stray Insert state.
+  let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
+  if readResult.isErr:
+    if sink == psOverlay:
+      # The overlay draws over the status row, so the message must go to the popup.
+      e.notifyPopup("Paste failed: " & readResult.error, nlError)
+    else:
+      e.notify("Paste failed: " & readResult.error, nlError)
+    return
+  # A click that pastes nothing (no tool, empty PRIMARY) stays a no-op rather
+  # than moving the focus.
+  if readResult.get().len == 0:
+    return
+
+  if not overlayHasKeys:
+    e.activatePointerWindow(windowIndex)
+
+  case sink
+  of psOverlay:
+    # Normalize for a single-line field.
+    let pastedText = readResult.get().normalizeNewlines()
+    if pastedText.len == 0:
+      return
+    if e.state.isCommandOverlay:
+      e.insertPastedTextInCommand(pastedText)
+    else:
+      e.insertPastedTextInSearch(pastedText)
+    return
+  of psTerminal:
+    when not defined(moe.embedded):
+      let pasteResult = e.pasteIntoTerminal(readResult.get())
+      if pasteResult.isErr:
+        e.notify(pasteResult.error, nlWarning)
+    return
+  of psBuffer:
+    discard
+
+  let activeBuffer = e.activeBuffer()
+
+  # Sanitize paste; skipped for raw buffers.
+  let pastedText = activeBuffer.preparePastedText(readResult.get())
+  if pastedText.len == 0:
+    return
+
+  let enteringInsertFromNormal = e.state.mode == EditorMode.Normal
+
+  if enteringInsertFromNormal:
+    let insertTransaction = activeBuffer.beginTransaction(
+      "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
+    )
+    if insertTransaction.isErr:
+      e.notify("Paste failed: " & insertTransaction.error, nlError)
+      return
+    e.setMode(EditorMode.Insert)
+    e.state.statusMessage = "-- INSERT --"
+
+  # Reuse existing Insert transaction if any.
+  let ownTransaction = not activeBuffer.inTransaction
+  if ownTransaction:
+    let transactionResult = activeBuffer.beginTransaction("Middle-click paste")
+    if transactionResult.isErr:
+      e.notify("Paste failed: " & transactionResult.error, nlError)
+      return
+
+  let pos = e.cursor
+  let insertResult = activeBuffer.insertTextEnd(pos, pastedText)
+  if insertResult.isErr:
+    var msg = "Paste failed: " & insertResult.error
+    # Roll back the transaction we opened; a joined session transaction is
+    # left untouched for the mode's own commit path.
+    if ownTransaction or enteringInsertFromNormal:
+      let rollbackResult = activeBuffer.rollbackTransaction()
+      if rollbackResult.isErr:
+        logError "handler",
+          "Failed to rollback paste transaction: " & rollbackResult.error
+        msg &= " (rollback failed: " & rollbackResult.error & ")"
+      if enteringInsertFromNormal:
+        # The Insert session never started: return to Normal mode and drop the
+        # "-- INSERT --" indicator this paste put on the status row.
+        e.setMode(EditorMode.Normal)
+        e.state.statusMessage = ""
+    e.notify(msg, nlError)
+    return
+
+  e.activeWindow.cursor = insertResult.get.cursor
+  # The click chose this window, so re-attach its viewport: a wheel-scrolled
+  # split would otherwise keep the cursor off-screen after the insert.
+  e.activeWindow.viewport.detachedFromCursor = false
+
+  if ownTransaction:
+    let commitResult = activeBuffer.commitTransaction()
+    if commitResult.isErr:
+      logError "handler", "Failed to commit paste transaction: " & commitResult.error
+      e.notify("Paste failed: " & commitResult.error, nlError)
 
 func pointerGranularity(
     input: PointerInput, selection: VisualSelection
@@ -985,8 +1085,9 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
         # Terminal owns a PTY in `e.terminalStates`; closing the window alone
         # would strand it, so tear the session down first.
         when not defined(moe.embedded):
-          if e.terminalStates.hasKey(e.activeWindow.buffer.id):
-            e.closeTerminalBuffer(e.activeWindow.buffer.id)
+          let termBufId = e.activeWindow.tabBufferId
+          if e.terminalStates.hasKey(termBufId):
+            e.closeTerminalBuffer(termBufId)
         let shouldQuit = e.closeWindow()
         if shouldQuit:
           return some(false)
@@ -1095,14 +1196,20 @@ proc handleInterruptCore(e: Editor): bool =
   ## Insert-Normal, or transition file-edit modes back to Normal.
 
   when not defined(moe.embedded):
-    # Terminal-Input mode: forward Ctrl-C to PTY as \x03
-    if e.state.mode == EditorMode.Terminal:
+    # An overlay opened over Terminal still owns Ctrl-C; the session gets it
+    # only while the keys are the window's own, in either sub-mode.
+    if e.state.mode == EditorMode.Terminal and not e.state.hasOverlay:
       let activeWin = e.activeWindow
       if activeWin.modeState.kind == mskTerminal:
         let termState = activeWin.modeState.terminal
         if termState.subMode == tsmInput:
+          # Input sub-mode: forward Ctrl-C to the PTY as \x03.
           termState.interrupt()
-          return true
+        else:
+          # Normal sub-mode: the keys are ours, but a paste queued before
+          # the switch is still draining and must stay cancellable.
+          termState.cancelQueuedPastes()
+        return true
 
   # Search overlay: cancel search and exit overlay
   if e.state.isSearchOverlay:
@@ -1503,9 +1610,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if event.mouse.button == mouse_logic.MouseButton.Middle and
         event.mouse.kind == celina.MouseEventKind.Press:
       e.prepareForInput(false)
-      if e.windowManager.windows.len > 0:
-        e.activeWindow.viewport.detachedFromCursor = false
-      e.middleClickPaste()
+      e.middleClickPaste(event.mouse.y, event.mouse.x)
       return true
     discard e.handleMouseEvent(event)
     return true # Always continue running after mouse events

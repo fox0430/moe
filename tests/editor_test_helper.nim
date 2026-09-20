@@ -25,7 +25,7 @@ proc createTestEditor*(
   ##
   ## `handlerManager` is stored on `Editor.handlerManager` so nested-playback
   ## paths (`runNestedKeyCombo`, `playbackMacroImpl`) can dispatch through it.
-  state.activeWindow.buffer = buf
+  state.activeWindow.setTab(buf)
   state.activeWindow.viewport = viewport
   let registry =
     if keyBindingRegistry.isNil:

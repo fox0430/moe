@@ -79,8 +79,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
         e.state.statusMessage = discardErr
         return true
     when not defined(moe.embedded):
-      if e.terminalStates.hasKey(activeWin.buffer.id):
-        e.closeTerminalBuffer(activeWin.buffer.id)
+      let termBufId = activeWin.tabBufferId
+      if e.terminalStates.hasKey(termBufId):
+        e.closeTerminalBuffer(termBufId)
     let shouldQuit = e.closeWindow()
     if shouldQuit:
       return false
@@ -131,7 +132,9 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
       e.setActiveWindowScreenCursor(e.activeWindow)
     return true
   of hrBufferDelete:
-    e.deleteCurrentBuffer()
+    let deleteResult = e.deleteCurrentBuffer(r.forceBufferDelete)
+    if deleteResult.isErr:
+      e.state.statusMessage = deleteResult.error
     return true
   of hrTerminalQuit:
     when defined(moe.embedded):
@@ -139,7 +142,7 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
     else:
       # Close the Terminal tab; closeTerminalBuffer picks a successor tab and
       # resets the window's mode to Normal.
-      e.closeTerminalBuffer(e.activeWindow.buffer.id)
+      e.closeTerminalBuffer(e.activeWindow.tabBufferId)
     return true
   of hrFileTreeQuit:
     # Close file tree window

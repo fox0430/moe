@@ -29,7 +29,8 @@ proc createTestWindow(x, y, width, height: int, active = false): EditorWindow =
   let buf = newTextBuffer()
   discard buf.insertText(BufferPosition(line: 0, column: 0), "Test content")
   EditorWindow(
-    buffer: buf,
+    viewBuffer: buf,
+    tabBufferId: buf.id,
     bufferIds: @[buf.id],
     viewport:
       ViewPort(topLine: 0, leftColumn: 0, width: width, height: height, x: x, y: y),
@@ -2186,7 +2187,8 @@ suite "EditorWindowManager - swapWindows":
 
     wm.windows.add(
       EditorWindow(
-        buffer: buf0,
+        viewBuffer: buf0,
+        tabBufferId: buf0.id,
         viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 3),
         active: true,
@@ -2194,7 +2196,8 @@ suite "EditorWindowManager - swapWindows":
     )
     wm.windows.add(
       EditorWindow(
-        buffer: buf1,
+        viewBuffer: buf1,
+        tabBufferId: buf1.id,
         viewport:
           ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 5),
@@ -2227,7 +2230,8 @@ suite "EditorWindowManager - swapWindows":
 
     wm.windows.add(
       EditorWindow(
-        buffer: buf0,
+        viewBuffer: buf0,
+        tabBufferId: buf0.id,
         viewport: ViewPort(x: 0, y: 0, width: 80, height: 11, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: true,
@@ -2235,7 +2239,8 @@ suite "EditorWindowManager - swapWindows":
     )
     wm.windows.add(
       EditorWindow(
-        buffer: buf1,
+        viewBuffer: buf1,
+        tabBufferId: buf1.id,
         viewport:
           ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
@@ -2265,7 +2270,8 @@ suite "EditorWindowManager - swapWindows":
 
     wm.windows.add(
       EditorWindow(
-        buffer: buf0,
+        viewBuffer: buf0,
+        tabBufferId: buf0.id,
         viewport: ViewPort(x: 0, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: false,
@@ -2273,7 +2279,8 @@ suite "EditorWindowManager - swapWindows":
     )
     wm.windows.add(
       EditorWindow(
-        buffer: buf1,
+        viewBuffer: buf1,
+        tabBufferId: buf1.id,
         viewport:
           ViewPort(x: 27, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
@@ -2282,7 +2289,8 @@ suite "EditorWindowManager - swapWindows":
     )
     wm.windows.add(
       EditorWindow(
-        buffer: buf2,
+        viewBuffer: buf2,
+        tabBufferId: buf2.id,
         viewport:
           ViewPort(x: 54, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
@@ -2315,7 +2323,8 @@ suite "EditorWindowManager - swapWindows":
 
     wm.windows.add(
       EditorWindow(
-        buffer: buf0,
+        viewBuffer: buf0,
+        tabBufferId: buf0.id,
         viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 2, leftColumn: 3),
         cursor: BufferPosition(line: 2, column: 4),
         active: true,
@@ -2323,7 +2332,8 @@ suite "EditorWindowManager - swapWindows":
     )
     wm.windows.add(
       EditorWindow(
-        buffer: buf1,
+        viewBuffer: buf1,
+        tabBufferId: buf1.id,
         viewport:
           ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 7),
@@ -2353,7 +2363,8 @@ suite "EditorWindowManager - swapWindows":
 
     wm.windows.add(
       EditorWindow(
-        buffer: buf0,
+        viewBuffer: buf0,
+        tabBufferId: buf0.id,
         viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: true,
@@ -2361,7 +2372,8 @@ suite "EditorWindowManager - swapWindows":
     )
     wm.windows.add(
       EditorWindow(
-        buffer: buf1,
+        viewBuffer: buf1,
+        tabBufferId: buf1.id,
         viewport:
           ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),

@@ -41,7 +41,7 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
         debugLines,
         i,
         i == e.windowManager.activeWindowIndex,
-        e.bufferIndexById(window.buffer.id),
+        e.bufferIndexById(window.tabBufferId),
         window.viewport.x,
         window.viewport.y,
         window.viewport.width,

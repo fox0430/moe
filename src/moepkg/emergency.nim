@@ -25,7 +25,7 @@
 
 import std/[os, times, json, options, strformat]
 
-import types/editor_types, buffer/[core, file_io], backup, unicode_utils
+import types/editor_types, buffer/[core, file_io], backup, unicode_utils, message_log
 
 const DefaultCrashRecoveryDir* = "~/.cache/moe/crash_recovery"
 
@@ -38,6 +38,23 @@ proc hasCrashRecoveryFiles*(baseDir: string = getCrashRecoveryBaseDir()): bool =
   for _ in walkDirs(baseDir / "*"):
     return true
   return false
+
+proc noteCrashRecoveryFiles*(
+    editor: Editor, baseDir: string = getCrashRecoveryBaseDir()
+) =
+  ## Surface leftover crash-recovery files at process start.
+  ##
+  ## Not called from `newEditor`: tests construct editors and must not pick up
+  ## the developer's `~/.cache/moe/crash_recovery`. `statusMessage=` already
+  ## logs, so a standing status line gets `addMessageLog` instead of a second
+  ## assignment.
+  if not hasCrashRecoveryFiles(baseDir):
+    return
+  let msg = "Crash recovery files found. See " & baseDir
+  if editor.state.statusMessage.len == 0:
+    editor.state.statusMessage = msg
+  else:
+    addMessageLog(msg)
 
 proc emergencySaveBuffers*(
     editor: Editor, baseDir: string = getCrashRecoveryBaseDir()

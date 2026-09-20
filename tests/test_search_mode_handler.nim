@@ -46,7 +46,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   config.standard.mouse = true
   result = newEditor(config)
   let buf = newTextBuffer(content)
-  result.windowManager.windows[0].buffer = buf
+  result.windowManager.windows[0].setTab(buf)
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
@@ -59,7 +59,7 @@ proc createTestEditorInHelpMode(): Editor =
   let helpState = newHelpViewerState()
   let helpBuffer = helpState.createHelpTextBuffer()
   result = createTestEditorWithBuffer("")
-  result.windowManager.windows[0].buffer = helpBuffer
+  result.windowManager.windows[0].setTab(helpBuffer)
   result.windowManager.windows[0].bufferIds = @[helpBuffer.id]
   result.windowManager.windows[0].modeState = ModeState(kind: mskHelp, help: helpState)
   result.state.mode = EditorMode.Help
