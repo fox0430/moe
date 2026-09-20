@@ -1700,6 +1700,236 @@ suite "Visual Commands - visualPaste":
     check state.visualSelection.active == false
     check state.mode == EditorMode.Normal
 
+  test "gp characterwise leaves cursor after pasted text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.registers.setYankedRegister("XYZ", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.getLine(0) == "XYZ world"
+    check state.cursor.line == 0
+    check state.cursor.column == 3
+    check state.mode == EditorMode.Normal
+
+  test "gp characterwise at end of line leaves cursor on last pasted char":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.registers.setYankedRegister("XY", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.getLine(0) == "XY"
+    check state.cursor.line == 0
+    check state.cursor.column == 1
+
+  test "gp linewise leaves cursor on the line after pasted text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nbbb")
+    discard buf.insertText(BufferPosition(line: 1, column: 3), "\nccc")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.registers.setYankedRegister("XX\nYY\n", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.len == 4
+    check buf.getLine(0) == "XX"
+    check buf.getLine(1) == "YY"
+    check buf.getLine(2) == "bbb"
+    check state.cursor.line == 2
+    check state.cursor.column == 0
+
+  test "gp linewise replacing the whole buffer parks on the last pasted char":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.registers.setYankedRegister("XX\n", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.len == 1
+    check buf.getLine(0) == "XX"
+    check state.cursor.line == 0
+    check state.cursor.column == 1
+
+  test "gp linewise replacing the whole buffer with multiple lines parks on the last pasted char":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.registers.setYankedRegister("XX\nYY\n", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.len == 2
+    check buf.getLine(0) == "XX"
+    check buf.getLine(1) == "YY"
+    check state.cursor.line == 1
+    check state.cursor.column == 1
+
+  test "gp linewise replacing the whole buffer parks on the last rune of an indented line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.registers.setYankedRegister("  pasted\n", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.getLine(0) == "  pasted"
+    check state.cursor.line == 0
+    check state.cursor.column == 7
+
+  test "gp linewise on the last line of a multi-line buffer parks at column 0":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nbbb")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.registers.setYankedRegister("XX\n", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 1, column: 0),
+      current: BufferPosition(line: 1, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.len == 2
+    check buf.getLine(0) == "aaa"
+    check buf.getLine(1) == "XX"
+    check state.cursor.line == 1
+    check state.cursor.column == 0
+
+  test "gp blockwise leaves cursor after pasted text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.registers.setYankedRegister("XYZ", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    # Rectangle ("hel"/"foo") is deleted; register text is inserted at the top-left.
+    check buf.getLine(0) == "XYZlo world"
+    check buf.getLine(1) == " bar"
+    check state.cursor.line == 0
+    check state.cursor.column == 3
+    check state.mode == EditorMode.Normal
+
+  test "gp blockwise with multi-line paste lands after the inserted text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ab")
+    discard buf.insertText(BufferPosition(line: 0, column: 2), "\ncdefgh")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.registers.setYankedRegister("X\nYZ", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 3),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskBlock,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    # Line 0 is shorter than the block start, so the insert appends at EOL.
+    check buf.len == 3
+    check buf.getLine(0) == "abX"
+    check buf.getLine(1) == "YZ"
+    check buf.getLine(2) == "cde"
+    check state.cursor.line == 1
+    check state.cursor.column == 1
+    check state.mode == EditorMode.Normal
+
+  test "gp linewise with an empty register inserts a blank line and moves after it":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line1\nline2\nline3")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.registers.setYankedRegister("", true)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 1, column: 0),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.getLine(0) == "line1"
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == "line3"
+    check state.cursor.line == 2
+    check state.cursor.column == 0
+    check state.mode == EditorMode.Normal
+
+  test "gp charwise with an empty register is a no-op":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.registers.setYankedRegister("", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    discard visualPaste(buf, state, cursorAfter = true)
+
+    check buf.getLine(0) == "hello world"
+    check state.visualSelection.active == false
+
   test "Paste with empty register (no-op)":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")

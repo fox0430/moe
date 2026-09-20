@@ -781,6 +781,35 @@ suite "KeyBindingRegistry - setupDefaultBindings":
     check result.isSome
     check result.get.name == "goto-first-line"
 
+  test "gp/gP sequence bindings are set up":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    registry.clearSequence()
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('g'))
+    let gpAfter = registry.processKey(EditorMode.Normal, toKeyCombo('p'))
+    check gpAfter.isSome
+    check gpAfter.get.name == "paste-after-end"
+
+    registry.clearSequence()
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('g'))
+    let gpBefore = registry.processKey(EditorMode.Normal, toKeyCombo('P'))
+    check gpBefore.isSome
+    check gpBefore.get.name == "paste-before-end"
+
+    for mode in [EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock]:
+      registry.clearSequence()
+      discard registry.processKey(mode, toKeyCombo('g'))
+      let visPasteAfter = registry.processKey(mode, toKeyCombo('p'))
+      check visPasteAfter.isSome
+      check visPasteAfter.get.name == "visual-paste-end"
+
+      registry.clearSequence()
+      discard registry.processKey(mode, toKeyCombo('g'))
+      let visPasteBefore = registry.processKey(mode, toKeyCombo('P'))
+      check visPasteBefore.isSome
+      check visPasteBefore.get.name == "visual-paste-end"
+
   test "Visual mode bindings exist":
     let registry = newKeyBindingRegistry()
     registry.setupDefaultBindings()

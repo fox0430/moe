@@ -200,13 +200,15 @@ proc handleVisualSwapSelection*(ctx: CommandContext): Result[(), string] =
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
-proc handleVisualPaste*(ctx: CommandContext): Result[(), string] =
-  ## Paste over selection
-  result = visualPaste(ctx.buffer, ctx.state, ctx.clipboardConfig)
+proc handleVisualPaste*(
+    ctx: CommandContext, cursorAfter: bool = false
+): Result[(), string] =
+  ## Paste over selection (p/P). `cursorAfter` is gp/gP.
+  result = visualPaste(ctx.buffer, ctx.state, ctx.clipboardConfig, cursorAfter)
   ctx.cursor = ctx.state.cursor
 
 proc registerVisualCommands*(registry: CommandRegistry) =
-  ## Register all 28 visual mode commands.
+  ## Register all 29 visual mode commands.
 
   # Visual mode movement commands
   registry.register(
@@ -494,6 +496,16 @@ proc registerVisualCommands*(registry: CommandRegistry) =
     "Paste over selection (p/P command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualPaste(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    custom("visual.paste.end"),
+    "Visual Paste End",
+    "Paste over selection and leave cursor after pasted text (gp/gP)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualPaste(ctx, cursorAfter = true),
     0,
     0,
   )

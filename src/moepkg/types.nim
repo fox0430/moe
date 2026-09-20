@@ -586,7 +586,7 @@ type
     lecSubstitute # Substitute command (s/S)
     lecDeleteLine # Delete line(s) with dd
     lecChangeLine # Change line(s) with cc
-    lecPaste # Paste operation (p/P)
+    lecPaste # Paste operation (p/P/gp/gP)
     lecToggleCase # Toggle case with ~
     lecJoinLines # Join lines with J
     lecOperatorLines # Doubled linewise operator (>>, <<, guu, gUU)
@@ -630,7 +630,8 @@ type
       changeLineCount*: int # Number of lines to change
     of lecPaste:
       pasteCount*: int # Number of times to paste
-      pasteBefore*: bool # true for P (before), false for p (after)
+      pasteBefore*: bool # true for P/gP (before), false for p/gp (after)
+      pasteCursorAfter*: bool # true for gp/gP
     of lecToggleCase:
       toggleCaseCount*: int # Number of characters to toggle
     of lecJoinLines:

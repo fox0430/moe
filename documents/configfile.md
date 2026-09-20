@@ -762,6 +762,8 @@ Commands are grouped by category below. Any command name listed here can be used
 | yank-line | Yank (copy) line |
 | paste-after | Paste after cursor |
 | paste-before | Paste before cursor |
+| paste-after-end | Paste after cursor and leave cursor after pasted text |
+| paste-before-end | Paste before cursor and leave cursor after pasted text |
 | clipboard-copy | Copy selected text to system clipboard |
 | clipboard-paste | Paste text from system clipboard |
 | clipboard-cut | Cut selected text to system clipboard |
@@ -822,6 +824,7 @@ Commands are grouped by category below. Any command name listed here can be used
 | visual-delete | Delete visual selection |
 | visual-change | Delete selection and enter insert mode |
 | visual-paste | Delete selection and paste register content |
+| visual-paste-end | Delete selection, paste, and leave cursor after pasted text |
 | visual-indent | Indent visual selection |
 | visual-dedent | Dedent visual selection |
 | visual-joinlines | Join lines in visual selection |

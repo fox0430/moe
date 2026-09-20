@@ -597,13 +597,16 @@ suite "HelpViewer - Mode sections (snapshot)":
       "ca{ or ca} - Delete around curly brackets and enter insert mode"
     )
 
-  test "# Visual mode section uses minWidth=7 padding":
+  test "# Visual mode section uses minWidth=9 padding":
     let state = newHelpViewerState()
     check state.items.contains("# Visual mode")
-    # natural max is 6 ("Ctrl-a"/"Ctrl-x"/"Ctrl-s"); minWidth pads to 7
-    check state.items.contains("d or x  - Delete text")
-    check state.items.contains("Ctrl-a  - Increase number under cursor")
-    check state.items.contains("Esc     - Go to Normal mode")
+    # natural max is 8 ("gp or gP"); minWidth pads to 9
+    check state.items.contains("d or x    - Delete text")
+    check state.items.contains("Ctrl-a    - Increase number under cursor")
+    check state.items.contains("Esc       - Go to Normal mode")
+    check state.items.contains(
+      "gp or gP  - Paste over the selection and leave the cursor after the pasted text (replacing the whole buffer parks on the last pasted character)"
+    )
 
   test "# Replace mode section is aligned to width 9":
     let state = newHelpViewerState()

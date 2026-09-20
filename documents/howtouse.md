@@ -101,6 +101,8 @@
 | <kbd>**y**</kbd> <kbd>**t**</kbd> <kbd>**Any key**</kbd> | Yank characters to a any character |
 | <kbd>**p**</kbd> | Paste the clipboard |
 | <kbd>**P**</kbd> | Paste the clipboard before the cursor |
+| <kbd>**g**</kbd> <kbd>**p**</kbd> | Paste and leave the cursor after the pasted text |
+| <kbd>**g**</kbd> <kbd>**P**</kbd> | Paste before the cursor and leave the cursor after the pasted text |
 | <kbd>**n**</kbd> | Search forwards |
 | <kbd>**N**</kbd> | Search backwards |
 | <kbd>**g**</kbd> <kbd>**n**</kbd> | Go to next search match and select it visually |
@@ -285,6 +287,7 @@
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd> | Delete text |
 | <kbd>**c**</kbd> | Change (delete selection and enter insert mode) |
 | <kbd>**y**</kbd> | Copy text |
+| <kbd>**g**</kbd> <kbd>**p**</kbd> OR <kbd>**g**</kbd> <kbd>**P**</kbd> | Paste over the selection and leave the cursor after the pasted text (replacing the whole buffer parks on the last pasted character) |
 | <kbd>**r**</kbd> | Replace character |
 | <kbd>**S**</kbd> | Surround selection with character |
 | <kbd>**J**</kbd> | Join lines |

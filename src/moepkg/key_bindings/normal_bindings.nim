@@ -96,6 +96,8 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   # Paste
   ("p", "paste-after"),
   ("P", "paste-before"),
+  ("g p", "paste-after-end"),
+  ("g P", "paste-before-end"),
   # Misc
   ("J", "join-lines"),
   ("g a", "show-char-info"),

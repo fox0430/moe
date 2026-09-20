@@ -24,7 +24,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, motion, modes, registers, logger, unicode_utils]
+import ../[cursor_util, types, motion, modes, registers, logger, unicode_utils]
 import ../buffer/[core, edit, fold, undo]
 
 import core, operator_engine
@@ -39,19 +39,28 @@ proc firstNonBlankColumn*(line: seq[Rune]): int =
     return line.len - 1
   return 0
 
-proc pasteEndPos(startPos: BufferPosition, pasteText: string): BufferPosition =
-  ## Position one past the last inserted rune when `pasteText` is inserted at
-  ## `startPos`. Splits on '\n' so multi-line paste lands on the final inserted
-  ## line instead of treating '\n' as a column-adding rune.
-  let nlCount = pasteText.count('\n')
-  if nlCount == 0:
-    BufferPosition(line: startPos.line, column: startPos.column + pasteText.charLen)
-  else:
-    let lastSeg = pasteText.substr(pasteText.rfind('\n') + 1)
-    BufferPosition(line: startPos.line + nlCount, column: lastSeg.charLen)
+proc finishPasteCursor(
+    ctx: CommandContext,
+    isFullLine, cursorAfter: bool,
+    firstPastedChar: Option[BufferPosition],
+    lastPastedEndLine: int,
+) =
+  ## p/P: first pasted char (characterwise). gp/gP: after the pasted text.
+  if cursorAfter:
+    if isFullLine:
+      if ctx.buffer.len > 0:
+        let afterLine = min(lastPastedEndLine + 1, ctx.buffer.len - 1)
+        ctx.cursor.line = afterLine
+        ctx.cursor.column = 0
+    elif ctx.buffer.len > 0:
+      clampCursorToLastChar(ctx.cursor, ctx.buffer.getLine(ctx.cursor.line).charLen)
+  elif not isFullLine and firstPastedChar.isSome:
+    ctx.cursor = firstPastedChar.get
 
-proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Paste after cursor (p). Uses register or clipboard fallback.
+proc handlePasteAfter*(
+    ctx: CommandContext, count: int = 1, cursorAfter: bool = false
+): Result[(), string] =
+  ## Paste after cursor (p). `cursorAfter` is gp. Uses register or clipboard fallback.
   logDebug("paste", "handlePasteAfter called with count=" & $count)
   let actualCount = max(1, count)
 
@@ -120,6 +129,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
   try:
     # Paste count times
     var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
+    var lastPastedEndLine = -1
     for i in 1 .. actualCount:
       if isFullLine:
         # Paste on new line below current line (Vim 'p' behavior for linewise yank)
@@ -139,6 +149,11 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
           ctx.cursor = savedCursor
           return err(insertResult.error)
 
+        # Track last pasted line across count repeats.
+        let n = textToInsert.count('\n')
+        if lastPastedEndLine > ctx.cursor.line:
+          lastPastedEndLine += n
+        lastPastedEndLine = max(lastPastedEndLine, ctx.cursor.line + n)
         # Move cursor to the first non-whitespace character of pasted line
         ctx.cursor.line = ctx.cursor.line + 1
         ctx.cursor.column =
@@ -170,9 +185,7 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
         ctx.cursor.line = endPos.line
         ctx.cursor.column = endPos.column
 
-    # Place cursor on the first character of the pasted text
-    if not isFullLine and firstPastedChar.isSome:
-      ctx.cursor = firstPastedChar.get
+    finishPasteCursor(ctx, isFullLine, cursorAfter, firstPastedChar, lastPastedEndLine)
 
     # Commit transaction if we started one
     if actualCount > 1:
@@ -187,13 +200,21 @@ proc handlePasteAfter*(ctx: CommandContext, count: int = 1): Result[(), string] 
     return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand =
-    some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: false))
+  ctx.state.editState.lastEditCommand = some(
+    LastEditCommand(
+      kind: lecPaste,
+      pasteCount: actualCount,
+      pasteBefore: false,
+      pasteCursorAfter: cursorAfter,
+    )
+  )
 
   return Result[(), string].ok ()
 
-proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string] =
-  ## Paste before cursor (P). Uses register or clipboard fallback.
+proc handlePasteBefore*(
+    ctx: CommandContext, count: int = 1, cursorAfter: bool = false
+): Result[(), string] =
+  ## Paste before cursor (P). `cursorAfter` is gP. Uses register or clipboard fallback.
 
   logDebug("paste", "handlePasteBefore called with count=" & $count)
   let actualCount = max(1, count)
@@ -263,6 +284,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
   try:
     # Paste count times
     var firstPastedChar: Option[BufferPosition] = none(BufferPosition)
+    var lastPastedEndLine = -1
     for i in 1 .. actualCount:
       if isFullLine:
         # Paste on new line above current line (Vim 'P' behavior for linewise yank)
@@ -280,6 +302,11 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
           ctx.cursor = savedCursor
           return err(insertResult.error)
 
+        # Track last pasted line across count repeats.
+        let n = textToInsert.count('\n')
+        if lastPastedEndLine >= ctx.cursor.line:
+          lastPastedEndLine += n
+        lastPastedEndLine = max(lastPastedEndLine, ctx.cursor.line + n - 1)
         # Move cursor to the first non-whitespace character of pasted line
         ctx.cursor.column =
           firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toCharRunes())
@@ -305,9 +332,7 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
         ctx.cursor.line = endPos.line
         ctx.cursor.column = endPos.column
 
-    # Place cursor on the first character of the pasted text
-    if not isFullLine and firstPastedChar.isSome:
-      ctx.cursor = firstPastedChar.get
+    finishPasteCursor(ctx, isFullLine, cursorAfter, firstPastedChar, lastPastedEndLine)
 
     # Commit transaction if we started one
     if actualCount > 1:
@@ -322,8 +347,14 @@ proc handlePasteBefore*(ctx: CommandContext, count: int = 1): Result[(), string]
     return rollbackPasteOnException(ctx, exc.msg, actualCount, savedCursor)
 
   # Record this command for repeat (.)
-  ctx.state.editState.lastEditCommand =
-    some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: true))
+  ctx.state.editState.lastEditCommand = some(
+    LastEditCommand(
+      kind: lecPaste,
+      pasteCount: actualCount,
+      pasteBefore: true,
+      pasteCursorAfter: cursorAfter,
+    )
+  )
 
   return Result[(), string].ok ()
 
@@ -1493,6 +1524,28 @@ proc registerEditCommands*(registry: CommandRegistry) =
   )
 
   registry.register(
+    custom("paste.after.end"),
+    "Paste After End",
+    "Paste clipboard content after cursor and leave cursor after pasted text (gp)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handlePasteAfter(ctx, count, cursorAfter = true),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("paste.before.end"),
+    "Paste Before End",
+    "Paste clipboard content before cursor and leave cursor after pasted text (gP)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handlePasteBefore(ctx, count, cursorAfter = true),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
     custom("indent.line"),
     "Indent Line",
     "Indent current line (>> command)",
@@ -1772,13 +1825,11 @@ proc registerEditCommands*(registry: CommandRegistry) =
         # Repeat line deletion (dd)
         return handleDeleteLine(ctx, lastCmd.deleteLineCount)
       of lecPaste:
-        # Repeat paste operation (p or P)
+        # Repeat paste operation (p, P, gp, or gP)
         if lastCmd.pasteBefore:
-          # P command - paste before
-          return handlePasteBefore(ctx, lastCmd.pasteCount)
+          return handlePasteBefore(ctx, lastCmd.pasteCount, lastCmd.pasteCursorAfter)
         else:
-          # p command - paste after
-          return handlePasteAfter(ctx, lastCmd.pasteCount)
+          return handlePasteAfter(ctx, lastCmd.pasteCount, lastCmd.pasteCursorAfter)
       of lecToggleCase:
         # Repeat toggle case (~)
         return handleToggleCase(ctx, lastCmd.toggleCaseCount)
