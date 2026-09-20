@@ -191,6 +191,20 @@ type
       ## transaction changes carry 0; only the wrapper that lands on
       ## undoStack gets an id. 0 = initial state.
     namedMarkChanges*: seq[NamedMarkChange]
+    noChangeListPosition*: bool
+      ## Skip `changeListIndex` on undo/redo: this entry recorded no position.
+      ## Set for a reload, which is not a user edit.
+    changeListAcross*: Option[seq[BufferPosition]]
+      ## `changeList` on the other side of this entry. A reload remaps the
+      ## recorded positions; undo/redo swap this with the live list.
+    changeListIndexAcross*: int
+      ## Index for `changeListAcross`. Swapped with the list: an edit after
+      ## this entry can evict the oldest position, so the two can differ in
+      ## length.
+    reloadChargeLines*: int
+      ## Lines this entry holds against the undoable-reload budget, refunded
+      ## when it leaves history. Non-zero only for a reload.
+    reloadChargeBytes*: int ## Bytes this entry holds against the undoable-reload budget.
     case kind*: BufferChangeKind
     of ckInsertText:
       insertPos*: BufferPosition
@@ -378,6 +392,13 @@ type
     # Undo/Redo stacks (using Deque for O(1) operations at both ends)
     undoStack*: Deque[BufferChange]
     redoStack*: Deque[BufferChange]
+    reloadUndoLines*: int
+      ## Lines charged by reload undo entries since the history was last
+      ## dropped (replaced + inserted). History is unbounded, so reloads have
+      ## a budget of their own.
+    reloadUndoBytes*: int
+      ## Byte counterpart of `reloadUndoLines`, for files of a few very long
+      ## lines.
 
     # Pre-mutation modifiedLines snapshot (for non-PieceTable undo/redo)
     pendingModifiedLinesSnapshot*: seq[LineModificationKind]
@@ -1542,6 +1563,8 @@ proc clearUndoRedoState*(b: TextBuffer) =
   ## calls this on its single reload path regardless of the backend swap.
   b.undoStack.clear()
   b.redoStack.clear()
+  b.reloadUndoLines = 0
+  b.reloadUndoBytes = 0
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
   b.discardPendingSnapshot()
@@ -1567,18 +1590,48 @@ proc markLineChanged*(b: TextBuffer, line: int) =
     b.lastChangedLines = line
     b.highlightNeedsUpdate = true
 
+proc dropChangeListFuture*(b: TextBuffer) =
+  ## Drop `changeList` entries past the index (left by undo). Once the redo
+  ## stack is gone they name nothing, but `g;` / `g,` would still visit them.
+  if b.changeList.len > 0 and b.changeListIndex < b.changeList.len - 1:
+    b.changeList.setLen(b.changeListIndex + 1)
+
+proc detachLastEntryFromChangeList*(
+    b: TextBuffer, changeListAcross: seq[BufferPosition], changeListIndexAcross: int
+) =
+  ## Mark the newest undo entry as having no changelist position and store the
+  ## pre-entry list for undo/redo to swap back.
+  if b.undoStack.len > 0:
+    b.undoStack[^1].noChangeListPosition = true
+    b.undoStack[^1].changeListAcross = some(changeListAcross)
+    b.undoStack[^1].changeListIndexAcross = changeListIndexAcross
+
+proc chargeReloadUndoBudget*(b: TextBuffer, lines, bytes: int) =
+  ## Charge the newest undo entry against the reload budget so it can be
+  ## refunded when the entry leaves history. No-op if there is no entry.
+  if b.undoStack.len == 0:
+    return
+  b.reloadUndoLines += lines
+  b.reloadUndoBytes += bytes
+  b.undoStack[^1].reloadChargeLines = lines
+  b.undoStack[^1].reloadChargeBytes = bytes
+
+proc refundReloadUndoBudget*(b: TextBuffer, entry: BufferChange) =
+  ## Refund `entry`'s reload-budget charge as it leaves history. Call on every
+  ## path that drops an entry without replaying it.
+  b.reloadUndoLines -= entry.reloadChargeLines
+  b.reloadUndoBytes -= entry.reloadChargeBytes
+
 proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
   ## Always increments changeSeq to mark buffer as modified
 
-  # Clear redo stack when new change is made
+  # Clear redo; refund reload-budget charges those entries still held.
+  for dropped in b.redoStack:
+    b.refundReloadUndoBudget(dropped)
   b.redoStack.clear()
 
-  # New edit invalidates any "future" changeList entries that an earlier undo
-  # left behind. Without this, g; / g, can navigate to positions that no longer
-  # correspond to any undoable change.
-  if b.changeList.len > 0 and b.changeListIndex < b.changeList.len - 1:
-    b.changeList.setLen(b.changeListIndex + 1)
+  b.dropChangeListFuture()
 
   # Snapshot changeSeq before and after this mutation so undo()/redo() can
   # restore it by direct assignment instead of inc/dec. Required for transactions

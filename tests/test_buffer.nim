@@ -3159,6 +3159,689 @@ suite "Buffer - reload resets stale content-keyed state":
     check buf.editorConfig.get.tabStop == some(4)
     check buf.isUtilityBuffer
 
+suite "Buffer - an external reload lands as an edit":
+  test "What the write did not touch stays, and undo reaches the old text":
+    let path = getTempDir() / "moe_test_reload_as_edit.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    buf.toggleBookmark(2)
+    buf.setLineMarker(2, LineMarkerKind.SyntaxError)
+
+    writeFile(path, "alpha\nBETA\ngamma\n")
+    let reloaded = buf.reloadFileIfContentChanged()
+    check reloaded.isOk
+    check reloaded.get
+
+    check buf.getLine(1) == "BETA"
+    check buf.hasBookmark(2)
+    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
+    # The buffer holds what is on disk, so nothing is owed a save.
+    check not buf.isModified
+
+    check buf.undo().isOk
+    check buf.getLine(1) == "beta"
+
+  test "A reload takes the shape the file was written in":
+    let path = getTempDir() / "moe_test_reload_shape.txt"
+    writeFile(path, "alpha\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.lineEnding == LF
+
+    writeFile(path, "alpha\r\nbeta\r\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.lineEnding == CRLF
+    check buf.getLine(1) == "beta"
+
+  test "Undo brings the lines back, not the shape the file was written in":
+    # The shape is a buffer option, like vim's fileformat and fileencoding:
+    # undo restores text, and a save after it writes that text the way the
+    # buffer is now set to write it.
+    let path = getTempDir() / "moe_test_reload_undo_shape.txt"
+    writeFile(path, "alpha\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    writeFile(path, "alpha\r\nbeta\r\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undo().isOk
+    check buf.len == 1
+    check buf.lineEnding == CRLF
+
+  test "A write too long to keep the new lines for reloads wholesale":
+    let path = getTempDir() / "moe_test_reload_grew.txt"
+    defer:
+      removeFile(path)
+    writeFile(path, "one\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    var lines = newSeq[string](UndoableReloadMaxLines + 1)
+    for i in 0 ..< lines.len:
+      lines[i] = "line " & $i
+    writeFile(path, lines.join("\n") & "\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.len == UndoableReloadMaxLines + 1
+    # The short side says nothing about what the entry would have to hold.
+    check buf.undoStack.len == 0
+
+  test "A buffer too long to keep the replaced lines for reloads wholesale":
+    let path = getTempDir() / "moe_test_reload_long.txt"
+    defer:
+      removeFile(path)
+    var lines = newSeq[string](UndoableReloadMaxLines + 1)
+    for i in 0 ..< lines.len:
+      lines[i] = "line " & $i
+    writeFile(path, lines.join("\n") & "\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    lines[0] = "changed"
+    writeFile(path, lines.join("\n") & "\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.getLine(0) == "changed"
+    # The old lines are not worth keeping at this length, so the history goes.
+    check buf.undoStack.len == 0
+
+  test "Bytes a replacement would sanitize reload the way they always did":
+    let path = getTempDir() / "moe_test_reload_raw.txt"
+    writeFile(path, "alpha\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    let raw = "\xFF\xFE" & "odd"
+    writeFile(path, raw)
+    check buf.reloadFileIfContentChanged().isOk
+    # A wholesale load, which is the only way in that keeps the bytes.
+    check buf.keepRaw
+    check buf.getTextString == raw
+    check buf.undoStack.len == 0
+
+  test "Invalid UTF-8 is not quietly rewritten on the way in":
+    let path = getTempDir() / "moe_test_reload_latin1.txt"
+    writeFile(path, "alpha\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    writeFile(path, "caf\xE9\n")
+    check buf.reloadFileIfContentChanged().isOk
+    # Verbatim: no byte turned into U+FFFD on the way in.
+    check buf.getLine(0) == "caf\xE9"
+    check buf.endOfLine
+
+  test "Diagnostics go, because nothing carries them onto the new lines":
+    let path = getTempDir() / "moe_test_reload_diagnostics.txt"
+    writeFile(path, "alpha\nbeta\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "stale",
+      )
+    ]
+
+    writeFile(path, "INSERTED\nalpha\nbeta\n")
+    check buf.reloadFileIfContentChanged().isOk
+    # The marker rides the edit down a line; the diagnostic cannot, so keeping
+    # it would leave the undercurl a line above the marker beside it.
+    check buf.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buf.diagnostics.len == 0
+    check buf.diagnosticsDirty
+
+  test "Reloads that have spent their share of the undo stack go wholesale":
+    let path = getTempDir() / "moe_test_reload_budget.txt"
+    defer:
+      removeFile(path)
+    const LineCount = UndoableReloadMaxLines
+    var lines = newSeq[string](LineCount)
+    for i in 0 ..< LineCount:
+      lines[i] = "line " & $i
+    writeFile(path, lines.join("\n") & "\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    # Each reload is small enough to land as an edit on its own, and each one
+    # rewrites every line, so the budget runs out after a few.
+    var landedAsEdit = 0
+    for round in 0 ..< 10:
+      for i in 0 ..< LineCount:
+        lines[i] = "round " & $round & " line " & $i
+      writeFile(path, lines.join("\n") & "\n")
+      check buf.reloadFileIfContentChanged().isOk
+      if buf.undoStack.len > 0:
+        inc landedAsEdit
+      else:
+        break
+    check landedAsEdit == UndoableReloadBudgetLines div (LineCount * 2)
+    # The overrun reloaded wholesale, which drops the history and with it the
+    # budget those reloads had spent.
+    check buf.undoStack.len == 0
+    check buf.reloadUndoLines == 0
+
+    # So the next write is an edit again: the bound is on the history, not a
+    # one-way switch that leaves the buffer reloading wholesale for good.
+    lines[0] = "after"
+    writeFile(path, lines.join("\n") & "\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack.len == 1
+
+  test "A reload is charged the entry it leaves, not the size of the buffer":
+    let path = getTempDir() / "moe_test_reload_budget_charge.txt"
+    defer:
+      removeFile(path)
+    const LineCount = 500
+    var lines = newSeq[string](LineCount)
+    for i in 0 ..< LineCount:
+      lines[i] = "line " & $i
+    writeFile(path, lines.join("\n") & "\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    lines[0] = "changed"
+    writeFile(path, lines.join("\n") & "\n")
+    check buf.reloadFileIfContentChanged().isOk
+    # One line replaced by one line: charging the whole buffer on both sides
+    # would exhaust the budget in a handful of one-line writes from a build.
+    check buf.reloadUndoLines == 2
+
+  test "An external write is not one of the user's changes":
+    let path = getTempDir() / "moe_test_reload_changelist.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 2, column: 0), "mine ").isOk
+    let mine = buf.changeList
+
+    writeFile(path, "ALPHA\nbeta\nmine gamma\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack.len == 2
+    # `g;` goes back to where the user typed, not to the line a build touched.
+    check buf.changeList == mine
+    check buf.changeListIndex == mine.len - 1
+
+  test "A reload the user has undone past leaves no changelist entry ahead":
+    # The reload clears the redo stack, so the entries an earlier undo left
+    # ahead of the index name changes no history holds any more.
+    let path = getTempDir() / "moe_test_reload_changelist_future.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 0, column: 0), "one ").isOk
+    check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
+    check buf.changeList.len == 2
+    check buf.undo().isOk
+    check buf.changeListIndex == 0
+
+    writeFile(path, "one alpha\nBETA\ngamma\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.redoStack.len == 0
+    check buf.changeList.len == 1
+    check buf.changeListIndex == 0
+
+  test "A write that changes no line leaves the changelist alone":
+    # Dropping the trailing newline changes the bytes but no line, so the
+    # replacement pushes no undo entry and clears no redo stack. Truncating
+    # the changelist here would strand entries the redo stack still backs.
+    let path = getTempDir() / "moe_test_reload_changelist_no_hunk.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 0, column: 0), "one ").isOk
+    check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
+    check buf.undo().isOk
+    check buf.changeList.len == 2
+    check buf.changeListIndex == 0
+    check buf.redoStack.len == 1
+
+    writeFile(path, "one alpha\nbeta\ngamma")
+    check buf.reloadFileIfContentChanged().isOk
+    check not buf.endOfLine
+    check buf.redoStack.len == 1
+    check buf.changeList.len == 2
+    check buf.changeListIndex == 0
+
+  test "The changelist follows the lines a reload moved":
+    let path = getTempDir() / "moe_test_reload_changelist_remap.txt"
+    writeFile(path, "a\nb\nc\nd\ne\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 4, column: 0), "x ").isOk
+    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+
+    # The two lines above the edited one go away, so it is line 2 now.
+    writeFile(path, "a\nd\nx e\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+
+  test "Undoing a reload puts the changelist back on the lines it names":
+    let path = getTempDir() / "moe_test_reload_changelist_undo_remap.txt"
+    writeFile(path, "a\nb\nc\nd\ne\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 4, column: 0), "x ").isOk
+    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+
+    writeFile(path, "a\nd\nx e\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+
+    # The undo brings the lines the reload took back, so the position that
+    # named the edited line has to come back with them.
+    check buf.undo().isOk
+    check buf.len == 5
+    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+    check buf.getLine(4) == "x e"
+
+    check buf.redo().isOk
+    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+    check buf.getLine(2) == "x e"
+
+  test "A changelist position on a line a reload took lands in the buffer":
+    let path = getTempDir() / "moe_test_reload_changelist_clamp.txt"
+    writeFile(path, "a\nb\nc\nd\ne\nf\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 5, column: 1), "!").isOk
+    check buf.changeList == @[BufferPosition(line: 5, column: 1)]
+
+    writeFile(path, "a\nb\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.len == 2
+    # `:changes` and `g;` read the entry, so it has to name a line that is
+    # there; the text it named went with the write.
+    check buf.changeList.len == 1
+    check buf.changeList[0].line < buf.len
+    check buf.changeList[0].column <= buf.getLineLen(buf.changeList[0].line)
+
+  test "Undoing a reload leaves the changelist index on the user's change":
+    let path = getTempDir() / "moe_test_reload_changelist_undo_index.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.insertText(BufferPosition(line: 0, column: 0), "one ").isOk
+    check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
+    check buf.changeListIndex == 1
+
+    writeFile(path, "one alpha\nBETA\ntwo gamma\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.changeListIndex == 1
+
+    # Undoing the reload steps over an entry that named no position, so `g;`
+    # still points at the newest line the user changed.
+    check buf.undo().isOk
+    check buf.getLine(1) == "beta"
+    check buf.changeListIndex == 1
+    check buf.changeList[buf.changeListIndex] == BufferPosition(line: 2, column: 0)
+
+    check buf.redo().isOk
+    check buf.changeListIndex == 1
+    # The next undo is the user's own, and moves the index.
+    check buf.undo().isOk
+    check buf.undo().isOk
+    check buf.changeListIndex == 0
+
+  test "A reload undone past an evicted changelist position keeps the index":
+    let path = getTempDir() / "moe_test_reload_changelist_evicted.txt"
+    defer:
+      removeFile(path)
+    var lines = newSeq[string](ChangeListMaxLen + 10)
+    for i in 0 ..< lines.len:
+      lines[i] = "line " & $i
+    writeFile(path, lines.join("\n") & "\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    # Fill the changelist to its cap, so the next position recorded evicts the
+    # oldest one.
+    for i in 0 ..< ChangeListMaxLen:
+      check buf.insertText(BufferPosition(line: i, column: 0), "x").isOk
+      lines[i] = "x" & lines[i]
+    check buf.changeList.len == ChangeListMaxLen
+    let newest = buf.changeList[buf.changeListIndex]
+
+    lines[^1] = "touched"
+    writeFile(path, lines.join("\n") & "\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack.len == ChangeListMaxLen + 1
+    # One more edit of the user's evicts the oldest position, so the live list
+    # and the one the reload carries no longer line up index for index.
+    check buf.insertText(BufferPosition(line: ChangeListMaxLen, column: 0), "y").isOk
+
+    check buf.undo().isOk
+    check buf.undo().isOk
+    # `g;` still names the newest change the user made before the reload.
+    check buf.changeList[buf.changeListIndex] == newest
+
+  test "A reload dropped from the history gives its budget back":
+    let path = getTempDir() / "moe_test_reload_budget_refund.txt"
+    defer:
+      removeFile(path)
+    writeFile(path, "alpha\nbeta\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    writeFile(path, "ALPHA\nbeta\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.reloadUndoLines == 2
+    check buf.reloadUndoBytes > 0
+
+    # Undone past and then edited over: the reload entry went with the redo
+    # stack the edit cleared, so nothing holds what it was charged any more.
+    check buf.undo().isOk
+    check buf.insertText(BufferPosition(line: 1, column: 0), "mine ").isOk
+    check buf.reloadUndoLines == 0
+    check buf.reloadUndoBytes == 0
+
+  test "A reload that changes no line leaves the charge on the entry holding it":
+    # A formatter that only drops the trailing newline writes different bytes
+    # and the same lines. The reload before it is the one still holding a
+    # charge, and billing the empty one would wipe it off that entry while the
+    # budget stays charged -- a leak that pushes later reloads wholesale.
+    let path = getTempDir() / "moe_test_reload_empty_diff_charge.txt"
+    defer:
+      removeFile(path)
+    writeFile(path, "alpha\nbeta\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    writeFile(path, "ALPHA\nbeta\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.reloadUndoLines == 2
+    let chargedBytes = buf.reloadUndoBytes
+    check chargedBytes > 0
+    check buf.undoStack[^1].reloadChargeLines == 2
+
+    writeFile(path, "ALPHA\nbeta")
+    check buf.reloadFileIfContentChanged().isOk
+    # No line moved, so no entry was pushed and the one before it still holds
+    # everything the budget is owed.
+    check buf.undoStack.len == 1
+    check buf.undoStack[^1].reloadChargeLines == 2
+    check buf.reloadUndoLines == 2
+    check buf.reloadUndoBytes == chargedBytes
+
+    # And the refund still happens once that entry leaves the history.
+    check buf.undo().isOk
+    check buf.insertText(BufferPosition(line: 1, column: 0), "mine ").isOk
+    check buf.reloadUndoLines == 0
+    check buf.reloadUndoBytes == 0
+
+  test "A write too large to keep the new bytes for reloads wholesale":
+    # The line limits say nothing about a file written as one very long line,
+    # which is what a build that rewrites a bundle in a loop produces.
+    let path = getTempDir() / "moe_test_reload_long_line.txt"
+    defer:
+      removeFile(path)
+    writeFile(path, "short\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    writeFile(path, "x".repeat(UndoableReloadMaxBytes + 1) & "\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.len == 1
+    check buf.getLine(0).len == UndoableReloadMaxBytes + 1
+    # One line either side, and still too much for an entry to hold.
+    check buf.undoStack.len == 0
+
+  test "A buffer too large to keep the replaced bytes for reloads wholesale":
+    let path = getTempDir() / "moe_test_reload_long_line_old.txt"
+    defer:
+      removeFile(path)
+    writeFile(path, "x".repeat(UndoableReloadMaxBytes + 1) & "\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    writeFile(path, "short\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.getLine(0) == "short"
+    check buf.undoStack.len == 0
+
+  test "Reloads that have spent their share of the bytes go wholesale":
+    let path = getTempDir() / "moe_test_reload_byte_budget.txt"
+    defer:
+      removeFile(path)
+    # One line just under the per-reload limit: every reload is small enough by
+    # both line counts and by bytes, so only the byte budget ever says no.
+    const LineLen = 900_000
+    writeFile(path, "a".repeat(LineLen) & "\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+
+    var landedAsEdit = 0
+    for round in 0 ..< 20:
+      writeFile(path, $chr(ord('b') + round) & "a".repeat(LineLen - 1) & "\n")
+      check buf.reloadFileIfContentChanged().isOk
+      if buf.undoStack.len > 0:
+        inc landedAsEdit
+      else:
+        break
+    # Each entry holds the replaced line and the new one, both LineLen + 1
+    # bytes, and the head-room asked for beforehand is the same plus one.
+    check landedAsEdit == (UndoableReloadBudgetBytes - 1) div (2 * (LineLen + 1))
+    check buf.undoStack.len == 0
+    check buf.reloadUndoBytes == 0
+    # The line budget never came close, which is the point of the byte one.
+    check buf.reloadUndoLines == 0
+
+    # The bound is on the history, so the next write is an edit again.
+    writeFile(path, "z".repeat(LineLen) & "\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack.len == 1
+
+  test "Conflict markers found before a reload do not outlive it":
+    let path = getTempDir() / "moe_test_reload_conflicts.txt"
+    writeFile(path, "alpha\nbeta\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    buf.conflictBlocks = @[ConflictBlock(startLine: 0, separatorLine: 0, endLine: 1)]
+
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack.len == 1
+    check buf.conflictBlocks.len == 0
+
+  test "A write that turns the file binary reloads wholesale":
+    let path = getTempDir() / "moe_test_reload_binary.txt"
+    writeFile(path, "alpha\nbeta\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.unusualContentKind == ucOrdinary
+
+    writeFile(path, "alpha\x00X\nbeta\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.unusualContentKind == ucBinary
+    # What the content *is* is a fact about the whole file that no undo entry
+    # carries, so a reload that changes it is not allowed to be undoable.
+    check buf.undoStack.len == 0
+
+  test "A write that turns the file back into text reloads wholesale":
+    let path = getTempDir() / "moe_test_reload_unbinary.txt"
+    writeFile(path, "alpha\x00X\nbeta\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.unusualContentKind == ucBinary
+
+    writeFile(path, "alpha\nbeta\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.unusualContentKind == ucOrdinary
+    check buf.undoStack.len == 0
+
+  test "Undoing a reload puts the changelist back on the lines it names (PieceTable)":
+    # Auto never lands a reload on PieceTable: the per-reload byte cap is 1MB
+    # and auto only picks PieceTable at 10MB. Pinning is the only way the
+    # snapshot inverse copy of changeListAcross is exercised.
+    setAutoBackendMode(false)
+    setConfiguredBackend(PieceTable)
+    defer:
+      setAutoBackendMode(false)
+      setConfiguredBackend(GapBuffer)
+    let path = getTempDir() / "moe_test_reload_changelist_undo_remap_pt.txt"
+    writeFile(path, "a\nb\nc\nd\ne\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.backendKind == PieceTable
+    check buf.insertText(BufferPosition(line: 4, column: 0), "x ").isOk
+    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+
+    writeFile(path, "a\nd\nx e\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack[^1].kind == ckSnapshot
+    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+
+    check buf.undo().isOk
+    check buf.len == 5
+    check buf.changeList == @[BufferPosition(line: 4, column: 0)]
+    check buf.getLine(4) == "x e"
+
+    check buf.redo().isOk
+    check buf.changeList == @[BufferPosition(line: 2, column: 0)]
+    check buf.getLine(2) == "x e"
+
+  test "Undoing a reload leaves the changelist index on the user's change (PieceTable)":
+    # The snapshot inverse has to copy noChangeListPosition: redo walks the
+    # index unless that flag rides onto the entry it builds.
+    setAutoBackendMode(false)
+    setConfiguredBackend(PieceTable)
+    defer:
+      setAutoBackendMode(false)
+      setConfiguredBackend(GapBuffer)
+    let path = getTempDir() / "moe_test_reload_changelist_undo_index_pt.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.backendKind == PieceTable
+    check buf.insertText(BufferPosition(line: 0, column: 0), "one ").isOk
+    check buf.insertText(BufferPosition(line: 2, column: 0), "two ").isOk
+    check buf.changeListIndex == 1
+
+    writeFile(path, "one alpha\nBETA\ntwo gamma\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack[^1].kind == ckSnapshot
+    check buf.changeListIndex == 1
+
+    check buf.undo().isOk
+    check buf.getLine(1) == "beta"
+    check buf.changeListIndex == 1
+    check buf.changeList[buf.changeListIndex] == BufferPosition(line: 2, column: 0)
+
+    check buf.redo().isOk
+    check buf.changeListIndex == 1
+    check buf.undo().isOk
+    check buf.undo().isOk
+    check buf.changeListIndex == 0
+
+  test "A reload dropped from the history gives its budget back (PieceTable)":
+    # Charges live on the entry. Snapshot undo builds a new object for redo,
+    # so the inverse has to copy them or the refund when the redo stack is
+    # cleared gives nothing back.
+    setAutoBackendMode(false)
+    setConfiguredBackend(PieceTable)
+    defer:
+      setAutoBackendMode(false)
+      setConfiguredBackend(GapBuffer)
+    let path = getTempDir() / "moe_test_reload_budget_refund_pt.txt"
+    defer:
+      removeFile(path)
+    writeFile(path, "alpha\nbeta\n")
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    check buf.backendKind == PieceTable
+
+    writeFile(path, "ALPHA\nbeta\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack[^1].kind == ckSnapshot
+    check buf.reloadUndoLines == 2
+    check buf.reloadUndoBytes > 0
+
+    check buf.undo().isOk
+    check buf.insertText(BufferPosition(line: 1, column: 0), "mine ").isOk
+    check buf.reloadUndoLines == 0
+    check buf.reloadUndoBytes == 0
+
+  test "A reload that moved a line announces itself":
+    # Positions held outside the buffer (the jump list, a visual selection)
+    # subscribe only through this hook. The landing path has to fire it; the
+    # buffer's own lines and changelist do not.
+    let path = getTempDir() / "moe_test_reload_announce.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    var announced = 0
+    buf.setContentReplacedHook(
+      proc(_: TextBuffer) =
+        inc announced
+    )
+
+    writeFile(path, "alpha\nBETA\ngamma\n")
+    check buf.reloadFileIfContentChanged().isOk
+    check buf.undoStack.len == 1
+    check announced == 1
+
+  test "A write that changes no line does not announce a replacement":
+    # Dropping the trailing newline rewrites bytes and no line. Positions
+    # still name what they named, so announcing would clamp them for nothing.
+    let path = getTempDir() / "moe_test_reload_no_announce.txt"
+    writeFile(path, "alpha\nbeta\ngamma\n")
+    defer:
+      removeFile(path)
+    let buf = newTextBuffer()
+    check buf.loadFile(path).isOk
+    var announced = 0
+    buf.setContentReplacedHook(
+      proc(_: TextBuffer) =
+        inc announced
+    )
+
+    writeFile(path, "alpha\nbeta\ngamma")
+    check buf.reloadFileIfContentChanged().isOk
+    check not buf.endOfLine
+    check announced == 0
+
 suite "Buffer - reload path convergence":
   # Path-independence guard: a backend-swap reload and a same-backend reload must
   # leave the buffer in the SAME state field-by-field. Since the backend variant
@@ -4142,3 +4825,119 @@ suite "Buffer - decodeForBuffer":
     let decoded = decodeForBuffer(raw)
     check decoded.decodeFailed
     check decoded.lines.join("\n") == raw
+
+  test "A buffer with no attributes of its own takes the ones the text came with":
+    let buf = newTextBuffer()
+    let decoded = decodeForBuffer("\xEF\xBB\xBFalpha\r\n")
+    let replaced = buf.replaceWithDecodedText(decoded, "restore", adoptShape = true)
+    check replaced.isOk
+    check buf.encoding == CharacterEncoding.utf8
+    check buf.hasBom
+    check buf.lineEnding == CRLF
+    check buf.endOfLine
+
+  test "A buffer that has attributes of its own keeps them":
+    let buf = newTextBuffer()
+    buf.lineEnding = CR
+    buf.hasBom = true
+    let decoded = decodeForBuffer("alpha\n")
+    let replaced = buf.replaceWithDecodedText(decoded, "replace")
+    check replaced.isOk
+    check buf.getLine(0) == "alpha"
+    check buf.lineEnding == CR
+    check buf.hasBom
+
+  test "Binary content is reported the way a load reports it":
+    let buf = newTextBuffer()
+    let decoded = decodeForBuffer("alpha\x00beta\n")
+    check decoded.hasBinaryContent
+    let replaced = buf.replaceWithDecodedText(decoded, "restore", adoptShape = true)
+    check replaced.isOk
+    check buf.unusualContentKind == ucBinary
+    let notices = buf.takeNotices()
+    check notices.len == 1
+    check notices[0].kind == bnContent
+
+  test "Bytes a replacement would sanitize are refused, not rewritten":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "keep me")
+    # Not valid UTF-8 and not UTF-16/32 either, so nothing reports a failure.
+    let decoded = decodeForBuffer("caf\xE9\n")
+    check not decoded.decodeFailed
+    check decoded.replacementSanitizesBytes
+    let replaced = buf.replaceWithDecodedText(decoded, "restore preserved work")
+    check replaced.isErr
+    check buf.getLine(0) == "keep me"
+
+  test "The line count answers what the lines would":
+    for content in [
+      "alpha\nbeta\n",
+      "alpha",
+      "",
+      "a\r\nb\r\n",
+      "a\rb\r",
+      "a\n\n",
+      "\xEF\xBB\xBFalpha\n",
+      "\xFF\xFE" & "odd",
+    ]:
+      let decoded = decodeForBuffer(content)
+      check decoded.lineCount == decoded.lines.len
+
+  test "A load and a replacement read the same bytes the same way":
+    let path = getTempDir() / "moe_test_decode_for_buffer.txt"
+    defer:
+      removeFile(path)
+    for content in [
+      "alpha\nbeta\n",
+      "alpha",
+      "",
+      "a\r\nb\r\n",
+      "a\rb\r",
+      "\xEF\xBB\xBFalpha\n",
+      "\xFF\xFE" & "h\x00i\x00\n\x00",
+      "alpha\x00beta\n",
+    ]:
+      writeFile(path, content)
+      let loaded = newTextBuffer()
+      check loaded.loadFile(path).isOk
+
+      let replaced = newTextBuffer()
+      let decoded = decodeForBuffer(content)
+      check replaced.replaceWithDecodedText(decoded, "replace", adoptShape = true).isOk
+
+      check loaded.getTextString == replaced.getTextString
+      check loaded.encoding == replaced.encoding
+      check loaded.hasBom == replaced.hasBom
+      check loaded.lineEnding == replaced.lineEnding
+      check loaded.endOfLine == replaced.endOfLine
+      check loaded.hasBinaryContent == replaced.hasBinaryContent
+
+  test "What the content turned out to be is recorded whatever the shape does":
+    # A buffer that has a file of its own keeps its shape, but the bytes it now
+    # holds are still the bytes it now holds.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ordinary")
+    check buf.unusualContentKind == ucOrdinary
+
+    let binary = decodeForBuffer("alpha\x00beta\n")
+    check buf.replaceWithDecodedText(binary, "filter").isOk
+    check buf.hasBinaryContent
+    check buf.unusualContentKind == ucBinary
+    let notices = buf.takeNotices()
+    check notices.len == 1
+    check notices[0].kind == bnContent
+
+    # And stops being true when clean text replaces it.
+    check buf.replaceWithDecodedText(decodeForBuffer("alpha\n"), "filter").isOk
+    check not buf.hasBinaryContent
+    check buf.unusualContentKind == ucOrdinary
+
+  test "Undecodable bytes are refused, not sanitized in":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "keep me")
+    let decoded = decodeForBuffer("\xFF\xFE" & "odd")
+    check decoded.decodeFailed
+    let replaced = buf.replaceWithDecodedText(decoded, "restore preserved work")
+    check replaced.isErr
+    check buf.getLine(0) == "keep me"
+    check not buf.keepRaw
