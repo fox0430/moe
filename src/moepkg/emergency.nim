@@ -17,103 +17,220 @@
 #                                                                              #
 #[############################################################################]#
 
-## Emergency buffer save on crash
+## Preserve unsaved buffers when the editor cannot ask the user.
 ##
-## When the editor crashes due to an unhandled exception, this module saves
-## all modified (unsaved) buffers to ~/.cache/moe/crash_recovery/<timestamp>/.
-## A recovery.json file maps recovery filenames to their original file paths.
+## Copies go under `<base>/<timestamp>_<pid>/payload/`, written then renamed
+## so a visible name is complete (process death only; no fsync). The manifest
+## is published last; a session without one still offers its copies.
 
-import std/[os, times, json, options, strformat]
+import std/[json, options, os, strformat, times]
 
-import types/editor_types, buffer/[core, file_io], backup, unicode_utils, message_log
+when defined(posix):
+  from std/posix import mkdir, Mode
 
-const DefaultCrashRecoveryDir* = "~/.cache/moe/crash_recovery"
+import
+  types/editor_types,
+  buffer/[core, file_io],
+  message_log,
+  path_key,
+  recovery_format,
+  recovery_store,
+  unicode_utils
 
-proc getCrashRecoveryBaseDir*(): string =
-  return expandBackupDir(DefaultCrashRecoveryDir)
+const MaxSessionDirAttempts = 64
 
-proc hasCrashRecoveryFiles*(baseDir: string = getCrashRecoveryBaseDir()): bool =
-  if not dirExists(baseDir):
+proc createPrivateDir(dir: string): bool =
+  ## Create `dir` with mode 0700. Fail if it already exists.
+  try:
+    createDir(dir.parentDir)
+  except CatchableError:
     return false
-  for _ in walkDirs(baseDir / "*"):
-    return true
-  return false
 
-proc noteCrashRecoveryFiles*(
-    editor: Editor, baseDir: string = getCrashRecoveryBaseDir()
-) =
-  ## Surface leftover crash-recovery files at process start.
+  when defined(posix):
+    return mkdir(dir.cstring, 0o700.Mode) == 0
+  else:
+    try:
+      # createDir would succeed on an existing dir and skip collision retry.
+      if existsOrCreateDir(dir):
+        return false
+      # chmod after create is racy; POSIX mkdir(0700) is unavailable here.
+      setFilePermissions(dir, {fpUserRead, fpUserWrite, fpUserExec})
+      return true
+    except CatchableError:
+      return false
+
+proc removeQuietly(path: string) =
+  try:
+    removeFile(path)
+  except CatchableError:
+    discard
+
+proc dirIsEmpty(dir: string): bool =
+  ## False when `dir` holds anything or cannot be read.
+  try:
+    for _ in walkDir(dir, checkDir = true):
+      return false
+  except CatchableError:
+    return false
+  true
+
+proc payloadBase(path: string): string =
+  var base = extractFilename(path)
+  if base.len == 0 or base in [".", ".."]:
+    base = "untitled"
+  result = truncateBytes(base, MaxPayloadBaseLen)
+  if result.len == 0:
+    # Every byte was a UTF-8 continuation byte; keep the name usable.
+    result = "untitled"
+
+proc payloadName(buf: TextBuffer, index: int): string =
+  let base =
+    if buf.filePath.isSome:
+      payloadBase(buf.filePath.get)
+    else:
+      "untitled"
+  payloadFileName(index, base)
+
+proc originEntry(buf: TextBuffer, name: string): JsonNode =
+  result = newJObject()
+  result[ManifestNameKey] = %name
+  if buf.filePath.isNone:
+    return
+  # Absolute: relative names collide across directories.
+  result[ManifestOriginKey] = %pathKey(buf.filePath.get)
+  # Stamp: tell unsaved work apart from later writes to the file.
+  let stamp = captureFileStamp(buf.filePath.get)
+  if stamp.modTime.isSome:
+    let mtimeNs = toUnixNano(stamp.modTime.get)
+    if mtimeNs.isSome:
+      result[ManifestOriginMtimeNsKey] = %mtimeNs.get
+  if stamp.size.isSome:
+    result[ManifestOriginSizeKey] = %stamp.size.get
+
+proc boundedDetail(detail: string): string =
+  if detail.len <= MaxDetailBytes:
+    return detail
+  result = truncateBytes(detail, MaxDetailBytes)
+
+type CopyCommit* = proc(scratchPath, finalPath: string): bool {.raises: [].}
+  ## Commit a scratch copy under its final name. Tests inject a stub.
+
+proc noteCrashRecovery*(editor: Editor, baseDir: string = getCrashRecoveryBaseDir()) =
+  ## Surface sessions preserved by an earlier process, at process start.
   ##
   ## Not called from `newEditor`: tests construct editors and must not pick up
   ## the developer's `~/.cache/moe/crash_recovery`. `statusMessage=` already
   ## logs, so a standing status line gets `addMessageLog` instead of a second
   ## assignment.
-  if not hasCrashRecoveryFiles(baseDir):
+  let store = newRecoveryStore(baseDir)
+  if not store.hasPreservedCopies():
     return
-  let msg = "Crash recovery files found. See " & baseDir
+  let msg = "Crash recovery files found. See " & store.baseDir
   if editor.state.statusMessage.len == 0:
     editor.state.statusMessage = msg
   else:
     addMessageLog(msg)
 
 proc emergencySaveBuffers*(
-    editor: Editor, baseDir: string = getCrashRecoveryBaseDir()
-): seq[string] =
-  ## Save all modified buffers to crash recovery directory.
-  ## Returns list of saved file paths.
+    editor: Editor,
+    continuity: ContinuityKind,
+    detail: string = "",
+    baseDir: string = getCrashRecoveryBaseDir(),
+    commit: CopyCommit = renameIntoPlace,
+): seq[string] {.raises: [].} =
+  ## Save modified buffers. Never raises: the caller may already be dying.
 
-  let timestamp = now().format("yyyyMMdd'T'HHmmss")
-  let recoveryDir = baseDir / timestamp
+  # Timestamp + pid, with a numeric suffix if that directory already exists.
+  let savedAt = now()
+  let dirBase = fmt"""{savedAt.format("yyyyMMdd'T'HHmmss")}_{getCurrentProcessId()}"""
 
-  try:
-    createDir(recoveryDir)
-  except CatchableError:
-    return @[]
+  var recoveryDir = baseDir / dirBase
+  var attempt = 2
+  while not createPrivateDir(recoveryDir):
+    if not dirExists(recoveryDir) or attempt > MaxSessionDirAttempts:
+      reportCrashNotice(
+        "moe: could not create recovery directory " & sanitizeForDisplay(recoveryDir)
+      )
+      return @[]
+    recoveryDir = baseDir / fmt"{dirBase}_{attempt}"
+    inc attempt
 
-  var savedPaths: seq[string] = @[]
-  var metadata = newJObject()
-
-  # Iterate `e.buffers`, not windows: windows only expose the foreground tab,
-  # so background-tab buffers would be lost.
-  for buf in editor.buffers:
-    if not buf.isModified:
-      continue
-
-    let recoveryName =
-      if buf.filePath.isSome:
-        extractFilename(buf.filePath.get)
-      else:
-        fmt"untitled_{buf.id}"
-
-    # Handle duplicate filenames by appending buffer id
-    var finalName = recoveryName
-    if metadata.hasKey(finalName):
-      finalName = fmt"{buf.id}_{recoveryName}"
-
-    let recoveryPath = recoveryDir / finalName
-
-    try:
-      let content = buf.getFileContent()
-      writeFile(recoveryPath, content)
-      savedPaths.add(recoveryPath)
-
-      let originalPath = if buf.filePath.isSome: buf.filePath.get else: ""
-      metadata[finalName] = %*{"originalPath": originalPath}
-    except CatchableError as e:
-      stderr.writeLine "moe: emergency save failed for " & sanitizeForDisplay(finalName) &
-        ": " & sanitizeForDisplay(e.msg)
-
-  if savedPaths.len > 0:
-    try:
-      writeFile(recoveryDir / "recovery.json", $metadata)
-    except CatchableError as e:
-      stderr.writeLine "moe: failed to write recovery metadata: " &
-        sanitizeForDisplay(e.msg)
-  else:
-    # No files saved, remove the empty directory
+  let payloadDir = recoveryDir / PayloadDirName
+  if not createPrivateDir(payloadDir):
+    reportCrashNotice(
+      "moe: could not create the payload directory " & sanitizeForDisplay(payloadDir)
+    )
     try:
       removeDir(recoveryDir)
     except CatchableError:
       discard
+    return @[]
+
+  var savedPaths: seq[string] = @[]
+  var entries = newJArray()
+  var index = 0
+
+  # Iterate `e.buffers`, not windows: windows only expose the foreground tab.
+  for buf in editor.buffers:
+    if not buf.isModified:
+      continue
+
+    # Keep the index on a failed write so nothing else reuses a half-written name.
+    let finalName = buf.payloadName(index)
+    inc index
+    let finalPath = payloadDir / finalName
+    # A scratch name is not a payload name, so nothing offers it as a copy.
+    let scratchPath = payloadDir / ("." & finalName)
+
+    var saved = false
+    var failure = ""
+    try:
+      let content = buf.getFileContent()
+      writeFile(scratchPath, content)
+      restrictToUser(scratchPath)
+      if commit(scratchPath, finalPath):
+        saved = true
+      else:
+        failure = "the copy could not be renamed into place"
+    except CatchableError as e:
+      failure = sanitizeForDisplay(e.msg)
+
+    if saved:
+      savedPaths.add(finalPath)
+      try:
+        entries.add buf.originEntry(finalName)
+      except CatchableError:
+        # The origin is enrichment; the copy is preserved either way.
+        discard
+    else:
+      reportCrashNotice(
+        "moe: emergency save failed for " & sanitizeForDisplay(finalName) & ": " &
+          failure
+      )
+      # Drop both so neither is offered as recoverable content.
+      removeQuietly(scratchPath)
+      removeQuietly(finalPath)
+
+  if savedPaths.len > 0:
+    var metadata = newJObject()
+    metadata[ManifestFormatKey] = %FormatName
+    metadata[ManifestVersionKey] = %FormatVersion
+    metadata[ManifestSavedAtKey] = %savedAt.toTime.toUnix
+    metadata[ManifestContinuityKey] = %($continuity)
+    metadata[ManifestDetailKey] = %boundedDetail(detail)
+    metadata[ManifestFilesKey] = entries
+    discard writeManifest(recoveryDir, metadata)
+  else:
+    # Remove empty dirs we created; never a directory that holds files.
+    if dirIsEmpty(payloadDir):
+      try:
+        removeDir(payloadDir)
+      except CatchableError:
+        discard
+    if dirIsEmpty(recoveryDir):
+      try:
+        removeDir(recoveryDir)
+      except CatchableError:
+        discard
 
   return savedPaths

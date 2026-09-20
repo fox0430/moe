@@ -11,7 +11,7 @@ You can set an interval to execute backups.
 
 ## Crash recovery
 
-When the editor crashes due to an unhandled exception, all modified (unsaved) buffers are automatically saved to `~/.cache/moe/crash_recovery/<timestamp>/`. A `recovery.json` file in the directory maps recovery filenames to their original file paths.
+When the editor crashes due to an unhandled exception, all modified (unsaved) buffers are automatically saved under `~/.cache/moe/crash_recovery/<timestamp>_<pid>/payload/`, one copy per buffer. A copy appears under its final name only once it is complete, as far as the process dying is concerned: nothing is fsynced, so a power loss or kernel panic can still leave a copy that never reached the disk in full. The session's `recovery.json` names the copies, the file each one came from and what ended the session; it is written last, so a session without one is a preserve that did not finish, and its copies are still offered.
 
 On next startup, if recovery files are found, a notification is shown in the status line.
 

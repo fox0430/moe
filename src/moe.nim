@@ -27,7 +27,7 @@ import pkg/[celina, results, chronos]
 import
   moepkg/[
     editor, editor_window_layout, handler, modes, logger, cmdline, lsp_integration,
-    config, config_loader, emergency, key_router, terminal_mode,
+    config, config_loader, emergency, key_router, terminal_mode, recovery_format,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -110,7 +110,7 @@ proc emergencySaveAndQuit(
   ## fall through to restoreTerminal()/quit(1) no matter what it throws.
   var savedPaths: seq[string]
   try:
-    savedPaths = editor.emergencySaveBuffers()
+    savedPaths = editor.emergencySaveBuffers(ckCrash, e.msg)
 
     editor.releaseExternalResources()
 
@@ -292,7 +292,9 @@ proc main() =
 
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
-  editor.noteCrashRecoveryFiles()
+
+  # After newEditor: constructing an editor must not scan the cache.
+  editor.noteCrashRecovery()
 
   # Always capture mouse events so the terminal doesn't convert wheel events
   # to arrow key sequences. When mouse is disabled in config, events are
