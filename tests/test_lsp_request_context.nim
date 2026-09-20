@@ -130,7 +130,7 @@ suite "classifyResponse":
     # Open a second buffer and make it active.
     let other = newTextBuffer("", some(getTempDir() / "other.nim"))
     e.addBuffer(other)
-    e.activeWindow.buffer = other
+    e.activeWindow.setTab(other)
     check e.activeBuffer.id != origin.id
 
     # ctx points at the still-open origin buffer but is no longer the active.

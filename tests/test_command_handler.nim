@@ -1100,32 +1100,19 @@ suite "CommandModeHandler - Buffer Navigation":
     check result.bufferArg == "test.nim"
 
 suite "CommandModeHandler - executeBufferDelete":
-  test "Delete unmodified buffer":
+  # The modified-buffer check lives in `deleteCurrentBuffer`, which resolves the
+  # real target; the handler only carries `force` through.
+  test "Defers the deletion target to deleteCurrentBuffer":
     let handler = setupHandler()
-    let buffer = setupBuffer()
-    buffer.markSaved()
 
-    let result = handler.executeBufferDelete(buffer, force = false)
+    let result = handler.executeBufferDelete(force = false)
     check result.kind == hrBufferDelete
     check result.forceBufferDelete == false
 
-  test "Delete modified buffer without force returns error":
+  test "Passes force through":
     let handler = setupHandler()
-    let buffer = setupBuffer(@["Hello"])
-    # Modify buffer to set isModified flag
-    discard buffer.insertText(BufferPosition(line: 0, column: 5), "!")
 
-    let result = handler.executeBufferDelete(buffer, force = false)
-    check result.kind == hrError
-    check result.errorMessage == "No write since last change (add ! to override)"
-
-  test "Delete modified buffer with force":
-    let handler = setupHandler()
-    let buffer = setupBuffer(@["Hello"])
-    # Modify buffer to set isModified flag
-    discard buffer.insertText(BufferPosition(line: 0, column: 5), "!")
-
-    let result = handler.executeBufferDelete(buffer, force = true)
+    let result = handler.executeBufferDelete(force = true)
     check result.kind == hrBufferDelete
     check result.forceBufferDelete == true
 

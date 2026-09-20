@@ -43,7 +43,7 @@ proc enterMode(
 ) =
   if originalBuffer != nil:
     win.originalBuffer = originalBuffer
-  win.buffer = swappedBuffer
+  win.setView(swappedBuffer)
   win.modeState = modeState
 
 suite "restoreOriginalBuffer":
@@ -169,7 +169,7 @@ suite "restoreOriginalBuffer":
     let e = createTestEditor()
     let win = e.activeWindow
     let buf = newTextBuffer("normal")
-    win.buffer = buf
+    win.setTab(buf)
 
     win.restoreOriginalBuffer(EditorMode.Normal)
 
@@ -343,7 +343,7 @@ suite "clearModeState":
     let e = createTestEditor()
     let win = e.activeWindow
     let buf = newTextBuffer("normal")
-    win.buffer = buf
+    win.setTab(buf)
 
     win.clearModeState(EditorMode.Normal)
 
@@ -482,7 +482,7 @@ suite "ModeState variant invariants":
     let e = createTestEditor()
     let win = e.activeWindow
     let activeBuf = newTextBuffer("active")
-    win.buffer = activeBuf
+    win.setTab(activeBuf)
     win.originalBuffer = newTextBuffer("orig")
     win.modeState = ModeState(kind: mskFiler, filer: FilerState())
 
@@ -497,7 +497,7 @@ suite "ModeState variant invariants":
     let e = createTestEditor()
     let win = e.activeWindow
     let activeBuf = newTextBuffer("active")
-    win.buffer = activeBuf
+    win.setTab(activeBuf)
 
     win.restoreOriginalBuffer(EditorMode.Filer)
 

@@ -30,6 +30,9 @@ import ../src/moepkg/types
 import ../src/moepkg/buffer
 import ../src/moepkg/modes
 import ../src/moepkg/help_viewer
+import ../src/moepkg/filer
+import ../src/moepkg/backup_manager
+import ../src/moepkg/diff_viewer
 import ../src/moepkg/render_utils
 
 # Helper to create a minimal Editor for testing
@@ -305,7 +308,7 @@ suite "syncActiveWindow":
   test "syncs buffer to executor":
     let e = createTestEditor()
     let newBuffer = newTextBuffer("New content")
-    e.activeWindow.buffer = newBuffer
+    e.activeWindow.setTab(newBuffer)
 
     e.syncActiveWindow()
 
@@ -410,7 +413,7 @@ suite "setActiveWindowScreenCursor":
     e.state.lineWrap = false
     # Set up buffer with enough content
     let buffer = newTextBuffer("Hello world test content")
-    e.activeWindow.buffer = buffer
+    e.activeWindow.setTab(buffer)
     e.activeWindow.cursor = BufferPosition(line: 0, column: 5)
     e.activeWindow.viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -427,7 +430,7 @@ suite "setActiveWindowScreenCursor":
     e.state.showTabLine = false
     e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
-    e.activeWindow.buffer = buffer
+    e.activeWindow.setTab(buffer)
     e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -444,7 +447,7 @@ suite "setActiveWindowScreenCursor":
     e.state.showTabLine = true
     e.state.lineWrap = false
     let buffer = newTextBuffer("Hello world")
-    e.activeWindow.buffer = buffer
+    e.activeWindow.setTab(buffer)
     e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
     e.activeWindow.viewport =
       ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
@@ -498,6 +501,58 @@ suite "enew - additional cases":
     # Executor should have the new buffer
     check e.motionController.buffer != oldBuffer
     check e.motionController.buffer == e.activeWindow.buffer
+
+  test "leaves a viewer mode instead of stranding the window in it":
+    # Regression: enew drops modeState, so a window left in Filer/References/...
+    # would keep dispatching to a handler whose state is gone — every key,
+    # including `:`, errors out with "Filer state not initialized".
+    let e = createTestEditor()
+    let listing = newTextBuffer("listing")
+    e.activeWindow.saveOriginalBuffer()
+    e.activeWindow.setView(listing)
+    e.activeWindow.modeState =
+      ModeState(kind: mskFiler, filer: newFilerState(getTempDir()))
+    e.setMode(EditorMode.Filer)
+
+    let result = e.enew()
+    check result.isOk
+    check e.activeWindow.modeState.kind == mskNone
+    check e.activeWindow.mode == EditorMode.Normal
+
+  test "drops a viewer entry owned by a suspended mode":
+    # Regression: `clearModeState` only drops the entry belonging to the mode
+    # it tears down, so the DiffViewer-over-BackupManager overlay left the
+    # BackupManager's entry on a window that now holds an empty buffer. A
+    # later `:backup` then focused this window and showed nothing, and the
+    # next in-place viewer replayed the stale entry's undo.
+    let e = createTestEditor()
+    let listing = newTextBuffer("backups")
+    e.activeWindow.saveOriginalBuffer()
+    e.activeWindow.setView(listing)
+    e.activeWindow.viewerEntry = some(
+      ViewerEntry(
+        mode: EditorMode.BackupManager,
+        placement: vpInPlace,
+        returnMode: EditorMode.Normal,
+        bufferId: listing.id,
+      )
+    )
+    e.activeWindow.modeState =
+      ModeState(kind: mskBackupManager, backupManager: newBackupManagerState())
+    e.setMode(EditorMode.BackupManager)
+    # The diff overlays the listing: mode and modeState are suspended, the
+    # viewer entry stays behind on the window.
+    e.activeWindow.suspendMode()
+    e.activeWindow.modeState =
+      ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState())
+    e.setMode(EditorMode.DiffViewer)
+
+    let result = e.enew()
+    check result.isOk
+    check e.activeWindow.viewerEntry.isNone
+    check e.activeWindow.suspendedMode.isNone
+    check e.activeWindow.modeState.kind == mskNone
+    check e.activeWindow.mode == EditorMode.Normal
 
 suite "closeWindow - sync after close":
   test "syncs to remaining window after close":

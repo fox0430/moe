@@ -122,11 +122,11 @@ proc countCalls(code: string, name: string): int =
     if p < code.len and code[p] == '(':
       inc result
 
-proc matchWindowBufferAssign(code: string): int =
-  for idx in code.occurrences(".buffer"):
-    let rhs = code.assignsAt(idx + len(".buffer"), compound = false)
-    if rhs >= 0 and code.skipSpaces(rhs) < code.len:
-      inc result
+proc matchWindowViewReplace(code: string): int =
+  ## Calls that replace what a window shows. `viewBuffer` has no setter, so
+  ## these two are the only way in. `retabTo` moves the tab under a view that
+  ## stays put, so it abandons nothing.
+  code.countCalls("setTab") + code.countCalls("setView")
 
 proc matchActivateWindow(code: string): int =
   code.countCalls("activateWindow")
@@ -172,15 +172,16 @@ proc matchSessionBeginTransaction(code: string): int =
 
 let Invariants = @[
   Invariant(
-    name: "window buffer replacement",
+    name: "window view replacement",
     guidance:
-      "Replacing a window's buffer abandons whatever session that window " &
+      "Replacing what a window shows abandons whatever session that window " &
       "owned. A new site must finalize the session first.",
-    # `.buffer` also names unrelated fields in these modules.
-    skipFiles: @["registers.nim", "sidebar.nim", "commands.nim"],
-    match: matchWindowBufferAssign,
+    skipFiles: @[],
+    match: matchWindowViewReplace,
     allow: @[
-      ("moepkg/editor_buffers.nim", 4),
+      # 4 tab switches, plus the two `syncTerminalView` arms — Terminal windows
+      # hold no Insert session, so there is nothing to finalize there.
+      ("moepkg/editor_buffers.nim", 6),
       ("moepkg/editor_frame.nim", 1),
       ("moepkg/editor_navigation.nim", 1),
       ("moepkg/editor_window.nim", 1),
@@ -188,8 +189,10 @@ let Invariants = @[
       ("moepkg/viewer_mode.nim", 1),
       ("moepkg/command_handlers/backup_ops.nim", 4),
       ("moepkg/command_handlers/editor_ops.nim", 1),
-      ("moepkg/command_handlers/mode_dispatchers.nim", 2),
       ("moepkg/command_handlers/viewer_ops.nim", 4),
+      # Filer / FileTree listing rebuilds. These were invisible to the old
+      # line-based `.buffer =` matcher because the RHS sat on the next line.
+      ("moepkg/command_handlers/result_processor.nim", 2),
       # Diff viewer buffer rebuild on resize (read-only viewer, no session).
       ("moepkg/editor_render_views.nim", 1),
     ],
@@ -347,14 +350,14 @@ suite "Invariant scanner self-tests":
   proc hits(m: Matcher, line: string): int =
     m(stripComment(line))
 
-  test "window buffer replacement matches an assignment only":
-    let m = matchWindowBufferAssign
-    check m.hits("e.activeWindow.buffer = newBuffer") == 1
-    check m.hits("  win.buffer = buffer") == 1
+  test "window view replacement matches the primitives only":
+    let m = matchWindowViewReplace
+    check m.hits("e.activeWindow.setTab(newBuffer)") == 1
+    check m.hits("  win.setView(buffer)") == 1
+    check m.hits("win.retabTo(newBuf)") == 0
+    check m.hits("proc setTab*(win: EditorWindow, buf: TextBuffer) =") == 0
+    check m.hits("# win.setView(x)") == 0
     check m.hits("if w.buffer == other:") == 0
-    check m.hits("w.bufferStatus = x") == 0
-    check m.hits("# w.buffer = x") == 0
-    check m.hits("let s = \"w.buffer = x\"") == 0
 
   test "focus move matches calls, not mentions":
     let m = matchActivateWindow
@@ -393,14 +396,14 @@ suite "Invariant scanner self-tests":
     let root = getTempDir() / "moe_insert_invariant_fixture"
     createDir(root / "moepkg")
     let path = root / "moepkg" / "editor_window.nim"
-    writeFile(path, "e.activeWindow.buffer = a\ne.activeWindow.buffer = b\n")
+    writeFile(path, "e.activeWindow.setTab(a)\ne.activeWindow.setTab(b)\n")
     defer:
       removeDir(root)
     let inv = Invariant(
       name: "fixture",
       guidance: "",
       skipFiles: @[],
-      match: matchWindowBufferAssign,
+      match: matchWindowViewReplace,
       allow: @[("moepkg/editor_window.nim", 1)],
     )
     let found = scan(inv, @[path], root)

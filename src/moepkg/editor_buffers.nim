@@ -108,6 +108,25 @@ proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
   if buffer.id notin e.activeWindow.bufferIds:
     e.activeWindow.bufferIds.add(buffer.id)
 
+when not defined(moe.embedded):
+  proc syncTerminalView*(e: Editor, win: EditorWindow) =
+    ## What a Terminal window shows, derived from its session's sub-mode. The
+    ## only place that decides it, so the two cannot drift apart.
+    if win.modeState.kind != mskTerminal:
+      return
+    let session = win.modeState.terminal
+    case session.subMode
+    of tsmNormal:
+      # `leaveTerminalSession` never parks a session in tsmNormal, so this only
+      # fires within one activation.
+      if session.scrollbackSnapshot == nil:
+        discard session.enterNormalSubMode()
+      win.setView(session.scrollbackSnapshot)
+    of tsmInput:
+      # `renderTerminal` draws the grid; the view is only what the status line
+      # and tab list read.
+      win.setView(e.tabBuffer(win))
+
 proc applyBufferMode*(e: Editor, buf: TextBuffer) =
   ## Re-derive the active window's mode/modeState from the activated buffer.
   let win = e.activeWindow
@@ -121,13 +140,19 @@ proc applyBufferMode*(e: Editor, buf: TextBuffer) =
   # to `buf` (a tab pick), so the saved reference would be wrong. Nulling
   # first turns the restore step into a no-op while still letting
   # `clearModeState` run its mode-specific cleanup and reset the variant.
+  # Unconditional: every caller has already called `win.setTab(buf)`.
+  win.originalBuffer = nil
+  # `clearModeState` only drops what the mode being torn down owns, so an
+  # overlay (DiffViewer over a suspended BackupManager) would strand the other
+  # mode's record on a window that is now showing an unrelated tab.
+  discard win.takeViewerEntry()
+  discard win.takeSuspendedMode()
   let wasSpecialMode =
     when defined(moe.embedded):
       win.modeState.kind != mskNone
     else:
       win.modeState.kind != mskNone and win.modeState.kind != mskTerminal
   if wasSpecialMode:
-    win.originalBuffer = nil
     win.clearModeState(win.mode)
 
   when defined(moe.embedded):
@@ -137,9 +162,17 @@ proc applyBufferMode*(e: Editor, buf: TextBuffer) =
     elif wasSpecialMode:
       e.setMode(EditorMode.Normal)
   else:
-    if e.terminalStates.hasKey(buf.id):
-      win.modeState = ModeState(kind: mskTerminal, terminal: e.terminalStates[buf.id])
+    let newSession =
+      if e.terminalStates.hasKey(buf.id):
+        e.terminalStates[buf.id]
+      else:
+        nil
+    # No-op when `buf` is the session the window is already on.
+    win.leaveTerminalSession(keep = newSession)
+    if newSession != nil:
+      win.modeState = ModeState(kind: mskTerminal, terminal: newSession)
       e.setMode(EditorMode.Terminal)
+      e.syncTerminalView(win)
     elif win.mode == EditorMode.Terminal:
       # Leaving a Terminal tab: clearModeState was skipped above (PTY ownership
       # lives in `terminalStates`), so reset the variant manually here.
@@ -162,7 +195,7 @@ proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
   # Finalize any Insert session on the old buffer before the switch.
   e.finalizeInsertSessionForBufferSwitch(e.activeWindow.buffer)
 
-  e.activeWindow.buffer = targetBuffer
+  e.activeWindow.setTab(targetBuffer)
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
   e.activeWindow.viewport.resetViewportTop()
   e.activeWindow.viewport.leftColumn = 0
@@ -203,7 +236,7 @@ proc currentBufferIndex*(e: Editor): int =
 proc windowBufferIndex*(e: Editor): int =
   ## Index of the active buffer inside the active window's tab list.
   ## Returns -1 if the active buffer is not registered with this window.
-  let id = e.activeWindow.buffer.id
+  let id = e.activeWindow.tabBufferId
   for i, bid in e.activeWindow.bufferIds:
     if bid == id:
       return i
@@ -240,7 +273,7 @@ when not defined(moe.embedded):
     # before we mutate the lists.
     var followups: seq[tuple[winIdx: int, tabIdx: int]] = @[]
     for wi, w in e.windowManager.windows:
-      if w.buffer != nil and w.buffer.id == bufId:
+      if w.buffer != nil and w.tabBufferId == bufId:
         var idx = -1
         for i, bid in w.bufferIds:
           if bid == bufId:
@@ -282,7 +315,7 @@ when not defined(moe.embedded):
           let targetOpt = e.bufferById(targetId)
           if targetOpt.isSome:
             let target = targetOpt.get
-            w.buffer = target
+            w.setTab(target)
             w.cursor = BufferPosition(line: 0, column: 0)
             w.viewport.resetViewportTop()
             w.viewport.leftColumn = 0
@@ -299,10 +332,11 @@ when not defined(moe.embedded):
         e.addBufferToWindowList(blank)
         if fu.winIdx == prevActive:
           e.finalizeInsertSessionForBufferSwitch(w.buffer)
-        w.buffer = blank
+        w.setTab(blank)
         w.cursor = BufferPosition(line: 0, column: 0)
         w.viewport.resetViewportTop()
         w.viewport.leftColumn = 0
+        w.originalBuffer = nil
         w.modeState = ModeState(kind: mskNone)
         w.mode = EditorMode.Normal
         e.setMode(EditorMode.Normal)
@@ -489,21 +523,39 @@ proc removeBufferAt*(e: Editor, idx: int): TextBuffer =
 proc redirectWindowsFromBuffer*(
     e: Editor, deletedBuffer: TextBuffer, newBuf: TextBuffer
 ) =
-  ## Switch every window currently showing `deletedBuffer` to `newBuf`,
-  ## register `newBuf.id` in those windows' tab lists, and reset their cursor
-  ## and viewport.
+  ## Move every window that was parked on `deletedBuffer`, or showing it, to
+  ## `newBuf`; register `newBuf.id` in those windows' tab lists. Tab and view
+  ## move separately: a window running a viewer only moves its tab.
   for window in e.windowManager.windows:
-    if window.buffer == deletedBuffer:
+    let
+      tabDeleted = window.tabBufferId == deletedBuffer.id
+      viewDeleted = window.buffer == deletedBuffer
+    if not tabDeleted and not viewDeleted:
+      continue
+
+    # Undo data pointing at the deleted buffer would restore an unreachable one.
+    if window.originalBuffer == deletedBuffer:
+      window.originalBuffer = newBuf
+
+    if viewDeleted:
       # Only the active window uses the global Insert tracking; non-active
       # windows keep their own mode in `window.mode`.
       if window == e.activeWindow:
         e.finalizeInsertSessionForBufferSwitch(window.buffer)
-      window.buffer = newBuf
-      if newBuf.id notin window.bufferIds:
-        window.bufferIds.add(newBuf.id)
+      # A window whose view is deleted while it sits on another tab keeps that
+      # tab: only the view moves.
+      if tabDeleted:
+        window.setTab(newBuf)
+      else:
+        window.setView(newBuf)
       window.cursor = BufferPosition(line: 0, column: 0)
       window.viewport.resetViewportTop()
       window.viewport.leftColumn = 0
+    else:
+      window.retabTo(newBuf)
+
+    if newBuf.id notin window.bufferIds:
+      window.bufferIds.add(newBuf.id)
 
 proc deleteBufferById(e: Editor, id: BufferId): Result[(), string] =
   when not defined(moe.embedded):
@@ -544,18 +596,22 @@ proc deleteBufferById(e: Editor, id: BufferId): Result[(), string] =
   e.setActiveWindowScreenCursor(e.activeWindow)
   ok(())
 
+proc isTerminalBuffer*(e: Editor, id: BufferId): bool =
+  ## Whether `id` names a live Terminal session rather than editable text.
+  ## Its buffer is an empty placeholder, so the session table is the only
+  ## record.
+  when defined(moe.embedded):
+    false
+  else:
+    id in e.terminalStates
+
 proc closeBuffer*(e: Editor, id: BufferId): Result[(), string] =
   ## Close a buffer by stable id while preserving editor lifecycle invariants.
   ## Modified buffers are rejected; terminal buffers use terminal teardown.
   let buffer = e.bufferById(id)
   if buffer.isNone:
     return err("Buffer does not exist")
-  let isTerminal =
-    when defined(moe.embedded):
-      false
-    else:
-      id in e.terminalStates
-  if not isTerminal and buffer.get.isModified:
+  if not e.isTerminalBuffer(id) and buffer.get.isModified:
     return err("No write since last change (add ! to override)")
   e.deleteBufferById(id)
 
@@ -580,17 +636,22 @@ proc moveBuffer*(e: Editor, id: BufferId, destination: Natural): bool =
   e.activeWindow.bufferIds.insert(id, destinationIndex)
   true
 
-proc deleteCurrentBuffer*(e: Editor) =
-  ## Delete the active buffer from the buffer list (Vim `:bd` semantics).
+proc deleteCurrentBuffer*(e: Editor, force: bool = false): Result[(), string] =
+  ## Delete the buffer the active window is parked on (Vim `:bd` semantics).
   ## Every window that was showing it switches to another buffer — windows
   ## themselves stay open. If this was the only buffer, a fresh empty
   ## `[No Name]` buffer takes its place.
   ##
-  ## The modified-buffer check is the caller's responsibility (handled in
-  ## `executeBufferDelete`).
-  let deleteResult = e.deleteBufferById(e.activeBuffer().id)
-  if deleteResult.isErr:
-    e.state.statusMessage = "Error: " & deleteResult.error
+  ## The target is the window's tab, not `activeBuffer()` — they differ in
+  ## Terminal-Normal and the viewer modes. `force` skips the modified check as
+  ## `:bd!` does.
+  ##
+  ## Refusals come back as `err`, not a status message, so an embedding caller
+  ## can tell a refusal from a deletion.
+  let target = e.tabBuffer(e.activeWindow)
+  if force:
+    return e.deleteBufferById(target.id)
+  e.closeBuffer(target.id)
 
 const MinNewWindowWidth* = 10
   ## Minimum width (in columns) required when spawning a new split window.
@@ -686,7 +747,8 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
   e.windowManager.deactivateAllWindows()
 
   let newWindow = EditorWindow(
-    buffer: newBuffer,
+    viewBuffer: newBuffer,
+    tabBufferId: newBuffer.id,
     bufferIds: @[newBuffer.id],
     viewport: ViewPort(
       topLine: 0, leftColumn: 0, width: newWidth, height: origHeight, x: newX, y: origY

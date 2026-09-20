@@ -558,7 +558,7 @@ suite "EditorState - buffer switch flips state.tabStop":
     let bufB = newTextBuffer()
     bufB.editorConfig = some(BufferEditorConfig(tabStop: some(8), shiftWidth: some(6)))
     e.addBuffer(bufB)
-    e.windowManager.windows[0].buffer = bufB
+    e.windowManager.windows[0].setTab(bufB)
     e.state.activeWindow = e.windowManager.windows[0]
 
     check e.state.tabStop == 8

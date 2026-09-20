@@ -80,7 +80,7 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
     return
 
   e.finalizeInsertSessionForBufferSwitch(activeWindow.buffer)
-  activeWindow.buffer = targetBuffer
+  activeWindow.setTab(targetBuffer)
   activeWindow.cursor = BufferPosition(line: 0, column: 0)
   activeWindow.viewport.resetViewportTop()
   activeWindow.viewport.leftColumn = 0

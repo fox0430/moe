@@ -19,12 +19,28 @@
 
 ## Per-window mode state lifecycle.
 ## Restores the original buffer for modes that swap the window buffer
-## (Filer, BufferManager, Terminal, ...) and resets the `modeState`
-## variant on `EditorWindow` back to `mskNone`.
+## (Filer, BufferManager, ...) and resets the `modeState` variant on
+## `EditorWindow` back to `mskNone`.
+##
+## `originalBuffer` is undo data only; the tab a window is on is
+## `EditorWindow.tabBufferId`.
 
 import std/options
 
 import types/editor_types, message_log
+
+when not defined(moe.embedded):
+  import terminal_mode
+
+  proc leaveTerminalSession*(win: EditorWindow, keep: TerminalState = nil) =
+    ## The window is moving off the Terminal session it was on (tab switch,
+    ## `enew`, a second `:terminal`). Drop the browsing sub-mode so the tab
+    ## resumes live. `keep` is the session switched *to*, left alone.
+    if win.modeState.kind != mskTerminal:
+      return
+    let session = win.modeState.terminal
+    if session != nil and session != keep:
+      session.exitNormalSubMode()
 
 proc saveOriginalBuffer*(win: EditorWindow) =
   ## Stash the current buffer as `originalBuffer` so a later mode exit can
@@ -40,7 +56,7 @@ proc saveOriginalBuffer*(win: EditorWindow) =
 
 proc restoreOriginalBufferUnchecked(win: EditorWindow) =
   if win.originalBuffer != nil:
-    win.buffer = win.originalBuffer
+    win.setView(win.originalBuffer)
     win.originalBuffer = nil
 
 proc takeViewerEntry*(win: EditorWindow): Option[ViewerEntry] =

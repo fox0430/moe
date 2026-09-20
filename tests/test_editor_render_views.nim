@@ -1996,7 +1996,7 @@ suite "advanceLayoutForFrame - viewer selection drives the window viewport":
         content.add('\n')
       content.add("line" & $i)
     let win = e.windowManager.windows[0]
-    win.buffer = newTextBuffer(content)
+    win.setTab(newTextBuffer(content))
     win.mode = mode
     e.state.mode = mode
     win.viewport.topLine = 0

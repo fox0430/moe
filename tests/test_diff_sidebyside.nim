@@ -927,8 +927,10 @@ suite "side-by-side: toggle routing and repaint":
     writeFile(sourceFile, "a\n\tY\nb\n")
     result = initDiffViewerState(sourceFile, backupFile)
     win.modeState = ModeState(kind: mskDiffViewer, diffViewer: result)
-    win.buffer = result.refreshDiffTextBuffer(
-      e.textAreaWidthForRows(win, max(result.items.len, result.sideRows.len))
+    win.setView(
+      result.refreshDiffTextBuffer(
+        e.textAreaWidthForRows(win, max(result.items.len, result.sideRows.len))
+      )
     )
     defer:
       removeFile(backupFile)
@@ -1109,8 +1111,10 @@ suite "side-by-side: toggle routing and repaint":
     let st = e.setupDiffViewer(160)
     let win = e.activeWindow
     st.viewMode = dvmSideBySide
-    win.buffer = st.refreshDiffTextBuffer(
-      e.textAreaWidthForRows(win, max(st.items.len, st.sideRows.len))
+    win.setView(
+      st.refreshDiffTextBuffer(
+        e.textAreaWidthForRows(win, max(st.items.len, st.sideRows.len))
+      )
     )
     check st.wordHighlight
     check hasWordBackground(win.buffer, EditorColorPairIndex.diffViewerAddedWord)

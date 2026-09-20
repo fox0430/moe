@@ -316,7 +316,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Create default window (always have at least one window)
   result.windowManager.windows.add(
     EditorWindow(
-      buffer: initialBuffer,
+      viewBuffer: initialBuffer,
+      tabBufferId: initialBuffer.id,
       bufferIds: @[initialBuffer.id],
         # Initialize per-window tabs with the initial buffer
       viewport: initialViewport,

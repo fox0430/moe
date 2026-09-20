@@ -23,7 +23,7 @@
 ## - Background process management
 ## - Search mode event handling helpers
 
-import std/[unittest, options, tables, os, osproc, times]
+import std/[unittest, options, tables, os, osproc, times, posix]
 from std/strutils import contains
 
 import pkg/[celina, chronos]
@@ -37,6 +37,8 @@ import
     render_utils, clipboard, message_log, frontend_input, editor_file_jobs,
   ]
 import ../src/moepkg/handler {.all.}
+import ../src/moepkg/terminal_mode
+import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/command_handlers/result_processor
 import ../src/moepkg/command_handlers/[handler_result, misc_ops]
 
@@ -926,7 +928,7 @@ suite "Filter op":
         discard buf.insert(i, line)
     buf.markSaved()
     editor.addBuffer(buf)
-    editor.activeWindow.buffer = buf
+    editor.activeWindow.setTab(buf)
     (editor, buf)
 
   proc runFilter(
@@ -1032,7 +1034,7 @@ suite "Filter op":
     # split on the same buffer keeps looking where its user left it.
     let (editor, buf) = filterEditor(@["b", "a", "c"])
     editor.activeWindow.cursor = BufferPosition(line: 2, column: 0)
-    let split = EditorWindow(buffer: buf)
+    let split = EditorWindow(viewBuffer: buf, tabBufferId: buf.id)
     split.cursor = BufferPosition(line: 2, column: 0)
     editor.windowManager.windows.add split
 
@@ -1049,7 +1051,7 @@ suite "Filter op":
     let other = newTextBuffer()
     discard other.insertText(BufferPosition(line: 0, column: 0), "elsewhere")
     editor.addBuffer(other)
-    let split = EditorWindow(buffer: other)
+    let split = EditorWindow(viewBuffer: other, tabBufferId: other.id)
     split.cursor = BufferPosition(line: 0, column: 3)
     editor.windowManager.windows.add split
     editor.windowManager.activeWindowIndex = 1
@@ -1070,7 +1072,7 @@ suite "Filter op":
 
   test "An inactive window on the filtered buffer is re-clamped too":
     let (editor, buf) = filterEditor(@["a", "b", "c", "d"])
-    let split = EditorWindow(buffer: buf)
+    let split = EditorWindow(viewBuffer: buf, tabBufferId: buf.id)
     split.cursor = BufferPosition(line: 3, column: 0)
     editor.windowManager.windows.add split
 
@@ -1587,7 +1589,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   config.standard.mouse = true
   result = newEditor(config)
   let buf = newTextBuffer(content)
-  result.windowManager.windows[0].buffer = buf
+  result.windowManager.windows[0].setTab(buf)
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
@@ -1769,7 +1771,8 @@ suite "frontend-neutral pointer and scroll input":
       ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0)
     let rightBuffer = newTextBuffer("right0\nright1\nright2\nright3\nright4")
     let rightWindow = EditorWindow(
-      buffer: rightBuffer,
+      viewBuffer: rightBuffer,
+      tabBufferId: rightBuffer.id,
       bufferIds: @[rightBuffer.id],
       viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
@@ -1806,7 +1809,8 @@ suite "frontend-neutral pointer and scroll input":
       ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
     let rightBuffer = newTextBuffer("right window text")
     let rightWindow = EditorWindow(
-      buffer: rightBuffer,
+      viewBuffer: rightBuffer,
+      tabBufferId: rightBuffer.id,
       bufferIds: @[rightBuffer.id],
       viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
@@ -2026,7 +2030,8 @@ suite "frontend-neutral pointer and scroll input":
       ViewPort(x: 0, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0)
     let rightBuffer = newTextBuffer("right side")
     let rightWindow = EditorWindow(
-      buffer: rightBuffer,
+      viewBuffer: rightBuffer,
+      tabBufferId: rightBuffer.id,
       bufferIds: @[rightBuffer.id],
       viewport: ViewPort(x: 20, y: 0, width: 20, height: 10, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
@@ -2225,7 +2230,8 @@ suite "handleMouseEvent - Wheel Scroll Multi-Window":
     # Create a second window for the right half
     let buf2 = newTextBuffer("a0\na1\na2\na3\na4\na5\na6\na7\na8\na9")
     let win2 = EditorWindow(
-      buffer: buf2,
+      viewBuffer: buf2,
+      tabBufferId: buf2.id,
       bufferIds: @[buf2.id],
       viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
@@ -2428,7 +2434,8 @@ proc createSplitEditor(multiStatusLine: bool = true): Editor =
   let buf2 = newTextBuffer(content)
   result.windowManager.windows.add(
     EditorWindow(
-      buffer: buf2,
+      viewBuffer: buf2,
+      tabBufferId: buf2.id,
       bufferIds: @[buf2.id],
       viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
@@ -3579,12 +3586,17 @@ proc createTestEditorForMiddleClick(content: string): Editor =
   config.clipboard.tool = getAvailableClipboardTool()
   result = newEditor(config)
   let buf = newTextBuffer(content)
-  result.windowManager.windows[0].buffer = buf
+  result.windowManager.windows[0].setTab(buf)
   result.windowManager.windows[0].bufferIds = @[buf.id]
   result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
   result.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
+
+proc middleClickInWindow(e: Editor, row = 2, col = 5) =
+  ## Middle-click inside the active window's text area. The cell matters: the
+  ## click picks the paste target, not the focused window.
+  e.middleClickPaste(row, col)
 
 proc makeMiddleClickEvent(x, y: int): Event =
   Event(
@@ -3670,7 +3682,7 @@ suite "middleClickPaste":
     e.state.mode = EditorMode.Insert
     discard e.activeBuffer.beginTransaction("test")
 
-    e.middleClickPaste()
+    e.middleClickInWindow()
 
     # Buffer should be unchanged
     check e.activeBuffer.getLine(0) == "hello"
@@ -3679,7 +3691,7 @@ suite "middleClickPaste":
     let e = createTestEditorForMiddleClick("hello")
     e.state.mode = EditorMode.Visual
 
-    e.middleClickPaste()
+    e.middleClickInWindow()
 
     check e.activeBuffer.getLine(0) == "hello"
 
@@ -3691,7 +3703,7 @@ suite "middleClickPaste":
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
     e.activeBuffer.readOnly = true
 
-    e.middleClickPaste()
+    e.middleClickInWindow()
 
     check e.state.mode == EditorMode.Normal
     check e.state.statusMessage == "Buffer is read-only"
@@ -3711,7 +3723,7 @@ suite "middleClickPaste":
     e.state.setStatusQuiet("")
     clearMessageLog()
 
-    e.middleClickPaste()
+    e.middleClickInWindow()
 
     check e.state.mode == EditorMode.Normal
     check not e.activeBuffer.inTransaction
@@ -3731,7 +3743,7 @@ suite "middleClickPaste":
     e.state.setStatusQuiet("")
     clearMessageLog()
 
-    e.middleClickPaste()
+    e.middleClickInWindow()
 
     check e.state.notificationPopup.queue.len == 1
     check e.state.notificationPopup.queue[0].message.contains("Paste failed")
@@ -3752,7 +3764,7 @@ suite "middleClickPaste":
     e.state.setStatusQuiet("")
     clearMessageLog()
 
-    e.middleClickPaste()
+    e.middleClickInWindow()
 
     check e.state.mode == EditorMode.Normal
     check not e.activeBuffer.inTransaction
@@ -3777,7 +3789,7 @@ suite "middleClickPaste":
       discard e.activeBuffer.beginTransaction("Insert mode edit")
       e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       let line = e.activeBuffer.getLine(0)
       check $line == "hello" & testText
@@ -3797,7 +3809,7 @@ suite "middleClickPaste":
       discard e.activeBuffer.beginTransaction("Insert mode edit")
       e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       let line = e.activeBuffer.getLine(0)
       check $line == "hello" & "\xEF\xBF\xBD" & "A"
@@ -3816,7 +3828,7 @@ suite "middleClickPaste":
       e.state.mode = EditorMode.Normal
       e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.mode == EditorMode.Insert
       let line = e.activeBuffer.getLine(0)
@@ -3837,7 +3849,7 @@ suite "middleClickPaste":
       # Out-of-bounds line makes insertText fail, hitting the rollback path
       e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.mode == EditorMode.Normal
       check not e.activeBuffer.inTransaction
@@ -3866,7 +3878,7 @@ suite "middleClickPaste":
       # Out-of-bounds line makes insertText fail, hitting the rollback path
       e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.mode == EditorMode.Normal
       check e.state.statusMessage == ""
@@ -3888,7 +3900,7 @@ suite "middleClickPaste":
       discard e.activeBuffer.beginTransaction("Insert mode edit")
       e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.mode == EditorMode.Insert
       check e.activeBuffer.inTransaction
@@ -3913,7 +3925,7 @@ suite "middleClickPaste":
       # switch happens).
       e.windowManager.windows[0].cursor = BufferPosition(line: 5, column: 0)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.mode == EditorMode.Insert
       check not e.activeBuffer.inTransaction
@@ -3936,7 +3948,7 @@ suite "middleClickPaste":
       e.state.mode = EditorMode.Insert
       discard e.activeBuffer.beginTransaction("Insert mode edit")
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.activeBuffer.len >= 2
       check $e.activeBuffer.getLine(0) == "line1"
@@ -3957,7 +3969,7 @@ suite "middleClickPaste":
       let e = createTestEditorForMiddleClick("")
       e.state.enterCommandOverlay()
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.input.commandText == ":hello world"
       check e.state.input.commandCursor == testText.len
@@ -3975,7 +3987,7 @@ suite "middleClickPaste":
       let e = createTestEditorForMiddleClick("")
       e.state.enterCommandOverlay()
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.input.commandText == ":first"
       check e.state.input.commandCursor == 5
@@ -3993,7 +4005,7 @@ suite "middleClickPaste":
       let e = createTestEditorForMiddleClick("haystack needle")
       e.state.enterSearchOverlay(SearchDirection.Forward)
 
-      e.middleClickPaste()
+      e.middleClickInWindow()
 
       check e.state.input.search.text == "needle"
 
@@ -4011,28 +4023,32 @@ suite "middleClickPaste":
       e.config.standard.mouse = false # Mouse disabled
       e.state.mode = EditorMode.Normal
 
-      let event = makeMiddleClickEvent(0, 0)
+      # Row 0 is the tab line; the cell has to land in the text area.
+      let event = makeMiddleClickEvent(5, 2)
       discard e.handleEvent(event)
 
       check e.state.mode == EditorMode.Insert
       let line = e.activeBuffer.getLine(0)
       check ($line).len > 5 # Text was inserted
 
-  test "handleEvent reattaches the viewport before middle-click paste":
+  test "a middle-click that pastes nothing leaves the viewport detached":
+    # The reattach belongs to the insertion, the way the left-click one belongs
+    # to the cursor move: a click that inserts nothing must not yank the view
+    # back to the cursor.
     let e = createTestEditorForMiddleClick("hello")
     e.config.clipboard.enable = false
     e.viewport.detachedFromCursor = true
 
     discard e.handleEvent(makeMiddleClickEvent(0, 0))
 
-    check not e.viewport.detachedFromCursor
+    check e.viewport.detachedFromCursor
 
 suite "handlePasteEvent":
   proc createTestEditorForPaste(content: string): Editor =
     let config = newEditorConfig()
     result = newEditor(config)
     let buf = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
     result.motionController.viewportManager.viewport = result.viewport
@@ -4190,7 +4206,7 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     config.standard.mouse = true
     result = newEditor(config)
     let buf = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
     result.motionController.viewportManager.viewport = result.viewport
@@ -4271,7 +4287,7 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     config.standard.mouse = true
     result = newEditor(config)
     let buf = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
     result.motionController.viewportManager.viewport = result.viewport
@@ -4591,7 +4607,7 @@ suite "Macro recording - Command / Search overlay keys":
     let config = newEditorConfig()
     result = newEditor(config)
     let buf = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
@@ -4660,7 +4676,7 @@ suite "Macro playback - overlay-aware routing":
     let config = newEditorConfig()
     result = newEditor(config)
     let buf = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].setTab(buf)
     result.windowManager.windows[0].bufferIds = @[buf.id]
     result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
@@ -4716,7 +4732,8 @@ proc addSecondWindow(e: Editor, buf2: TextBuffer, vpx: int = 40) =
   e.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: vpx, height: 24, topLine: 0, leftColumn: 0)
   let win2 = EditorWindow(
-    buffer: buf2,
+    viewBuffer: buf2,
+    tabBufferId: buf2.id,
     bufferIds: @[buf2.id],
     viewport:
       ViewPort(x: vpx, y: 0, width: 80 - vpx, height: 24, topLine: 0, leftColumn: 0),
@@ -4979,3 +4996,432 @@ suite "Ctrl-w window commands in special modes":
 
     check e.windowManager.windows[e.windowManager.activeWindowIndex].viewport.width <
       width
+
+suite "Ctrl-C in Terminal mode":
+  proc fakeTerminalState(subMode: TerminalSubMode): TerminalState =
+    TerminalState(
+      pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
+      grid: newTerminalGrid(80, 24),
+      subMode: subMode,
+      exitCode: none(int),
+      waitingForCtrlN: false,
+      needsBufferRefresh: false,
+    )
+
+  proc createTerminalEditor(subMode: TerminalSubMode): Editor =
+    result = createTestEditorWithBuffer("")
+    let termState = fakeTerminalState(subMode)
+    result.terminalStates[result.activeWindow.buffer.id] = termState
+    result.activeWindow.modeState = ModeState(kind: mskTerminal, terminal: termState)
+    result.activeWindow.mode = EditorMode.Terminal
+    result.state.mode = EditorMode.Terminal
+
+  test "Ctrl-C closes a command overlay opened over the Terminal":
+    let e = createTerminalEditor(tsmNormal)
+    e.state.enterCommandOverlay()
+
+    check e.handleInterrupt()
+
+    check not e.state.hasOverlay
+    check e.state.mode == EditorMode.Terminal
+
+  test "Ctrl-C closes a search overlay opened over the Terminal":
+    let e = createTerminalEditor(tsmNormal)
+    e.state.enterSearchOverlay(Forward)
+
+    check e.handleInterrupt()
+
+    check not e.state.hasOverlay
+    check e.state.mode == EditorMode.Terminal
+
+  proc createTerminalEditorWithPaste(subMode: TerminalSubMode = tsmNormal): Editor =
+    result = createTerminalEditor(subMode)
+    let termState = result.activeWindow.modeState.terminal
+    termState.pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
+    check termState.pty.queueWrite("paste", wcDroppable).isOk
+
+  test "Ctrl-C over the Terminal drops the queued paste":
+    let e = createTerminalEditorWithPaste()
+
+    check e.handleInterrupt()
+
+    check e.activeWindow.modeState.terminal.pty.droppableBytes == 0
+
+  test "Ctrl-C meant for an overlay leaves the queued paste draining":
+    let e = createTerminalEditorWithPaste()
+    e.state.enterCommandOverlay()
+
+    check e.handleInterrupt()
+
+    check not e.state.hasOverlay
+    check e.activeWindow.modeState.terminal.pty.droppableBytes == 5
+
+  test "Ctrl-C in the Input sub-mode stays with the child process":
+    let e = createTerminalEditor(tsmInput)
+
+    check e.handleInterrupt()
+
+    check e.state.mode == EditorMode.Terminal
+
+  test "Ctrl-C meant for an overlay never reaches the child in the Input sub-mode":
+    let e = createTerminalEditorWithPaste(tsmInput)
+    e.state.enterCommandOverlay()
+
+    check e.handleInterrupt()
+
+    check not e.state.hasOverlay
+    check e.state.mode == EditorMode.Terminal
+    # `interrupt()` would have dropped the paste on its way to the child.
+    check e.activeWindow.modeState.terminal.pty.droppableBytes == 5
+
+suite "middleClickPaste - the click picks the target":
+  proc fakeTerminalState(): TerminalState =
+    TerminalState(
+      pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: false),
+      grid: newTerminalGrid(80, 24),
+      subMode: tsmInput,
+      exitCode: none(int),
+      waitingForCtrlN: false,
+      needsBufferRefresh: false,
+    )
+
+  proc editorWithTerminalAndSplit(): tuple[e: Editor, term: TerminalState] =
+    ## Active window (top) runs a Terminal session; a second window (bottom)
+    ## shows an ordinary buffer.
+    let e = createTestEditorForMiddleClick("")
+    let top = e.windowManager.windows[0]
+    top.viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+
+    let term = fakeTerminalState()
+    e.terminalStates[top.buffer.id] = term
+    top.modeState = ModeState(kind: mskTerminal, terminal: term)
+    top.mode = EditorMode.Terminal
+    e.state.mode = EditorMode.Terminal
+
+    let otherBuf = newTextBuffer("hello")
+    e.addBuffer(otherBuf)
+    let bottom = EditorWindow(
+      viewBuffer: otherBuf,
+      tabBufferId: otherBuf.id,
+      bufferIds: @[otherBuf.id],
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      mode: EditorMode.Normal,
+      previousMode: EditorMode.Normal,
+      preferredColumn: -1,
+      screenCursor: CursorPosition(x: 0, y: 0),
+      active: false,
+      wrapCountCache: WrapCountCache(),
+    )
+    e.windowManager.windows.add(bottom)
+    (e, term)
+
+  proc editorWithFullScreenTerminal(): tuple[e: Editor, term: TerminalState] =
+    ## A single Terminal window over the whole screen, so the shared
+    ## status/command row is the last row of its viewport.
+    let e = createTestEditorForMiddleClick("")
+    let win = e.windowManager.windows[0]
+    win.viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+
+    let term = fakeTerminalState()
+    e.terminalStates[win.buffer.id] = term
+    win.modeState = ModeState(kind: mskTerminal, terminal: term)
+    win.mode = EditorMode.Terminal
+    e.state.mode = EditorMode.Terminal
+    (e, term)
+
+  proc editorWithTwoBufferWindows(): Editor =
+    ## Two ordinary buffer windows, the top one active.
+    let e = createTestEditorForMiddleClick("top")
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+
+    let bottomBuffer = newTextBuffer("bottom")
+    e.addBuffer(bottomBuffer)
+    e.windowManager.windows.add(
+      EditorWindow(
+        viewBuffer: bottomBuffer,
+        tabBufferId: bottomBuffer.id,
+        bufferIds: @[bottomBuffer.id],
+        viewport:
+          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        mode: EditorMode.Normal,
+        previousMode: EditorMode.Normal,
+        preferredColumn: -1,
+        screenCursor: CursorPosition(x: 0, y: 0),
+        active: false,
+        wrapCountCache: WrapCountCache(),
+      )
+    )
+    e
+
+  proc primarySelectionHolds(text: string): bool =
+    ## Put `text` in PRIMARY. False when this environment has no clipboard
+    ## tool: a middle click with nothing to paste is a no-op by design, so a
+    ## focus assertion needs a real selection behind it.
+    if not isClipboardToolAvailable():
+      return false
+    if writeToPrimarySelectionSync(getAvailableClipboardTool(), text).isErr:
+      return false
+    sleep(100)
+    true
+
+  test "a click in another split does not reach the terminal's child":
+    ## Regression: the Terminal branch ran before any hit test, so a click
+    ## meant for another split queued the selection to the shell, which runs it
+    ## (newlines are normalized to CR and the shell has no bracketed paste).
+    if not primarySelectionHolds("split"):
+      skip()
+    else:
+      let (e, term) = editorWithTerminalAndSplit()
+      require term.pty.pendingWriteBytes == 0
+
+      # Inside the bottom window.
+      e.middleClickPaste(row = 15, col = 10)
+
+      check term.pty.pendingWriteBytes == 0
+      check e.activeWindow == e.windowManager.windows[1]
+      check e.state.mode != EditorMode.Terminal
+
+  test "a click on the tab line reaches nothing":
+    let (e, term) = editorWithTerminalAndSplit()
+    let activeBefore = e.activeWindow
+    e.state.setStatusQuiet("")
+
+    e.middleClickPaste(row = 0, col = 10)
+
+    check term.pty.pendingWriteBytes == 0
+    check e.state.statusMessage == ""
+    check e.activeWindow == activeBefore
+    check e.activeBuffer().getLine(0).len == 0
+
+  test "a click below every window reaches nothing":
+    let (e, term) = editorWithTerminalAndSplit()
+    let activeBefore = e.activeWindow
+    e.state.setStatusQuiet("")
+
+    # The command-line row, under both viewports.
+    e.middleClickPaste(row = 24, col = 10)
+
+    check term.pty.pendingWriteBytes == 0
+    check e.state.statusMessage == ""
+    check e.activeWindow == activeBefore
+
+  test "a click on the status row never reaches the child":
+    ## Regression: the hit test bounded the window at the bottom of its
+    ## viewport instead of subtracting the status/command reserve, so a click
+    ## on the shared bottom row resolved to the terminal and the shell ran the
+    ## selection.
+    let (e, term) = editorWithFullScreenTerminal()
+    e.state.setStatusQuiet("")
+
+    e.middleClickPaste(row = 23, col = 10)
+
+    check term.pty.pendingWriteBytes == 0
+    # The fake pty cannot accept bytes, so the byte count alone would also hold
+    # for a paste that was attempted and refused: an attempt leaves a message.
+    check e.state.statusMessage == ""
+
+  test "a click in another split leaves the terminal window in Terminal mode":
+    ## Regression: the mouse-jump finalizer assigned Normal to `state.mode`,
+    ## which aliases the window losing the focus, so the terminal window's mode
+    ## stopped matching its modeState: it rendered as an empty buffer and its
+    ## session was no longer resized or reaped.
+    if not primarySelectionHolds("split"):
+      skip()
+    else:
+      let (e, _) = editorWithTerminalAndSplit()
+
+      e.middleClickPaste(row = 15, col = 10)
+
+      check e.activeWindow == e.windowManager.windows[1]
+      check e.windowManager.windows[0].mode == EditorMode.Terminal
+      check e.windowManager.windows[0].modeState.kind == mskTerminal
+
+  test "a click in another split still rewinds an edit mode to Normal":
+    if not primarySelectionHolds("split"):
+      skip()
+    else:
+      let e = editorWithTwoBufferWindows()
+      e.state.mode = EditorMode.Insert
+
+      e.middleClickPaste(row = 15, col = 10)
+
+      check e.activeWindow == e.windowManager.windows[1]
+      check e.windowManager.windows[0].mode == EditorMode.Normal
+
+  test "the paste reattaches the window it landed in":
+    ## Regression: the flag was cleared on the window that had the focus, while
+    ## the click pastes into the window under the pointer. A wheel-scrolled
+    ## split kept its detached viewport, leaving the cursor off-screen.
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let writeResult =
+        writeToPrimarySelectionSync(getAvailableClipboardTool(), "reattach")
+      check writeResult.isOk
+      sleep(100)
+
+      let e = editorWithTwoBufferWindows()
+      e.windowManager.windows[1].viewport.detachedFromCursor = true
+
+      e.middleClickPaste(row = 15, col = 10)
+
+      check e.activeWindow == e.windowManager.windows[1]
+      check $e.activeBuffer.getLine(0) == "reattachbottom"
+      check not e.windowManager.windows[1].viewport.detachedFromCursor
+
+  test "a failed clipboard read leaves the focus where it was":
+    ## Regression: the window was activated before PRIMARY was read, so a
+    ## middle click with no working clipboard tool jumped the focus anyway and
+    ## finalized the Insert session of the window it came from.
+    let e = editorWithTwoBufferWindows()
+    # win32yank.exe does not exist here, so the primary selection read fails.
+    e.config.clipboard.tool = cbtWin32yank
+    e.config.notification.popupNotifications = false
+    e.state.mode = EditorMode.Insert
+
+    e.middleClickPaste(row = 15, col = 10)
+
+    check e.activeWindow == e.windowManager.windows[0]
+    check e.windowManager.windows[0].mode == EditorMode.Insert
+    check e.state.statusMessage.contains("Paste failed")
+
+  test "a paste refused by the target does not move the focus either":
+    ## The refusal is decided on the window the click picked, so it costs
+    ## neither a clipboard round trip nor the focus.
+    let e = editorWithTwoBufferWindows()
+    e.config.notification.popupNotifications = false
+    e.windowManager.windows[1].buffer.readOnly = true
+
+    e.middleClickPaste(row = 15, col = 10)
+
+    check e.activeWindow == e.windowManager.windows[0]
+    check e.state.statusMessage == "Buffer is read-only"
+
+suite "pointerPositionInWindow":
+  proc singleWindowEditor(showTabLine: bool): Editor =
+    let e = createTestEditorForMiddleClick("aaa\nbbb\nccc")
+    e.state.showTabLine = showTabLine
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    e
+
+  proc splitWindowEditor(): Editor =
+    let e = singleWindowEditor(showTabLine = true)
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+
+    let bottomBuffer = newTextBuffer("ddd\neee")
+    e.addBuffer(bottomBuffer)
+    e.windowManager.windows.add(
+      EditorWindow(
+        viewBuffer: bottomBuffer,
+        tabBufferId: bottomBuffer.id,
+        bufferIds: @[bottomBuffer.id],
+        viewport:
+          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        mode: EditorMode.Normal,
+        active: false,
+        wrapCountCache: WrapCountCache(),
+      )
+    )
+    e
+
+  test "the shared status/command row is not part of the window's text":
+    # Regression: the tab line came off the clicked row but not off the bottom
+    # reserve, so the row below the last one drawn was still accepted and
+    # clamped onto the last buffer line.
+    let e = singleWindowEditor(showTabLine = true)
+
+    check e.pointerPositionInWindow(initPointerInput(22, 10), 0).isSome
+    check e.pointerPositionInWindow(initPointerInput(23, 10), 0).isNone
+
+  test "with the tab line off the window keeps its last text row":
+    let e = singleWindowEditor(showTabLine = false)
+
+    check e.pointerPositionInWindow(initPointerInput(0, 10), 0).isSome
+    check e.pointerPositionInWindow(initPointerInput(22, 10), 0).isSome
+    check e.pointerPositionInWindow(initPointerInput(23, 10), 0).isNone
+
+  test "a non-bottom window stops above its own status row":
+    let e = splitWindowEditor()
+
+    check e.pointerPositionInWindow(initPointerInput(10, 10), 0).isSome
+    check e.pointerPositionInWindow(initPointerInput(11, 10), 0).isNone
+    check e.pointerPositionInWindow(initPointerInput(22, 10), 1).isSome
+    check e.pointerPositionInWindow(initPointerInput(23, 10), 1).isNone
+
+  test "agrees with windowIndexAtCell on every row":
+    # The two hit tests answer the same question (left click vs middle click);
+    # a row either belongs to a window's text area or it does not.
+    for e in [singleWindowEditor(showTabLine = true), splitWindowEditor()]:
+      for row in 0 .. 23:
+        let hit = e.windowIndexAtCell(row, 10)
+        for i in 0 ..< e.windowManager.windows.len:
+          check e.pointerPositionInWindow(initPointerInput(row, 10), i).isSome ==
+            (hit == i)
+
+suite "windowIndexAtCell":
+  proc singleWindowEditor(showTabLine: bool): Editor =
+    let e = createTestEditorForMiddleClick("")
+    e.state.showTabLine = showTabLine
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    e
+
+  proc splitWindowEditor(): Editor =
+    let e = singleWindowEditor(showTabLine = true)
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 12, topLine: 0, leftColumn: 0)
+
+    let bottomBuffer = newTextBuffer("")
+    e.addBuffer(bottomBuffer)
+    e.windowManager.windows.add(
+      EditorWindow(
+        viewBuffer: bottomBuffer,
+        tabBufferId: bottomBuffer.id,
+        bufferIds: @[bottomBuffer.id],
+        viewport:
+          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        mode: EditorMode.Normal,
+        active: false,
+        wrapCountCache: WrapCountCache(),
+      )
+    )
+    e
+
+  test "the shared status/command row belongs to no window":
+    let e = singleWindowEditor(showTabLine = true)
+
+    check e.windowIndexAtCell(22, 10) == 0
+    check e.windowIndexAtCell(23, 10) == -1
+
+  test "the status row is excluded with the tab line off too":
+    # tabLineOffset drops to 0 while the bottom reserve stays, so the row the
+    # window claims and the row it draws no longer happen to cancel out.
+    let e = singleWindowEditor(showTabLine = false)
+
+    check e.windowIndexAtCell(0, 10) == 0
+    check e.windowIndexAtCell(22, 10) == 0
+    check e.windowIndexAtCell(23, 10) == -1
+
+  test "a non-bottom window reserves its own status row under multiStatusLine":
+    let e = splitWindowEditor()
+
+    check e.windowIndexAtCell(10, 10) == 0
+    check e.windowIndexAtCell(11, 10) == -1
+    check e.windowIndexAtCell(22, 10) == 1
+    check e.windowIndexAtCell(23, 10) == -1
+
+  test "without multiStatusLine the non-bottom window keeps its last row":
+    let e = splitWindowEditor()
+    e.state.multiStatusLine = false
+
+    check e.windowIndexAtCell(11, 10) == 0
+    check e.windowIndexAtCell(23, 10) == -1

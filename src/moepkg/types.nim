@@ -200,7 +200,11 @@ type
 
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
-    buffer*: TextBuffer
+    viewBuffer*: TextBuffer
+      # What the window draws; a mode may swap in an unregistered view
+      # (Terminal-Normal snapshot, Filer listing). Read it as `win.buffer`.
+    tabBufferId*: BufferId
+      # The tab the window is parked on. Changes on a tab switch only.
     bufferIds*: seq[BufferId]
       # Window-local tab list, stored as stable BufferIds.
       # Resolve via Editor.bufferById; entries pointing at deleted buffers
@@ -214,8 +218,9 @@ type
     screenCursor*: CursorPosition # Screen cursor position (x/y)
     modeState*: ModeState # Per-window mode-specific state (variant)
     originalBuffer*: TextBuffer
-      # Saved buffer for modes that swap the window buffer (Filer, Terminal,
+      # Saved buffer for modes that swap the window buffer (Filer,
       # BufferManager, ...). Set on mode entry, restored and cleared on exit.
+      # Undo data only — identity is `tabBufferId`.
     viewerEntry*: Option[ViewerEntry]
       # Set by enterViewerMode, consumed by leaveViewerMode.
     suspendedMode*: Option[SuspendedMode]
@@ -1002,6 +1007,26 @@ type
 
 const MaxLspDebounceBackoffShift* = 6
   ## Max exponent for the reject-streak backoff (interval << 6).
+
+# There is no `buffer=` on purpose: every write picks one of these three, so
+# the call site says whether it is a tab switch or a view swap.
+
+proc buffer*(win: EditorWindow): TextBuffer {.inline.} =
+  win.viewBuffer
+
+proc setTab*(win: EditorWindow, buf: TextBuffer) {.inline.} =
+  ## Move the window to another tab: view and identity change together.
+  win.viewBuffer = buf
+  win.tabBufferId = buf.id
+
+proc retabTo*(win: EditorWindow, buf: TextBuffer) {.inline.} =
+  ## Move the tab while a mode holds a view up, for a tab deleted underneath
+  ## one. The mode restores `buf` when it exits.
+  win.tabBufferId = buf.id
+
+proc setView*(win: EditorWindow, buf: TextBuffer) {.inline.} =
+  ## Swap what the window draws without moving it off its tab.
+  win.viewBuffer = buf
 
 # State-based config pull-type accessors. Editor-based versions live in
 # types/editor_types.nim.

@@ -29,6 +29,8 @@
 ## LSP-driven viewers, the remaining split viewers, and nested entry.
 
 import std/[unittest, os, options, json, importutils, tables]
+
+import pkg/results
 from std/strutils import contains, startsWith
 
 import
@@ -1022,7 +1024,7 @@ suite "Viewer round-trip - teardown records":
     # real backup on disk.
     viewerWin.saveOriginalBuffer()
     viewerWin.suspendMode()
-    viewerWin.buffer = newTextBuffer("diff")
+    viewerWin.setView(newTextBuffer("diff"))
     viewerWin.modeState =
       ModeState(kind: mskDiffViewer, diffViewer: initDiffViewerState(path, path))
     viewerWin.mode = EditorMode.DiffViewer
@@ -1077,3 +1079,75 @@ suite "Viewer round-trip - teardown records":
     check e.state.mode == EditorMode.Normal
     check e.bufferById(scratchId).isNone
     check e.buffers.len == buffersBefore
+
+suite "Viewer round-trip - tab identity":
+  test "a listing is a view swap, so the window stays on its tab":
+    # Regression: which tab a window was on used to be guessed from
+    # `originalBuffer`, so every consumer (tab line, `:bd`, `:bnext`, terminal
+    # teardown) had to re-derive it and could disagree.
+    let (e, path) = editorOnFile("moe_rt_tab_identity.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check win.buffer != origBuf # the listing is up
+    check win.tabBufferId == origBuf.id
+    check e.tabBuffer(win) == origBuf
+
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer())
+    check win.tabBufferId == origBuf.id
+    check e.tabBuffer(win) == origBuf
+
+  test "a listing refresh keeps the tab too":
+    let (e, path) = editorOnFile("moe_rt_tab_identity_refresh.txt")
+    defer:
+      removeFile(path)
+    let win = e.activeWindow
+    let origBuf = win.buffer
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    let firstListing = win.buffer
+
+    # What `processResult` does after a filer state change (enterDirectory,
+    # toggleHidden): rebuild the listing into the window.
+    win.modeState.filer.needsBufferRefresh = true
+    discard e.processResult(HandlerResult(kind: hrHandled), e.activeBuffer())
+
+    check win.buffer != firstListing
+    check win.tabBufferId == origBuf.id
+
+  test "deleting the tab under a live viewer moves the tab, not the view":
+    # `:bd` typed from inside a viewer deletes the buffer the window is parked
+    # on while the listing stays up. The window has to end up on the successor
+    # tab, and the viewer's exit has to restore that buffer rather than the
+    # deleted one.
+    let (e, pathA) = editorOnFile("moe_rt_tab_identity_bd_a.txt")
+    let pathB = getTempDir() / "moe_rt_tab_identity_bd_b.txt"
+    writeFile(pathB, TestLines)
+    defer:
+      removeFile(pathA)
+      removeFile(pathB)
+
+    let win = e.activeWindow
+    let bufA = win.buffer
+    discard e.editFile(pathB)
+    let bufB = e.activeBuffer()
+    check bufA != bufB
+    check e.activateBuffer(bufA.id)
+    check win.buffer == bufA
+
+    discard e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    let listing = win.buffer
+    check win.tabBufferId == bufA.id
+
+    check e.deleteCurrentBuffer().isOk
+
+    check e.bufferById(bufA.id).isNone
+    check win.buffer == listing # the viewer is untouched
+    check win.tabBufferId == bufB.id
+
+    discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer())
+    check win.buffer == bufB
+    check win.tabBufferId == bufB.id

@@ -143,7 +143,7 @@ proc enterViewerMode*(
       )
       win.saveOriginalBuffer()
     e.state.previousMode = win.viewerEntry.get.returnMode
-    win.buffer = buffer
+    win.setView(buffer)
     win.resetViewerViewport()
     win.modeState = modeState
     e.setMode(mode)

@@ -78,7 +78,7 @@ suite "Editor frontend buffers":
       registered = e.addWindowBuffer("Registered")
       active = newTextBuffer()
     e.addBuffer(active)
-    e.activeWindow.buffer = active
+    e.activeWindow.setTab(active)
 
     let buffers = e.activeWindowBuffers()
 

@@ -471,38 +471,56 @@ suite "findMaxBottomY":
 
   test "single window":
     var buf = newTextBuffer()
-    let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 0, height: 20))
+    let win = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 0, height: 20)
+    )
     check findMaxBottomY(@[win]) == 20
 
   test "multiple windows - find max":
     var buf = newTextBuffer()
-    let win1 = EditorWindow(buffer: buf, viewport: ViewPort(y: 0, height: 10))
-    let win2 = EditorWindow(buffer: buf, viewport: ViewPort(y: 10, height: 15))
-    let win3 = EditorWindow(buffer: buf, viewport: ViewPort(y: 0, height: 20))
+    let win1 = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 0, height: 10)
+    )
+    let win2 = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 10, height: 15)
+    )
+    let win3 = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 0, height: 20)
+    )
     check findMaxBottomY(@[win1, win2, win3]) == 25 # win2: 10 + 15 = 25
 
   test "windows at same position":
     var buf = newTextBuffer()
-    let win1 = EditorWindow(buffer: buf, viewport: ViewPort(y: 5, height: 10))
-    let win2 = EditorWindow(buffer: buf, viewport: ViewPort(y: 5, height: 12))
+    let win1 = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 5, height: 10)
+    )
+    let win2 = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 5, height: 12)
+    )
     check findMaxBottomY(@[win1, win2]) == 17 # 5 + 12 = 17
 
 suite "calculateWindowStatusLineY":
   test "bottom window":
     var buf = newTextBuffer()
-    let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 0, height: 24))
+    let win = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 0, height: 24)
+    )
     # Status line at last row: y + height - 1
     check calculateWindowStatusLineY(win, true) == 23
 
   test "non-bottom window":
     var buf = newTextBuffer()
-    let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 0, height: 12))
+    let win = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 0, height: 12)
+    )
     # Status line at last row: y + height - 1
     check calculateWindowStatusLineY(win, false) == 11
 
   test "window with offset":
     var buf = newTextBuffer()
-    let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 10, height: 15))
+    let win = EditorWindow(
+      viewBuffer: buf, tabBufferId: buf.id, viewport: ViewPort(y: 10, height: 15)
+    )
     check calculateWindowStatusLineY(win, true) == 24 # 10 + 15 - 1 = 24
     check calculateWindowStatusLineY(win, false) == 24 # 10 + 15 - 1 = 24
 

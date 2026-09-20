@@ -338,13 +338,19 @@ proc processResultEpilogue(
             "Cursor adjusted: " & $oldColumn & " → " & $e.activeWindow.cursor.column,
           )
 
+  # Terminal view follows the session's sub-mode, which the dispatcher set.
+  when not defined(moe.embedded):
+    if e.state.mode == EditorMode.Terminal:
+      e.syncTerminalView(e.activeWindow)
+
   # Filer buffer regeneration after state changes (e.g. enterDirectory, toggleHidden)
   if e.state.mode == EditorMode.Filer:
     let filerWin = e.activeWindow
     if filerWin.modeState.kind == mskFiler and
         filerWin.modeState.filer.needsBufferRefresh:
-      filerWin.buffer =
+      filerWin.setView(
         filerWin.modeState.filer.createFilerTextBuffer(e.config.filer.showIcons)
+      )
       filerWin.modeState.filer.needsBufferRefresh = false
 
   # FileTree buffer regeneration after state changes (check all windows since
@@ -352,8 +358,9 @@ proc processResultEpilogue(
   for win in e.windowManager.windows:
     if win.mode == EditorMode.FileTree and win.modeState.kind == mskFileTree and
         win.modeState.fileTree.needsBufferRefresh:
-      win.buffer =
+      win.setView(
         win.modeState.fileTree.createFileTreeTextBuffer(e.config.filer.showIcons)
+      )
       win.modeState.fileTree.needsBufferRefresh = false
 
   # Set status message if any

@@ -313,12 +313,9 @@ proc executeBufferLast*(handler: CommandModeHandler): HandlerResult =
 proc executeBuffer*(handler: CommandModeHandler, arg: string): HandlerResult =
   HandlerResult(kind: hrBuffer, bufferArg: arg)
 
-proc executeBufferDelete*(
-    handler: CommandModeHandler, buffer: TextBuffer, force: bool
-): HandlerResult =
-  ## Execute bdelete command (:bd, :bdelete)
-  if not force and buffer.isModified:
-    return unsavedChangesErr()
+proc executeBufferDelete*(handler: CommandModeHandler, force: bool): HandlerResult =
+  ## Execute bdelete command (:bd, :bdelete). Takes no buffer: the target and
+  ## its modified check both live in `deleteCurrentBuffer`.
   HandlerResult(kind: hrBufferDelete, forceBufferDelete: force)
 
 proc executeStripWhitespace*(
@@ -640,7 +637,7 @@ proc handleCommandModeInput*(
   of claBufferLast:
     handler.executeBufferLast()
   of claBufferDelete:
-    handler.executeBufferDelete(buffer, cmdResult.forceBufferDelete)
+    handler.executeBufferDelete(cmdResult.forceBufferDelete)
   of claBuffer:
     handler.executeBuffer(cmdResult.bufferArg)
   of claStripWhitespace:

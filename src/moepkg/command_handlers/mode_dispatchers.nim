@@ -1088,8 +1088,8 @@ when not defined(moe.embedded):
     of trSwitchToNormal:
       # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer.
       # Terminal windows hold no Insert session, so no finalization is needed.
+      # Sub-mode and placement only; `syncTerminalView` derives the view.
       let snapshotBuffer = termState.enterNormalSubMode()
-      window.buffer = snapshotBuffer
       window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
       window.viewport.resetViewportTop(
         max(0, snapshotBuffer.len - window.viewport.height)
@@ -1100,9 +1100,8 @@ when not defined(moe.embedded):
         statusMessage: "-- TERMINAL NORMAL --",
       )
     of trReturnToInput:
-      # Return to Terminal-Input sub-mode: restore placeholder buffer
+      # `syncTerminalView` puts the session's tab buffer back under the grid.
       termState.exitNormalSubMode()
-      window.buffer = newTextBuffer("")
       window.cursor = BufferPosition(line: 0, column: 0)
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""

@@ -90,7 +90,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
       debugLines,
       i,
       i == e.windowManager.activeWindowIndex,
-      e.bufferIndexById(window.buffer.id),
+      e.bufferIndexById(window.tabBufferId),
       window.viewport.x,
       window.viewport.y,
       window.viewport.width,
@@ -187,7 +187,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
 
     # Replace buffer in the window.
     # Debug windows hold no Insert session, so no finalization is needed.
-    foundWindow.buffer = newDebugBuffer
+    foundWindow.setView(newDebugBuffer)
 
     # Restore scroll position (clamped to valid range)
     foundWindow.viewport.resetViewportTop(
