@@ -86,6 +86,9 @@ type
       ## (reload, `:e!`, a backup restore). Installed on every buffer by
       ## `addBuffer` and set once during editor construction; a nil hook does
       ## nothing, keeping buffers usable outside a full editor.
+    xHostPopupMenus: bool
+    xHostHelpViewer: bool
+    xHostHelpRequestPending: bool
     when not defined(moe.embedded):
       terminalStates*: Table[BufferId, TerminalState]
         ## Live Terminal sessions keyed by their buffer id. The window's
@@ -286,6 +289,26 @@ proc expandTab*(e: Editor): bool =
 
 proc `expandTab=`*(e: Editor, v: bool) =
   e.state.expandTab = v
+
+proc hostPopupMenus*(e: Editor): bool =
+  e.xHostPopupMenus
+
+proc `hostPopupMenus=`*(e: Editor, enabled: bool) =
+  e.xHostPopupMenus = enabled
+
+proc hostHelpViewer*(e: Editor): bool =
+  e.xHostHelpViewer
+
+proc `hostHelpViewer=`*(e: Editor, enabled: bool) =
+  e.xHostHelpViewer = enabled
+
+proc requestHostHelpViewer*(e: Editor) =
+  if e.xHostHelpViewer:
+    e.xHostHelpRequestPending = true
+
+proc takeHostHelpRequest*(e: Editor): bool =
+  result = e.xHostHelpRequestPending
+  e.xHostHelpRequestPending = false
 
 flag2(autoIndent, bool, standard, autoIndent)
 flag2(smartIndent, bool, standard, smartIndent)
