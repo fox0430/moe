@@ -379,6 +379,7 @@
 | <kbd>**k**</kbd> | Go up |
 | <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first line |
 | <kbd>**G**</kbd> | Go to the last line |
+| <kbd>**R**</kbd> | Restore the preserved copy |
 | <kbd>**D**</kbd> <kbd>**D**</kbd> | Discard the preserved copy |
 | <kbd>**r**</kbd> | Reload the preserved copies |
 <!-- AUTO-GEN:end RecoveryManagerMode -->

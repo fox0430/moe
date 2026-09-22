@@ -17,11 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-## UI for reviewing what a crash preserved.
+## UI for reviewing and restoring what a crash preserved.
 ##
 ## The list is about one file by default, and falls back to every preserved
 ## copy when no file is open. Discarding asks first, since the text exists
 ## nowhere else.
+##
+## Restoring puts the preserved text back into the buffer as one undoable
+## edit, never onto the disk, so restoring the wrong copy costs one `u`.
 
 import std/[options, os, strutils, times, unicode]
 
@@ -126,6 +129,21 @@ proc formatLine*(entry: RecoveryEntry, withPath: bool): string =
   let note = entry.noteFor
   if note.len > 0:
     result.add "  (" & note & ")"
+
+proc preservedContent*(
+    state: RecoveryManagerState, index: int, content: var string, reason: var string
+): bool =
+  ## Read the preserved bytes of the selected copy. On failure, `reason` says
+  ## why, for the caller to show.
+  if index < 0 or index >= state.items.len:
+    reason = "no copy is selected"
+    return false
+  try:
+    content = readFile(state.items[index].copyPath)
+    true
+  except CatchableError as e:
+    reason = e.msg
+    false
 
 proc discardEntry*(state: RecoveryManagerState, index: int, reason: var string): bool =
   ## Drop the selected copy and refresh the list. On failure, `reason` says

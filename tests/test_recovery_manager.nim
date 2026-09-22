@@ -189,6 +189,382 @@ suite "recovery manager - discarding":
     check dirExists(sessionDir)
     check initRecoveryManagerState(TestRecoveryDir, fileB).items.len == 1
 
+suite "recovery manager - restoring":
+  setup:
+    cleanupTestDir()
+
+  teardown:
+    cleanupTestDir()
+
+  proc enterRecovery(e: Editor, state: RecoveryManagerState) =
+    check e.enterViewerMode(
+      EditorMode.RecoveryManager,
+      ModeState(kind: mskRecoveryManager, recoveryManager: state),
+      state.createRecoveryManagerTextBuffer(),
+      vpVSplit,
+    ).isOk
+
+  test "Restoring puts the preserved text back in the buffer, unsaved":
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_restore.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "work that was never saved")
+    discard e.preserveModified()
+
+    # The session came back with the file as the disk left it.
+    let buf = e.activeBuffer()
+    check buf.replaceAllLines(["disk"]).isOk
+    buf.savedSeq = buf.changeSeq
+
+    let state = initRecoveryManagerState(TestRecoveryDir, file)
+    e.enterRecovery(state)
+    check e.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+
+    check buf.getLine(0) == "work that was never saved"
+    check buf.len == 1
+    # Restoring is an edit, not a save: the file still holds what it held.
+    check readFile(file) == "disk"
+    check buf.isModified
+
+  test "Restoring is one undo away":
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_undo.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "preserved")
+    discard e.preserveModified()
+
+    let buf = e.activeBuffer()
+    check buf.replaceAllLines(["disk"]).isOk
+
+    let state = initRecoveryManagerState(TestRecoveryDir, file)
+    e.enterRecovery(state)
+    check e.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check buf.getLine(0) == "preserved"
+
+    check buf.undo().isOk
+    check buf.getLine(0) == "disk"
+
+  test "A copy whose file is not open opens it":
+    # The list is most useful right after the crash, when nothing is open yet.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_closed.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "preserved")
+    discard e.preserveModified()
+
+    # Widen the list, then take the file away from the editor.
+    let state = initRecoveryManagerState(TestRecoveryDir, "")
+    let other = createTestEditor()
+    other.enterRecovery(state)
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+
+    let index = other.findBufferByPath(file)
+    check index >= 0
+    check other.buffers[index].getLine(0) == "preserved"
+    check other.buffers[index].isModified
+    check other.state.statusMessage.contains("Opened")
+    check readFile(file) == "disk"
+
+  test "A copy that matches the file it opens still says it opened it":
+    # The restore put a file in front of the user; a message about the diff
+    # would report that nothing happened.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_same.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "preserved")
+    discard e.preserveModified()
+    # The file caught up with the copy, so the restore changes no line.
+    writeFile(file, "preserved")
+
+    let other = createTestEditor()
+    other.enterRecovery(initRecoveryManagerState(TestRecoveryDir, ""))
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check other.activeWindow.buffer.filePath == some(file)
+    check other.state.statusMessage.contains("Opened")
+
+  test "A copy from an unnamed buffer lands in a new buffer":
+    # Text that was never written anywhere is the least replaceable thing a
+    # crash preserves, so it cannot be the one kind with nowhere to go.
+    let e = createTestEditor()
+    check e.activeBuffer().replaceAllLines(["never named"]).isOk
+    discard e.preserveModified()
+
+    let state = initRecoveryManagerState(TestRecoveryDir, "")
+    check state.items.len == 1
+    check state.items[0].originalPath.len == 0
+
+    let other = createTestEditor()
+    other.enterRecovery(state)
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check other.activeWindow.buffer.getLine(0) == "never named"
+    check other.state.statusMessage.contains("new buffer")
+
+  test "A restore shows what it restored":
+    # Restored text is unsaved work that only `u` takes back, so leaving it in a
+    # buffer behind the listing is what would let `:wa` write it unseen.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_shows.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "preserved")
+    discard e.preserveModified()
+
+    let state = initRecoveryManagerState(TestRecoveryDir, "")
+    let other = createTestEditor()
+    other.enterRecovery(state)
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+
+    check other.state.mode != EditorMode.RecoveryManager
+    let shown = other.activeWindow.buffer
+    check shown.filePath == some(file)
+    check shown.getLine(0) == "preserved"
+    check shown.id in other.activeWindow.bufferIds
+
+  test "A restore that fails leaves the buffer list as it found it":
+    # `replaceAllLines` refuses a raw-bytes buffer, and the file it opened to
+    # hold the copy is in no window and holds nothing the user asked for.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_failed.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "preserved")
+    discard e.preserveModified()
+
+    # Take the file away from the editor and leave bytes behind it that no
+    # decoding accepts: a UTF-16 BOM over an odd number of bytes.
+    writeFile(file, "\xFF\xFEodd")
+
+    let state = initRecoveryManagerState(TestRecoveryDir, "")
+    let other = createTestEditor()
+    other.enterRecovery(state)
+    let before = other.buffers.len
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check other.state.statusMessage.contains("Failed to restore")
+    check other.buffers.len == before
+    check other.findBufferByPath(file) < 0
+
+  test "A copy of a CR file comes back as lines, not one run-on line":
+    # The copy is written the way a save writes: in the buffer's own line
+    # ending, which splitting on \n alone would collapse into one line.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_cr.txt"
+    defer:
+      removeFile(file)
+    writeFile(file, "one\rtwo\rthree\r")
+    discard e.loadFile(file)
+    let buf = e.activeBuffer()
+    check buf.lineEnding == CR
+    check buf.replaceAllLines(["alpha", "beta", "gamma"]).isOk
+    discard e.preserveModified()
+    check buf.replaceAllLines(["disk"]).isOk
+
+    let state = initRecoveryManagerState(TestRecoveryDir, file)
+    e.enterRecovery(state)
+    check e.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check buf.len == 3
+    check buf.getLine(0) == "alpha"
+    check buf.getLine(2) == "gamma"
+
+  test "A copy of a file with a BOM comes back without it":
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_bom.txt"
+    defer:
+      removeFile(file)
+    writeFile(file, "\xEF\xBB\xBFone\n")
+    discard e.loadFile(file)
+    let buf = e.activeBuffer()
+    check buf.hasBom
+    check buf.replaceAllLines(["alpha"]).isOk
+    discard e.preserveModified()
+    check buf.replaceAllLines(["disk"]).isOk
+
+    let state = initRecoveryManagerState(TestRecoveryDir, file)
+    e.enterRecovery(state)
+    check e.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check buf.getLine(0) == "alpha"
+
+  test "A copy of a UTF-16 file comes back decoded":
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_utf16.txt"
+    defer:
+      removeFile(file)
+    writeFile(file, "\xFF\xFEo\x00n\x00e\x00\n\x00")
+    discard e.loadFile(file)
+    let buf = e.activeBuffer()
+    check buf.encoding == CharacterEncoding.utf16Le
+    check buf.getLine(0) == "one"
+    check buf.replaceAllLines(["alpha"]).isOk
+    discard e.preserveModified()
+    check buf.replaceAllLines(["disk"]).isOk
+
+    let state = initRecoveryManagerState(TestRecoveryDir, file)
+    e.enterRecovery(state)
+    check e.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check buf.len == 1
+    check buf.getLine(0) == "alpha"
+
+  test "A copy restored into a file that is gone keeps how it was written":
+    # The file a restore opens is the authority for how a save writes it --
+    # except when there is no file left, where the copy is the only record.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_gone_crlf.txt"
+    defer:
+      removeFile(file)
+    writeFile(file, "one\r\ntwo\r\n")
+    discard e.loadFile(file)
+    let buf = e.activeBuffer()
+    check buf.lineEnding == CRLF
+    check buf.replaceAllLines(["alpha", "beta"]).isOk
+    discard e.preserveModified()
+    removeFile(file)
+
+    let other = createTestEditor()
+    other.enterRecovery(initRecoveryManagerState(TestRecoveryDir, ""))
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    let restored = other.activeWindow.buffer
+    check restored.filePath == some(file)
+    check restored.lineEnding == CRLF
+    check restored.getFileContent == "alpha\r\nbeta\r\n"
+
+  test "A copy restored into an open buffer whose file is gone keeps how it was written":
+    # Same as above, except the path is already open here. The buffer was made
+    # after the file went, so it holds the defaults and knows nothing of how
+    # the work was written; only the copy does.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_open_gone_crlf.txt"
+    defer:
+      removeFile(file)
+    writeFile(file, "one\r\ntwo\r\n")
+    discard e.loadFile(file)
+    let buf = e.activeBuffer()
+    check buf.lineEnding == CRLF
+    check buf.replaceAllLines(["alpha", "beta"]).isOk
+    discard e.preserveModified()
+    removeFile(file)
+
+    let other = createTestEditor()
+    discard other.loadFile(file)
+    check other.activeBuffer().lineEnding == LF
+    let existing = other.activeBuffer()
+    other.enterRecovery(initRecoveryManagerState(TestRecoveryDir, ""))
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    let restored = other.activeWindow.buffer
+    # The restore went into the buffer that was already there.
+    check restored == existing
+    check restored.filePath == some(file)
+    check restored.lineEnding == CRLF
+    check restored.getFileContent == "alpha\r\nbeta\r\n"
+
+  test "A restore into unsaved work of its own leaves that work as it was":
+    # The shape is set outside the undo entry, so a buffer holding work of its
+    # own keeps its own: `u` would bring the lines back under a line ending
+    # the user never chose, and the next `:w` would write their work that way.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_own_work_crlf.txt"
+    defer:
+      removeFile(file)
+    writeFile(file, "one\r\ntwo\r\n")
+    discard e.loadFile(file)
+    check e.activeBuffer().replaceAllLines(["alpha", "beta"]).isOk
+    discard e.preserveModified()
+    removeFile(file)
+
+    let other = createTestEditor()
+    discard other.loadFile(file)
+    let existing = other.activeBuffer()
+    check existing.lineEnding == LF
+    check existing.replaceAllLines(["my own unsaved work"]).isOk
+    other.enterRecovery(initRecoveryManagerState(TestRecoveryDir, ""))
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check existing.getLine(0) == "alpha"
+    check existing.lineEnding == LF
+
+    check existing.undo().isOk
+    check existing.getLine(0) == "my own unsaved work"
+    check existing.lineEnding == LF
+    check not existing.getFileContent.contains("\r")
+
+  test "A copy whose bytes no decoding accepts is refused, not sanitized":
+    # A raw-bytes buffer refuses a restore; whether the file it came from is
+    # still there must not decide it. Going ahead would turn every byte that
+    # did not decode into U+FFFD and report a restore over the only copy left.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_raw_copy.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "preserved")
+    let copies = e.preserveModified()
+    check copies.len == 1
+    # A UTF-16 BOM over an odd number of bytes: the copy now holds what a raw
+    # buffer would have been preserved as.
+    writeFile(copies[0], "\xFF\xFEodd")
+    removeFile(file)
+
+    let other = createTestEditor()
+    other.enterRecovery(initRecoveryManagerState(TestRecoveryDir, ""))
+    let before = other.buffers.len
+    check other.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check other.state.statusMessage.contains("Failed to restore")
+    check other.buffers.len == before
+
+  test "A restore clamps the cursor of the window showing the target":
+    # The target is in another split, so nothing else notices that the text
+    # its cursor named is gone.
+    let e = createTestEditor()
+    let file = getTempDir() / "moe_rcm_clamp.txt"
+    defer:
+      removeFile(file)
+    e.openModified(file, "disk", "preserved")
+    discard e.preserveModified()
+
+    let buf = e.activeBuffer()
+    var long: seq[string]
+    for i in 0 ..< 200:
+      long.add "line " & $i
+    check buf.replaceAllLines(long).isOk
+    let sourceWindow = e.activeWindow
+    sourceWindow.cursor = BufferPosition(line: 150, column: 0)
+
+    let state = initRecoveryManagerState(TestRecoveryDir, file)
+    e.enterRecovery(state)
+    check e.processRecoveryResult(
+      HandlerResult(kind: hrRecoveryManagerRestore, restoreRecoveryIndex: 0)
+    )
+    check buf.len == 1
+    check sourceWindow.cursor.line == 0
+
 suite "recovery manager - what a session recorded":
   setup:
     cleanupTestDir()
@@ -401,3 +777,11 @@ suite "recovery manager - discarding asks first":
     check state.handleRecoveryManagerModeKey(10, toKeyCombo('r')).kind == rcmrRefresh
     # The D after that asks again rather than discarding.
     check state.handleRecoveryManagerModeKey(10, toKeyCombo('D')).kind == rcmrArmDiscard
+
+  test "Enter does not restore; R asks for it":
+    # Enter is the key for looking at a row, and a restore replaces the whole
+    # buffer it lands in.
+    let state = listWithOneCopy()
+    let enter = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    check state.handleRecoveryManagerModeKey(10, enter).kind == rcmrHandled
+    check state.handleRecoveryManagerModeKey(10, toKeyCombo('R')).kind == rcmrRestore
