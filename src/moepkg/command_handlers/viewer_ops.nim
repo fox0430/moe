@@ -322,6 +322,9 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       e.state.statusMessage = "Failed to open LSP log: " & enterResult.error
     return true
   of hrEnterHelpViewer:
+    if e.hostHelpViewer:
+      e.requestHostHelpViewer()
+      return true
     if e.focusExistingViewerWindow(EditorMode.Help):
       return true
     let helpState = newHelpViewerState()

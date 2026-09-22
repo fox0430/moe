@@ -524,7 +524,8 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     renderWrappedInput(buffer, areaTopY, areaH, width, text, grid)
 
     # Render command completion popup if active
-    if e.state.isCommandOverlay and e.state.commandCompletionManager.isActive():
+    if e.state.isCommandOverlay and e.state.commandCompletionManager.isActive() and
+        not e.hostPopupMenus:
       let popupPos = calculateCommandPopupPosition(
         e.state.input.commandCursor,
         buffer.area.width,

@@ -536,7 +536,7 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
 
   if e.state.mode == EditorMode.Insert:
     let completionMgr = e.handlerManager.insertHandler.completionManager
-    if completionMgr.isActive():
+    if completionMgr.isActive() and not e.hostPopupMenus:
       # Anchor the popup to the start of the word being completed, not the
       # current cursor position. This prevents the popup from shifting when
       # cycling through candidates of different lengths.

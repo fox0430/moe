@@ -21,7 +21,7 @@
 ## result. A pure dispatch delegating each kind group to a per-feature ops
 ## module; trailing overlay/mode transitions live in `processResultEpilogue`.
 
-import std/[options, os, monotimes, tables, unicode]
+import std/[options, os, monotimes, strutils, tables, unicode]
 
 import pkg/[results, chronos]
 
@@ -663,11 +663,15 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
 
   # 2. dispatch
   let activeBuffer = e.activeBuffer()
+  let commandMode = e.currentMode
   let isShared = e.isBufferShared(activeBuffer)
   let otherModifiedCount = e.modifiedBufferCountExcept(activeBuffer)
-  let r = e.handlerManager.handleCommandMode(
+  var r = e.handlerManager.handleCommandMode(
     activeBuffer, commandText, isShared, e.activeWindow.cursor.line, otherModifiedCount
   )
+  if commandMode == EditorMode.Config and
+      commandText.strip().toLowerAscii() in [":q", ":q!", ":quit", ":quit!"]:
+    r = HandlerResult(kind: hrConfigQuit)
   if commandText.len > 1:
     e.addCommandToHistory(commandText[1 ..^ 1])
 
