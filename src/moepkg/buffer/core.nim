@@ -193,7 +193,7 @@ type
     namedMarkChanges*: seq[NamedMarkChange]
     noChangeListPosition*: bool
       ## Skip `changeListIndex` on undo/redo: this entry recorded no position.
-      ## Set for a reload, which is not a user edit.
+    isReload*: bool ## This entry is a reload that landed as an edit.
     changeListAcross*: Option[seq[BufferPosition]]
       ## `changeList` on the other side of this entry. A reload remaps the
       ## recorded positions; undo/redo swap this with the live list.
@@ -310,6 +310,10 @@ type
       discard
 
   RowColRemapCallback* = proc(b: TextBuffer, event: RowColRemapEvent) {.closure.}
+
+  BufferFileReadHook* = proc(b: TextBuffer) {.closure.}
+    ## Called whenever `lastLoadedContent` is taken from the file: the buffer
+    ## just read it, or wrote it.
 
   BufferContentReplacedHook* = proc(b: TextBuffer) {.closure.}
     ## Called once whenever the buffer's contents are replaced wholesale from
@@ -446,7 +450,11 @@ type
     changeSeq*: int # Current change sequence number
     savedSeq*: int # Sequence number when file was last saved
     nextChangeId*: int64
-      ## BufferChange.id counter. Monotonic; only reload resets. First id = 1.
+      ## BufferChange.id counter. Never reset, so an id names one change for
+      ## the buffer's whole life. First id = 1.
+    historyResets*: int
+      ## Times a wholesale load dropped the undo history. Tells a change-less
+      ## state before one from the same state after.
     savedChangeId*: int64
       ## undoStack top id at last save (0 for initial state / empty stack).
       ## isModified uses this instead of savedSeq to defeat the collision.
@@ -489,6 +497,7 @@ type
     # Wholesale content replacement subscriber. A single slot, so registering
     # the buffer twice cannot accumulate duplicates.
     contentReplacedHook: BufferContentReplacedHook
+    fileReadHook: BufferFileReadHook ## A single slot, like the one above.
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -787,6 +796,36 @@ proc adjustBookmarksForDelete*(b: TextBuffer, line: int, count: int = 1) =
 proc currentChangeId*(b: TextBuffer): int64 {.inline.} =
   ## Id of the undoStack top, or 0 for initial state (empty stack).
   if b.undoStack.len > 0: b.undoStack.peekLast.id else: 0
+
+proc holdsChange*(b: TextBuffer, id: int64): bool =
+  ## Whether change `id` is applied: still on the undo stack, so neither undone
+  ## nor dropped by a wholesale load. Ids only grow up the stack, so this is a
+  ## search.
+  if id <= 0:
+    return false
+  var
+    lo = 0
+    hi = b.undoStack.len - 1
+  while lo <= hi:
+    let mid = (lo + hi) div 2
+    let at = b.undoStack[mid].id
+    if at == id:
+      return true
+    if at < id:
+      lo = mid + 1
+    else:
+      hi = mid - 1
+  false
+
+proc reloadedSince*(b: TextBuffer, id: int64): bool =
+  ## Whether a reload that landed as an edit sits applied above change `id`
+  ## (0: above the start of history).
+  for i in countdown(b.undoStack.len - 1, 0):
+    if b.undoStack[i].id <= id:
+      return false
+    if b.undoStack[i].isReload:
+      return true
+  false
 
 proc isAtSavedState*(b: TextBuffer): bool {.inline.} =
   ## Both signals must match. Id is authoritative; changeSeq compare kept as an
@@ -1499,6 +1538,20 @@ proc setContentReplacedHook*(b: TextBuffer, cb: BufferContentReplacedHook) =
   ## previous one.
   b.contentReplacedHook = cb
 
+proc setFileReadHook*(b: TextBuffer, cb: BufferFileReadHook) =
+  ## Install the hook run whenever `lastLoadedContent` is taken from the file.
+  ## Replaces any previous one.
+  b.fileReadHook = cb
+
+proc emitFileRead*(b: TextBuffer) =
+  ## Announce that `lastLoadedContent` is what the file held just now.
+  if b.fileReadHook == nil:
+    return
+  try:
+    b.fileReadHook(b)
+  except CatchableError as e:
+    logError("buffer", "fileReadHook raised: " & e.msg)
+
 proc emitContentReplaced*(b: TextBuffer) =
   ## Announce that `b` now holds different contents, invalidating every
   ## position taken before this point. Called at the end of every load.
@@ -1619,9 +1672,10 @@ proc clearUndoRedoState*(b: TextBuffer) =
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
   b.discardPendingSnapshot()
-  # Reset id state too so post-reload isModified starts clean (0 == 0).
-  b.nextChangeId = 0
+  # The empty stack reads as id 0, so this is a clean post-reload state. The
+  # counter keeps going: an id names one change for the buffer's whole life.
   b.savedChangeId = 0
+  b.historyResets.inc
 
 proc advanceContentVersion*(b: TextBuffer) {.inline.} =
   ## Advance the monotonic content version. Call from EVERY content-mutating
@@ -1656,6 +1710,11 @@ proc detachLastEntryFromChangeList*(
     b.undoStack[^1].noChangeListPosition = true
     b.undoStack[^1].changeListAcross = some(changeListAcross)
     b.undoStack[^1].changeListIndexAcross = changeListIndexAcross
+
+proc markLastEntryReload*(b: TextBuffer) =
+  ## Mark the newest undo entry as a reload, for `reloadedSince`.
+  if b.undoStack.len > 0:
+    b.undoStack[^1].isReload = true
 
 proc chargeReloadUndoBudget*(b: TextBuffer, lines, bytes: int) =
   ## Charge the newest undo entry against the reload budget so it can be

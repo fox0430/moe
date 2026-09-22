@@ -28,13 +28,15 @@
 
 import std/[options, os, strutils, times, unicode]
 
-import buffer/core, list_viewer, recovery_store, unicode_utils
+import buffer/core, list_viewer, recovery_index, unicode_utils
 import types/recovery_manager_types
 
 export recovery_manager_types
 export list_viewer
 
-proc toEntry(c: PreservedCopy): RecoveryEntry =
+proc toEntry(
+    index: RecoveryIndex, c: PreservedCopy, buffers: openArray[TextBuffer]
+): RecoveryEntry =
   RecoveryEntry(
     copyPath: c.file.path,
     originalPath: c.file.origin.get(""),
@@ -43,35 +45,47 @@ proc toEntry(c: PreservedCopy): RecoveryEntry =
     cause: $c.session.continuity,
     detail: c.session.detail,
     changedSince: c.originalChangedSince,
-    matchesDisk: c.verdict == cvSame,
+    matchesDisk: index.holds(c.file, buffers),
+    reviewed: c.file.reviewed,
+    restored: index.restoring(c.file, buffers),
   )
 
-proc collectEntries(baseDir, sourceFilePath: string): seq[RecoveryEntry] =
-  let store = newRecoveryStore(baseDir)
+proc collectEntries(
+    index: RecoveryIndex, sourceFilePath: string, buffers: openArray[TextBuffer]
+): seq[RecoveryEntry] =
+  ## Every copy, reviewed or not: setting one aside only stops the notice.
   if sourceFilePath.len > 0:
-    for c in store.copiesOf(sourceFilePath):
-      result.add c.toEntry
+    for c in index.copiesOf(sourceFilePath):
+      result.add index.toEntry(c, buffers)
   else:
-    for session in store.sessions:
+    for session in index.sessions:
       for f in session.files:
-        result.add PreservedCopy(file: f, session: session).toEntry
+        result.add index.toEntry(PreservedCopy(file: f, session: session), buffers)
 
 proc newRecoveryManagerState*(): RecoveryManagerState =
-  RecoveryManagerState(items: @[], selectedIndex: 0, sourceFilePath: "", baseDir: "")
+  RecoveryManagerState(items: @[], selectedIndex: 0, sourceFilePath: "")
 
 proc initRecoveryManagerState*(
-    baseDir: string, sourceFilePath: string
+    index: RecoveryIndex, sourceFilePath: string, buffers: openArray[TextBuffer]
 ): RecoveryManagerState =
   ## Initialize recovery manager state for a source file. An empty
-  ## `sourceFilePath` lists every preserved copy.
+  ## `sourceFilePath` lists every preserved copy. `buffers` are the open ones,
+  ## which answer for their files the way the status line mark does.
   result = newRecoveryManagerState()
-  result.baseDir = baseDir
+  result.index = index
   result.sourceFilePath = sourceFilePath
-  result.items = collectEntries(baseDir, sourceFilePath)
+  result.items = collectEntries(index, sourceFilePath, buffers)
 
-proc refresh*(state: RecoveryManagerState) =
+proc initRecoveryManagerState*(
+    baseDir: string, sourceFilePath: string, buffers: openArray[TextBuffer]
+): RecoveryManagerState =
+  ## Over a fresh index of `baseDir`, shared with nothing.
+  initRecoveryManagerState(newRecoveryIndex(baseDir), sourceFilePath, buffers)
+
+proc refresh*(state: RecoveryManagerState, buffers: openArray[TextBuffer]) =
   ## Re-read the preserved copies, keeping the selection in range.
-  state.items = collectEntries(state.baseDir, state.sourceFilePath)
+  state.index.refresh()
+  state.items = collectEntries(state.index, state.sourceFilePath, buffers)
   if state.items.len > 0:
     if state.selectedIndex >= state.items.len:
       state.selectedIndex = state.items.high
@@ -91,6 +105,10 @@ proc noteFor*(entry: RecoveryEntry): string =
   ## Short note on whether the copy still has anything to offer.
   if entry.matchesDisk:
     "already saved"
+  elif entry.reviewed:
+    "reviewed"
+  elif entry.restored:
+    "restored, not saved yet"
   elif entry.changedSince:
     "file changed since"
   else:
@@ -145,27 +163,51 @@ proc preservedContent*(
     reason = e.msg
     false
 
-proc discardEntry*(state: RecoveryManagerState, index: int, reason: var string): bool =
+proc discardEntry*(
+    state: RecoveryManagerState,
+    index: int,
+    reason: var string,
+    buffers: openArray[TextBuffer],
+): bool =
   ## Drop the selected copy and refresh the list. On failure, `reason` says
   ## why, for the caller to show.
   if index < 0 or index >= state.items.len:
     reason = "no copy is selected"
     return false
   let entry = state.items[index]
-  let store = newRecoveryStore(state.baseDir)
-  if not store.discardCopy(entry.copyPath, entry.sessionDir, reason):
+  if not state.index.store.discardCopy(entry.copyPath, entry.sessionDir, reason):
     return false
-  state.refresh()
+  state.refresh(buffers)
+  true
+
+proc toggleReviewed*(
+    state: RecoveryManagerState, index: int, reason: var string
+): bool =
+  ## Flip whether the selected copy counts as dealt with. Only that row
+  ## changes.
+  if index < 0 or index >= state.items.len:
+    reason = "no copy is selected"
+    return false
+  let entry = state.items[index]
+  if not state.index.setReviewed(
+    entry.copyPath, entry.sessionDir, not entry.reviewed, reason
+  ):
+    return false
+  state.items[index].reviewed = not entry.reviewed
   true
 
 proc createRecoveryManagerTextBuffer*(state: RecoveryManagerState): TextBuffer =
   ## Create a TextBuffer from the preserved copies.
   let withPath = state.sourceFilePath.len == 0
-  let header =
+  var header =
     if withPath:
       "-- Recovery: all preserved work --"
     else:
       "-- Recovery: " & sanitizeForDisplay(state.sourceFilePath) & " --"
+  if state.index != nil and not state.index.listed:
+    # An empty list here would read as nothing preserved.
+    header.add " could not read " & sanitizeForDisplay(state.index.store.baseDir) &
+      "; showing what was last read"
   state.toListTextBuffer(
     header,
     proc(entry: RecoveryEntry): string =

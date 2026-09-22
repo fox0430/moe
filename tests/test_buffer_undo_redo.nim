@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils, options, deques]
+import std/[unittest, strutils, options, deques, os]
 
 import pkg/results
 
@@ -1858,3 +1858,100 @@ suite "Buffer - transaction guard on undo/redo":
     check b.inTransaction
     check b.undoStack.len == undoLenBefore
     check b.redoStack.len == redoLenBefore
+
+suite "Buffer - holdsChange":
+  test "A change is held until it is undone, and again once redone":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    let id = b.currentChangeId
+    check b.holdsChange(id)
+    check b.undo().isOk
+    check not b.holdsChange(id)
+    check b.redo().isOk
+    check b.holdsChange(id)
+
+  test "Later edits keep an earlier change held":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    let id = b.currentChangeId
+    discard b.insertText(BufferPosition(line: 0, column: 0), ">")
+    discard b.insertText(BufferPosition(line: 0, column: 0), ">")
+    check b.holdsChange(id)
+
+  test "A change undone and then replaced by another edit is gone":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    let id = b.currentChangeId
+    check b.undo().isOk
+    discard b.insertText(BufferPosition(line: 0, column: 0), ">")
+    check not b.holdsChange(id)
+
+  test "Dropping the history does not hand an id to the next change":
+    # A reload clears the stack; an id recorded before it must not name a
+    # change made after it.
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    let id = b.currentChangeId
+    b.clearUndoRedoState()
+    discard b.insertText(BufferPosition(line: 0, column: 5), "?")
+    check b.currentChangeId != id
+    check not b.holdsChange(id)
+
+  test "No change is held by an empty history":
+    let b = newTextBuffer("hello")
+    check not b.holdsChange(0)
+    check not b.holdsChange(b.currentChangeId)
+
+  test "An edit detached from the changelist is not a reload":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    b.detachLastEntryFromChangeList(@[], 0)
+    check not b.reloadedSince(0)
+
+  test "A load announces the read once the buffer is fully loaded":
+    let path = getTempDir() / "moe_test_undo_file_read_hook.txt"
+    writeFile(path, "on disk\n")
+    defer:
+      removeFile(path)
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "edited")
+    var seenModified = true
+    var seenHistory = -1
+    b.setFileReadHook(
+      proc(buf: TextBuffer) =
+        seenModified = buf.isModified
+        seenHistory = buf.undoStack.len
+    )
+    check b.loadFile(path).isOk
+    check not seenModified
+    check seenHistory == 0
+
+  test "A reload that finds the same bytes still announces the read":
+    let path = getTempDir() / "moe_test_undo_file_read_same.txt"
+    writeFile(path, "same\n")
+    defer:
+      removeFile(path)
+    let b = newTextBuffer("")
+    check b.loadFile(path).isOk
+    var reads = 0
+    b.setFileReadHook(
+      proc(buf: TextBuffer) =
+        inc reads
+    )
+    check not b.reloadFileIfContentChanged().get(true)
+    check reads == 1
+
+  test "A reload that lands as an edit stays one through undo and redo":
+    let path = getTempDir() / "moe_test_undo_reloaded_since.txt"
+    writeFile(path, "hello\n")
+    defer:
+      removeFile(path)
+    let b = newTextBuffer("")
+    check b.loadFile(path).isOk
+    writeFile(path, "changed\n")
+    check b.reloadFileIfContentChanged().get(false)
+    check b.reloadedSince(0)
+    check b.undo().isOk
+    check not b.reloadedSince(0)
+    check b.redo().isOk
+    check b.reloadedSince(0)

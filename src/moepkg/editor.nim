@@ -50,7 +50,7 @@ import
   render_utils, git_conflict, logger, config_loader, search_utils, hover_popup,
   notification_popup, command_completion, color, message_log, recent_file_mode,
   registers, persist, command_line, command_config, key_router, config, window_manager,
-  lsp_integration
+  lsp_integration, recovery_notice
 
 import command_handlers/handler_manager
 
@@ -307,6 +307,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Subscribe before the first buffer is registered; `addBuffer` installs the
   # hook on each buffer as it joins.
   result.onBufferContentReplaced = invalidateForReplacedContent
+  result.onBufferFileRead = noteReadForRecovery
 
   # Add initial buffer to buffer list
   result.addBuffer(initialBuffer)

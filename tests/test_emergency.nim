@@ -19,15 +19,17 @@
 
 import std/[unittest, os, options, json, strutils, sequtils, times]
 
+import pkg/results
+
 import
   ../src/moepkg/[
     editor, editor_buffers, editor_window, buffer, backup, config, config_loader,
-    emergency, message_log, recovery_format, recovery_store,
+    emergency, message_log, recovery_format, recovery_index, recovery_store,
   ]
 import ../src/moepkg/types/editor_types
 
 when defined(posix):
-  from std/posix import getuid
+  from std/posix import getuid, mkfifo
 
 let TestRecoveryDir = getTempDir() / "moe_test_crash_recovery"
 
@@ -43,6 +45,10 @@ proc createTestEditor(): Editor =
 proc testStore(): RecoveryStore =
   ## The store the tests list and discard through.
   newRecoveryStore(TestRecoveryDir)
+
+proc testIndex(): RecoveryIndex =
+  ## A running editor's view of the test store.
+  newRecoveryIndex(TestRecoveryDir)
 
 proc sessionDirOf(savedPath: string): string =
   ## The session that holds a copy `emergencySaveBuffers` returned.
@@ -67,6 +73,28 @@ proc observeCommit(scratchPath, finalPath: string): bool {.raises: [].} =
   inc commitCalls
   scratchExistedAtCommit = fileExists(scratchPath)
   finalExistedAtCommit = fileExists(finalPath)
+  result = renameIntoPlace(scratchPath, finalPath)
+
+var committed: seq[string]
+var describedAtCommit: seq[string]
+var beforeSecondCommit: proc() {.raises: [].} = nil
+
+proc recordCommit(scratchPath, finalPath: string): bool {.raises: [].} =
+  ## Note the order copies are committed in, and what the manifest described
+  ## at the time, then commit for real.
+  committed.add extractFilename(finalPath)
+  if committed.len == 2 and beforeSecondCommit != nil:
+    beforeSecondCommit()
+  try:
+    let manifest = parentDir(parentDir(finalPath)) / MetadataName
+    describedAtCommit.add(
+      if fileExists(manifest):
+        readFile(manifest)
+      else:
+        ""
+    )
+  except CatchableError:
+    describedAtCommit.add ""
   result = renameIntoPlace(scratchPath, finalPath)
 
 proc rejectCommit(scratchPath, finalPath: string): bool {.raises: [].} =
@@ -118,6 +146,12 @@ proc plantLegacySession(
       """{"planted.txt":{"originalPath":"""" & originalPath & """"}}""",
   )
 
+proc markEdited(buf: TextBuffer) =
+  ## Modified, holding text its file does not: what a preserve is for. A
+  ## buffer still holding what it last read is skipped.
+  buf.changeSeq = buf.savedSeq + 1
+  buf.lastLoadedContent = none(ContentFingerprint)
+
 suite "emergency - emergencySaveBuffers":
   setup:
     cleanupTestDir()
@@ -135,7 +169,7 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFile)
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1 # Mark as modified
+    markEdited(buf)
 
     let savedPaths = saveSession(e)
     check savedPaths.len == 1
@@ -172,7 +206,7 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFile)
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1 # Mark as modified
+    markEdited(buf)
 
     commitCalls = 0
     scratchExistedAtCommit = false
@@ -197,13 +231,12 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFile)
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1 # Mark as modified
+    markEdited(buf)
 
     let savedPaths = e.emergencySaveBuffers(ckCrash, "", TestRecoveryDir, rejectCommit)
     check savedPaths.len == 0
     # The failed copy is not offered, and the empty session goes away with the
     # scratch instead of lingering.
-    check not testStore().hasPreservedCopies()
     check testStore().sessions().len == 0
     check toSeq(walkDirRec(TestRecoveryDir)).len == 0
 
@@ -219,11 +252,226 @@ suite "emergency - emergencySaveBuffers":
 
     check saveSession(e).len == 0
 
+  test "Skip a modified buffer that still holds what it last read":
+    # Typed away and back: nothing in it the file lacks, so a copy would only
+    # be announced with nothing to offer.
+    let e = createTestEditor()
+
+    let testFile = getTempDir() / "moe_test_emergency_same.txt"
+    writeFile(testFile, "same content")
+    defer:
+      removeFile(testFile)
+
+    discard e.loadFile(testFile)
+    let buf = e.activeBuffer()
+    check buf.replaceAllLines(@["other content"]).isOk
+    check buf.replaceAllLines(@["same content"]).isOk
+    check buf.isModified
+
+    check saveSession(e).len == 0
+
+  test "Save a buffer holding what it last read once the file is gone":
+    # The buffer is the only place that text is left.
+    let e = createTestEditor()
+
+    let testFile = getTempDir() / "moe_test_emergency_same_gone.txt"
+    writeFile(testFile, "same content")
+
+    discard e.loadFile(testFile)
+    let buf = e.activeBuffer()
+    check buf.replaceAllLines(@["other content"]).isOk
+    check buf.replaceAllLines(@["same content"]).isOk
+    removeFile(testFile)
+
+    let savedPaths = saveSession(e)
+    check savedPaths.len == 1
+    check readFile(savedPaths[0]) == "same content"
+
+  test "Save a buffer holding what it last read once the file changed":
+    let e = createTestEditor()
+
+    let testFile = getTempDir() / "moe_test_emergency_same_changed.txt"
+    writeFile(testFile, "same content")
+    defer:
+      removeFile(testFile)
+
+    discard e.loadFile(testFile)
+    let buf = e.activeBuffer()
+    check buf.replaceAllLines(@["other content"]).isOk
+    check buf.replaceAllLines(@["same content"]).isOk
+    writeFile(testFile, "rewritten elsewhere")
+
+    check saveSession(e).len == 1
+
+  test "A buffer holding what it last read has its file read only after the others are saved":
+    # Its file may sit on a mount that never answers; the real work comes
+    # first, described in the manifest.
+    let e = createTestEditor()
+
+    let sameFile = getTempDir() / "moe_test_emergency_order_same.txt"
+    let editedFile = getTempDir() / "moe_test_emergency_order_edited.txt"
+    writeFile(sameFile, "same content")
+    writeFile(editedFile, "disk")
+    defer:
+      removeFile(sameFile)
+      removeFile(editedFile)
+
+    discard e.loadFile(sameFile)
+    let same = e.activeBuffer()
+    check same.replaceAllLines(@["other content"]).isOk
+    check same.replaceAllLines(@["same content"]).isOk
+    writeFile(sameFile, "rewritten elsewhere")
+
+    let edited = newTextBuffer("edited", some(editedFile))
+    discard e.vsplitWithBuffer(edited)
+    markEdited(edited)
+
+    committed.setLen 0
+    describedAtCommit.setLen 0
+    let savedPaths =
+      e.emergencySaveBuffers(ckCrash, "", TestRecoveryDir, commit = recordCommit)
+    check savedPaths.len == 2
+    require committed.len == 2
+    check committed[0].contains("order_edited")
+    check committed[1].contains("order_same")
+    check describedAtCommit[0].len == 0
+    check describedAtCommit[1].contains(committed[0])
+    let manifest = parseJson(readFile(sessionDirOf(savedPaths[0]) / MetadataName))
+    check manifest["files"].len == 2
+
+  test "No file a buffer came from is looked at before every copy is written":
+    # A stamp taken between copies would be of a file that may never answer.
+    let e = createTestEditor()
+
+    let firstFile = getTempDir() / "moe_test_emergency_stamp_first.txt"
+    let secondFile = getTempDir() / "moe_test_emergency_stamp_second.txt"
+    writeFile(firstFile, "disk")
+    writeFile(secondFile, "disk")
+    defer:
+      removeFile(firstFile)
+      removeFile(secondFile)
+
+    for path in [firstFile, secondFile]:
+      let buf = newTextBuffer("edited", some(path))
+      discard e.vsplitWithBuffer(buf)
+      markEdited(buf)
+
+    let grown = "grown by the time the last copy landed"
+    committed.setLen 0
+    describedAtCommit.setLen 0
+    beforeSecondCommit = proc() {.raises: [].} =
+      try:
+        writeFile(firstFile, grown)
+      except CatchableError:
+        discard
+    defer:
+      beforeSecondCommit = nil
+    let savedPaths =
+      e.emergencySaveBuffers(ckCrash, "", TestRecoveryDir, commit = recordCommit)
+    check savedPaths.len == 2
+    check describedAtCommit[1].len == 0
+    let manifest = parseJson(readFile(sessionDirOf(savedPaths[0]) / MetadataName))
+    var sizes: seq[int]
+    for entry in manifest["files"]:
+      if entry["origin"].getStr.endsWith("stamp_first.txt"):
+        sizes.add entry[ManifestOriginSizeKey].getInt
+    check sizes == @[grown.len]
+
+  test "Files are stamped only once the buffers holding what they last read are checked":
+    # A stamp is detail; a file that never answers must not keep work unsaved.
+    let e = createTestEditor()
+
+    let editedFile = getTempDir() / "moe_test_emergency_late_stamp_edited.txt"
+    let sameFile = getTempDir() / "moe_test_emergency_late_stamp_same.txt"
+    writeFile(editedFile, "disk")
+    defer:
+      removeFile(editedFile)
+      removeFile(sameFile)
+
+    let edited = newTextBuffer("edited", some(editedFile))
+    discard e.vsplitWithBuffer(edited)
+    markEdited(edited)
+
+    writeFile(sameFile, "same content")
+    let same = newTextBuffer("", some(sameFile))
+    discard e.vsplitWithBuffer(same)
+    check same.loadFile(sameFile).isOk
+    check same.replaceAllLines(@["other"]).isOk
+    check same.replaceAllLines(@["same content"]).isOk
+    writeFile(sameFile, "rewritten elsewhere")
+
+    let grown = "grown by the time the last copy landed"
+    committed.setLen 0
+    describedAtCommit.setLen 0
+    beforeSecondCommit = proc() {.raises: [].} =
+      try:
+        writeFile(editedFile, grown)
+      except CatchableError:
+        discard
+    defer:
+      beforeSecondCommit = nil
+    let savedPaths =
+      e.emergencySaveBuffers(ckCrash, "", TestRecoveryDir, commit = recordCommit)
+    require savedPaths.len == 2
+    check committed[1].contains("late_stamp_same")
+    let manifest = parseJson(readFile(sessionDirOf(savedPaths[0]) / MetadataName))
+    var sizes: seq[int]
+    for entry in manifest["files"]:
+      if entry["origin"].getStr.endsWith("late_stamp_edited.txt"):
+        sizes.add entry[ManifestOriginSizeKey].getInt
+    check sizes == @[grown.len]
+
+  test "Each copy of a buffer holding what it last read is described before the next is written":
+    let e = createTestEditor()
+
+    let firstFile = getTempDir() / "moe_test_emergency_describe_first.txt"
+    let secondFile = getTempDir() / "moe_test_emergency_describe_second.txt"
+    defer:
+      removeFile(firstFile)
+      removeFile(secondFile)
+
+    for (path, target) in [(firstFile, "first"), (secondFile, "second")]:
+      writeFile(path, target)
+      let buf = newTextBuffer("", some(path))
+      discard e.vsplitWithBuffer(buf)
+      check buf.loadFile(path).isOk
+      check buf.replaceAllLines(@["other"]).isOk
+      check buf.replaceAllLines(@[target]).isOk
+      writeFile(path, "rewritten elsewhere")
+
+    committed.setLen 0
+    describedAtCommit.setLen 0
+    let savedPaths =
+      e.emergencySaveBuffers(ckCrash, "", TestRecoveryDir, commit = recordCommit)
+    check savedPaths.len == 2
+    require committed.len == 2
+    check describedAtCommit[1].contains(committed[0])
+
+  test "A buffer whose path is a pipe is preserved without reading it":
+    # Reading a pipe nobody writes to would hang the dying process.
+    when defined(posix):
+      let e = createTestEditor()
+      let fifo = getTempDir() / "moe_test_emergency_fifo"
+      discard tryRemoveFile(fifo)
+      require mkfifo(fifo.cstring, 0o600) == 0
+      defer:
+        removeFile(fifo)
+
+      let buf = newTextBuffer("", some(fifo))
+      discard e.vsplitWithBuffer(buf)
+      buf.changeSeq = buf.savedSeq + 1
+      # Zero bytes, the size a pipe reports, and what it last read.
+      buf.endOfLine = false
+      require buf.getFileContent().len == 0
+      buf.lastLoadedContent = some(fingerprint(""))
+
+      check saveSession(e).len == 1
+
   test "Save buffer without file path":
     let e = createTestEditor()
 
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1 # Mark as modified
+    markEdited(buf)
 
     let savedPaths = saveSession(e)
     check savedPaths.len == 1
@@ -244,11 +492,11 @@ suite "emergency - emergencySaveBuffers":
       removeFile(testFile2)
 
     discard e.loadFile(testFile1)
-    e.activeBuffer().changeSeq = e.activeBuffer().savedSeq + 1
+    markEdited(e.activeBuffer())
 
     let buf2 = newTextBuffer("content 2", some(testFile2))
     discard e.vsplitWithBuffer(buf2)
-    buf2.changeSeq = buf2.savedSeq + 1
+    markEdited(buf2)
 
     let savedPaths = saveSession(e)
     check savedPaths.len == 2
@@ -270,7 +518,7 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFile)
     let sharedBuf = e.activeBuffer()
-    sharedBuf.changeSeq = sharedBuf.savedSeq + 1
+    markEdited(sharedBuf)
 
     # Split with same buffer
     discard e.vsplitWithBuffer(sharedBuf)
@@ -293,11 +541,11 @@ suite "emergency - emergencySaveBuffers":
       removeDir(dir2)
 
     discard e.loadFile(file1)
-    e.activeBuffer().changeSeq = e.activeBuffer().savedSeq + 1
+    markEdited(e.activeBuffer())
 
     let buf2 = newTextBuffer("from dir2", some(file2))
     discard e.vsplitWithBuffer(buf2)
-    buf2.changeSeq = buf2.savedSeq + 1
+    markEdited(buf2)
 
     let savedPaths = saveSession(e)
     check savedPaths.len == 2
@@ -321,7 +569,7 @@ suite "emergency - emergencySaveBuffers":
       removeFile(testFile2)
 
     discard e.loadFile(testFile1)
-    e.activeBuffer().changeSeq = e.activeBuffer().savedSeq + 1
+    markEdited(e.activeBuffer())
 
     let buf2 = newTextBuffer("unmodified content", some(testFile2))
     discard e.vsplitWithBuffer(buf2)
@@ -349,14 +597,14 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFileFg)
     let fgBuf = e.activeBuffer()
-    fgBuf.changeSeq = fgBuf.savedSeq + 1
+    markEdited(fgBuf)
 
     # Register a second buffer in e.buffers and the same window's tab list
     # WITHOUT activating it, so it stays a background tab (not window.buffer).
     let bgBuf = newTextBuffer("background content", some(testFileBg))
     e.addBuffer(bgBuf)
     e.addBufferToWindowList(bgBuf)
-    bgBuf.changeSeq = bgBuf.savedSeq + 1
+    markEdited(bgBuf)
 
     check e.activeWindow.buffer == fgBuf
     check bgBuf.id in e.activeWindow.bufferIds
@@ -380,7 +628,7 @@ suite "emergency - emergencySaveBuffers":
 
     let orphan = newTextBuffer("orphan content", some(testFile))
     e.addBuffer(orphan)
-    orphan.changeSeq = orphan.savedSeq + 1
+    markEdited(orphan)
 
     check e.activeWindow.buffer != orphan
     check orphan.id notin e.activeWindow.bufferIds
@@ -405,7 +653,7 @@ suite "emergency - emergencySaveBuffers":
   test "Continuity and detail are recorded as given":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let saved = e.emergencySaveBuffers(ckSignal, "SIGTERM", TestRecoveryDir)
     require saved.len == 1
@@ -417,7 +665,7 @@ suite "emergency - emergencySaveBuffers":
   test "A caller that cannot say what happened records unknown":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let saved = e.emergencySaveBuffers(ckUnknown, "", TestRecoveryDir)
     require saved.len == 1
@@ -428,7 +676,7 @@ suite "emergency - emergencySaveBuffers":
   test "A long exception message is kept bounded":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let saved = e.emergencySaveBuffers(ckCrash, "x".repeat(10_000), TestRecoveryDir)
     require saved.len == 1
@@ -446,7 +694,7 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFile)
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let saved = saveSession(e)
     require saved.len == 1
@@ -476,7 +724,7 @@ suite "emergency - emergencySaveBuffers":
     else:
       discard e.loadFile(testFile)
       let buf = e.activeBuffer()
-      buf.changeSeq = buf.savedSeq + 1
+      markEdited(buf)
 
       let saved = saveSession(e)
       require saved.len == 1
@@ -496,7 +744,7 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFile)
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let saved = saveSession(e)
     require saved.len == 1
@@ -517,7 +765,7 @@ suite "emergency - emergencySaveBuffers":
 
     discard e.loadFile(testFile)
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let saved = saveSession(e)
     require saved.len == 1
@@ -538,7 +786,7 @@ suite "emergency - directory identity":
   test "The session directory carries the pid, not the timestamp alone":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
     let saved = saveSession(e)
     require saved.len == 1
 
@@ -548,7 +796,7 @@ suite "emergency - directory identity":
     # Regression: an empty preserve used to remove another session's directory.
     let first = createTestEditor()
     let firstBuf = first.activeBuffer()
-    firstBuf.changeSeq = firstBuf.savedSeq + 1
+    markEdited(firstBuf)
     let saved = saveSession(first)
     require saved.len == 1
 
@@ -561,7 +809,7 @@ suite "emergency - directory identity":
   test "A second preserve from the same process still preserves":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let first = saveSession(e)
     require first.len == 1
@@ -595,7 +843,7 @@ suite "emergency - recovery metadata paths":
 
     discard e.loadFile("same.txt")
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     let savedPaths = saveSession(e)
     check savedPaths.len == 1
@@ -682,7 +930,6 @@ suite "emergency - sessions":
     createSymlink(target, dir / PayloadDirName / "0000-link.txt")
 
     check testStore().sessions().len == 0
-    check not testStore().hasPreservedCopies()
 
   test "A copy the manifest does not name is still offered":
     plantSession("20260918T000000_1")
@@ -720,7 +967,6 @@ suite "emergency - sessions":
     )
 
     check testStore().sessions().len == 0
-    check not testStore().hasPreservedCopies()
 
   test "A manifest version this reader does not know is not interpreted":
     let dir = TestRecoveryDir / "20260918T000000_1"
@@ -765,14 +1011,12 @@ suite "emergency - sessions":
         require sessions.len == 1
         check not sessions[0].listed
         check sessions[0].files.len == 0
-        check testStore().hasPreservedCopies()
 
   test "A session holding only metadata is not offered":
     let dir = TestRecoveryDir / "20260918T000000_1"
     createDir(dir / PayloadDirName)
     writeFile(dir / MetadataName, "{}")
     check testStore().sessions().len == 0
-    check not testStore().hasPreservedCopies()
 
   test "Files survive metadata that cannot be read":
     let dir = TestRecoveryDir / "20260918T000000_1"
@@ -897,7 +1141,7 @@ suite "emergency - asking about one file":
       files = @[("0000-planted.txt", "/tmp/other.txt", "other")],
     )
 
-    let copies = testStore().copiesOf("/tmp/wanted.txt")
+    let copies = testIndex().copiesOf("/tmp/wanted.txt")
     check copies.len == 2
     check readFile(copies[0].file.path) == "new"
     check readFile(copies[1].file.path) == "old"
@@ -916,34 +1160,37 @@ suite "emergency - asking about one file":
     defer:
       setCurrentDir(previousDir)
 
-    check testStore().copiesOf("wanted.txt").len == 1
-    check testStore().copiesOf("./wanted.txt").len == 1
+    check testIndex().copiesOf("wanted.txt").len == 1
+    check testIndex().copiesOf("./wanted.txt").len == 1
 
   test "An unnamed buffer answers for no file":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
     require saveSession(e).len == 1
 
-    check testStore().copiesOf("").len == 0
-    check testStore().copiesOf("/tmp/anything.txt").len == 0
+    check testIndex().copiesOf("").len == 0
+    check testIndex().copiesOf("/tmp/anything.txt").len == 0
 
-suite "emergency - whether a copy is worth offering":
+suite "emergency - whether the file already has a copy":
   setup:
     cleanupTestDir()
 
   teardown:
     cleanupTestDir()
 
-  proc preserveModified(path, content: string): PreservedCopy =
+  proc preserveModified(
+      path, content: string
+  ): tuple[index: RecoveryIndex, copy: PreservedCopy] =
     let e = createTestEditor()
     discard e.loadFile(path)
     let buf = e.activeBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), content)
     require saveSession(e).len == 1
-    let copies = testStore().copiesOf(path)
+    let index = testIndex()
+    let copies = index.copiesOf(path)
     require copies.len == 1
-    return copies[0]
+    (index: index, copy: copies[0])
 
   test "A copy the disk already holds is not worth a prompt":
     let dir = getTempDir() / "moe_test_emergency_same"
@@ -953,22 +1200,11 @@ suite "emergency - whether a copy is worth offering":
     let testFile = dir / "f.txt"
     writeFile(testFile, "original\n")
 
-    let copy = preserveModified(testFile, "edited ")
-    check copy.verdict == cvDiffers
+    let (index, copy) = preserveModified(testFile, "edited ")
+    check not index.holds(copy.file, [])
 
     writeFile(testFile, readFile(copy.file.path))
-    check copy.verdict == cvSame
-
-  test "A file the crash left alone is reported as changed":
-    let dir = getTempDir() / "moe_test_emergency_untouched"
-    createDir(dir)
-    defer:
-      removeDir(dir)
-    let testFile = dir / "f.txt"
-    writeFile(testFile, "original\n")
-
-    let copy = preserveModified(testFile, "edited ")
-    check copy.verdict == cvDiffers
+    check index.holds(copy.file, [])
 
   test "A file written after the crash is decided by its content":
     let dir = getTempDir() / "moe_test_emergency_moved"
@@ -978,13 +1214,13 @@ suite "emergency - whether a copy is worth offering":
     let testFile = dir / "f.txt"
     writeFile(testFile, "original\n")
 
-    let copy = preserveModified(testFile, "edited ")
+    let (index, copy) = preserveModified(testFile, "edited ")
 
     writeFile(testFile, "someone else wrote this\n")
-    check copy.verdict == cvDiffers
+    check not index.holds(copy.file, [])
 
     writeFile(testFile, readFile(copy.file.path))
-    check copy.verdict == cvSame
+    check index.holds(copy.file, [])
 
   test "A session that recorded no stamp is compared by content":
     let dir = getTempDir() / "moe_test_emergency_nostamp"
@@ -997,25 +1233,26 @@ suite "emergency - whether a copy is worth offering":
       "20260918T000000_1", content = "preserved", originalPath = testFile
     )
 
-    let copies = testStore().copiesOf(testFile)
+    let index = testIndex()
+    let copies = index.copiesOf(testFile)
     require copies.len == 1
     check copies[0].file.originStamp.mtime.isNone
-    check copies[0].verdict == cvSame
+    check index.holds(copies[0].file, [])
 
     writeFile(testFile, "something else entirely")
-    check copies[0].verdict == cvDiffers
+    check not index.holds(copies[0].file, [])
 
-  test "The answer says when there is only one file to compare with":
+  test "A copy from an unnamed buffer belongs to no file":
     plantSession("20260918T000000_1", files = @[("0000-untitled", "", "preserved")])
-    let copies = testStore().copiesOf("/tmp/anything.txt")
-    check copies.len == 0
+    let index = testIndex()
+    check index.copiesOf("/tmp/anything.txt").len == 0
 
-    let sessions = testStore().sessions()
-    require sessions.len == 1
-    let unnamed = PreservedCopy(file: sessions[0].files[0], session: sessions[0])
-    check unnamed.verdict == cvNoOrigin
+    require index.sessions.len == 1
+    let unnamed = index.sessions[0].files[0]
+    check not index.holds(unnamed, [])
+    check index.owed(unnamed, [])
 
-  test "A file the crash was the end of is its own answer":
+  test "A file the crash was the end of holds nothing":
     let dir = getTempDir() / "moe_test_emergency_gone"
     createDir(dir)
     defer:
@@ -1023,11 +1260,12 @@ suite "emergency - whether a copy is worth offering":
     let testFile = dir / "f.txt"
     writeFile(testFile, "original\n")
 
-    let copy = preserveModified(testFile, "edited ")
+    let (index, copy) = preserveModified(testFile, "edited ")
     removeFile(testFile)
-    check copy.verdict == cvOriginalGone
+    check not index.holds(copy.file, [])
+    check index.owed(copy.file, [])
 
-  test "A copy that is gone cannot be compared":
+  test "A copy discarded since the last read is gone at the next":
     let dir = getTempDir() / "moe_test_emergency_nocopy"
     createDir(dir)
     defer:
@@ -1035,9 +1273,10 @@ suite "emergency - whether a copy is worth offering":
     let testFile = dir / "f.txt"
     writeFile(testFile, "original\n")
 
-    let copy = preserveModified(testFile, "edited ")
+    let (index, copy) = preserveModified(testFile, "edited ")
     removeFile(copy.file.path)
-    check copy.verdict == cvUnknown
+    index.refresh()
+    check index.copiesOf(testFile).len == 0
 
 suite "emergency - discardSession":
   setup:
@@ -1055,6 +1294,119 @@ suite "emergency - discardSession":
     check testStore().discardSession(sessions[0].dir, reason)
     check reason.len == 0
     check testStore().sessions().len == 0
+
+suite "emergency - marking a copy reviewed":
+  setup:
+    cleanupTestDir()
+
+  teardown:
+    cleanupTestDir()
+
+  test "The mark survives a re-read and can be taken back":
+    plantSession(
+      "20260918T000000_1",
+      files = @[
+        ("0000-done.txt", "/tmp/done.txt", "done"),
+        ("0001-open.txt", "/tmp/open.txt", "open"),
+      ],
+    )
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    let copyPath = dir / PayloadDirName / "0000-done.txt"
+
+    var reason = ""
+    check testStore().setReviewed(copyPath, dir, true, reason)
+    check reason.len == 0
+    var files = testStore().sessions()[0].files
+    require files.len == 2
+    check files[0].reviewed
+    check not files[1].reviewed
+    # Only the mark changed: the copy is still there to restore.
+    check readFile(copyPath) == "done"
+    check files[0].origin == some("/tmp/done.txt")
+
+    check testStore().setReviewed(copyPath, dir, false, reason)
+    files = testStore().sessions()[0].files
+    check not files[0].reviewed
+
+  test "Marking leaves the manifest as it was":
+    # Another editor may be reading or discarding in the same session.
+    plantSession("20260918T000000_1")
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    let before = readFile(dir / MetadataName)
+    let copyPath = testStore().sessions()[0].files[0].path
+
+    var reason = ""
+    check testStore().setReviewed(copyPath, dir, true, reason)
+    check readFile(dir / MetadataName) == before
+
+  test "A session with no manifest carries the mark":
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    createDir(dir / PayloadDirName)
+    writeFile(dir / PayloadDirName / "0000-half.txt", "half written")
+
+    var reason = ""
+    check testStore().setReviewed(
+      dir / PayloadDirName / "0000-half.txt", dir, true, reason
+    )
+    check testStore().sessions()[0].files[0].reviewed
+
+  test "A legacy session carries the mark in its own shape":
+    plantLegacySession("20260918T000000_1")
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    let before = readFile(dir / MetadataName)
+    let files = testStore().sessions()[0].files
+
+    var reason = ""
+    check testStore().setReviewed(files[0].path, dir, true, reason)
+    check readFile(dir / MetadataName) == before
+    # The mark is not read back as one more copy.
+    let after = testStore().sessions()[0].files
+    check after.len == files.len
+    check after[0].reviewed
+
+  test "Discarding a copy takes its mark with it":
+    plantSession(
+      "20260918T000000_1",
+      files = @[
+        ("0000-done.txt", "/tmp/done.txt", "done"),
+        ("0001-open.txt", "/tmp/open.txt", "open"),
+      ],
+    )
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    let copyPath = dir / PayloadDirName / "0000-done.txt"
+    var reason = ""
+    check testStore().setReviewed(copyPath, dir, true, reason)
+    check testStore().discardCopy(copyPath, dir, reason)
+    check not fileExists(dir / ReviewedDirName / "0000-done.txt")
+
+  test "A linked mark is not written through":
+    when defined(posix):
+      plantSession("20260918T000000_1")
+      let dir = TestRecoveryDir / "20260918T000000_1"
+      let copyPath = testStore().sessions()[0].files[0].path
+      let victim = getTempDir() / "moe_test_reviewed_victim.txt"
+      writeFile(victim, "keep me")
+      defer:
+        removeFile(victim)
+      createDir(dir / ReviewedDirName)
+      createSymlink(victim, dir / ReviewedDirName / copyPath.lastPathPart)
+
+      var reason = ""
+      check not testStore().setReviewed(copyPath, dir, true, reason)
+      check readFile(victim) == "keep me"
+
+  test "A copy outside the store is refused":
+    plantSession("20260918T000000_1")
+    let outside = getTempDir() / "moe_test_reviewed_outside"
+    createDir(outside)
+    defer:
+      removeDir(outside)
+
+    var reason = ""
+    check not testStore().setReviewed(
+      outside / "0000-planted.txt", outside, true, reason
+    )
+    check reason.len > 0
 
 suite "emergency - discardCopy":
   setup:
@@ -1144,7 +1496,6 @@ suite "emergency - discardCopy":
     check reason.len == 0
     check testStore().sessions().len == 0
     check not dirExists(dir)
-    check not testStore().hasPreservedCopies()
 
   test "A session that cannot be taken away is not reported as discarded":
     # removeDir can still fail after the copy is gone.
@@ -1168,7 +1519,6 @@ suite "emergency - discardCopy":
         check reason.len > 0
         check dirExists(dir)
         check testStore().sessions().len == 0
-        check not testStore().hasPreservedCopies()
 
 suite "emergency - discarding what leads out of the cache":
   setup:
@@ -1297,7 +1647,7 @@ suite "emergency - preserved text is private":
     when defined(posix):
       let e = createTestEditor()
       let buf = e.activeBuffer()
-      buf.changeSeq = buf.savedSeq + 1
+      markEdited(buf)
       let savedPaths = saveSession(e)
       require savedPaths.len == 1
 
@@ -1307,7 +1657,7 @@ suite "emergency - preserved text is private":
       check getFilePermissions(sessionDirOf(savedPaths[0]) / MetadataName) ==
         {fpUserRead, fpUserWrite}
 
-suite "emergency - hasPreservedCopies":
+suite "emergency - listing the store":
   setup:
     cleanupTestDir()
 
@@ -1317,40 +1667,39 @@ suite "emergency - hasPreservedCopies":
   test "The default base is the user's cache, with no test override":
     check getCrashRecoveryBaseDir() == expandBackupDir(DefaultCrashRecoveryDir)
 
-  test "Returns false when no recovery directory exists":
-    check not testStore().hasPreservedCopies()
+  test "A missing base directory is an empty listing":
+    let listing = testStore().listSessions()
+    check listing.listed
+    check listing.sessions.len == 0
 
-  test "Returns true when a recovery file exists":
+  test "A preserved copy is listed":
     let e = createTestEditor()
     let buf = e.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
+    markEdited(buf)
 
     discard saveSession(e)
-    check testStore().hasPreservedCopies()
+    check testStore().sessions().len == 1
 
-  test "An empty session directory is not recovery files":
+  test "An empty session directory is not listed":
     createDir(TestRecoveryDir / "20260918T000000_1")
-    check not testStore().hasPreservedCopies()
     check testStore().sessions().len == 0
 
-  test "A session holding only metadata is not recovery files":
+  test "A session holding only metadata is not listed":
     let dir = TestRecoveryDir / "20260918T000000_1"
     createDir(dir / PayloadDirName)
     writeFile(dir / MetadataName, "{}")
-    check not testStore().hasPreservedCopies()
     check testStore().sessions().len == 0
 
-  test "A preserve that died before the manifest is recovery files":
+  test "A preserve that died before the manifest is listed":
     let dir = TestRecoveryDir / "20260918T000000_1"
     createDir(dir / PayloadDirName)
     writeFile(dir / PayloadDirName / "0000-half.txt", "half written")
-    check testStore().hasPreservedCopies()
+    check testStore().sessions().len == 1
 
-  test "A scratch left by a crash is not recovery files":
+  test "A scratch left by a crash is not listed":
     let dir = TestRecoveryDir / "20260918T000000_1"
     createDir(dir / PayloadDirName)
     writeFile(dir / PayloadDirName / ".0000-half.txt", "half written")
-    check not testStore().hasPreservedCopies()
     check testStore().sessions().len == 0
 
   test "A base directory that cannot be listed is not reported as empty":
@@ -1359,79 +1708,11 @@ suite "emergency - hasPreservedCopies":
         skip()
       else:
         plantSession("20260918T000000_1")
-        require testStore().hasPreservedCopies()
+        require testStore().sessions().len == 1
 
         # Deny everything on the base so the top-level listing fails.
         setFilePermissions(TestRecoveryDir, {})
         defer:
           setFilePermissions(TestRecoveryDir, {fpUserRead, fpUserWrite, fpUserExec})
 
-        check testStore().hasPreservedCopies()
-
-suite "emergency - noteCrashRecovery":
-  setup:
-    cleanupTestDir()
-    clearMessageLog()
-
-  teardown:
-    cleanupTestDir()
-    clearMessageLog()
-
-  test "Stays quiet when nothing was preserved":
-    let e = createTestEditor()
-    e.state.setStatusQuiet("")
-
-    e.noteCrashRecovery(TestRecoveryDir)
-
-    check e.state.statusMessage.len == 0
-    check getMessageLog().len == 0
-
-  test "Offers preserved copies in the status line and the message log":
-    let saver = createTestEditor()
-    let buf = saver.activeBuffer()
-    buf.changeSeq = buf.savedSeq + 1
-    require saveSession(saver).len == 1
-
-    let e = createTestEditor()
-    e.state.setStatusQuiet("")
-    clearMessageLog()
-
-    e.noteCrashRecovery(TestRecoveryDir)
-
-    let msg = "Crash recovery files found. See " & TestRecoveryDir
-    check e.state.statusMessage == msg
-    # The `statusMessage=` setter logs; the notice must not log twice.
-    check getMessageLog() == @[msg]
-
-  test "Keeps an existing status message but still logs":
-    plantSession("20260918T000000_1")
-
-    let e = createTestEditor()
-    e.state.setStatusQuiet("standing message")
-
-    e.noteCrashRecovery(TestRecoveryDir)
-
-    let msg = "Crash recovery files found. See " & TestRecoveryDir
-    check e.state.statusMessage == "standing message"
-    check msg in getMessageLog()
-
-  test "An unlistable base directory is still offered":
-    when defined(posix):
-      if not permissionsAreEnforced():
-        skip()
-      else:
-        plantSession("20260918T000000_1")
-        require testStore().hasPreservedCopies()
-
-        setFilePermissions(TestRecoveryDir, {})
-        defer:
-          setFilePermissions(TestRecoveryDir, {fpUserRead, fpUserWrite, fpUserExec})
-
-        let e = createTestEditor()
-        e.state.setStatusQuiet("")
-        clearMessageLog()
-
-        e.noteCrashRecovery(TestRecoveryDir)
-
-        check e.state.statusMessage ==
-          "Crash recovery files found. See " & TestRecoveryDir
+        check not testStore().listSessions().listed

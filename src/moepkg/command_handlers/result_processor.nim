@@ -189,7 +189,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrBackupManagerRefresh, hrBackupManagerRestore, hrBackupManagerDelete,
       hrBackupManagerOpenDiff:
     return e.processBackupResult(r)
-  of hrRecoveryManagerRefresh, hrRecoveryManagerRestore, hrRecoveryManagerDiscard:
+  of hrRecoveryManagerRefresh, hrRecoveryManagerRestore,
+      hrRecoveryManagerToggleReviewed, hrRecoveryManagerDiscard:
     return e.processRecoveryResult(r)
   of hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
       hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,

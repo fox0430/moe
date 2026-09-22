@@ -334,6 +334,39 @@ proc noteFileStamp*(b: TextBuffer, path: string) =
 proc fingerprint*(content: string): ContentFingerprint =
   ContentFingerprint(size: content.len, hash: hash(content))
 
+proc regularFileSize*(path: string): int64 =
+  ## Size of the regular file at `path`, or -1. Anything else, a pipe or a
+  ## device, reports no size worth comparing and may block a read. Not
+  ## `getFileInfo`: it calls every non-directory a file.
+  when defined(posix):
+    var st: Stat
+    if stat(path.cstring, st) != 0 or not S_ISREG(st.st_mode):
+      return -1
+    st.st_size.int64
+  else:
+    try:
+      let info = getFileInfo(path)
+      if info.kind == pcFile: info.size else: -1
+    except OSError:
+      -1
+
+proc fileHolds*(path, content: string): bool {.raises: [].} =
+  ## Whether the regular file at `path` is exactly `content`. Sizes go first,
+  ## so most answers read nothing. Unreadable holds nothing.
+  try:
+    regularFileSize(path) == content.len and readFile(path) == content
+  except CatchableError:
+    false
+
+proc filesHoldSame*(a, b: string): bool {.raises: [].} =
+  ## Whether the regular files at `a` and `b` hold the same bytes. Sizes go
+  ## first, so most answers read nothing. Unreadable holds nothing.
+  try:
+    let size = regularFileSize(a)
+    size >= 0 and size == regularFileSize(b) and readFile(a) == readFile(b)
+  except CatchableError:
+    false
+
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   var content: string
 
@@ -481,6 +514,7 @@ proc loadFileWithDecoded*(
 
   # Last, so a subscriber can clamp against a fully consistent buffer.
   b.emitContentReplaced()
+  b.emitFileRead()
 
   return Result[(), string].ok ()
 
@@ -541,6 +575,15 @@ proc getFileContent*(buffer: TextBuffer): string =
     result = encodeFromUtf8(result, buffer.encoding)
   if buffer.hasBom:
     result = bomBytes(buffer.encoding) & result
+
+proc fileHoldsBuffer*(b: TextBuffer): bool =
+  ## Whether `b`'s file is exactly what saving `b` would write.
+  if b.filePath.isNone:
+    return false
+  try:
+    fileHolds(b.filePath.get, b.getFileContent())
+  except CatchableError:
+    false
 
 proc bufferHoldsFile*(buf: TextBuffer, path: string): bool =
   ## Whether `buf` holds the file at `path` (spelling or entity).
@@ -710,6 +753,7 @@ proc saveFile*(
   buffer.noteFileStamp(path)
   # The bytes on disk are exactly the ones just written.
   buffer.lastLoadedContent = some(fingerprint(written.get))
+  buffer.emitFileRead()
 
   return Result[(), string].ok ()
 
@@ -779,7 +823,9 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
   let onDisk = fingerprint(content)
   if b.lastLoadedContent.isSome and onDisk == b.lastLoadedContent.get:
     # Same bytes: only the stat moved, so re-baseline and leave the buffer be.
+    # The file was still read.
     b.applyFileStamp(stamp)
+    b.emitFileRead()
     return ok(false)
 
   # Both ways in decode, so decode once and hand the result to whichever runs.
@@ -842,10 +888,12 @@ proc reloadFileIfContentChanged*(b: TextBuffer): Result[bool, string] =
         let changeListOnOldLines = b.changeList
         b.changeList = b.remapThroughHunks(changeListOnOldLines, replaced.get.hunks)
         b.detachLastEntryFromChangeList(changeListOnOldLines, b.changeListIndex)
+        b.markLastEntryReload()
       b.conflictBlocks.setLen(0)
       b.applyFileStamp(stamp)
       b.lastLoadedContent = some(onDisk)
       b.markSaved()
+      b.emitFileRead()
       if replaced.get.hunks.len > 0:
         # Positions held outside the buffer (selection, jumplist) need this.
         b.emitContentReplaced()

@@ -20,8 +20,10 @@
 ## Preserve unsaved buffers when the editor cannot ask the user.
 ##
 ## Copies go under `<base>/<timestamp>_<pid>/payload/`, written then renamed
-## so a visible name is complete (process death only; no fsync). The manifest
-## is published last; a session without one still offers its copies.
+## so a visible name is complete (process death only; no fsync). No file a
+## buffer came from is touched until every copy is written and described: it
+## may sit on a mount that never answers. The manifest is then written again
+## as that adds to it; a session without one still offers its copies.
 
 import std/[json, options, os, strformat, times]
 
@@ -29,13 +31,7 @@ when defined(posix):
   from std/posix import mkdir, Mode
 
 import
-  types/editor_types,
-  buffer/[core, file_io],
-  message_log,
-  path_key,
-  recovery_format,
-  recovery_store,
-  unicode_utils
+  types/editor_types, buffer/[core, file_io], path_key, recovery_format, unicode_utils
 
 const MaxSessionDirAttempts = 64
 
@@ -92,19 +88,21 @@ proc payloadName(buf: TextBuffer, index: int): string =
   payloadFileName(index, base)
 
 proc originEntry(buf: TextBuffer, name: string): JsonNode =
+  ## Stats and reads nothing.
   result = newJObject()
   result[ManifestNameKey] = %name
-  if buf.filePath.isNone:
-    return
-  # Absolute: relative names collide across directories.
-  result[ManifestOriginKey] = %pathKey(buf.filePath.get)
-  # Stamp: tell unsaved work apart from later writes to the file.
-  let stamp = captureFileStamp(buf.filePath.get)
+  if buf.filePath.isSome:
+    # Absolute: relative names collide across directories.
+    result[ManifestOriginKey] = %pathKey(buf.filePath.get)
+
+proc addStamp(entry: JsonNode, path: string) =
+  ## Tell unsaved work apart from later writes to the file.
+  let stamp = captureFileStamp(path)
   if stamp.observed == fileObservedPresent:
     let mtimeNs = toUnixNano(stamp.modTime)
     if mtimeNs.isSome:
-      result[ManifestOriginMtimeNsKey] = %mtimeNs.get
-    result[ManifestOriginSizeKey] = %stamp.size
+      entry[ManifestOriginMtimeNsKey] = %mtimeNs.get
+    entry[ManifestOriginSizeKey] = %stamp.size
 
 proc boundedDetail(detail: string): string =
   if detail.len <= MaxDetailBytes:
@@ -113,22 +111,6 @@ proc boundedDetail(detail: string): string =
 
 type CopyCommit* = proc(scratchPath, finalPath: string): bool {.raises: [].}
   ## Commit a scratch copy under its final name. Tests inject a stub.
-
-proc noteCrashRecovery*(editor: Editor, baseDir: string = getCrashRecoveryBaseDir()) =
-  ## Surface sessions preserved by an earlier process, at process start.
-  ##
-  ## Not called from `newEditor`: tests construct editors and must not pick up
-  ## the developer's `~/.cache/moe/crash_recovery`. `statusMessage=` already
-  ## logs, so a standing status line gets `addMessageLog` instead of a second
-  ## assignment.
-  let store = newRecoveryStore(baseDir)
-  if not store.hasPreservedCopies():
-    return
-  let msg = "Crash recovery files found. See " & store.baseDir
-  if editor.state.statusMessage.len == 0:
-    editor.state.statusMessage = msg
-  else:
-    addMessageLog(msg)
 
 proc emergencySaveBuffers*(
     editor: Editor,
@@ -167,13 +149,12 @@ proc emergencySaveBuffers*(
 
   var savedPaths: seq[string] = @[]
   var entries = newJArray()
+  var unstamped: seq[(JsonNode, string)]
   var index = 0
 
-  # Iterate `e.buffers`, not windows: windows only expose the foreground tab.
-  for buf in editor.buffers:
-    if not buf.isModified:
-      continue
-
+  proc preserve(buf: TextBuffer, content: string, readFailure = ""): bool =
+    ## Write `buf`'s copy, or report why there is none. True when it landed.
+    var failure = readFailure
     # Keep the index on a failed write so nothing else reuses a half-written name.
     let finalName = buf.payloadName(index)
     inc index
@@ -182,22 +163,25 @@ proc emergencySaveBuffers*(
     let scratchPath = payloadDir / ("." & finalName)
 
     var saved = false
-    var failure = ""
-    try:
-      let content = buf.getFileContent()
-      writeFile(scratchPath, content)
-      restrictToUser(scratchPath)
-      if commit(scratchPath, finalPath):
-        saved = true
-      else:
-        failure = "the copy could not be renamed into place"
-    except CatchableError as e:
-      failure = sanitizeForDisplay(e.msg)
+    if failure.len == 0:
+      try:
+        writeFile(scratchPath, content)
+        restrictToUser(scratchPath)
+        if commit(scratchPath, finalPath):
+          saved = true
+        else:
+          failure = "the copy could not be renamed into place"
+      except CatchableError as e:
+        failure = sanitizeForDisplay(e.msg)
 
+    result = saved
     if saved:
       savedPaths.add(finalPath)
       try:
-        entries.add buf.originEntry(finalName)
+        let entry = buf.originEntry(finalName)
+        entries.add entry
+        if buf.filePath.isSome:
+          unstamped.add (entry, buf.filePath.get)
       except CatchableError:
         # The origin is enrichment; the copy is preserved either way.
         discard
@@ -210,7 +194,10 @@ proc emergencySaveBuffers*(
       removeQuietly(scratchPath)
       removeQuietly(finalPath)
 
-  if savedPaths.len > 0:
+  proc describeSaved() =
+    ## Write the manifest for every copy saved so far.
+    if savedPaths.len == 0:
+      return
     var metadata = newJObject()
     metadata[ManifestFormatKey] = %FormatName
     metadata[ManifestVersionKey] = %FormatVersion
@@ -219,7 +206,59 @@ proc emergencySaveBuffers*(
     metadata[ManifestDetailKey] = %boundedDetail(detail)
     metadata[ManifestFilesKey] = entries
     discard writeManifest(recoveryDir, metadata)
-  else:
+
+  proc stampSaved() =
+    for (entry, path) in unstamped:
+      try:
+        entry.addStamp(path)
+      except CatchableError:
+        discard
+    unstamped.setLen 0
+
+  # Modified, but holding what it last read or wrote: only a copy the file no
+  # longer holds is work to preserve, and a copy of the rest would be announced
+  # with nothing to offer. Asking means reading the file, so it waits too.
+  # Their text is taken again then, not held meanwhile.
+  var unchanged: seq[TextBuffer]
+
+  # Iterate `e.buffers`, not windows: windows only expose the foreground tab.
+  for buf in editor.buffers:
+    if not buf.isModified:
+      continue
+
+    var content = ""
+    var failure = ""
+    try:
+      content = buf.getFileContent()
+    except CatchableError as e:
+      failure = sanitizeForDisplay(e.msg)
+    if failure.len == 0 and buf.lastLoadedContent == some(fingerprint(content)) and
+        buf.filePath.isSome:
+      unchanged.add buf
+    else:
+      discard preserve(buf, content, failure)
+
+  describeSaved()
+
+  # From here on the files are touched, work first: whatever is described
+  # stays so if one never answers.
+  for buf in unchanged:
+    var content = ""
+    try:
+      content = buf.getFileContent()
+    except CatchableError as e:
+      discard preserve(buf, "", sanitizeForDisplay(e.msg))
+      continue
+    # The file is read, not trusted: it may be gone.
+    if not fileHolds(buf.filePath.get, content) and preserve(buf, content):
+      describeSaved()
+
+  # Stamps only add detail, so they come last.
+  if unstamped.len > 0:
+    stampSaved()
+    describeSaved()
+
+  if savedPaths.len == 0:
     # Remove empty dirs we created; never a directory that holds files.
     if dirIsEmpty(payloadDir):
       try:

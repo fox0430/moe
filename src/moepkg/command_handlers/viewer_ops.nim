@@ -30,9 +30,17 @@ import
     editor_window_layout, editor_window_state, help_viewer, log_viewer, logger,
     lsp_service, message_log, types, viewer_mode,
   ]
-import ../[backup, backup_manager, diff_viewer, recovery_format, recovery_manager]
+import ../[backup, backup_manager, diff_viewer, recovery_index, recovery_manager]
 
 import editor_ops, handler_result
+
+proc freshRecoveryIndex(e: Editor): RecoveryIndex =
+  ## The editor's index, re-read: opening the list is where the user asks what
+  ## is there now, and another editor may have preserved or discarded since.
+  if e.recovery.isNone:
+    return newRecoveryIndex("")
+  result = e.recovery.get
+  result.refresh()
 
 proc processViewerResult*(e: Editor, r: HandlerResult): bool =
   ## Handle viewer quit / jump / refresh kinds. Returns true to continue.
@@ -394,13 +402,15 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
         # editor may have discarded a session since the list was built.
         let scope =
           if rescope: sourceFilePath else: win.modeState.recoveryManager.sourceFilePath
-        let openState = initRecoveryManagerState(getCrashRecoveryBaseDir(), scope)
+        let openState =
+          initRecoveryManagerState(e.freshRecoveryIndex(), scope, e.buffers)
         win.modeState = ModeState(kind: mskRecoveryManager, recoveryManager: openState)
         win.setView(openState.createRecoveryManagerTextBuffer())
         win.cursor.line = min(1, win.buffer.len - 1)
         win.cursor.column = 0
       return true
-    let rcState = initRecoveryManagerState(getCrashRecoveryBaseDir(), sourceFilePath)
+    let rcState =
+      initRecoveryManagerState(e.freshRecoveryIndex(), sourceFilePath, e.buffers)
     let enterResult = e.enterViewerMode(
       EditorMode.RecoveryManager,
       ModeState(kind: mskRecoveryManager, recoveryManager: rcState),

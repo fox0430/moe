@@ -25,50 +25,36 @@
 import std/[algorithm, json, options, os, sets, tables, times]
 
 import buffer/[core, file_io], path_key, recovery_format, unicode_utils
+import types/recovery_index_types
 
-type RecoveredFile* = object
-  path*: string ## Copy inside the session directory.
-  origin*: Option[string] ## None for an unnamed buffer.
-  originStamp*: OriginStamp
-
-type RecoverySession* = object
-  dir*: string
-  complete*: bool ## Manifest landed; without it the preserve died halfway.
-  listed*: bool ## False: `files` may be incomplete, including empty.
-  continuity*: ContinuityKind
-  detail*: string
-  savedAt*: Option[Time]
-  files*: seq[RecoveredFile]
-
-type PreservedCopy* = object
-  file*: RecoveredFile
-  session*: RecoverySession
-
-type CopyVerdict* = enum
-  cvNoOrigin ## No origin path.
-  cvSame ## Original already holds the copy's bytes.
-  cvDiffers ## Original exists and holds other bytes.
-  cvOriginalGone ## Origin recorded, but no file is there.
-  cvUnknown ## Copy or original could not be read.
-
-type RecoveryStore* = object ## Binds listing and discard to one base directory.
-  baseDir*: string
+export recovery_index_types
 
 proc newRecoveryStore*(baseDir: string = getCrashRecoveryBaseDir()): RecoveryStore =
   RecoveryStore(baseDir: baseDir)
 
-proc sessionDirs(baseDir: string): seq[string] =
+proc sessionDirs(baseDir: string): tuple[dirs: seq[string], listed: bool] =
   ## Session directories, sorted by name. Names carry no time order.
+  ## A missing base directory is an empty listing; one that is there but could
+  ## not be read leaves `listed` false.
   try:
-    for kind, path in walkDir(baseDir):
+    for kind, path in walkDir(baseDir, checkDir = true):
       if kind in {pcDir, pcLinkToDir}:
-        result.add(path)
+        result.dirs.add(path)
   except CatchableError:
-    return @[]
-  result.sort()
+    return (dirs: @[], listed: not dirExists(baseDir))
+  result.dirs.sort()
+  result.listed = true
 
 proc payloadDir(sessionDir: string): string =
   sessionDir / PayloadDirName
+
+proc reviewedMark(sessionDir, copyPath: string): string =
+  sessionDir / ReviewedDirName / copyPath.lastPathPart
+
+proc reviewedDirLinked(sessionDir: string): bool =
+  ## Whether the marks would be reached through a link: then they are not the
+  ## store's, so none is read, written or removed.
+  symlinkExists(sessionDir / ReviewedDirName)
 
 proc payloadFiles(sessionDir: string): tuple[files: seq[string], listed: bool] =
   ## Sorted payload copies. Scratch names and links are ignored.
@@ -193,7 +179,7 @@ proc readLegacyEntries(
     let path = sessionDir / name
     if not fileExists(path):
       continue
-    var file = RecoveredFile(path: path)
+    var file = RecoveredFile(path: path, described: true)
     file.readOriginEntry(entry, LegacyOriginPathKey)
     claimed.incl name
     result.add(file)
@@ -210,6 +196,7 @@ proc readSession(dir: string): RecoverySession =
       var file = RecoveredFile(path: path)
       let name = path.lastPathPart
       if named.hasKey(name):
+        file.described = true
         file.readOriginEntry(named[name], ManifestOriginKey)
       result.files.add(file)
   else:
@@ -225,79 +212,54 @@ proc readSession(dir: string): RecoverySession =
     proc(a, b: RecoveredFile): int =
       cmp(a.path, b.path)
   )
+  let linked = reviewedDirLinked(dir)
+  for file in result.files.mitems:
+    file.reviewed = not linked and fileExists(reviewedMark(dir, file.path))
 
-proc sessionOrder(a, b: RecoverySession): int =
-  ## Oldest first. Missing `savedAt` falls back to directory mtime.
-  proc key(s: RecoverySession): int64 =
-    if s.savedAt.isSome:
-      return s.savedAt.get.toUnix
+proc sessionAge(s: RecoverySession): int64 =
+  ## `savedAt`, or else when the newest copy was written, which nothing
+  ## changes afterwards. The directory's own mtime moves whenever a mark or a
+  ## discard touches it, so it is only the last resort.
+  if s.savedAt.isSome:
+    return s.savedAt.get.toUnix
+  result = low(int64)
+  for f in s.files:
     try:
-      return getLastModificationTime(s.dir).toUnix
+      result = max(result, getLastModificationTime(f.path).toUnix)
     except CatchableError:
-      return low(int64)
+      discard
+  if result == low(int64):
+    try:
+      result = getLastModificationTime(s.dir).toUnix
+    except CatchableError:
+      discard
 
-  result = cmp(key(a), key(b))
-  if result == 0:
-    result = cmp(a.dir, b.dir)
+proc listSessions*(
+    store: RecoveryStore
+): tuple[sessions: seq[RecoverySession], listed: bool] =
+  ## Newest first. Empty sessions are omitted unless their listing failed.
+  ## `listed` is false when the store itself could not be read.
+  if store.baseDir.len == 0:
+    return (sessions: @[], listed: true)
+  let found = sessionDirs(store.baseDir)
+  result.listed = found.listed
+  var aged: seq[(int64, RecoverySession)]
+  for dir in found.dirs:
+    let session = readSession(dir)
+    if session.files.len > 0 or not session.listed:
+      aged.add (session.sessionAge, session)
+  aged.sort(
+    proc(a, b: (int64, RecoverySession)): int =
+      result = cmp(b[0], a[0])
+      if result == 0:
+        result = cmp(b[1].dir, a[1].dir)
+  )
+  for (_, session) in aged:
+    result.sessions.add session
 
 proc sessions*(store: RecoveryStore): seq[RecoverySession] =
   ## Newest first. Empty sessions are omitted unless their listing failed.
-  for dir in sessionDirs(store.baseDir):
-    let session = readSession(dir)
-    if session.files.len > 0 or not session.listed:
-      result.add(session)
-  result.sort(sessionOrder)
-  result.reverse()
-
-proc payloadHasCopy(sessionDir: string): bool =
-  try:
-    for kind, path in walkDir(payloadDir(sessionDir), checkDir = true):
-      if kind == pcFile and isPayloadFileName(path.lastPathPart):
-        return true
-  except CatchableError:
-    # Could not look. Assume there is something rather than hide a preserve.
-    return true
-  false
-
-proc legacyHasCopy(sessionDir: string): bool =
-  try:
-    for kind, path in walkDir(sessionDir, checkDir = true):
-      if kind notin {pcFile, pcLinkToFile}:
-        continue
-      let name = path.lastPathPart
-      if name != MetadataName and name != MetadataTempName:
-        return true
-  except CatchableError:
-    return true
-  false
-
-proc hasPreservedCopies*(store: RecoveryStore): bool =
-  ## Whether `sessions` would return anything. Stops at the first copy and
-  ## reads no manifest.
-  if store.baseDir.len == 0 or not dirExists(store.baseDir):
-    return false
-  try:
-    for kind, path in walkDir(store.baseDir, checkDir = true):
-      if kind notin {pcDir, pcLinkToDir}:
-        continue
-      if dirExists(payloadDir(path)):
-        if payloadHasCopy(path):
-          return true
-      elif legacyHasCopy(path):
-        return true
-  except CatchableError:
-    # Gone: empty. Unlistable: assume a preserve, same as an unlistable session.
-    return dirExists(store.baseDir)
-  false
-
-proc copiesOf*(store: RecoveryStore, path: string): seq[PreservedCopy] =
-  ## Copies of `path`, newest first. Compared via `pathKey`.
-  if path.len == 0:
-    return @[]
-  for session in sessions(store):
-    for f in session.files:
-      if f.origin.isSome and samePath(f.origin.get, path):
-        result.add(PreservedCopy(file: f, session: session))
+  store.listSessions().sessions
 
 proc stampHeld(stamp: OriginStamp, origin: string): bool =
   if stamp.mtime.isNone and stamp.size.isNone:
@@ -319,29 +281,14 @@ proc originalChangedSince*(c: PreservedCopy): bool =
     return false
   not stampHeld(c.file.originStamp, c.file.origin.get)
 
-proc verdict*(c: PreservedCopy): CopyVerdict =
-  ## Whether the original already holds what was preserved.
-  ##
-  ## If the origin still carries the preserve-time stamp, `cvDiffers` without
-  ## reading: the copy came from a modified buffer. Otherwise compare bytes.
-  let file = c.file
+proc originHolds*(file: RecoveredFile): bool =
+  ## Whether the origin holds exactly the copy's bytes. The bytes decide: an
+  ## unchanged stamp does not rule a match out, since the buffer may have been
+  ## out of step with its file when it was preserved. Sizes go first, so most
+  ## answers read neither file. Anything unreadable holds nothing.
   if file.origin.isNone or file.origin.get.len == 0:
-    return cvNoOrigin
-  if not fileExists(file.path):
-    return cvUnknown
-  let origin = file.origin.get
-  try:
-    if not fileExists(origin):
-      return cvOriginalGone
-    if stampHeld(file.originStamp, origin):
-      return cvDiffers
-    if getFileSize(origin) != getFileSize(file.path):
-      return cvDiffers
-    if readFile(origin) == readFile(file.path):
-      return cvSame
-    return cvDiffers
-  except CatchableError:
-    return cvUnknown
+    return false
+  filesHoldSame(file.origin.get, file.path)
 
 proc isDirectChild(path, dir: string): bool =
   ## Direct child of `dir` after normalizing `..` and relative paths.
@@ -394,16 +341,15 @@ proc dropManifestEntry(sessionDir, name: string) =
   meta[ManifestFilesKey] = kept
   discard writeManifest(sessionDir, meta)
 
-proc discardCopy*(
+proc insideStore(
     store: RecoveryStore, copyPath, sessionDir: string, reason: var string
 ): bool =
-  ## Remove one copy and drop it from the manifest. The session directory
-  ## goes too once nothing is left in it; both must sit inside the store.
+  ## Whether `copyPath` is a copy this store may change, reached without a link.
   if not isDirectChild(sessionDir, store.baseDir):
     reason = "it is outside the recovery directory"
     return false
   if symlinkExists(sessionDir):
-    # copyPath would be outside the cache; dropping it would unlink the real file.
+    # copyPath would be outside the cache; changing it would touch the real file.
     reason = "it is reached through a linked session directory"
     return false
   if symlinkExists(payloadDir(sessionDir)):
@@ -415,12 +361,24 @@ proc discardCopy*(
   ):
     reason = "it is outside the session directory"
     return false
+  true
+
+proc discardCopy*(
+    store: RecoveryStore, copyPath, sessionDir: string, reason: var string
+): bool =
+  ## Remove one copy and drop it from the manifest. The session directory
+  ## goes too once nothing is left in it; both must sit inside the store.
+  if not store.insideStore(copyPath, sessionDir, reason):
+    return false
   try:
     removeFile(copyPath)
   except CatchableError as e:
     reason = sanitizeForDisplay(e.msg)
     return false
   dropManifestEntry(sessionDir, copyPath.lastPathPart)
+  if not reviewedDirLinked(sessionDir):
+    # Through a link the mark would be a file outside the store.
+    discard tryRemoveFile(reviewedMark(sessionDir, copyPath))
   let session = readSession(sessionDir)
   if session.listed and session.files.len == 0:
     return discardSession(store, sessionDir, reason)
@@ -431,3 +389,39 @@ proc discardCopy*(
 ): bool {.discardable.} =
   var reason: string
   discardCopy(store, copyPath, sessionDir, reason)
+
+proc setReviewed*(
+    store: RecoveryStore,
+    copyPath, sessionDir: string,
+    reviewed: bool,
+    reason: var string,
+): bool =
+  ## Record whether the user has dealt with this copy. Any session can carry
+  ## the mark: it is a file of its own, not a manifest entry.
+  if not store.insideStore(copyPath, sessionDir, reason):
+    return false
+  if not fileExists(copyPath):
+    reason = "the copy is gone"
+    return false
+  let dir = sessionDir / ReviewedDirName
+  if reviewedDirLinked(sessionDir):
+    reason = "it is reached through a linked reviewed directory"
+    return false
+  let mark = reviewedMark(sessionDir, copyPath)
+  try:
+    if reviewed:
+      if symlinkExists(mark):
+        # Writing through it would truncate whatever it points at.
+        reason = "its mark is a link"
+        return false
+      if not fileExists(mark):
+        # Never the session itself: a discard racing this one may have taken
+        # it, and bringing it back would leave a directory nothing lists.
+        discard existsOrCreateDir(dir)
+        writeFile(mark, "")
+    else:
+      removeFile(mark)
+  except CatchableError as e:
+    reason = sanitizeForDisplay(e.msg)
+    return false
+  true

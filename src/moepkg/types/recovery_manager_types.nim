@@ -25,9 +25,9 @@
 
 import std/[options, times]
 
-import list_viewer_types
+import list_viewer_types, recovery_index_types
 
-export list_viewer_types
+export list_viewer_types, recovery_index_types
 
 type
   RecoveryEntry* = object
@@ -42,12 +42,14 @@ type
     detail*: string ## Free text about the cause, e.g. an exception message
     changedSince*: bool ## The original moved on disk after the copy was made
     matchesDisk*: bool ## The original already holds these bytes
+    reviewed*: bool ## The user has dealt with it; no longer announced
+    restored*: bool ## Restored into a buffer here that is not saved yet
 
   RecoveryManagerState* = ref object of ListViewer[RecoveryEntry]
     ## State for the recovery manager UI.
     sourceFilePath*: string
       ## The file the list is about. Empty lists every preserved copy.
-    baseDir*: string ## Crash recovery base directory
+    index*: RecoveryIndex ## What the list is read from
     armedDiscardIndex*: Option[int]
       ## The row a first `D` armed, waiting for a second one to confirm.
       ## Discarding drops text that exists nowhere else, so one keypress is

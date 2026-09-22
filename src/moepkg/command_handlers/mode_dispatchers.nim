@@ -974,6 +974,10 @@ proc handleRecoveryManagerMode*(
     return HandlerResult(
       kind: hrRecoveryManagerRestore, restoreRecoveryIndex: r.restoreIndex
     )
+  of rcmrToggleReviewed:
+    return HandlerResult(
+      kind: hrRecoveryManagerToggleReviewed, reviewRecoveryIndex: r.reviewIndex
+    )
   of rcmrDiscard:
     return HandlerResult(
       kind: hrRecoveryManagerDiscard, discardRecoveryIndex: r.discardIndex

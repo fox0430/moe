@@ -380,11 +380,23 @@
 | <kbd>**g**</kbd> <kbd>**g**</kbd> | Go to the first line |
 | <kbd>**G**</kbd> | Go to the last line |
 | <kbd>**R**</kbd> | Restore the preserved copy |
+| <kbd>**x**</kbd> | Mark the preserved copy reviewed, or not |
 | <kbd>**D**</kbd> <kbd>**D**</kbd> | Discard the preserved copy |
 | <kbd>**r**</kbd> | Reload the preserved copies |
 <!-- AUTO-GEN:end RecoveryManagerMode -->
 
 </details>
+
+A file whose work a crash preserved shows `[recover]` in the status line until
+every one of its copies is dealt with. Each copy is dealt with on its own:
+restore it and save the buffer, or mark it reviewed in the list. Restoring one
+copy settles nothing about the others, which may hold work no other copy has.
+A copy whose text the file is found to hold, when it is opened, reloaded or
+saved, is marked reviewed then; so is one whose file nobody opens, at startup.
+Until the restored buffer is saved, the copy is still owed: undoing the restore
+or closing the buffer brings the mark back, and so does the next start if this
+one ends without saving. Dealt-with copies stay in the list. Copies with no
+open file behind them are counted once at startup.
 
 
 ## References mode

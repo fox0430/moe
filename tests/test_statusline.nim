@@ -311,6 +311,59 @@ suite "StatusLine - setMultiStatusLine":
     check state.multiStatusLine == false
 
 suite "StatusLine - buildFileDisplay":
+  test "Mark a file a crash preserved work for, even with the changed mark off":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.changedMark = false
+
+    let result =
+      buildFileDisplay(textBuffer, EditorMode.Normal, config, owesPreservedWork = true)
+
+    check result == " " & PreservedWorkMark & " file.nim"
+
+  test "The preserved-work mark goes ahead of the path and the changed mark":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    textBuffer.changeSeq = textBuffer.savedSeq + 1
+    var config = createTestStatusLineConfig()
+    config.directory = false
+
+    let result =
+      buildFileDisplay(textBuffer, EditorMode.Normal, config, owesPreservedWork = true)
+
+    check result == " " & PreservedWorkMark & " file.nim [+]"
+
+  test "Only the mark when neither name nor directory is shown":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    var config = createTestStatusLineConfig()
+    config.directory = false
+    config.filename = false
+    config.changedMark = false
+
+    let result =
+      buildFileDisplay(textBuffer, EditorMode.Normal, config, owesPreservedWork = true)
+
+    check result == " " & PreservedWorkMark
+
+  test "A file name's trailing space is kept ahead of the changed mark":
+    let textBuffer = createTestTextBuffer("/path/to/notes ")
+    textBuffer.changeSeq = textBuffer.savedSeq + 1
+    var config = createTestStatusLineConfig()
+    config.directory = false
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
+
+    check result == " notes  [+]"
+
+  test "No preserved-work mark in a mode that shows no file":
+    let textBuffer = createTestTextBuffer("/path/to/file.nim")
+    let config = createTestStatusLineConfig()
+
+    let result =
+      buildFileDisplay(textBuffer, EditorMode.Help, config, owesPreservedWork = true)
+
+    check PreservedWorkMark notin result
+
   test "Display [No Name] for unnamed buffer":
     let textBuffer = createTestTextBuffer()
     let config = createTestStatusLineConfig()
@@ -743,6 +796,34 @@ suite "StatusLine - renderStatusLine":
     check "NORMAL" notin line
 
 suite "StatusLine - renderWindowStatusLine":
+  test "A narrow window keeps the preserved-work mark over the path":
+    var state = createTestState()
+    state.showStatusLine = true
+    state.multiStatusLine = true
+
+    var displayBuffer = createTestBuffer()
+    let textBuffer = createTestTextBuffer(
+      "/a/rather/long/directory/path/leading/to/the/file.nim", false, "test content"
+    )
+    let config = createTestStatusLineConfig()
+
+    renderWindowStatusLine(
+      state,
+      textBuffer,
+      displayBuffer,
+      10,
+      0,
+      40,
+      true,
+      state.mode,
+      config,
+      owesPreservedWork = true,
+    )
+
+    let line = getBufferLine(displayBuffer, 10)
+    check PreservedWorkMark in line
+    check "file.nim" notin line
+
   test "Does nothing when showStatusLine is false":
     var state = createTestState()
     state.showStatusLine = false
