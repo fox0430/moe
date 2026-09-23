@@ -395,8 +395,11 @@ A copy whose text the file is found to hold, when it is opened, reloaded or
 saved, is marked reviewed then; so is one whose file nobody opens, at startup.
 Until the restored buffer is saved, the copy is still owed: undoing the restore
 or closing the buffer brings the mark back, and so does the next start if this
-one ends without saving. Dealt-with copies stay in the list. Copies with no
-open file behind them are counted once at startup.
+one ends without saving. Dealt-with copies stay in the list for a while: once
+every copy of a session has been dealt with, and the last of them 14 days ago,
+the next start may remove the session. One holding anything it cannot account
+for, such as a copy a newer version wrote, is kept until discarded. Copies with
+no open file behind them are counted once at startup.
 
 
 ## References mode

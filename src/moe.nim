@@ -294,7 +294,9 @@ proc main() =
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
   # Not in newEditor: tests construct editors and must not read the user's
-  # cache.
+  # cache. Pruned first so the index never lists what is about to go.
+  for dir in newRecoveryStore(getCrashRecoveryBaseDir()).pruneSettledSessions():
+    logInfo("moe", "Pruned settled recovery session " & dir.lastPathPart)
   editor.recovery = some(newRecoveryIndex(getCrashRecoveryBaseDir()))
 
   # Always capture mouse events so the terminal doesn't convert wheel events
