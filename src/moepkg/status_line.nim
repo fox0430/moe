@@ -146,8 +146,14 @@ proc getOverlayLabelStyle(overlay: OverlayKind): Style =
   ## Get the status line label style for overlay modes
   getThemeStyle(EditorColorPairIndex.statusLineExModeLabel, {StyleModifier.Bold})
 
+const PreservedWorkMark* = "[recover]"
+  ## A crash preserved work for this file that nobody has dealt with yet.
+
 proc buildFileDisplay(
-    textBuffer: TextBuffer, mode: EditorMode, config: StatusLineConfig
+    textBuffer: TextBuffer,
+    mode: EditorMode,
+    config: StatusLineConfig,
+    owesPreservedWork = false,
 ): string =
   ## Build the file display text based on config settings
   ## For special modes (non-file-edit modes), show mode label instead of filename
@@ -171,25 +177,31 @@ proc buildFileDisplay(
 
   let filePath = sanitizeForDisplay(textBuffer.filePath.get())
 
-  var displayText = " "
+  # Joined, not padded: a file name's own trailing spaces are part of it.
+  var parts: seq[string]
+
+  # Not behind a setting: it stands for text that exists nowhere else. Ahead
+  # of the path, since a narrow window cuts the file display from the right.
+  if owesPreservedWork:
+    parts.add PreservedWorkMark
 
   # Show directory if enabled
-  if config.directory:
-    displayText &= filePath
-  else:
-    # Show just filename if directory is disabled
-    if config.filename:
-      displayText &= filePath.extractFilename()
+  let name =
+    if config.directory:
+      filePath
+    elif config.filename:
+      # Show just filename if directory is disabled
+      filePath.extractFilename()
     else:
-      discard
+      ""
+  if name.len > 0:
+    parts.add name
 
   # Add changed mark if enabled and buffer is modified
   if config.changedMark and textBuffer.isModified:
-    if displayText == " ":
-      displayText = " [+]"
-    else:
-      displayText &= " [+]"
+    parts.add "[+]"
 
+  let displayText = " " & parts.join(" ")
   return sanitizeForDisplay(displayText)
 
 proc buildGitInfo(
@@ -384,6 +396,7 @@ proc renderStatusLine*(
     buffer: var Buffer,
     statusLineY: int,
     config: StatusLineConfig,
+    owesPreservedWork = false,
 ) =
   ## Render the status line at the specified Y position
   if not state.showStatusLine:
@@ -415,7 +428,7 @@ proc renderStatusLine*(
   let gitInfoText = buildGitInfo(state.git, textBuffer, state.mode, config, true)
 
   # Build file display text
-  let filePathText = buildFileDisplay(textBuffer, state.mode, config)
+  let filePathText = buildFileDisplay(textBuffer, state.mode, config, owesPreservedWork)
 
   let statusLeftWidth =
     displayWidth(modeLabelText) + displayWidth(gitInfoText) + displayWidth(filePathText)
@@ -479,6 +492,7 @@ proc renderWindowStatusLine*(
     isActiveWindow: bool,
     windowMode: EditorMode,
     config: StatusLineConfig,
+    owesPreservedWork = false,
 ) =
   ## Render a status line for a specific window
   if not state.showStatusLine or not state.multiStatusLine:
@@ -514,7 +528,7 @@ proc renderWindowStatusLine*(
     buildGitInfo(state.git, textBuffer, windowMode, config, isActiveWindow)
 
   # Build file display text
-  let filePathText = buildFileDisplay(textBuffer, windowMode, config)
+  let filePathText = buildFileDisplay(textBuffer, windowMode, config, owesPreservedWork)
 
   # Draw mode label with white background
   var currentX = statusLineX

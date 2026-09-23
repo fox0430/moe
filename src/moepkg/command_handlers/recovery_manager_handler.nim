@@ -29,6 +29,7 @@ type
   RecoveryManagerResultKind* = enum
     rcmrHandled
     rcmrRestore ## Restore the selected copy into the buffer
+    rcmrToggleReviewed ## Mark the selected copy dealt with, or not
     rcmrDiscard
     rcmrArmDiscard ## Ask before discarding the selected copy
     rcmrRefresh
@@ -39,6 +40,8 @@ type
     case kind*: RecoveryManagerResultKind
     of rcmrRestore:
       restoreIndex*: int
+    of rcmrToggleReviewed:
+      reviewIndex*: int
     of rcmrDiscard, rcmrArmDiscard:
       discardIndex*: int
     else:
@@ -81,6 +84,13 @@ proc handleRecoveryManagerModeKey*(
       if rcState.getSelectedItem().isSome:
         return
           RecoveryManagerResult(kind: rcmrRestore, restoreIndex: rcState.selectedIndex)
+      return RecoveryManagerResult(kind: rcmrHandled)
+    of "x":
+      # No confirmation: it only stops the notice, and `x` takes it back.
+      if rcState.getSelectedItem().isSome:
+        return RecoveryManagerResult(
+          kind: rcmrToggleReviewed, reviewIndex: rcState.selectedIndex
+        )
       return RecoveryManagerResult(kind: rcmrHandled)
     of "D":
       if rcState.getSelectedItem().isSome:

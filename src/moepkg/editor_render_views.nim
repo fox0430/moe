@@ -39,7 +39,8 @@ import
   diff_viewer,
   color,
   window_manager,
-  popup_render
+  popup_render,
+  recovery_notice
 
 type WindowLayout = object
   ## Per-frame layout metrics for a window. A pure, idempotent projection of
@@ -437,8 +438,15 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         else:
           calculateWindowStatusLineY(window, layout.isBottomWindow)
       e.state.renderWindowStatusLine(
-        window.buffer, buffer, statusLineY, window.viewport.x, window.viewport.width,
-        layout.isActiveWindow, window.mode, e.config.statusLine,
+        window.buffer,
+        buffer,
+        statusLineY,
+        window.viewport.x,
+        window.viewport.width,
+        layout.isActiveWindow,
+        window.mode,
+        e.config.statusLine,
+        e.owesPreservedWork(window.buffer),
       )
 
     # Draw separator between windows (except for last window)
@@ -511,10 +519,20 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
       # Pushed up onto its own row above the grown area
       let statusY = areaTopY - 1
       if statusY >= buffer.area.y:
-        e.state.renderStatusLine(e.activeBuffer(), buffer, statusY, e.config.statusLine)
+        e.state.renderStatusLine(
+          e.activeBuffer(),
+          buffer,
+          statusY,
+          e.config.statusLine,
+          e.owesPreservedWork(e.activeBuffer()),
+        )
     else:
       e.state.renderStatusLine(
-        e.activeBuffer(), buffer, screenBottomY, e.config.statusLine
+        e.activeBuffer(),
+        buffer,
+        screenBottomY,
+        e.config.statusLine,
+        e.owesPreservedWork(e.activeBuffer()),
       )
 
   if e.state.hasOverlay:

@@ -28,6 +28,7 @@ import
   moepkg/[
     editor, editor_window_layout, handler, modes, logger, cmdline, lsp_integration,
     config, config_loader, emergency, key_router, terminal_mode, recovery_format,
+    recovery_index, recovery_notice,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -292,9 +293,9 @@ proc main() =
 
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
-
-  # After newEditor: constructing an editor must not scan the cache.
-  editor.noteCrashRecovery()
+  # Not in newEditor: tests construct editors and must not read the user's
+  # cache.
+  editor.recovery = some(newRecoveryIndex(getCrashRecoveryBaseDir()))
 
   # Always capture mouse events so the terminal doesn't convert wheel events
   # to arrow key sequences. When mouse is disabled in config, events are
@@ -360,6 +361,10 @@ proc main() =
         editor.openAdditionalStartupFiles(
           cmdLineConfig.filePaths, cmdLineConfig.isReadonly
         )
+
+  # After the startup files are open, so the count can tell them apart from
+  # work no open buffer shows.
+  editor.noteRecoveryAtStartup()
 
   # Run the async editor main loop
   waitFor runEditor(editor, app, cmdLineConfig, log)

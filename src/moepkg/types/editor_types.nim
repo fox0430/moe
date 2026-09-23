@@ -66,6 +66,9 @@ type
     lsp*: LspIntegration
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
+    recovery*: Option[RecoveryIndex]
+      ## What a crash preserved, as this editor last read it. Only `main` sets
+      ## it, so an editor a test builds never reads the user's cache.
     runningBackgroundProcesses*: seq[RunningCommand]
       ## External commands the editor started and can still stop, named and
       ## timed so the user can see which one holds a file's claim.
@@ -74,6 +77,9 @@ type
       ## `runningBackgroundProcesses` because they own temporary files (temp
       ## source + build artifacts) that must be removed on editor exit/crash.
       ## Cleaned up via `cleanupQuickRunProcesses` on shutdown/emergency.
+    onBufferFileRead*: proc(e: Editor, buf: TextBuffer) {.closure.}
+      ## Run whenever a registered buffer reads or writes its file, and once
+      ## as it is registered, since it may have been loaded first.
     onBufferContentReplaced*: proc(e: Editor, buf: TextBuffer) {.closure.}
       ## Run when any registered buffer's contents are replaced wholesale
       ## (reload, `:e!`, a backup restore). Installed on every buffer by
@@ -163,6 +169,14 @@ proc addBuffer*(e: Editor, buf: TextBuffer) =
       proc(b: TextBuffer) =
         editor.onBufferContentReplaced(editor, b)
     )
+  if e.onBufferFileRead != nil:
+    let editor = e
+    buf.setFileReadHook(
+      proc(b: TextBuffer) =
+        editor.onBufferFileRead(editor, b)
+    )
+    if buf.lastLoadedContent.isSome:
+      e.onBufferFileRead(e, buf)
 
 proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   ## Remove the buffer at `idx` from `e.buffers` and drop it from
@@ -176,6 +190,7 @@ proc deleteBufferAtNoLsp*(e: Editor, idx: int) =
   # Unsubscribe: an untracked buffer must not keep reaching back into the
   # editor, which the hook also keeps alive.
   buf.setContentReplacedHook(nil)
+  buf.setFileReadHook(nil)
   forgetSyncReport(id)
 
 proc unregisterBufferNoLsp*(e: Editor, buf: TextBuffer) =

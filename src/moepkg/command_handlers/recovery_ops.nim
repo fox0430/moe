@@ -34,7 +34,7 @@ import pkg/results
 import
   ../[
     buffer, editor, editor_buffers, highlight_config, message_log, types,
-    recovery_manager, unicode_utils, viewer_mode,
+    recovery_index, recovery_manager, unicode_utils, viewer_mode,
   ]
 
 import handler_result
@@ -44,6 +44,12 @@ proc refreshRecoveryView(e: Editor, rcState: RecoveryManagerState) =
   activeWin.setView(rcState.createRecoveryManagerTextBuffer())
   activeWin.cursor.line = min(rcState.selectedIndex + 1, activeWin.buffer.len - 1)
   activeWin.cursor.column = 0
+
+proc rereadAfterFailure(e: Editor, rcState: RecoveryManagerState) =
+  ## A failed change may mean another editor changed the store first: show
+  ## what is there now, in the list and on the status lines.
+  rcState.refresh(e.buffers)
+  e.refreshRecoveryView(rcState)
 
 type
   RestoreOrigin = enum
@@ -112,7 +118,7 @@ proc processRecoveryResult*(e: Editor, r: HandlerResult): bool =
 
   case r.kind
   of hrRecoveryManagerRefresh:
-    rcState.refresh()
+    rcState.refresh(e.buffers)
     e.refreshRecoveryView(rcState)
     return true
   of hrRecoveryManagerRestore:
@@ -135,6 +141,7 @@ proc processRecoveryResult*(e: Editor, r: HandlerResult): bool =
           "Failed to read the preserved copy: " & sanitizeForDisplay(readReason)
         else:
           "Failed to read the preserved copy"
+      e.rereadAfterFailure(rcState)
       e.state.statusMessage = message
       addMessageLog message
       return true
@@ -158,13 +165,30 @@ proc processRecoveryResult*(e: Editor, r: HandlerResult): bool =
     )
     if replaced.isErr:
       # A buffer opened for a restore that put nothing in it holds nothing the
-      # user asked for. Leave the list as the restore found it.
+      # user asked for. Close it again; what opening it saw on disk stays
+      # recorded, as it would for any other open.
       e.undoOpen(target)
       # The opened buffer is gone again, so only this record is left.
       let message = "Failed to restore: " & replaced.error
       e.state.statusMessage = message
       addMessageLog message
       return true
+
+    # Unsaved, the work is held back only while this buffer has it: the copy
+    # is dealt with once it is saved. Only a clean buffer whose file has the
+    # text now counts as saved: one with edits of its own may be undone back
+    # to them and saved over the file, and a clean buffer matches only what it
+    # last read, which may be gone.
+    var markReason = ""
+    var marked = true
+    let onDisk = not target.buffer.isModified and target.buffer.fileHoldsBuffer()
+    if onDisk:
+      marked =
+        rcState.index.setReviewed(entry.copyPath, entry.sessionDir, true, markReason)
+    # Recorded either way: it replaces whatever an earlier restore put here.
+    rcState.index.noteRestored(
+      entry.copyPath, entry.sessionDir, target.buffer, settled = onDisk and marked
+    )
 
     if replaced.get.hunks.len > 0:
       # A replacement out of a load announces itself; this one has to. Every
@@ -183,20 +207,52 @@ proc processRecoveryResult*(e: Editor, r: HandlerResult): bool =
     # How the restore got here decides the message, not the diff: a buffer
     # created or opened for this changed what the user sees even when the text
     # matched byte for byte.
+    # A file that already has the text has nothing left to save.
+    let saved =
+      if not onDisk:
+        " -- not saved yet"
+      elif marked:
+        "; the file already has it"
+      else:
+        "; the file already has it, but the copy could not be marked"
     e.state.statusMessage =
       if targetPath.len == 0:
-        "Restored preserved work into a new buffer -- not saved yet"
+        "Restored preserved work into a new buffer" & saved
       elif target.origin == roLoaded:
-        "Opened " & sanitizeForDisplay(targetPath) &
-          " and restored preserved work -- not saved yet"
+        "Opened " & sanitizeForDisplay(targetPath) & " and restored preserved work" &
+          saved
       elif replaced.get.hunks.len == 0:
         "Buffer already holds the preserved work"
       else:
-        "Restored preserved work into the buffer -- not saved yet"
+        "Restored preserved work into the buffer" & saved
+    if not marked:
+      addMessageLog "The restored copy is still announced: " & markReason
+    return true
+  of hrRecoveryManagerToggleReviewed:
+    let index = r.reviewRecoveryIndex
+    if index < 0 or index >= rcState.items.len:
+      return true
+    let reviewing = not rcState.items[index].reviewed
+    var reason = ""
+    if rcState.toggleReviewed(index, reason):
+      e.refreshRecoveryView(rcState)
+      e.state.statusMessage =
+        if reviewing:
+          "Preserved copy marked reviewed; it is kept but no longer announced"
+        elif rcState.index.restoring(rcState.items[index].copyPath, e.buffers):
+          # Held back by the restore, not by the mark just taken off.
+          "Preserved copy is no longer marked reviewed; it is restored, not saved yet"
+        else:
+          "Preserved copy is announced again"
+    else:
+      let message = "Failed to mark the preserved copy: " & reason
+      e.rereadAfterFailure(rcState)
+      e.state.statusMessage = message
+      addMessageLog message
     return true
   of hrRecoveryManagerDiscard:
     var discardReason = ""
-    if rcState.discardEntry(r.discardRecoveryIndex, discardReason):
+    if rcState.discardEntry(r.discardRecoveryIndex, discardReason, e.buffers):
       e.state.statusMessage = "Preserved copy discarded"
       e.refreshRecoveryView(rcState)
     else:
@@ -206,6 +262,7 @@ proc processRecoveryResult*(e: Editor, r: HandlerResult): bool =
           "Failed to discard the preserved copy: " & discardReason
         else:
           "Failed to discard the preserved copy"
+      e.rereadAfterFailure(rcState)
       e.state.statusMessage = message
       addMessageLog message
     return true

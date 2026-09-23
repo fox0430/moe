@@ -25,12 +25,19 @@ when defined(posix):
   proc cRename(source, dest: cstring): cint {.importc: "rename", header: "<stdio.h>".}
     ## rename(2): atomic in-directory; reports failure instead of raising.
 
-import backup, unicode_utils
+import backup, unicode_utils, types/recovery_index_types
+
+export recovery_index_types
 
 const DefaultCrashRecoveryDir* = "~/.cache/moe/crash_recovery"
 
 const PayloadDirName* = "payload"
   ## Session copies live only here; presence marks the current shape.
+
+const ReviewedDirName* = "reviewed"
+  ## One empty file per copy the user has dealt with, named after the copy.
+  ## A directory, so neither shape's reader takes it for a copy, and creating
+  ## or removing one file needs no lock against another editor.
 
 const MetadataName* = "recovery.json"
 
@@ -71,16 +78,6 @@ const MaxDetailBytes* = 4096 ## Bound on free text from a dying process.
 
 const MaxPayloadBaseLen* = 80
   ## Truncated so the indexed copy still fits in one path component.
-
-type ContinuityKind* = enum
-  ckCrash = "crash"
-  ckSignal = "signal"
-  ckUnknown = "unknown" ## Unrecorded, or a value this version does not know.
-
-type OriginStamp* = object
-  ## Original file at preserve time; both fields optional, from one stat.
-  mtime*: Option[Time]
-  size*: Option[int64]
 
 proc getCrashRecoveryBaseDir*(): string =
   expandBackupDir(DefaultCrashRecoveryDir)

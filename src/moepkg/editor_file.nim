@@ -39,7 +39,8 @@ import
   persist,
   buffer,
   lsp_integration,
-  quick_run_utils
+  quick_run_utils,
+  recovery_notice
 
 type SkippedSave* = tuple[path: string, buffer: TextBuffer, reason: WriteRefusal]
   ## File a batch save skipped.
@@ -341,7 +342,9 @@ proc revertTrimIfNeeded(
   ok(())
 
 proc noteBufferSaved*(e: Editor, buffer: TextBuffer) =
-  ## Refresh git gutter and notify LSP after `buffer` was written.
+  ## Refresh git gutter, notify LSP and settle restored copies after `buffer`
+  ## was written.
+  e.noteSavedForRecovery(buffer)
   if e.showGitDiff:
     e.state.git.requestGitRefresh(buffer)
   if e.lsp.enabled:

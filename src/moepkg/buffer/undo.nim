@@ -176,6 +176,7 @@ proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange
     snapshotBookmarks: b.bookmarks,
     namedMarkChanges: change.namedMarkChanges,
     noChangeListPosition: change.noChangeListPosition,
+    isReload: change.isReload,
     changeListAcross: change.changeListAcross,
     changeListIndexAcross: change.changeListIndexAcross,
     reloadChargeLines: change.reloadChargeLines,
