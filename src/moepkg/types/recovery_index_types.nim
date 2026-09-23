@@ -47,13 +47,21 @@ type
     originStamp*: OriginStamp
     reviewed*: bool
       ## The user has dealt with this copy: saved what was restored from it, or
-      ## chose to set it aside. It stays listed; it is just no longer announced.
+      ## chose to set it aside. It is no longer announced, and stays listed
+      ## until its session is pruned.
+    reviewedAt*: Time ## When it was last dealt with. Unset unless `reviewed`.
+
+  ManifestState* = enum
+    ## A landed manifest does not mean the preserve finished: it may still
+    ## have died after it, on a file it went on to read, leaving a later copy
+    ## it does not name.
+    msAbsent ## None landed.
+    msRead ## Landed, and this build reads it in full.
+    msUnreadable ## Landed, but damaged, foreign or newer: some of it goes unseen.
 
   RecoverySession* = object
     dir*: string
-    complete*: bool
-      ## Manifest landed. The preserve may still have died after it, on a file
-      ## it went on to read, leaving a later copy it does not name.
+    manifest*: ManifestState
     listed*: bool ## False: `files` may be incomplete, including empty.
     continuity*: ContinuityKind
     detail*: string

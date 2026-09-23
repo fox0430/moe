@@ -886,7 +886,7 @@ suite "emergency - sessions":
 
     let sessions = testStore().sessions()
     require sessions.len == 1
-    check sessions[0].complete
+    check sessions[0].manifest == msRead
     check sessions[0].listed
     check sessions[0].continuity == ckSignal
     check sessions[0].detail == "TERM"
@@ -901,7 +901,7 @@ suite "emergency - sessions":
 
     let sessions = testStore().sessions()
     require sessions.len == 1
-    check not sessions[0].complete
+    check sessions[0].manifest == msAbsent
     check sessions[0].listed
     check sessions[0].continuity == ckUnknown
     check sessions[0].savedAt.isNone
@@ -980,7 +980,7 @@ suite "emergency - sessions":
 
     let sessions = testStore().sessions()
     require sessions.len == 1
-    check sessions[0].complete
+    check sessions[0].manifest == msUnreadable
     require sessions[0].files.len == 1
     check sessions[0].files[0].origin.isNone
     check sessions[0].savedAt.isNone
@@ -1026,7 +1026,7 @@ suite "emergency - sessions":
 
     let sessions = testStore().sessions()
     require sessions.len == 1
-    check sessions[0].complete
+    check sessions[0].manifest == msUnreadable
     check sessions[0].files.len == 1
     check sessions[0].files[0].origin.isNone
     check readFile(sessions[0].files[0].path) == "preserved"
@@ -1039,7 +1039,7 @@ suite "emergency - sessions":
 
     let sessions = testStore().sessions()
     require sessions.len == 1
-    check not sessions[0].complete
+    check sessions[0].manifest == msAbsent
     require sessions[0].files.len == 1
     check sessions[0].files[0].path.lastPathPart == "0000-planted.txt"
 
@@ -1095,7 +1095,7 @@ suite "emergency - sessions":
 
     let sessions = testStore().sessions()
     require sessions.len == 1
-    check sessions[0].complete
+    check sessions[0].manifest == msRead
     check sessions[0].files[0].origin.get == "/tmp/v0.txt"
     check sessions[0].continuity == ckUnknown
     check sessions[0].savedAt.isNone
@@ -1407,6 +1407,249 @@ suite "emergency - marking a copy reviewed":
       outside / "0000-planted.txt", outside, true, reason
     )
     check reason.len > 0
+
+proc markReviewed(session, copyName: string, age: Duration) =
+  ## Mark a planted copy reviewed, `age` ago.
+  let dir = TestRecoveryDir / session
+  var reason = ""
+  require testStore().setReviewed(dir / PayloadDirName / copyName, dir, true, reason)
+  setLastModificationTime(dir / ReviewedDirName / copyName, getTime() - age)
+
+suite "emergency - pruning settled sessions":
+  setup:
+    cleanupTestDir()
+
+  teardown:
+    cleanupTestDir()
+
+  test "A session reviewed long ago is pruned":
+    plantSession("20260918T000000_1")
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+
+    check testStore().pruneSettledSessions() == @[TestRecoveryDir / "20260918T000000_1"]
+    check not dirExists(TestRecoveryDir / "20260918T000000_1")
+
+  test "A session reviewed recently is kept":
+    plantSession("20260918T000000_1")
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 1))
+
+    check testStore().pruneSettledSessions().len == 0
+    check testStore().sessions().len == 1
+
+  test "An old session with an unreviewed copy is kept":
+    plantSession(
+      "20260918T000000_1",
+      savedAt = 1000000000,
+      files = @[
+        ("0000-done.txt", "/tmp/done.txt", "done"),
+        ("0001-open.txt", "/tmp/open.txt", "open"),
+      ],
+    )
+    markReviewed("20260918T000000_1", "0000-done.txt", initDuration(days = 15))
+
+    check testStore().pruneSettledSessions().len == 0
+    check testStore().sessions()[0].files.len == 2
+
+  test "The latest review decides, not the first":
+    plantSession(
+      "20260918T000000_1",
+      files = @[("0000-a.txt", "/tmp/a.txt", "a"), ("0001-b.txt", "/tmp/b.txt", "b")],
+    )
+    markReviewed("20260918T000000_1", "0000-a.txt", initDuration(days = 30))
+    markReviewed("20260918T000000_1", "0001-b.txt", initDuration(days = 1))
+
+    check testStore().pruneSettledSessions().len == 0
+
+  test "A copy taken back from review keeps its session":
+    plantSession("20260918T000000_1")
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+    var reason = ""
+    check testStore().setReviewed(
+      dir / PayloadDirName / "0000-planted.txt", dir, false, reason
+    )
+
+    check testStore().pruneSettledSessions().len == 0
+
+  test "Only the settled session goes":
+    plantSession("20260918T000000_1")
+    plantSession("20260918T000000_2")
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+
+    check testStore().pruneSettledSessions().len == 1
+    check testStore().sessions().mapIt(it.dir) ==
+      @[TestRecoveryDir / "20260918T000000_2"]
+
+  test "An empty session directory is left alone":
+    # Possibly a preserve that has not written its first copy yet.
+    createDir(TestRecoveryDir / "20260918T000000_1" / PayloadDirName)
+
+    check testStore().pruneSettledSessions().len == 0
+    check dirExists(TestRecoveryDir / "20260918T000000_1")
+
+  test "Marks reached through a linked reviewed directory settle nothing":
+    when defined(posix):
+      plantSession("20260918T000000_1")
+      let outside = getTempDir() / "moe_test_prune_linked_reviewed"
+      createDir(outside)
+      defer:
+        removeDir(outside)
+      writeFile(outside / "0000-planted.txt", "")
+      setLastModificationTime(
+        outside / "0000-planted.txt", getTime() - initDuration(days = 15)
+      )
+      createSymlink(outside, TestRecoveryDir / "20260918T000000_1" / ReviewedDirName)
+
+      check testStore().pruneSettledSessions().len == 0
+      check fileExists(outside / "0000-planted.txt")
+
+  test "A mark that is a link settles nothing":
+    when defined(posix):
+      plantSession("20260918T000000_1")
+      let outside = getTempDir() / "moe_test_prune_linked_mark"
+      writeFile(outside, "")
+      defer:
+        removeFile(outside)
+      setLastModificationTime(outside, getTime() - initDuration(days = 15))
+      let reviewed = TestRecoveryDir / "20260918T000000_1" / ReviewedDirName
+      createDir(reviewed)
+      createSymlink(outside, reviewed / "0000-planted.txt")
+
+      check testStore().pruneSettledSessions().len == 0
+      check dirExists(TestRecoveryDir / "20260918T000000_1")
+
+  test "A linked session directory settles nothing":
+    when defined(posix):
+      plantSession("20260918T000000_1")
+      markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+      let outside = getTempDir() / "moe_test_prune_linked_session"
+      moveDir(TestRecoveryDir / "20260918T000000_1", outside)
+      defer:
+        removeDir(outside)
+      createSymlink(outside, TestRecoveryDir / "20260918T000000_1")
+
+      check testStore().pruneSettledSessions().len == 0
+      check symlinkExists(TestRecoveryDir / "20260918T000000_1")
+
+  test "A legacy session reviewed long ago is pruned":
+    plantLegacySession("20260918T000000_1")
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    var reason = ""
+    require testStore().setReviewed(dir / "planted.txt", dir, true, reason)
+    setLastModificationTime(
+      dir / ReviewedDirName / "planted.txt", getTime() - initDuration(days = 15)
+    )
+
+    check testStore().pruneSettledSessions() == @[dir]
+
+  test "A payload entry this build does not list keeps its session":
+    # A copy a newer format names, or a scratch a killed preserve left.
+    for extra in ["future-copy", ".0001-scratch.txt"]:
+      plantSession("20260918T000000_1")
+      let dir = TestRecoveryDir / "20260918T000000_1"
+      writeFile(dir / PayloadDirName / extra, "unseen")
+      markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+
+      check testStore().pruneSettledSessions().len == 0
+      check fileExists(dir / PayloadDirName / extra)
+      removeDir(dir)
+
+  test "A file beside the payload keeps its session":
+    plantSession("20260918T000000_1")
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    writeFile(dir / "stray.txt", "unseen")
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+
+    check testStore().pruneSettledSessions().len == 0
+    check fileExists(dir / "stray.txt")
+
+  test "A mark that is a link is not read as a review":
+    when defined(posix):
+      plantSession("20260918T000000_1")
+      let outside = getTempDir() / "moe_test_linked_mark_read"
+      writeFile(outside, "")
+      defer:
+        removeFile(outside)
+      let reviewed = TestRecoveryDir / "20260918T000000_1" / ReviewedDirName
+      createDir(reviewed)
+      createSymlink(outside, reviewed / "0000-planted.txt")
+
+      check not testStore().sessions()[0].files[0].reviewed
+
+  test "Reviewing a copy again restarts its retention":
+    plantSession("20260918T000000_1")
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+    var reason = ""
+    check testStore().setReviewed(
+      dir / PayloadDirName / "0000-planted.txt", dir, true, reason
+    )
+
+    check testStore().pruneSettledSessions().len == 0
+
+  test "A manifest this build cannot read in full keeps its session":
+    for meta in [
+      """{"format":"moe-recovery","version":""" & $(FormatVersion + 1) &
+        ""","files":[{"name":"0000-planted.txt"}]}""",
+      """{"format":"another-format","files":[]}""", "{damaged",
+    ]:
+      plantSession("20260918T000000_1")
+      let dir = TestRecoveryDir / "20260918T000000_1"
+      writeFile(dir / MetadataName, meta)
+      markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+
+      check testStore().pruneSettledSessions().len == 0
+      removeDir(dir)
+
+  test "A formatted manifest without a payload directory keeps its session":
+    plantLegacySession(
+      "20260918T000000_1",
+      meta = """{"format":"moe-recovery","version":""" & $(FormatVersion + 1) & "}",
+    )
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    var reason = ""
+    require testStore().setReviewed(dir / "planted.txt", dir, true, reason)
+    setLastModificationTime(
+      dir / ReviewedDirName / "planted.txt", getTime() - initDuration(days = 15)
+    )
+
+    check testStore().pruneSettledSessions().len == 0
+
+  test "A manifest whose file list is damaged keeps its session":
+    plantSession("20260918T000000_1")
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    writeFile(
+      dir / MetadataName,
+      """{"format":"moe-recovery","version":""" & $FormatVersion & ""","files":"x"}""",
+    )
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+
+    check testStore().pruneSettledSessions().len == 0
+
+  test "A legacy copy called format is still a legacy manifest":
+    let dir = TestRecoveryDir / "20260918T000000_1"
+    createDir(dir)
+    writeFile(dir / "format", "preserved")
+    writeFile(dir / MetadataName, """{"format":{"originalPath":"/tmp/format"}}""")
+    var reason = ""
+    require testStore().setReviewed(dir / "format", dir, true, reason)
+    setLastModificationTime(
+      dir / ReviewedDirName / "format", getTime() - initDuration(days = 15)
+    )
+
+    check testStore().sessions()[0].manifest == msRead
+    check testStore().pruneSettledSessions() == @[dir]
+
+  test "A session whose manifest never landed can still be pruned":
+    plantSession("20260918T000000_1")
+    removeFile(TestRecoveryDir / "20260918T000000_1" / MetadataName)
+    markReviewed("20260918T000000_1", "0000-planted.txt", initDuration(days = 15))
+
+    check testStore().pruneSettledSessions().len == 1
+
+  test "A store with no base directory prunes nothing":
+    check testStore().pruneSettledSessions().len == 0
+    check newRecoveryStore("").pruneSettledSessions().len == 0
 
 suite "emergency - discardCopy":
   setup:

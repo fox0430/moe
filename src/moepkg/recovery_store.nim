@@ -56,6 +56,11 @@ proc reviewedDirLinked(sessionDir: string): bool =
   ## store's, so none is read, written or removed.
   symlinkExists(sessionDir / ReviewedDirName)
 
+proc marksReachedDirectly(sessionDir: string): bool =
+  ## Whether this session's marks are the store's: neither the session nor
+  ## its reviewed directory is a link.
+  not symlinkExists(sessionDir) and not reviewedDirLinked(sessionDir)
+
 proc payloadFiles(sessionDir: string): tuple[files: seq[string], listed: bool] =
   ## Sorted payload copies. Scratch names and links are ignored.
   ## Unreadable: `listed` is false and `files` is empty.
@@ -118,7 +123,7 @@ proc readNamedEntries(
   result = initTable[string, JsonNode]()
   if not fileExists(sessionDir / MetadataName):
     return
-  session.complete = true
+  session.manifest = msUnreadable
 
   var meta: JsonNode
   try:
@@ -146,6 +151,7 @@ proc readNamedEntries(
     session.detail = meta[ManifestDetailKey].getStr
   if not (meta.hasKey(ManifestFilesKey) and meta[ManifestFilesKey].kind == JArray):
     return
+  session.manifest = msRead
   for entry in meta[ManifestFilesKey]:
     if entry.kind != JObject:
       continue
@@ -163,7 +169,7 @@ proc readLegacyEntries(
   ## the directory.
   if not fileExists(sessionDir / MetadataName):
     return @[]
-  session.complete = true
+  session.manifest = msUnreadable
 
   var meta: JsonNode
   try:
@@ -172,6 +178,10 @@ proc readLegacyEntries(
     return @[]
   if meta.kind != JObject:
     return @[]
+  # A manifest naming a format is not this flat map, whatever it holds. A
+  # copy called "format" maps to an object, not a name.
+  if not (meta.hasKey(ManifestFormatKey) and meta[ManifestFormatKey].kind == JString):
+    session.manifest = msRead
 
   for name, entry in meta:
     if not isLegacyPayloadName(name):
@@ -212,9 +222,18 @@ proc readSession(dir: string): RecoverySession =
     proc(a, b: RecoveredFile): int =
       cmp(a.path, b.path)
   )
-  let linked = reviewedDirLinked(dir)
+  if not marksReachedDirectly(dir):
+    return
+  # Only a plain mark the store wrote counts. One lstat, so the time read is
+  # the mark's own even if it is swapped for a link afterwards.
   for file in result.files.mitems:
-    file.reviewed = not linked and fileExists(reviewedMark(dir, file.path))
+    try:
+      let info = getFileInfo(reviewedMark(dir, file.path), followSymlink = false)
+      if info.kind == pcFile:
+        file.reviewed = true
+        file.reviewedAt = info.lastWriteTime
+    except CatchableError:
+      discard
 
 proc sessionAge(s: RecoverySession): int64 =
   ## `savedAt`, or else when the newest copy was written, which nothing
@@ -315,6 +334,59 @@ proc discardSession*(store: RecoveryStore, dir: string): bool {.discardable.} =
   var reason: string
   discardSession(store, dir, reason)
 
+const SettledSessionRetention* = initDuration(days = 14)
+  ## How long a session stays listed after the last review of its copies, so
+  ## what was set aside can still be looked up for a while.
+
+proc holdsOnlyListed(session: RecoverySession): bool =
+  ## Whether the directory holds nothing but the listed copies, their marks
+  ## and the manifest. Anything else, such as a copy a newer format names or
+  ## a scratch file a killed preserve left, may be work no one has seen.
+  var listed = initHashSet[string]()
+  for f in session.files:
+    listed.incl f.path
+  try:
+    for kind, path in walkDir(session.dir, checkDir = true):
+      let name = path.lastPathPart
+      if path in listed or (kind == pcFile and name in [MetadataName, MetadataTempName]):
+        continue
+      if kind != pcDir or name notin [PayloadDirName, ReviewedDirName]:
+        return false
+      for inner, innerPath in walkDir(path, checkDir = true):
+        let known =
+          if name == PayloadDirName:
+            innerPath in listed
+          else:
+            inner == pcFile
+        if not known:
+          return false
+  except CatchableError:
+    return false
+  true
+
+proc settledBefore(session: RecoverySession, cutoff: Time): bool =
+  ## Whether every copy was reviewed, the last of them before `cutoff`, and
+  ## the directory holds nothing else. A session that could not be fully
+  ## listed, lists nothing, or has a manifest this build cannot read in
+  ## full, may hold work no one has seen.
+  if not session.listed or session.files.len == 0 or session.manifest == msUnreadable:
+    return false
+  for f in session.files:
+    if not f.reviewed or f.reviewedAt >= cutoff:
+      return false
+  session.holdsOnlyListed()
+
+proc pruneSettledSessions*(store: RecoveryStore): seq[string] =
+  ## Remove sessions whose every copy was reviewed longer than
+  ## `SettledSessionRetention` ago, and return their directories. Unreviewed
+  ## work is never aged out: it stays until the user deals with it.
+  if store.baseDir.len == 0:
+    return
+  let cutoff = getTime() - SettledSessionRetention
+  for dir in sessionDirs(store.baseDir).dirs:
+    if readSession(dir).settledBefore(cutoff) and store.discardSession(dir):
+      result.add dir
+
 proc dropManifestEntry(sessionDir, name: string) =
   ## Drop `name` from this format's manifest. Other shapes are left alone.
   var meta: JsonNode
@@ -414,7 +486,14 @@ proc setReviewed*(
         # Writing through it would truncate whatever it points at.
         reason = "its mark is a link"
         return false
-      if not fileExists(mark):
+      if fileExists(mark):
+        # Dealt with again: retention counts from now. The review stands
+        # either way, so a failure only keeps the older time.
+        try:
+          setLastModificationTime(mark, getTime())
+        except CatchableError:
+          discard
+      else:
         # Never the session itself: a discard racing this one may have taken
         # it, and bringing it back would leave a directory nothing lists.
         discard existsOrCreateDir(dir)

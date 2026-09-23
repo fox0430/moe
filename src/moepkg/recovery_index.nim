@@ -34,7 +34,7 @@
 ## or written, is marked dealt with then: what happens to the file afterwards
 ## is the user's doing, not the crash's.
 
-import std/[options, sets, tables]
+import std/[options, sets, tables, times]
 
 import buffer/[core, file_io], path_key, recovery_store
 
@@ -238,6 +238,11 @@ proc setReviewed*(
     for file in session.files.mitems:
       if file.path == copyPath:
         file.reviewed = reviewed
+        file.reviewedAt =
+          if reviewed:
+            getTime()
+          else:
+            Time()
   true
 
 proc noteRestored*(

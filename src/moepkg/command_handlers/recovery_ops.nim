@@ -29,6 +29,8 @@
 ## The copy was written the way a save writes, so it is read back the way a load
 ## reads, not as raw bytes.
 
+import std/times
+
 import pkg/results
 
 import
@@ -238,7 +240,8 @@ proc processRecoveryResult*(e: Editor, r: HandlerResult): bool =
       e.refreshRecoveryView(rcState)
       e.state.statusMessage =
         if reviewing:
-          "Preserved copy marked reviewed; it is kept but no longer announced"
+          "Preserved copy marked reviewed; no longer announced, and may be removed " &
+            $SettledSessionRetention.inDays & " days after its session is all reviewed"
         elif rcState.index.restoring(rcState.items[index].copyPath, e.buffers):
           # Held back by the restore, not by the mark just taken off.
           "Preserved copy is no longer marked reviewed; it is restored, not saved yet"
