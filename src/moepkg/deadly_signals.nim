@@ -32,6 +32,7 @@ type
   KeyboardActions* = object ## What `absorbKeyboardSignals` replaced.
     saved: array[2, Sigaction]
     replaced: array[2, bool]
+
   TerminalJob* = enum
     tjNone ## stdin is not moe's controlling terminal, as under `setsid`.
     tjForeground ## moe holds its terminal.
