@@ -3257,6 +3257,48 @@ proc makeCharEvent(c: string): Event =
 proc makeBackspaceEvent(): Event =
   Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Backspace))
 
+suite "handleEvent - quit":
+  test "Quitting is noted on the editor":
+    # A signal from then on must not preserve what `:q!` discarded.
+    let e = createTestEditorWithBuffer("hello")
+    check not e.state.quitDecided
+    var goesOn = true
+    for key in [":", "q", "!"]:
+      goesOn = e.handleEvent(makeCharEvent(key))
+    check goesOn
+    check not e.state.quitDecided
+    goesOn = e.handleEvent(makeEnterEvent())
+    check not goesOn
+    check e.state.quitDecided
+
+  test "Quitting through handleKeyCombo directly is noted":
+    # GUI frontends can bypass `handleEvent`; the signal answer must still
+    # see that the user already quit.
+    proc charKey(c: string): KeyCombo =
+      KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    let e = createTestEditorWithBuffer("hello")
+    check not e.state.quitDecided
+    var goesOn = true
+    for key in [":", "q", "!"]:
+      goesOn = e.handleKeyCombo(charKey(key))
+    check goesOn
+    check not e.state.quitDecided
+    goesOn = e.handleKeyCombo(enterKey)
+    check not goesOn
+    check e.state.quitDecided
+
+  test "Ordinary input through handleKeyCombo does not note a quit":
+    proc charKey(c: string): KeyCombo =
+      KeyCombo(isSpecial: false, char: c, modifiers: {})
+
+    let e = createTestEditorWithBuffer("hello")
+    check e.handleKeyCombo(charKey("j"))
+    check not e.state.quitDecided
+    check e.handleTextInput("j")
+    check not e.state.quitDecided
+
 suite "Command Mode - History Navigation":
   test "Up with empty history does nothing":
     let e = createTestEditorWithBuffer("hello")

@@ -48,4 +48,6 @@ export
 export
   frontend_input.GridRegion, frontend_input.PointerButton, frontend_input.PointerAction,
   frontend_input.PointerInput, frontend_input.ScrollInput, frontend_input.ScrollOutcome
-export handler.handleTextInput, handler.handleEvent, handler.releaseExternalResources
+export
+  handler.handleKeyCombo, handler.handleTextInput, handler.handleEvent,
+  handler.releaseExternalResources

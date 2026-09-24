@@ -41,6 +41,8 @@ import
   render_utils,
   tab_line,
   clipboard_backend,
+  signal_watcher,
+  terminal_command,
   git_cache,
   cursor_util,
   syntax_checker,
@@ -1509,12 +1511,10 @@ proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
       otherBufs.add(win.buffer)
   e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
 
-proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
-  ## Handle one frontend-neutral key combination.
-  ##
-  ## GUI frontends can call this directly after translating their native key
-  ## input into Moe's `KeyCombo` type. Terminal-specific events such as Quit,
-  ## paste, and mouse input remain handled by `handleEvent`.
+proc dispatchKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle one frontend-neutral key combination, without noting a quit.
+  ## Public entry points (`handleKeyCombo`, `handleTextInput`, `handleEvent`)
+  ## record the result through `noteQuit`.
   e.prepareForKeyCombo()
 
   when not defined(moe.embedded):
@@ -1581,8 +1581,8 @@ proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   return outcome != roQuit
 
-proc handleTextInput*(e: Editor, text: string): bool =
-  ## Handle committed text from a GUI text-input protocol.
+proc dispatchTextInput(e: Editor, text: string): bool =
+  ## Handle committed text from a GUI text-input protocol, without noting a quit.
   ##
   ## This is distinct from a physical key event so frontends can preserve IME,
   ## dead-key, and composed Unicode input. Special keys and modified shortcuts
@@ -1590,16 +1590,16 @@ proc handleTextInput*(e: Editor, text: string): bool =
   ## one rune, but paste operations should use `handlePaste`.
   if text.len == 0:
     return true
-  e.handleKeyCombo(KeyCombo(isSpecial: false, char: text, modifiers: {}))
+  e.dispatchKeyCombo(KeyCombo(isSpecial: false, char: text, modifiers: {}))
 
-proc handleEvent*(e: Editor, event: Event): bool =
+proc dispatchEvent(e: Editor, event: Event): bool =
   ## Main event handler using the new handler manager system
   if event.kind == EventKind.Key:
     let keyComboOpt = eventToKeyCombo(event)
     if keyComboOpt.isNone:
       e.prepareForKeyCombo()
       return true
-    return e.handleKeyCombo(keyComboOpt.get)
+    return e.dispatchKeyCombo(keyComboOpt.get)
 
   # Handle Ctrl-C (Quit event from celina)
   if event.kind == EventKind.Quit:
@@ -1633,14 +1633,23 @@ type
 
 template withFrontendSuspend(frontend: FrontendHooks, e: Editor, body: untyped) =
   ## Suspend the owning frontend around synchronous terminal interaction.
+  ## `body` blocks the event loop, so it must return soon after a deadly signal
+  ## (see `runInTerminal`, `waitForEnter`). Ctrl-C there is dropped.
   if frontend.suspend.isNil or frontend.resume.isNil:
     e.state.statusMessage = "This frontend does not support terminal commands"
+  elif takenSignal() != 0:
+    logInfo("handler", "Terminal not handed over: a deadly signal is being answered")
   else:
-    await frontend.suspend()
-    try:
-      body
-    finally:
-      await frontend.resume()
+    withTerminalHandedOver:
+      await frontend.suspend()
+      try:
+        body
+      finally:
+        # Still in the background (after `kill %1`), the loop answers without
+        # the terminal: taking it would stop moe.
+        stayStoppedInBackground()
+        if not inBackground():
+          await frontend.resume()
 
 proc focusOutputWindow(
     editor: Editor, target: EditorWindow, mode, previousMode: EditorMode
@@ -1995,26 +2004,29 @@ proc handlePendingAsyncOperationsImpl(
           e.enterTerminalInActiveWindow(op.command)
         of paoShellCommand:
           # withFrontendSuspend wraps the body in try/finally so the TUI always
-          # resumes, even if execShellCmd/readLine raises (a missed resume leaves
-          # the terminal in raw mode and destroys the screen).
+          # resumes, even if the command or the prompt raises (a missed resume
+          # leaves the terminal in raw mode and destroys the screen).
           withFrontendSuspend(frontend, e):
             stdout.write("\e[H\e[2J") # Clear screen
             stdout.flushFile()
-            let exitCode = execShellCmd(op.command)
-            stdout.write("\n\nShell returned " & $exitCode & "\n")
-            stdout.write("Press Enter to continue...")
-            stdout.flushFile()
-            discard stdin.readLine()
+            let exitCode = runInTerminal(op.command)
+            withTerminalOutput:
+              stdout.write("\n\nShell returned " & $exitCode & "\n")
+              stdout.write("Press Enter to continue...")
+              stdout.flushFile()
+            waitForEnter()
         of paoManPage:
           withFrontendSuspend(frontend, e):
             stdout.write("\e[H\e[2J") # Clear screen
             stdout.flushFile()
-            let exitCode = execShellCmd("man " & quoteShell(op.command))
-            if exitCode != 0:
-              stdout.write("man: " & op.command & " not found\n")
-            stdout.write("\nPress Enter to continue...")
-            stdout.flushFile()
-            discard stdin.readLine()
+            let exitCode = runInTerminal("man " & quoteShell(op.command))
+            # Past 127: killed. -1: did not run or was lost.
+            withTerminalOutput:
+              if exitCode in 1 .. 127:
+                stdout.write("man: " & op.command & " not found\n")
+              stdout.write("\nPress Enter to continue...")
+              stdout.flushFile()
+            waitForEnter()
         of paoBackground:
           # SIGTSTP to self so the shell registers moe as a proper stopped job
           # (visible in `jobs`, resumable via `fg`). Falls back to a blocking
@@ -2056,7 +2068,7 @@ proc handlePendingAsyncOperations*(
     except Exception as ex:
       logError("moe", "handlePendingAsyncOperations failed: " & ex.msg)
 
-proc handleKeyMappingTimeout*(e: Editor): bool =
+proc dispatchKeyMappingTimeout(e: Editor): bool =
   ## Called when the key mapping timeout fires.
   ## Matching is delegated to `KeyRouter.flushTimeout`; this proc only chooses
   ## the dispatch mode (base vs Command overlay) and executes the plan.
@@ -2131,3 +2143,31 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
             break
 
   return shouldContinue
+
+proc noteQuit(e: Editor, goesOn: bool): bool =
+  ## Every quit reaches the frontend through here, so it is noted once.
+  if not goesOn:
+    e.state.quitDecided = true
+  goesOn
+
+proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle one frontend-neutral key combination. False when the editor decided
+  ## to quit.
+  ##
+  ## GUI frontends can call this directly after translating their native key
+  ## input into Moe's `KeyCombo` type. Terminal-specific events such as Quit,
+  ## paste, and mouse input remain handled by `handleEvent`.
+  e.noteQuit(e.dispatchKeyCombo(keyCombo))
+
+proc handleTextInput*(e: Editor, text: string): bool =
+  ## Handle committed text from a GUI text-input protocol. False when the
+  ## editor decided to quit.
+  e.noteQuit(e.dispatchTextInput(text))
+
+proc handleEvent*(e: Editor, event: Event): bool =
+  ## Handle `event`. False when the editor decided to quit.
+  e.noteQuit(e.dispatchEvent(event))
+
+proc handleKeyMappingTimeout*(e: Editor): bool =
+  ## Handle the key mapping timeout. False when the editor decided to quit.
+  e.noteQuit(e.dispatchKeyMappingTimeout())

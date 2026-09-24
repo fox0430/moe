@@ -26,7 +26,13 @@
 
 import std/[options, sequtils, strutils]
 
-import types/editor_types, buffer/core, message_log, recovery_index, unicode_utils
+import
+  types/editor_types,
+  buffer/core,
+  editor_notify,
+  message_log,
+  recovery_index,
+  unicode_utils
 
 proc owesPreservedWork*(e: Editor, buf: TextBuffer): bool =
   ## Whether a crash preserved work for `buf`'s file that is still owed.
@@ -47,17 +53,6 @@ proc noteSavedForRecovery*(e: Editor, buf: TextBuffer) =
     return
   for reason in e.recovery.get.noteSaved(buf):
     addMessageLog "A restored copy is still announced: " & reason
-
-proc announce(e: Editor, notice: string) =
-  ## Below whatever the status line already says: a config error owns it from
-  ## startup, and a copy from a file nobody opens has no other trace.
-  let standing = e.state.statusMessage
-  if standing.len == 0:
-    e.state.statusMessage = notice
-  else:
-    # `statusMessage=` would log the standing message a second time.
-    addMessageLog(notice)
-    e.state.setStatusQuiet(standing & "\n" & notice)
 
 proc joinParts(parts: seq[string]): string =
   if parts.len <= 2:
@@ -83,7 +78,7 @@ proc noteRecoveryAtStartup*(e: Editor) =
   let dir = sanitizeForDisplay(index.store.baseDir)
   if not index.listed:
     # Nothing is known about what is in there, so nothing is claimed.
-    e.announce("Could not read the crash recovery directory " & dir)
+    e.appendStatus("Could not read the crash recovery directory " & dir)
     return
   # A file nobody opened is read only here; an open one was seen on load.
   for reason in index.noteObservedOnDisk(e.buffers):
@@ -131,6 +126,6 @@ proc noteRecoveryAtStartup*(e: Editor) =
       ". :recover! to review it"
     if unreadable:
       notice.add "; part of " & dir & " could not be read"
-    e.announce(notice)
+    e.appendStatus(notice)
   elif unreadable:
-    e.announce("Part of the crash recovery directory could not be read: " & dir)
+    e.appendStatus("Part of the crash recovery directory could not be read: " & dir)

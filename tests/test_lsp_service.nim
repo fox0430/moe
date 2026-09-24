@@ -1266,7 +1266,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
   test "levApplyEdit swallows a throwing apply callback (server still answerable)":
     # The server blocks on the ApplyWorkspaceEditResponse, so an exception raised
     # while applying the edit must NOT escape processEvent (it would otherwise
-    # propagate out of poll() and tear the editor down via emergencySaveAndQuit,
+    # propagate out of poll() and tear the editor down via preserveAndExit,
     # while the server waits forever). processEvent must return normally.
     let svc = newLspService()
     var called = false

@@ -29,7 +29,7 @@ import std/posix
 
 import pkg/results
 
-import config, encoding, logger
+import config, encoding, logger, posix_wait
 
 type
   ClipboardOperation* {.pure.} = enum
@@ -58,16 +58,6 @@ const
   ClipboardProcessOptions = {poUsePath, poDaemon}
     ## poDaemon: new process group for cleanup.
 
-var
-  P_PID {.importc, header: "<sys/wait.h>".}: cint
-  CLD_EXITED {.importc, header: "<signal.h>".}: cint
-
-proc decodeSiginfo(info: SigInfo): int =
-  ## Decode a `waitid` result to an exit code.
-  if info.si_code == CLD_EXITED:
-    return info.si_status.int
-  return 128 + info.si_status.int
-
 proc pidStillExists(p: Process): bool =
   ## Null-signal probe. False only when the PID is provably gone.
   if kill(Pid(p.processID), 0) == 0:
@@ -88,7 +78,7 @@ proc processGone(p: Process, exitCode: var int): bool =
   # ECHILD = already reaped elsewhere, avoid signaling recycled PID.
   var info: SigInfo
   info.si_pid = Pid(0)
-  let wr = waitid(P_PID, Id(p.processID), info, WEXITED or WNOHANG or WNOWAIT)
+  let wr = waitid(idPid, Id(p.processID), info, WEXITED or WNOHANG or WNOWAIT)
   if wr == -1:
     if osLastError().cint == ECHILD:
       return true
