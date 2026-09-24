@@ -967,6 +967,7 @@ type
     notificationPopup*: NotificationPopupManager
     # Exit code (non-zero for :cq)
     exitCode*: int
+    quitDecided*: bool ## Once set, a signal or crash no longer preserves buffers.
     # --- Sub-state groups (Phase 4 refactor) ---
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)

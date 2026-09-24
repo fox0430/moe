@@ -21,6 +21,7 @@ import std/[unittest, posix, os, strutils, times, deques]
 
 import pkg/results
 
+import ../src/moepkg/deadly_signals
 import ../src/moepkg/terminal/pty
 
 proc childIsGone(pid: Pid): bool =
@@ -466,3 +467,52 @@ suite "queueResponse":
     let pty = PtyHandle(masterFd: -1, childPid: Pid(0), closed: false)
     check pty.queueResponse("").isOk
     check pty.writeQueue.len == 0
+
+suite "openPtyAndSpawn - signal mask":
+  test "The child starts with nothing blocked":
+    # `exec` keeps the mask, and the editor blocks the deadly set for
+    # `signal_watcher` to take. Inherited, it would leave the shell — and
+    # everything it runs — deaf to Ctrl-C and to `kill`.
+    when not defined(linux):
+      # The check reads the mask from /proc, which only Linux has.
+      skip()
+    else:
+      check blockDeadlySignals()
+      # Restore on every exit: a test binary that keeps the deadly set blocked
+      # answers nothing but SIGKILL.
+      defer:
+        restoreDeadlySignalDefaults()
+
+      let spawned = openPtyAndSpawn("grep SigBlk /proc/self/status", 80, 24)
+      require spawned.isOk
+
+      var
+        buf = newString(4096)
+        output = ""
+        sigBlk = -1
+      let deadline = getTime() + initDuration(seconds = 5)
+      while getTime() < deadline and sigBlk < 0:
+        let n = read(spawned.get.masterFd, buf[0].addr, 4096)
+        if n > 0:
+          output.add buf[0 ..< n]
+        # Only complete lines: the tail chunk may cut the value short.
+        var lines = output.splitLines()
+        if not output.endsWith("\n") and lines.len > 0:
+          lines.setLen(lines.len - 1)
+        for line in lines:
+          if line.startsWith("SigBlk"):
+            let fields = line.splitWhitespace()
+            if fields.len >= 2:
+              try:
+                sigBlk = parseHexInt(fields[^1])
+              except ValueError:
+                discard
+            break
+        if sigBlk < 0:
+          sleep(10)
+
+      # A complete SigBlk line arrived; the child must start with nothing
+      # blocked. SigBlk is a hex bitmask whose width depends on the kernel.
+      check sigBlk == 0
+
+      spawned.get.closePty()

@@ -744,7 +744,7 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
     # blocking on the ApplyWorkspaceEditResponse, so EVERY path must answer:
     # both the parse and the apply run inside the try, and any CatchableError
     # becomes a negative response instead of escaping poll() (where it would
-    # strand the server and reach emergencySaveAndQuit). A Defect is deliberately
+    # strand the server and reach preserveAndExit). A Defect is deliberately
     # NOT caught here: the apply path reports errors via Result rather than
     # raising, so a Defect signals a real bug and stays fatal, as elsewhere.
     # TransactionRollbackError is the one deliberate exception: re-raise it

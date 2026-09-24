@@ -23,12 +23,14 @@ when not defined(posix):
 import std/[strformat, os, options, tables]
 
 import pkg/[celina, results, chronos]
+from pkg/celina/async/async_io import tryWriteBlocking
+from std/posix import isatty, STDERR_FILENO, Sigset, SIGTTOU
 
 import
   moepkg/[
     editor, editor_window_layout, handler, modes, logger, cmdline, lsp_integration,
-    config, config_loader, emergency, key_router, terminal_mode, recovery_format,
-    recovery_index, recovery_notice,
+    config, config_loader, deadly_signals, emergency, key_router, terminal_mode,
+    recovery_format, recovery_index, recovery_notice, signal_watcher, terminal_command,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -95,46 +97,136 @@ proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
   if e.config.startUpFileTree.enable:
     e.toggleFileTree(none(string), e.activeBuffer())
 
-proc emergencySaveAndQuit(
+type Death = object ## Why the editor is leaving without the user asking it to.
+  exception: ref Exception ## What ended the loop, if anything did.
+  case kind: ContinuityKind
+  of ckSignal:
+    signal: cint
+  of ckCrash, ckUnknown:
+    discard
+
+proc crashDeath(e: ref Exception): Death =
+  ## Prefer a taken signal as the cause: a closed terminal fails tty I/O often
+  ## before SIGHUP arrives, so an I/O crash waits briefly for one.
+  var sig = takenSignal()
+  let ioFailed = e of IOError or e of OSError or e of TerminalError
+  if sig == 0 and ioFailed and signalWatcherRunning():
+    sig = waitForTakenSignal(200.milliseconds)
+  if sig == 0:
+    Death(kind: ckCrash, exception: e)
+  else:
+    Death(kind: ckSignal, signal: sig, exception: e)
+
+proc detail(death: Death): string =
+  case death.kind
+  of ckSignal:
+    if death.exception.isNil:
+      signalName(death.signal)
+    else:
+      signalName(death.signal) & ": " & death.exception.msg
+  of ckCrash, ckUnknown:
+    if death.exception.isNil: "" else: death.exception.msg
+
+proc leave(death: Death) {.noreturn.} =
+  ## Die of the signal so the parent sees `WIFSIGNALED`; otherwise `quit(1)`.
+  if death.kind == ckSignal:
+    reraiseAsDeath(death.signal)
+  quit(1)
+
+var preserving = none(Death)
+  ## Set once, so a nested death cannot restart the sequence or change the exit.
+
+proc preserveAndExit(
     editor: Editor,
     app: AsyncApp,
-    e: ref Exception,
+    death: Death,
     cmdLineConfig: CmdLineConfig,
     log: Logger,
 ) {.noreturn.} =
-  ## Emergency save modified buffers and exit on crash.
+  ## Save unsaved buffers to recovery files, restore the terminal and leave.
+  ## The single exit for both crashes and signals. Nothing is saved once the
+  ## user quit, and the user's own files are never written. Recovery files are
+  ## not fsynced: the process is dying, not the kernel.
   ##
-  ## This runs as a last-resort handler for an already-fatal exception from
-  ## inside `{.cast(raises: []).}` callbacks, so a secondary exception raised by
-  ## the rescue body would escape unchecked and skip the terminal restore below,
-  ## stranding the user in raw mode. Guard the save/cleanup sequence and always
-  ## fall through to restoreTerminal()/quit(1) no matter what it throws.
+  ## Every step is guarded, Defects included: callers are `raises: []`
+  ## callbacks, and an escape would leave the terminal in raw mode.
+  if preserving.isSome:
+    # Safety net: a nested crash must not hide the first death's signal.
+    preserving.get.leave()
+  preserving = some(death)
+
+  # In the background, touching the terminal would stop moe; with SIGTTOU
+  # blocked, writes still go through under `stty tostop`.
+  let background = inBackground()
+  if background:
+    var previous: Sigset
+    discard blockSignal(SIGTTOU, previous)
+
   var savedPaths: seq[string]
+  if not editor.state.quitDecided and beginPreserving():
+    try:
+      # `raises: []` does not cover Defects.
+      savedPaths = editor.emergencySaveBuffers(death.kind, death.detail)
+    except Exception as ex:
+      logError("moe", "emergency save failed: " & ex.msg)
+
+  # Before teardown: `releaseExternalResources` may block on wedged threads,
+  # and the user must not wait in raw mode.
   try:
-    savedPaths = editor.emergencySaveBuffers(ckCrash, e.msg)
+    if not app.isNil and not background:
+      # CAN aborts an escape sequence a suspended frame write left open.
+      # Blocking, since that write was suspended on a full tty.
+      tryWriteBlocking("\x18")
+      app.restoreTerminal()
+
+    if not background or isatty(STDERR_FILENO) != 1:
+      if death.kind == ckSignal:
+        stderr.writeLine "moe: caught deadly signal " & signalName(death.signal)
+      if not death.exception.isNil:
+        stderr.writeLine "moe: fatal error: " & death.exception.msg
+        stderr.writeLine death.exception.getStackTrace()
+      if savedPaths.len > 0:
+        stderr.writeLine "Recovery files saved to: " & savedPaths[0].parentDir
+  except Exception as ex:
+    logError("moe", "terminal restore/report failed: " & ex.msg)
+
+  # Teardown below is capped by the watcher's finish deadline; after settle
+  # the next signal ends the process at once.
+  settle()
+
+  try:
+    if cmdLineConfig.debugEnabled:
+      case death.kind
+      of ckSignal:
+        logInfo("moe", "Caught deadly signal " & death.detail)
+      else:
+        logError("moe", "Fatal: " & death.detail)
 
     editor.releaseExternalResources()
 
     if cmdLineConfig.debugEnabled:
-      logError("moe", "Fatal: " & e.msg)
       log.close()
-  except CatchableError as ce:
-    logError("moe", "emergency save/cleanup failed: " & ce.msg)
+  except Exception as ex:
+    logError("moe", "cleanup failed: " & ex.msg)
 
-  # Always restore the terminal and report the crash, even if the rescue body
-  # above threw. Guarded so a failure here still reaches quit(1).
+  death.leave()
+
+proc answerDeadlySignals(
+    editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
+) {.async: (raises: []).} =
+  ## Preserve on the first signal, unless the user already quit: teardown then
+  ## re-raises it.
   try:
-    if not app.isNil:
-      app.restoreTerminal()
-
-    stderr.writeLine "moe: fatal error: " & e.msg
-    stderr.writeLine e.getStackTrace()
-    if savedPaths.len > 0:
-      stderr.writeLine "Recovery files saved to: " & savedPaths[0].parentDir
-  except CatchableError as ce:
-    logError("moe", "terminal restore/report failed: " & ce.msg)
-
-  quit(1)
+    await signalForwarded()
+  except CancelledError:
+    return
+  if editor.state.quitDecided:
+    beginWindingDown()
+  else:
+    {.cast(gcsafe).}:
+      editor.preserveAndExit(
+        app, Death(kind: ckSignal, signal: takenSignal()), cmdLineConfig, log
+      )
 
 template editorCallback(
     ed: Editor, app: AsyncApp, clc: CmdLineConfig, lg: Logger, body: untyped
@@ -145,7 +237,7 @@ template editorCallback(
       try:
         body
       except Exception as e:
-        ed.emergencySaveAndQuit(app, e, clc, lg)
+        ed.preserveAndExit(app, crashDeath(e), clc, lg)
 
 proc applyFrontendRequests(editor: Editor, app: AsyncApp) =
   ## Drain editor-core requests that need concrete Celina app side effects.
@@ -240,17 +332,30 @@ proc runEditor(
         else:
           app.hideCursor()
 
+    # Not before the loop runs: until then the default action is better.
+    if signalWatcherRunning():
+      loopAnswers()
+      asyncSpawn editor.answerDeadlySignals(app, cmdLineConfig, log)
+    elif signalWatcherSupported:
+      editor.appendStatus(
+        "Warning: unsaved buffers will not be preserved if moe is terminated"
+      )
+
     try:
       # Run the async main loop
       # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
       await app.runAsync()
     except Exception as e:
-      editor.emergencySaveAndQuit(app, e, cmdLineConfig, log)
+      editor.preserveAndExit(app, crashDeath(e), cmdLineConfig, log)
 
     if not editor.config.standard.disableChangeCursor:
       # Restore cursor to default style on exit
       let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
       app.setCursorStyle(cursorStyle)
+
+    # Teardown can block on a wedged language server; it is capped by the
+    # watcher's finish deadline, and from here the next signal ends moe.
+    settle()
 
     editor.releaseExternalResources()
 
@@ -259,7 +364,14 @@ proc runEditor(
       logInfo("moe", "Editor shutting down")
       log.close()
 
+    let lateSignal = takenSignal()
+    if lateSignal != 0:
+      reraiseAsDeath(lateSignal)
+
 proc main() =
+  # Before any thread exists: threads inherit their creator's signal mask.
+  discard startSignalWatcher()
+
   # Parse command line arguments
   let cmdLineConfig = parseCmdLine()
 
@@ -309,6 +421,8 @@ proc main() =
     rawMode: true,
     windowMode: false,
     bracketedPaste: true,
+    # `signal_watcher` owns the deadly signals.
+    installSignalHandler: false,
   )
   var app = newAsyncApp(appConfig)
 

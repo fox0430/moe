@@ -24,6 +24,8 @@ import std/[deques, os, posix, options]
 
 import pkg/results
 
+import ../deadly_signals
+
 type
   WriteChunkKind* = enum
     wcEssential ## Bytes the child must receive: a keystroke or a query answer.
@@ -125,7 +127,9 @@ proc openPtyAndSpawn*(
     return err("forkpty failed: " & $strerror(errno))
 
   if pid == 0:
-    # Child process
+    # `exec` keeps the editor's blocked deadly set.
+    discard clearSignalMask()
+
     putEnv("TERM", "xterm-256color")
 
     let shell = getEnv("SHELL", "/bin/sh")
