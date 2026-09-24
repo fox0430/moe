@@ -36,3 +36,6 @@ else:
 
   proc inBackground*(): bool =
     false
+
+  template withTerminalOutput*(body: untyped) =
+    body

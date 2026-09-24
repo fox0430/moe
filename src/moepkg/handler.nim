@@ -41,7 +41,6 @@ import
   render_utils,
   tab_line,
   clipboard_backend,
-  deadly_signals,
   signal_watcher,
   terminal_command,
   git_cache,
@@ -2011,7 +2010,7 @@ proc handlePendingAsyncOperationsImpl(
             stdout.write("\e[H\e[2J") # Clear screen
             stdout.flushFile()
             let exitCode = runInTerminal(op.command)
-            withSignalBlocked(posix.SIGTTOU):
+            withTerminalOutput:
               stdout.write("\n\nShell returned " & $exitCode & "\n")
               stdout.write("Press Enter to continue...")
               stdout.flushFile()
@@ -2022,7 +2021,7 @@ proc handlePendingAsyncOperationsImpl(
             stdout.flushFile()
             let exitCode = runInTerminal("man " & quoteShell(op.command))
             # Past 127: killed. -1: did not run or was lost.
-            withSignalBlocked(posix.SIGTTOU):
+            withTerminalOutput:
               if exitCode in 1 .. 127:
                 stdout.write("man: " & op.command & " not found\n")
               stdout.write("\nPress Enter to continue...")

@@ -31,6 +31,12 @@ proc inBackground*(): bool =
   ## Whether another job holds moe's terminal, as after Ctrl-Z and `kill %1`.
   terminalJob() == tjBackground
 
+template withTerminalOutput*(body: untyped) =
+  ## Run `body`, which writes to the terminal, with SIGTTOU blocked so a
+  ## background moe is not stopped by it.
+  withSignalBlocked(SIGTTOU):
+    body
+
 proc orphaned(): bool =
   ## Whether no shell is left to continue moe; the kernel then drops its
   ## SIGTSTP.

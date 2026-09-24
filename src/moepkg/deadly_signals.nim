@@ -38,7 +38,9 @@ type
     tjForeground ## moe holds its terminal.
     tjBackground ## Another job holds it; touching it would stop moe.
 
-const
+let
+  # Not `const`: the posix signal numbers are `importc` variables on
+  # macOS and Windows.
   DeadlySignals* = [SIGHUP, SIGINT, SIGQUIT, SIGTERM]
     ## SIGINT and SIGQUIT come only from `kill` while the terminal is raw.
 
