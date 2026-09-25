@@ -31,7 +31,7 @@
 ## retry after a delay in either mode. Previous counts stay on
 ## screen until a current (not superseded) pipeline completes.
 
-import std/[options, tables, monotimes, times, os, osproc, streams, strutils]
+import std/[options, tables, monotimes, times, os, osproc, strutils]
 
 import pkg/results
 
@@ -154,7 +154,7 @@ proc reapBranch(entry: var GitRepositoryCacheEntry): bool =
       releaseGitProcess(entry.pending)
       entry.deferBranchRetry()
       return
-    let output = entry.pending.outputStream().readAll()
+    let output = entry.pending.drainExitedProcessOutput()
     releaseGitProcess(entry.pending)
     if entry.pendingGeneration != entry.generation:
       return
