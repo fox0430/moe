@@ -57,61 +57,43 @@ proc buildCommand(
     cmd: command.cmd, args: command.args, workingDir: workspaceRoot
   )
 
-proc startBackgroundBuild*(
-    path: string, language: SourceLanguage, workspaceRoot: string = ""
-): Result[BuildProcess, string] =
-  ## Start a background process for exec the build command.
-
-  let command = buildCommand(path, language, workspaceRoot)
-  if command.isErr:
-    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {command.error}"
-
-  let backgroundProcess = startBackgroundProcess(command.get)
-  if backgroundProcess.isErr:
-    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
-
-  return Result[BuildProcess, string].ok BuildProcess(
-    command: command.get, filePath: path, process: backgroundProcess.get
-  )
-
-proc startBackgroundBuild*(
-    customCommand: BuildCommand, language: SourceLanguage, workspaceRoot: string = ""
-): Result[BuildProcess, string] =
-  ## Start the build on a background process.
-
-  if customCommand.cmd.len == 0:
-    return Result[BuildProcess, string].err fmt"command is empty"
-
-  let command = BackgroundProcessCommand(
-    cmd: customCommand.cmd, args: customCommand.args, workingDir: workspaceRoot
-  )
-
-  let backgroundProcess = startBackgroundProcess(command)
-  if backgroundProcess.isErr:
-    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
-
-  return Result[BuildProcess, string].ok BuildProcess(
-    command: command, process: backgroundProcess.get
-  )
-
-proc startBackgroundBuildOnSave*(
+proc buildOnSaveCommand*(
     path: string,
     language: SourceLanguage,
     customCommand: string = "",
     workspaceRoot: string = "",
-): Result[BuildProcess, string] =
-  ## Start a background build for buildOnSave.
-  ## If customCommand is provided, use it; otherwise use language-specific command.
-
+): Result[BackgroundProcessCommand, string] =
+  ## What a build of `path` runs: `customCommand` when given, otherwise the
+  ## language's own command.
   if customCommand.len > 0:
     let parsed = parseCommandString(customCommand)
-    return startBackgroundBuild(parsed, language, workspaceRoot)
+    if parsed.cmd.len == 0:
+      return Result[BackgroundProcessCommand, string].err "command is empty"
+    Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+      cmd: parsed.cmd, args: parsed.args, workingDir: workspaceRoot
+    )
   else:
-    return startBackgroundBuild(path, language, workspaceRoot)
+    buildCommand(path, language, workspaceRoot).mapErr(
+      proc(e: string): string =
+        fmt"Failed to exec build commands: {e}"
+    )
+
+proc startBackgroundBuild*(
+    command: BackgroundProcessCommand, path: string = ""
+): Result[BuildProcess, string] =
+  ## Start `command` as a build of `path`.
+  let backgroundProcess = startBackgroundProcess(command)
+  if backgroundProcess.isErr:
+    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+
+  Result[BuildProcess, string].ok BuildProcess(
+    command: command, filePath: path, process: backgroundProcess.get
+  )
 
 proc waitForAsync*(
-    bp: BuildProcess, timeout: Duration
+    bp: BuildProcess, timeout: Duration, stop: JobStop = nil
 ): Future[ProcessOutputResult] {.async: (raises: []).} =
   ## Wait for the build to complete and return its output. A build still
-  ## running after `timeout` is killed and reported as an error.
-  return await bp.process.waitForAsync(timeout)
+  ## running after `timeout`, or told to `stop`, is killed and reported as an
+  ## error.
+  return await bp.process.waitForAsync(timeout, stop)

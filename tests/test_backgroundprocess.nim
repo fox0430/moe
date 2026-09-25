@@ -620,6 +620,94 @@ suite "BackgroundProcess - waitForAsync with timeout":
     check r.isOk
     check r.get[0] == "slow"
 
+suite "BackgroundProcess - waitForAsync with a stop":
+  proc stopLater(stop: JobStop) {.async.} =
+    await sleepAsync(100.milliseconds)
+    stop.request()
+
+  test "A stop kills the command and is reported as one":
+    proc runTest(): Future[tuple[r: ProcessOutputResult, closed: bool]] {.async.} =
+      let r = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sleep", args: @["30"], workingDir: getCurrentDir()
+        )
+      )
+      if r.isErr:
+        return (ProcessOutputResult.err "start failed", false)
+      let stop = JobStop()
+      asyncSpawn stopLater(stop)
+      let waitResult = await r.get.waitForAsync(30.seconds, stop)
+      return (waitResult, r.get.process.released)
+
+    let started = Moment.now()
+    let r = waitFor runTest()
+    check r.r.isErr
+    check "stopped" in r.r.error
+    check r.closed
+    check Moment.now() - started < 5.seconds
+
+  test "A stop asked before the wait ends it at once":
+    proc runTest(): Future[ProcessOutputResult] {.async.} =
+      let r = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sleep", args: @["30"], workingDir: getCurrentDir()
+        )
+      )
+      if r.isErr:
+        return ProcessOutputResult.err "start failed"
+      let stop = JobStop()
+      stop.request()
+      return await r.get.waitForAsync(30.seconds, stop)
+
+    let started = Moment.now()
+    let r = waitFor runTest()
+    check r.isErr
+    check "stopped" in r.error
+    check Moment.now() - started < 5.seconds
+
+  test "The kill does not wait for a turn of the loop":
+    # A stop at quit gets no further turn: the kill must already have landed.
+    let r = startBackgroundProcess(
+      BackgroundProcessCommand(cmd: "sleep", args: @["30"], workingDir: getCurrentDir())
+    )
+    check r.isOk
+    let stop = JobStop()
+    let waiting = r.get.waitForAsync(30.seconds, stop)
+    stop.request()
+    # Blocking, so the loop does not turn.
+    var gone = false
+    for _ in 0 ..< 200:
+      if not r.get.process.running():
+        gone = true
+        break
+      os.sleep(10)
+    check gone
+    discard waitFor waiting
+
+  when defined(linux):
+    test "A stop ends the wait within the grace when a descendant keeps the pipe":
+      # The kill reaches the group, not what left it, so EOF never arrives.
+      # Stopping from outside the wait left it waiting for that descendant.
+      proc runTest(): Future[ProcessOutputResult] {.async.} =
+        let r = startBackgroundProcess(
+          BackgroundProcessCommand(
+            cmd: "sh",
+            args: @["-c", "setsid sleep 6 & sleep 30"],
+            workingDir: getCurrentDir(),
+          )
+        )
+        if r.isErr:
+          return ProcessOutputResult.err "start failed"
+        let stop = JobStop()
+        asyncSpawn stopLater(stop)
+        return await r.get.waitForAsync(InfiniteDuration, stop)
+
+      let started = Moment.now()
+      let r = waitFor runTest()
+      check r.isErr
+      check "stopped" in r.error
+      check Moment.now() - started < 5.seconds
+
 suite "BackgroundProcess - timeoutFromSeconds":
   test "Positive seconds become a bounded duration":
     check timeoutFromSeconds(30) == 30.seconds

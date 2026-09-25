@@ -24,7 +24,7 @@ import std/[unittest]
 
 import ../src/moepkg/[editor, config, editor_window, window_manager]
 import ../src/moepkg/types/editor_types
-import ../src/moepkg/handler {.all.}
+import ../src/moepkg/editor_command_output
 
 proc testEditor(): Editor =
   newEditor(newEditorConfig())

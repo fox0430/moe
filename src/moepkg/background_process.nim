@@ -22,10 +22,10 @@ import std/[options, strformat, strutils]
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
-import logger, child_process
+import logger, child_process, job_stop
 
 import types/background_process_types
-export background_process_types
+export background_process_types, job_stop
 
 proc timeoutFromSeconds*(seconds: int): Duration =
   ## Convert a config timeout to the value the bounded waits expect.
@@ -76,17 +76,28 @@ proc waitForExitAsync*(
     return none(int)
 
 proc runToCompletion(
-    bp: BackgroundProcess, transfers: seq[FutureBase], timeout: Duration
+    bp: BackgroundProcess,
+    transfers: seq[FutureBase],
+    timeout: Duration,
+    stop: JobStop = nil,
 ): Future[ProcessRunOutcome] {.async: (raises: []).} =
-  ## Wait for `transfers` and for the command to exit, bounded by `timeout`,
-  ## then take the command down and reap it - whichever way the wait ended.
+  ## Wait for `transfers` and for the command to exit, bounded by `timeout` and
+  ## ended early by `stop`, then take the command down and reap it - whichever
+  ## way the wait ended.
   ##
-  ## The timeout and cancellation contract for external commands lives here and
-  ## only here: however this returns, the command has been killed unless it
-  ## exited on its own, every transfer is finished, its pipes are closed, and
-  ## the child is reaped - or, if it outlived its kill, left to be reaped once
-  ## it exits. A second copy of this drifts, and always the same way -
-  ## some path reaches the wait for exit with no kill in front of it.
+  ## The timeout, cancellation and stop contract for external commands lives
+  ## here and only here: however this returns, the command has been killed
+  ## unless it exited on its own, every transfer is finished, its pipes are
+  ## closed, and the child is reaped - or, if it outlived its kill, left to be
+  ## reaped once it exits. A second copy of this drifts, and always the same
+  ## way - some path reaches the wait for exit with no kill in front of it.
+  if not stop.isNil:
+    # Killed at once as well: a stop at quit gets no turn to reach the race.
+    stop.onStop(
+      proc() =
+        bp.kill()
+    )
+
   proc runAll(): Future[void] {.async: (raises: [CancelledError]).} =
     ## Everything the run consists of. The exit belongs here with the transfers
     ## because `timeout` has to bound the two together: a command that closes
@@ -106,13 +117,18 @@ proc runToCompletion(
   # the child is never reaped. `allFutures` and `race` are here because neither
   # cancels what it aggregates.
   let shield = allFutures(waiter)
+  var ends: seq[FutureBase]
+  if not timer.isNil:
+    ends.add timer
+  if not stop.isNil:
+    ends.add stop.stopped
   try:
-    if timer.isNil:
+    if ends.len == 0:
       await shield
     else:
-      discard await race(FutureBase(shield), FutureBase(timer))
+      discard await race(FutureBase(shield), ends)
       if not waiter.finished:
-        outcome = proTimedOut
+        outcome = if not stop.isNil and stop.requested: proStopped else: proTimedOut
   except CancelledError:
     outcome = proCancelled
 
@@ -318,17 +334,17 @@ proc readAllOutput*(
   return lines
 
 proc waitForAsync*(
-    bp: BackgroundProcess, timeout: Duration
+    bp: BackgroundProcess, timeout: Duration, stop: JobStop = nil
 ): Future[ProcessOutputResult] {.async: (raises: []).} =
   ## Wait for the process and return its output, killing it once `timeout`
-  ## elapses. `InfiniteDuration` waits without a bound.
+  ## elapses or `stop` is requested. `InfiniteDuration` waits without a bound.
   ##
   ## This is the bounded form every external command should use: a command that
   ## never exits (a hung compiler, a program reading stdin) is turned into an
   ## error instead of a Future and a child process that live until the editor
   ## quits. A timeout is always reported as an error, never as empty output.
   let reader = bp.readAllOutput()
-  case await bp.runToCompletion(@[FutureBase(reader)], timeout)
+  case await bp.runToCompletion(@[FutureBase(reader)], timeout, stop)
   of proCompleted:
     return ProcessOutputResult.ok(await reader)
   of proTimedOut:
@@ -337,6 +353,8 @@ proc waitForAsync*(
     return ProcessOutputResult.err fmt"Timed out after {timeout}"
   of proCancelled:
     return ProcessOutputResult.err "The command was cancelled"
+  of proStopped:
+    return ProcessOutputResult.err "The command was stopped"
 
 proc startFilterProcess*(command: BackgroundProcessCommand): StartProcessResult =
   ## Start `command` with each of its three standard streams on a pipe of its
@@ -394,7 +412,7 @@ proc filterOutput*(
     # report "0" for anything shorter than a second.
     return
       FilterProcessResult.err(filterError(ffTimedOut, fmt"Timed out after {timeout}"))
-  of proCancelled:
+  of proCancelled, proStopped:
     return FilterProcessResult.err filterError(ffCancelled, "The command was cancelled")
   of proCompleted:
     discard

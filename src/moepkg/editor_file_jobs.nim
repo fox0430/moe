@@ -17,19 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-## The external commands the editor has started: what is running, and ending
-## them.
-##
-## A command captures `commandEpoch` when it is queued and re-checks it after
-## every await, so `:jobs!` reaches work already in flight rather than only
-## what is still waiting to start.
+## The external commands the editor has started: listing them for `:jobs` and
+## stopping them for `:jobs!`.
 
 import std/monotimes
 
 from std/times import inSeconds
 
 import types/editor_types
-import background_process, quick_run_utils
+import background_process, job_lanes, quick_run_utils
 
 const NoCommandEpoch* = high(uint64)
   ## The epoch of work `:jobs!` cannot stop. The counter only counts up from
@@ -53,26 +49,40 @@ proc elapsedText(startedAt: MonoTime): string =
     $(secs div 60) & "m" & $(secs mod 60) & "s"
 
 proc runningCommands*(e: Editor): seq[string] =
-  ## One line per running external command, for `:jobs`.
+  ## One line per external command running, stopping or queued, for `:jobs`.
+  proc entry(label, state, path: string): string =
+    result = label & " (" & state & ")"
+    if path.len > 0:
+      result &= ": " & path
+
   for running in e.runningBackgroundProcesses:
     let name = if running.label.len > 0: running.label else: "Command"
-    var line = name & " (" & elapsedText(running.startedAt) & ")"
-    if running.path.len > 0:
-      line &= ": " & running.path
-    result.add line
+    result.add entry(name, elapsedText(running.startedAt), running.path)
+
+  for job in e.jobLanes.jobs:
+    case job.state
+    of jsRunning:
+      result.add entry(job.label, elapsedText(job.startedAt), job.path)
+    of jsStopping:
+      result.add entry(job.label, "stopping", job.path)
+    of jsWaiting:
+      discard
 
   for qr in e.runningQuickRunProcesses:
     result.add "QuickRun (" & elapsedText(qr.startedAt) & "): " & qr.filePath
 
+  for job in e.jobLanes.jobs:
+    if job.state == jsWaiting:
+      result.add entry(job.label, "queued", job.path)
+
 proc stopRunningCommands*(e: Editor): int =
-  ## Kill every external command the editor started and report how many were
-  ## stopped outright: each one `runningCommands` lists.
-  ##
-  ## Work that stops at its next epoch check instead is not counted, since it
-  ## is still running when this returns.
+  ## Kill every external command the editor started, drop the queued ones, and
+  ## return how many. Jobs already stopping, and work that stops at its next
+  ## epoch check, are not counted.
   # Bumped first so everything unwinding below sees it and stops at its next
   # await rather than carrying on.
   e.state.commandEpoch.inc
+  let fromLanes = e.jobLanes.stopAll().len
 
   # Whether or not the command itself has exited: what it left running in its
   # group holds the job open until the run releases it.
@@ -80,4 +90,4 @@ proc stopRunningCommands*(e: Editor): int =
     running.process.kill()
   for qr in e.runningQuickRunProcesses:
     qr.process.kill()
-  e.runningBackgroundProcesses.len + e.runningQuickRunProcesses.len
+  e.runningBackgroundProcesses.len + e.runningQuickRunProcesses.len + fromLanes

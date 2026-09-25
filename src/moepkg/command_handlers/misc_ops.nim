@@ -23,7 +23,10 @@
 
 import std/os
 
-import ../[editor, editor_file_jobs, editor_notify, logger, registers, types]
+import
+  ../[
+    editor, editor_build_jobs, editor_file_jobs, editor_notify, logger, registers, types
+  ]
 
 import editor_ops, handler_result
 
@@ -104,18 +107,15 @@ proc processMiscResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): 
       e.state.statusMessage = "Build error: File not saved"
       logError("handler", "Build failed: No file path")
     else:
-      e.state.pending.add PendingAsyncOp(
-        kind: paoBuild,
-        epoch: e.state.commandEpoch,
-        build: (
+      e.submitBuild(
+        (
           path: filePath,
           language: activeBuffer.language.ord,
           customCmd: "",
           workspaceRoot: parentDir(filePath),
           automatic: false,
-        ),
+        )
       )
-      e.state.statusMessage = "Building: " & filePath
     return true
   of hrTheme:
     e.applyThemeCommand(r.hrThemeName)

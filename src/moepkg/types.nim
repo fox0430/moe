@@ -851,9 +851,7 @@ type
     paoShellCommand
     paoManPage
     paoBackground
-    paoBuild
     paoQuickRun
-    paoSyntaxCheck
     paoFilter
 
   PendingAsyncOp* = object
@@ -862,20 +860,15 @@ type
     ## import graph (handler.nim owns the runners). Fire-and-forget work whose
     ## runner is importable uses `asyncSpawn` at the call site instead.
     epoch*: uint64
-      # Command epoch captured when the op was queued. File-job runners (build,
-      # QuickRun, syntax check) check it, so a `:jobs!` between queueing and
-      # spawning still refuses the claim.
+      # Command epoch captured when the op was queued. QuickRun checks it, so a
+      # `:jobs!` between queueing and spawning still stops the run.
     case kind*: PendingAsyncOpKind
     of paoTerminalCommand, paoShellCommand, paoManPage:
       command*: string
     of paoBackground:
       discard
-    of paoBuild:
-      build*: BuildInfo
     of paoQuickRun:
       quickRun*: QuickRunInfo
-    of paoSyntaxCheck:
-      syntaxCheck*: SyntaxCheckInfo
     of paoFilter:
       filter*: FilterInfo
 

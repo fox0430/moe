@@ -19,7 +19,7 @@
 
 import std/[unittest, os, strutils]
 
-import pkg/chronos
+import pkg/[chronos, results]
 
 import ../src/moepkg/build {.all.}
 import ../src/moepkg/child_process
@@ -141,154 +141,94 @@ suite "Build - buildCommand":
     let r = buildCommand("/path/to/file.txt", SourceLanguage.langNone, "/workspace")
     check r.isErr
 
-suite "Build - startBackgroundBuild with path":
-  test "Start build with unsupported language returns error":
-    proc runTest(): Future[bool] {.async.} =
-      let r = startBackgroundBuild(
-        "/path/to/file.py", SourceLanguage.langPython, getCurrentDir()
-      )
-      return r.isErr
+proc startBuild(
+    cmd: string, args: seq[string] = @[], dir = getCurrentDir(), path = ""
+): Result[BuildProcess, string] =
+  startBackgroundBuild(
+    BackgroundProcessCommand(cmd: cmd, args: args, workingDir: dir), path
+  )
 
-    check waitFor(runTest())
-
-  test "Start build with langNone returns error":
-    proc runTest(): Future[bool] {.async.} =
-      let r = startBackgroundBuild(
-        "/path/to/file.txt", SourceLanguage.langNone, getCurrentDir()
-      )
-      return r.isErr
-
-    check waitFor(runTest())
-
-suite "Build - startBackgroundBuild with custom command":
-  test "Start build with custom echo command":
-    proc runTest(): Future[tuple[isOk: bool, output: seq[string]]] {.async.} =
-      let customCmd: BuildCommand = (cmd: "echo", args: @["build", "success"])
-      let r = startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
-      if r.isOk:
-        let bp = r.get
-        let output = (await bp.waitForAsync(30.seconds)).get
-        return (true, output)
-      else:
-        return (false, @[])
-
-    let r = waitFor runTest()
+suite "Build - buildOnSaveCommand":
+  test "A custom command runs as given, in the workspace root":
+    let r = buildOnSaveCommand(
+      "/path/to/file.nim",
+      SourceLanguage.langNim,
+      customCommand = "echo custom build",
+      workspaceRoot = "/workspace",
+    )
     check r.isOk
-    check r.output.len >= 1
-    check r.output[0] == "build success"
+    check r.get.cmd == "echo"
+    check r.get.args == @["custom", "build"]
+    check r.get.workingDir == "/workspace"
 
-  test "Start build with empty command returns error":
-    proc runTest(): Future[bool] {.async.} =
-      let customCmd: BuildCommand = (cmd: "", args: @[])
-      let r = startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
-      return r.isErr
-
-    check waitFor(runTest())
-
-  test "Start build with working directory":
-    proc runTest(): Future[tuple[isOk: bool, output: seq[string]]] {.async.} =
-      let customCmd: BuildCommand = (cmd: "pwd", args: @[])
-      let r = startBackgroundBuild(customCmd, SourceLanguage.langNim, "/tmp")
-      if r.isOk:
-        let bp = r.get
-        let output = (await bp.waitForAsync(30.seconds)).get
-        return (true, output)
-      else:
-        return (false, @[])
-
-    let r = waitFor runTest()
+  test "Without one, the language's own command":
+    let r = buildOnSaveCommand(
+      "/path/to/file.nim", SourceLanguage.langNim, workspaceRoot = "/workspace"
+    )
     check r.isOk
-    check r.output.len >= 1
-    check r.output[0] == "/tmp"
+    check r.get.cmd == "nim"
+    check r.get.args == @["c", "/path/to/file.nim"]
+
+  test "A custom command of only blanks is refused":
+    check buildOnSaveCommand("/path/to/file.nim", SourceLanguage.langNim, "   ").isErr
+
+  test "A language without a build command is refused":
+    let r = buildOnSaveCommand("/path/to/file.py", SourceLanguage.langPython)
+    check r.isErr
+    check "Failed to exec build commands" in r.error
+    check buildOnSaveCommand("/path/to/file.txt", SourceLanguage.langNone).isErr
+
+suite "Build - startBackgroundBuild":
+  test "Start a build and read its output":
+    proc runTest(): Future[seq[string]] {.async.} =
+      let r = startBuild("echo", @["build", "success"])
+      if r.isErr:
+        return @[]
+      return (await r.get.waitForAsync(30.seconds)).get
+
+    let output = waitFor runTest()
+    check output.len >= 1
+    check output[0] == "build success"
+
+  test "The build runs in its working directory":
+    proc runTest(): Future[seq[string]] {.async.} =
+      let r = startBuild("pwd")
+      if r.isErr:
+        return @[]
+      return (await r.get.waitForAsync(30.seconds)).get
+
+    let output = waitFor runTest()
+    check output.len >= 1
+    check output[0] == getCurrentDir()
 
   test "BuildProcess stores command and filePath":
-    proc runTest(): Future[tuple[cmd: string, args: seq[string]]] {.async.} =
-      let customCmd: BuildCommand = (cmd: "echo", args: @["test"])
-      let r = startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
-      if r.isOk:
-        let bp = r.get
-        discard await bp.waitForAsync(30.seconds)
-        return (bp.command.cmd, bp.command.args)
-      else:
-        return ("", @[])
-
-    let r = waitFor runTest()
-    check r.cmd == "echo"
-    check r.args == @["test"]
-
-suite "Build - startBackgroundBuildOnSave":
-  test "Start build on save with custom command":
-    proc runTest(): Future[tuple[isOk: bool, output: seq[string]]] {.async.} =
-      let r = startBackgroundBuildOnSave(
-        "/path/to/file.nim",
-        SourceLanguage.langNim,
-        customCommand = "echo custom build",
-        workspaceRoot = getCurrentDir(),
-      )
-      if r.isOk:
-        let bp = r.get
-        let output = (await bp.waitForAsync(30.seconds)).get
-        return (true, output)
-      else:
-        return (false, @[])
-
-    let r = waitFor runTest()
+    let r = startBuild("echo", @["test"], path = "/src/a.nim")
     check r.isOk
-    check r.output.len >= 1
-    check r.output[0] == "custom build"
-
-  test "Start build on save without custom command for unsupported language":
-    proc runTest(): Future[bool] {.async.} =
-      let r = startBackgroundBuildOnSave(
-        "/path/to/file.py",
-        SourceLanguage.langPython,
-        customCommand = "",
-        workspaceRoot = getCurrentDir(),
-      )
-      return r.isErr
-
-    check waitFor(runTest())
-
-  test "Start build on save with empty custom command uses default":
-    proc runTest(): Future[bool] {.async.} =
-      # For unsupported language without custom command, should fail
-      let r = startBackgroundBuildOnSave(
-        "/path/to/file.txt",
-        SourceLanguage.langNone,
-        customCommand = "",
-        workspaceRoot = getCurrentDir(),
-      )
-      return r.isErr
-
-    check waitFor(runTest())
+    check r.get.command.cmd == "echo"
+    check r.get.command.args == @["test"]
+    check r.get.filePath == "/src/a.nim"
+    discard waitFor r.get.waitForAsync(30.seconds)
 
 suite "Build - waitForAsync":
   test "Wait for build process and get output":
-    proc runTest(): Future[tuple[output: seq[string], processIsNil: bool]] {.async.} =
-      let customCmd: BuildCommand = (cmd: "echo", args: @["build output"])
-      let r = startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
-      if r.isOk:
-        let bp = r.get
-        let output = (await bp.waitForAsync(30.seconds)).get
-        return (output, bp.process.process.released)
-      else:
+    proc runTest(): Future[tuple[output: seq[string], released: bool]] {.async.} =
+      let r = startBuild("echo", @["build output"])
+      if r.isErr:
         return (@[], false)
+      let output = (await r.get.waitForAsync(30.seconds)).get
+      return (output, r.get.process.process.released)
 
     let r = waitFor runTest()
     check r.output.len >= 1
     check r.output[0] == "build output"
-    check r.processIsNil
+    check r.released
 
   test "Wait for multi-line output":
     proc runTest(): Future[seq[string]] {.async.} =
-      let customCmd: BuildCommand =
-        (cmd: "sh", args: @["-c", "echo line1; echo line2; echo line3"])
-      let r = startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
-      if r.isOk:
-        let bp = r.get
-        return (await bp.waitForAsync(30.seconds)).get
-      else:
+      let r = startBuild("sh", @["-c", "echo line1; echo line2; echo line3"])
+      if r.isErr:
         return @[]
+      return (await r.get.waitForAsync(30.seconds)).get
 
     let output = waitFor runTest()
     check output.len >= 3
@@ -298,23 +238,6 @@ suite "Build - waitForAsync":
 
 suite "Build - error handling":
   test "Invalid executable returns error":
-    proc runTest(): Future[bool] {.async.} =
-      let customCmd: BuildCommand =
-        (cmd: "/nonexistent/command/that/does/not/exist", args: @[])
-      let r = startBackgroundBuild(customCmd, SourceLanguage.langNim, getCurrentDir())
-      return r.isErr
-
-    check waitFor(runTest())
-
-  test "Error message contains 'Failed to exec build commands'":
-    proc runTest(): Future[string] {.async.} =
-      let r = startBackgroundBuild(
-        "/path/to/file.py", SourceLanguage.langPython, getCurrentDir()
-      )
-      if r.isErr:
-        return r.error
-      else:
-        return ""
-
-    let errMsg = waitFor runTest()
-    check "Failed to exec build commands" in errMsg
+    let r = startBuild("/nonexistent/command/that/does/not/exist")
+    check r.isErr
+    check "Failed to exec build commands" in r.error

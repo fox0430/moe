@@ -41,7 +41,8 @@ moe is searching and reflects the current VSCode theme if you already installed 
 
 moe can build on save if you set true in BuildOnSave.enable in the configuration file.  
 By default, the ```nim c filename``` command is executed.  
-You can set workSpaceRoot and command to be executed in the configuration file.
+You can set workSpaceRoot and command to be executed in the configuration file.  
+A build waits for the one running, whatever it builds: two builds at once can overwrite each other's output. Saves during a build queue one more run of the same command, however many saves there were.
 
 ## History mode (Backup file manager)
 

@@ -22,7 +22,7 @@
 
 import std/[options, tables]
 
-import ../[types, motion, commands, command_registry, modes, quick_run_utils]
+import ../[types, motion, commands, command_registry, modes, quick_run_utils, job_lanes]
 import ../key_bindings except Command
 import ../command_handlers/handler_types
 import ../buffer/core as buffer_core
@@ -70,8 +70,9 @@ type
       ## What a crash preserved, as this editor last read it. Only `main` sets
       ## it, so an editor a test builds never reads the user's cache.
     runningBackgroundProcesses*: seq[RunningCommand]
-      ## External commands the editor started and can still stop, named and
-      ## timed so the user can see which one holds a file's claim.
+      ## External commands started outside `jobLanes` that the editor can
+      ## still stop, named and timed for `:jobs`.
+    jobLanes*: JobLanes ## Builds and syntax checks, listed and stopped through here.
     runningQuickRunProcesses*: seq[QuickRunProcess]
       ## In-flight QuickRun processes, tracked separately from
       ## `runningBackgroundProcesses` because they own temporary files (temp
