@@ -292,7 +292,7 @@ type
       # per-frame levRawJson events are emitted (any non-off level enables them).
     debugLog: bool # Also emit them so req/res reach the debug log file (-d)
 
-  LspWorker* = ref object
+  LspWorkerObj = object
     thread: Thread[LspWorkerContext]
     threadStarted: bool
     stopped: bool
@@ -303,6 +303,20 @@ type
     languageId*: string
     nextRequestId: int # For generating unique request IDs
     traceLevel: LspTrace # Forwarded to the worker context on start()
+
+  LspWorker* = ref LspWorkerObj
+
+proc stopThread(worker: var LspWorkerObj)
+
+proc `=destroy`(worker: var LspWorkerObj) =
+  ## The thread reads the queues and state held here, so a worker dropped
+  ## without `stop` ends its thread before they are freed.
+  if not worker.signal.isNil:
+    if worker.threadStarted and not worker.stopped:
+      logWarn("lsp", worker.languageId & " worker dropped without stop")
+    worker.stopThread()
+  for field in worker.fields:
+    `=destroy`(field)
 
 # Atomic state accessors
 proc loadRunning(s: ptr SharedState): bool =
@@ -1795,50 +1809,7 @@ proc initSharedState(): SharedState =
   result.running.store(false, moRelaxed)
   result.stateVal.store(lwsStopped.ord, moRelaxed)
 
-proc newLspWorker*(
-    languageId: string, traceLevel: LspTrace = traceOff
-): Result[LspWorker, string] =
-  ## Create a new LSP worker. Returns error if signal creation fails.
-  ## traceLevel is forwarded to `initialize` and gates per-frame levRawJson
-  ## events (any non-off level enables them).
-  let signalResult = ThreadSignalPtr.new()
-  if signalResult.isErr:
-    return err("Failed to create thread signal: " & signalResult.error)
-
-  ok(
-    LspWorker(
-      commandQueue: initCommandQueue(),
-      eventQueue: initEventQueue(),
-      sharedState: initSharedState(),
-      signal: signalResult.get,
-      languageId: languageId,
-      nextRequestId: 1,
-      traceLevel: traceLevel,
-    )
-  )
-
-proc start*(worker: LspWorker) =
-  if worker.sharedState.running.load(moAcquire):
-    return
-
-  worker.sharedState.running.store(true, moRelease)
-
-  let ctx = LspWorkerContext(
-    commandQueue: addr worker.commandQueue,
-    eventQueue: addr worker.eventQueue,
-    sharedState: addr worker.sharedState,
-    signal: worker.signal,
-    tempDir: getTempDir(),
-    traceLevel: worker.traceLevel,
-    # Read once here on the main thread; the worker only emits events, the
-    # actual file write happens in processEvent (also on the main thread).
-    debugLog: getGlobalLogger().isEnabled,
-  )
-
-  createThread(worker.thread, workerThreadProc, ctx)
-  worker.threadStarted = true
-
-proc stop*(worker: LspWorker) =
+proc stopThread(worker: var LspWorkerObj) =
   if worker.stopped:
     return
 
@@ -1864,6 +1835,54 @@ proc stop*(worker: LspWorker) =
   discard worker.signal.close()
 
   worker.stopped = true
+
+proc newLspWorker*(
+    languageId: string, traceLevel: LspTrace = traceOff
+): Result[LspWorker, string] =
+  ## Create a new LSP worker. Returns error if signal creation fails.
+  ## traceLevel is forwarded to `initialize` and gates per-frame levRawJson
+  ## events (any non-off level enables them).
+  let signalResult = ThreadSignalPtr.new()
+  if signalResult.isErr:
+    return err("Failed to create thread signal: " & signalResult.error)
+
+  ok(
+    LspWorker(
+      commandQueue: initCommandQueue(),
+      eventQueue: initEventQueue(),
+      sharedState: initSharedState(),
+      signal: signalResult.get,
+      languageId: languageId,
+      nextRequestId: 1,
+      traceLevel: traceLevel,
+    )
+  )
+
+proc start*(worker: LspWorker) =
+  # `stop` freed the locks and signal, and the destructor skips stopped workers.
+  doAssert not worker.stopped, "a stopped LspWorker cannot be restarted"
+  if worker.sharedState.running.load(moAcquire):
+    return
+
+  worker.sharedState.running.store(true, moRelease)
+
+  let ctx = LspWorkerContext(
+    commandQueue: addr worker.commandQueue,
+    eventQueue: addr worker.eventQueue,
+    sharedState: addr worker.sharedState,
+    signal: worker.signal,
+    tempDir: getTempDir(),
+    traceLevel: worker.traceLevel,
+    # Read once here on the main thread; the worker only emits events, the
+    # actual file write happens in processEvent (also on the main thread).
+    debugLog: getGlobalLogger().isEnabled,
+  )
+
+  createThread(worker.thread, workerThreadProc, ctx)
+  worker.threadStarted = true
+
+proc stop*(worker: LspWorker) =
+  worker[].stopThread()
 
 proc startServer*(
     worker: LspWorker,
