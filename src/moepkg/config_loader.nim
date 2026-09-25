@@ -24,11 +24,13 @@
 ## `generateSectionSerializers` from `config_macros`), which derive the section
 ## set from `EditorConfig`'s `{.cfgSection.}` fields so it cannot drift from the
 ## type. Sections without a `{.cfgSection.}` (Theme, Lsp, Debug, KeyMapping,
-## CommandAliases, ShellCommands, DisabledCommandAliases) and the nested
+## Hook, CommandAliases, ShellCommands, DisabledCommandAliases) and the nested
 ## `[StartUp.*]` tables are dispatched by hand here, using the helpers from
 ## `config_loader/<section>.nim`. `[Lsp]` is dispatched by hand because its
 ## parent table also holds the dynamic `[Lsp.<languageId>]` keyspace, but its
 ## body is derived from `LspConfig` all the same (see `config_loader/lsp`).
+## `[Hook]` is by hand because the dispatch macros do not model its
+## `[[Hook.entries]]` array of tables.
 ## Those sub-modules are re-exported so external callers (`editor.nim`,
 ## `command_handlers/*`, etc.) can keep `import config_loader` unchanged.
 
@@ -44,9 +46,19 @@ when defined(moe.matter) or defined(features.moe.matter):
 
 import
   config_loader/[
-    base, save_base, simple, debug, lsp, theme as themeLoader, keymapping, user_commands
+    base,
+    save_base,
+    simple,
+    debug,
+    lsp,
+    theme as themeLoader,
+    keymapping,
+    user_commands,
+    hooks as hooksLoader,
   ]
-export base, save_base, simple, debug, lsp, themeLoader, keymapping, user_commands
+export
+  base, save_base, simple, debug, lsp, themeLoader, keymapping, user_commands,
+  hooksLoader
 
 # Every top-level section name moerc.toml accepts. Each sub-module owns the
 # names it handles; "StartUp" is the parent table of `[StartUp.FileOpen]` and
@@ -54,7 +66,8 @@ export base, save_base, simple, debug, lsp, themeLoader, keymapping, user_comman
 const KnownTopLevelSections* =
   @SimpleSectionNames &
   @[
-    DebugSectionName, LspSectionName, ThemeSectionName, KeyMappingSectionName, "StartUp"
+    DebugSectionName, LspSectionName, ThemeSectionName, KeyMappingSectionName,
+    HookSectionName, "StartUp",
   ] & @UserCommandsSectionNames
 
 # The sub-tables of [StartUp].
@@ -125,7 +138,7 @@ proc loadConfigFromToml*(
   # loading). This single macro call expands to the per-section
   # `if toml.hasKey(...)` dispatch derived from EditorConfig's fields, so it
   # stays in sync with the type automatically. Sections with no {.cfgSection.}
-  # (Theme, Lsp, Debug, KeyMapping, CommandAliases, ShellCommands,
+  # (Theme, Lsp, Debug, KeyMapping, Hook, CommandAliases, ShellCommands,
   # DisabledCommandAliases) and the nested [StartUp.*] sections are handled by
   # hand below.
   generateSectionLoaders(toml, config, vr, EditorConfig)
@@ -164,6 +177,9 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("ShellCommands"):
     loadShellCommandsConfig(toml["ShellCommands"].getTable(), config.shellCommands, vr)
+
+  if toml.hasKey("Hook"):
+    loadHookConfig(toml["Hook"].getTable(), config.hooks, vr)
 
   if toml.hasKey("DisabledCommandAliases"):
     loadDisabledCommandAliasesConfig(
@@ -217,6 +233,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   appendCommandAliasesToml(lines, config.commandAliases)
   appendShellCommandsToml(lines, config.shellCommands)
   appendDisabledCommandAliasesToml(lines, config.disabledCommandAliases)
+  appendHookToml(lines, config.hooks)
 
   # Ensure directory exists
   let dir = parentDir(path)

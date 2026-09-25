@@ -362,6 +362,13 @@ proc tick*(e: Editor) =
   ## Each phase is a self-contained proc; the call order below is significant
   ## (see the per-phase docs for the dependencies between them) and must match
   ## the original sequence.
+  ##
+  ## Only notifications run once the user quit: the frames left show the
+  ## wait for the hooks the quit owes, and auto save must not write what `:q!`
+  ## threw away.
+  if e.state.quitDecided:
+    e.tickNotifications()
+    return
   e.tickLsp()
   e.tickFileAndConfig()
   e.tickGitAndDebug()

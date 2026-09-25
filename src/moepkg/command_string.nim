@@ -19,16 +19,13 @@
 
 ## Splitting a command line into an argv the process starter can use.
 ##
-## Used by build-on-save, which takes a command as one string from the config
-## and must exec it without a shell.
+## Used by build-on-save and `[Hook]`, which take a command as one string from
+## the config and must exec it without a shell.
 
 type CommandArgv* = tuple[cmd: string, args: seq[string]]
 
-proc parseCommandString*(cmdStr: string): CommandArgv =
-  ## Parse a command string into a CommandArgv tuple, honoring POSIX-style
-  ## single/double quotes and backslash escapes so args containing whitespace
-  ## survive as a single token.
-  ## E.g., `nim c "-d:foo bar" file.nim` -> (cmd: "nim", args: @["c", "-d:foo bar", "file.nim"])
+proc scanCommandString(cmdStr: string): tuple[tokens: seq[string], unterminated: bool] =
+  ## The tokens of `cmdStr`, and whether a quote in it is never closed.
   var
     tokens: seq[string] = @[]
     current = ""
@@ -77,7 +74,19 @@ proc parseCommandString*(cmdStr: string): CommandArgv =
     inc i
   if hasToken or inSingle or inDouble:
     tokens.add current
+  (tokens: tokens, unterminated: inSingle or inDouble)
 
+proc hasUnterminatedQuote*(cmdStr: string): bool =
+  ## Whether a quote in `cmdStr` is never closed. `parseCommandString` takes
+  ## such a quote to run to the end of the line; a validator can refuse it.
+  scanCommandString(cmdStr).unterminated
+
+proc parseCommandString*(cmdStr: string): CommandArgv =
+  ## Parse a command string into a CommandArgv tuple, honoring POSIX-style
+  ## single/double quotes and backslash escapes so args containing whitespace
+  ## survive as a single token.
+  ## E.g., `nim c "-d:foo bar" file.nim` -> (cmd: "nim", args: @["c", "-d:foo bar", "file.nim"])
+  let tokens = scanCommandString(cmdStr).tokens
   if tokens.len == 0:
     return (cmd: "", args: @[])
   elif tokens.len == 1:

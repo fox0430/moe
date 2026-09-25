@@ -651,3 +651,30 @@ rustAnalyzerDebugSingle = true         # rust-analyzer specific: debug single
 # nimbuild = { command = "nimble build", description = "Build project" }
 # nimtest = { command = "nimble test" }
 # gitlog = { command = "git log --oneline -20", description = "Recent commits" }
+
+# [Hook]
+# Run a command when an editor event happens: run a linter, regenerate code,
+# poke a dev server. Each hook is one [[Hook.entries]] table, and they fire in
+# the order they are written. They run in the background, one at a time, and
+# report only a failure; a quit waits for the BufWritePost ones.
+#
+# enable = true       # Run hooks at all
+# onAutoSave = false  # Run BufWritePost for auto saves too
+
+# [[Hook.entries]]
+# event       = "BufWritePost"  # BufWritePost | BufReadPost
+# command     = "nimble check"  # Not run through a shell; use "sh -c '...'" for that
+# filetype    = ["nim"]         # Default: every file type
+# filter      = "\\.nim$"       # Regex over the path. Default: every path
+# workingDir  = "src"           # Relative to the file's directory. Default: that directory
+# showOutput  = true            # Show the output in a horizontal split
+#
+# [[Hook.entries]]
+# event       = "BufWritePost"
+# command     = "sh -c 'make -s proto'"
+# timeout     = 300             # Seconds. 0 waits without a bound
+#
+# Placeholders usable in command and workingDir:
+#   ${file} ${dir} ${filename} ${basename} ${ext} ${filetype}
+#
+# `:jobs` lists the commands still running and `:jobs!` gives up on them.

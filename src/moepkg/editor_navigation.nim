@@ -97,10 +97,12 @@ proc bufferIndexForFile(e: Editor, path: string): int =
   ## Index of the buffer holding `path`, or -1.
   indexOfBufferHoldingPath(e.buffers, path)
 
-proc loadAndRegisterBuffer(e: Editor, path: string): Result[TextBuffer, string] =
+proc loadAndRegisterBuffer(
+    e: Editor, path: string, readByUser = true
+): Result[TextBuffer, string] =
   ## Load `path` into a fresh buffer and register it in the global buffer list
   ## with the setup every opened file gets. Whether a window shows the result is
-  ## the caller's choice.
+  ## the caller's choice; `readByUser` is as for `initLoadedBuffer`.
   let newBuffer = newTextBuffer()
   # Seed the highlight cap before loadFile builds the first chunk, so the cap
   # is not changed afterwards (which would nil the progressive-load cache).
@@ -117,7 +119,7 @@ proc loadAndRegisterBuffer(e: Editor, path: string): Result[TextBuffer, string] 
   applyHighlightConfig(newBuffer, e.config)
   # Doing this by hand used to leave a file reached by go-to-definition without
   # its bookmarks, gutter or conflict blocks.
-  e.initLoadedBuffer(newBuffer)
+  e.initLoadedBuffer(newBuffer, readByUser)
 
   ok(newBuffer)
 
@@ -153,7 +155,7 @@ proc openFileInBackground*(e: Editor, path: string): Result[TextBuffer, string] 
   if existing >= 0:
     return ok(e.buffers[existing])
 
-  e.loadAndRegisterBuffer(path)
+  e.loadAndRegisterBuffer(path, readByUser = false)
 
 proc addToJumpList*(e: Editor) =
   ## Add current cursor position to jump list before a jump

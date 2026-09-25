@@ -25,6 +25,8 @@
 import std/[options, strutils, unicode, tables]
 import celina_backend as celina
 
+import encoding
+
 export buffer.runeWidth, buffer.displayWidth, buffer.foldZeroWidthRune
 
 proc isC0Control*(r: Rune): bool =
@@ -82,6 +84,11 @@ proc sanitizeForDisplay*(s: string): string =
   result = newStringOfCap(s.len)
   for r in s.runes:
     result.add($sanitizeCellRune(r))
+
+proc forDisplay*(msg: string): string =
+  ## Make external text (a path, command output) safe to display: replace
+  ## invalid UTF-8 and control bytes, including ones a byte cut split.
+  msg.sanitizeInvalidUtf8().sanitizeForDisplay()
 
 proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
   ## Write a single rune at (x, y), returning its display width so callers can

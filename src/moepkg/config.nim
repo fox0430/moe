@@ -301,6 +301,7 @@ proc newEditorConfig*(): EditorConfig =
     shellCommands: initTable[string, UserCommandEntry](),
     commandAliases: initTable[string, UserCommandEntry](),
     disabledCommandAliases: @[],
+    hooks: HookConfig(),
   )
   when defined(moe.matter) or defined(features.moe.matter):
     result.highlight.matterGrammarSet = newMatterGrammarSet()
