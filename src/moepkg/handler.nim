@@ -92,10 +92,10 @@ proc removeRunningProcess*(e: Editor, p: BackgroundProcess) =
       return
 
 proc cleanupBackgroundProcesses*(e: Editor) =
-  ## Cancel all running background processes (call on editor exit)
+  ## Kill every background command (call on editor exit), along with what one
+  ## that has exited left running in its group.
   for running in e.runningBackgroundProcesses:
-    if running.process.isRunning:
-      running.process.kill()
+    running.process.kill()
   e.runningBackgroundProcesses = @[]
 
 proc addRunningQuickRun*(e: Editor, p: QuickRunProcess) =
@@ -1727,7 +1727,7 @@ proc runSyntaxCheckJob(
   {.cast(gcsafe).}:
     try:
       let checkResult =
-        await startBackgroundSyntaxCheck(info.path, SourceLanguage(info.language))
+        startBackgroundSyntaxCheck(info.path, SourceLanguage(info.language))
       if checkResult.isErr:
         editor.notify("Syntax check error: " & checkResult.error, nlError)
       else:
@@ -1769,7 +1769,7 @@ proc runBuildJob(
   ## Run build process in background and display output when complete
   {.cast(gcsafe).}:
     try:
-      let buildResult = await startBackgroundBuildOnSave(
+      let buildResult = startBackgroundBuildOnSave(
         info.path, SourceLanguage(info.language), info.customCmd, info.workspaceRoot
       )
       if buildResult.isErr:
@@ -1811,7 +1811,7 @@ proc runQuickRunJob(
         filePath: info.filePath,
         isTempFile: info.isTempFile,
       )
-      let quickRunResult = await startBackgroundQuickRun(prepared)
+      let quickRunResult = startBackgroundQuickRun(prepared)
       if quickRunResult.isErr:
         editor.notify("QuickRun error: " & quickRunResult.error, nlError)
       else:
@@ -1860,7 +1860,7 @@ proc runFilterAsync(
         input.add before.get.getLine(i)
         input.add '\n'
 
-      let startResult = await startFilterProcess(
+      let startResult = startFilterProcess(
         BackgroundProcessCommand(
           cmd: "sh", args: @["-c", info.command], workingDir: getCurrentDir()
         )

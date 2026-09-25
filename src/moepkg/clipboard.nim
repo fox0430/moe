@@ -77,8 +77,7 @@ proc processGone(p: Process, exitCode: var int): bool =
   # WNOWAIT checks without reaping; otherwise Process state is lost.
   # ECHILD = already reaped elsewhere, avoid signaling recycled PID.
   var info: SigInfo
-  info.si_pid = Pid(0)
-  let wr = waitid(idPid, Id(p.processID), info, WEXITED or WNOHANG or WNOWAIT)
+  let wr = waitidRetrying(p.processID, info, WEXITED or WNOHANG or WNOWAIT)
   if wr == -1:
     if osLastError().cint == ECHILD:
       return true

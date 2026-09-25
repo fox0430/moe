@@ -89,12 +89,12 @@ proc parseNimCheckResult*(path: string, output: seq[string]): seq[SyntaxCheckErr
 
 proc startBackgroundSyntaxCheck*(
     path: string, lang: SourceLanguage
-): Future[Result[SyntaxCheckProcess, string]] {.async: (raises: []).} =
+): Result[SyntaxCheckProcess, string] =
   let command = syntaxCheckCommand(path, lang)
   if command.isErr:
     return Result[SyntaxCheckProcess, string].err(command.error)
 
-  let backgroundProcess = await startBackgroundProcess(command.get)
+  let backgroundProcess = startBackgroundProcess(command.get)
   if backgroundProcess.isErr:
     return Result[SyntaxCheckProcess, string].err(
       "Failed to start syntax check: " & backgroundProcess.error

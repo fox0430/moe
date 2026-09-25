@@ -24,7 +24,7 @@ import pkg/chronos
 import ../src/moepkg/syntax_checker {.all.}
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/buffer
-import ../src/moepkg/background_process
+import ../src/moepkg/[background_process, child_process]
 
 suite "SyntaxChecker - syntaxCheckCommand":
   test "Nim language returns nim check command":
@@ -369,24 +369,21 @@ suite "SyntaxChecker - formattedMessage":
 suite "SyntaxChecker - startBackgroundSyntaxCheck":
   test "Unsupported language returns error":
     proc runTest(): Future[bool] {.async.} =
-      let r =
-        await startBackgroundSyntaxCheck("/path/to/file.py", SourceLanguage.langPython)
+      let r = startBackgroundSyntaxCheck("/path/to/file.py", SourceLanguage.langPython)
       return r.isErr
 
     check waitFor(runTest())
 
   test "langNone returns error":
     proc runTest(): Future[bool] {.async.} =
-      let r =
-        await startBackgroundSyntaxCheck("/path/to/file.txt", SourceLanguage.langNone)
+      let r = startBackgroundSyntaxCheck("/path/to/file.txt", SourceLanguage.langNone)
       return r.isErr
 
     check waitFor(runTest())
 
   test "Nim language starts process successfully":
     proc runTest(): Future[tuple[isOk: bool, cmd: string]] {.async.} =
-      let r =
-        await startBackgroundSyntaxCheck("/tmp/nonexistent.nim", SourceLanguage.langNim)
+      let r = startBackgroundSyntaxCheck("/tmp/nonexistent.nim", SourceLanguage.langNim)
       if r.isOk:
         let checkProc = r.get
         checkProc.process.kill()
@@ -401,8 +398,7 @@ suite "SyntaxChecker - startBackgroundSyntaxCheck":
 
   test "SyntaxCheckProcess stores filePath":
     proc runTest(): Future[string] {.async.} =
-      let r =
-        await startBackgroundSyntaxCheck("/tmp/test_file.nim", SourceLanguage.langNim)
+      let r = startBackgroundSyntaxCheck("/tmp/test_file.nim", SourceLanguage.langNim)
       if r.isOk:
         let checkProc = r.get
         let path = checkProc.filePath
@@ -424,12 +420,12 @@ suite "SyntaxChecker - waitForAsync":
         args: @["test.nim(1, 0) Error: test error"],
         workingDir: getCurrentDir(),
       )
-      let bp = await startBackgroundProcess(cmd)
+      let bp = startBackgroundProcess(cmd)
       if bp.isOk:
         let checkProc =
           SyntaxCheckProcess(command: cmd, filePath: "test.nim", process: bp.get)
         let output = (await checkProc.waitForAsync(60.seconds)).get
-        return (output, checkProc.process.process.isNil)
+        return (output, checkProc.process.process.released)
       else:
         return (@[], false)
 

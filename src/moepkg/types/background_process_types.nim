@@ -21,14 +21,14 @@
 ##
 ## Split out from `background_process` so modules that only need the type
 ## surface (notably `types/editor_types` for the
-## `Editor.runningBackgroundProcesses` field) do not transitively pull in the
-## async runtime procs. The async spawn/wait/kill procs stay in
-## `background_process`.
+## `Editor.runningBackgroundProcesses` field) do not import it. `ChildProcess`
+## is defined in `child_process`, the one module that touches its fields.
 
 import std/[monotimes, options]
 
 import pkg/results
-import pkg/chronos/asyncproc
+
+import ../child_process
 
 type
   BackgroundProcessCommand* = object
@@ -37,21 +37,7 @@ type
     workingDir*: string
 
   BackgroundProcess* = ref object
-    process*: AsyncProcessRef
-      ## The live handle, released once the run is over. `isNil` only means
-      ## the handle is gone - it is `reaped` that says whether the pid is.
-    reaped*: bool
-      ## The child has been waited for, so its pid may already be somebody
-      ## else's and nothing may signal it again. A field rather than a question
-      ## asked of the handle: the reap and the release of the handle are
-      ## separated by suspension points, and the editor can kill a registered
-      ## job in between. Every place that reaps sets it; `kill` and `cancel`
-      ## are the only readers.
-    exitCode*: Option[int]
-      ## Exit status, filled in once the process is reaped. `none` covers both
-      ## "not waited for yet" and "could not be determined": neither is a
-      ## status, and an `int` sentinel for them is indistinguishable from a
-      ## command that really exited with that code.
+    process*: ChildProcess ## Kept after the run: it is what knows how the command ended.
 
   ProcessRunOutcome* = enum
     ## How a run left the bounded wait. Cancellation is kept apart from a
