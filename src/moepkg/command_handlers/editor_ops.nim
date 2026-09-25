@@ -31,7 +31,7 @@ import
   ../[
     editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
     config_loader, window_manager, log_viewer, syntax_checker, render_utils, motion,
-    viewer_mode,
+    viewer_mode, editor_build_jobs,
   ]
 
 when not defined(moe.embedded):
@@ -263,27 +263,18 @@ proc processSaveResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
             e.config.buildOnSave.workspaceRoot.get
           else:
             parentDir(savedPath)
-        e.state.pending.add PendingAsyncOp(
-          kind: paoBuild,
-          epoch: e.state.commandEpoch,
-          build: (
+        e.submitBuild(
+          (
             path: savedPath,
             language: activeBuffer.language.ord,
             customCmd: customCmd,
             workspaceRoot: workspaceRoot,
             automatic: true,
-          ),
+          )
         )
-        if e.config.notification.screenNotifications and
-            e.config.notification.buildOnSaveScreenNotify:
-          e.state.statusMessage = "Building: " & savedPath
       if e.config.syntaxChecker.enable and
           syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
-        e.state.pending.add PendingAsyncOp(
-          kind: paoSyntaxCheck,
-          epoch: e.state.commandEpoch,
-          syntaxCheck: (path: savedPath, language: activeBuffer.language.ord),
-        )
+        e.submitSyntaxCheck((path: savedPath, language: activeBuffer.language.ord))
 
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Move the cursor to the specified line number.

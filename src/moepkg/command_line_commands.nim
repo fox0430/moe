@@ -697,11 +697,13 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   ),
   CommandLineCommandSpec(
     name: "jobs",
-    completionDescription: "List the external commands still running",
+    completionDescription: "List the external commands running or queued",
     helpEntries: @[
-      HelpEntry(syntax: "jobs", description: "List the external commands still running"),
       HelpEntry(
-        syntax: "jobs!", description: "Stop every external command still running"
+        syntax: "jobs", description: "List the external commands running or queued"
+      ),
+      HelpEntry(
+        syntax: "jobs!", description: "Stop every external command running or queued"
       ),
     ],
     action: some(claJobs),

@@ -34,9 +34,11 @@ import config_test_helper
 import
   ../src/moepkg/[
     buffer, types, modes, registers, editor, config, filer, key_bindings, config_loader,
-    render_utils, clipboard, message_log, frontend_input, editor_file_jobs,
+    render_utils, clipboard, message_log, frontend_input,
   ]
 import ../src/moepkg/handler {.all.}
+import ../src/moepkg/editor_build_jobs {.all.}
+import ../src/moepkg/job_lanes
 import ../src/moepkg/terminal_mode
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/command_handlers/result_processor
@@ -1153,14 +1155,8 @@ suite "Pending async operations":
       kind: paoShellCommand, command: "command must not run"
     )
     editor.state.pending.add PendingAsyncOp(
-      kind: paoBuild,
-      build: (
-        path: "/tmp/x.nim",
-        language: 0,
-        customCmd: "",
-        workspaceRoot: "",
-        automatic: false,
-      ),
+      kind: paoQuickRun,
+      quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
     )
 
     waitFor editor.handlePendingAsyncOperations(
@@ -1168,7 +1164,7 @@ suite "Pending async operations":
     )
 
     check editor.state.pending.len == 1
-    check editor.state.pending[0].kind == paoBuild
+    check editor.state.pending[0].kind == paoQuickRun
     check editor.state.statusMessage.contains("Pending operation failed")
 
   test "Terminal body is skipped unless both frontend hooks are available":
@@ -1217,14 +1213,8 @@ proc detachedPendingWriter(e: Editor): Future[void] {.async: (raises: [Exception
   # e.codeLensPickerConfirm() -> executeCodeLensItem(), which is asyncSpawn'd
   # from handler.nim after handleEvent has already returned.
   e.state.pending.add PendingAsyncOp(
-    kind: paoBuild,
-    build: (
-      path: "/tmp/detached.nim",
-      language: 0,
-      customCmd: "",
-      workspaceRoot: "",
-      automatic: false,
-    ),
+    kind: paoQuickRun,
+    quickRun: (cmd: "echo", args: @["detached"], filePath: "", isTempFile: false),
   )
 
 proc runDetachedScenario(e: Editor): Future[void] {.async: (raises: [Exception]).} =
@@ -1240,30 +1230,27 @@ proc waitForOutputSplit(e: Editor): Future[bool] {.async: (raises: [Exception]).
     await sleepAsync(10)
   return false
 
-suite "handlePendingAsyncOperations drains ops queued from async tasks":
+suite "Build output":
   test "build output remains Normal when forced Insert mode is enabled":
     let config = newEditorConfig()
     config.standard.forceInsertMode = true
     let editor = newEditor(config)
-    editor.state.pending.add PendingAsyncOp(
-      kind: paoBuild,
-      build: (
-        path: "/tmp/x.nim",
+    editor.submitBuild(
+      (
+        path: getTempDir() / "x.nim",
         language: 0,
         customCmd: "echo hi",
         workspaceRoot: "",
         automatic: false,
-      ),
+      )
     )
 
-    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
-
-    check editor.state.pending.len == 0
     check waitFor waitForOutputSplit(editor)
     check editor.activeBuffer.readOnly
     check editor.state.mode == EditorMode.Normal
     check not editor.activeBuffer.inTransaction
 
+suite "handlePendingAsyncOperations drains ops queued from async tasks":
   test "QuickRun output remains Normal when forced Insert mode is enabled":
     let config = newEditorConfig()
     config.standard.forceInsertMode = true
@@ -1281,17 +1268,6 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     check editor.state.mode == EditorMode.Normal
     check not editor.activeBuffer.inTransaction
 
-  test "syntaxCheck op drains on tick":
-    let config = newEditorConfig()
-    let editor = newEditor(config)
-    editor.state.pending.add PendingAsyncOp(
-      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/x.nim", language: 0)
-    )
-
-    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
-
-    check editor.state.pending.len == 0
-
   test "drain from detached async task (simulates CodeLens confirm)":
     # Reproduces the visible bug: handler.nim asyncSpawns a task, the task
     # queues an op *after* handleEvent returns. Without the unconditional
@@ -1307,21 +1283,19 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let config = newEditorConfig()
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
-      kind: paoBuild,
-      build: (
-        path: "/tmp/x.nim",
-        language: 0,
-        customCmd: "",
-        workspaceRoot: "",
-        automatic: false,
-      ),
-    )
-    editor.state.pending.add PendingAsyncOp(
       kind: paoQuickRun,
       quickRun: (cmd: "echo", args: @["hi"], filePath: "", isTempFile: false),
     )
     editor.state.pending.add PendingAsyncOp(
-      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/y.nim", language: 0)
+      kind: paoFilter,
+      filter: (
+        bufferId: BufferId(999_999),
+        windowIndex: 0,
+        command: "cat",
+        first: 0,
+        last: 0,
+        contentVersion: 0,
+      ),
     )
 
     waitFor editor.handlePendingAsyncOperations(FrontendHooks())
@@ -1333,10 +1307,12 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
     let config = newEditorConfig()
     let editor = newEditor(config)
     editor.state.pending.add PendingAsyncOp(
-      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/a.nim", language: 0)
+      kind: paoQuickRun,
+      quickRun: (cmd: "echo", args: @["a"], filePath: "", isTempFile: false),
     )
     editor.state.pending.add PendingAsyncOp(
-      kind: paoSyntaxCheck, syntaxCheck: (path: "/tmp/b.nim", language: 0)
+      kind: paoQuickRun,
+      quickRun: (cmd: "echo", args: @["b"], filePath: "", isTempFile: false),
     )
     check editor.state.pending.len == 2
 
@@ -1353,31 +1329,6 @@ suite "handlePendingAsyncOperations drains ops queued from async tasks":
 
     check editor.state.pending.len == 0
 
-  test ":jobs! stops a build queued before the drain":
-    # The op carries the epoch from when it was queued; stopping the commands
-    # before the drain makes the spawned task give up instead of starting.
-    let config = newEditorConfig()
-    let editor = newEditor(config)
-    editor.state.pending.add PendingAsyncOp(
-      kind: paoBuild,
-      epoch: editor.commandEpoch,
-      build: (
-        path: "/tmp/x.nim",
-        language: 0,
-        customCmd: "echo hi",
-        workspaceRoot: "",
-        automatic: false,
-      ),
-    )
-
-    check editor.stopRunningCommands() == 0
-    waitFor editor.handlePendingAsyncOperations(FrontendHooks())
-    # Let the spawned task reach its claim.
-    waitFor sleepAsync(200)
-
-    check editor.windowManager.windows.len == 1
-    check editor.runningBackgroundProcesses.len == 0
-
 suite "Background op failures route through notify":
   test "syntax check failure raises an error notification":
     # A bare statusMessage is wiped by prepareForInput on the next keystroke,
@@ -1388,8 +1339,8 @@ suite "Background op failures route through notify":
     editor.config.notification.popupNotifications = true
     editor.state.setStatusQuiet("")
 
-    waitFor runSyntaxCheckAsync(
-      editor, (path: "/nonexistent.txt", language: 0), editor.commandEpoch
+    waitFor runSyntaxCheckJob(
+      editor, (path: "/nonexistent.txt", language: 0), JobStop()
     )
 
     check editor.state.notificationPopup.queue.len == 1
@@ -1402,8 +1353,8 @@ suite "Background op failures route through notify":
     editor.config.notification.popupNotifications = false
     editor.state.setStatusQuiet("")
 
-    waitFor runSyntaxCheckAsync(
-      editor, (path: "/nonexistent.txt", language: 0), editor.commandEpoch
+    waitFor runSyntaxCheckJob(
+      editor, (path: "/nonexistent.txt", language: 0), JobStop()
     )
 
     check editor.state.notificationPopup.queue.len == 0

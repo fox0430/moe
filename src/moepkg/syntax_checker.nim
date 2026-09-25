@@ -105,11 +105,12 @@ proc startBackgroundSyntaxCheck*(
   )
 
 proc waitForAsync*(
-    bp: SyntaxCheckProcess, timeout: Duration
+    bp: SyntaxCheckProcess, timeout: Duration, stop: JobStop = nil
 ): Future[ProcessOutputResult] {.async: (raises: []).} =
   ## Wait for the syntax check to complete and return its output. A check still
-  ## running after `timeout` is killed and reported as an error.
-  return await bp.process.waitForAsync(timeout)
+  ## running after `timeout`, or told to `stop`, is killed and reported as an
+  ## error.
+  return await bp.process.waitForAsync(timeout, stop)
 
 proc clearSyntaxMarkers*(b: TextBuffer) =
   ## Clear only SyntaxError and SyntaxWarning markers from the buffer,

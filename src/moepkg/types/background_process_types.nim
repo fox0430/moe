@@ -40,11 +40,12 @@ type
     process*: ChildProcess ## Kept after the run: it is what knows how the command ended.
 
   ProcessRunOutcome* = enum
-    ## How a run left the bounded wait. Cancellation is kept apart from a
-    ## timeout: the editor asked for one, the command earned the other.
+    ## How a run left the bounded wait. Cancellation and a stop are kept apart
+    ## from a timeout: the editor asked for them, the command earned the other.
     proCompleted
     proTimedOut
     proCancelled
+    proStopped
 
   RunningCommand* = object
     ## One external command the editor started, named and timed so a command
