@@ -805,6 +805,27 @@ suite "Viewer round-trip - split-window viewers":
     check e.activeWindow.buffer == origBuf
     check e.activeWindow.modeState.kind == mskNone
 
+  test "Config quit commands close the scratch window through the overlay":
+    for commandText in [":q", ":q foo", ": q", ":quit", ":q!"]:
+      checkpoint commandText
+      let (e, path) = editorOnFile("moe_rt_config_command.txt")
+      defer:
+        removeFile(path)
+      let origWin = e.activeWindow
+      let origBuf = origWin.buffer
+      let windowsBefore = e.windowManager.windows.len
+
+      discard e.processResult(HandlerResult(kind: hrConfig), e.activeBuffer())
+      check e.state.mode == EditorMode.Config
+      let scratchId = e.activeWindow.buffer.id
+
+      check e.executeCommandOverlay(commandText)
+      check e.state.mode == EditorMode.Normal
+      check e.windowManager.windows.len == windowsBefore
+      check e.activeWindow == origWin
+      check e.activeWindow.buffer == origBuf
+      check e.bufferById(scratchId).isNone
+
   test "hrDebug opens the debug split and registers its auto-refresh buffer":
     # Debug has no live quit result (hrDebugViewerQuit only reaches
     # processResult defensively), so only the entry half is pinned.
