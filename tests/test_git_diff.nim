@@ -29,6 +29,14 @@ import ../src/moepkg/buffer
 import ../src/moepkg/git_diff {.all.}
 
 when defined(posix):
+  const outputProbeFlag = "--moe-git-output-probe"
+
+  if paramCount() == 1 and paramStr(1) == outputProbeFlag:
+    stdout.write("ready")
+    stdout.flushFile()
+    sleep(2000)
+    quit(0)
+
   proc openDescriptorCount(): int =
     for fd in 0.cint ..< 4096.cint:
       if fcntl(fd, F_GETFD) != -1:
@@ -57,6 +65,30 @@ when defined(posix):
       doAssert openDescriptorCount() == before
       abandonGitDiffProcess(pipeline)
       doAssert openDescriptorCount() == before
+
+  suite "Git process output polling":
+    test "available output does not wait for pipe EOF":
+      let child =
+        startProcess(getAppFilename(), args = @[outputProbeFlag], options = {})
+      try:
+        let deadline = getMonoTime() + initDuration(seconds = 5)
+        var ready = false
+        while getMonoTime() < deadline:
+          var readyFd = TPollfd(fd: child.outputHandle().cint, events: POLLIN)
+          if posix.poll(addr readyFd, Tnfds(1), 0) > 0:
+            ready = true
+            break
+          sleep(1)
+        require ready
+
+        let started = getMonoTime()
+        check child.drainExitedProcessOutput() == "ready"
+        check getMonoTime() - started < initDuration(seconds = 1)
+      finally:
+        if child.peekExitCode() == -1:
+          child.kill()
+        discard child.waitForExit()
+        child.close()
 
   block git_cleanup_kills_a_child_that_ignores_termination:
     let before = openDescriptorCount()
@@ -114,9 +146,11 @@ suite "GitDiff - parseDiffHunk":
 
 suite "GitDiff - processDeleteAddPairs":
   test "Convert single delete+add to modified":
-    let lines = @[
-      GitDiffLine(lineNumber: 5, kind: Deleted), GitDiffLine(lineNumber: 5, kind: Added)
-    ]
+    let lines =
+      @[
+        GitDiffLine(lineNumber: 5, kind: Deleted),
+        GitDiffLine(lineNumber: 5, kind: Added),
+      ]
     let result = processDeleteAddPairs(lines)
 
     check result.len == 1
@@ -124,12 +158,13 @@ suite "GitDiff - processDeleteAddPairs":
     check result[0].kind == Modified
 
   test "Convert multiple consecutive delete+add pairs to modified":
-    let lines = @[
-      GitDiffLine(lineNumber: 5, kind: Deleted),
-      GitDiffLine(lineNumber: 6, kind: Deleted),
-      GitDiffLine(lineNumber: 5, kind: Added),
-      GitDiffLine(lineNumber: 6, kind: Added),
-    ]
+    let lines =
+      @[
+        GitDiffLine(lineNumber: 5, kind: Deleted),
+        GitDiffLine(lineNumber: 6, kind: Deleted),
+        GitDiffLine(lineNumber: 5, kind: Added),
+        GitDiffLine(lineNumber: 6, kind: Added),
+      ]
     let result = processDeleteAddPairs(lines)
 
     check result.len == 2
@@ -137,12 +172,13 @@ suite "GitDiff - processDeleteAddPairs":
     check result[1].kind == Modified
 
   test "More deletes than adds":
-    let lines = @[
-      GitDiffLine(lineNumber: 5, kind: Deleted),
-      GitDiffLine(lineNumber: 6, kind: Deleted),
-      GitDiffLine(lineNumber: 7, kind: Deleted),
-      GitDiffLine(lineNumber: 5, kind: Added),
-    ]
+    let lines =
+      @[
+        GitDiffLine(lineNumber: 5, kind: Deleted),
+        GitDiffLine(lineNumber: 6, kind: Deleted),
+        GitDiffLine(lineNumber: 7, kind: Deleted),
+        GitDiffLine(lineNumber: 5, kind: Added),
+      ]
     let result = processDeleteAddPairs(lines)
 
     check result.len == 3
@@ -151,12 +187,13 @@ suite "GitDiff - processDeleteAddPairs":
     check result[2].kind == Deleted
 
   test "More adds than deletes":
-    let lines = @[
-      GitDiffLine(lineNumber: 5, kind: Deleted),
-      GitDiffLine(lineNumber: 5, kind: Added),
-      GitDiffLine(lineNumber: 6, kind: Added),
-      GitDiffLine(lineNumber: 7, kind: Added),
-    ]
+    let lines =
+      @[
+        GitDiffLine(lineNumber: 5, kind: Deleted),
+        GitDiffLine(lineNumber: 5, kind: Added),
+        GitDiffLine(lineNumber: 6, kind: Added),
+        GitDiffLine(lineNumber: 7, kind: Added),
+      ]
     let result = processDeleteAddPairs(lines)
 
     check result.len == 3
@@ -165,10 +202,11 @@ suite "GitDiff - processDeleteAddPairs":
     check result[2].kind == Added
 
   test "Only deletes":
-    let lines = @[
-      GitDiffLine(lineNumber: 5, kind: Deleted),
-      GitDiffLine(lineNumber: 6, kind: Deleted),
-    ]
+    let lines =
+      @[
+        GitDiffLine(lineNumber: 5, kind: Deleted),
+        GitDiffLine(lineNumber: 6, kind: Deleted),
+      ]
     let result = processDeleteAddPairs(lines)
 
     check result.len == 2
@@ -176,9 +214,10 @@ suite "GitDiff - processDeleteAddPairs":
     check result[1].kind == Deleted
 
   test "Only adds":
-    let lines = @[
-      GitDiffLine(lineNumber: 5, kind: Added), GitDiffLine(lineNumber: 6, kind: Added)
-    ]
+    let lines =
+      @[
+        GitDiffLine(lineNumber: 5, kind: Added), GitDiffLine(lineNumber: 6, kind: Added)
+      ]
     let result = processDeleteAddPairs(lines)
 
     check result.len == 2
@@ -192,12 +231,13 @@ suite "GitDiff - processDeleteAddPairs":
     check result.len == 0
 
   test "Non-consecutive groups":
-    let lines = @[
-      GitDiffLine(lineNumber: 5, kind: Deleted),
-      GitDiffLine(lineNumber: 5, kind: Added),
-      GitDiffLine(lineNumber: 10, kind: Deleted),
-      GitDiffLine(lineNumber: 10, kind: Added),
-    ]
+    let lines =
+      @[
+        GitDiffLine(lineNumber: 5, kind: Deleted),
+        GitDiffLine(lineNumber: 5, kind: Added),
+        GitDiffLine(lineNumber: 10, kind: Deleted),
+        GitDiffLine(lineNumber: 10, kind: Added),
+      ]
     let result = processDeleteAddPairs(lines)
 
     check result.len == 2
@@ -208,7 +248,8 @@ suite "GitDiff - processDeleteAddPairs":
 
 suite "GitDiff - parseDiffOutput":
   test "Parse simple added lines":
-    let output = """diff --git a/test.txt b/test.txt
+    let output =
+      """diff --git a/test.txt b/test.txt
 index 1234567..abcdefg 100644
 --- a/test.txt
 +++ b/test.txt
@@ -225,7 +266,8 @@ index 1234567..abcdefg 100644
     check diffInfo.lines[1].kind == Added
 
   test "Parse deleted lines":
-    let output = """@@ -1,2 +1,0 @@
+    let output =
+      """@@ -1,2 +1,0 @@
 -deleted line 1
 -deleted line 2
 """
@@ -236,7 +278,8 @@ index 1234567..abcdefg 100644
     check diffInfo.lines[1].kind == Deleted
 
   test "Parse modified lines (delete+add)":
-    let output = """@@ -5,1 +5,1 @@
+    let output =
+      """@@ -5,1 +5,1 @@
 -old line
 +new line
 """
@@ -247,7 +290,8 @@ index 1234567..abcdefg 100644
     check diffInfo.lines[0].lineNumber == 4
 
   test "Parse multiple hunks":
-    let output = """@@ -1,1 +1,1 @@
+    let output =
+      """@@ -1,1 +1,1 @@
 -old first
 +new first
 @@ -10,1 +10,1 @@
@@ -263,7 +307,8 @@ index 1234567..abcdefg 100644
     check diffInfo.lines[1].lineNumber == 9
 
   test "Parse with context lines":
-    let output = """@@ -2,3 +2,4 @@
+    let output =
+      """@@ -2,3 +2,4 @@
  context line
 -deleted
 +added 1
@@ -282,7 +327,8 @@ index 1234567..abcdefg 100644
     check diffInfo.lines.len == 0
 
   test "Parse diff with no newline marker":
-    let output = """@@ -1,1 +1,1 @@
+    let output =
+      """@@ -1,1 +1,1 @@
 -old
 +new
 \ No newline at end of file
@@ -424,14 +470,15 @@ suite "GitDiff - advanceToGitShow guards":
 suite "GitDiff - countGitChangedLines":
   test "Count all types of changes":
     let diffInfo = GitDiffInfo(
-      lines: @[
-        GitDiffLine(lineNumber: 0, kind: Added),
-        GitDiffLine(lineNumber: 1, kind: Added),
-        GitDiffLine(lineNumber: 5, kind: Modified),
-        GitDiffLine(lineNumber: 10, kind: Deleted),
-        GitDiffLine(lineNumber: 11, kind: Deleted),
-        GitDiffLine(lineNumber: 12, kind: Deleted),
-      ]
+      lines:
+        @[
+          GitDiffLine(lineNumber: 0, kind: Added),
+          GitDiffLine(lineNumber: 1, kind: Added),
+          GitDiffLine(lineNumber: 5, kind: Modified),
+          GitDiffLine(lineNumber: 10, kind: Deleted),
+          GitDiffLine(lineNumber: 11, kind: Deleted),
+          GitDiffLine(lineNumber: 12, kind: Deleted),
+        ]
     )
 
     let (added, modified, deleted) = countGitChangedLines(diffInfo)
@@ -451,9 +498,11 @@ suite "GitDiff - countGitChangedLines":
 
   test "Count only added":
     let diffInfo = GitDiffInfo(
-      lines: @[
-        GitDiffLine(lineNumber: 0, kind: Added), GitDiffLine(lineNumber: 1, kind: Added)
-      ]
+      lines:
+        @[
+          GitDiffLine(lineNumber: 0, kind: Added),
+          GitDiffLine(lineNumber: 1, kind: Added),
+        ]
     )
 
     let (added, modified, deleted) = countGitChangedLines(diffInfo)
@@ -470,11 +519,12 @@ suite "GitDiff - applyGitDiffToBuffer":
     )
 
     let diffInfo = GitDiffInfo(
-      lines: @[
-        GitDiffLine(lineNumber: 0, kind: Added),
-        GitDiffLine(lineNumber: 2, kind: Modified),
-        GitDiffLine(lineNumber: 4, kind: Deleted),
-      ]
+      lines:
+        @[
+          GitDiffLine(lineNumber: 0, kind: Added),
+          GitDiffLine(lineNumber: 2, kind: Modified),
+          GitDiffLine(lineNumber: 4, kind: Deleted),
+        ]
     )
 
     buf.applyGitDiffToBuffer(diffInfo)
@@ -503,11 +553,12 @@ suite "GitDiff - applyGitDiffToBuffer":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
 
     let diffInfo = GitDiffInfo(
-      lines: @[
-        GitDiffLine(lineNumber: 0, kind: Added),
-        GitDiffLine(lineNumber: 10, kind: Modified),
-        GitDiffLine(lineNumber: -1, kind: Deleted),
-      ]
+      lines:
+        @[
+          GitDiffLine(lineNumber: 0, kind: Added),
+          GitDiffLine(lineNumber: 10, kind: Modified),
+          GitDiffLine(lineNumber: -1, kind: Deleted),
+        ]
     )
 
     buf.applyGitDiffToBuffer(diffInfo)
@@ -522,16 +573,17 @@ suite "GitDiff - applyGitDiffToBuffer":
     )
 
     # Pre-seed LSP diagnostics and a non-git marker.
-    buf.diagnostics = @[
-      BufferDiagnostic(
-        startLine: 1,
-        startCol: 0,
-        endLine: 1,
-        endCol: 5,
-        severity: bdsError,
-        message: "oops",
-      )
-    ]
+    buf.diagnostics =
+      @[
+        BufferDiagnostic(
+          startLine: 1,
+          startCol: 0,
+          endLine: 1,
+          endCol: 5,
+          severity: bdsError,
+          message: "oops",
+        )
+      ]
     buf.setLineMarker(1, SyntaxError)
     buf.setLineMarker(3, Bookmark)
     # And a pre-existing git marker that should be cleared on re-apply.
