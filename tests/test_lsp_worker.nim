@@ -17,11 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, os, monotimes, times, strutils]
+import
+  std/[unittest, json, options, os, monotimes, times, sequtils, strutils, importutils]
 
 import pkg/results
 
 import ../src/moepkg/lsp/worker
+import ../src/moepkg/logger
 
 suite "LspWorker - pathToFileUri":
   test "plain absolute path":
@@ -1362,3 +1364,64 @@ suite "LspWorker - Multiple workers":
     worker2.stop()
     check worker1.isStopped
     check worker2.isStopped
+
+suite "LspWorker - lifetime":
+  when defined(linux):
+    proc threadIds(): seq[string] =
+      for entry in walkDir("/proc/self/task"):
+        result.add entry.path.extractFilename
+
+    proc waitForThreadGone(tid: string, timeoutMs = 1000): bool =
+      ## The join returns before the kernel drops the thread's /proc entry.
+      let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+      while getMonoTime() < deadline:
+        if not dirExists("/proc/self/task" / tid):
+          return true
+        sleep(10)
+      false
+
+    test "A worker dropped without stop takes its thread with it":
+      # The thread reads the queues the worker holds: left running, it reads
+      # them after they are freed. Watched by id, since other tests' threads
+      # may come and go meanwhile.
+      let before = threadIds()
+      var started: seq[string]
+      block:
+        let worker = newLspWorker("txt").get
+        worker.start()
+        worker.startServer("moe-no-such-language-server", @[], getTempDir())
+        started = threadIds().filterIt(it notin before)
+        check started.len == 1
+      check started.allIt(waitForThreadGone(it))
+
+  test "A worker dropped without stop logs a warning":
+    privateAccess(Logger)
+    let prev = getGlobalLogger()
+    let oldDir = getCurrentDir()
+    # Per-process temp dir so a stale line or a parallel test cannot satisfy it.
+    let logDir = getTempDir() / "moe-lsp-worker-log-" & $getCurrentProcessId()
+    let logPath = logDir / "moe-debug.log"
+    createDir(logDir)
+    defer:
+      removeDir(logDir)
+    setCurrentDir(logDir)
+    let logger = initLogger(enabled = true, clearOnStart = true)
+    setCurrentDir(oldDir)
+    check logger.isEnabled
+    check logger.filePath == logPath
+    setGlobalLogger(logger)
+    try:
+      block:
+        let worker = newLspWorker("txt").get
+        worker.start()
+    finally:
+      setGlobalLogger(prev)
+      logger.close()
+    check readFile(logPath).contains("[lsp] txt worker dropped without stop")
+
+  test "A stopped worker refuses to start again":
+    let worker = newLspWorker("txt").get
+    worker.start()
+    worker.stop()
+    expect AssertionDefect:
+      worker.start()
