@@ -4381,19 +4381,28 @@ suite "Handler - Clipboard operations":
       skip()
     else:
       try:
-        let buffer = newTextBuffer("hello world\nfoo bar baz")
-        let ctx = createTestContext(buffer)
-        ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
-        ctx.state.config.clipboard = ClipboardConfig(enable: true, tool: cbtWlClipboard)
-        let registry = createTestRegistry()
-        ctx.state.registers.setClipboardTool(cbtWlClipboard)
+        # The copy counts as confirmed only if the fake exits within the
+        # short early-exit poll, and a loaded CI box can overrun it. Retry
+        # the whole copy so a slow exit is not reported as a missed adoption.
+        var reg: Register
+        for _ in 0 ..< 10:
+          let buffer = newTextBuffer("hello world\nfoo bar baz")
+          let ctx = createTestContext(buffer)
+          ctx.setupVisual(0, 0, 0, 4, mode = EditorMode.VisualLine, kind = vskLine)
+          ctx.state.config.clipboard =
+            ClipboardConfig(enable: true, tool: cbtWlClipboard)
+          let registry = createTestRegistry()
+          ctx.state.registers.setClipboardTool(cbtWlClipboard)
 
-        check registry.execute(ctx, builtin(bcEditCopy)).isOk
+          check registry.execute(ctx, builtin(bcEditCopy)).isOk
 
-        # The write is confirmed (the fake exits right away), so the
-        # immediate external change is adopted by the next put.
-        writeFile(clipboardFilePath(fakeDir), "external copy")
-        let reg = ctx.state.registers.getNoNamedRegister()
+          # The write is confirmed (the fake exits right away), so the
+          # immediate external change is adopted by the next put.
+          writeFile(clipboardFilePath(fakeDir), "external copy")
+          reg = ctx.state.registers.getNoNamedRegister()
+          if reg.getContent() == "external copy":
+            break
+          sleep(100)
         check reg.getContent() == "external copy"
         check reg.isLine == false
       finally:

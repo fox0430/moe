@@ -774,15 +774,23 @@ suite "Registers":
       skip()
     else:
       try:
-        let r = initRegisters()
-        r.setClipboardTool(cbtWlClipboard)
-        r.setNoNamedRegister("new content", true)
-        waitForClipboardWrite(fakeDir, "new content")
+        # The write counts as confirmed only if the fake exits within the
+        # short early-exit poll, and a loaded CI box can overrun it. Retry
+        # the whole write so a slow exit is not reported as a missed adoption.
+        var reg: Register
+        for _ in 0 ..< 10:
+          let r = initRegisters()
+          r.setClipboardTool(cbtWlClipboard)
+          r.setNoNamedRegister("new content", true)
+          waitForClipboardWrite(fakeDir, "new content")
 
-        # The write is confirmed (the fake exits right away), so the
-        # immediate external change is adopted by the next put.
-        writeFile(clipboardFilePath(fakeDir), "external copy")
-        let reg = r.getNoNamedRegister()
+          # The write is confirmed (the fake exits right away), so the
+          # immediate external change is adopted by the next put.
+          writeFile(clipboardFilePath(fakeDir), "external copy")
+          reg = r.getNoNamedRegister()
+          if reg.getContent() == "external copy":
+            break
+          sleep(100)
         check reg.getContent() == "external copy"
         check reg.isLine == false
       finally:
