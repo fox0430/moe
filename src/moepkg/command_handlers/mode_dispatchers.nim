@@ -39,7 +39,7 @@ when not defined(moe.embedded):
 import
   ../[
     types, buffer, modes, key_bindings, keybind_config, string_builder, filer, filetree,
-    diff_viewer, recent_file_mode,
+    diff_viewer, recent_file_mode, command_line,
   ]
 
 when not defined(moe.embedded):
@@ -382,12 +382,12 @@ proc handleInsertMode*(
 proc handleCommandMode*(
     manager: HandlerManager,
     buffer: TextBuffer,
-    commandText: string,
+    cmdResult: CommandLineResult,
     isSharedBuffer: bool = false,
     currentLine: int = 0,
     otherModifiedCount: int = 0,
 ): HandlerResult =
-  ## Handle Command mode input (when Enter is pressed).
+  ## Handle an already parsed Command mode input.
   ## isSharedBuffer: true if the buffer is shared across multiple windows.
   ## currentLine: 0-based cursor line, used for range substitution with '.'.
   ## otherModifiedCount: modified buffers other than `buffer` (for :qa).
@@ -395,7 +395,7 @@ proc handleCommandMode*(
   ## executed here and folded onto hrHandled/hrError; every other kind is
   ## returned as-is to the caller.
   let r = manager.commandHandler.handleCommandModeInput(
-    buffer, commandText, isSharedBuffer, currentLine, otherModifiedCount
+    buffer, cmdResult, isSharedBuffer, currentLine, otherModifiedCount
   )
   case r.kind
   of hrMapAdd:
@@ -460,6 +460,27 @@ proc handleCommandMode*(
     )
   else:
     return r
+
+proc handleCommandMode*(
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    commandText: string,
+    isSharedBuffer: bool = false,
+    currentLine: int = 0,
+    otherModifiedCount: int = 0,
+): HandlerResult =
+  ## Parse and dispatch Command mode text, including an empty `:` overlay.
+  if commandText.len <= 1:
+    return manager.commandHandler.handleCommandModeInput(
+      buffer, commandText, isSharedBuffer, currentLine, otherModifiedCount
+    )
+  manager.handleCommandMode(
+    buffer,
+    manager.commandHandler.parser.parseAndExecute(commandText),
+    isSharedBuffer,
+    currentLine,
+    otherModifiedCount,
+  )
 
 proc handleVisualMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo

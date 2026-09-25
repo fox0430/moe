@@ -43,6 +43,9 @@ type
     width*, height*: int
     prevWidth*, prevHeight*: int
 
+  HostCommandFilter* = proc(e: Editor, command: ParsedCommand): bool {.closure.}
+    ## Return true to let the host handle a parsed `:` command instead of Moe.
+
   Editor* = ref object
     state*: EditorState
     screenSize*: ScreenSize
@@ -87,8 +90,8 @@ type
       ## `addBuffer` and set once during editor construction; a nil hook does
       ## nothing, keeping buffers usable outside a full editor.
     xHostPopupMenus: bool
-    xHostHelpViewer: bool
-    xHostHelpRequestPending: bool
+    hostCommandFilter*: HostCommandFilter
+    xHostCommandRequests: seq[ParsedCommand]
     when not defined(moe.embedded):
       terminalStates*: Table[BufferId, TerminalState]
         ## Live Terminal sessions keyed by their buffer id. The window's
@@ -296,19 +299,17 @@ proc hostPopupMenus*(e: Editor): bool =
 proc `hostPopupMenus=`*(e: Editor, enabled: bool) =
   e.xHostPopupMenus = enabled
 
-proc hostHelpViewer*(e: Editor): bool =
-  e.xHostHelpViewer
+proc interceptHostCommand*(e: Editor, command: ParsedCommand): bool =
+  ## Queue a command for the host when its filter elects to handle it.
+  if not e.hostCommandFilter.isNil and e.hostCommandFilter(e, command):
+    e.xHostCommandRequests.add(command)
+    return true
 
-proc `hostHelpViewer=`*(e: Editor, enabled: bool) =
-  e.xHostHelpViewer = enabled
-
-proc requestHostHelpViewer*(e: Editor) =
-  if e.xHostHelpViewer:
-    e.xHostHelpRequestPending = true
-
-proc takeHostHelpRequest*(e: Editor): bool =
-  result = e.xHostHelpRequestPending
-  e.xHostHelpRequestPending = false
+proc takeHostCommandRequest*(e: Editor): Option[ParsedCommand] =
+  ## Take the oldest host-handled command, or none when the queue is empty.
+  if e.xHostCommandRequests.len > 0:
+    result = some(e.xHostCommandRequests[0])
+    e.xHostCommandRequests.delete(0)
 
 flag2(autoIndent, bool, standard, autoIndent)
 flag2(smartIndent, bool, standard, smartIndent)

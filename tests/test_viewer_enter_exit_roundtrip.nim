@@ -1172,3 +1172,65 @@ suite "Viewer round-trip - tab identity":
     discard e.processResult(HandlerResult(kind: hrFilerQuit), e.activeBuffer())
     check win.buffer == bufB
     check win.tabBufferId == bufB.id
+
+suite "Host command interception":
+  test "consumed help aliases keep the editor open and queue parsed requests":
+    let (e, path) = editorOnFile("moe_rt_host_help.txt")
+    defer:
+      removeFile(path)
+    let origWin = e.activeWindow
+    let origBuf = e.activeBuffer()
+    check e.addCommandAlias("h", claHelp).isOk
+    e.hostCommandFilter = proc(hostEditor: Editor, command: ParsedCommand): bool =
+      command.action == claHelp
+
+    check e.executeCommandOverlay(":help overview")
+    check e.executeCommandOverlay(":h keys")
+    check e.state.mode == EditorMode.Normal
+    check e.activeWindow == origWin
+    check e.activeBuffer() == origBuf
+    let first = e.takeHostCommandRequest()
+    let second = e.takeHostCommandRequest()
+    check first.isSome
+    check second.isSome
+    if first.isSome and second.isSome:
+      check first.get.action == claHelp
+      check first.get.args == @["overview"]
+      check first.get.rawText == ":help overview"
+      check second.get.action == claHelp
+      check second.get.args == @["keys"]
+      check second.get.rawText == ":h keys"
+    check e.takeHostCommandRequest().isNone
+
+  test "interception happens before mutating or rejecting a command":
+    let (e, path) = editorOnFile("moe_rt_host_commands.txt")
+    defer:
+      removeFile(path)
+    let originalText = e.activeBuffer().getTextString()
+    e.hostCommandFilter = proc(hostEditor: Editor, command: ParsedCommand): bool =
+      command.action in {claDeleteLines, claUnknown}
+
+    check e.executeCommandOverlay(":d")
+    check e.activeBuffer().getTextString() == originalText
+    check e.executeCommandOverlay(":hostaction arg")
+    let deleted = e.takeHostCommandRequest()
+    let custom = e.takeHostCommandRequest()
+    check deleted.isSome
+    check custom.isSome
+    if deleted.isSome and custom.isSome:
+      check deleted.get.action == claDeleteLines
+      check custom.get.action == claUnknown
+      check custom.get.rawText == ":hostaction arg"
+      check custom.get.args == @["arg"]
+    check e.takeHostCommandRequest().isNone
+
+  test "declined commands still execute normally":
+    let (e, path) = editorOnFile("moe_rt_host_passthrough.txt")
+    defer:
+      removeFile(path)
+    e.hostCommandFilter = proc(hostEditor: Editor, command: ParsedCommand): bool =
+      false
+
+    check e.executeCommandOverlay(":d")
+    check e.activeBuffer().getLine(0) == "bbbb"
+    check e.takeHostCommandRequest().isNone
