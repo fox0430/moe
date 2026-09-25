@@ -182,6 +182,9 @@ type
     ## What a stream outrunning its limit means for the run.
     dlpFail ## The stream is the answer, so an incomplete one is an error.
     dlpTruncate ## The stream is commentary, so the first `limit` bytes will do.
+    dlpKeepTail
+      ## The stream is a log whose end says how the run went, so the last
+      ## `limit` bytes will do.
 
   DrainSink = ref object
     ## Where a drain accumulates, owned by the caller rather than returned by
@@ -270,7 +273,8 @@ proc drainBounded(
   ## bytes and reads the rest away rather than failing the run. Reading it away
   ## is the part that matters: a drain that stopped early would leave the
   ## command blocked on a pipe nobody empties, and it is the command that has
-  ## to exit before the other streams reach EOF.
+  ## to exit before the other streams reach EOF. `dlpKeepTail` also reads it
+  ## all but keeps the end (at least `limit` bytes; the caller trims the rest).
   ##
   ## Cancellation is not a failure: whatever reached `sink` stays there, and
   ## `sink.atEnd` says whether it is the whole stream.
@@ -285,7 +289,7 @@ proc drainBounded(
       let n = await reader.readOnce(addr chunk[0], ReadChunk)
       if n <= 0:
         break
-      if sink.overflowed:
+      if sink.overflowed and sink.policy != dlpKeepTail:
         continue
       if bounded and sink.text.len + n > sink.limit:
         sink.overflowed = true
@@ -296,24 +300,35 @@ proc drainBounded(
             ffOutputTooLarge, "The command produced more than " & $sink.limit & " bytes"
           )
           bp.kill()
+          continue
         of dlpTruncate:
           sink.text.addFront(chunk, sink.limit - sink.text.len)
-        continue
+          continue
+        of dlpKeepTail:
+          # Trimmed only past twice the limit, so each byte is moved about once.
+          if sink.text.len > 2 * sink.limit:
+            sink.text.delete(0 ..< sink.text.len - sink.limit)
       sink.text.addFront(chunk, n)
     sink.atEnd = true
   except AsyncStreamError as e:
-    if sink.policy == dlpFail:
-      # Nothing further on this stream is readable, so nothing further the
-      # command writes is usable. The kill also keeps the other streams moving.
+    if sink.policy != dlpTruncate:
+      # Nothing further is readable, so neither the rest nor a kept tail is
+      # usable. The kill keeps the command from blocking on an unread pipe.
       failure.fail(ffReadFailed, "Failed to read the command output: " & e.msg)
       bp.kill()
   except CancelledError:
     discard
 
+const OutputDroppedMarker* = "... earlier output dropped"
+  ## The first line of output `readAllOutput` kept only the end of.
+
 proc readAllOutput*(
-    bp: BackgroundProcess
+    bp: BackgroundProcess, limit = 0
 ): Future[seq[string]] {.async: (raises: []).} =
-  ## Read all output from the process stdout, split into lines.
+  ## Read all output from the process stdout, split into lines. A positive
+  ## `limit` keeps only the whole lines in the last `limit` bytes, after
+  ## `OutputDroppedMarker`; the rest is still read so the command never blocks
+  ## on a full pipe. A single line longer than `limit` keeps its tail.
   ##
   ## Split once it is all read rather than with `readLine`, which cannot tell a
   ## last empty line from a read that only found EOF: text after the last
@@ -321,29 +336,46 @@ proc readAllOutput*(
   if bp.process.isNil:
     return @[]
   let
-    sink = DrainSink(policy: dlpFail)
+    sink = DrainSink(limit: limit, policy: if limit > 0: dlpKeepTail else: dlpFail)
     failure = RunFailure()
   await bp.drainBounded(bp.process.stdoutStream(), sink, failure)
   if failure.error.isSome:
     logError "background_process", failure.error.get.message
-  if sink.text.len == 0:
+  var text = move sink.text
+  let dropped = sink.overflowed
+  if dropped:
+    # More than `limit` bytes were kept, so the cut drops at least one.
+    let cut = text.len - limit
+    let midLine = text[cut - 1] != '\n'
+    text.delete(0 ..< cut)
+    if midLine:
+      # Drop the cut line's fragment, unless only blank lines would be left
+      # (an overlong line): then the fragment is all there is to show.
+      let firstEnd = text.find('\n')
+      if firstEnd >= 0 and firstEnd < text.high and
+          text[firstEnd + 1 .. ^1].strip(chars = {'\n'}).len > 0:
+        text.delete(0 .. firstEnd)
+  if text.len == 0:
     return @[]
-  var lines = sink.text.split('\n')
-  if sink.text.endsWith('\n'):
+  var lines = text.split('\n')
+  if text.endsWith('\n'):
     lines.setLen(lines.len - 1)
+  if dropped:
+    lines.insert(OutputDroppedMarker, 0)
   return lines
 
 proc waitForAsync*(
-    bp: BackgroundProcess, timeout: Duration, stop: JobStop = nil
+    bp: BackgroundProcess, timeout: Duration, stop: JobStop = nil, outputLimit = 0
 ): Future[ProcessOutputResult] {.async: (raises: []).} =
   ## Wait for the process and return its output, killing it once `timeout`
   ## elapses or `stop` is requested. `InfiniteDuration` waits without a bound.
+  ## `outputLimit` is as for `readAllOutput`.
   ##
   ## This is the bounded form every external command should use: a command that
   ## never exits (a hung compiler, a program reading stdin) is turned into an
   ## error instead of a Future and a child process that live until the editor
   ## quits. A timeout is always reported as an error, never as empty output.
-  let reader = bp.readAllOutput()
+  let reader = bp.readAllOutput(outputLimit)
   case await bp.runToCompletion(@[FutureBase(reader)], timeout, stop)
   of proCompleted:
     return ProcessOutputResult.ok(await reader)

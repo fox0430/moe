@@ -23,7 +23,17 @@ import std/strutils
 
 import pkg/results
 
-import editor, editor_notify, buffer, highlight_config, modes, window_manager
+import
+  types/editor_types,
+  editor_buffers,
+  editor_hooks,
+  editor_mode,
+  editor_notify,
+  editor_window,
+  buffer,
+  highlight_config,
+  modes,
+  window_manager
 
 proc focusOutputWindow(
     editor: Editor, target: EditorWindow, mode, previousMode: EditorMode
@@ -93,3 +103,7 @@ proc showCommandOutput*(
     editor.focusOutputWindow(previousWindow, previousMode, previousPreviousMode)
   editor.enforceModePolicy()
   true
+
+hookOutputPresenter = proc(e: Editor, output: seq[string]) =
+  # A hook fires on its own, so the user's focus and mode stay.
+  e.showCommandOutput(output, keepFocus = true)

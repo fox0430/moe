@@ -17,15 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-## The external commands the editor has started: listing them for `:jobs` and
-## stopping them for `:jobs!`.
+## The external commands the editor has started: listing them for `:jobs`,
+## stopping them for `:jobs!`, and what a quit waits for.
 
 import std/monotimes
 
 from std/times import inSeconds
 
 import types/editor_types
-import background_process, job_lanes, quick_run_utils
+import background_process, job_lanes, quick_run_utils, unicode_utils
 
 const NoCommandEpoch* = high(uint64)
   ## The epoch of work `:jobs!` cannot stop. The counter only counts up from
@@ -75,14 +75,13 @@ proc runningCommands*(e: Editor): seq[string] =
     if job.state == jsWaiting:
       result.add entry(job.label, "queued", job.path)
 
-proc stopRunningCommands*(e: Editor): int =
-  ## Kill every external command the editor started, drop the queued ones, and
-  ## return how many. Jobs already stopping, and work that stops at its next
-  ## epoch check, are not counted.
+proc stopEverything(e: Editor): seq[JobInfo] =
+  ## Kill every external command the editor started and drop the queued ones,
+  ## returning the lane jobs this reached.
   # Bumped first so everything unwinding below sees it and stops at its next
   # await rather than carrying on.
   e.state.commandEpoch.inc
-  let fromLanes = e.jobLanes.stopAll().len
+  result = e.jobLanes.stopAll()
 
   # Whether or not the command itself has exited: what it left running in its
   # group holds the job open until the run releases it.
@@ -90,4 +89,27 @@ proc stopRunningCommands*(e: Editor): int =
     running.process.kill()
   for qr in e.runningQuickRunProcesses:
     qr.process.kill()
+
+proc stopRunningCommands*(e: Editor): int =
+  ## Kill every external command the editor started, drop the queued ones, and
+  ## return how many. Jobs already stopping, and work that stops at its next
+  ## epoch check, are not counted.
+  let fromLanes = e.stopEverything().len
   e.runningBackgroundProcesses.len + e.runningQuickRunProcesses.len + fromLanes
+
+proc readyToExit*(e: Editor): bool =
+  ## Whether the user quit and nothing the quit is owed waits or runs.
+  e.state.quitDecided and e.jobLanes.owedIdle
+
+proc abandonExitWait*(e: Editor) =
+  ## Stop everything, owed work included, for a session ending without waiting
+  ## (Ctrl-C, a signal, a crash). Owed jobs are recorded for stderr, as a
+  ## `$EDITOR` caller may rely on them; each once, however many paths call this.
+  for job in e.stopEverything():
+    if job.owed:
+      var report =
+        (if job.state == jsWaiting: "Not run: " else: "Stopped before finishing: ") &
+        job.label
+      if job.path.len > 0:
+        report &= " on " & job.path
+      e.state.exitReports.add report.forDisplay

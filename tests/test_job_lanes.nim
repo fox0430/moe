@@ -398,3 +398,65 @@ suite "Job lanes - stopping":
     turn()
     check p.started == @["running start"]
     check lanes.idle
+
+proc owedJob(job: LaneJob): LaneJob =
+  result = job
+  result.owed = true
+
+suite "Job lanes - winding down":
+  test "Winding down stops what is not owed and lets the owed run":
+    var lanes: JobLanes
+    let p = Probe()
+
+    discard lanes.submit("a", p.job("owed running").owedJob)
+    discard lanes.submit("a", p.job("dropped"))
+    discard lanes.submit("a", p.job("owed next").owedJob)
+    discard lanes.submit("b", p.job("stopped"))
+    turn()
+    lanes.windDown()
+
+    check p.log.filterIt(it.endsWith " stopped") == @["stopped stopped"]
+    check lanes.labels(jsWaiting) == @["owed next"]
+    p.release("owed running")
+    check p.started == @["owed running start", "stopped start", "owed next start"]
+
+  test "Winding down refuses new work, owed or not":
+    var lanes: JobLanes
+    let p = Probe()
+
+    lanes.windDown()
+    check lanes.submit("a", p.job("owed").owedJob) == smRefused
+    check lanes.submit("a", p.job("not owed")) == smRefused
+    turn()
+    check p.log.len == 0
+
+  test "An owed job waits for a stopped one to end, as any queued job does":
+    var lanes: JobLanes
+    let p = Probe()
+
+    discard lanes.submit("a", p.job("slow to die", stubborn = true))
+    discard lanes.submit("a", p.job("owed").owedJob)
+    turn()
+    lanes.windDown()
+    turn()
+    check p.started == @["slow to die start"]
+
+    p.release("slow to die")
+    check p.started == @["slow to die start", "owed start"]
+
+  test "Only owed jobs that wait or run keep the lanes from being idle for a quit":
+    var lanes: JobLanes
+    let p = Probe()
+    check lanes.owedIdle
+
+    discard lanes.submit("a", p.job("not owed"))
+    check lanes.owedIdle
+    discard lanes.submit("b", p.job("owed", stubborn = true).owedJob)
+    check not lanes.owedIdle
+    turn()
+    check not lanes.owedIdle
+
+    # Told to stop, it is not waited for: its kill has been sent.
+    discard lanes.stopAll()
+    check "owed" in lanes.labels(jsStopping)
+    check lanes.owedIdle

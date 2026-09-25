@@ -2268,8 +2268,11 @@ suite "ConfigMode - descriptor completeness":
       "syntaxChecker", "smoothScroll", "startUpFileOpen", "startUpFileTree",
       "editorConfig", "log", "theme", "lsp",
     ].toHashSet
+    # `hooks` joins the hand-loaded sections: a list of repeated tables has no
+    # scalar toggle for the Config mode UI to offer.
     let excluded = [
-      "debug", "keyMapping", "shellCommands", "commandAliases", "disabledCommandAliases"
+      "debug", "keyMapping", "shellCommands", "commandAliases",
+      "disabledCommandAliases", "hooks",
     ].toHashSet
 
     var cfg = newEditorConfig()

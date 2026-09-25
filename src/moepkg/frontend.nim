@@ -28,6 +28,11 @@
 ## Hosts with filesystem/Git watchers can select `grmEventDriven` using
 ## `setFrontendGitRefreshMode`, then call `notifyGitRepositoryChanged` on the
 ## editor thread. `frontendGitStatusRevision` changes when results arrive.
+##
+## External work (`[Hook]` commands, builds, syntax checks, filters, `:!`)
+## runs on the event loop and the pending queue, which only the terminal
+## frontend drives; a host here does not, so a quit it acts on waits for
+## nothing.
 
 import
   config, editor, editor_frame, editor_display, editor_buffers, frontend_input, handler

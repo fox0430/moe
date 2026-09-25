@@ -220,6 +220,8 @@ proc processBackupResult*(e: Editor, r: HandlerResult): bool =
             # The load itself invalidates the positions naming the old text.
             # Refresh the restored buffer's git-diff gutter and conflicts.
             e.refreshBufferGitAndConflicts(srcBuf)
+            # The buffer holds what its file holds again.
+            e.queueHooks(heBufReadPost, srcBuf)
             # Restore screen notification (controlled by config)
             if e.config.notification.screenNotifications and
                 e.config.notification.restoreScreenNotify:

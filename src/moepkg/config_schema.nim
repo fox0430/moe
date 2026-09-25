@@ -30,6 +30,8 @@ import std/[options, sequtils, strutils]
 
 import config_macros, unicode_utils
 
+import syntax/tokenizer
+
 import types/config_types
 
 type
@@ -111,6 +113,7 @@ proc derivedSections(): seq[ConfigSchemaSection] =
   generateConfigSchema(result, EditorConfig)
   generateConfigSchema(result, DebugConfig)
   generateSectionGroupSchema(result, LspConfig)
+  generateSectionGroupSchema(result, HookConfig)
 
 const DerivedSectionNames* = derivedSections().mapIt(it.name)
   ## Their names, pinned against the reference docs in the test suite: a

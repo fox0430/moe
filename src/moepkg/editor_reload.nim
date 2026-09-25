@@ -28,6 +28,7 @@ import pkg/results
 import
   types/editor_types,
   editor_file,
+  editor_hooks,
   editor_lsp,
   motion,
   editor_codelens,
@@ -183,6 +184,9 @@ proc reportExternalChange(e: Editor, buf: TextBuffer, msg: string, isError: bool
 proc actOnExternalChange(e: Editor, buf: TextBuffer, filePath: string) =
   ## Handle a detected external change on `buf`: a buffer with unsaved changes
   ## is never overwritten, only warned about once; anything else is reloaded.
+  ##
+  ## No `BufReadPost`, unlike `:e!`: a read hook that rewrites its file would
+  ## retrigger itself, indistinguishable from another program's change.
   if buf.isModified:
     if not buf.externalModWarned:
       e.reportExternalChange(
@@ -274,6 +278,9 @@ proc reloadCurrentFile*(e: Editor, announce = true): Result[void, string] =
     return err(reloadResult.error)
 
   e.finishReload(activeBuffer, filePath, announce)
+  # Only a reload the user asked for counts as a read.
+  if announce:
+    e.queueHooks(heBufReadPost, activeBuffer)
   return ok()
 
 proc maybeUpdateConflicts*(e: Editor) =

@@ -1369,6 +1369,186 @@ Usage:
 - `:nimbuild --release` runs `nimble build --release`
 
 
+### Hook table
+
+Run a command when an editor event happens: lint on save, regenerate
+something, poke a dev server. Equivalent to Vim's `autocmd`, Kakoune's `hook`
+or Emacs' `after-save-hook`.
+
+`[Hook]` holds the switches, and each hook is one `[[Hook.entries]]` table.
+
+**Experimental.** The event names, and what an event carries, may change
+without a deprecation period. The plugin work has still to decide what an
+editor event is, and this table should not freeze that answer ahead of it.
+
+Every event observes: the command runs in the background after the fact and
+cannot hold up a write or a read. Hooks run one at a time, whichever file they
+fired for, as they do in the editors above: what a command touches besides its
+file, such as a build directory or git's index, is not something moe can know,
+and two `git add` runs at once already fail on the index lock. The entries that
+match one event run in the order they are written. A run still waiting to start
+is replaced, in its place, by a newer one asking for the same work: the same
+event, the same command lines once placeholders are expanded, and the same
+directory to run them in. So `:w` held down adds no more than one run behind
+the one in flight, and a command that names no file, like `make proto` below,
+runs once for a `:wa` that wrote several files sharing a directory. Files in
+different directories each get a run of their own, in their own directory,
+unless `workingDir` is an absolute path naming one directory for all of them.
+Nothing orders hooks against the editor, though: a hook that rewrites the file
+it fired for races the next save, which can land before the rewrite and be
+overwritten by it, and `liveReloadOfFile` then loads the result like any change
+on disk; a QuickRun or `buildOnSave` started by the same write may read the
+file before or during the rewrite.
+
+Example:
+```toml
+[Hook]
+enable = true
+
+# Lint Nim files after every write and show what the linter says.
+[[Hook.entries]]
+event = "BufWritePost"
+filetype = ["nim"]
+command = "nimble check"
+showOutput = true
+
+# Something outside the editor, picked by path rather than by file type.
+[[Hook.entries]]
+event = "BufWritePost"
+filter = "\\.proto$"
+command = "make proto"
+workingDir = "~/src/api"
+```
+
+<!-- AUTO-GEN:start Hook -->
+| Name | Type | Default Value | Description |
+|:---|:---|:---|:---|
+| enable | bool | true | Run hooks at all |
+| onAutoSave | bool | false | Run BufWritePost for auto saves too |
+<!-- AUTO-GEN:end Hook -->
+
+`event` and `command` are required; an entry missing either is reported and
+dropped whole. Keys of a `[[Hook.entries]]` table:
+
+<!-- AUTO-GEN:start Hook.entries -->
+| Name | Type | Default Value | Description |
+|:---|:---|:---|:---|
+| event | string (enum: BufWritePost, BufReadPost) | BufWritePost | Event to attach to |
+| command | string |  | Command line to run |
+| filetype | string array | [] | File types this applies to (default: every type) |
+| filter | string |  | Regex the file path must match (default: every path) |
+| workingDir | string |  | Directory to run the command in (default: the file's) |
+| timeout | integer | 60 | Seconds before the command is killed. 0 waits without a bound |
+| showOutput | bool | false | Show the command output in a horizontal split |
+<!-- AUTO-GEN:end Hook.entries -->
+
+Events:
+
+| Name | Fires when |
+|:-----|:-----------|
+| BufWritePost | A buffer was written to disk |
+| BufReadPost | A file was read into a buffer |
+
+`BufReadPost` fires when a file is read into a buffer at the user's asking: an
+open, `:e!`, a backup restored from the backup manager. A file an LSP rename
+opens in the background to edit it is not one, nor is showing that buffer
+later, since the file is not read again. It does not fire for a
+file that was never read — `:e newfile.nim` opens a buffer for a path that does
+not exist yet — nor, unlike Vim, for a change on disk picked up by
+`liveReloadOfFile`: hooks run in the background, so a read hook that rewrites
+its file would fire itself for as long as the file is open, and nothing tells
+its change apart from another program's.
+
+`BufWritePost` fires once per file a buffer was actually written to, whichever
+write command did it — `:w` and `:wa` both count, and a file open in two buffers
+still fires once. A backup restored from the backup manager is a read, not a
+write: it fires `BufReadPost`. Auto save is the exception: it is timer-driven, so a hook would fire in
+the middle of typing. Set `onAutoSave = true` if you want it anyway.
+
+A quit waits for the `BufWritePost` hooks it owes: those of the write `:wq`,
+`:x`, `ZZ`, `:wqa` and `:xa` make, and those of an earlier write still running.
+The screen stays up with a message while they run, one after another, each
+within its own `timeout`. Ctrl-C quits at once and stops them. A hook that
+fails meanwhile is reported on standard error once the screen is gone, not on
+the status line, which keeps saying how to stop waiting; so is each one Ctrl-C
+stopped or kept from starting, and the output of a `showOutput` hook. moe's
+exit status stays that of the quit, since a hook observes the write rather
+than vetting it.
+`BufReadPost` hooks are not waited for but stopped: a read is moot once the
+user leaves.
+
+Placeholders usable in `command` and `workingDir`:
+
+| Placeholder | Expands to |
+|:------------|:-----------|
+| `${file}` | Full path of the file, absolute even if it was opened by a relative one |
+| `${dir}` | Directory holding it |
+| `${filename}` | File name with extension |
+| `${basename}` | File name without extension |
+| `${ext}` | Extension, without the dot |
+| `${filetype}` | File type name, as used by `filetype` |
+
+A `${...}` that is not one of these is passed through untouched.
+
+Pass the file as `${file}` wherever the command takes it: it is absolute, so it
+always starts with `/`. A program named by a placeholder is looked up on `PATH`
+like any other unless it holds a `/`, which is what `${filetype}-lint` wants;
+run the file itself as `${file}`. `${filename}` and `${basename}` of a file named
+`--plugin=x.js` start with `-`, and a command reads them as an option — no
+shell is involved, but option parsing still is.
+
+Notes:
+
+- The command is **not** run through a shell. It is split into an argv the way
+  a shell would (single quotes, double quotes and backslash escapes are
+  honoured) and executed directly, and placeholders are expanded per argument
+  afterwards — so a path containing spaces stays one argument and cannot inject
+  further ones. To use shell features, run a shell explicitly, and hand it the
+  placeholders as arguments rather than writing them into its script:
+  `command = "sh -c 'grep -c TODO \"$1\" > \"$2\"/todo.count' sh ${file} ${dir}"`.
+  Inside the script, `${file}` would be script text, and a file named
+  `x';rm -rf ~;'.nim` would run as a command.
+- A leading `~` is expanded in `command`, in its arguments and in `workingDir`,
+  since there is no shell to do it. Unlike in a shell, quoting does not keep it
+  literal: the quotes are gone by the time it is expanded. Nothing else a shell
+  would expand is: `$HOME`, `*` and `&&` reach the command verbatim.
+- `filetype` matches the buffer's file type, not the extension, so a type set
+  by a modeline or by `.editorconfig` is honoured. Any spelling the editor
+  accepts elsewhere works: the display name (`Nim`, `JavaScriptReact`, `C++`),
+  its abbreviations (`tsx`, `py`), or the lowercase `${filetype}` token. A file
+  of no known type cannot be picked this way; use `filter`. `filter` is an unanchored
+  regex matched against the absolute file path; use `^` and `$` to anchor it.
+- A successful hook says nothing. A hook that exits non-zero is reported with
+  its last line of output. One that cannot be started, such as a program that
+  does not exist, or that hits its `timeout` is reported with the reason, since
+  the command produced no complete output to quote.
+- A `command` with a quote left open is rejected at startup rather than run as
+  something else.
+- `showOutput` opens the output in a horizontal split without taking the focus
+  or the mode, since a hook fires on its own. It is the same window `buildOnSave`
+  and QuickRun report in: a later run replaces its contents rather than opening
+  another split. The entries one event matches share it instead, each adding its
+  output below the last, under a `==> command <==` line when more than one
+  shows. Once the user quit, the output goes to standard error instead.
+- A command that floods its output is not a command that hangs: only the last
+  megabyte of it is kept — the part a failure quotes and `showOutput` shows —
+  but all of it is read, so the command is never left blocked on a pipe nobody
+  is emptying.
+- A command's standard input is `/dev/null`, not the terminal: pass the file
+  as an argument (`${file}`) to a tool that would otherwise read standard
+  input.
+- `:jobs` lists what is running or waiting, and `:jobs!` ends it: every
+  command is killed, what waits is dropped, and a run midway through its entries
+  stops instead of starting the next one. Give a command that can hang a real
+  timeout: every hook behind it waits until it ends.
+- A relative `workingDir` is taken from the file's directory, not from where
+  moe was started.
+- Hooks never fire for the filer, the file tree or any other utility buffer:
+  the path those hold is a directory, not a file.
+- An entry with an invalid field is reported at startup and dropped whole,
+  rather than loaded half-configured.
+
+
 ### Theme table
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
