@@ -24,7 +24,7 @@
 
 import std/[options, osproc, strutils, tables, os, tempfiles, times, monotimes]
 when defined(windows):
-  import std/streams
+  import std/winlean
 else:
   import std/posix
 
@@ -79,12 +79,25 @@ proc drainExitedProcessOutput*(p: Process): string =
   ## process may still hold a copy of the pipe's write end, so waiting for EOF
   ## here would freeze the editor thread.
   try:
+    const maxOutputBytes = 64 * 1024
+    var buffer: array[4096, char]
     when defined(windows):
-      result = p.outputStream().readAll()
+      let handle = p.outputHandle().Handle
+      while result.len < maxOutputBytes:
+        var available: int32
+        if not peekNamedPipe(handle, lpTotalBytesAvail = addr available) or
+            available <= 0:
+          break
+        var count: int32
+        let amount = min(min(buffer.len, maxOutputBytes - result.len), available.int)
+        if readFile(handle, addr buffer[0], amount.int32, addr count, nil) == 0 or
+            count <= 0:
+          break
+        let start = result.len
+        result.setLen(start + count.int)
+        copyMem(addr result[start], addr buffer[0], count.int)
     else:
-      const maxOutputBytes = 64 * 1024
       let fd = p.outputHandle().cint
-      var buffer: array[4096, char]
       while result.len < maxOutputBytes:
         var readyFd = TPollfd(fd: fd, events: POLLIN)
         if posix.poll(addr readyFd, Tnfds(1), 0) <= 0:
