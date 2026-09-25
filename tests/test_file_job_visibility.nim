@@ -24,18 +24,15 @@
 
 import std/[unittest, os, strutils]
 
-import pkg/chronos
+import pkg/results
 
 import ../src/moepkg/[editor, config, background_process, editor_file_jobs]
 import ../src/moepkg/handler {.all.}
 
 proc startSleeper(e: Editor, label, path: string): BackgroundProcess =
-  proc go(): Future[StartProcessResult] {.async.} =
-    await startBackgroundProcess(
-      BackgroundProcessCommand(cmd: "sleep", args: @["30"], workingDir: getTempDir())
-    )
-
-  let started = waitFor go()
+  let started = startBackgroundProcess(
+    BackgroundProcessCommand(cmd: "sleep", args: @["30"], workingDir: getTempDir())
+  )
   doAssert started.isOk
   result = started.get
   e.addRunningProcess(result, label, path)
@@ -68,3 +65,80 @@ suite "File jobs - visibility":
   test "Stopping with nothing running reports nothing":
     let e = newEditor(newEditorConfig())
     check e.stopRunningCommands() == 0
+
+when defined(linux):
+  import std/posix
+
+  import pkg/chronos
+
+  import ../src/moepkg/child_process
+
+  proc leaveSleeper(e: Editor, pidFile: string): (BackgroundProcess, Pid) =
+    ## A command that exits at once and leaves a sleeper in its group holding
+    ## its output open, as `sh -c 'server &'` does.
+    removeFile(pidFile)
+    let started = startBackgroundProcess(
+      BackgroundProcessCommand(
+        cmd: "sh",
+        args: @["-c", "sleep 30 & echo $! > " & pidFile],
+        workingDir: getTempDir(),
+      )
+    )
+    doAssert started.isOk
+    let bp = started.get
+    e.addRunningProcess(bp, "Build", "/src/a.nim")
+    for _ in 0 ..< 500:
+      if fileExists(pidFile) and readFile(pidFile).strip.len > 0:
+        break
+      sleep(10)
+    for _ in 0 ..< 500:
+      if not bp.process.running():
+        break
+      sleep(10)
+    doAssert not bp.process.running()
+    (bp, Pid(parseInt(readFile(pidFile).strip)))
+
+  proc gone(pid: Pid): bool =
+    ## Whether `pid` has died; it is not ours, so init reaps it.
+    for _ in 0 ..< 200:
+      if posix.kill(pid, 0) != 0:
+        return true
+      try:
+        if readFile("/proc/" & $pid & "/stat").split(' ')[2] == "Z":
+          return true
+      except IOError:
+        return true
+      sleep(10)
+    false
+
+  suite "File jobs - what an exited command left running":
+    test "Stopping reaches it":
+      let
+        e = newEditor(newEditorConfig())
+        pidFile = getTempDir() / "moe_test_jobs_stop_leftover"
+        (bp, sleeper) = e.leaveSleeper(pidFile)
+      defer:
+        # Unreaped, the command's pid still names the group: this reaches the
+        # sleeper should the check below fail, and nobody else.
+        bp.kill()
+        waitFor bp.closeAsync()
+        removeFile(pidFile)
+
+      check e.runningCommands().len == 1
+      check e.stopRunningCommands() == 1
+      check gone(sleeper)
+
+    test "Quitting reaches it":
+      let
+        e = newEditor(newEditorConfig())
+        pidFile = getTempDir() / "moe_test_jobs_quit_leftover"
+        (bp, sleeper) = e.leaveSleeper(pidFile)
+      defer:
+        # Unreaped, the command's pid still names the group: this reaches the
+        # sleeper should the check below fail, and nobody else.
+        bp.kill()
+        waitFor bp.closeAsync()
+        removeFile(pidFile)
+
+      e.cleanupBackgroundProcesses()
+      check gone(sleeper)

@@ -23,7 +23,7 @@ from std/times import getTime, initDuration, `-`
 import pkg/chronos
 
 import ../src/moepkg/quick_run_utils {.all.}
-import ../src/moepkg/[config, background_process]
+import ../src/moepkg/[config, background_process, child_process]
 import ../src/moepkg/buffer/[core, file_io, edit]
 import ../src/moepkg/syntax/tokenizer
 
@@ -705,52 +705,6 @@ suite "QuickRunUtils - prepareQuickRun":
       if fileExists("quickruntemp.rs"):
         removeFile("quickruntemp.rs")
 
-suite "QuickRunUtils - QuickRunProcess isRunning and isFinish":
-  test "isRunning and isFinish for running process":
-    proc runTest(): Future[tuple[running: bool, finish: bool]] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "sleep", args: @["1"], workingDir: getCurrentDir()
-      )
-
-      let r = await startBackgroundProcess(cmd)
-      if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: "test.nim", isTempFile: false, process: r.get
-        )
-        let running = qp.isRunning
-        let finish = qp.isFinish
-        qp.process.kill()
-        await qp.process.closeAsync()
-        return (running, finish)
-      else:
-        return (false, true)
-
-    let r = waitFor runTest()
-    check r.running == true
-    check r.finish == false
-
-  test "isRunning and isFinish for completed process":
-    proc runTest(): Future[tuple[running: bool, finish: bool]] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "echo", args: @["done"], workingDir: getCurrentDir()
-      )
-
-      let r = await startBackgroundProcess(cmd)
-      if r.isOk:
-        let qp = QuickRunProcess(
-          command: cmd, filePath: "test.nim", isTempFile: false, process: r.get
-        )
-        discard await qp.process.waitForAsync(30.seconds)
-        let running = qp.isRunning
-        let finish = qp.isFinish
-        return (running, finish)
-      else:
-        return (true, false)
-
-    let r = waitFor runTest()
-    check r.running == false
-    check r.finish == true
-
 suite "QuickRunUtils - startBackgroundQuickRun":
   test "Start QuickRun with echo command":
     proc runTest(): Future[tuple[isOk: bool, output: seq[string]]] {.async.} =
@@ -763,7 +717,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         didSave: false,
       )
 
-      let r = await startBackgroundQuickRun(prepared)
+      let r = startBackgroundQuickRun(prepared)
       if r.isOk:
         let qp = r.get
         let output = await qp.waitForResultAsync(30.seconds)
@@ -790,7 +744,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         didSave: false,
       )
 
-      let r = await startBackgroundQuickRun(prepared)
+      let r = startBackgroundQuickRun(prepared)
       return r.isErr
 
     check waitFor(runTest())
@@ -811,7 +765,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         isTempFile: true,
         didSave: false,
       )
-      let r = await startBackgroundQuickRun(prepared)
+      let r = startBackgroundQuickRun(prepared)
       return r.isErr
 
     check waitFor(runTest())
@@ -833,7 +787,7 @@ suite "QuickRunUtils - startBackgroundQuickRun":
         isTempFile: false,
         didSave: false,
       )
-      let r = await startBackgroundQuickRun(prepared)
+      let r = startBackgroundQuickRun(prepared)
       return r.isErr
 
     check waitFor(runTest())
@@ -846,7 +800,7 @@ suite "QuickRunUtils - waitForResultAsync":
         cmd: "echo", args: @["hello", "world"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: "test.nim", isTempFile: false, process: r.get
@@ -872,7 +826,7 @@ suite "QuickRunUtils - waitForResultAsync":
         workingDir: getCurrentDir(),
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: "test.sh", isTempFile: false, process: r.get
@@ -901,7 +855,7 @@ suite "QuickRunUtils - cleanupTempFiles":
       let cmd = BackgroundProcessCommand(
         cmd: "echo", args: @["test"], workingDir: getCurrentDir()
       )
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: tempPath, isTempFile: true, process: r.get
@@ -924,7 +878,7 @@ suite "QuickRunUtils - cleanupTempFiles":
       let cmd = BackgroundProcessCommand(
         cmd: "echo", args: @["test"], workingDir: getCurrentDir()
       )
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: tempPath, isTempFile: false, process: r.get
@@ -952,7 +906,7 @@ suite "QuickRunUtils - cleanupTempFiles":
       let cmd = BackgroundProcessCommand(
         cmd: "echo", args: @["test"], workingDir: getCurrentDir()
       )
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: tempPath, isTempFile: true, process: r.get
@@ -981,7 +935,7 @@ suite "QuickRunUtils - cleanupTempFiles":
       let cmd = BackgroundProcessCommand(
         cmd: "echo", args: @["test"], workingDir: getCurrentDir()
       )
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: tempPath, isTempFile: true, process: r.get
@@ -1001,14 +955,14 @@ suite "QuickRunUtils - cancel and kill":
         cmd: "sleep", args: @["10"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: "test.sh", isTempFile: false, process: r.get
         )
         qp.cancel()
         await sleepAsync(100.milliseconds)
-        let finished = qp.isFinish
+        let finished = not qp.process.process.running()
         return finished
       else:
         return false
@@ -1022,14 +976,14 @@ suite "QuickRunUtils - cancel and kill":
         cmd: "sleep", args: @["10"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let qp = QuickRunProcess(
           command: cmd, filePath: "test.sh", isTempFile: false, process: r.get
         )
         qp.kill()
         await sleepAsync(100.milliseconds)
-        let finished = qp.isFinish
+        let finished = not qp.process.process.running()
         return finished
       else:
         return false
@@ -1069,7 +1023,7 @@ suite "QuickRunUtils - abandonQuickRunProcess":
       let cmd = BackgroundProcessCommand(
         cmd: "sleep", args: @["10"], workingDir: getCurrentDir()
       )
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if not r.isOk:
         return false
       let qp = QuickRunProcess(
@@ -1077,6 +1031,6 @@ suite "QuickRunUtils - abandonQuickRunProcess":
       )
       abandonQuickRunProcess(qp)
       await sleepAsync(100.milliseconds)
-      return qp.isFinish and not fileExists(tempPath)
+      return not qp.process.process.running() and not fileExists(tempPath)
 
     check waitFor runTest()

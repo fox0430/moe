@@ -25,7 +25,7 @@ import std/posix
 
 import pkg/chronos/timer
 
-import deadly_signals, logger, posix_wait, signal_watcher_linux
+import deadly_signals, logger, posix_spawn_setup, posix_wait, signal_watcher_linux
 
 proc inBackground*(): bool =
   ## Whether another job holds moe's terminal, as after Ctrl-Z and `kill %1`.
@@ -55,56 +55,22 @@ proc waitForCommand(pid: Pid, target: int, holdsTerminal: bool, lost: var cint):
   let stops = if holdsTerminal: WSTOPPED else: 0
   while true:
     var info: SigInfo
-    if waitid(idPid, Id(pid), info, WEXITED or stops or WNOWAIT) != 0:
-      if errno == EINTR:
-        continue
+    if waitidRetrying(pid, info, WEXITED or stops or WNOWAIT) != 0:
       lost = errno
       return -1
     if info.si_code == cldStopped:
       # Never blocking: someone else may have continued it meanwhile.
       var consumed: SigInfo
-      discard waitid(idPid, Id(pid), consumed, WSTOPPED or WNOHANG)
+      discard waitidRetrying(pid, consumed, WSTOPPED or WNOHANG)
       discard kill(Pid(target), SIGCONT)
       continue
     return decodeSiginfo(info)
-
-var environ {.importc, header: "<unistd.h>".}: cstringArray
 
 proc spawnShell(command: string, ownGroup: bool, pid: var Pid): cint =
   ## Start `sh -c command` with nothing blocked, in its own process group when
   ## `ownGroup`. 0, or the error. Not `osproc`: older Nim forks without
   ## clearing the mask.
-  var
-    attrs: Tposix_spawnattr
-    actions: Tposix_spawn_file_actions
-    mask: Sigset
-  result = posix_spawnattr_init(attrs)
-  if result != 0:
-    return
-  defer:
-    discard posix_spawnattr_destroy(attrs)
-  result = posix_spawn_file_actions_init(actions)
-  if result != 0:
-    return
-  defer:
-    discard posix_spawn_file_actions_destroy(actions)
-
-  var flags = POSIX_SPAWN_SETSIGMASK
-  if sigemptyset(mask) != 0:
-    return errno
-  result = posix_spawnattr_setsigmask(attrs, mask)
-  if result == 0 and ownGroup:
-    flags = flags or POSIX_SPAWN_SETPGROUP
-    result = posix_spawnattr_setpgroup(attrs, 0)
-  if result == 0:
-    result = posix_spawnattr_setflags(attrs, flags)
-  if result != 0:
-    return
-
-  let argv = allocCStringArray(["sh", "-c", command])
-  defer:
-    deallocCStringArray(argv)
-  result = posix_spawn(pid, "/bin/sh", actions, attrs, argv, environ)
+  spawnChild(pid, "/bin/sh", ["sh", "-c", command], ownGroup)
 
 proc runInTerminal*(command: string): int =
   ## Run `command` through the shell on the terminal and return its exit code.

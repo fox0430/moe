@@ -22,10 +22,7 @@ import std/[options, strformat, strutils]
 import pkg/[results, chronos]
 import pkg/chronos/asyncproc
 
-import logger
-
-when defined(posix):
-  import std/posix
+import logger, child_process
 
 import types/background_process_types
 export background_process_types
@@ -39,85 +36,44 @@ const KillGrace = 2.seconds
   ## How long a killed command is given to let go of its pipes before the
   ## transfers are cancelled out from under it.
 
-proc killProcessGroup(pid: int) =
-  ## SIGKILL the whole process group. Processes are spawned as group leaders
-  ## (AsyncProcessOption.ProcessGroup), so the negative-pid kill also reaps
-  ## grandchildren - `nim c` spawning a C compiler, or the `sh -c "build && run"`
-  ## of QuickRun. Harmless if the group is already gone (ESRCH is ignored).
-  if pid <= 0:
-    return
-  when defined(posix):
-    discard posix.kill(posix.Pid(-pid), posix.SIGKILL)
-
-proc isRunning*(bp: BackgroundProcess): bool =
-  if bp.reaped or bp.process.isNil:
-    return false
-  let r = bp.process.running()
-  if r.isErr:
-    return false
-  if not r.get:
-    # `running` peeks with WNOHANG, which reaps the zombie it finds, so asking
-    # is itself what spends the pid.
-    bp.reaped = true
-    return false
-  return true
-
-proc isFinish*(bp: BackgroundProcess): bool =
-  not bp.isRunning
+proc exitCode*(bp: BackgroundProcess): Option[int] =
+  ## How the command ended; none until then, or if that could not be learnt.
+  if bp.process.isNil:
+    none(int)
+  else:
+    bp.process.exitCode
 
 proc cancel*(bp: BackgroundProcess) =
-  ## SIGTERM the process. A no-op once reaped, as for `kill`.
-  if bp.process.isNil or bp.reaped:
-    return
-  discard bp.process.terminate()
+  ## SIGTERM the command and everything it started. A no-op once reaped.
+  if not bp.process.isNil:
+    bp.process.terminate()
 
 proc kill*(bp: BackgroundProcess) =
-  ## SIGKILL the process and everything it spawned. Killing only the direct
+  ## SIGKILL the command and everything it started: killing only the direct
   ## child would leave the real workers (compiler, linker, the program a
-  ## `sh -c` wrapper launched) running with the pipe still open.
-  ##
-  ## A no-op once the child has been reaped: the run that owns the job and the
-  ## editor holding it both signal through here, so whether the pid is still
-  ## the child's is decided once, here.
-  if bp.process.isNil or bp.reaped:
-    return
-  killProcessGroup(bp.process.pid)
-  discard bp.process.kill()
+  ## `sh -c` wrapper launched) running with the pipe still open. A no-op once
+  ## reaped, so the run that owns the job and the editor holding it can both
+  ## signal through here.
+  if not bp.process.isNil:
+    bp.process.kill()
 
 proc closeAsync*(bp: BackgroundProcess): Future[void] {.async: (raises: []).} =
-  ## Release the handle.
-  ##
-  ## The field is cleared before the close suspends, not after: `closeWait` is
-  ## a suspension point, and a `kill` arriving from the editor loop in that
-  ## window would signal a pid the wait has already reaped.
-  let process = bp.process
-  bp.process = nil
-  if not process.isNil:
-    await noCancel process.closeWait()
+  ## Let the command go: stopped if it still runs, reaped, pipes closed.
+  if not bp.process.isNil:
+    await bp.process.release()
 
 proc waitForExitAsync*(
     bp: BackgroundProcess
 ): Future[Option[int]] {.async: (raises: []).} =
-  ## Wait for the process to exit and return its status, also recording it in
-  ## `exitCode` so it stays readable after the handle is gone. `none` means the
-  ## status could not be determined, which is not the same as any exit code a
-  ## command could have produced.
+  ## Wait for the command to exit and return how it ended. `none` means that
+  ## could not be learnt, which is not the same as any exit code a command
+  ## could have produced; a cancelled wait also returns it, without waiting.
   if bp.process.isNil:
-    return bp.exitCode
-
+    return none(int)
   try:
-    let status = await bp.process.waitForExit()
-    bp.reaped = true
-    bp.exitCode = some(status)
-  except AsyncProcessError:
-    # Whether it was reaped is what could not be determined. Treated as reaped:
-    # signalling a pid that may be somebody else's is the worse mistake.
-    bp.reaped = true
-    bp.exitCode = none(int)
-  except CancelledError:
-    # A cancelled wait never waited, so the child is still the child.
-    bp.exitCode = none(int)
-  return bp.exitCode
+    return some(await bp.process.waitForExit())
+  except AsyncProcessError, CancelledError:
+    return none(int)
 
 proc runToCompletion(
     bp: BackgroundProcess, transfers: seq[FutureBase], timeout: Duration
@@ -127,8 +83,9 @@ proc runToCompletion(
   ##
   ## The timeout and cancellation contract for external commands lives here and
   ## only here: however this returns, the command has been killed unless it
-  ## exited on its own, every transfer is finished, the child is reaped and the
-  ## handle released. A second copy of this drifts, and always the same way -
+  ## exited on its own, every transfer is finished, its pipes are closed, and
+  ## the child is reaped - or, if it outlived its kill, left to be reaped once
+  ## it exits. A second copy of this drifts, and always the same way -
   ## some path reaches the wait for exit with no kill in front of it.
   proc runAll(): Future[void] {.async: (raises: [CancelledError]).} =
     ## Everything the run consists of. The exit belongs here with the transfers
@@ -173,91 +130,30 @@ proc runToCompletion(
   # write end open, and then no transfer reaches EOF: waiting for one would
   # last as long as that descendant. Past the grace the transfers are
   # cancelled instead, which costs only the tail since each keeps what it
-  # read, and `allFutures` over cancelled transfers completes, so the wait
-  # goes on to reap the child it has already killed.
+  # read.
   #
-  # Uncancellable: a second cancellation here would leave the child running
-  # with nobody to reap it.
+  # Nor is the exit waited for past the grace: a command in uninterruptible
+  # sleep outlives its SIGKILL, and `release` has its own bound for that.
   if not await noCancel allFutures(waiter).withTimeout(KillGrace):
     await noCancel cancelAndWait(transfers)
-    await noCancel allFutures(waiter)
   await cancelAndWait(transfers)
   await bp.closeAsync()
   return outcome
 
-proc startBackgroundProcess*(
-    command: BackgroundProcessCommand
-): Future[StartProcessResult] {.async: (raises: []).} =
+proc startBackgroundProcess*(command: BackgroundProcessCommand): StartProcessResult =
   ## Start the passed command in a new process and return BackgroundProcess.
   ## Standard error is merged into standard output, so a caller reading the
   ## output sees the diagnostics too.
-  # ProcessGroup makes the child its own process-group leader so `kill` can
-  # take out the grandchildren it spawns too (see killProcessGroup).
-  const Options = {
-    AsyncProcessOption.UsePath, AsyncProcessOption.StdErrToStdOut,
-    AsyncProcessOption.ProcessGroup,
-  }
-
-  try:
-    let process = await startProcess(
-      command.cmd,
-      command.workingDir,
-      command.args,
-      options = Options,
-      stdoutHandle = AsyncProcess.Pipe,
-    )
-    return StartProcessResult.ok BackgroundProcess(process: process)
-  except AsyncProcessError as e:
-    return StartProcessResult.err fmt"Failed to create a background process: {e.msg}"
-  except CancelledError:
-    return StartProcessResult.err "Process start was cancelled"
-
-proc readAllOutput*(
-    bp: BackgroundProcess
-): Future[seq[string]] {.async: (raises: []).} =
-  ## Read all output from the process stdout
-  var lines: seq[string] = @[]
-  if bp.process.isNil:
-    return lines
-
-  let stdout = bp.process.stdoutStream()
-  if stdout.isNil:
-    return lines
-
-  try:
-    while not stdout.atEof():
-      let line = await stdout.readLine(sep = "\n")
-      lines.add(line)
-  except AsyncStreamError as e:
-    logError "background_process", "Failed to read process output: " & e.msg
-  except CancelledError:
-    discard
-
-  return lines
-
-proc waitForAsync*(
-    bp: BackgroundProcess, timeout: Duration
-): Future[ProcessOutputResult] {.async: (raises: []).} =
-  ## Wait for the process and return its output, killing it once `timeout`
-  ## elapses. `InfiniteDuration` waits without a bound.
   ##
-  ## This is the bounded form every external command should use: a command that
-  ## never exits (a hung compiler, a program reading stdin) is turned into an
-  ## error instead of a Future and a child process that live until the editor
-  ## quits. A timeout is always reported as an error, never as empty output.
-  let reader = bp.readAllOutput()
-  case await bp.runToCompletion(@[FutureBase(reader)], timeout)
-  of proCompleted:
-    return ProcessOutputResult.ok(await reader)
-  of proTimedOut:
-    # `$Duration` keeps sub-second timeouts honest; `timeout.seconds` would
-    # report "0" for anything shorter than a second.
-    return ProcessOutputResult.err fmt"Timed out after {timeout}"
-  of proCancelled:
-    return ProcessOutputResult.err "The command was cancelled"
+  ## The command runs when this returns, and the handle is the caller's to
+  ## list and to run: `waitForAsync` releases it.
+  let process = startChild(command.cmd, command.workingDir, command.args).valueOr:
+    return StartProcessResult.err fmt"Failed to create a background process: {error}"
+  StartProcessResult.ok BackgroundProcess(process: process)
+
+const ReadChunk = 64 * 1024 ## Bytes asked of a pipe per read.
 
 const
-  FilterReadChunk = 64 * 1024
   FilterDiagnosticsLimit = 8 * 1024
     ## Bytes of standard error worth keeping. Bounded on its own rather than by
     ## the output limit: the diagnostics go to the status line and the message
@@ -292,8 +188,15 @@ proc fail(f: RunFailure, kind: FilterFailureKind, message: string) =
   if f.error.isNone:
     f.error = some filterError(kind, message)
 
+proc addFront(s: var string, chunk: string, n: int) =
+  ## Append the first `n` bytes of `chunk` without slicing them out first.
+  if n > 0:
+    let at = s.len
+    s.setLen(at + n)
+    copyMem(addr s[at], unsafeAddr chunk[0], n)
+
 proc feedStdin(
-    process: AsyncProcessRef, data: string, failure: RunFailure
+    process: ChildProcess, data: string, failure: RunFailure
 ): Future[void] {.async: (raises: []).} =
   ## Hand the command its input and close the pipe so it sees EOF.
   ##
@@ -360,10 +263,10 @@ proc drainBounded(
     return
 
   let bounded = sink.limit > 0
-  var chunk = newString(FilterReadChunk)
+  var chunk = newString(ReadChunk)
   try:
     while not reader.atEof():
-      let n = await reader.readOnce(addr chunk[0], FilterReadChunk)
+      let n = await reader.readOnce(addr chunk[0], ReadChunk)
       if n <= 0:
         break
       if sink.overflowed:
@@ -378,9 +281,9 @@ proc drainBounded(
           )
           bp.kill()
         of dlpTruncate:
-          sink.text.add chunk[0 ..< sink.limit - sink.text.len]
+          sink.text.addFront(chunk, sink.limit - sink.text.len)
         continue
-      sink.text.add chunk[0 ..< n]
+      sink.text.addFront(chunk, n)
     sink.atEnd = true
   except AsyncStreamError as e:
     if sink.policy == dlpFail:
@@ -391,9 +294,51 @@ proc drainBounded(
   except CancelledError:
     discard
 
-proc startFilterProcess*(
-    command: BackgroundProcessCommand
-): Future[StartProcessResult] {.async: (raises: []).} =
+proc readAllOutput*(
+    bp: BackgroundProcess
+): Future[seq[string]] {.async: (raises: []).} =
+  ## Read all output from the process stdout, split into lines.
+  ##
+  ## Split once it is all read rather than with `readLine`, which cannot tell a
+  ## last empty line from a read that only found EOF: text after the last
+  ## newline is a line, nothing after it is not, however the EOF arrives.
+  if bp.process.isNil:
+    return @[]
+  let
+    sink = DrainSink(policy: dlpFail)
+    failure = RunFailure()
+  await bp.drainBounded(bp.process.stdoutStream(), sink, failure)
+  if failure.error.isSome:
+    logError "background_process", failure.error.get.message
+  if sink.text.len == 0:
+    return @[]
+  var lines = sink.text.split('\n')
+  if sink.text.endsWith('\n'):
+    lines.setLen(lines.len - 1)
+  return lines
+
+proc waitForAsync*(
+    bp: BackgroundProcess, timeout: Duration
+): Future[ProcessOutputResult] {.async: (raises: []).} =
+  ## Wait for the process and return its output, killing it once `timeout`
+  ## elapses. `InfiniteDuration` waits without a bound.
+  ##
+  ## This is the bounded form every external command should use: a command that
+  ## never exits (a hung compiler, a program reading stdin) is turned into an
+  ## error instead of a Future and a child process that live until the editor
+  ## quits. A timeout is always reported as an error, never as empty output.
+  let reader = bp.readAllOutput()
+  case await bp.runToCompletion(@[FutureBase(reader)], timeout)
+  of proCompleted:
+    return ProcessOutputResult.ok(await reader)
+  of proTimedOut:
+    # `$Duration` keeps sub-second timeouts honest; `timeout.seconds` would
+    # report "0" for anything shorter than a second.
+    return ProcessOutputResult.err fmt"Timed out after {timeout}"
+  of proCancelled:
+    return ProcessOutputResult.err "The command was cancelled"
+
+proc startFilterProcess*(command: BackgroundProcessCommand): StartProcessResult =
   ## Start `command` with each of its three standard streams on a pipe of its
   ## own, ready to be driven by `filterOutput`.
   ##
@@ -404,23 +349,15 @@ proc startFilterProcess*(
   ## Split from the wait so the handle belongs to the caller from the moment it
   ## exists - the editor registers it and can kill it - rather than being
   ## lent back through a callback from inside the run.
-  const Options = {AsyncProcessOption.UsePath, AsyncProcessOption.ProcessGroup}
-
-  try:
-    let process = await startProcess(
-      command.cmd,
-      command.workingDir,
-      command.args,
-      options = Options,
-      stdinHandle = AsyncProcess.Pipe,
-      stdoutHandle = AsyncProcess.Pipe,
-      stderrHandle = AsyncProcess.Pipe,
-    )
-    return StartProcessResult.ok BackgroundProcess(process: process)
-  except AsyncProcessError as e:
-    return StartProcessResult.err fmt"Failed to create a background process: {e.msg}"
-  except CancelledError:
-    return StartProcessResult.err "Process start was cancelled"
+  let process = startChild(
+    command.cmd,
+    command.workingDir,
+    command.args,
+    stdinMode = csPipe,
+    stderrMode = cePipe,
+  ).valueOr:
+    return StartProcessResult.err fmt"Failed to create a background process: {error}"
+  StartProcessResult.ok BackgroundProcess(process: process)
 
 proc filterOutput*(
     bp: BackgroundProcess, input: string, timeout: Duration, limit: int
@@ -434,8 +371,8 @@ proc filterOutput*(
   ## Input and both outputs move at once. Feeding the input first would
   ## deadlock on anything larger than a pipe buffer.
   ##
-  ## However this returns, the process has been reaped and the handle dropped.
-  if bp.process.isNil:
+  ## However this returns, the process has been released.
+  if bp.process.isNil or bp.process.released:
     return
       FilterProcessResult.err(filterError(ffStartFailed, "The command is not running"))
 

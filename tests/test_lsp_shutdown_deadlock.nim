@@ -22,9 +22,9 @@
 ## A server that stops reading its stdin while moe is mid-write wedges the
 ## worker thread in a blocking write, so it never sees the queued shutdown and
 ## worker.stop()'s joinThread used to hang forever (the editor hung after the
-## UI exited). worker.stop() now SIGKILLs the server's process group from the
-## main thread first, which unblocks the write. This test forces that exact
-## wedge and asserts stop() still returns promptly.
+## UI exited). The worker now SIGKILLs the server's process group as soon as
+## the shutdown is queued, which unblocks the write. This test forces that
+## exact wedge and asserts stop() still returns promptly.
 ##
 ## A watchdog thread bounds the wait: if stop() ever hangs again it quit(1)s so
 ## the suite fails fast instead of hanging CI.
@@ -84,6 +84,22 @@ proc watchdog(deadlineMs: int) {.thread.} =
         "ms -- the LSP shutdown deadlock is back"
     )
     quit(1)
+
+proc childrenOfThisProcess(): seq[string] =
+  ## `/proc/<pid>/stat` of every child of this process, zombies included.
+  let me = $getCurrentProcessId()
+  for kind, path in walkDir("/proc"):
+    if kind != pcDir or not path.extractFilename.allCharsInSet(Digits):
+      continue
+    try:
+      let
+        stat = readFile(path / "stat")
+        # After the parenthesised name: state, then the parent's pid.
+        fields = stat[stat.rfind(')') + 2 .. ^1].split(' ')
+      if fields[1] == me:
+        result.add stat
+    except IOError, OSError:
+      discard
 
 proc buildStuckServer(baseDir: string) =
   ## Compile the fixture (at baseDir) with the same nim that built this test.
@@ -146,3 +162,6 @@ suite "LspWorker - shutdown deadlock":
 
     check w.isStopped
     check elapsedMs < 15000
+    when defined(linux):
+      # The worker owns the server alone, so it reaped it too.
+      check childrenOfThisProcess().len == 0

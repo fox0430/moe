@@ -66,7 +66,7 @@ proc runningCommands*(e: Editor): seq[string] =
 
 proc stopRunningCommands*(e: Editor): int =
   ## Kill every external command the editor started and report how many were
-  ## stopped outright.
+  ## stopped outright: each one `runningCommands` lists.
   ##
   ## Work that stops at its next epoch check instead is not counted, since it
   ## is still running when this returns.
@@ -74,11 +74,10 @@ proc stopRunningCommands*(e: Editor): int =
   # await rather than carrying on.
   e.state.commandEpoch.inc
 
+  # Whether or not the command itself has exited: what it left running in its
+  # group holds the job open until the run releases it.
   for running in e.runningBackgroundProcesses:
-    if running.process.isRunning:
-      running.process.kill()
-      result.inc
+    running.process.kill()
   for qr in e.runningQuickRunProcesses:
-    if qr.process.isRunning:
-      qr.process.kill()
-      result.inc
+    qr.process.kill()
+  e.runningBackgroundProcesses.len + e.runningQuickRunProcesses.len

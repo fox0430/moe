@@ -245,17 +245,11 @@ proc quickRunCommand(
 
   return Result[BackgroundProcessCommand, string].ok command
 
-proc isRunning*(p: QuickRunProcess): bool {.inline.} =
-  p.process.isRunning
-
 proc cancel*(p: QuickRunProcess) {.inline.} =
   p.process.cancel
 
 proc kill*(p: QuickRunProcess) {.inline.} =
   p.process.kill
-
-proc isFinish*(p: QuickRunProcess): bool {.inline.} =
-  p.process.isFinish
 
 type QuickRunPrepareResult* = object
   command*: BackgroundProcessCommand
@@ -342,13 +336,13 @@ proc cleanupTempFiles(p: QuickRunProcess) =
 
 proc startBackgroundQuickRun*(
     prepared: QuickRunPrepareResult
-): Future[Result[QuickRunProcess, string]] {.async: (raises: []).} =
-  ## Start a background process for build and run commands (async).
+): Result[QuickRunProcess, string] =
+  ## Start a background process for build and run commands.
   ## On failure, cleans up the temp source file that `prepareQuickRun`
   ## may have written, so a failed start never leaves `quickruntemp.<ext>`
   ## behind.
 
-  let backgroundProcess = await startBackgroundProcess(prepared.command)
+  let backgroundProcess = startBackgroundProcess(prepared.command)
   if backgroundProcess.isErr:
     cleanupTempFiles(prepared.filePath, prepared.isTempFile)
     return Result[QuickRunProcess, string].err fmt"QuickRun failed: {backgroundProcess.error}"

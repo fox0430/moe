@@ -17,26 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-## Waiting on one child with `waitid`, and what it reports.
+## The background process tests again, with fork and exec starting every
+## child as they do where libc's `posix_spawn` cannot do all a start needs,
+## and the child finding moe's descriptors in /proc/self/fd as it does where
+## close_range cannot mark them (the defines are in
+## test_backgroundprocess_fork.nims).
 
-import std/posix
-
-# Own names: some systems' `std/posix` declares these and others do not.
-var
-  idPid {.importc: "P_PID", header: "<sys/wait.h>".}: cint
-  cldExited {.importc: "CLD_EXITED", header: "<signal.h>".}: cint
-  cldStopped* {.importc: "CLD_STOPPED", header: "<signal.h>".}: cint
-
-proc waitidRetrying*(pid: int, info: var SigInfo, options: cint): cint =
-  ## `waitid` on `pid`, again when a signal interrupts it. `si_pid` is zeroed
-  ## first: under `WNOHANG` it is what tells a change from none.
-  info.si_pid = Pid(0)
-  result = waitid(idPid, Id(pid), info, options)
-  while result != 0 and errno == EINTR:
-    result = waitid(idPid, Id(pid), info, options)
-
-proc decodeSiginfo*(info: SigInfo): int =
-  ## Decode a `waitid` result to an exit code as a shell reports it.
-  if info.si_code == cldExited:
-    return info.si_status.int
-  return 128 + info.si_status.int
+include test_backgroundprocess

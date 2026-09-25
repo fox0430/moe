@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, strutils]
+import std/[importutils, unittest, options, os, strutils]
 
 import pkg/chronos
+import pkg/chronos/asyncproc
 
-import ../src/moepkg/background_process {.all.}
+import ../src/moepkg/[background_process {.all.}, child_process {.all.}]
 
 proc outputOf(bp: BackgroundProcess): Future[seq[string]] {.async.} =
   ## Unbounded wait, for the tests that are about what a command printed
@@ -58,7 +59,7 @@ suite "BackgroundProcess - startBackgroundProcess":
         cmd: "echo", args: @["hello"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let notNil = not bp.process.isNil
@@ -79,7 +80,7 @@ suite "BackgroundProcess - startBackgroundProcess":
         workingDir: getCurrentDir(),
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       return r.isErr
 
     check waitFor(runTest())
@@ -88,7 +89,7 @@ suite "BackgroundProcess - startBackgroundProcess":
     proc runTest(): Future[tuple[success: bool, output: seq[string]]] {.async.} =
       let cmd = BackgroundProcessCommand(cmd: "pwd", args: @[], workingDir: "/tmp")
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let output = await bp.outputOf()
@@ -101,52 +102,31 @@ suite "BackgroundProcess - startBackgroundProcess":
     check r.output.len > 0
     check r.output[0] == "/tmp"
 
-suite "BackgroundProcess - isRunning and isFinish":
-  test "isRunning returns true for running process":
-    proc runTest(): Future[tuple[running: bool, finish: bool]] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "sleep", args: @["1"], workingDir: getCurrentDir()
-      )
+suite "BackgroundProcess - whether the child runs":
+  test "A started child runs":
+    proc runTest(): Future[bool] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "sleep", args: @["1"], workingDir: getCurrentDir()
+        )
+      ).get
+      let running = bp.process.running()
+      await bp.closeAsync()
+      return running
 
-      let r = await startBackgroundProcess(cmd)
-      if r.isOk:
-        let bp = r.get
-        let running = bp.isRunning
-        let finish = bp.isFinish
-        bp.kill()
-        await bp.closeAsync()
-        return (running, finish)
-      else:
-        return (false, true)
+    check waitFor runTest()
 
-    let r = waitFor runTest()
-    check r.running == true
-    check r.finish == false
+  test "A child that has exited does not":
+    proc runTest(): Future[bool] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(
+          cmd: "echo", args: @["done"], workingDir: getCurrentDir()
+        )
+      ).get
+      discard await bp.outputOf()
+      return bp.process.running()
 
-  test "isFinish returns true for completed process":
-    proc runTest(): Future[tuple[running: bool, finish: bool]] {.async.} =
-      let cmd = BackgroundProcessCommand(
-        cmd: "echo", args: @["done"], workingDir: getCurrentDir()
-      )
-
-      let r = await startBackgroundProcess(cmd)
-      if r.isOk:
-        let bp = r.get
-        discard await bp.outputOf()
-        let running = bp.isRunning
-        let finish = bp.isFinish
-        return (running, finish)
-      else:
-        return (true, false)
-
-    let r = waitFor runTest()
-    check r.running == false
-    check r.finish == true
-
-  test "isRunning returns false for nil process":
-    let bp = BackgroundProcess(process: nil)
-    check bp.isRunning == false
-    check bp.isFinish == true
+    check not waitFor runTest()
 
 suite "BackgroundProcess - readAllOutput":
   test "Read single line output":
@@ -155,7 +135,7 @@ suite "BackgroundProcess - readAllOutput":
         cmd: "echo", args: @["hello"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let output = await bp.readAllOutput()
@@ -176,7 +156,7 @@ suite "BackgroundProcess - readAllOutput":
         workingDir: getCurrentDir(),
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let output = await bp.readAllOutput()
@@ -196,7 +176,7 @@ suite "BackgroundProcess - readAllOutput":
       let cmd =
         BackgroundProcessCommand(cmd: "true", args: @[], workingDir: getCurrentDir())
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let output = await bp.readAllOutput()
@@ -223,7 +203,7 @@ suite "BackgroundProcess - waitForExitAsync":
       let cmd =
         BackgroundProcessCommand(cmd: "true", args: @[], workingDir: getCurrentDir())
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let exitCode = await bp.waitForExitAsync()
@@ -240,7 +220,7 @@ suite "BackgroundProcess - waitForExitAsync":
       let cmd =
         BackgroundProcessCommand(cmd: "false", args: @[], workingDir: getCurrentDir())
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let exitCode = await bp.waitForExitAsync()
@@ -258,7 +238,7 @@ suite "BackgroundProcess - waitForExitAsync":
         cmd: "sh", args: @["-c", "exit 42"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let exitCode = await bp.waitForExitAsync()
@@ -284,11 +264,11 @@ suite "BackgroundProcess - waitForAsync":
         cmd: "echo", args: @["test output"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         let output = await bp.outputOf()
-        return (output, bp.process.isNil)
+        return (output, bp.process.released)
       else:
         return (@[], false)
 
@@ -304,12 +284,12 @@ suite "BackgroundProcess - waitForAsync":
         cmd: "echo", args: @["cleanup test"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let beforeNil = bp.process.isNil
+        let beforeNil = bp.process.released
         discard await bp.outputOf()
-        let afterNil = bp.process.isNil
+        let afterNil = bp.process.released
         return (beforeNil, afterNil)
       else:
         return (true, true)
@@ -325,10 +305,10 @@ suite "BackgroundProcess - cancel and kill":
         cmd: "sleep", args: @["10"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let running = bp.isRunning
+        let running = bp.process.running()
         bp.cancel()
         await sleepAsync(100.milliseconds)
         await bp.closeAsync()
@@ -345,10 +325,10 @@ suite "BackgroundProcess - cancel and kill":
         cmd: "sleep", args: @["10"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let running = bp.isRunning
+        let running = bp.process.running()
         bp.kill()
         await sleepAsync(100.milliseconds)
         await bp.closeAsync()
@@ -359,47 +339,26 @@ suite "BackgroundProcess - cancel and kill":
     let wasRunning = waitFor runTest()
     check wasRunning == true
 
-  test "A reaped process is never signalled again":
-    # Waiting for the child is what spends its pid: from that moment the
-    # number can be somebody else's, and both the run and the editor holding
-    # the job in `runningBackgroundProcesses` signal through the same `kill`.
+  test "A released process is never signalled again":
+    # Its pid may be somebody else's from then on, and both the run and the
+    # editor holding the job in `runningBackgroundProcesses` signal through
+    # the same `kill`.
     proc runTest(): Future[BackgroundProcess] {.async.} =
-      let r = await startBackgroundProcess(
+      let r = startBackgroundProcess(
         BackgroundProcessCommand(
           cmd: "sh", args: @["-c", "exit 0"], workingDir: getCurrentDir()
         )
       )
       let bp = r.get
       discard await bp.waitForExitAsync()
-      # The handle outlives the reap - it is released later, and a kill from
-      # the editor can land anywhere in that window.
-      doAssert not bp.process.isNil
+      await bp.closeAsync()
       bp.kill()
       bp.cancel()
-      await bp.closeAsync()
       return bp
 
     let bp = waitFor runTest()
-    check bp.reaped
-    check not bp.isRunning
-
-  test "Asking whether a process is running is itself a reap":
-    # `running` peeks with WNOHANG, so the question reaps the zombie it finds
-    # and the pid is spent even though this run never waited for it.
-    proc runTest(): Future[BackgroundProcess] {.async.} =
-      let r = await startBackgroundProcess(
-        BackgroundProcessCommand(
-          cmd: "sh", args: @["-c", "exit 0"], workingDir: getCurrentDir()
-        )
-      )
-      let bp = r.get
-      await sleepAsync(200.milliseconds)
-      doAssert not bp.isRunning
-      return bp
-
-    let bp = waitFor runTest()
-    check bp.reaped
-    waitFor bp.closeAsync()
+    check bp.process.fate == cfReaped
+    check not bp.process.running()
 
   test "Cancel nil process does nothing":
     let bp = BackgroundProcess(process: nil)
@@ -418,12 +377,12 @@ suite "BackgroundProcess - closeAsync":
         cmd: "echo", args: @["close test"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
-        let beforeNil = bp.process.isNil
+        let beforeNil = bp.process.released
         await bp.closeAsync()
-        let afterNil = bp.process.isNil
+        let afterNil = bp.process.released
         return (beforeNil, afterNil)
       else:
         return (true, true)
@@ -447,12 +406,12 @@ suite "BackgroundProcess - closeAsync":
         cmd: "echo", args: @["double close"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         await bp.closeAsync()
         await bp.closeAsync() # Second close should be safe
-        return bp.process.isNil
+        return bp.process.released
       else:
         return false
 
@@ -466,7 +425,7 @@ suite "BackgroundProcess - stderr capture":
         cmd: "sh", args: @["-c", "echo error >&2"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         return await bp.outputOf()
@@ -486,7 +445,7 @@ suite "BackgroundProcess - stderr capture":
         workingDir: getCurrentDir(),
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         return await bp.outputOf()
@@ -508,7 +467,7 @@ suite "BackgroundProcess - edge cases":
         cmd: "echo", args: @["hello world", "with spaces"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         return await bp.outputOf()
@@ -525,7 +484,7 @@ suite "BackgroundProcess - edge cases":
         cmd: "echo", args: @["日本語テスト"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         return await bp.outputOf()
@@ -541,7 +500,7 @@ suite "BackgroundProcess - edge cases":
       let cmd =
         BackgroundProcessCommand(cmd: "echo", args: @[""], workingDir: getCurrentDir())
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isOk:
         let bp = r.get
         return await bp.outputOf()
@@ -559,7 +518,7 @@ suite "BackgroundProcess - edge cases":
           cmd: "echo", args: @[$i], workingDir: getCurrentDir()
         )
 
-        let r = await startBackgroundProcess(cmd)
+        let r = startBackgroundProcess(cmd)
         if r.isOk:
           let bp = r.get
           let output = await bp.outputOf()
@@ -581,7 +540,7 @@ suite "BackgroundProcess - waitForAsync with timeout":
         cmd: "echo", args: @["fast"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isErr:
         return ProcessOutputResult.err "start failed"
       return await r.get.waitForAsync(5.seconds)
@@ -597,12 +556,12 @@ suite "BackgroundProcess - waitForAsync with timeout":
         cmd: "sleep", args: @["30"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isErr:
         return (ProcessOutputResult.err "start failed", false)
       let bp = r.get
       let waitResult = await bp.waitForAsync(200.milliseconds)
-      return (waitResult, bp.process.isNil)
+      return (waitResult, bp.process.released)
 
     let r = waitFor runTest()
     check r.r.isErr
@@ -618,7 +577,7 @@ suite "BackgroundProcess - waitForAsync with timeout":
         cmd: "sh", args: @["-c", "sleep 30 & wait"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isErr:
         return ProcessOutputResult.err "start failed"
       return await r.get.waitForAsync(200.milliseconds)
@@ -637,7 +596,7 @@ suite "BackgroundProcess - waitForAsync with timeout":
           cmd: "sh", args: @["-c", "setsid sleep 5 & wait"], workingDir: getCurrentDir()
         )
 
-        let r = await startBackgroundProcess(cmd)
+        let r = startBackgroundProcess(cmd)
         if r.isErr:
           return ProcessOutputResult.err "start failed"
         return await r.get.waitForAsync(200.milliseconds)
@@ -652,7 +611,7 @@ suite "BackgroundProcess - waitForAsync with timeout":
         cmd: "sh", args: @["-c", "sleep 0.2; echo slow"], workingDir: getCurrentDir()
       )
 
-      let r = await startBackgroundProcess(cmd)
+      let r = startBackgroundProcess(cmd)
       if r.isErr:
         return ProcessOutputResult.err "start failed"
       return await r.get.waitForAsync(InfiniteDuration)
@@ -672,14 +631,12 @@ suite "BackgroundProcess - timeoutFromSeconds":
 suite "BackgroundProcess - filterOutput":
   const Unbounded = 64 * 1024 * 1024
 
-  proc startFilter(
-      cmd: string, args: seq[string]
-  ): Future[BackgroundProcess] {.async.} =
-    let r = await startFilterProcess(
+  proc startFilter(cmd: string, args: seq[string]): BackgroundProcess =
+    let r = startFilterProcess(
       BackgroundProcessCommand(cmd: cmd, args: args, workingDir: getTempDir())
     )
     doAssert r.isOk, r.error
-    return r.get
+    r.get
 
   proc runFilter(
       cmd: string,
@@ -689,7 +646,7 @@ suite "BackgroundProcess - filterOutput":
       limit = Unbounded,
   ): FilterProcessResult =
     proc go(): Future[FilterProcessResult] {.async.} =
-      let bp = await startFilter(cmd, args)
+      let bp = startFilter(cmd, args)
       return await bp.filterOutput(input, timeout, limit)
 
     waitFor go()
@@ -830,7 +787,7 @@ suite "BackgroundProcess - filterOutput":
       removeFile(marker)
 
     proc go(marker: string): Future[void] {.async.} =
-      let bp = await startFilter("sh", @["-c", "sleep 0.5; : > " & marker])
+      let bp = startFilter("sh", @["-c", "sleep 0.5; : > " & marker])
       let running = bp.filterOutput("in\n", InfiniteDuration, Unbounded)
       await sleepAsync(100.milliseconds)
       await running.cancelAndWait()
@@ -850,9 +807,8 @@ suite "BackgroundProcess - filterOutput":
       removeFile(marker)
 
     proc go(marker: string): Future[void] {.async.} =
-      let bp = await startFilter(
-        "sh", @["-c", "exec 0<&- 1>&- 2>&-; sleep 0.5; : > " & marker]
-      )
+      let bp =
+        startFilter("sh", @["-c", "exec 0<&- 1>&- 2>&-; sleep 0.5; : > " & marker])
       let running = bp.filterOutput("in\n", InfiniteDuration, Unbounded)
       await sleepAsync(150.milliseconds)
       await running.cancelAndWait()
@@ -867,7 +823,7 @@ suite "BackgroundProcess - filterOutput":
     # session, where it keeps claiming its path against every later job on
     # that file.
     proc go(): Future[BackgroundProcess] {.async.} =
-      let bp = await startFilter("sh", @["-c", "sleep 5"])
+      let bp = startFilter("sh", @["-c", "sleep 5"])
       let running = bp.filterOutput("in\n", InfiniteDuration, Unbounded)
       await sleepAsync(100.milliseconds)
       # Twice, with the second landing while the first is already unwinding
@@ -879,5 +835,333 @@ suite "BackgroundProcess - filterOutput":
       return bp
 
     let bp = waitFor go()
-    check bp.process.isNil
-    check bp.isFinish
+    check bp.process.released
+    check not bp.process.running()
+
+when defined(linux):
+  import std/posix
+
+  proc start(cmd: string, args: seq[string], dir = ""): BackgroundProcess =
+    let r = startBackgroundProcess(
+      BackgroundProcessCommand(cmd: cmd, args: args, workingDir: dir)
+    )
+    doAssert r.isOk, r.error
+    r.get
+
+  proc pidWrittenTo(path: string): Pid =
+    for _ in 0 ..< 500:
+      if fileExists(path) and readFile(path).strip.len > 0:
+        return Pid(parseInt(readFile(path).strip))
+      sleep(10)
+    doAssert false, "no pid in " & path
+
+  proc isZombie(pid: int): bool =
+    readFile("/proc/" & $pid & "/stat").split(' ')[2] == "Z"
+
+  proc gone(pid: Pid): bool =
+    ## Whether `pid` has died; one that is not moe's child is reaped by init.
+    for _ in 0 ..< 200:
+      try:
+        if posix.kill(pid, 0) != 0 or isZombie(int(pid)):
+          return true
+      except IOError:
+        return true
+      sleep(10)
+    false
+
+  proc zombieChildren(): int =
+    ## Children of this process that exited and were never reaped.
+    let me = $getCurrentProcessId()
+    for kind, path in walkDir("/proc"):
+      if kind != pcDir or not path.extractFilename.allCharsInSet(Digits):
+        continue
+      try:
+        let
+          stat = readFile(path / "stat")
+          # After the parenthesised name: state, then the parent's pid.
+          fields = stat[stat.rfind(')') + 2 .. ^1].split(' ')
+        if fields[0] == "Z" and fields[1] == me:
+          result.inc
+      except IOError, OSError:
+        discard
+
+  suite "BackgroundProcess - how a child is started":
+    # Run twice: as is, and from test_backgroundprocess_fork with fork and exec
+    # starting every child. Both ways promise the same.
+    test "moe's working directory stays put, even when a start fails":
+      let
+        before = getCurrentDir()
+        a = getTempDir() / "moe_test_spawn_wd_a"
+        b = getTempDir() / "moe_test_spawn_wd_b"
+      createDir(a)
+      createDir(b)
+      defer:
+        removeDir(a)
+        removeDir(b)
+
+      let missing = startBackgroundProcess(
+        BackgroundProcessCommand(cmd: "moe-no-such-command", args: @[], workingDir: a)
+      )
+      let pwd = startBackgroundProcess(
+        BackgroundProcessCommand(cmd: "pwd", args: @[], workingDir: b)
+      )
+      check getCurrentDir() == before
+      check missing.isErr
+      let output = waitFor pwd.get.waitForAsync(5.seconds)
+      check getCurrentDir() == before
+      check output.isOk and output.get == @[b]
+
+    test "A command that is not found fails the start and leaves nothing":
+      let before = zombieChildren()
+      let r = startChild("moe-no-such-command", "", @[])
+      check r.isErr and "No such file" in r.error
+      check zombieChildren() == before
+
+    test "A working directory that cannot be entered fails the start":
+      let before = zombieChildren()
+      let r = startChild("pwd", getTempDir() / "moe_test_no_such_dir", @[])
+      check r.isErr and "No such file" in r.error
+      check zombieChildren() == before
+
+    test "A relative command is looked for in the working directory":
+      # The child enters the directory before its exec, as `posix_spawnp`
+      # does with a chdir action.
+      let dir = getTempDir() / "moe_test_relative_command"
+      createDir(dir)
+      defer:
+        removeDir(dir)
+      writeFile(dir / "hello.sh", "#!/bin/sh\necho relative\n")
+      setFilePermissions(dir / "hello.sh", {fpUserRead, fpUserWrite, fpUserExec})
+      let output = waitFor start("./hello.sh", @[], dir).waitForAsync(5.seconds)
+      check output.isOk and output.get == @["relative"]
+
+    test "Standard input is /dev/null, not the terminal":
+      let output =
+        waitFor start("readlink", @["/proc/self/fd/0"]).waitForAsync(5.seconds)
+      check output.isOk and output.get == @["/dev/null"]
+
+    test "A descriptor of moe's without close-on-exec stays in moe":
+      # `osproc` pipes (git, the clipboard) are not close-on-exec.
+      var fds: array[2, cint]
+      check posix.pipe(fds) == 0
+      let high = fcntl(fds[0], F_DUPFD, 200)
+      defer:
+        discard posix.close(fds[0])
+        discard posix.close(fds[1])
+        discard posix.close(high)
+      check high >= 200
+
+      let output =
+        waitFor start("sh", @["-c", "ls /proc/self/fd"]).waitForAsync(5.seconds)
+      check output.isOk
+      check $high notin output.get
+
+    test "SIGPIPE is at its default in the child":
+      # chronos ignores it in moe; a pipeline in a command would otherwise
+      # report broken pipes instead of ending quietly.
+      let output = waitFor start(
+        "sh", @["-c", "yes | head -n 1 > /dev/null; echo done"]
+      )
+        .waitForAsync(5.seconds)
+      check output.isOk and output.get == @["done"]
+
+    test "A killed child reports 128 plus the signal":
+      let bp = start("sleep", @["10"])
+      bp.kill()
+      check (waitFor bp.waitForExitAsync()) == some(128 + int(SIGKILL))
+      waitFor bp.closeAsync()
+
+    test "A stream that is not a pipe is nil":
+      proc go(): Future[(bool, bool)] {.async.} =
+        let child = startChild("true", "", @[]).get
+        let streams = (child.stdinStream.isNil, child.stderrStream.isNil)
+        await child.release()
+        return streams
+
+      check waitFor(go()) == (true, true)
+
+    test "Two waits on one child both see its exit":
+      proc go(): Future[(int, int)] {.async.} =
+        let child = startChild("sh", "", @["-c", "sleep 0.2; exit 3"]).get
+        let
+          first = child.waitForExit()
+          second = child.waitForExit()
+        let codes = (await first, await second)
+        await child.release()
+        return codes
+
+      check waitFor(go()) == (3, 3)
+
+    test "Releasing a child that still runs stops and reaps it":
+      # However a handle is let go, nothing is left running and no zombie
+      # stays behind.
+      proc go(): Future[ChildProcess] {.async.} =
+        let child = startChild("sleep", "", @["30"]).get
+        await child.release()
+        return child
+
+      let child = waitFor go()
+      check child.fate == cfReaped
+      check child.exitCode == some(128 + int(SIGKILL))
+      check not dirExists("/proc/" & $child.pid)
+
+    test "A wait alongside a release sees the end the release brought":
+      proc go(): Future[int] {.async.} =
+        let child = startChild("sleep", "", @["30"]).get
+        let waiting = child.waitForExit()
+        await sleepAsync(20.milliseconds)
+        await child.release()
+        return await waiting.wait(3.seconds)
+
+      check waitFor(go()) == 128 + int(SIGKILL)
+
+    test "A cancel reaches what the child started":
+      # Every child leads a process group so that signals reach its children.
+      let pidFile = getTempDir() / "moe_test_cancel_group"
+      removeFile(pidFile)
+      defer:
+        removeFile(pidFile)
+      let bp = start("sh", @["-c", "sleep 30 & echo $! > " & pidFile & "; wait"])
+      let grandchild = pidWrittenTo(pidFile)
+
+      bp.cancel()
+      discard waitFor bp.waitForExitAsync()
+      check gone(grandchild)
+      waitFor bp.closeAsync()
+
+    test "A timeout takes out what the command left in its group":
+      # The command has exited and what it started holds the pipe. Unreaped,
+      # its pid still names the group, so the kill still reaches that.
+      let pidFile = getTempDir() / "moe_test_timeout_leftover"
+      removeFile(pidFile)
+      defer:
+        removeFile(pidFile)
+      let
+        bp = start("sh", @["-c", "sleep 30 & echo $! > " & pidFile])
+        leftover = pidWrittenTo(pidFile)
+      # Asked meanwhile: that must not spend the pid.
+      for _ in 0 ..< 200:
+        if not bp.process.running():
+          break
+        sleep(10)
+      check not bp.process.running()
+      let r = waitFor bp.waitForAsync(200.milliseconds)
+      check r.isErr and "Timed out" in r.error
+      check gone(leftover)
+
+    test "A timeout is bounded even when the exit is never announced":
+      # As for a command in uninterruptible sleep, which outlives its SIGKILL:
+      # the pidfd watches another process, so the wait for the exit never
+      # returns within the grace. The command closes its output first, so the
+      # run is waiting for the exit alone when the timeout comes.
+      privateAccess(ChildProcess)
+      proc go(): Future[(ProcessOutputResult, Duration, ChildFate)] {.async.} =
+        let
+          bp = start("sh", @["-c", "exec >&- 2>&-; exec sleep 30"])
+          decoy = startChild("sleep", "", @["8"]).get
+        discard posix.close(bp.process.pidfd)
+        bp.process.pidfd = decoy.pidfd
+        decoy.pidfd = -1
+        let started = Moment.now()
+        let r = await bp.waitForAsync(200.milliseconds)
+        let took = Moment.now() - started
+        await decoy.release()
+        return (r, took, bp.process.fate)
+
+      let (r, took, fate) = waitFor go()
+      check r.isErr and "Timed out" in r.error
+      # The timeout and the kill's grace, not the decoy's life.
+      check took < 5.seconds
+      check fate == cfReaped
+
+    test "A child that has exited stays unreaped until it is released":
+      proc go(): Future[(int, ChildFate, bool, ChildFate)] {.async.} =
+        let child = startChild("sh", "", @["-c", "exit 7"]).get
+        let code = await child.waitForExit()
+        let
+          before = child.fate
+          zombie = isZombie(child.pid)
+        await child.release()
+        return (code, before, zombie, child.fate)
+
+      check waitFor(go()) == (7, cfExited, true, cfReaped)
+
+    test "A child is waited for by polling without its pidfd":
+      # As on a kernel without pidfds, or once the dispatcher refused one.
+      proc go(): Future[int] {.async.} =
+        let child = startChild("sh", "", @["-c", "sleep 0.1; exit 5"]).get
+        child.closePidfd()
+        let code = await child.waitForExit().wait(5.seconds)
+        await child.release()
+        return code
+
+      check waitFor(go()) == 5
+
+    test "A cancelled release still reaps the child":
+      proc go(): Future[ChildProcess] {.async.} =
+        let child = startChild("sleep", "", @["30"]).get
+        await child.release().cancelAndWait()
+        return child
+
+      let child = waitFor go()
+      check child.fate == cfReaped
+      check not dirExists("/proc/" & $child.pid)
+
+    test "A child reaped behind the handle's back is not known, not exited":
+      # Its pid may be somebody else's now: nothing may signal it, and how it
+      # ended cannot be made up.
+      let child = startChild("sh", "", @["-c", "exit 3"]).get
+      var status: cint
+      check posix.waitpid(Pid(child.pid), status, 0) == Pid(child.pid)
+      check not child.running
+      check child.fate == cfUnknown
+      check child.exitCode.isNone
+      expect AsyncProcessError:
+        discard waitFor child.waitForExit()
+      child.kill()
+      waitFor child.release()
+      check child.fate == cfUnknown
+
+    test "A child left to be reaped later is reaped by the next start":
+      # As `release` leaves one that outlived its kill; the next start or
+      # release on any thread reaps it.
+      let child = startChild("sh", "", @["-c", "sleep 0.1"]).get
+      child.leaveToReaper()
+      check child.fate == cfUnknown
+      for _ in 0 ..< 200:
+        if isZombie(child.pid):
+          break
+        sleep(10)
+      check isZombie(child.pid)
+      let next = startChild("true", "", @[]).get
+      check not dirExists("/proc/" & $child.pid)
+      waitFor next.release()
+      waitFor child.release()
+
+    test "A child that left its group is signalled by its pid as well":
+      # It can join another group of the session; what it started stays in
+      # the one it leads.
+      let python = findExe("python3")
+      if python.len == 0:
+        skip()
+      else:
+        let pidFile = getTempDir() / "moe_test_left_group"
+        removeFile(pidFile)
+        defer:
+          removeFile(pidFile)
+        let bp = start(
+          python,
+          @[
+            "-c",
+            "import os, subprocess, sys, time\n" &
+              "p = subprocess.Popen(['sleep', '10'])\n" &
+              "os.setpgid(0, os.getpgid(os.getppid()))\n" &
+              "open(sys.argv[1], 'w').write(str(p.pid))\n" & "time.sleep(10)",
+            pidFile,
+          ],
+        )
+        let leftover = pidWrittenTo(pidFile)
+        bp.kill()
+        check (waitFor bp.waitForExitAsync()) == some(128 + int(SIGKILL))
+        check gone(leftover)
+        waitFor bp.closeAsync()

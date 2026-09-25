@@ -20,14 +20,11 @@
 ## LSP Worker Thread
 ## Runs chronos event loop in a separate thread to avoid blocking the UI
 
-import std/[json, options, os, strutils, strtabs, locks, tables, atomics, deques, uri]
+import std/[json, options, os, strutils, locks, tables, atomics, deques, uri]
 import std/times except milliseconds
 
-when defined(posix):
-  from std/posix import nil
-
 import pkg/[results, chronos, jsony]
-import pkg/chronos/[asyncproc, threadsync]
+import pkg/chronos/threadsync
 
 when defined(windows):
   from pkg/chronos/osdefs import closeHandle
@@ -36,7 +33,7 @@ else:
 
 import jsonrpc
 import protocol/types
-import ../[logger, setting_issue]
+import ../[child_process, logger, setting_issue]
 
 export types
 
@@ -110,10 +107,6 @@ type
   SharedState = object
     running: Atomic[bool]
     stateVal: Atomic[int] # LspWorkerState stored as int for atomic access
-    serverPid: Atomic[int]
-      # OS pid of the live server process (spawned as its own group leader);
-      # 0 when no server is running. Read by the main thread at shutdown to
-      # SIGKILL a worker that is wedged in a blocking write (pipe deadlock).
 
   # Messages from main thread to worker thread
   LspCommandKind* = enum
@@ -323,21 +316,6 @@ proc loadState(s: ptr SharedState): LspWorkerState =
 
 proc storeState(s: ptr SharedState, val: LspWorkerState) =
   s[].stateVal.store(val.ord, moRelease)
-
-proc storeServerPid(s: ptr SharedState, val: int) =
-  s[].serverPid.store(val, moRelease)
-
-proc killServerProcessGroup(pid: int) =
-  ## SIGKILL the server's whole process group. The server is spawned as a group
-  ## leader (AsyncProcessOption.ProcessGroup), so the negative-pid kill also
-  ## reaps grandchildren (e.g. nimsuggest spawned by nimlangserver). Harmless if
-  ## the process has already exited (ESRCH is ignored).
-  if pid <= 0:
-    return
-  when defined(posix):
-    discard posix.kill(posix.Pid(-pid), posix.SIGKILL)
-  else:
-    discard
 
 # Queue operations
 proc initCommandQueue(): CommandQueue =
@@ -793,7 +771,7 @@ proc notificationToEvents*(meth: string, params: JsonNode): LspEvent =
 # Worker thread main loop
 proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
   var
-    serverProcess: AsyncProcessRef = nil
+    serverProcess: ChildProcess = nil
     serverStreams: Streams = nil
     outputFuture: Future[JsonRpcResponseResult] = nil
     # Drains the server's stderr pipe so it never blocks the child and its
@@ -1058,17 +1036,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ## Kill the server process, release its handles, and fail any requests
     ## still waiting on it. Does not change the worker state; callers set
     ## lwsStopped/lwsCrashed as appropriate.
-    # Drop the shared pid first so the main-thread shutdown backstop won't also
-    # try to kill it. Then SIGKILL the whole process group (reaps grandchildren
-    # like nimsuggest that chronos's single-process kill would orphan).
-    let pid = if serverProcess != nil: serverProcess.pid else: 0
-    ctx.sharedState.storeServerPid(0)
-    killServerProcessGroup(pid)
-    try:
-      if serverProcess != nil:
-        discard serverProcess.kill()
-    except CatchableError as e:
-      sendLogMessage(mtWarning, "Failed to kill LSP server process: " & e.msg)
+    # The whole process group, grandchildren like nimsuggest included, so the
+    # pumps below see EOF.
+    if serverProcess != nil:
+      serverProcess.kill()
 
     # Stop the stderr drain loop before closing its pipe
     if not stderrDrainFut.isNil and not stderrDrainFut.finished:
@@ -1087,11 +1058,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     readPumpFut = nil
 
     if serverProcess != nil:
-      # Close process pipe FDs and streams (must be called explicitly)
-      try:
-        await serverProcess.closeWait()
-      except CatchableError:
-        discard
+      await serverProcess.release()
 
     serverProcess = nil
     serverStreams = nil
@@ -1164,36 +1131,18 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # Use temp dir as working directory to prevent nimlangserver from
     # detecting a project based on moe's current working directory
     let workingDir = lspWorkingDir
-    let env: StringTableRef = nil
-    # stderr gets its own pipe: merging it into stdout (StdErrToStdOut) would
-    # interleave server log output with the JSON-RPC framing stream and
-    # permanently desynchronize it.
-    # ProcessGroup makes the server its own process-group leader, so a single
-    # kill(-pid) at shutdown/crash reaps any children it spawned (e.g.
-    # nimsuggest under nimlangserver) instead of orphaning them.
-    let opts: set[AsyncProcessOption] = {UsePath, ProcessGroup}
-
-    try:
-      serverProcess = await startProcess(
-        command,
-        workingDir,
-        args,
-        env,
-        opts,
-        stdoutHandle = AsyncProcess.Pipe,
-        stdinHandle = AsyncProcess.Pipe,
-        stderrHandle = AsyncProcess.Pipe,
-      )
-    except CatchableError as e:
+    # stderr gets its own pipe: merging it into stdout would interleave server
+    # log output with the JSON-RPC framing stream and permanently
+    # desynchronize it.
+    let started =
+      startChild(command, workingDir, args, stdinMode = csPipe, stderrMode = cePipe)
+    if started.isErr:
       ctx.sharedState.storeState(lwsCrashed)
-      sendError("Failed to start LSP server: " & e.msg)
+      sendError("Failed to start LSP server: " & started.error)
       # Drop held docs; the next start re-opens fresh.
       pendingDocs.clearPendingDocs()
       return
-
-    # Publish the pid so the main thread can SIGKILL the group at shutdown if
-    # the worker is wedged in a blocking write and can't process lcmdShutdown.
-    ctx.sharedState.storeServerPid(serverProcess.pid)
+    serverProcess = started.get
 
     serverStreams = Streams(
       input: InputStream(stream: serverProcess.stdinStream),
@@ -1281,7 +1230,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       currentSettings = newJNull()
 
     let reqResult = await sendRequest("initialize", $initParams)
-    if reqResult.isErr:
+    # A queued stop kills the server, which is then why the write failed: the
+    # wait below sees the stop.
+    if reqResult.isErr and not ctx.commandQueue[].hasPendingStopOrShutdown():
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to send initialize: " & reqResult.error)
       await cleanupProcess()
@@ -1299,18 +1250,12 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     const InitializeTimeoutSec = 30
     let initDeadline = Moment.now() + chronos.seconds(InitializeTimeoutSec)
     while true:
-      while not outputFuture.finished:
+      while not outputFuture.finished and
+          not ctx.commandQueue[].hasPendingStopOrShutdown():
         let sleeper = sleepAsync(chronos.seconds(1))
         discard await race(outputFuture, sleeper)
         if not sleeper.finished:
           await sleeper.cancelAndWait()
-        if ctx.commandQueue[].hasPendingStopOrShutdown():
-          sendLogMessage(mtWarning, "LSP initialize aborted by stop request")
-          await cleanupProcess()
-          ctx.sharedState.storeState(lwsStopped)
-          # Explicit stop drops held docs.
-          pendingDocs.clearPendingDocs()
-          return
         if Moment.now() > initDeadline:
           ctx.sharedState.storeState(lwsCrashed)
           sendError(
@@ -1319,6 +1264,16 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           await cleanupProcess()
           pendingDocs.clearPendingDocs()
           return
+
+      # Also once the read has ended: a queued stop kills the server, which is
+      # then what ended it.
+      if ctx.commandQueue[].hasPendingStopOrShutdown():
+        sendLogMessage(mtWarning, "LSP initialize aborted by stop request")
+        await cleanupProcess()
+        ctx.sharedState.storeState(lwsStopped)
+        # Explicit stop drops held docs.
+        pendingDocs.clearPendingDocs()
+        return
 
       let respResult = outputFuture.read()
 
@@ -1721,6 +1676,26 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     for lspId in timedOutIds:
       pendingRequests.del(lspId)
 
+  let commandsArrived = newAsyncEvent()
+
+  proc watchCommands() {.async.} =
+    ## The one waiter on the main thread's signal, running beside the loop.
+    ## A queued stop kills the server at once: a write to a server that has
+    ## stopped reading would otherwise hold the loop, and the stop queued
+    ## behind it, forever.
+    while true:
+      try:
+        await ctx.signal.wait()
+      except CancelledError as e:
+        raise e
+      except CatchableError:
+        # The loop still wakes on its own timeout.
+        await sleepAsync(milliseconds(SignalTimeoutIdleMs))
+        continue
+      commandsArrived.fire()
+      if serverProcess != nil and ctx.commandQueue[].hasPendingStopOrShutdown():
+        serverProcess.kill()
+
   proc mainLoop() {.async.} =
     while ctx.sharedState.loadRunning():
       # Process any pending commands
@@ -1748,8 +1723,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
         # The pump stopped: stdout closed (crash/exit) or the inbound queue
         # overflowed (runaway server). Surface it as a crash so the service
-        # restarts, after the queued frames above have been dispatched.
-        if readPumpStopped:
+        # restarts, after the queued frames above have been dispatched. Not
+        # when a queued stop is what killed the server.
+        if readPumpStopped and not ctx.commandQueue[].hasPendingStopOrShutdown():
           ctx.sharedState.storeState(lwsCrashed)
           if readPumpOverflow:
             sendError(
@@ -1764,21 +1740,25 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       if pendingRequests.len > 0:
         checkRequestTimeouts()
 
-      # Wait for signal from main thread or timeout. The timeout also bounds how
-      # long pump-queued frames sit before the next drain above.
+      # Wait for a command or timeout. The timeout also bounds how long
+      # pump-queued frames sit before the next drain above.
       try:
         if ctx.sharedState.loadState() == lwsRunning:
           # When server is running, use short timeout to drain LSP messages
-          discard
-            await ctx.signal.wait().withTimeout(milliseconds(SignalTimeoutRunningMs))
+          discard await commandsArrived.wait().withTimeout(
+            milliseconds(SignalTimeoutRunningMs)
+          )
         else:
           # When server is not running, wait longer for commands
-          discard await ctx.signal.wait().withTimeout(milliseconds(SignalTimeoutIdleMs))
+          discard
+            await commandsArrived.wait().withTimeout(milliseconds(SignalTimeoutIdleMs))
       except CatchableError:
         # Timeout or error - continue loop
         discard
+      commandsArrived.clear()
 
   # Run the async main loop with top-level exception handling
+  let commandWatch = watchCommands()
   try:
     waitFor mainLoop()
   except CatchableError as e:
@@ -1788,6 +1768,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ctx.sharedState.storeState(lwsCrashed)
     ctx.sharedState.storeRunning(false)
   finally:
+    # However the loop ended, the server is this thread's to stop: nothing
+    # else knows of it.
+    try:
+      waitFor commandWatch.cancelAndWait()
+      if serverProcess != nil:
+        waitFor cleanupProcess()
+    except CatchableError:
+      discard
     # PDispatcher has no destructor, so close its native I/O handle explicitly.
     # Use finally to ensure cleanup even on Defect.
     try:
@@ -1855,20 +1843,11 @@ proc stop*(worker: LspWorker) =
     return
 
   if worker.sharedState.running.load(moAcquire):
-    # Normal case: send shutdown command to gracefully stop
+    # Normal case: send shutdown command to gracefully stop. `watchCommands`
+    # kills the server as soon as this is queued.
     worker.commandQueue.pushAndSignal(LspCommand(kind: lcmdShutdown), worker.signal)
 
   if worker.threadStarted:
-    # The worker may be wedged in a blocking write to a server that has stopped
-    # reading its stdin (pipe-full deadlock), so it would never observe the
-    # queued lcmdShutdown and joinThread would block forever. Killing the
-    # server's process group from here closes the pipes, which fails that write
-    # and lets the worker reach the shutdown path. Harmless if already gone, or
-    # if the read pump already cleared the pid on a clean stop.
-    let pid = worker.sharedState.serverPid.load(moAcquire)
-    if pid > 0:
-      killServerProcessGroup(pid)
-
     # Always join the thread if it was started, even if the worker has crashed.
     # Without joining, the old thread may still be accessing shared memory when
     # the LspWorker ref is freed, causing allocator corruption.
