@@ -322,7 +322,10 @@ template withTransaction*(
       var completed = false
       var inFlight: ref Exception = nil
       try:
-        body
+        # `if true` avoids UnreachableCode when body ends with `return`.
+        # `if` (unlike `block`) does not capture a bare `break`.
+        if true:
+          body
         completed = true
       except Exception as exc:
         # Capture the exception now: getCurrentException() inside finally

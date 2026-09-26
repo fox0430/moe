@@ -448,7 +448,10 @@ template withPlaybackGuard*(e: Editor, body: untyped): ReplayOutcome =
       state.pendingInput.macroState.isRecording = false
       var outcome {.inject.} = roContinue
       try:
-        body
+        # `if true` avoids UnreachableCode when body ends with `return`/`raise`.
+        # `if` (unlike `block`) does not capture a bare `break`.
+        if true:
+          body
       finally:
         # Exception safety: always restore playback state, even on failure.
         state.pendingInput.macroState.isRecording = wasRecording
