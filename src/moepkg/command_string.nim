@@ -22,13 +22,16 @@
 ## Used by build-on-save, which takes a command as one string from the config
 ## and must exec it without a shell.
 
+import pkg/results
+
 type CommandArgv* = tuple[cmd: string, args: seq[string]]
 
-proc parseCommandString*(cmdStr: string): CommandArgv =
-  ## Parse a command string into a CommandArgv tuple, honoring POSIX-style
-  ## single/double quotes and backslash escapes so args containing whitespace
-  ## survive as a single token.
+proc parseCommandString*(cmdStr: string): Result[CommandArgv, string] =
+  ## Parse a command string into a `Result` whose ok value is a CommandArgv
+  ## tuple, honoring POSIX-style single/double quotes and backslash escapes
+  ## so args containing whitespace survive as a single token.
   ## E.g., `nim c "-d:foo bar" file.nim` -> (cmd: "nim", args: @["c", "-d:foo bar", "file.nim"])
+  ## Returns err "unterminated quote" when a quote is left open.
   var
     tokens: seq[string] = @[]
     current = ""
@@ -75,12 +78,14 @@ proc parseCommandString*(cmdStr: string): CommandArgv =
         current.add c
         hasToken = true
     inc i
-  if hasToken or inSingle or inDouble:
+  if inSingle or inDouble:
+    return Result[CommandArgv, string].err "unterminated quote"
+  if hasToken:
     tokens.add current
 
   if tokens.len == 0:
-    return (cmd: "", args: @[])
+    return Result[CommandArgv, string].ok (cmd: "", args: @[])
   elif tokens.len == 1:
-    return (cmd: tokens[0], args: @[])
+    return Result[CommandArgv, string].ok (cmd: tokens[0], args: @[])
   else:
-    return (cmd: tokens[0], args: tokens[1 .. ^1])
+    return Result[CommandArgv, string].ok (cmd: tokens[0], args: tokens[1 .. ^1])
