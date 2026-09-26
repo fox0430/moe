@@ -66,7 +66,8 @@ proc buildOnSaveCommand*(
   ## What a build of `path` runs: `customCommand` when given, otherwise the
   ## language's own command.
   if customCommand.len > 0:
-    let parsed = parseCommandString(customCommand)
+    let parsed = parseCommandString(customCommand).valueOr:
+      return Result[BackgroundProcessCommand, string].err error
     if parsed.cmd.len == 0:
       return Result[BackgroundProcessCommand, string].err "command is empty"
     Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(

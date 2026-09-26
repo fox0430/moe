@@ -28,69 +28,83 @@ import ../src/moepkg/syntax/tokenizer
 
 suite "Build - parseCommandString":
   test "Parse simple command":
-    let cmd = parseCommandString("echo")
+    let cmd = parseCommandString("echo").get
     check cmd.cmd == "echo"
     check cmd.args.len == 0
 
   test "Parse command with single arg":
-    let cmd = parseCommandString("nim c")
+    let cmd = parseCommandString("nim c").get
     check cmd.cmd == "nim"
     check cmd.args == @["c"]
 
   test "Parse command with multiple args":
-    let cmd = parseCommandString("nim c -d:release file.nim")
+    let cmd = parseCommandString("nim c -d:release file.nim").get
     check cmd.cmd == "nim"
     check cmd.args == @["c", "-d:release", "file.nim"]
 
   test "Parse empty string":
-    let cmd = parseCommandString("")
+    let cmd = parseCommandString("").get
     check cmd.cmd == ""
     check cmd.args.len == 0
 
   test "Parse cargo build command":
-    let cmd = parseCommandString("cargo build --release")
+    let cmd = parseCommandString("cargo build --release").get
     check cmd.cmd == "cargo"
     check cmd.args == @["build", "--release"]
 
   test "Collapse consecutive whitespace":
-    let cmd = parseCommandString("nim   c\t\tfile.nim")
+    let cmd = parseCommandString("nim   c\t\tfile.nim").get
     check cmd.cmd == "nim"
     check cmd.args == @["c", "file.nim"]
 
   test "Trim leading and trailing whitespace":
-    let cmd = parseCommandString("  nim c file.nim  ")
+    let cmd = parseCommandString("  nim c file.nim  ").get
     check cmd.cmd == "nim"
     check cmd.args == @["c", "file.nim"]
 
   test "Double-quoted arg preserves inner spaces":
-    let cmd = parseCommandString("nim c \"-d:foo bar\" file.nim")
+    let cmd = parseCommandString("nim c \"-d:foo bar\" file.nim").get
     check cmd.cmd == "nim"
     check cmd.args == @["c", "-d:foo bar", "file.nim"]
 
   test "Single-quoted arg is fully literal":
-    let cmd = parseCommandString("echo 'a \"b\" \\c'")
+    let cmd = parseCommandString("echo 'a \"b\" \\c'").get
     check cmd.cmd == "echo"
     check cmd.args == @["a \"b\" \\c"]
 
   test "Backslash escapes space outside quotes":
-    let cmd = parseCommandString("cmd a\\ b c")
+    let cmd = parseCommandString("cmd a\\ b c").get
     check cmd.cmd == "cmd"
     check cmd.args == @["a b", "c"]
 
   test "Backslash escapes quote inside double quotes":
-    let cmd = parseCommandString("echo \"say \\\"hi\\\"\"")
+    let cmd = parseCommandString("echo \"say \\\"hi\\\"\"").get
     check cmd.cmd == "echo"
     check cmd.args == @["say \"hi\""]
 
   test "Empty quoted string is a token":
-    let cmd = parseCommandString("cmd \"\" x")
+    let cmd = parseCommandString("cmd \"\" x").get
     check cmd.cmd == "cmd"
     check cmd.args == @["", "x"]
 
   test "Whitespace-only string yields empty command":
-    let cmd = parseCommandString("   \t  ")
+    let cmd = parseCommandString("   \t  ").get
     check cmd.cmd == ""
     check cmd.args.len == 0
+
+  test "Unterminated double quote is an error":
+    let r = parseCommandString("cargo build --features \"a b")
+    check r.isErr
+    check r.error == "unterminated quote"
+
+  test "Unterminated single quote is an error":
+    let r = parseCommandString("echo 'abc")
+    check r.isErr
+    check r.error == "unterminated quote"
+
+  test "Unterminated quote after valid tokens is an error":
+    let r = parseCommandString("nim c \"-d:foo bar")
+    check r.isErr
 
 suite "Build - nimBuildCommand":
   test "Generate nim build command":
@@ -171,6 +185,16 @@ suite "Build - buildOnSaveCommand":
 
   test "A custom command of only blanks is refused":
     check buildOnSaveCommand("/path/to/file.nim", SourceLanguage.langNim, "   ").isErr
+
+  test "A custom command with an unterminated quote is refused":
+    let r = buildOnSaveCommand(
+      "/path/to/file.nim",
+      SourceLanguage.langNim,
+      customCommand = "cargo build --features \"a b",
+      workspaceRoot = "/workspace",
+    )
+    check r.isErr
+    check r.error == "unterminated quote"
 
   test "A language without a build command is refused":
     let r = buildOnSaveCommand("/path/to/file.py", SourceLanguage.langPython)
