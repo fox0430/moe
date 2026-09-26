@@ -173,6 +173,9 @@ type
         discard
       else:
         terminal*: TerminalState
+        scrollbackSnapshot*: TextBuffer
+          ## This window's Terminal-Normal copy of the session; nil while its
+          ## keys go to the session. Leaving the tab drops it with the variant.
 
   ViewerPlacement* = enum
     ## Placement chosen on viewer entry and reversed on exit.
@@ -186,6 +189,12 @@ type
     mode*: EditorMode
     placement*: ViewerPlacement
     returnMode*: EditorMode
+    returnState*: ModeState
+      ## `returnMode`'s variant (a Terminal session, a FileTree), taken with it
+      ## so the two resume as one unit.
+    returnTab*: BufferId
+      ## The tab an in-place viewer covered. What it covered resumes only while
+      ## the window is still on it.
     bufferId*: BufferId
       ## Listing buffer to delete on exit. Refreshing viewers swap in an
       ## unregistered buffer, so this must not key off the window.
@@ -1320,6 +1329,11 @@ proc baseMode*(state: EditorState): EditorMode =
   ## Get the base mode (the mode under the overlay)
   ## With overlays, state.mode always holds the base mode
   state.mode
+
+when not defined(moe.embedded):
+  func terminalSubMode*(state: ModeState): TerminalSubMode =
+    ## Only for an `mskTerminal` state.
+    if state.scrollbackSnapshot == nil: tsmInput else: tsmNormal
 
 proc modeStateKind*(mode: EditorMode): ModeStateKind =
   ## Map an `EditorMode` to the `ModeStateKind` it expects on `EditorWindow`.

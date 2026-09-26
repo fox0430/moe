@@ -51,6 +51,14 @@ proc terminalWindowFor(e: Editor, id: BufferId): EditorWindow =
       return window
   nil
 
+proc isBrowsed(e: Editor, id: BufferId): bool =
+  ## Whether a window on the session parked on `id` is in Terminal-Normal.
+  for window in e.windowManager.windows:
+    if window.tabBufferId == id and window.modeState.kind == mskTerminal and
+        window.modeState.terminalSubMode == tsmNormal:
+      return true
+  false
+
 proc pollTerminalSessions*(e: Editor) =
   ## Drain every live Terminal session's PTY and resize the ones on screen.
   ## Called on every render frame.
@@ -75,7 +83,7 @@ proc pollTerminalSessions*(e: Editor) =
 
     # A shell only exits when the user quits it, so the tab always goes — but
     # not while the user is browsing the scrollback of one that just exited.
-    if session.subMode == tsmInput and session.exitCode.isSome:
+    if session.exitCode.isSome and not e.isBrowsed(id):
       # After the loop: teardown mutates the table this one is walking.
       exited.add(id)
 

@@ -396,6 +396,9 @@ when not defined(moe.embedded):
     let activeWin = e.activeWindow
     result = newTextBuffer("")
     result.displayName = some("[Terminal: " & command & "]")
+    # Input goes to the PTY; a window that reaches this buffer in a text mode
+    # must not be able to edit, save or preserve it.
+    result.readOnly = true
 
     e.addBuffer(result)
     e.addBufferToWindowList(result)

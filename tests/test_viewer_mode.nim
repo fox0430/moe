@@ -30,6 +30,7 @@ import
   ]
 import ../src/moepkg/types/editor_types
 import ../src/moepkg/buffer
+import ../src/moepkg/command_handlers/editor_ops
 
 const TestLines = "aaaa\nbbbb\ncccc\n"
 
@@ -149,6 +150,24 @@ suite "viewer_mode - enterViewerMode (vpVSplit)":
     e.leaveViewerMode(EditorMode.Help)
     check e.windowManager.windows.len == windowCount
 
+  test ":bd of the listing ends the viewer and keeps the window":
+    let (e, path) = editorOnFile("moe_viewer_vsplit_bd.txt")
+    defer:
+      removeFile(path)
+    let fileBuffer = e.activeBuffer()
+    discard e.enterViewerMode(
+      EditorMode.Help, makeHelpModeState(), newTextBuffer("help line 1"), vpVSplit
+    )
+    let win = e.activeWindow
+
+    check e.deleteCurrentBuffer().isOk
+
+    check e.activeWindow == win
+    check win.viewerEntry.isNone
+    check win.modeState.kind == mskNone
+    check win.mode == EditorMode.Normal
+    check win.buffer == fileBuffer
+
 suite "viewer_mode - focusExistingViewerWindow":
   test "activates an existing viewer window":
     let (e, path) = editorOnFile("moe_viewer_focus1.txt")
@@ -191,16 +210,44 @@ suite "viewer_mode - closeLiveViewer":
     check e.activeWindow.mode == EditorMode.Normal
 
 suite "viewer_mode - leaveViewerModeForJump":
-  test "returns the entry and switches to Normal without restoring the cursor":
+  test "returns the entry and lands in Normal at the origin position":
     let (e, path) = editorOnFile("moe_viewer_jump1.txt")
     defer:
       removeFile(path)
+    e.activeWindow.cursor = BufferPosition(line: 2, column: 1)
     let helpBuffer = newTextBuffer("help line 1")
     discard
       e.enterViewerMode(EditorMode.Help, makeHelpModeState(), helpBuffer, vpInPlace)
+    e.activeWindow.cursor = BufferPosition(line: 0, column: 6)
     let entry = e.leaveViewerModeForJump(EditorMode.Help)
     check entry.isSome
     check e.activeWindow.mode == EditorMode.Normal
+    # The jump list anchors at the cursor, so it must be the origin, not the
+    # listing's.
+    check e.activeWindow.cursor == BufferPosition(line: 2, column: 1)
+
+suite "viewer_mode - resuming what an in-place viewer covered":
+  test "a FileTree window gets its FileTree state back":
+    let (e, path) = editorOnFile("moe_viewer_resume_filetree.txt")
+    defer:
+      removeFile(path)
+    e.toggleFileTree(none(string), e.activeBuffer())
+    require e.focusFileTreeWindow()
+    let win = e.activeWindow
+    let ftState = win.modeState.fileTree
+    let ftView = win.buffer
+    discard e.enterViewerMode(
+      EditorMode.Help, makeHelpModeState(), newTextBuffer("help"), vpInPlace
+    )
+    require win.mode == EditorMode.Help
+
+    e.leaveViewerMode(EditorMode.Help)
+
+    check win.mode == EditorMode.FileTree
+    check win.modeState.kind == mskFileTree
+    if win.modeState.kind == mskFileTree:
+      check win.modeState.fileTree == ftState
+    check win.buffer == ftView
 
 suite "viewer_mode - tab switch teardown":
   test "a tab switch drops a viewer entry owned by a suspended mode":

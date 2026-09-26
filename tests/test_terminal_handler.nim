@@ -132,14 +132,15 @@ suite "handleTerminalModeKey - Terminal-Input sub-mode":
   test "Regular key in Input mode returns trHandled":
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
-      let result = handleTerminalModeKey(termState.get, charKey("a"))
+      let result = handleTerminalModeKey(termState.get, tsmInput, charKey("a"))
       check result.kind == trHandled
       termState.get.cleanup()
 
   test "Ctrl-backslash sets waitingForCtrlN":
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
-      let result = handleTerminalModeKey(termState.get, charKey("\\", {kmCtrl}))
+      let result =
+        handleTerminalModeKey(termState.get, tsmInput, charKey("\\", {kmCtrl}))
       check result.kind == trHandled
       check termState.get.waitingForCtrlN == true
       termState.get.cleanup()
@@ -148,24 +149,21 @@ suite "handleTerminalModeKey - Terminal-Normal sub-mode":
   test "'i' in Normal sub-mode returns trReturnToInput":
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
-      discard termState.get.enterNormalSubMode()
-      let result = handleTerminalModeKey(termState.get, charKey("i"))
+      let result = handleTerminalModeKey(termState.get, tsmNormal, charKey("i"))
       check result.kind == trReturnToInput
       termState.get.cleanup()
 
   test "'a' in Normal sub-mode returns trReturnToInput":
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
-      discard termState.get.enterNormalSubMode()
-      let result = handleTerminalModeKey(termState.get, charKey("a"))
+      let result = handleTerminalModeKey(termState.get, tsmNormal, charKey("a"))
       check result.kind == trReturnToInput
       termState.get.cleanup()
 
   test "':' in Normal sub-mode returns trEnterCommand":
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
-      discard termState.get.enterNormalSubMode()
-      let result = handleTerminalModeKey(termState.get, charKey(":"))
+      let result = handleTerminalModeKey(termState.get, tsmNormal, charKey(":"))
       check result.kind == trEnterCommand
       termState.get.cleanup()
 
@@ -277,10 +275,10 @@ suite "pollOutput sets exitCode on process exit (regression)":
       check ts.exitCode.get == 1
       ts.cleanup()
 
-suite "enterNormalSubMode snapshots live session (regression)":
-  ## `enterNormalSubMode` (entered manually via Ctrl-\ Ctrl-N) snapshots the
-  ## current grid into a read-only TextBuffer for scrollback browsing. The
-  ## snapshot must contain the command output and not be full of empty lines.
+suite "snapshotScrollback snapshots live session (regression)":
+  ## `snapshotScrollback` (taken on Ctrl-\ Ctrl-N) copies the current grid into
+  ## a read-only TextBuffer for scrollback browsing. The snapshot must contain
+  ## the command output and not be full of empty lines.
 
   test "Snapshot buffer contains command output":
     let termState = newTerminalState("echo hello", 80, 24)
@@ -293,8 +291,7 @@ suite "enterNormalSubMode snapshots live session (regression)":
         discard ts.pollOutput()
         sleep(20)
 
-      let snapshot = ts.enterNormalSubMode()
-      check ts.subMode == tsmNormal
+      let snapshot = ts.snapshotScrollback()
       check snapshot.len > 0
       # Should not have 24 lines (grid height) of mostly empty content
       check snapshot.len < 24
@@ -308,7 +305,7 @@ suite "enterNormalSubMode snapshots live session (regression)":
         discard ts.pollOutput()
         sleep(20)
 
-      let snapshot = ts.enterNormalSubMode()
+      let snapshot = ts.snapshotScrollback()
       check snapshot.readOnly == true
       ts.cleanup()
 
@@ -364,8 +361,6 @@ suite "pollOutput drains multi-chunk bursts in one tick (regression)":
     let ts = TerminalState(
       pty: ptyResult.get,
       grid: newTerminalGrid(80, 24),
-      subMode: tsmInput,
-      scrollbackSnapshot: nil,
       exitCode: none(int),
       waitingForCtrlN: false,
       needsBufferRefresh: false,
@@ -396,17 +391,17 @@ suite "A doubled Ctrl-backslash sends one quit character":
       ts.cleanup()
     fillWriteQueue(ts)
 
-    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
     require ts.waitingForCtrlN
 
-    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
     # One \x1c, and nothing left waiting to fire against a later key.
     check ts.pty.queuedBytes.endsWith("\x1c")
     check not ts.pty.queuedBytes.endsWith("\x1c\x1c")
     check not ts.waitingForCtrlN
 
     # A following Ctrl-N is an ordinary keystroke, not the idiom.
-    check handleTerminalModeKey(ts, charKey("n", {kmCtrl})).kind == trHandled
+    check handleTerminalModeKey(ts, tsmInput, charKey("n", {kmCtrl})).kind == trHandled
     check ts.pty.queuedBytes.endsWith("\x1c\x0e")
 
 suite "A held Ctrl-backslash and the keys that never reach the terminal handler":
@@ -432,7 +427,7 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     fillWriteQueue(ts)
 
     let e = editorWithTerminal(ts)
-    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
     require ts.waitingForCtrlN
 
     check e.handleInterrupt()
@@ -463,7 +458,7 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     fillWriteQueue(ts)
 
     let e = editorWithTerminal(ts)
-    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
     require ts.waitingForCtrlN
 
     check e.handleKeyCombo(charKey("w", {kmCtrl}))
@@ -481,16 +476,17 @@ suite "A held Ctrl-backslash and the keys that never reach the terminal handler"
     fillWriteQueue(ts)
 
     let e = editorWithTerminal(ts)
-    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
     check e.handleKeyCombo(charKey("w", {kmCtrl}))
     check e.handleKeyCombo(specialKey(skEscape))
     require not ts.waitingForCtrlN
     let afterCancel = ts.pty.pendingWriteBytes
 
     # The idiom now starts from scratch: Terminal-Normal, no second quit.
-    discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+    discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
     require ts.waitingForCtrlN
-    check handleTerminalModeKey(ts, charKey("n", {kmCtrl})).kind == trSwitchToNormal
+    check handleTerminalModeKey(ts, tsmInput, charKey("n", {kmCtrl})).kind ==
+      trSwitchToNormal
     check ts.pty.pendingWriteBytes == afterCancel
 
 suite "Query answers the write queue could not take":
@@ -679,7 +675,7 @@ suite "pasteInput forwards pasted text to the PTY":
       let ts = termState.get
       ts.grid.bracketedPaste = true
       ts.pasteInput("z".repeat(1024 * 1024))
-      discard ts.enterNormalSubMode()
+      discard ts.snapshotScrollback()
       require ts.pty.writeOffset > 0
 
       ts.cancelQueuedPastes()
@@ -721,7 +717,7 @@ suite "pasteInput forwards pasted text to the PTY":
     let termState = newTerminalState("cat", 80, 24)
     if termState.isOk:
       let ts = termState.get
-      discard ts.enterNormalSubMode()
+      discard ts.snapshotScrollback()
       # `cat` echoes every byte back, so the paste only drains as long as the
       # output is drained too - which pollOutput does in either sub-mode.
       ts.pasteInput("z\n".repeat(35000))
@@ -766,7 +762,7 @@ suite "pasteInput forwards pasted text to the PTY":
       ts.pasteInput("z".repeat(1024 * 1024))
       require ts.pty.writeOffset > 0
 
-      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
       require ts.waitingForCtrlN
 
       ts.interrupt()
@@ -792,7 +788,7 @@ suite "pasteInput forwards pasted text to the PTY":
     let termState = newTerminalState("cat -v", 80, 24)
     if termState.isOk:
       let ts = termState.get
-      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
       check ts.waitingForCtrlN
 
       ts.pasteInput("hi\n")
@@ -826,7 +822,7 @@ suite "pasteInput forwards pasted text to the PTY":
       ts.pasteInput("z".repeat(maxPtyWriteQueueBytes + 1024 * 1024))
       require ts.pty.writeOffset > 0
 
-      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
       require ts.waitingForCtrlN
 
       ts.interrupt()
@@ -836,7 +832,7 @@ suite "pasteInput forwards pasted text to the PTY":
     let termState = newTerminalState("cat -v", 80, 24)
     if termState.isOk:
       let ts = termState.get
-      discard handleTerminalModeKey(ts, charKey("\\", {kmCtrl}))
+      discard handleTerminalModeKey(ts, tsmInput, charKey("\\", {kmCtrl}))
       require ts.waitingForCtrlN
 
       # A clipboard of control bytes alone: nothing is queued, but the wait is
@@ -848,10 +844,10 @@ suite "pasteInput forwards pasted text to the PTY":
     let termState = newTerminalState("cat", 80, 24)
     if termState.isOk:
       let ts = termState.get
-      discard ts.handleTerminalModeKey(charKey("\\", {kmCtrl}))
+      discard ts.handleTerminalModeKey(tsmInput, charKey("\\", {kmCtrl}))
       require ts.waitingForCtrlN
       ts.cleanup()
-      discard ts.handleTerminalModeKey(charKey("a"))
+      discard ts.handleTerminalModeKey(tsmInput, charKey("a"))
       check not ts.waitingForCtrlN
 
 suite "sanitizePastedText":

@@ -190,7 +190,9 @@ let Invariants = @[
       ("moepkg/editor_navigation.nim", 1),
       ("moepkg/editor_window.nim", 1),
       ("moepkg/editor_window_state.nim", 1),
-      ("moepkg/viewer_mode.nim", 1),
+      # Entry, and the exit onto a tab moved underneath the viewer (a viewer
+      # window holds no Insert session).
+      ("moepkg/viewer_mode.nim", 2),
       ("moepkg/command_handlers/backup_ops.nim", 4),
       # Recovery viewer list rebuild (read-only viewer, no session).
       ("moepkg/command_handlers/recovery_ops.nim", 1),

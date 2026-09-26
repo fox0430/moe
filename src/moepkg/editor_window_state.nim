@@ -29,19 +29,6 @@ import std/options
 
 import types/editor_types, message_log
 
-when not defined(moe.embedded):
-  import terminal_mode
-
-  proc leaveTerminalSession*(win: EditorWindow, keep: TerminalState = nil) =
-    ## The window is moving off the Terminal session it was on (tab switch,
-    ## `enew`, a second `:terminal`). Drop the browsing sub-mode so the tab
-    ## resumes live. `keep` is the session switched *to*, left alone.
-    if win.modeState.kind != mskTerminal:
-      return
-    let session = win.modeState.terminal
-    if session != nil and session != keep:
-      session.exitNormalSubMode()
-
 proc saveOriginalBuffer*(win: EditorWindow) =
   ## Stash the current buffer as `originalBuffer` so a later mode exit can
   ## restore it. Logs a warning if a previous save is still live — that

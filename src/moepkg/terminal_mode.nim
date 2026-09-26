@@ -51,8 +51,6 @@ proc newTerminalState*(
   let state = TerminalState(
     pty: ptyResult.get,
     grid: newTerminalGrid(cols, rows),
-    subMode: tsmInput,
-    scrollbackSnapshot: nil,
     exitCode: none(int),
     waitingForCtrlN: false,
     needsBufferRefresh: false,
@@ -265,19 +263,11 @@ proc interrupt*(state: TerminalState) =
   state.cancelQueuedPastes()
   state.sendInput("\x03")
 
-proc enterNormalSubMode*(state: TerminalState): TextBuffer =
-  ## Switch to Terminal-Normal sub-mode.
-  ## Creates a snapshot of the grid as a TextBuffer for scrollback browsing.
-  state.subMode = tsmNormal
-  let plainText = state.grid.toPlainText()
-  state.scrollbackSnapshot = newTextBuffer(plainText)
-  state.scrollbackSnapshot.readOnly = true
-  state.scrollbackSnapshot
-
-proc exitNormalSubMode*(state: TerminalState) =
-  ## Return to Terminal-Input sub-mode.
-  state.subMode = tsmInput
-  state.scrollbackSnapshot = nil
+proc snapshotScrollback*(state: TerminalState): TextBuffer =
+  ## A read-only copy of the scrollback and screen for Terminal-Normal
+  ## browsing. The session keeps running; the window browsing holds the copy.
+  result = newTextBuffer(state.grid.toPlainText())
+  result.readOnly = true
 
 proc resize*(state: TerminalState, cols, rows: int) =
   ## Resize the terminal grid and notify the PTY.

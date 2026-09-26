@@ -19,8 +19,9 @@
 
 ## Entry/exit for the read-only listing modes (Filer, BufferManager,
 ## BookmarkManager, References, DocumentSymbol, CallHierarchy, Help, LogViewer,
-## BackupManager, Debug, Config, RecentFile). Entry records placement and the
-## displaced cursor/viewport in `EditorWindow.viewerEntry`; exit replays it.
+## BackupManager, Debug, Config, RecentFile). Entry records placement, the
+## covered mode and the displaced cursor/viewport in `EditorWindow.viewerEntry`;
+## exit replays it.
 ##
 ## Not covered: Terminal (owned by `Editor.terminalStates`), FileTree (toggled
 ## sidebar) and DiffViewer (uses `suspendMode`).
@@ -59,46 +60,69 @@ proc resetViewerViewport(win: EditorWindow) =
   win.viewport.resetViewportTop()
   win.viewport.leftColumn = 0
 
-proc applyViewerUndo(
-    e: Editor, win: EditorWindow, entry: ViewerEntry, restorePosition: bool
+proc restoreViewerPosition(win: EditorWindow, entry: ViewerEntry) =
+  ## Clamped since the buffer may have shrunk (external reload, `:e!` from
+  ## inside the viewer).
+  let lastLine = max(0, win.buffer.len - 1)
+  let line = min(entry.originCursor.line, lastLine)
+  let lineLen =
+    if win.buffer.len > 0:
+      win.buffer.getLine(line).charLen
+    else:
+      0
+  win.cursor =
+    BufferPosition(line: line, column: min(entry.originCursor.column, lineLen))
+  win.viewport.restoreViewportTop(
+    min(entry.originTopLine, lastLine), entry.originTopWrapOffset
+  )
+  win.viewport.leftColumn = entry.originLeftColumn
+
+proc resumeCoveredMode(
+    e: Editor, win: EditorWindow, entry: ViewerEntry, textMode: Option[EditorMode]
 ) =
-  ## Reverse the placement: restore the displaced cursor/viewport or close the
-  ## split. Jumping exits pass `restorePosition = false` and place the cursor
-  ## themselves. The snapshot is clamped since the restored buffer may have
-  ## shrunk (external reload, `:e!` from inside the viewer).
-  case entry.placement
-  of vpInPlace:
-    if restorePosition:
-      let lastLine = max(0, win.buffer.len - 1)
-      let line = min(entry.originCursor.line, lastLine)
-      let lineLen =
-        if win.buffer.len > 0:
-          win.buffer.getLine(line).charLen
-        else:
-          0
-      win.cursor =
-        BufferPosition(line: line, column: min(entry.originCursor.column, lineLen))
-      win.viewport.restoreViewportTop(
-        min(entry.originTopLine, lastLine), entry.originTopWrapOffset
-      )
-      win.viewport.leftColumn = entry.originLeftColumn
-  of vpVSplit, vpHSplit:
+  ## Put back the (mode, modeState) the viewer covered, then its position. Once
+  ## the tab has moved (`:bd`, the shell exiting, a split's window reused by
+  ## `enew`) nothing is left to put back, so derive from the new tab instead.
+  if entry.placement != vpInPlace or win.tabBufferId != entry.returnTab:
+    win.setView(e.tabBuffer(win))
+    win.modeState = ModeState(kind: mskNone)
+    e.setMode(EditorMode.Normal)
+    e.deriveTabMode(win)
+    win.resetViewerViewport()
+    return
+
+  win.modeState = entry.returnState
+  e.setMode(
+    if textMode.isSome and entry.returnState.kind == mskNone:
+      textMode.get
+    else:
+      entry.returnMode
+  )
+  when not defined(moe.embedded):
+    # The restored state decides the Terminal view, not `originalBuffer`.
+    e.syncTerminalView(win)
+  win.restoreViewerPosition(entry)
+
+proc undoViewer(
+    e: Editor, win: EditorWindow, entry: ViewerEntry, textMode: Option[EditorMode]
+) =
+  ## Shared exit once the entry is taken. A split placement closes its window;
+  ## the covered mode resumes only if the window survived — a closed split
+  ## leaves a neighbour that was never in the viewer mode.
+  win.clearModeState(entry.mode)
+  if entry.placement != vpInPlace:
     e.closeViewerSplit(entry)
+  if e.activeWindow == win:
+    e.resumeCoveredMode(win, entry, textMode)
 
 proc closeLiveViewer*(e: Editor) =
   ## Tear down whichever viewer is live in the active window (no-op if none)
-  ## and restore its returnMode. A split placement closes the active window, so
+  ## and resume what it covered. A split placement closes the active window, so
   ## callers must re-read `Editor.activeWindow` afterwards.
   let win = e.activeWindow
   let entry = win.takeViewerEntry()
-  if entry.isNone:
-    return
-  win.clearModeState(entry.get.mode)
-  e.applyViewerUndo(win, entry.get, restorePosition = true)
-  if e.activeWindow == win:
-    # Only when the window survived — a closed split leaves a neighbour that
-    # was never in the viewer mode.
-    e.setMode(entry.get.returnMode)
+  if entry.isSome:
+    e.undoViewer(win, entry.get, none(EditorMode))
 
 proc enterViewerMode*(
     e: Editor,
@@ -134,6 +158,8 @@ proc enterViewerMode*(
           mode: mode,
           placement: vpInPlace,
           returnMode: win.mode,
+          returnState: win.modeState,
+          returnTab: win.tabBufferId,
           bufferId: buffer.id,
           originCursor: win.cursor,
           originTopLine: win.viewport.topLine,
@@ -182,27 +208,24 @@ proc focusExistingViewerWindow*(e: Editor, mode: EditorMode): bool =
   false
 
 proc tearDownViewer(
-    e: Editor, mode: EditorMode, nextMode: Option[EditorMode], restorePosition: bool
+    e: Editor, mode: EditorMode, textMode: Option[EditorMode]
 ): Option[ViewerEntry] =
   ## Shared exit. The record is taken only when it belongs to `mode` so an
   ## unrelated caller cannot consume it (no mode switch either in that case).
-  ## `nextMode = none` falls back to `entry.returnMode` (round-trips Visual).
-  ## The mode switch runs only if the window survived — a closed split leaves
-  ## a neighbour that was never in `mode`.
   let win = e.activeWindow
   result = win.takeViewerEntry(mode)
-  win.clearModeState(mode)
   if result.isNone:
+    win.clearModeState(mode)
     return
-  e.applyViewerUndo(win, result.get, restorePosition)
-  if e.activeWindow == win:
-    e.setMode(if nextMode.isSome: nextMode.get else: result.get.returnMode)
+  e.undoViewer(win, result.get, textMode)
 
 proc leaveViewerMode*(e: Editor, mode: EditorMode) =
-  ## Undo `enterViewerMode`, returning to `viewerEntry.returnMode`.
-  discard e.tearDownViewer(mode, none(EditorMode), restorePosition = true)
+  ## Undo `enterViewerMode`, resuming what the viewer covered (round-trips
+  ## Visual).
+  discard e.tearDownViewer(mode, none(EditorMode))
 
 proc leaveViewerModeForJump*(e: Editor, mode: EditorMode): Option[ViewerEntry] =
-  ## Exit to Normal without restoring the cursor; the caller places it. Returns
-  ## the entry so the jump list can be anchored at the origin position.
-  e.tearDownViewer(mode, some(EditorMode.Normal), restorePosition = false)
+  ## Exit before a jump: a text mode lands in Normal, and the origin position is
+  ## restored so the jump list anchors there. Returns the entry, none when
+  ## `mode` held no viewer.
+  e.tearDownViewer(mode, some(EditorMode.Normal))

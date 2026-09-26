@@ -297,7 +297,7 @@ proc advanceLayoutForFrame*(e: Editor, buffer: Buffer, wasResized: bool) =
         else:
           e.activeWindow.mode == EditorMode.Terminal and
             e.activeWindow.modeState.kind == mskTerminal and
-            e.activeWindow.modeState.terminal.subMode == tsmInput
+            e.activeWindow.modeState.terminalSubMode == tsmInput
       isConfig = e.activeWindow.mode == EditorMode.Config
 
     if not isTerminalInput and not isConfig:
@@ -407,7 +407,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         # Terminal mode renders grid directly in Input sub-mode,
         # or uses standard window rendering in Normal sub-mode
         if window.modeState.kind == mskTerminal and
-            window.modeState.terminal.subMode == tsmInput:
+            window.modeState.terminalSubMode == tsmInput:
           e.renderTerminal(buffer, window, layout.isBottomWindow, tabLineOffset)
         else:
           e.renderWindow(
