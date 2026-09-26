@@ -31,6 +31,7 @@ import
     editor, editor_window_layout, handler, modes, logger, cmdline, lsp_integration,
     config, config_loader, deadly_signals, emergency, key_router, terminal_mode,
     recovery_format, recovery_index, recovery_notice, signal_watcher, terminal_command,
+    editor_file_jobs,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -133,6 +134,15 @@ proc leave(death: Death) {.noreturn.} =
     reraiseAsDeath(death.signal)
   quit(1)
 
+proc writeExitReports(editor: Editor) =
+  ## Print the owed work's reports once the screen is gone, before teardown
+  ## (which may block). SIGPIPE is ignored, so a closed stderr only raises.
+  try:
+    for report in editor.state.exitReports:
+      stderr.writeLine "moe: " & report
+  except IOError:
+    discard
+
 var preserving = none(Death)
   ## Set once, so a nested death cannot restart the sequence or change the exit.
 
@@ -170,6 +180,12 @@ proc preserveAndExit(
     except Exception as ex:
       logError("moe", "emergency save failed: " & ex.msg)
 
+  # Record the owed work before teardown stops it silently.
+  try:
+    editor.abandonExitWait()
+  except Exception as ex:
+    logError("moe", "stopping owed work failed: " & ex.msg)
+
   # Before teardown: `releaseExternalResources` may block on wedged threads,
   # and the user must not wait in raw mode.
   try:
@@ -187,6 +203,7 @@ proc preserveAndExit(
         stderr.writeLine death.exception.getStackTrace()
       if savedPaths.len > 0:
         stderr.writeLine "Recovery files saved to: " & savedPaths[0].parentDir
+      editor.writeExitReports()
   except Exception as ex:
     logError("moe", "terminal restore/report failed: " & ex.msg)
 
@@ -222,6 +239,8 @@ proc answerDeadlySignals(
     return
   if editor.state.quitDecided:
     beginWindingDown()
+    # Stop the hooks the quit is waiting for, so the loop ends on its own.
+    editor.abandonExitWait()
   else:
     {.cast(gcsafe).}:
       editor.preserveAndExit(
@@ -269,12 +288,25 @@ proc runEditor(
           # screen and forces a full render on the next frame.
           return erContinue
 
+        if editor.state.quitDecided:
+          # Waiting for the hooks the quit owes: no key reaches the editor,
+          # and Ctrl-C gives up on them.
+          if e.kind == EventKind.Quit:
+            return erQuit
+          return erContinue
+
         let shouldContinue = editor.handleEvent(e)
         editor.applyFrontendRequests(app)
 
         # Drain unconditionally: detached async tasks can set pending fields
-        # after handleEvent returns; a guard here would skip that drain.
+        # after handleEvent returns; a guard here would skip that drain. A quit
+        # drains too, so a `:!` queued ahead of it in one mapping still runs.
         await editor.handlePendingAsyncOperations(frontendHooks)
+
+        if not shouldContinue:
+          app.setApplicationTimeout(0)
+          # Otherwise the tick ends the session once the owed hooks are done.
+          return if editor.readyToExit(): erQuit else: erContinue
 
         # Key mapping timeout control — delegated to KeyRouter so policy
         # (enabled/timeoutlen) and accumulator state are queried in one place.
@@ -284,7 +316,7 @@ proc runEditor(
         elif routerTimeout == 0 and app.getApplicationTimeout() > 0:
           app.setApplicationTimeout(0)
 
-        return if shouldContinue: erContinue else: erQuit
+        return erContinue
 
     app.onTimeoutAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
       editorCallback(editor, app, cmdLineConfig, log):
@@ -292,13 +324,18 @@ proc runEditor(
         editor.applyFrontendRequests(app)
         app.setApplicationTimeout(0) # One-shot: disable until next prefix match
         await editor.handlePendingAsyncOperations(frontendHooks)
-        return if shouldContinue: trContinue else: trQuit
+        if not shouldContinue and editor.readyToExit():
+          return trQuit
+        return trContinue
 
     app.onTickAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
       editorCallback(editor, app, cmdLineConfig, log):
         editor.lsp.poll(0)
         editor.lsp.cleanupStaleProgress()
         await editor.handlePendingAsyncOperations(frontendHooks)
+        if editor.readyToExit():
+          return trQuit
+        editor.showExitWait()
       return trContinue
 
     app.onRenderAsync proc(buffer: var Buffer) =
@@ -357,6 +394,9 @@ proc runEditor(
     # watcher's finish deadline, and from here the next signal ends moe.
     settle()
 
+    # After Ctrl-C, record the owed work before teardown stops it silently.
+    editor.abandonExitWait()
+    editor.writeExitReports()
     editor.releaseExternalResources()
 
     if cmdLineConfig.debugEnabled:

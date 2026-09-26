@@ -25,6 +25,8 @@
 ## `submit` only records the job and starts it on a later event-loop turn, so it
 ## is safe to call from anywhere. A waiting job is listed and stoppable like a
 ## running one. A stop reports each job once, however long it takes to end.
+##
+## A quit winds the lanes down: owed jobs still run, everything else stops.
 
 import std/[monotimes, sequtils, tables]
 
@@ -43,6 +45,7 @@ type
     collapse*: string
       ## For `adQueue`: a waiting job with the same value is replaced in place
       ## rather than queued again. Empty never matches.
+    owed*: bool ## Still run when the lanes wind down; a quit waits for it.
     run*: LaneRun
 
   Admission* = enum
@@ -67,6 +70,7 @@ type
     path*: string
     state*: JobState
     startedAt*: MonoTime ## Unset while waiting.
+    owed*: bool
 
   Job = ref object
     spec: LaneJob
@@ -93,6 +97,7 @@ proc info(job: Job): JobInfo =
     path: job.spec.path,
     state: job.state,
     startedAt: job.startedAt,
+    owed: job.spec.owed,
   )
 
 proc canStart(lane: Lane): bool =
@@ -212,6 +217,30 @@ proc stopAll*(lanes: var JobLanes): seq[JobInfo] =
       idle.add key
   for key in idle:
     all.table.del(key)
+
+proc windDown*(lanes: var JobLanes) =
+  ## Refuse new work and stop what is not owed, for a quit that waits for the
+  ## rest. Owed jobs keep their place and run as usual.
+  let all = lanes.get
+  all.closed = true
+  var idle: seq[string]
+  for key, lane in all.table:
+    lane.waiting.keepItIf(it.spec.owed)
+    for job in lane.live:
+      if job.state == jsRunning and not job.spec.owed:
+        job.tellToStop()
+    if lane.waiting.len == 0 and lane.live.len == 0:
+      idle.add key
+  for key in idle:
+    all.table.del(key)
+
+proc owedIdle*(lanes: JobLanes): bool =
+  ## Whether no owed job waits or runs. One told to stop is not waited for:
+  ## its kill has been sent.
+  for job in lanes.jobs:
+    if job.owed and job.state != jsStopping:
+      return false
+  true
 
 proc close*(lanes: var JobLanes) =
   ## Refuse new work and stop everything, for editor shutdown.

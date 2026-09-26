@@ -32,6 +32,7 @@ import
   editor_window_layout,
   editor_window_state,
   editor_lsp,
+  editor_hooks,
   editor_mode,
   git_cache,
   git_conflict,
@@ -123,7 +124,7 @@ proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
 
 # Window split procedures
 
-proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
+proc initLoadedBuffer*(e: Editor, buf: TextBuffer, readByUser = true) =
   ## Per-buffer initialisation shared by every freshly loaded file regardless of
   ## how it is opened: `:e`, the FileTree opener and no-split startup go through
   ## `loadOrCreateBuffer`, while `:vsplit file`/`:split file` and auto-split
@@ -132,6 +133,8 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
   ## language server so a file looks identical whichever path reaches it.
   ## Cursor restore is intentionally omitted: it is handled per window (the
   ## window manager seeds the split cursor, loadFile restores the first file's).
+  ## `readByUser` is off for a file opened on the user's behalf and not shown
+  ## (an LSP rename), which fires no `BufReadPost`.
   if buf.filePath.isSome:
     let absPath = absolutePath(buf.filePath.get)
     if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
@@ -143,6 +146,8 @@ proc initLoadedBuffer*(e: Editor, buf: TextBuffer) =
   buf.refreshConflicts()
   # Announce the new document to the language server.
   e.openBufferWithLsp(buf)
+  if readByUser:
+    e.queueHooks(heBufReadPost, buf)
 
 proc registerSplitBuffer(
     e: Editor, newBuffer: TextBuffer, applyConfig: bool, context: string

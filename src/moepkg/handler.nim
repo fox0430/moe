@@ -1806,7 +1806,7 @@ proc runFilterAsync(
       for line in filtered.get.diagnostics:
         # stderr goes straight to the status line, so strip escape sequences
         # (a byte-bounded read can also cut one in half).
-        report.add line.sanitizeInvalidUtf8().sanitizeForDisplay()
+        report.add line.forDisplay
       if filtered.get.diagnosticsTruncated:
         report.add "... the rest of what it wrote on stderr was dropped"
       # stderr output is not failure; only the exit status decides.
@@ -1976,10 +1976,22 @@ proc dispatchKeyMappingTimeout(e: Editor): bool =
 
   return shouldContinue
 
+const ExitWaitMessage = "Waiting for hooks to finish (Ctrl-C quits now)"
+
+proc showExitWait*(e: Editor) =
+  ## Say what a quit is waiting for and how to skip it. Called every frame to
+  ## restore it once overwritten; set only when changed, since each set is logged.
+  if e.state.quitDecided and not e.readyToExit() and
+      e.state.statusMessage != ExitWaitMessage:
+    e.state.statusMessage = ExitWaitMessage
+
 proc noteQuit(e: Editor, goesOn: bool): bool =
   ## Every quit reaches the frontend through here, so it is noted once.
+  ## Background work stops, except what the quit is owed.
   if not goesOn:
     e.state.quitDecided = true
+    e.jobLanes.windDown()
+    e.showExitWait()
   goesOn
 
 proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =

@@ -174,6 +174,38 @@ suite "Config schema - context analysis":
     check ctx.kind == cckSection
     check ctx.head == "Lsp."
 
+  test "Keys complete inside an array-of-tables section":
+    let ctx = analyzeLine("ev", 2, "Hook.entries")
+    check ctx.kind == cckKey
+    check "event" in candidates(ctx).texts
+    check "showOutput" in candidates(ctx).texts
+
+  test "filetype offers the filetype tokens":
+    # Without them the only feedback on a misspelled file type is a startup
+    # error that names no candidates. The tokens rather than the display names
+    # (`C++`, `JavaScriptReact`): they are what `${filetype}` expands to, and
+    # what the documentation spells a file type with.
+    let ctx = analyzeLine("filetype = [\"", 13, "Hook.entries")
+    # Inside an open literal a candidate carries its own closing quote.
+    let texts = candidates(ctx).texts
+    check "nim\"" in texts
+    check "jsx\"" in texts
+    # "no language" is what an unmatched file has, not something to write.
+    check "none\"" notin texts
+
+  test "An array-of-tables header only offers repeatable sections":
+    let ctx = analyzeLine("[[Hook.", 7, "")
+    check ctx.kind == cckSection
+    check ctx.head == "Hook."
+    check ctx.arrayOfTables
+    check candidates(ctx).texts == @["entries"]
+
+  test "A single-bracket header never offers an array-of-tables name":
+    let ctx = analyzeLine("[Hook.", 6, "")
+    check ctx.kind == cckSection
+    check not ctx.arrayOfTables
+    check "entries" notin candidates(ctx).texts
+
   test "A space after the bracket keeps the head aligned with the schema":
     let ctx = analyzeLine("[ Lsp.Compl", 11, "")
     check ctx.kind == cckSection

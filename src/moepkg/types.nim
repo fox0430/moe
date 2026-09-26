@@ -960,7 +960,9 @@ type
     notificationPopup*: NotificationPopupManager
     # Exit code (non-zero for :cq)
     exitCode*: int
-    quitDecided*: bool ## Once set, a signal or crash no longer preserves buffers.
+    quitDecided*: bool
+      ## Once set, a signal or crash no longer preserves buffers, and the loop
+      ## only waits for the hooks the quit owes.
     # --- Sub-state groups (Phase 4 refactor) ---
     input*: InputState # Command-line/search input state (text, cursor, history)
     jumpList*: JumpListState # Jump list navigation state (Ctrl-o / Ctrl-i)
@@ -969,6 +971,9 @@ type
       # Bumped when the user stops the external commands. Each command captures
       # it when queued and re-checks after every await, so work in flight stops
       # at its next step; emptying the queues cannot reach that work.
+    exitReports*: seq[string]
+      # What went wrong while the quit waited, written to stderr once the
+      # screen is gone.
     commandOutputBufferId*: BufferId
       # Buffer a background command last wrote its output into; reused while a
       # window shows it, so frequent runs do not add a split each time.

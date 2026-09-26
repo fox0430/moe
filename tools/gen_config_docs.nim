@@ -246,6 +246,7 @@ macro defineGroupSections(ownerField: untyped, GroupT: typedesc): untyped =
       `caseStmt`
 
 defineGroupSections(lsp, LspConfig)
+defineGroupSections(hooks, HookConfig)
 
 proc replaceMarkers(text: string, name, body: string): string =
   ## Replace the content between `<!-- AUTO-GEN:start name -->` and
@@ -311,6 +312,8 @@ proc regenerateConfigDocs*(input: string): string =
     result = replaceMarkers(result, name, bodyFor(name, cfg))
   for name in LspSectionNames:
     result = replaceMarkers(result, name, lspBodyFor(name, cfg))
+  for name in HookSectionNames:
+    result = replaceMarkers(result, name, hookBodyFor(name, cfg))
   for name in ExtraSectionNames:
     result = replaceMarkers(result, name, bodyForExtra(name))
 
@@ -321,7 +324,8 @@ proc main() {.used.} =
 
   let original = readFile(DocsPath)
   let regenerated = regenerateConfigDocs(original)
-  let totalSections = SectionNames.len + LspSectionNames.len + ExtraSectionNames.len
+  let totalSections =
+    SectionNames.len + LspSectionNames.len + HookSectionNames.len + ExtraSectionNames.len
   if regenerated != original:
     writeFile(DocsPath, regenerated)
     echo "regenerated ", totalSections, " section(s) in ", DocsPath

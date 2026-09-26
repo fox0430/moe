@@ -92,6 +92,13 @@ suite "Build - parseCommandString":
     check cmd.cmd == ""
     check cmd.args.len == 0
 
+  test "An unterminated quote is detected":
+    check hasUnterminatedQuote("sh -c 'make")
+    check hasUnterminatedQuote("fmt \"a b")
+    check not hasUnterminatedQuote("sh -c 'make' \"a b\" c\\'d")
+    # Quotes inside the other kind do not count.
+    check not hasUnterminatedQuote("echo \"it's\" 'say \"hi'")
+
 suite "Build - nimBuildCommand":
   test "Generate nim build command":
     let cmd = nimBuildCommand("/path/to/file.nim")

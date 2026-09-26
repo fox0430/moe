@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[importutils, unittest, options, os, strutils]
+import std/[importutils, unittest, options, os, sequtils, strutils]
 
 import pkg/chronos
 import pkg/chronos/asyncproc
@@ -196,6 +196,99 @@ suite "BackgroundProcess - readAllOutput":
 
     let output = waitFor runTest()
     check output.len == 0
+
+proc tailOf(script: string, limit: int): seq[string] =
+  ## What `readAllOutput` keeps of `sh -c script` within `limit` bytes.
+  proc run(): Future[seq[string]] {.async.} =
+    let bp = startBackgroundProcess(
+      BackgroundProcessCommand(
+        cmd: "sh", args: @["-c", script], workingDir: getTempDir()
+      )
+    ).get
+    let output = await bp.readAllOutput(limit)
+    await bp.closeAsync()
+    return output
+
+  waitFor run()
+
+suite "BackgroundProcess - readAllOutput keeping the end":
+  test "Only the whole lines at the end of a flood are kept, after a mark":
+    let output = tailOf("seq 1 100000", 1000)
+    check output[0] == OutputDroppedMarker
+    check output[^1] == "100000"
+    # Every line kept is a whole number, not the cut end of one.
+    check output[1 ..^ 1].allIt(it.len > 0 and it.allCharsInSet(Digits))
+    check output[1 ..^ 1].join("\n").len <= 1000
+    check output[1].parseInt + output.len - 2 == 100000
+
+  test "A cut right after a newline keeps the line it starts":
+    # The last 10 bytes are "ABCD\nEFGH\n", right after a newline.
+    check tailOf("printf '0123456789\\nABCD\\nEFGH\\n'", 10) ==
+      @[OutputDroppedMarker, "ABCD", "EFGH"]
+
+  test "A cut inside a line drops what is left of it":
+    # The last 10 bytes are "B\nCD\nEFGH\n": "B" is the end of "AB".
+    check tailOf("printf '0123456789\\nAB\\nCD\\nEFGH\\n'", 10) ==
+      @[OutputDroppedMarker, "CD", "EFGH"]
+
+  test "Output within the limit is kept whole, with no mark":
+    check tailOf("printf 'a\\nb\\n'", 1000) == @["a", "b"]
+
+  test "A single line longer than the limit keeps its end":
+    let output = tailOf("printf %05000d 7", 100)
+    check output.len == 2
+    check output[0] == OutputDroppedMarker
+    check output[1].len == 100
+    check output[1].endsWith("7")
+
+  test "A single overlong line with a trailing newline keeps its end":
+    let output = tailOf("printf '%05000d\\n' 7", 100)
+    check output.len == 2
+    check output[0] == OutputDroppedMarker
+    check output[1].len == 99
+    check output[1].endsWith("7")
+
+  test "An overlong line ending in a blank line keeps its end":
+    # The last 100 bytes are 98 digits then two newlines. Dropping the cut
+    # line here would leave the mark and a blank line and nothing else.
+    let output = tailOf("printf '%05000d\\n\\n' 7", 100)
+    check output.len == 3
+    check output[0] == OutputDroppedMarker
+    check output[1].len == 98
+    check output[1].endsWith("7")
+    check output[2] == ""
+
+  test "A read failing midway fails the run and kills the command":
+    # What was kept is no longer the end, and a command still writing would
+    # block on a pipe nobody empties until its timeout.
+    privateAccess(DrainSink)
+    privateAccess(RunFailure)
+    const Script =
+      "echo first; sleep 0.3; " &
+      "i=0; while [ $i -lt 200000 ]; do echo more$i; i=$((i+1)); done"
+
+    proc run(policy: DrainLimitPolicy): Future[(bool, bool)] {.async.} =
+      let bp = startBackgroundProcess(
+        BackgroundProcessCommand(cmd: "sh", args: @["-c", Script], workingDir: "")
+      ).get
+      let reader = bp.process.stdoutStream()
+      let sink = DrainSink(limit: 1024 * 1024, policy: policy)
+      let failure = RunFailure()
+      let drain = bp.drainBounded(reader, sink, failure)
+      await sleepAsync(100.milliseconds)
+      # The next read raises, once the pending one returns.
+      reader.close()
+      await drain
+      let failed = failure.error.isSome and failure.error.get.kind == ffReadFailed
+      let exited = await bp.waitForExitAsync().withTimeout(2.seconds)
+      bp.kill()
+      await bp.closeAsync()
+      return (failed, exited)
+
+    for policy in [dlpFail, dlpKeepTail]:
+      let (failed, exited) = waitFor run(policy)
+      check failed
+      check exited
 
 suite "BackgroundProcess - waitForExitAsync":
   test "Wait for successful command":

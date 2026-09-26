@@ -81,7 +81,7 @@ suite "every section the declarations produce is documented":
   ## which says nothing about a section the generator never visits. This pins
   ## it against the schema instead.
   test "the docs cover exactly the derived sections":
-    let documented = (SectionNames & LspSectionNames).toHashSet
+    let documented = (SectionNames & LspSectionNames & HookSectionNames).toHashSet
     for name in DerivedSectionNames:
       if name notin documented:
         echo "section `", name, "` loads and completes but has no docs table."
