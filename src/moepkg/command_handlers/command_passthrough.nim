@@ -31,6 +31,7 @@
 
 import std/options
 
+import ../key_bindings/commands
 import ./handler_result
 
 type PassthroughKind* = enum
@@ -238,3 +239,17 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrLspDocumentLink)
   of ptLspDocumentSymbol:
     HandlerResult(kind: hrLspDocumentSymbol)
+
+proc windowSecondKeyToHandlerResult*(key: string): Option[HandlerResult] =
+  ## HandlerResult for a `C-w <key>` second key, resolved through the same
+  ## command names as the Normal-mode bindings. None for unknown keys.
+  for (k, name) in WindowSecondKeyCommands:
+    if k == key:
+      let commandId = actionCommandId(name)
+      if commandId.isNone:
+        return none(HandlerResult)
+      let passthrough = lookupPassthrough(commandId.get)
+      if passthrough.isNone:
+        return none(HandlerResult)
+      return some(passthrough.get.toHandlerResult())
+  none(HandlerResult)

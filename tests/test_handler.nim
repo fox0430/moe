@@ -4994,6 +4994,51 @@ suite "Ctrl-w window commands in special modes":
     check e.windowManager.windows[e.windowManager.activeWindowIndex].viewport.width <
       width
 
+  proc editorOnTempFile(name: string): tuple[e: Editor, path: string] =
+    let path = getTempDir() / name
+    writeFile(path, "line0\nline1\n")
+    let e = createTestEditorWithBuffer("")
+    check e.editFile(path).isOk
+    (e, path)
+
+  test "Ctrl-w c closes a split viewer and drops its scratch buffer":
+    for kind in [
+      hrConfig, hrEnterHelpViewer, hrEnterLogViewer, hrEnterBackupManager,
+      hrEnterRecoveryManager, hrRecentFile,
+    ]:
+      checkpoint $kind
+      let (e, path) = editorOnTempFile("moe_ctrlw_close_viewer.txt")
+      defer:
+        removeFile(path)
+      let origWin = e.activeWindow
+      let windowsBefore = e.windowManager.windows.len
+      check e.processResult(HandlerResult(kind: kind), e.activeBuffer())
+      check e.windowManager.windows.len == windowsBefore + 1
+      let scratchId = e.activeWindow.buffer.id
+
+      e.sendWindowCommand("c")
+
+      check e.windowManager.windows.len == windowsBefore
+      check e.activeWindow == origWin
+      check e.state.mode == EditorMode.Normal
+      check e.bufferIndexById(scratchId) < 0
+
+  test "Ctrl-w c on the last window does not quit over a modified buffer":
+    # The in-place Filer hides the modified file buffer from the window.
+    let (e, path) = editorOnTempFile("moe_ctrlw_close_last.txt")
+    defer:
+      removeFile(path)
+    check e.handleKeyCombo(KeyCombo(isSpecial: false, char: "x", modifiers: {}))
+    check e.activeBuffer().isModified
+    check e.processResult(HandlerResult(kind: hrEnterFiler), e.activeBuffer())
+    check e.state.mode == EditorMode.Filer
+    check e.windowManager.windows.len == 1
+
+    e.sendWindowCommand("c")
+
+    check e.state.mode == EditorMode.Filer
+    check e.state.statusMessage.contains("No write since last change")
+
 suite "Ctrl-C in Terminal mode":
   proc fakeTerminalState(subMode: TerminalSubMode): TerminalState =
     TerminalState(
