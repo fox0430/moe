@@ -310,7 +310,7 @@ when not defined(moe.embedded):
       maxRows = terminalContentRows(window, isBottomWindow, tabLineOffset)
       maxCols = window.viewport.width
 
-    case termState.subMode
+    case window.modeState.terminalSubMode
     of tsmInput:
       # Render live terminal grid directly to celina buffer
       for row in 0 ..< min(grid.rows, maxRows):

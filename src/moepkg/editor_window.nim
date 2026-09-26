@@ -353,9 +353,6 @@ proc enew*(e: Editor): Result[(), string] =
   discard win.takeViewerEntry()
   discard win.takeSuspendedMode()
   let wasSpecialMode = win.modeState.kind != mskNone
-  when not defined(moe.embedded):
-    # As on a tab switch: the session resumes live, not mid-scrollback.
-    win.leaveTerminalSession()
   if win.modeState.kind != mskTerminal:
     win.clearModeState(win.mode)
   win.modeState = ModeState(kind: mskNone)

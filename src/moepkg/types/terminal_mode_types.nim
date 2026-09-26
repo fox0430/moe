@@ -26,7 +26,6 @@
 import std/options
 
 import ../terminal/[pty, ansi_parser]
-import ../buffer/core
 
 const TtyQuitChar* = "\x1c"
   ## The byte Ctrl-\ produces (FS), which a tty delivers as SIGQUIT.
@@ -39,8 +38,6 @@ type
   TerminalState* = ref object
     pty*: PtyHandle
     grid*: TerminalGrid
-    subMode*: TerminalSubMode
-    scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
     exitCode*: Option[int]
     waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
     needsBufferRefresh*: bool

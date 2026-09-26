@@ -5040,11 +5040,10 @@ suite "Ctrl-w window commands in special modes":
     check e.state.statusMessage.contains("No write since last change")
 
 suite "Ctrl-C in Terminal mode":
-  proc fakeTerminalState(subMode: TerminalSubMode): TerminalState =
+  proc fakeTerminalState(): TerminalState =
     TerminalState(
       pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
       grid: newTerminalGrid(80, 24),
-      subMode: subMode,
       exitCode: none(int),
       waitingForCtrlN: false,
       needsBufferRefresh: false,
@@ -5052,9 +5051,17 @@ suite "Ctrl-C in Terminal mode":
 
   proc createTerminalEditor(subMode: TerminalSubMode): Editor =
     result = createTestEditorWithBuffer("")
-    let termState = fakeTerminalState(subMode)
+    let termState = fakeTerminalState()
     result.terminalStates[result.activeWindow.buffer.id] = termState
-    result.activeWindow.modeState = ModeState(kind: mskTerminal, terminal: termState)
+    result.activeWindow.modeState = ModeState(
+      kind: mskTerminal,
+      terminal: termState,
+      scrollbackSnapshot:
+        if subMode == tsmNormal:
+          termState.snapshotScrollback()
+        else:
+          nil,
+    )
     result.activeWindow.mode = EditorMode.Terminal
     result.state.mode = EditorMode.Terminal
 
@@ -5121,7 +5128,6 @@ suite "middleClickPaste - the click picks the target":
     TerminalState(
       pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: false),
       grid: newTerminalGrid(80, 24),
-      subMode: tsmInput,
       exitCode: none(int),
       waitingForCtrlN: false,
       needsBufferRefresh: false,
@@ -5364,7 +5370,6 @@ suite "middleClickPaste - the click picks the target":
       let term = TerminalState(
         pty: PtyHandle(masterFd: fds[1], childPid: Pid(999999), closed: false),
         grid: newTerminalGrid(80, 24),
-        subMode: tsmInput,
         exitCode: none(int),
         waitingForCtrlN: false,
         needsBufferRefresh: false,

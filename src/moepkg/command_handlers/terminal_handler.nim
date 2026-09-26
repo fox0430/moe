@@ -156,11 +156,11 @@ proc releaseHeldQuitForKey*(termState: TerminalState, keyCombo: KeyCombo) =
   termState.releaseHeldQuit()
 
 proc handleTerminalModeKey*(
-    termState: TerminalState, keyCombo: KeyCombo
+    termState: TerminalState, subMode: TerminalSubMode, keyCombo: KeyCombo
 ): TerminalResult =
-  ## Handle a key press in Terminal mode.
+  ## Handle a key press in Terminal mode. `subMode` is the window's.
 
-  case termState.subMode
+  case subMode
   of tsmInput:
     # Terminal-Input sub-mode: forward almost everything to PTY
 

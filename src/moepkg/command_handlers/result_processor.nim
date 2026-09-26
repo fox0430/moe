@@ -345,7 +345,7 @@ proc processResultEpilogue(
             "Cursor adjusted: " & $oldColumn & " → " & $e.activeWindow.cursor.column,
           )
 
-  # Terminal view follows the session's sub-mode, which the dispatcher set.
+  # Terminal view follows the window's sub-mode, which the dispatcher set.
   when not defined(moe.embedded):
     if e.state.mode == EditorMode.Terminal:
       e.syncTerminalView(e.activeWindow)

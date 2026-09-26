@@ -106,22 +106,36 @@ proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
 
 when not defined(moe.embedded):
   proc syncTerminalView*(e: Editor, win: EditorWindow) =
-    ## What a Terminal window shows, derived from its session's sub-mode. The
-    ## only place that decides it, so the two cannot drift apart.
+    ## What a Terminal window shows, derived from its sub-mode. The only place
+    ## that decides it, so the two cannot drift apart.
     if win.modeState.kind != mskTerminal:
       return
-    let session = win.modeState.terminal
-    case session.subMode
+    case win.modeState.terminalSubMode
     of tsmNormal:
-      # `leaveTerminalSession` never parks a session in tsmNormal, so this only
-      # fires within one activation.
-      if session.scrollbackSnapshot == nil:
-        discard session.enterNormalSubMode()
-      win.setView(session.scrollbackSnapshot)
+      win.setView(win.modeState.scrollbackSnapshot)
     of tsmInput:
       # `renderTerminal` draws the grid; the view is only what the status line
       # and tab list read.
       win.setView(e.tabBuffer(win))
+
+proc applyTabMode(e: Editor, win: EditorWindow, tabId: BufferId) =
+  when not defined(moe.embedded):
+    let session = e.terminalStates.getOrDefault(tabId)
+    if session != nil:
+      # Arriving on the session starts live; staying on it keeps the browsing.
+      if win.modeState.kind != mskTerminal or win.modeState.terminal != session:
+        win.modeState = ModeState(kind: mskTerminal, terminal: session)
+      win.mode = EditorMode.Terminal
+      e.syncTerminalView(win)
+      return
+  if win.mode == EditorMode.Terminal:
+    win.modeState = ModeState(kind: mskNone)
+    win.mode = EditorMode.Normal
+
+proc deriveTabMode*(e: Editor, win: EditorWindow) =
+  ## Terminal exactly when `win`'s tab is a session. Other modes belong to
+  ## their owners, so call this only once no viewer holds the window.
+  e.applyTabMode(win, win.tabBufferId)
 
 proc applyBufferMode*(e: Editor, buf: TextBuffer) =
   ## Re-derive the active window's mode/modeState from the activated buffer.
@@ -151,34 +165,12 @@ proc applyBufferMode*(e: Editor, buf: TextBuffer) =
   if wasSpecialMode:
     win.clearModeState(win.mode)
 
-  when defined(moe.embedded):
-    if win.mode == EditorMode.Terminal:
-      win.modeState = ModeState(kind: mskNone)
-      e.setMode(EditorMode.Normal)
-    elif wasSpecialMode:
-      e.setMode(EditorMode.Normal)
-  else:
-    let newSession =
-      if e.terminalStates.hasKey(buf.id):
-        e.terminalStates[buf.id]
-      else:
-        nil
-    # No-op when `buf` is the session the window is already on.
-    win.leaveTerminalSession(keep = newSession)
-    if newSession != nil:
-      win.modeState = ModeState(kind: mskTerminal, terminal: newSession)
-      e.setMode(EditorMode.Terminal)
-      e.syncTerminalView(win)
-    elif win.mode == EditorMode.Terminal:
-      # Leaving a Terminal tab: clearModeState was skipped above (PTY ownership
-      # lives in `terminalStates`), so reset the variant manually here.
-      win.modeState = ModeState(kind: mskNone)
-      e.setMode(EditorMode.Normal)
-    elif wasSpecialMode:
-      # clearModeState resets modeState but leaves `win.mode` untouched —
-      # explicitly drop it back to Normal so the tab switch doesn't leave the
-      # window stuck in Filer/BufferManager/etc.
-      e.setMode(EditorMode.Normal)
+  e.applyTabMode(win, buf.id)
+  if wasSpecialMode and win.mode != EditorMode.Terminal:
+    # clearModeState resets modeState but leaves `win.mode` untouched —
+    # explicitly drop it back to Normal so the tab switch doesn't leave the
+    # window stuck in Filer/BufferManager/etc.
+    e.setMode(EditorMode.Normal)
 
 proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
   ## Point the active window at `targetBuffer` and reset its viewport/cursor.
@@ -279,8 +271,6 @@ when not defined(moe.embedded):
 
     e.pruneBufferIdFromAllWindows(bufId)
     let bidx = e.bufferIndexById(bufId)
-    # Snapshot before delete so the viewer branch can re-anchor originalBuffer.
-    let deletedOpt = e.bufferById(bufId)
     if bidx >= 0:
       # Mirror removeBufferAt: evict before delete so the buffer's pointer can't
       # alias a future buffer via a leftover cache entry.
@@ -304,15 +294,13 @@ when not defined(moe.embedded):
             fu.tabIdx
           else:
             w.bufferIds.len - 1
-        # Overlay owns the view: retab only, keep mode/undo.
+        # Overlay owns the view: retab only. Leaving the viewer sees the tab
+        # moved and starts over on `target`.
         if w.viewerEntry.isSome:
           let targetId = w.bufferIds[newIdx]
           let targetOpt = e.bufferById(targetId)
           if targetOpt.isSome:
-            let target = targetOpt.get
-            if deletedOpt.isSome and w.originalBuffer == deletedOpt.get:
-              w.originalBuffer = target
-            w.retabTo(target)
+            w.retabTo(targetOpt.get)
           else:
             w.bufferIds.delete(newIdx)
         elif fu.winIdx == prevActive:
@@ -578,7 +566,14 @@ proc redirectWindowsFromBuffer*(
       # A window whose view is deleted while it sits on another tab keeps that
       # tab: only the view moves.
       if tabDeleted:
+        # A split viewer's tab is its listing, so the viewer ends with it.
+        let entry = window.takeViewerEntry()
+        if entry.isSome:
+          window.clearModeState(entry.get.mode)
+          window.mode = EditorMode.Normal
         window.setTab(newBuf)
+        # The successor may be a Terminal session.
+        e.deriveTabMode(window)
       else:
         window.setView(newBuf)
       window.cursor = BufferPosition(line: 0, column: 0)

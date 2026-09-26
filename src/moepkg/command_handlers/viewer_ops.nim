@@ -84,7 +84,6 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     e.leaveViewerMode(EditorMode.References)
     return true
   of hrReferencesJumpTo:
-    # Restore the pre-viewer cursor so the jump list anchors at the origin.
     # The path is LSP-server-sourced; refuse obviously invalid values even
     # though the items are already validated when the viewer is built.
     if r.jumpToPath.len == 0 or '\0' in r.jumpToPath:
@@ -93,25 +92,20 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     let win = e.activeWindow
     let openWindow =
       win.modeState.kind == mskReferences and win.modeState.references.openWindowOnJump
-    let entry = e.leaveViewerModeForJump(EditorMode.References)
-    if entry.isSome:
-      win.cursor = entry.get.originCursor
+    discard e.leaveViewerModeForJump(EditorMode.References)
     discard e.openFileAndJumpTo(r.jumpToPath, r.jumpToLine, r.jumpToColumn, openWindow)
     return true
   of hrDocumentSymbolQuit:
     e.leaveViewerMode(EditorMode.DocumentSymbol)
     return true
   of hrDocumentSymbolJumpTo:
-    # Restore the pre-viewer cursor so the jump list anchors at the origin.
     let activeWin = e.activeWindow
     let filePath =
       if activeWin.modeState.kind == mskDocumentSymbol:
         activeWin.modeState.documentSymbol.filePath
       else:
         ""
-    let entry = e.leaveViewerModeForJump(EditorMode.DocumentSymbol)
-    if entry.isSome:
-      activeWin.cursor = entry.get.originCursor
+    discard e.leaveViewerModeForJump(EditorMode.DocumentSymbol)
     if filePath.len > 0:
       discard e.openFileAndJumpTo(filePath, r.symbolLine, r.symbolColumn)
     return true
@@ -120,7 +114,6 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     e.leaveViewerMode(EditorMode.CallHierarchy)
     return true
   of hrCallHierarchyJumpTo:
-    # Restore the pre-viewer cursor so the jump list anchors at the origin.
     # The URI is LSP-server-sourced: only a well-formed local file URI may
     # open a buffer, so anything else is refused here.
     let pathRes = lsp_service.validateLocalFileUri(r.callHierarchyJumpUri)
@@ -129,13 +122,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
       return true
     let path = pathRes.get
     cancelAllCallHierarchy(e)
-    let win = e.activeWindow
-    let entry = e.leaveViewerModeForJump(EditorMode.CallHierarchy)
-    win.cursor =
-      if entry.isSome:
-        entry.get.originCursor
-      else:
-        BufferPosition(line: 0, column: 0)
+    discard e.leaveViewerModeForJump(EditorMode.CallHierarchy)
     discard
       e.openFileAndJumpTo(path, r.callHierarchyJumpLine, r.callHierarchyJumpColumn)
     return true

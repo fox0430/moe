@@ -457,7 +457,6 @@ suite "editor_navigation - switchToBufferForLsp":
       let term = TerminalState(
         pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
         grid: newTerminalGrid(80, 24),
-        subMode: tsmInput,
         exitCode: none(int),
         waitingForCtrlN: false,
         needsBufferRefresh: false,

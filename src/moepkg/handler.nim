@@ -295,7 +295,7 @@ when not defined(moe.embedded):
     ## the Terminal and its overlays do not share a place to show a message.
     let activeWin = e.activeWindow
     if activeWin.modeState.kind != mskTerminal or
-        activeWin.modeState.terminal.subMode != tsmInput:
+        activeWin.modeState.terminalSubMode != tsmInput:
       return err("Paste not supported in this mode")
     activeWin.modeState.terminal.pasteInput(text.sanitizeInvalidUtf8())
 
@@ -1157,7 +1157,7 @@ proc handleInterruptCore(e: Editor): bool =
       let activeWin = e.activeWindow
       if activeWin.modeState.kind == mskTerminal:
         let termState = activeWin.modeState.terminal
-        if termState.subMode == tsmInput:
+        if activeWin.modeState.terminalSubMode == tsmInput:
           # Input sub-mode: forward Ctrl-C to the PTY as \x03.
           termState.interrupt()
         else:

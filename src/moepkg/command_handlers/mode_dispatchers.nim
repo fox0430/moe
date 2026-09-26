@@ -1144,7 +1144,7 @@ when not defined(moe.embedded):
       window: EditorWindow,
   ): HandlerResult =
     ## Handle Terminal mode input
-    let r = handleTerminalModeKey(termState, keyCombo)
+    let r = handleTerminalModeKey(termState, window.modeState.terminalSubMode, keyCombo)
     case r.kind
     of trHandled:
       return HandlerResult(
@@ -1154,7 +1154,8 @@ when not defined(moe.embedded):
       # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer.
       # Terminal windows hold no Insert session, so no finalization is needed.
       # Sub-mode and placement only; `syncTerminalView` derives the view.
-      let snapshotBuffer = termState.enterNormalSubMode()
+      let snapshotBuffer = termState.snapshotScrollback()
+      window.modeState.scrollbackSnapshot = snapshotBuffer
       window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
       window.viewport.resetViewportTop(
         max(0, snapshotBuffer.len - window.viewport.height)
@@ -1166,7 +1167,7 @@ when not defined(moe.embedded):
       )
     of trReturnToInput:
       # `syncTerminalView` puts the session's tab buffer back under the grid.
-      termState.exitNormalSubMode()
+      window.modeState.scrollbackSnapshot = nil
       window.cursor = BufferPosition(line: 0, column: 0)
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""

@@ -43,7 +43,6 @@ proc exitedTerminalState(): TerminalState =
   TerminalState(
     pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
     grid: newTerminalGrid(80, 24),
-    subMode: tsmInput,
     exitCode: some(0),
     waitingForCtrlN: false,
     needsBufferRefresh: false,
@@ -131,10 +130,10 @@ suite "pollTerminalSessions - sub-mode round trip":
     discard
       e.handleKeyCombo(KeyCombo(isSpecial: false, char: "\\", modifiers: {kmCtrl}))
     discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl}))
-    check w.modeState.terminal.subMode == tsmNormal
+    check w.modeState.terminalSubMode == tsmNormal
 
     discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "i", modifiers: {}))
-    check w.modeState.terminal.subMode == tsmInput
+    check w.modeState.terminalSubMode == tsmInput
     # The window is back on the registered buffer, not a fresh one.
     check w.buffer.id == termBufId
 
@@ -151,12 +150,33 @@ suite "pollTerminalSessions - sub-mode round trip":
     discard
       e.handleKeyCombo(KeyCombo(isSpecial: false, char: "\\", modifiers: {kmCtrl}))
     discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl}))
-    check w.modeState.terminal.subMode == tsmNormal
+    check w.modeState.terminalSubMode == tsmNormal
 
     discard e.handleKeyCombo(KeyCombo(isSpecial: false, char: "q", modifiers: {}))
 
     check not e.terminalStates.hasKey(termBufId)
     check w.mode != EditorMode.Terminal
+
+  test "An exited shell stays while any window on it browses the scrollback":
+    let e = createTestEditor()
+    let w1 = e.windowManager.windows[0]
+    let termBuf = e.registerExitedTerminalInWindow(w1, "bash")
+    let w2 = e.addSecondWindow()
+    w2.modeState = ModeState(
+      kind: mskTerminal,
+      terminal: e.terminalStates[termBuf.id],
+      scrollbackSnapshot: newTextBuffer(""),
+    )
+    w2.mode = EditorMode.Terminal
+
+    e.pollTerminalSessions()
+
+    check e.terminalStates.hasKey(termBuf.id)
+
+    w2.modeState.scrollbackSnapshot = nil
+    e.pollTerminalSessions()
+
+    check not e.terminalStates.hasKey(termBuf.id)
 
 suite "pollTerminalSessions - a backgrounded session keeps running":
   proc openTerminalState(): TerminalState =
@@ -169,7 +189,6 @@ suite "pollTerminalSessions - a backgrounded session keeps running":
         closed: false,
       ),
       grid: newTerminalGrid(80, 24),
-      subMode: tsmInput,
       exitCode: none(int),
       waitingForCtrlN: false,
       needsBufferRefresh: false,
