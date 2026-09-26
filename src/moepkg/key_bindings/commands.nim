@@ -24,7 +24,7 @@
 ## `Command` variants. This keeps `setupDefaultBindings` in `key_bindings.nim`
 ## free of the 183 hand-written `registerCommand` calls it used to contain.
 
-import std/tables
+import std/[tables, options]
 
 import ../[types, modes, command_config]
 import ./registry
@@ -192,6 +192,33 @@ const ActionCommands: seq[tuple[name, desc, commandId: string]] = @[
     "visual.paste.end",
   ),
 ]
+
+const WindowSecondKeyCommands*: seq[tuple[key, name: string]] = @[
+  ("h", "window-move-left"),
+  ("j", "window-move-down"),
+  ("k", "window-move-up"),
+  ("l", "window-move-right"),
+  ("w", "window-next"),
+  ("p", "window-prev"),
+  ("_", "window-maximize-height"),
+  ("+", "window-increase-height"),
+  ("-", "window-decrease-height"),
+  (">", "window-increase-width"),
+  ("<", "window-decrease-width"),
+  ("=", "window-equalize"),
+  ("x", "window-swap"),
+  ("c", "close-window"),
+]
+  ## Second key of a `C-w <key>` window command and the command name it fires.
+  ## Single source for `normal_bindings` (`C-w <key>` entries) and
+  ## `command_passthrough.windowSecondKeyToHandlerResult` (special-mode `C-w`).
+
+func actionCommandId*(name: string): Option[string] =
+  ## CommandId for an ActionCommands entry, or none when unknown.
+  for (n, _, commandId) in ActionCommands:
+    if n == name:
+      return some(commandId)
+  none(string)
 
 const CustomCommands: seq[tuple[name, desc, commandId: string]] = @[
   ("delete-word", "Delete word", "delete.word"),

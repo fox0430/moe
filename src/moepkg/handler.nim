@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[monotimes, options, os, strutils, tables]
+import std/[monotimes, options, os, strutils]
 
 when defined(posix):
   from std/posix import nil
@@ -59,15 +59,14 @@ import
   editor_file_jobs,
   editor_command_output,
   job_lanes,
-  highlight,
-  window_manager
+  highlight
 
 when not defined(moe.embedded):
   import terminal_mode
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,
-    result_processor,
+    result_processor, command_passthrough,
   ]
 export command_mode_handler, search_mode_handler, cursor_util, frontend_input
 
@@ -1039,66 +1038,17 @@ proc handlePointerInputCore(e: Editor, input: PointerInput): bool =
   return false
 
 proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
-  ## Handle Ctrl-W window command second key. Mirrors the `C-w` key bindings of
-  ## the file edit modes (see `normal_bindings`).
+  ## Handle Ctrl-W window command second key. Runs the same result as the file
+  ## edit modes (see `WindowSecondKeyCommands`), so closing a viewer or
+  ## Terminal window tears it down too.
   ## Returns some(true) if handled, some(false) if last window closed (quit),
   ## none if not a window command key.
   if e.state.pendingInput.pendingCommand == PendingWindowCmd:
     e.state.pendingInput.pendingCommand = PendingNone
     if not keyCombo.isSpecial:
-      case keyCombo.char
-      of "h":
-        e.moveToWindowDirection(wdLeft)
-        return some(true)
-      of "j":
-        e.moveToWindowDirection(wdDown)
-        return some(true)
-      of "k":
-        e.moveToWindowDirection(wdUp)
-        return some(true)
-      of "l":
-        e.moveToWindowDirection(wdRight)
-        return some(true)
-      of "w":
-        e.switchToNextWindow
-        return some(true)
-      of "p":
-        e.switchToPrevWindow
-        return some(true)
-      of "_":
-        e.maximizeWindowHeight
-        return some(true)
-      of "+":
-        e.increaseWindowHeight
-        return some(true)
-      of "-":
-        e.decreaseWindowHeight
-        return some(true)
-      of ">":
-        e.increaseWindowWidth
-        return some(true)
-      of "<":
-        e.decreaseWindowWidth
-        return some(true)
-      of "=":
-        e.equalizeWindowSizes
-        return some(true)
-      of "x":
-        e.swapWindow
-        return some(true)
-      of "c":
-        # Terminal owns a PTY in `e.terminalStates`; closing the window alone
-        # would strand it, so tear the session down first.
-        when not defined(moe.embedded):
-          let termBufId = e.activeWindow.tabBufferId
-          if e.terminalStates.hasKey(termBufId):
-            e.closeTerminalBuffer(termBufId)
-        let shouldQuit = e.closeWindow()
-        if shouldQuit:
-          return some(false)
-        return some(true)
-      else:
-        discard
+      let r = windowSecondKeyToHandlerResult(keyCombo.char)
+      if r.isSome:
+        return some(e.processResult(r.get, e.activeBuffer()))
     return some(true) # Unknown window command, cancel
 
   # Check for Ctrl-w to enter window command mode

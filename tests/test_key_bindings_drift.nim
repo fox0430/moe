@@ -34,7 +34,7 @@
 ## `help_generator.nim`'s `syntax:` / `description:` text — that pairing has
 ## its own cross-check in `test_help_keybinding_sync`.
 
-import std/[algorithm, sequtils, sets, strutils, tables, unittest]
+import std/[algorithm, options, sequtils, sets, strutils, tables, unittest]
 
 import ../tools/gen_config_docs
 import ../src/moepkg/command_config
@@ -42,6 +42,7 @@ import ../src/moepkg/key_bindings/normal_bindings {.all.}
 import ../src/moepkg/key_bindings/insert_bindings {.all.}
 import ../src/moepkg/key_bindings/visual_bindings {.all.}
 import ../src/moepkg/key_bindings/commands {.all.}
+import ../src/moepkg/command_handlers/command_passthrough {.all.}
 
 proc registeredCommands(): Table[string, string] =
   ## Every name `[KeyBindings]` can bind, mapped to its description.
@@ -169,3 +170,30 @@ suite "key bindings — command name drift detection":
         mismatched.incl name & " — code: " & registered[name] & " / doc: " &
           description
     check report("description drift", mismatched) == 0
+
+  test "window second keys resolve through the shared table":
+    let registered = registeredCommands().names
+
+    var seenKeys: HashSet[string]
+    var problems: seq[string]
+    for (key, name) in WindowSecondKeyCommands:
+      if key in seenKeys:
+        problems.add("duplicate key: " & key)
+      seenKeys.incl key
+      if name notin registered:
+        problems.add("unregistered command: " & key & " → " & name)
+        continue
+      let commandId = actionCommandId(name)
+      if commandId.isNone:
+        problems.add("no action commandId: " & name)
+        continue
+      if lookupPassthrough(commandId.get).isNone:
+        problems.add("no passthrough: " & commandId.get)
+      if windowSecondKeyToHandlerResult(key).isNone:
+        problems.add("no handler result: " & key)
+    if windowSecondKeyToHandlerResult("z").isSome:
+      problems.add("unknown key resolves: z")
+
+    for entry in problems:
+      echo "  window key drift: ", entry
+    check problems.len == 0

@@ -53,6 +53,7 @@ import std/[os, options, sets, strutils, unittest]
 import ../src/moepkg/[help_generator, help_markdown]
 import ../src/moepkg/key_bindings/registry
 import ../src/moepkg/key_bindings/normal_bindings {.all.}
+import ../src/moepkg/key_bindings/commands {.all.}
 import ../src/moepkg/key_bindings/visual_bindings {.all.}
 import ../src/moepkg/key_bindings/insert_bindings {.all.}
 
@@ -212,7 +213,11 @@ suite "help / keybinding consistency":
         "mark-exact",
       ]
     )
-    let missing = findUndocumented(NormalBindings, help, allowKeys, allowCmds)
+    let missing = block:
+      var allNormal = @NormalBindings
+      for (key, cmd) in WindowSecondKeyCommands:
+        allNormal.add ("C-w " & key, cmd)
+      findUndocumented(allNormal, help, allowKeys, allowCmds)
     report("Normal", missing)
     check missing.len == 0
 

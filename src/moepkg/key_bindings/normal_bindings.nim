@@ -26,7 +26,7 @@
 ## via `parseKeyCombo` — so no `KeyCombo(...)` literals appear here.
 
 import ../modes
-import ./registry
+import ./[registry, commands]
 
 const NormalBindings: seq[tuple[key, cmd: string]] = @[
   # Basic motion
@@ -119,21 +119,8 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   # Save and quit
   ("Z Z", "save-and-quit"),
   ("Z Q", "quit-force"),
-  # Window management
-  ("C-w c", "close-window"),
-  ("C-w w", "window-next"),
-  ("C-w p", "window-prev"),
-  ("C-w h", "window-move-left"),
-  ("C-w j", "window-move-down"),
-  ("C-w k", "window-move-up"),
-  ("C-w l", "window-move-right"),
-  ("C-w _", "window-maximize-height"),
-  ("C-w +", "window-increase-height"),
-  ("C-w -", "window-decrease-height"),
-  ("C-w >", "window-increase-width"),
-  ("C-w <", "window-decrease-width"),
-  ("C-w =", "window-equalize"),
-  ("C-w x", "window-swap"),
+  # Window management entries come from WindowSecondKeyCommands
+  # and are bound as `C-w <key>` in bindNormalMode.
   # Named marks
   ("m", "mark-set"),
   ("'", "mark-line"),
@@ -237,3 +224,5 @@ proc bindNormalMode*(registry: KeyBindingRegistry) =
   ## silently skips entries whose target command name is not yet registered.
   for (key, cmd) in NormalBindings:
     registry.bindKey(EditorMode.Normal, key, cmd)
+  for (key, cmd) in WindowSecondKeyCommands:
+    registry.bindKey(EditorMode.Normal, "C-w " & key, cmd)
