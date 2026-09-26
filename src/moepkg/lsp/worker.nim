@@ -306,7 +306,44 @@ type
 
   LspWorker* = ref LspWorkerObj
 
-proc stopThread(worker: var LspWorkerObj)
+# Defined before `=destroy` (which calls `stopThread`): a forward declaration
+# has no inferred raises, so the destructor would warn about an unlisted `Effect`.
+proc pushAndSignal(q: var CommandQueue, cmd: LspCommand, signal: ThreadSignalPtr) =
+  ## Push command and signal the worker thread
+  withLock(q.lock):
+    q.queue.addLast(cmd)
+  # Signal after releasing lock to avoid holding lock during syscall
+  # Ignore signal errors - command is already queued and will be processed
+  let signalResult = signal.fireSync()
+  if signalResult.isErr:
+    discard # Signal failed but command is queued; worker will pick it up on next timeout
+
+proc stopThread(worker: var LspWorkerObj) =
+  if worker.stopped:
+    return
+
+  if worker.sharedState.running.load(moAcquire):
+    # Normal case: send shutdown command to gracefully stop. `watchCommands`
+    # kills the server as soon as this is queued.
+    worker.commandQueue.pushAndSignal(LspCommand(kind: lcmdShutdown), worker.signal)
+
+  if worker.threadStarted:
+    # Always join the thread if it was started, even if the worker has crashed.
+    # Without joining, the old thread may still be accessing shared memory when
+    # the LspWorker ref is freed, causing allocator corruption.
+    joinThread(worker.thread)
+    worker.threadStarted = false
+
+  worker.sharedState.running.store(false, moRelease)
+
+  # Clean up locks
+  deinitLock(worker.commandQueue.lock)
+  deinitLock(worker.eventQueue.lock)
+
+  # Clean up signal
+  discard worker.signal.close()
+
+  worker.stopped = true
 
 proc `=destroy`(worker: var LspWorkerObj) =
   ## The thread reads the queues and state held here, so a worker dropped
@@ -339,16 +376,6 @@ proc initCommandQueue(): CommandQueue =
 proc initEventQueue(): EventQueue =
   result.lock.initLock()
   result.queue = initDeque[LspEvent]()
-
-proc pushAndSignal(q: var CommandQueue, cmd: LspCommand, signal: ThreadSignalPtr) =
-  ## Push command and signal the worker thread
-  withLock(q.lock):
-    q.queue.addLast(cmd)
-  # Signal after releasing lock to avoid holding lock during syscall
-  # Ignore signal errors - command is already queued and will be processed
-  let signalResult = signal.fireSync()
-  if signalResult.isErr:
-    discard # Signal failed but command is queued; worker will pick it up on next timeout
 
 proc pop(q: var CommandQueue): Option[LspCommand] =
   withLock(q.lock):
@@ -1808,33 +1835,6 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 proc initSharedState(): SharedState =
   result.running.store(false, moRelaxed)
   result.stateVal.store(lwsStopped.ord, moRelaxed)
-
-proc stopThread(worker: var LspWorkerObj) =
-  if worker.stopped:
-    return
-
-  if worker.sharedState.running.load(moAcquire):
-    # Normal case: send shutdown command to gracefully stop. `watchCommands`
-    # kills the server as soon as this is queued.
-    worker.commandQueue.pushAndSignal(LspCommand(kind: lcmdShutdown), worker.signal)
-
-  if worker.threadStarted:
-    # Always join the thread if it was started, even if the worker has crashed.
-    # Without joining, the old thread may still be accessing shared memory when
-    # the LspWorker ref is freed, causing allocator corruption.
-    joinThread(worker.thread)
-    worker.threadStarted = false
-
-  worker.sharedState.running.store(false, moRelease)
-
-  # Clean up locks
-  deinitLock(worker.commandQueue.lock)
-  deinitLock(worker.eventQueue.lock)
-
-  # Clean up signal
-  discard worker.signal.close()
-
-  worker.stopped = true
 
 proc newLspWorker*(
     languageId: string, traceLevel: LspTrace = traceOff
