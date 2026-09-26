@@ -87,6 +87,13 @@ suite "Build - parseCommandString":
     check cmd.cmd == "cmd"
     check cmd.args == @["", "x"]
 
+  test "A token of quoted blanks is preserved":
+    # Quoted whitespace is content, not a separator; `buildOnSaveCommand`
+    # rejects such a token only when it lands in the command position.
+    let cmd = parseCommandString("cmd \"  \"").get
+    check cmd.cmd == "cmd"
+    check cmd.args == @["  "]
+
   test "Whitespace-only string yields empty command":
     let cmd = parseCommandString("   \t  ").get
     check cmd.cmd == ""
@@ -185,6 +192,12 @@ suite "Build - buildOnSaveCommand":
 
   test "A custom command of only blanks is refused":
     check buildOnSaveCommand("/path/to/file.nim", SourceLanguage.langNim, "   ").isErr
+
+  test "A custom command whose first token is only blanks is refused":
+    for customCommand in ["\"  \"", "'  '", "\"  \" x", "\"\t\"", "\"\n\""]:
+      check buildOnSaveCommand(
+        "/path/to/file.nim", SourceLanguage.langNim, customCommand
+      ).isErr
 
   test "A custom command with an unterminated quote is refused":
     let r = buildOnSaveCommand(

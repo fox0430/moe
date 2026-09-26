@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/strformat
+import std/[strformat, strutils]
 
 import pkg/[results, chronos]
 
@@ -68,7 +68,9 @@ proc buildOnSaveCommand*(
   if customCommand.len > 0:
     let parsed = parseCommandString(customCommand).valueOr:
       return Result[BackgroundProcessCommand, string].err error
-    if parsed.cmd.len == 0:
+    # Whitespace inside quotes is a token, so a blank first token (e.g. `"  "`)
+    # can reach this point; no executable matches it.
+    if parsed.cmd.strip.len == 0:
       return Result[BackgroundProcessCommand, string].err "command is empty"
     Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
       cmd: parsed.cmd, args: parsed.args, workingDir: workspaceRoot
