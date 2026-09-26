@@ -29,7 +29,7 @@ import
   ../[
     editor, modes, buffer, logger, types, filer, filetree, lsp_service, primitives,
     syntax_checker, cursor_util, quick_run_utils, command_completion, key_bindings,
-    key_router, lsp_integration, command_registry,
+    key_router, lsp_integration, command_registry, command_line,
   ]
 import
   backup_ops, config_ops, debug_ops, editor_ops, file_ops, handler_result,
@@ -664,11 +664,29 @@ proc executeCommandOverlay*(e: Editor, commandText: string): bool =
 
   # 2. dispatch
   let activeBuffer = e.activeBuffer()
+  let commandMode = e.currentMode
   let isShared = e.isBufferShared(activeBuffer)
   let otherModifiedCount = e.modifiedBufferCountExcept(activeBuffer)
-  let r = e.handlerManager.handleCommandMode(
-    activeBuffer, commandText, isShared, e.activeWindow.cursor.line, otherModifiedCount
-  )
+  var r: HandlerResult
+  if commandText.len <= 1:
+    r = e.handlerManager.handleCommandMode(
+      activeBuffer, commandText, isShared, e.activeWindow.cursor.line,
+      otherModifiedCount,
+    )
+  else:
+    let parsed = e.commandLineParser.parseCommandLine(commandText)
+    if e.interceptHostCommand(parsed):
+      r = HandlerResult(kind: hrHandled)
+    else:
+      r = e.handlerManager.handleCommandMode(
+        activeBuffer,
+        e.commandLineParser.execute(parsed),
+        isShared,
+        e.activeWindow.cursor.line,
+        otherModifiedCount,
+      )
+  if commandMode == EditorMode.Config and r.kind == hrCloseWindow:
+    r = HandlerResult(kind: hrConfigQuit)
   if commandText.len > 1:
     e.addCommandToHistory(commandText[1 ..^ 1])
 

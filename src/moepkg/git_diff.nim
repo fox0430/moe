@@ -22,7 +22,11 @@
 ## This module provides functionality for getting git diff information
 ## and applying it to buffer sidebar markers.
 
-import std/[options, osproc, strutils, tables, os, tempfiles, streams, times, monotimes]
+import std/[options, osproc, strutils, tables, os, tempfiles, times, monotimes]
+when defined(windows):
+  import std/winlean
+else:
+  import std/posix
 
 import pkg/results
 
@@ -70,12 +74,43 @@ proc terminateProcess(p: Process) =
     except CatchableError as killErr:
       logError("git diff", "Failed to kill process: " & killErr.msg)
 
-proc drainOutput(p: Process): string =
+proc drainExitedProcessOutput*(p: Process): string =
+  ## Read only bytes already available after the Git child exits. Another
+  ## process may still hold a copy of the pipe's write end, so waiting for EOF
+  ## here would freeze the editor thread.
   try:
-    p.outputStream().readAll()
+    const maxOutputBytes = 64 * 1024
+    var buffer: array[4096, char]
+    when defined(windows):
+      let handle = p.outputHandle().Handle
+      while result.len < maxOutputBytes:
+        var available: int32
+        if not peekNamedPipe(handle, lpTotalBytesAvail = addr available) or
+            available <= 0:
+          break
+        var count: int32
+        let amount = min(min(buffer.len, maxOutputBytes - result.len), available.int)
+        if readFile(handle, addr buffer[0], amount.int32, addr count, nil) == 0 or
+            count <= 0:
+          break
+        let start = result.len
+        result.setLen(start + count.int)
+        copyMem(addr result[start], addr buffer[0], count.int)
+    else:
+      let fd = p.outputHandle().cint
+      while result.len < maxOutputBytes:
+        var readyFd = TPollfd(fd: fd, events: POLLIN)
+        if posix.poll(addr readyFd, Tnfds(1), 0) <= 0:
+          break
+        let count =
+          posix.read(fd, addr buffer[0], min(buffer.len, maxOutputBytes - result.len))
+        if count <= 0:
+          break
+        let start = result.len
+        result.setLen(start + count.int)
+        copyMem(addr result[start], addr buffer[0], count.int)
   except CatchableError as e:
     logError("git diff", "Failed to read process output: " & e.msg)
-    ""
 
 proc closeSafely(p: Process) =
   try:
@@ -459,7 +494,7 @@ proc pollGitDiff(
   if exitCode == PROCESS_RUNNING:
     return none(Result[GitDiffInfo, string])
 
-  let output = drainOutput(diffProc.process)
+  let output = drainExitedProcessOutput(diffProc.process)
   releaseGitProcess(diffProc.process)
 
   case diffProc.stage

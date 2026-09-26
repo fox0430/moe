@@ -25,7 +25,7 @@ when not defined(moe.embedded):
 
 import pkg/results
 
-import ../[editor, editor_window_state, logger, types, window_manager]
+import ../[editor, editor_window_state, logger, types, viewer_mode, window_manager]
 
 import editor_ops, handler_result
 
@@ -78,6 +78,10 @@ proc processWindowResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer)
       if discardErr.len > 0:
         e.state.statusMessage = discardErr
         return true
+    e.closeLiveViewer()
+    if e.activeWindow != activeWin:
+      # A split viewer closed its own window as part of teardown.
+      return true
     when not defined(moe.embedded):
       let termBufId = activeWin.tabBufferId
       if e.terminalStates.hasKey(termBufId):

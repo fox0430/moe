@@ -29,6 +29,14 @@ import ../src/moepkg/buffer
 import ../src/moepkg/git_diff {.all.}
 
 when defined(posix):
+  const outputProbeFlag = "--moe-git-output-probe"
+
+  if paramCount() == 1 and paramStr(1) == outputProbeFlag:
+    stdout.write("ready")
+    stdout.flushFile()
+    sleep(2000)
+    quit(0)
+
   proc openDescriptorCount(): int =
     for fd in 0.cint ..< 4096.cint:
       if fcntl(fd, F_GETFD) != -1:
@@ -57,6 +65,30 @@ when defined(posix):
       doAssert openDescriptorCount() == before
       abandonGitDiffProcess(pipeline)
       doAssert openDescriptorCount() == before
+
+  suite "Git process output polling":
+    test "available output does not wait for pipe EOF":
+      let child =
+        startProcess(getAppFilename(), args = @[outputProbeFlag], options = {})
+      try:
+        let deadline = getMonoTime() + initDuration(seconds = 5)
+        var ready = false
+        while getMonoTime() < deadline:
+          var readyFd = TPollfd(fd: child.outputHandle().cint, events: POLLIN)
+          if posix.poll(addr readyFd, Tnfds(1), 0) > 0:
+            ready = true
+            break
+          sleep(1)
+        require ready
+
+        let started = getMonoTime()
+        check child.drainExitedProcessOutput() == "ready"
+        check getMonoTime() - started < initDuration(seconds = 1)
+      finally:
+        if child.peekExitCode() == -1:
+          child.kill()
+        discard child.waitForExit()
+        child.close()
 
   block git_cleanup_kills_a_child_that_ignores_termination:
     let before = openDescriptorCount()

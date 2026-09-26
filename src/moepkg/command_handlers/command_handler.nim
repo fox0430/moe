@@ -570,22 +570,15 @@ proc executeDelete*(
 proc handleCommandModeInput*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
-    commandText: string,
+    cmdResult: CommandLineResult,
     isSharedBuffer: bool = false,
     currentLine: int = 0,
     otherModifiedCount: int = 0,
 ): HandlerResult =
-  ## Main entry point for handling Command mode input.
+  ## Dispatch an already parsed Command mode input.
   ## isSharedBuffer: true if the buffer is shared across multiple windows
   ## currentLine: 0-based cursor line, used for range substitution with '.'
   ## otherModifiedCount: modified buffers other than `buffer` (for :qa)
-
-  if commandText.len <= 1: # Just ":"
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-    )
-
-  let cmdResult = handler.parser.parseAndExecute(commandText)
 
   case cmdResult.kind
   of claQuit:
@@ -767,3 +760,24 @@ proc handleCommandModeInput*(
     HandlerResult(kind: hrCquit)
   of claUnknown:
     HandlerResult(kind: hrError, errorMessage: cmdResult.errorMessage)
+
+proc handleCommandModeInput*(
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    commandText: string,
+    isSharedBuffer: bool = false,
+    currentLine: int = 0,
+    otherModifiedCount: int = 0,
+): HandlerResult =
+  ## Parse and dispatch Command mode text, including an empty `:` overlay.
+  if commandText.len <= 1:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
+    )
+  handler.handleCommandModeInput(
+    buffer,
+    handler.parser.parseAndExecute(commandText),
+    isSharedBuffer,
+    currentLine,
+    otherModifiedCount,
+  )
