@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 ## Command-line types, action enum, result variant, and the
-## ArgumentRequiredActions set (plus isNoArgumentAction).
+## argument-arity sets (plus isNoArgumentAction).
 
 import std/[tables, options]
 
@@ -273,8 +273,8 @@ type
     of claUnknown:
       errorMessage*: string
 
-# Actions that require arguments (cannot be executed immediately)
-# All other actions are considered no-argument actions
+# Every action is in exactly one of the two sets below (asserted at compile
+# time), because accepting a no-argument command in the completion popup runs it.
 const ArgumentRequiredActions* = {
   claEdit, # requires filename
   claGoto, # requires line number
@@ -282,6 +282,7 @@ const ArgumentRequiredActions* = {
   claSubstitute, # requires pattern
   claBuffer, # requires buffer number/name
   claShellCommand, # requires command
+  claFilter, # requires command
   claMan, # requires page name
   claTheme, # requires theme name
   claLspExecuteCommand, # requires command
@@ -310,11 +311,35 @@ const ArgumentRequiredActions* = {
   claUnknown, # invalid command
 }
 
+const NoArgumentActions* = {
+  claQuit, claQuitAll, claSave, claSaveAll, claSaveAndQuit, claSaveIfModifiedAndQuit,
+  claSaveAllAndQuit, claEnew, claHelp, claUndo, claRedo, claDeleteLines, claNew,
+  claVnew, claBufferNext, claBufferPrev, claBufferFirst, claBufferLast, claBufferDelete,
+  claStripWhitespace, claLogViewer, claJobs, claQuickRun, claBufferManager,
+  claBackupManager, claRecoveryManager, claRecentFile, claClearSearchHighlight,
+  claBackground, claJumpList, claChanges, claBookmarks, claConflictNext,
+  claConflictPrev, claBuild, claDebug, claConfig, claPutConfigFile, claLspLog,
+  claLspFormat, claLspRestart, claLspFold, claLspCallHierarchyIncoming,
+  claLspCallHierarchyOutgoing, claMapclear, claNmapclear, claImapclear, claVmapclear,
+  claRmapclear, claCmapclear, claOnlyWindow, claEditConfigFile, claCquit,
+}
+
+static:
+  const unclassified =
+    {low(CommandLineAction) .. high(CommandLineAction)} - NoArgumentActions -
+    ArgumentRequiredActions
+  doAssert unclassified == {},
+    "CommandLineAction values missing from NoArgumentActions/ArgumentRequiredActions: " &
+      $unclassified
+  doAssert NoArgumentActions * ArgumentRequiredActions == {},
+    "CommandLineAction values in both argument sets: " &
+      $(NoArgumentActions * ArgumentRequiredActions)
+
 proc isNoArgumentAction*(parser: CommandLineParser, command: string): bool =
-  ## Check if a command requires no arguments based on its action
-  ## Returns true for actions not in ArgumentRequiredActions
+  ## Check if a command is complete without an argument.
+  ## Returns true only for actions in NoArgumentActions
   if command in parser.aliases:
-    return parser.aliases[command] notin ArgumentRequiredActions
+    return parser.aliases[command] in NoArgumentActions
   if command in parser.shellCommands:
     return false # Custom commands may accept arguments
   return false
