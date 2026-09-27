@@ -35,6 +35,7 @@ import
   editor_window,
   editor_window_state,
   editor_buffers,
+  editor_window_tab,
   git_cache,
   buffer,
   window_manager

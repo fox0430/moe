@@ -29,9 +29,9 @@ import pkg/results
 
 import
   ../[
-    editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
-    config_loader, window_manager, log_viewer, syntax_checker, render_utils, motion,
-    viewer_mode, editor_build_jobs,
+    editor, editor_window_state, editor_window_tab, modes, buffer, logger, types, filer,
+    filetree, config_loader, window_manager, log_viewer, syntax_checker, render_utils,
+    motion, viewer_mode, editor_build_jobs,
   ]
 
 when not defined(moe.embedded):
@@ -404,16 +404,8 @@ when not defined(moe.embedded):
     e.addBufferToWindowList(result)
     e.terminalStates[result.id] = termState
 
-    activeWin.setTab(result)
-    activeWin.cursor = BufferPosition(line: 0, column: 0)
-    activeWin.viewport.resetViewportTop()
-    activeWin.viewport.leftColumn = 0
-    # Drop the bookkeeping of what the window was showing: a viewer entry would
-    # later undo itself on top of the live session.
-    discard activeWin.takeViewerEntry()
-    discard activeWin.takeSuspendedMode()
-    # Drops any handed-over `originalBuffer` and derives Terminal mode.
-    e.applyBufferMode(result)
+    # Shared tab transition drops viewer bookkeeping and derives Terminal mode.
+    discard e.moveWindowToTab(activeWin, result)
 
 proc enterTerminalInActiveWindow*(e: Editor, command: string) =
   when defined(moe.embedded):

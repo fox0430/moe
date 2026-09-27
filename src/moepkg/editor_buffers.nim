@@ -32,7 +32,7 @@ import
   types/editor_types,
   editor_mode,
   editor_window,
-  editor_window_state,
+  editor_window_tab,
   git_cache,
   editorconfig_helper,
   highlight,
@@ -104,94 +104,14 @@ proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
   if buffer.id notin e.activeWindow.bufferIds:
     e.activeWindow.bufferIds.add(buffer.id)
 
-when not defined(moe.embedded):
-  proc syncTerminalView*(e: Editor, win: EditorWindow) =
-    ## What a Terminal window shows, derived from its sub-mode. The only place
-    ## that decides it, so the two cannot drift apart.
-    if win.modeState.kind != mskTerminal:
-      return
-    case win.modeState.terminalSubMode
-    of tsmNormal:
-      win.setView(win.modeState.scrollbackSnapshot)
-    of tsmInput:
-      # `renderTerminal` draws the grid; the view is only what the status line
-      # and tab list read.
-      win.setView(e.tabBuffer(win))
-
-proc applyTabMode(e: Editor, win: EditorWindow, tabId: BufferId) =
-  when not defined(moe.embedded):
-    let session = e.terminalStates.getOrDefault(tabId)
-    if session != nil:
-      # Arriving on the session starts live; staying on it keeps the browsing.
-      if win.modeState.kind != mskTerminal or win.modeState.terminal != session:
-        win.modeState = ModeState(kind: mskTerminal, terminal: session)
-      win.mode = EditorMode.Terminal
-      e.syncTerminalView(win)
-      return
-  if win.mode == EditorMode.Terminal:
-    win.modeState = ModeState(kind: mskNone)
-    win.mode = EditorMode.Normal
-
-proc deriveTabMode*(e: Editor, win: EditorWindow) =
-  ## Terminal exactly when `win`'s tab is a session. Other modes belong to
-  ## their owners, so call this only once no viewer holds the window.
-  e.applyTabMode(win, win.tabBufferId)
-
-proc applyBufferMode*(e: Editor, buf: TextBuffer) =
-  ## Re-derive the active window's mode/modeState from the activated buffer.
-  let win = e.activeWindow
-  # Drop any prior buffer-swap mode state (Filer, BufferManager, ...) so its
-  # `originalBuffer` doesn't leak across the tab switch. Terminal state is
-  # owned by `e.terminalStates` and must NOT be cleaned up here — `cleanup()`
-  # would kill the PTY of a session the user wants to resume later.
-  #
-  # `originalBuffer` is nulled before `clearModeState` on purpose: the normal
-  # lifecycle restores it into `win.buffer`, but we're explicitly switching
-  # to `buf` (a tab pick), so the saved reference would be wrong. Nulling
-  # first turns the restore step into a no-op while still letting
-  # `clearModeState` run its mode-specific cleanup and reset the variant.
-  # Unconditional: every caller has already called `win.setTab(buf)`.
-  win.originalBuffer = nil
-  # `clearModeState` only drops what the mode being torn down owns, so an
-  # overlay (DiffViewer over a suspended BackupManager) would strand the other
-  # mode's record on a window that is now showing an unrelated tab.
-  discard win.takeViewerEntry()
-  discard win.takeSuspendedMode()
-  let wasSpecialMode =
-    when defined(moe.embedded):
-      win.modeState.kind != mskNone
-    else:
-      win.modeState.kind != mskNone and win.modeState.kind != mskTerminal
-  if wasSpecialMode:
-    win.clearModeState(win.mode)
-
-  e.applyTabMode(win, buf.id)
-  if wasSpecialMode and win.mode != EditorMode.Terminal:
-    # clearModeState resets modeState but leaves `win.mode` untouched —
-    # explicitly drop it back to Normal so the tab switch doesn't leave the
-    # window stuck in Filer/BufferManager/etc.
-    e.setMode(EditorMode.Normal)
-
 proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
-  ## Point the active window at `targetBuffer` and reset its viewport/cursor.
-  ## No-op when the window is already showing this buffer (preserves position).
-  ## Shared tail of switchToBufferByIndex/switchToWindowBuffer — the callers
-  ## differ only in how they resolve `targetBuffer`.
-  if e.activeWindow.buffer == targetBuffer:
+  ## Point the active window at `targetBuffer`, resetting viewport/cursor.
+  ## No-op when already on this tab (preserves position).
+  if not e.moveWindowToTab(e.activeWindow, targetBuffer):
     return
-
-  # Finalize any Insert session on the old buffer before the switch.
-  e.finalizeInsertSessionForBufferSwitch(e.activeWindow.buffer)
-
-  e.activeWindow.setTab(targetBuffer)
-  e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  e.activeWindow.viewport.resetViewportTop()
-  e.activeWindow.viewport.leftColumn = 0
-  e.applyBufferMode(targetBuffer)
 
   # syncActiveWindow also updates state.windowDisplay.currentBufferId for the Jump List anchor.
   e.syncActiveWindow()
-  e.enforceModePolicy()
   e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc switchToBufferByIndex*(e: Editor, index: int) =
@@ -279,8 +199,7 @@ when not defined(moe.embedded):
 
     let prevActive = e.windowManager.activeWindowIndex
     for fu in followups:
-      e.windowManager.activeWindowIndex = fu.winIdx
-      let w = e.activeWindow
+      let w = e.windowManager.windows[fu.winIdx]
       if w.bufferIds.len > 0:
         # Prefer the tab that took the closed terminal's slot (formerly
         # tabIdx+1); fall back to the previous tab when the closed terminal
@@ -304,23 +223,14 @@ when not defined(moe.embedded):
           else:
             w.bufferIds.delete(newIdx)
         elif fu.winIdx == prevActive:
-          # Only the active window owns the global Insert session.
+          # Shared transition finalizes Insert and reapplies forceInsertMode.
           e.switchToWindowBuffer(newIdx)
         else:
-          # Non-active window: reassign the buffer without finalizing.
+          # Shared transition skips the Insert session a background window lacks.
           let targetId = w.bufferIds[newIdx]
           let targetOpt = e.bufferById(targetId)
           if targetOpt.isSome:
-            let target = targetOpt.get
-            w.setTab(target)
-            w.cursor = BufferPosition(line: 0, column: 0)
-            w.viewport.resetViewportTop()
-            w.viewport.leftColumn = 0
-            e.applyBufferMode(target)
-            # Match activateBufferInWindow so forceInsertMode re-enters Insert.
-            e.enforceModePolicy()
-            e.syncActiveWindow()
-            e.setActiveWindowScreenCursor(w)
+            discard e.moveWindowToTab(w, targetOpt.get)
           else:
             w.bufferIds.delete(newIdx)
       else:
@@ -329,46 +239,17 @@ when not defined(moe.embedded):
           let survivor = e.buffers[min(max(bidx, 0), e.buffers.len - 1)]
           if survivor.id notin w.bufferIds:
             w.bufferIds.add(survivor.id)
-          if fu.winIdx == prevActive:
-            e.finalizeInsertSessionForBufferSwitch(w.buffer)
-          w.setTab(survivor)
-          w.cursor = BufferPosition(line: 0, column: 0)
-          w.viewport.resetViewportTop()
-          w.viewport.leftColumn = 0
-          w.originalBuffer = nil
-          # Drop overlay undo so leaveViewerMode cannot restore the deleted tab.
-          discard w.takeViewerEntry()
-          discard w.takeSuspendedMode()
-          # Re-derive mode; a hardcoded Normal would desync a Terminal survivor.
-          e.applyBufferMode(survivor)
-          e.enforceModePolicy()
-          e.syncActiveWindow()
-          e.setActiveWindowScreenCursor(w)
+          # Shared transition drops overlay undo and re-derives the mode.
+          discard e.moveWindowToTab(w, survivor)
         else:
           let blank = newTextBuffer("")
           e.addBuffer(blank)
-          e.addBufferToWindowList(blank)
-          if fu.winIdx == prevActive:
-            e.finalizeInsertSessionForBufferSwitch(w.buffer)
-          w.setTab(blank)
-          w.cursor = BufferPosition(line: 0, column: 0)
-          w.viewport.resetViewportTop()
-          w.viewport.leftColumn = 0
-          w.originalBuffer = nil
-          # Drop overlay undo so leaveViewerMode cannot restore onto this blank.
-          discard w.takeViewerEntry()
-          discard w.takeSuspendedMode()
-          w.modeState = ModeState(kind: mskNone)
-          w.mode = EditorMode.Normal
-          e.setMode(EditorMode.Normal)
-          # Same forceInsertMode alignment as the branches above.
-          e.enforceModePolicy()
-          e.syncActiveWindow()
-          e.setActiveWindowScreenCursor(w)
-    e.windowManager.activeWindowIndex = prevActive
-    # Followup loop may have re-synced `state.windowDisplay.currentBufferId`
-    # to the last visited window. Re-anchor it to the (restored) active one.
+          if blank.id notin w.bufferIds:
+            w.bufferIds.add(blank.id)
+          discard e.moveWindowToTab(w, blank)
+    # Re-anchor to the active window and refresh its cursor.
     e.syncActiveWindow()
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
   proc cleanupAllTerminals*(e: Editor) =
     ## Tear down every live Terminal session's PTY on editor exit/crash.
@@ -566,14 +447,8 @@ proc redirectWindowsFromBuffer*(
       # A window whose view is deleted while it sits on another tab keeps that
       # tab: only the view moves.
       if tabDeleted:
-        # A split viewer's tab is its listing, so the viewer ends with it.
-        let entry = window.takeViewerEntry()
-        if entry.isSome:
-          window.clearModeState(entry.get.mode)
-          window.mode = EditorMode.Normal
-        window.setTab(newBuf)
-        # The successor may be a Terminal session.
-        e.deriveTabMode(window)
+        # Viewer ends with its listing; otherwise use the shared transition.
+        discard e.moveWindowToTab(window, newBuf)
       else:
         window.setView(newBuf)
       window.cursor = BufferPosition(line: 0, column: 0)
