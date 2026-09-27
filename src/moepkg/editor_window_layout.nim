@@ -21,6 +21,8 @@
 ## These procs are side-effect-free helpers used by both the window
 ## management layer and the rendering layer.
 
+import std/options
+
 import types/editor_types, render_utils, buffer/core, visible_rows
 import diff_viewer, types/diff_viewer_types
 
@@ -66,6 +68,38 @@ proc calculateTerminalAreaDimensions*(
     cols: window.viewport.width,
     rows: max(1, terminalContentRows(window, isBottomWindow, tabLineOffset)),
   )
+
+proc minimumTerminalAreaDimensions*(
+    e: Editor, id: BufferId
+): Option[tuple[cols, rows: int]] =
+  ## The smallest grid every window showing the session parked on `id` can
+  ## display, or none when no window shows it (a background tab).
+  ##
+  ## Several windows can show one session (`:b N`, `:bd` successor). The
+  ## minimum fits them all; the largest size would clip prompts in smaller
+  ## windows.
+  ##
+  ## Browsing windows (Terminal-Normal) vote too, so entering and leaving the
+  ## scrollback does not resize the PTY under the child. A window a viewer has
+  ## covered does not, as it no longer shows the grid.
+  var found = false
+  var cols, rows: int
+  for window in e.windowManager.windows:
+    if window.mode == EditorMode.Terminal and window.modeState.kind == mskTerminal and
+        window.tabBufferId == id:
+      let (windowCols, windowRows) = e.calculateTerminalAreaDimensions(window)
+      if found:
+        cols = min(cols, windowCols)
+        rows = min(rows, windowRows)
+      else:
+        cols = windowCols
+        rows = windowRows
+        found = true
+
+  if found:
+    some((cols: cols, rows: rows))
+  else:
+    none(tuple[cols, rows: int])
 
 proc calculateSidebarWidth*(e: Editor, window: EditorWindow): int =
   ## Calculate the width occupied by the sidebar (0 if disabled).

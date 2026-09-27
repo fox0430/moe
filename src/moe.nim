@@ -43,18 +43,11 @@ proc toCursorStyle(ct: CursorType): CursorStyle =
   of ctNonBlinkBlock: CursorStyle.SteadyBlock
   of ctNonBlinkIbeam: CursorStyle.SteadyBar
 
-proc terminalWindowFor(e: Editor, id: BufferId): EditorWindow =
-  ## The window showing the session parked on `id`, or nil for a background tab.
-  for window in e.windowManager.windows:
-    if window.mode == EditorMode.Terminal and window.modeState.kind == mskTerminal and
-        window.tabBufferId == id:
-      return window
-  nil
-
 proc isBrowsed(e: Editor, id: BufferId): bool =
   ## Whether a window on the session parked on `id` is in Terminal-Normal.
   for window in e.windowManager.windows:
-    if window.tabBufferId == id and window.modeState.kind == mskTerminal and
+    if window.mode == EditorMode.Terminal and window.tabBufferId == id and
+        window.modeState.kind == mskTerminal and
         window.modeState.terminalSubMode == tsmNormal:
       return true
   false
@@ -69,14 +62,15 @@ proc pollTerminalSessions*(e: Editor) =
   for id, session in e.terminalStates:
     discard session.pollOutput()
 
-    let window = e.terminalWindowFor(id)
-    if window == nil:
+    # Size to the smallest window showing the session; layout order says
+    # nothing about which size fits them all.
+    let dimensions = e.minimumTerminalAreaDimensions(id)
+    if dimensions.isNone:
       # Backgrounded: no size to follow, and no teardown behind the user's back.
       continue
 
-    # Sizing follows the window, not the sub-mode: output drained while the
-    # user browses the scrollback still lands in the grid.
-    let (expectedCols, expectedRows) = e.calculateTerminalAreaDimensions(window)
+    # Sizing follows the window, not the sub-mode.
+    let (expectedCols, expectedRows) = dimensions.get
     if expectedCols > 0 and expectedRows > 0 and
         (expectedCols != session.grid.cols or expectedRows != session.grid.rows):
       session.resize(expectedCols, expectedRows)
