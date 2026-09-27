@@ -1514,12 +1514,15 @@ Notes:
   since there is no shell to do it. Unlike in a shell, quoting does not keep it
   literal: the quotes are gone by the time it is expanded. Nothing else a shell
   would expand is: `$HOME`, `*` and `&&` reach the command verbatim.
-- `filetype` matches the buffer's file type, not the extension, so a type set
-  by a modeline or by `.editorconfig` is honoured. Any spelling the editor
-  accepts elsewhere works: the display name (`Nim`, `JavaScriptReact`, `C++`),
-  its abbreviations (`tsx`, `py`), or the lowercase `${filetype}` token. A file
-  of no known type cannot be picked this way; use `filter`. `filter` is an unanchored
-  regex matched against the absolute file path; use `^` and `$` to anchor it.
+- `filetype` matches the file type the file's own path gives it — the same
+  detection that picks its highlighting. moe reads no modeline, and
+  `.editorconfig` carries no file type. A write is matched by the path written
+  to, so `:w other.txt` is matched by that path, not by the type the buffer was
+  opened with. Any spelling the editor accepts elsewhere works: the display
+  name (`Nim`, `JavaScriptReact`, `C++`), its abbreviations (`tsx`, `py`), or
+  the lowercase `${filetype}` token. A file of no known type cannot be picked
+  this way; use `filter`. `filter` is an unanchored regex matched against the
+  absolute file path; use `^` and `$` to anchor it.
   A path that is not valid UTF-8 is matched as it would be displayed: each
   undecodable byte is one U+FFFD, so a filter over the rest of the path still
   applies.

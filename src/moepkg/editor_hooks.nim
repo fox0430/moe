@@ -23,10 +23,12 @@
 ## touches besides its file (a build directory, git's index) cannot be known,
 ## so no two may overlap. The hooks one event matches run as one job, in
 ## config order. A job still waiting to start is replaced, in its place, by a
-## newer one asking for the same work, whichever file asked: a command naming
-## no file runs once for a `:wa` of many. `BufWritePost` jobs are owed: a quit
-## waits for them, since a caller that ran moe as `$EDITOR` reads the file once
-## moe exits.
+## newer one asking for the same work: the same event, the same command lines
+## once placeholders are expanded, and the same directory to run them in. So a
+## command naming no file runs once for a `:wa` of files sharing a directory,
+## and files in different directories each get a run of their own.
+## `BufWritePost` jobs are owed: a quit waits for them, since a caller that ran
+## moe as `$EDITOR` reads the file once moe exits.
 
 import std/[options, os, sequtils, strutils]
 
@@ -117,7 +119,9 @@ proc jobLabel(hooks: seq[HookCommand]): string =
 
 proc workKey(event: HookEvent, hooks: seq[HookCommand]): string =
   ## Equal for two firings asking for the same work, whichever file fired
-  ## them. The event is part of it, so a read never takes an owed write's place.
+  ## them: the event, the command lines once placeholders are expanded, and the
+  ## directory they run in. The event is part of it, so a read never takes an
+  ## owed write's place.
   $event & $hooks.mapIt((it.cmd, it.args, it.workingDir, it.timeout, it.showOutput))
 
 proc exitMessage(label: string, exitCode: int, output: seq[string]): string =
