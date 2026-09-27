@@ -216,17 +216,24 @@ proc queueHooks*(e: Editor, event: HookEvent, path: string, language: SourceLang
         return
       await e.runHook(hook, stop, shown)
 
-  # Refused only once the editor winds down, when a new event is owed nothing.
-  discard e.jobLanes.submit(
+  let label = jobLabel(hooks)
+  let submission = e.jobLanes.submit(
     HookLane,
     LaneJob(
-      label: jobLabel(hooks),
+      label: label,
       path: hooks[0].path,
       collapse: workKey(event, hooks),
       owed: event.owedOnExit,
       run: run,
     ),
   )
+  # Refused once the editor winds down. A read is owed nothing by then, but a
+  # write is: record it, so a caller that ran moe as `$EDITOR` learns the file
+  # its hook never saw instead of reading it unaware.
+  if submission == smRefused and event.owedOnExit:
+    e.state.exitReports.add(
+      ("Not run: " & label & " on " & hooks[0].path).forDisplay
+    )
 
 proc queueHooks*(e: Editor, event: HookEvent, buf: TextBuffer) =
   ## Queue hooks for a buffer's own file; skip pathless and utility buffers.

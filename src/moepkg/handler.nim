@@ -1926,33 +1926,11 @@ proc dispatchKeyMappingTimeout(e: Editor): bool =
 
   return shouldContinue
 
-const ExitWaitHint = "Ctrl-C quits now"
-
-proc exitWaitStatus(e: Editor): string =
-  ## What the status line says while a quit waits for its hooks: the bound,
-  ## when one is set, so the wait's end is not a surprise.
-  result = "Waiting for hooks to finish ("
-  let bound = e.config.hooks.exitWaitTimeout
-  if bound > 0:
-    result &= "up to " & $bound & "s, "
-  result &= ExitWaitHint & ")"
-
-proc showExitWait*(e: Editor) =
-  ## Say what a quit is waiting for and how to skip it. Called every frame to
-  ## restore it once overwritten; set only when changed, since each set is logged.
-  if e.state.quitDecided and not e.readyToExit():
-    let msg = e.exitWaitStatus
-    if e.state.statusMessage != msg:
-      e.state.statusMessage = msg
-
 proc noteQuit(e: Editor, goesOn: bool): bool =
   ## Every quit reaches the frontend through here, so it is noted once.
   ## Background work stops, except what the quit is owed.
   if not goesOn:
-    e.state.quitDecided = true
-    e.jobLanes.windDown()
-    e.beginExitWait()
-    e.showExitWait()
+    e.beginQuit()
   goesOn
 
 proc handleKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =

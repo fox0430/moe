@@ -1340,6 +1340,25 @@ suite "Hooks - quitting":
     check not editor.noteQuit(false)
     editor.queueHooks(heBufWritePost, path, SourceLanguage.langNim)
     check editor.hookJobs.len == 0
+    # A write the quit no longer waits for is not dropped in silence.
+    check editor.state.exitReports ==
+      @["Not run: BufWritePost hook (true) on " & path]
+
+  test "A read queued after the quit is dropped without a report":
+    # A read is moot once the user leaves, so only a write is worth a line.
+    let dir = testDir("quitqueueread")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "x\n")
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufReadPost, command: "true", timeout: 5)]
+
+    check not editor.noteQuit(false)
+    editor.queueHooks(heBufReadPost, path, SourceLanguage.langNim)
+    check editor.hookJobs.len == 0
+    check editor.state.exitReports.len == 0
 
   test "A write hook already running when the quit comes is waited for":
     let dir = testDir("quitrunning")
@@ -1398,6 +1417,57 @@ suite "Hooks - quitting":
 
     check editor.readyToExit()
     check Moment.now() - start < 2.seconds
+
+  test "The exit wait is one state, not a mix of flags":
+    let dir = testDir("quitstate")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "x\n")
+    editor.config.hooks.exitWaitTimeout = 1
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufWritePost, command: "sleep 60", timeout: 0)]
+
+    check editor.exitWaitState == ewsNotQuitting
+    check editor.exitWaitAction(interrupt = true) == ewaHandle
+
+    editor.queueHooks(heBufWritePost, path, SourceLanguage.langNim)
+    check not editor.noteQuit(false)
+    turn()
+    check editor.exitWaitState == ewsWaiting
+    # While waiting, an event reaches nobody; an interrupt gives up.
+    check editor.exitWaitAction(interrupt = false) == ewaIgnore
+    check editor.exitWaitAction(interrupt = true) == ewaQuitNow
+
+    # The bound running out is a quit, interrupt or not.
+    editor.state.exitWaitStartedAt =
+      some(getMonoTime() - initDuration(seconds = 2))
+    check editor.exitWaitState == ewsReady
+    check editor.readyToExit()
+    check editor.exitWaitAction(interrupt = false) == ewaQuitNow
+
+    editor.abandonExitWait()
+
+  test "A second quit notice does not restart the wait":
+    let dir = testDir("quitagain")
+    defer:
+      removeDir(dir)
+    let path = dir / "a.nim"
+    let editor = newEditor(newEditorConfig())
+    editor.openInEditor(path, "x\n")
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufWritePost, command: "sleep 60", timeout: 0)]
+
+    check not editor.noteQuit(false)
+    let started = editor.state.exitWaitStartedAt
+    check started.isSome
+    # A key mapping's timeout can reach the quit path again; the bound must
+    # not be pushed back by it.
+    check not editor.noteQuit(false)
+    check editor.state.exitWaitStartedAt == started
+
+    editor.abandonExitWait()
 
   test "A quit stops waiting once exitWaitTimeout passes":
     # The bound is on the wait as a whole, not on a hook: one command with no

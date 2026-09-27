@@ -290,12 +290,14 @@ proc runEditor(
           # screen and forces a full render on the next frame.
           return erContinue
 
-        if editor.state.quitDecided:
-          # Waiting for the hooks the quit owes: no key reaches the editor,
-          # and Ctrl-C gives up on them.
-          if e.kind == EventKind.Quit:
-            return erQuit
+        case editor.exitWaitAction(e.kind == EventKind.Quit)
+        of ewaQuitNow:
+          return erQuit
+        of ewaIgnore:
+          # Waiting for the hooks the quit owes: no key reaches the editor.
           return erContinue
+        of ewaHandle:
+          discard # The editor is not quitting; fall through to the event.
 
         let shouldContinue = editor.handleEvent(e)
         editor.applyFrontendRequests(app)
@@ -308,7 +310,7 @@ proc runEditor(
         if not shouldContinue:
           app.setApplicationTimeout(0)
           # Otherwise the tick ends the session once the owed hooks are done.
-          return if editor.readyToExit(): erQuit else: erContinue
+          return if editor.exitWaitState == ewsReady: erQuit else: erContinue
 
         # Key mapping timeout control — delegated to KeyRouter so policy
         # (enabled/timeoutlen) and accumulator state are queried in one place.
@@ -322,11 +324,11 @@ proc runEditor(
 
     app.onTimeoutAsync proc(app: AsyncApp): Future[TickResult] {.async.} =
       editorCallback(editor, app, cmdLineConfig, log):
-        let shouldContinue = editor.handleKeyMappingTimeout()
+        discard editor.handleKeyMappingTimeout()
         editor.applyFrontendRequests(app)
         app.setApplicationTimeout(0) # One-shot: disable until next prefix match
         await editor.handlePendingAsyncOperations(frontendHooks)
-        if not shouldContinue and editor.readyToExit():
+        if editor.exitWaitState == ewsReady:
           return trQuit
         return trContinue
 
@@ -335,9 +337,13 @@ proc runEditor(
         editor.lsp.poll(0)
         editor.lsp.cleanupStaleProgress()
         await editor.handlePendingAsyncOperations(frontendHooks)
-        if editor.readyToExit():
+        case editor.exitWaitState
+        of ewsReady:
           return trQuit
-        editor.showExitWait()
+        of ewsWaiting:
+          editor.showExitWait()
+        of ewsNotQuitting:
+          discard
       return trContinue
 
     app.onRenderAsync proc(buffer: var Buffer) =

@@ -97,12 +97,6 @@ proc stopRunningCommands*(e: Editor): int =
   let fromLanes = e.stopEverything().len
   e.runningBackgroundProcesses.len + e.runningQuickRunProcesses.len + fromLanes
 
-proc beginExitWait*(e: Editor) =
-  ## Stamp the start of the quit's wait, once: `exitWaitTimeout` is measured
-  ## from the quit, not from the first frame that notices the wait.
-  if e.state.exitWaitStartedAt.isNone:
-    e.state.exitWaitStartedAt = some(getMonoTime())
-
 proc exitWaitTimedOut*(e: Editor): bool =
   ## Whether the quit has waited for owed work past `exitWaitTimeout`. A
   ## non-positive bound means time alone never ends the wait.
@@ -111,10 +105,67 @@ proc exitWaitTimedOut*(e: Editor): bool =
   (getMonoTime() - e.state.exitWaitStartedAt.get).inSeconds >=
     e.config.hooks.exitWaitTimeout
 
+type ExitWaitState* = enum
+  ## Where a quit stands with the work it is owed. `exitWaitState` is the one
+  ## place this is decided, from the quit, the owed jobs and the bound.
+  ewsNotQuitting ## No quit was decided; everything runs as usual.
+  ewsWaiting ## The quit is waiting for the hooks it owes.
+  ewsReady ## Nothing owed is left, or the bound ran out: end the session.
+
+type ExitWaitAction* = enum
+  ## What a frontend does with an input event while `ExitWaitState` stands.
+  ewaHandle ## The editor is not quitting: pass the event to it.
+  ewaIgnore ## The quit is waiting: the event reaches nobody.
+  ewaQuitNow ## End the session now.
+
+proc exitWaitState*(e: Editor): ExitWaitState =
+  if not e.state.quitDecided:
+    return ewsNotQuitting
+  if e.jobLanes.owedIdle or e.exitWaitTimedOut():
+    return ewsReady
+  ewsWaiting
+
+proc exitWaitAction*(e: Editor, interrupt: bool): ExitWaitAction =
+  ## What to do with an event, from the state alone. `interrupt` is the
+  ## frontend's Ctrl-C, which gives up on the hooks a quit is waiting for.
+  case e.exitWaitState
+  of ewsNotQuitting: ewaHandle
+  of ewsWaiting: (if interrupt: ewaQuitNow else: ewaIgnore)
+  of ewsReady: ewaQuitNow
+
 proc readyToExit*(e: Editor): bool =
-  ## Whether the user quit and nothing the quit is owed waits or runs, or the
-  ## wait has outlasted `exitWaitTimeout`, when what is left is given up on.
-  e.state.quitDecided and (e.jobLanes.owedIdle or e.exitWaitTimedOut())
+  ## Whether the session may end now; `exitWaitState` is the state behind it.
+  e.exitWaitState == ewsReady
+
+const ExitWaitHint = "Ctrl-C quits now"
+
+proc exitWaitStatus(e: Editor): string =
+  ## What the status line says while a quit waits for its hooks: the bound,
+  ## when one is set, so the wait's end is not a surprise.
+  result = "Waiting for hooks to finish ("
+  let bound = e.config.hooks.exitWaitTimeout
+  if bound > 0:
+    result &= "up to " & $bound & "s, "
+  result &= ExitWaitHint & ")"
+
+proc showExitWait*(e: Editor) =
+  ## Say what a quit is waiting for and how to skip it. Called every frame to
+  ## restore it once overwritten; set only when changed, since each set is logged.
+  if e.exitWaitState == ewsWaiting:
+    let msg = e.exitWaitStatus
+    if e.state.statusMessage != msg:
+      e.state.statusMessage = msg
+
+proc beginQuit*(e: Editor) =
+  ## Note the quit and start its wait, once: the wait is measured from the
+  ## quit, and a second notice (a key mapping's timeout, say) must not push
+  ## the bound back.
+  if e.state.quitDecided:
+    return
+  e.state.quitDecided = true
+  e.jobLanes.windDown()
+  e.state.exitWaitStartedAt = some(getMonoTime())
+  e.showExitWait()
 
 proc abandonExitWait*(e: Editor) =
   ## Stop everything, owed work included, for a session ending without waiting
