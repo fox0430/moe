@@ -636,9 +636,7 @@ suite "Terminal tabs - the window's mode follows its tab":
       bmState.createBufferManagerTextBuffer(),
       vpInPlace,
     )
-    let r = HandlerResult(
-      kind: hrBufferManagerDeleteBuffer, deleteBufferId: textBuf.id
-    )
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: textBuf.id)
     discard e.processResult(r, e.activeBuffer)
     require e.bufferById(textBuf.id).isNone
     require e.activeWindow.modeState.kind == mskBufferManager
@@ -695,10 +693,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     e.runCommand("ls")
     require e.state.mode == EditorMode.BufferManager
 
-    let r = HandlerResult(
-      kind: hrBufferManagerSelectBuffer,
-      selectBufferId: textBuf.id,
-    )
+    let r = HandlerResult(kind: hrBufferManagerSelectBuffer, selectBufferId: textBuf.id)
     discard e.processResult(r, e.activeBuffer)
     require e.activeWindow.tabBufferId == textBuf.id
 
@@ -764,9 +759,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     e.runCommand("ls")
     require e.state.mode == EditorMode.BufferManager
 
-    let r = HandlerResult(
-      kind: hrBufferManagerDeleteBuffer, deleteBufferId: termBuf.id
-    )
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termBuf.id)
     discard e.processResult(r, e.activeBuffer)
     require e.bufferById(termBuf.id).isNone
     require e.activeWindow.tabBufferId == textBuf.id
