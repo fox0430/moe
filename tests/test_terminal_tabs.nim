@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Tests for Terminal-mode tab integration: applyBufferMode and
+## Tests for Terminal-mode tab integration: moveWindowToTab and
 ## closeTerminalBuffer keep `e.terminalStates`, `bufferIds`, and the
 ## active window's mode in sync as Terminal buffers come and go.
 
@@ -139,18 +139,18 @@ proc twoWindowsOnSession(
   require e.activateBuffer(termBuf.id)
   e.focusWindow(result.second)
 
-suite "Terminal tabs - applyBufferMode":
+suite "Terminal tabs - moveWindowToTab":
   test "Activating a Terminal buffer restores Terminal mode":
     let e = createTestEditor()
     let originalBuf = e.activeWindow.buffer
     let termBuf = registerFakeTerminal(e, "bash")
 
-    # Force the window into Normal first so we can confirm applyBufferMode
+    # Force the window into Normal first so we can confirm moveWindowToTab
     # promotes it back to Terminal on its own.
     e.activeWindow.mode = EditorMode.Normal
     e.activeWindow.modeState = ModeState(kind: mskNone)
 
-    e.applyBufferMode(termBuf)
+    discard e.moveWindowToTab(e.activeWindow, termBuf)
 
     check e.activeWindow.mode == EditorMode.Terminal
     check e.activeWindow.modeState.kind == mskTerminal
@@ -162,7 +162,7 @@ suite "Terminal tabs - applyBufferMode":
     let originalBuf = e.activeWindow.buffer
     discard registerFakeTerminal(e, "bash")
 
-    e.applyBufferMode(originalBuf)
+    discard e.moveWindowToTab(e.activeWindow, originalBuf)
 
     check e.activeWindow.mode == EditorMode.Normal
     check e.activeWindow.modeState.kind == mskNone
@@ -597,8 +597,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
     let termId2 = termBuf2.id
     require termId1 != termId2
     e.activeWindow.bufferIds = @[termId1]
-    e.activeWindow.setTab(termBuf1)
-    e.applyBufferMode(termBuf1)
+    discard e.moveWindowToTab(e.activeWindow, termBuf1)
     require e.state.mode == EditorMode.Terminal
 
     e.closeTerminalBuffer(termId1)
@@ -968,3 +967,94 @@ suite "Terminal tabs - cursor belongs to the active window":
     e.renderSplitView(buffer)
 
     check e.state.cursorVisible
+
+suite "Terminal tabs - splitting off a session":
+  test "a vertical split opens the session live and leaves the origin browsing":
+    # Regression: the split used `e.activeBuffer` (the browsing snapshot), so
+    # the snapshot was registered as a real buffer and the new window came up
+    # in Normal mode, showing neither the grid nor the session.
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let snapshot = e.enterNormal()
+    let origin = e.activeWindow
+    require origin.modeState.terminalSubMode == tsmNormal
+
+    e.runCommand("vs")
+
+    require e.windowManager.windows.len == 2
+    # The snapshot is a view, not a tab: it must not be registered.
+    for b in e.buffers:
+      check b != snapshot
+
+    let opened = e.activeWindow
+    check opened != origin
+    checkOnSession(e, opened, termBuf)
+    check opened.modeState.terminalSubMode == tsmInput
+
+    # The origin window keeps its tab and its browsing position.
+    check origin.tabBufferId == termBuf.id
+    check origin.modeState.terminalSubMode == tsmNormal
+    check origin.buffer == snapshot
+
+  test "a horizontal split opens the session live and leaves the origin browsing":
+    # Same regression as the vertical split above, through `hsplit` (which
+    # also takes `e.multiStatusLine`): the browsing snapshot must not be
+    # registered as a buffer, and the new window starts live on the session.
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    let snapshot = e.enterNormal()
+    let origin = e.activeWindow
+    require origin.modeState.terminalSubMode == tsmNormal
+
+    e.runCommand("sp")
+
+    require e.windowManager.windows.len == 2
+    # The snapshot is a view, not a tab: it must not be registered.
+    for b in e.buffers:
+      check b != snapshot
+
+    let opened = e.activeWindow
+    check opened != origin
+    checkOnSession(e, opened, termBuf)
+    check opened.modeState.terminalSubMode == tsmInput
+
+    # The origin window keeps its tab and its browsing position.
+    check origin.tabBufferId == termBuf.id
+    check origin.modeState.terminalSubMode == tsmNormal
+    check origin.buffer == snapshot
+
+  test "reselecting the browsed session keeps the scroll position":
+    # `:b` (and the BufferManager) used to compare the view, so re-picking the
+    # tab the window was already on reset the scrollback to the top.
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    var output = ""
+    for i in 1 .. 40:
+      output.add "line " & $i & "\r\n"
+    e.terminalStates[termBuf.id].grid.processOutput(output)
+    let snapshot = e.enterNormal()
+    require snapshot.len > 5
+    let deepLine = snapshot.len - 2
+    e.activeWindow.cursor = BufferPosition(line: deepLine, column: 0)
+    e.activeWindow.viewport.resetViewportTop(deepLine - 2)
+
+    check e.activateBuffer(termBuf.id)
+
+    check e.activeWindow.tabBufferId == termBuf.id
+    check e.activeWindow.modeState.terminalSubMode == tsmNormal
+    check e.activeWindow.buffer == snapshot
+    check e.activeWindow.cursor.line == deepLine
+    check e.activeWindow.viewport.topLine == deepLine - 2
+
+  test "reselecting the session a viewer covers ends the viewer":
+    let e = createTestEditor()
+    let termBuf = registerFakeTerminal(e, "bash")
+    discard e.enterNormal()
+    e.runCommand("ls")
+    require e.state.mode == EditorMode.BufferManager
+
+    check e.activateBuffer(termBuf.id)
+
+    check e.activeWindow.viewerEntry.isNone
+    checkOnSession(e, e.activeWindow, termBuf)
+    check e.activeWindow.modeState.terminalSubMode == tsmInput

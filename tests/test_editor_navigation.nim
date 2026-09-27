@@ -444,7 +444,7 @@ suite "editor_navigation - switchToBufferForLsp":
 
     check e.state.windowDisplay.currentBufferId == initialBufferId
 
-  test "applyBufferMode clears Terminal when jumping to a text buffer":
+  test "moveWindowToTab clears Terminal when jumping to a text buffer":
     when defined(moe.embedded):
       skip()
     else:
@@ -462,8 +462,7 @@ suite "editor_navigation - switchToBufferForLsp":
         needsBufferRefresh: false,
       )
       e.terminalStates[termBuf.id] = term
-      e.activeWindow.setTab(termBuf)
-      e.applyBufferMode(termBuf)
+      discard e.moveWindowToTab(e.activeWindow, termBuf)
       require e.state.mode == EditorMode.Terminal
       require e.activeWindow.modeState.kind == mskTerminal
 

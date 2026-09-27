@@ -30,9 +30,8 @@ import
   editorconfig_helper,
   highlight_config,
   editor_window_layout,
-  editor_window_state,
+  editor_window_tab,
   editor_lsp,
-  editor_mode,
   git_cache,
   git_conflict,
   window_manager,
@@ -206,7 +205,9 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Save current window state before splitting
   e.saveActiveWindowState()
 
-  let bufferResult = e.windowManager.vsplit(e.activeBuffer, e.viewport, e.cursor)
+  # Split the tab, not a mode-swapped view.
+  let bufferResult =
+    e.windowManager.vsplit(e.tabBuffer(e.activeWindow), e.viewport, e.cursor)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -218,9 +219,8 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
-  # New window is in Normal mode, so update state to match
-  # This ensures command handler returns to Normal mode, not the previous special mode
-  e.setMode(EditorMode.Normal)
+  # Derive the new window's mode from its tab.
+  e.deriveTabMode(e.activeWindow)
   e.state.previousMode = EditorMode.Normal
 
   # Update cursor position immediately to avoid visual glitch
@@ -247,9 +247,8 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
-  # New window is in Normal mode, so update state to match
-  # This ensures command handler returns to Normal mode, not the previous special mode
-  e.setMode(EditorMode.Normal)
+  # Derive the new window's mode from its tab.
+  e.deriveTabMode(e.activeWindow)
   e.state.previousMode = EditorMode.Normal
 
   # Update cursor position immediately to avoid visual glitch
@@ -270,8 +269,10 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Save current window state before splitting
   e.saveActiveWindowState()
 
-  let bufferResult =
-    e.windowManager.hsplit(e.activeBuffer, e.viewport, e.cursor, e.multiStatusLine)
+  # Split the tab, not a mode-swapped view.
+  let bufferResult = e.windowManager.hsplit(
+    e.tabBuffer(e.activeWindow), e.viewport, e.cursor, e.multiStatusLine
+  )
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -283,9 +284,8 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
-  # New window is in Normal mode, so update state to match
-  # This ensures command handler returns to Normal mode, not the previous special mode
-  e.setMode(EditorMode.Normal)
+  # Derive the new window's mode from its tab.
+  e.deriveTabMode(e.activeWindow)
   e.state.previousMode = EditorMode.Normal
 
   # Update cursor position immediately to avoid visual glitch
@@ -319,9 +319,8 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
-  # New window is in Normal mode, so update state to match
-  # This ensures command handler returns to Normal mode, not the previous special mode
-  e.setMode(EditorMode.Normal)
+  # Derive the new window's mode from its tab.
+  e.deriveTabMode(e.activeWindow)
   e.state.previousMode = EditorMode.Normal
 
   # Update cursor position immediately to avoid visual glitch
@@ -343,36 +342,10 @@ proc enew*(e: Editor): Result[(), string] =
   applyHighlightConfig(newBuffer, e.config)
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
-  # Replace the buffer in the active window
-  e.finalizeInsertSessionForBufferSwitch(e.activeWindow.buffer)
-  # Not routed through applyBufferMode, so drop the buffer-swap mode state here.
-  let win = e.activeWindow
-  win.originalBuffer = nil
-  # Same ownership gap as in `applyBufferMode`: `clearModeState` keeps a viewer
-  # entry / suspension owned by another mode.
-  discard win.takeViewerEntry()
-  discard win.takeSuspendedMode()
-  let wasSpecialMode = win.modeState.kind != mskNone
-  if win.modeState.kind != mskTerminal:
-    win.clearModeState(win.mode)
-  win.modeState = ModeState(kind: mskNone)
-  if wasSpecialMode:
-    # `clearModeState` leaves `win.mode` alone and is skipped for Terminal, so
-    # drop the mode here as applyBufferMode does.
-    e.setMode(EditorMode.Normal)
-  e.activeWindow.setTab(newBuffer)
-  e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  e.activeWindow.viewport.resetViewportTop()
-  e.activeWindow.viewport.leftColumn = 0
-
-  # Reset cursor
-  e.cursor = BufferPosition(line: 0, column: 0)
+  # Shared tab transition.
+  discard e.moveWindowToTab(e.activeWindow, newBuffer)
 
   e.syncActiveWindow()
-
-  # Match activateBufferInWindow so forceInsertMode re-enters Insert at once
-  # instead of lingering in Normal until the next input.
-  e.enforceModePolicy()
 
   ok(())
 

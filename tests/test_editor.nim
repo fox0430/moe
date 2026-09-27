@@ -192,6 +192,21 @@ suite "Editor - switchToBufferByIndex":
     e.switchToBufferByIndex(999)
     check e.currentBufferIndex() == originalIndex
 
+  test "Switching to the buffer the window is already on keeps its position":
+    let e = createTestEditor()
+    let buf = newTextBuffer("one\ntwo\nthree\n")
+    e.addBuffer(buf)
+    e.addBufferToWindowList(buf)
+    require e.activateBuffer(buf.id)
+    e.activeWindow.cursor = BufferPosition(line: 2, column: 1)
+    e.activeWindow.viewport.resetViewportTop(1)
+
+    e.switchToBufferByIndex(e.bufferIndexById(buf.id))
+
+    check e.activeWindow.tabBufferId == buf.id
+    check e.activeWindow.cursor == BufferPosition(line: 2, column: 1)
+    check e.activeWindow.viewport.topLine == 1
+
 suite "Editor - switchToNextBuffer and switchToPrevBuffer":
   test "Switch to next buffer":
     let e = createTestEditor()

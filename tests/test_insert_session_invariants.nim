@@ -179,16 +179,13 @@ let Invariants = @[
     skipFiles: @[],
     match: matchWindowViewReplace,
     allow: @[
-      # 5 tab switches (activateBufferInWindow, closeTerminalBuffer's
-      # non-active / survivor / blank arms, redirectWindowsFromBuffer's
-      # tab-deleted arm), the two `syncTerminalView` arms (Terminal windows
-      # hold no Insert session), and the view-only arm of
-      # `redirectWindowsFromBuffer` (session finalized just above, shared
-      # with the tab-switch arm).
-      ("moepkg/editor_buffers.nim", 8),
+      # The shared tab transition (one `setTab` in `moveWindowToTab`) and the
+      # two `syncTerminalView` arms (Terminal windows hold no Insert session).
+      ("moepkg/editor_window_tab.nim", 3),
+      # The view-only arm of `redirectWindowsFromBuffer` (session finalized
+      # just above, shared with the tab-switch arm).
+      ("moepkg/editor_buffers.nim", 1),
       ("moepkg/editor_frame.nim", 1),
-      ("moepkg/editor_navigation.nim", 1),
-      ("moepkg/editor_window.nim", 1),
       ("moepkg/editor_window_state.nim", 1),
       # Entry, and the exit onto a tab moved underneath the viewer (a viewer
       # window holds no Insert session).
@@ -196,7 +193,6 @@ let Invariants = @[
       ("moepkg/command_handlers/backup_ops.nim", 4),
       # Recovery viewer list rebuild (read-only viewer, no session).
       ("moepkg/command_handlers/recovery_ops.nim", 1),
-      ("moepkg/command_handlers/editor_ops.nim", 1),
       # One of the five re-scopes an open recovery list (read-only viewer).
       ("moepkg/command_handlers/viewer_ops.nim", 5),
       # Filer / FileTree listing rebuilds. These were invisible to the old
@@ -230,8 +226,7 @@ let Invariants = @[
     match: matchActiveWindowIndexAssign,
     allow: @[
       ("moepkg/editor.nim", 1), # Initial window setup.
-      # Terminal close scratch + restore, and the new right window.
-      ("moepkg/editor_buffers.nim", 3),
+      ("moepkg/editor_buffers.nim", 1), # The new right window.
       ("moepkg/handler.nim", 1), # Mouse jump to the clicked window.
       ("moepkg/command_handlers/editor_ops.nim", 1), # File tree index fixup.
     ],
@@ -244,11 +239,10 @@ let Invariants = @[
     skipFiles: @[],
     match: matchFinalizeForBufferSwitch,
     allow: @[
-      # activateBufferInWindow, closeTerminalBuffer survivor/blank,
-      # redirectWindowsFromBuffer.
-      ("moepkg/editor_buffers.nim", 4),
-      ("moepkg/editor_navigation.nim", 1),
-      ("moepkg/editor_window.nim", 1),
+      # The shared tab transition, and redirectWindowsFromBuffer's view-only
+      # arm.
+      ("moepkg/editor_window_tab.nim", 1),
+      ("moepkg/editor_buffers.nim", 1),
       ("moepkg/handler.nim", 1),
     ],
   ),

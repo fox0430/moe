@@ -116,7 +116,7 @@ suite "minimumTerminalAreaDimensions":
     ModeState(kind: mskTerminal, terminal: fakeTerminalState())
 
   proc addTerminalWindow(e: Editor, id: BufferId, viewport: ViewPort): EditorWindow =
-    ## Add a window showing session `id`, as applyBufferMode leaves it.
+    ## Add a window showing session `id`, as moveWindowToTab leaves it.
     result = EditorWindow(
       viewport: viewport,
       mode: EditorMode.Terminal,

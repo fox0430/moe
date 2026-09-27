@@ -29,7 +29,6 @@ import pkg/results
 import
   types/editor_types,
   editor_window,
-  editor_mode,
   viewer_mode,
   editor_lsp,
   lsp_service,
@@ -39,7 +38,7 @@ import
   unicode_utils,
   editorconfig_helper,
   highlight_config,
-  editor_buffers
+  editor_window_tab
 import lsp/protocol/types as lspTypes
 
 const
@@ -74,23 +73,14 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
     return
 
   let targetBuffer = e.buffers[index]
-  let activeWindow = e.activeWindow
 
-  if activeWindow.buffer == targetBuffer:
+  # Shared tab transition; no-op when already on this tab.
+  if not e.moveWindowToTab(e.activeWindow, targetBuffer):
     return
-
-  e.finalizeInsertSessionForBufferSwitch(activeWindow.buffer)
-  activeWindow.setTab(targetBuffer)
-  activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  activeWindow.viewport.resetViewportTop()
-  activeWindow.viewport.leftColumn = 0
-  # Re-derive mode so a jump off a Terminal tab cannot leave a stale variant.
-  e.applyBufferMode(targetBuffer)
 
   # Re-sync executor, motion controller, jump-list anchor and per-buffer
   # EditorConfig now that the active window's buffer changed.
   e.syncActiveWindow()
-  e.enforceModePolicy()
   e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc bufferIndexForFile(e: Editor, path: string): int =
