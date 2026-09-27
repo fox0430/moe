@@ -107,6 +107,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
       debugLines,
       buf.id,
       buf.filePath,
+      buf.displayName,
       buf.isModified,
       buf.readOnly,
       $buf.language,

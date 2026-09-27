@@ -19,9 +19,9 @@
 
 ## Core buffer types: TextBuffer, BufferChange, FoldState, and supporting enums.
 
-from std/strutils import rfind
+from std/strutils import rfind, contains
 
-import std/[algorithm, deques, hashes, options, tables, times, unicode]
+import std/[algorithm, deques, hashes, options, os, tables, times, unicode]
 
 import ../[encoding, highlight, logger, primitives, setting_issue, unicode_utils]
 import ../types/highlight_types
@@ -392,6 +392,9 @@ type
     displayName*: Option[string]
       # Overrides the tab label when set (used for Terminal buffers, etc.).
       # Skips the `[+]` modified mark.
+    matchAliases*: seq[string] = @[]
+      # Stable `:b` keys (e.g. a Terminal's command), independent of the
+      # display label. Presentation must never define these.
     readOnly*: bool
     isUtilityBuffer*: bool # Utility buffers (jumplist, log, etc.) disable decorations
     lineEnding*: LineEnding
@@ -845,6 +848,51 @@ proc markSaved*(b: TextBuffer) {.inline.} =
   b.savedChangeId = b.currentChangeId
   for i in 0 ..< b.modifiedLines.len:
     b.modifiedLines[i] = lmkUnmodified
+
+proc displayLabel*(
+    displayName, filePath: Option[string], baseNameOnly = false
+): string =
+  ## Display-label priority: displayName > filePath > "No Name". Raw; the
+  ## display boundary sanitizes. `baseNameOnly` keeps only the last path
+  ## component. The one definition every label surface goes through.
+  if displayName.isSome:
+    displayName.get
+  elif filePath.isSome:
+    if baseNameOnly: filePath.get.extractFilename else: filePath.get
+  else:
+    "No Name"
+
+proc canonicalLabel*(b: TextBuffer, baseNameOnly = false): string {.inline.} =
+  ## Full display label for `b`. See `displayLabel` for the priority.
+  displayLabel(b.displayName, b.filePath, baseNameOnly)
+
+type BufferMatchRank* = enum
+  ## How well an argument names a buffer; `>` reads as "a better match". The
+  ## switcher keeps the best rank, and the earliest buffer on a tie.
+  bmrNone = 0
+  bmrPathPartial ## `arg` is a substring of the buffer's path
+  bmrAliasPartial ## `arg` is a substring of an authored `matchAliases` entry
+  bmrPathExact ## `arg` is the buffer's path or its filename
+  bmrAliasExact ## `arg` is an authored `matchAliases` entry
+
+proc matchRank*(b: TextBuffer, arg: string): BufferMatchRank =
+  ## How well `arg` names `b`. Identity is `matchAliases` plus `filePath`; the
+  ## display label is never a key, so relabelling cannot change what `:b` takes.
+  if arg.len == 0:
+    return bmrNone
+  for alias in b.matchAliases:
+    if alias == arg:
+      return bmrAliasExact
+  if b.filePath.isSome:
+    let path = b.filePath.get
+    if path == arg or path.extractFilename == arg:
+      return bmrPathExact
+  for alias in b.matchAliases:
+    if alias.contains(arg):
+      return bmrAliasPartial
+  if b.filePath.isSome and b.filePath.get.contains(arg):
+    return bmrPathPartial
+  bmrNone
 
 proc allocateChangeId*(b: TextBuffer): int64 {.inline.} =
   ## Preinc so 0 stays reserved for "initial state".

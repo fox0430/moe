@@ -21,7 +21,11 @@
 
 import std/[strutils, options, times]
 
-import modes, buffer/core, list_viewer
+import modes, buffer/core, list_viewer, unicode_utils
+
+proc formatDisplayOption(opt: Option[string]): string =
+  ## Stringify an optional value for the debug listing; "none" when absent.
+  if opt.isSome: opt.get else: "none"
 
 import types/debug_viewer_types
 export debug_viewer_types, list_viewer
@@ -32,19 +36,15 @@ proc newDebugViewerState*(): DebugViewerState =
 proc formatBool(b: bool): string =
   if b: "true" else: "false"
 
-proc formatOption[T](opt: Option[T]): string =
-  if opt.isSome:
-    $opt.get
-  else:
-    "none"
-
 proc addSection(lines: var seq[string], title: string) =
   lines.add("")
   lines.add("-- " & title & " --")
 
 proc addField(lines: var seq[string], name: string, value: string) =
+  ## Display boundary for the debug listing: sanitize every field value so a
+  ## control character cannot forge a line or a terminal sequence.
   let paddedName = name.alignLeft(24)
-  lines.add("  " & paddedName & " : " & value)
+  lines.add("  " & paddedName & " : " & sanitizeForDisplay(value))
 
 proc generateWindowNodeInfo*(
     lines: var seq[string],
@@ -251,6 +251,7 @@ proc generateBufferInfo*(
     lines: var seq[string],
     bufferNumber: BufferId,
     filePath: Option[string],
+    displayName: Option[string] = none(string),
     isModified: bool,
     isReadOnly: bool,
     language: string,
@@ -265,7 +266,8 @@ proc generateBufferInfo*(
   # The number in the heading is the buffer number, not a position in the
   # buffer list, so it reads the same as the `:ls` entry for this buffer.
   lines.addSection("Buffer " & $bufferNumber.int)
-  lines.addField("path", formatOption(filePath))
+  lines.addField("path", formatDisplayOption(filePath))
+  lines.addField("displayName", formatDisplayOption(displayName))
   lines.addField("isModified", formatBool(isModified))
   lines.addField("readOnly", formatBool(isReadOnly))
   lines.addField("language", language)

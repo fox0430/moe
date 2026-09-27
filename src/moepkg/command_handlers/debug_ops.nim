@@ -57,6 +57,7 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
         debugLines,
         buf.id,
         buf.filePath,
+        buf.displayName,
         buf.isModified,
         buf.readOnly,
         $buf.language,

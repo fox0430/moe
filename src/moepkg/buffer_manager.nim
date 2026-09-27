@@ -20,9 +20,7 @@
 ## Buffer Manager module
 ## Provides a UI for viewing and switching between open buffers
 
-import std/options
-
-import buffer/core, list_viewer
+import buffer/core, list_viewer, unicode_utils
 import types/buffer_manager_types
 
 export buffer_manager_types
@@ -31,21 +29,31 @@ export list_viewer
 proc newBufferManagerState*(): BufferManagerState =
   BufferManagerState(items: @[], selectedIndex: 0)
 
+proc toBufferInfo*(buf: TextBuffer, isActive: bool): BufferInfo =
+  ## Build a `BufferInfo` from a live buffer; the one field mapping.
+  BufferInfo(
+    number: buf.id.int,
+    filePath: buf.filePath,
+    displayName: buf.displayName,
+    isModified: buf.isModified,
+    isActive: isActive,
+  )
+
 proc initBufferManagerEntries*(bufferInfos: seq[BufferInfo]): seq[BufferEntry] =
-  ## Create buffer entries from buffer information
+  ## Create buffer entries from buffer information. Names stay raw; the
+  ## display boundary (`formatLine`) sanitizes them.
   result = @[]
   for info in bufferInfos:
-    let name = if info.filePath.isSome: info.filePath.get else: "No Name"
     result.add(
       BufferEntry(
         number: info.number,
-        name: name,
+        name: displayLabel(info.displayName, info.filePath),
         modified: info.isModified,
         active: info.isActive,
       )
     )
 
-  # If no buffers, add a placeholder
+  # If no buffers, add a placeholder; BufferId(0) names no live buffer.
   if result.len == 0:
     result.add(BufferEntry(number: 0, name: "No Name", modified: false, active: true))
 
@@ -57,12 +65,12 @@ proc updateEntries*(state: BufferManagerState, bufferInfos: seq[BufferInfo]) =
     state.selectedIndex = max(0, state.items.len - 1)
 
 proc formatLine*(entry: BufferEntry): string =
-  ## Format a buffer entry for display
+  ## Format a buffer entry for display, with the name sanitized.
   let
     modifiedMark = if entry.modified: "[+] " else: "    "
     activeMark = if entry.active: "* " else: "  "
     numberStr = $entry.number & ": "
-  result = activeMark & numberStr & modifiedMark & entry.name
+  result = activeMark & numberStr & modifiedMark & sanitizeForDisplay(entry.name)
 
 proc createBufferManagerTextBuffer*(state: BufferManagerState): TextBuffer =
   ## Create a TextBuffer from buffer manager entries for rendering via the normal view path

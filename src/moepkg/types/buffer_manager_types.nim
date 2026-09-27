@@ -34,7 +34,7 @@ type
       ## Stable buffer number (`BufferId`), what `:b N` takes and what the
       ## manager's own select/delete act on. Deliberately not a list
       ## position: the list is rebuilt after every deletion.
-    name*: string # Buffer name (file path or "No Name")
+    name*: string # Raw buffer name; the display boundary sanitizes it
     modified*: bool # Whether buffer has unsaved changes
     active*: bool # Whether this is the currently active buffer
 
@@ -45,5 +45,7 @@ type
   BufferInfo* = object ## Information about a buffer for initializing buffer manager
     number*: int ## Stable buffer number (BufferId)
     filePath*: Option[string]
+    displayName*: Option[string] = none(string)
+      ## Tab label override (e.g. Terminal sessions). Shown instead of filePath.
     isModified*: bool
     isActive*: bool

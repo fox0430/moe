@@ -22,7 +22,7 @@
 ## This module provides VSCode-like tab line functionality, displaying
 ## open buffers as tabs at the top of each window.
 
-import std/[options, os, strutils]
+import std/[options, strutils]
 
 import celina_backend as celina
 
@@ -51,13 +51,7 @@ proc buildTabText(buf: TextBuffer): string =
   ## of the filename, and never show the modified mark.
 
   let
-    name =
-      if buf.displayName.isSome:
-        sanitizeForDisplay(buf.displayName.get)
-      elif buf.filePath.isSome:
-        sanitizeForDisplay(buf.filePath.get.extractFilename)
-      else:
-        "No Name"
+    name = sanitizeForDisplay(buf.canonicalLabel(baseNameOnly = true))
     modMark =
       if buf.displayName.isSome:
         ""

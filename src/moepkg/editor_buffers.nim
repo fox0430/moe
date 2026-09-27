@@ -55,12 +55,8 @@ type OpenBufferInfo* = object
   active*: bool
 
 proc bufferTitle(buffer: TextBuffer): string =
-  if buffer.displayName.isSome:
-    buffer.displayName.get
-  elif buffer.filePath.isSome:
-    buffer.filePath.get.extractFilename
-  else:
-    "No Name"
+  ## Title for a tab line: the last path component when the buffer has a path.
+  buffer.canonicalLabel(baseNameOnly = true)
 
 proc toOpenBufferInfo(buffer, activeBuffer: TextBuffer): OpenBufferInfo =
   OpenBufferInfo(
@@ -310,7 +306,7 @@ proc switchToFirstBuffer*(e: Editor) =
     e.state.statusMessage = "Already at first buffer"
     return
 
-  if e.windowBufferIndex() == 0:
+  if e.isShowingTab(e.activeWindow, e.activeWindow.bufferIds[0]):
     e.state.statusMessage = "Already at first buffer"
     return
 
@@ -324,7 +320,7 @@ proc switchToLastBuffer*(e: Editor) =
     return
 
   let lastIdx = e.activeWindow.bufferIds.len - 1
-  if e.windowBufferIndex() == lastIdx:
+  if e.isShowingTab(e.activeWindow, e.activeWindow.bufferIds[lastIdx]):
     e.state.statusMessage = "Already at last buffer"
     return
 
@@ -340,8 +336,11 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
   logDebug("editor", "buffers.len: " & $e.buffers.len)
   # Log each buffer's path for debugging
   for i, buf in e.buffers:
-    let path = if buf.filePath.isSome: buf.filePath.get else: "[No Name]"
-    logDebug("editor", "  buffer[" & $i & "]: " & path)
+    logDebug("editor", "  buffer[" & $i & "]: " & buf.canonicalLabel)
+
+  if arg.len == 0:
+    e.state.statusMessage = "E94: No matching buffer for " & arg
+    return false
 
   # Try to parse as a number first: a stable buffer number (`BufferId`, as
   # shown by `:ls`), not a position in the list — deleting a buffer never
@@ -362,9 +361,9 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
       return false
 
     let targetId = matchedId.get
-    if targetId == e.activeBuffer().id:
-      # Already at this buffer
-      logDebug("editor", "Already at this buffer")
+    if e.isShowingTab(e.activeWindow, targetId):
+      # An overlay covering the tab does not count as showing it
+      logDebug("editor", "Already showing this buffer")
       return true
 
     # Switch to the buffer
@@ -375,22 +374,25 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
   except ValueError:
     discard # Not a number, try matching by name
 
-  # Try to match by file name in buffer list
+  # Pick the best-ranked buffer in one scan. `matchRank` owns the precedence,
+  # and strict `>` keeps the earliest buffer on a tie.
+  let win = e.activeWindow
+  var
+    bestIndex = -1
+    bestRank = bmrNone
   for i, buf in e.buffers:
-    if buf.filePath.isSome:
-      let bufferPath = buf.filePath.get
-      # Match against full path, file name, or partial match
-      if bufferPath == arg or bufferPath.extractFilename == arg or
-          bufferPath.contains(arg):
-        let currentIdx = e.currentBufferIndex()
-        if i == currentIdx:
-          # Already at this buffer
-          return true
+    let rank = buf.matchRank(arg)
+    if rank > bestRank:
+      bestRank = rank
+      bestIndex = i
 
-        # Switch to the buffer
-        e.switchToBufferByIndex(i)
-        e.state.statusMessage = ""
-        return true
+  if bestIndex >= 0:
+    if e.isShowingTab(win, e.buffers[bestIndex].id):
+      logDebug("editor", "Already showing this buffer")
+      return true
+    e.switchToBufferByIndex(bestIndex)
+    e.state.statusMessage = ""
+    return true
 
   e.state.statusMessage = "E94: No matching buffer for " & arg
   return false
