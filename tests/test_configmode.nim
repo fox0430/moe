@@ -2269,8 +2269,7 @@ suite "ConfigMode - descriptor completeness":
       "editorConfig", "log", "theme", "lsp", "hooks",
     ].toHashSet
     let excluded = [
-      "debug", "keyMapping", "shellCommands", "commandAliases",
-      "disabledCommandAliases",
+      "debug", "keyMapping", "shellCommands", "commandAliases", "disabledCommandAliases"
     ].toHashSet
 
     var cfg = newEditorConfig()
@@ -2367,8 +2366,7 @@ suite "ConfigMode - descriptor completeness":
     # The switches address their own fields.
     let cfg = newEditorConfig()
     for desc in configDescriptors:
-      if desc.kind == cvkBool and desc.section == "Hook" and
-          desc.displayName == "enable":
+      if desc.kind == cvkBool and desc.section == "Hook" and desc.displayName == "enable":
         desc.boolSet(cfg, false)
       elif desc.kind == cvkInt and desc.section == "Hook" and
           desc.displayName == "exitWaitTimeout":

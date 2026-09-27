@@ -235,9 +235,7 @@ proc queueHooks*(e: Editor, event: HookEvent, path: string, language: SourceLang
   # write is: record it, so a caller that ran moe as `$EDITOR` learns the file
   # its hook never saw instead of reading it unaware.
   if submission == smRefused and event.owedOnExit:
-    e.state.exitReports.add(
-      ("Not run: " & label & " on " & hooks[0].path).forDisplay
-    )
+    e.state.exitReports.add(("Not run: " & label & " on " & hooks[0].path).forDisplay)
 
 proc queueHooks*(e: Editor, event: HookEvent, buf: TextBuffer) =
   ## Queue hooks for a buffer's own file; skip pathless and utility buffers.
@@ -252,8 +250,7 @@ type ReadOrigin* = enum
   ## Why a buffer was read from disk. `noteBufferRead` is the one place this
   ## is turned into a `BufReadPost`, so a read path names the situation rather
   ## than deciding for itself.
-  roUser
-    ## The user asked for the file: an open, a split, `:e!`, a restored backup.
+  roUser ## The user asked for the file: an open, a split, `:e!`, a restored backup.
   roInternal
     ## The editor read it on its own account, not a keystroke's asking: an LSP
     ## rename's background copy, a reload made without the user asking.

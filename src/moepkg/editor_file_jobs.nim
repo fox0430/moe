@@ -129,9 +129,12 @@ proc exitWaitAction*(e: Editor, interrupt: bool): ExitWaitAction =
   ## What to do with an event, from the state alone. `interrupt` is the
   ## frontend's Ctrl-C, which gives up on the hooks a quit is waiting for.
   case e.exitWaitState
-  of ewsNotQuitting: ewaHandle
-  of ewsWaiting: (if interrupt: ewaQuitNow else: ewaIgnore)
-  of ewsReady: ewaQuitNow
+  of ewsNotQuitting:
+    ewaHandle
+  of ewsWaiting:
+    (if interrupt: ewaQuitNow else: ewaIgnore)
+  of ewsReady:
+    ewaQuitNow
 
 proc readyToExit*(e: Editor): bool =
   ## Whether the session may end now; `exitWaitState` is the state behind it.

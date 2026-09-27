@@ -124,8 +124,7 @@ suite "Hooks - matching":
     check not entry.matches(heBufWritePost, "/tmp/a\x80b.gox", langGo)
 
     # The byte is one replacement character to the filter.
-    let named =
-      HookEntry(event: heBufWritePost, command: "true", filter: "\uFFFD")
+    let named = HookEntry(event: heBufWritePost, command: "true", filter: "\uFFFD")
     check named.matches(heBufWritePost, "/tmp/a\x80b.go", langGo)
 
   test "Filetype and filter both have to match":
@@ -555,8 +554,8 @@ typo = 1
     appendHookToml(lines, config.hooks)
 
     for key in [
-      "exitWaitTimeout", "event", "command", "filetype", "filter", "workingDir", "timeout",
-      "showOutput",
+      "exitWaitTimeout", "event", "command", "filetype", "filter", "workingDir",
+      "timeout", "showOutput",
     ]:
       check lines.anyIt(it.startsWith(key & " = "))
 

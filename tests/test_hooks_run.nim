@@ -84,8 +84,9 @@ suite "Hooks - running":
     defer:
       removeDir(dir)
     let editor = newEditor(newEditorConfig())
-    editor.config.hooks.entries =
-      @[HookEntry(event: heBufWritePost, command: "true", filter: r"\.nim$", timeout: 5)]
+    editor.config.hooks.entries = @[
+      HookEntry(event: heBufWritePost, command: "true", filter: r"\.nim$", timeout: 5)
+    ]
 
     editor.queueHooks(heBufWritePost, dir / "a\x80b.nim", SourceLanguage.langNim)
     check editor.hookJobs.len == 1
@@ -1341,8 +1342,7 @@ suite "Hooks - quitting":
     editor.queueHooks(heBufWritePost, path, SourceLanguage.langNim)
     check editor.hookJobs.len == 0
     # A write the quit no longer waits for is not dropped in silence.
-    check editor.state.exitReports ==
-      @["Not run: BufWritePost hook (true) on " & path]
+    check editor.state.exitReports == @["Not run: BufWritePost hook (true) on " & path]
 
   test "A read queued after the quit is dropped without a report":
     # A read is moot once the user leaves, so only a write is worth a line.
@@ -1441,8 +1441,7 @@ suite "Hooks - quitting":
     check editor.exitWaitAction(interrupt = true) == ewaQuitNow
 
     # The bound running out is a quit, interrupt or not.
-    editor.state.exitWaitStartedAt =
-      some(getMonoTime() - initDuration(seconds = 2))
+    editor.state.exitWaitStartedAt = some(getMonoTime() - initDuration(seconds = 2))
     check editor.exitWaitState == ewsReady
     check editor.readyToExit()
     check editor.exitWaitAction(interrupt = false) == ewaQuitNow
@@ -1493,15 +1492,15 @@ suite "Hooks - quitting":
 
     # Backdated rather than slept through: the wait's start is what the bound
     # counts from.
-    editor.state.exitWaitStartedAt =
-      some(getMonoTime() - initDuration(seconds = 2))
+    editor.state.exitWaitStartedAt = some(getMonoTime() - initDuration(seconds = 2))
     check editor.readyToExit()
 
     editor.abandonExitWait()
-    check editor.state.exitReports == @[
-      "Hook wait timed out after 1s",
-      "Stopped before finishing: BufWritePost hook (sleep) on " & path,
-    ]
+    check editor.state.exitReports ==
+      @[
+        "Hook wait timed out after 1s",
+        "Stopped before finishing: BufWritePost hook (sleep) on " & path,
+      ]
     editor.drain(
       proc(): bool =
         editor.hookJobs.len == 0
@@ -1521,8 +1520,7 @@ suite "Hooks - quitting":
     editor.queueHooks(heBufWritePost, path, SourceLanguage.langNim)
     check not editor.noteQuit(false)
     turn()
-    editor.state.exitWaitStartedAt =
-      some(getMonoTime() - initDuration(seconds = 2))
+    editor.state.exitWaitStartedAt = some(getMonoTime() - initDuration(seconds = 2))
     check not editor.exitWaitTimedOut()
     check not editor.readyToExit()
 
