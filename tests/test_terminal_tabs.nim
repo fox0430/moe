@@ -24,11 +24,13 @@
 import std/[unittest, options, os, posix, tables]
 
 import pkg/results
+import pkg/celina
 
 import
   ../src/moepkg/[
     editor, config, types, modes, terminal_mode, editor_window, editor_window_state,
     handler, key_bindings, viewer_mode, buffer_manager, window_manager,
+    editor_render_views, render_utils,
   ]
 import ../src/moepkg/terminal/[pty, ansi_parser]
 import ../src/moepkg/buffer/core
@@ -912,3 +914,57 @@ suite "Terminal tabs - browsing belongs to the window":
 
     checkOnSession(e, covered, termBuf)
     check covered.modeState.terminalSubMode == tsmInput
+
+suite "Terminal tabs - cursor belongs to the active window":
+  proc createTestBuffer(): Buffer =
+    result = newBuffer(80, 24)
+    result.area = Rect(x: 0, y: 0, width: 80, height: 24)
+
+  test "an inactive live window does not place the screen cursor":
+    # Both windows are live on the session and `twoWindowsOnSession` leaves the
+    # lower-index window active, so the later-painted window is the inactive one.
+    # Its grid render must not overwrite the cursor placed for the active window.
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (inactive, active) = e.twoWindowsOnSession(textBuf, termBuf)
+    require e.activeWindow == active
+    require e.windowManager.activeWindowIndex == 0
+    require inactive.modeState.terminalSubMode == tsmInput
+    require active.modeState.terminalSubMode == tsmInput
+    # The assertion below only proves the fix while the two windows place the
+    # grid at different screen coordinates.
+    require active.viewport.x != inactive.viewport.x
+
+    let grid = active.modeState.terminal.grid
+    grid.cursorRow = 3
+    grid.cursorCol = 7
+    grid.cursorVisible = true
+
+    var buffer = createTestBuffer()
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderSplitView(buffer)
+
+    let tabLineOffset = if e.showTabLine: TabLineHeight else: 0
+    check e.state.screenCursor.x == active.viewport.x + grid.cursorCol
+    check e.state.screenCursor.y == active.viewport.y + tabLineOffset + grid.cursorRow
+    check e.state.cursorVisible
+
+  test "an inactive live window with a hidden grid cursor keeps the cursor visible":
+    # The active window is a normal text tab; the live terminal sharing the
+    # frame hides its grid cursor. Only the active window's visibility may stand.
+    let e = createTestEditor()
+    let textBuf = e.buffers[0]
+    let termBuf = registerFakeTerminal(e, "bash")
+    let (inactive, active) = e.twoWindowsOnSession(textBuf, termBuf)
+    require e.activateBuffer(textBuf.id)
+    require e.activeWindow == active
+    require active.mode == EditorMode.Normal
+    require inactive.modeState.terminalSubMode == tsmInput
+    inactive.modeState.terminal.grid.cursorVisible = false
+
+    var buffer = createTestBuffer()
+    e.advanceLayoutForFrame(buffer, false)
+    e.renderSplitView(buffer)
+
+    check e.state.cursorVisible

@@ -408,7 +408,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer) =
         # or uses standard window rendering in Normal sub-mode
         if window.modeState.kind == mskTerminal and
             window.modeState.terminalSubMode == tsmInput:
-          e.renderTerminal(buffer, window, layout.isBottomWindow, tabLineOffset)
+          e.renderTerminal(
+            buffer, window, layout.isBottomWindow, layout.isActiveWindow, tabLineOffset
+          )
         else:
           e.renderWindow(
             buffer, window, layout.lineNumOffset, layout.isBottomWindow,

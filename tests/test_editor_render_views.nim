@@ -45,7 +45,7 @@ proc createTestBuffer(): Buffer =
   result.area = Rect(x: 0, y: 0, width: 80, height: 24)
 
 proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
-  ## Test shim preserving the pre-M16 call shape. The render pipeline split the
+  ## Test shim preserving the previous call shape. The render pipeline split the
   ## former renderSplitView(wasResized) into a state-advancement pass
   ## (advanceLayoutForFrame: resize, viewport scroll, selection-cursor sync,
   ## screen cursor) followed by a read-only paint. Run both, matching what the
