@@ -352,12 +352,72 @@ suite "Editor - switchToBuffer":
       removeFile(testFile)
 
     discard e.editFile(testFile)
+    let targetNumber = $e.buffers[1].id.int
     e.switchToBufferByIndex(0)
 
-    # Buffer numbers are 1-indexed in Vim
-    let result = e.switchToBuffer("2")
+    # Buffer numbers are stable BufferIds, not positions in the list
+    let result = e.switchToBuffer(targetNumber)
     check result == true
     check e.currentBufferIndex() == 1
+
+  test "Buffer numbers from getBufferInfos are the ones :b takes":
+    # The seam the buffer manager and `:b` share: the number shown in `:ls`
+    # must be the number `:b` resolves. Read the numbers from the production
+    # producer (`getBufferInfos`) instead of restating the implementation's
+    # value, so a number that turned back into a list position fails here.
+    let e = createTestEditor()
+    let files = @[
+      getTempDir() / "moe_test_number_a.txt",
+      getTempDir() / "moe_test_number_b.txt",
+      getTempDir() / "moe_test_number_c.txt",
+    ]
+    defer:
+      for f in files:
+        if fileExists(f):
+          removeFile(f)
+
+    for f in files:
+      writeFile(f, "content")
+      discard e.editFile(f)
+
+    let infos = e.getBufferInfos()
+    check infos.len == e.buffers.len
+
+    for i, info in infos:
+      # Leave the target first, so a switch that silently does nothing — or
+      # lands on the wrong buffer — cannot pass.
+      let other = (i + 1) mod infos.len
+      e.switchToBufferByIndex(other)
+      check e.currentBufferIndex() == other
+      check e.switchToBuffer($info.number)
+      check e.currentBufferIndex() == i
+
+  test "Deleting a buffer leaves the other buffer numbers alone":
+    let e = createTestEditor()
+    let files = @[
+      getTempDir() / "moe_test_renumber_a.txt", getTempDir() / "moe_test_renumber_b.txt"
+    ]
+    defer:
+      for f in files:
+        if fileExists(f):
+          removeFile(f)
+
+    for f in files:
+      writeFile(f, "content")
+      discard e.editFile(f)
+
+    let infos = e.getBufferInfos()
+    let doomed = infos[1]
+    let survivor = infos[2]
+    check e.deleteBufferById(e.buffers[1].id).isOk
+
+    # The deleted number is gone...
+    check e.switchToBuffer($doomed.number) == false
+    check e.state.statusMessage == "E86: Buffer " & $doomed.number & " does not exist"
+    # ...and the survivors keep theirs, so `:b <number>` still lands on the
+    # same file. A renumbering would silently open the other one.
+    check e.switchToBuffer($survivor.number)
+    check e.activeBuffer().filePath == survivor.filePath
 
   test "Switch to buffer by filename":
     let e = createTestEditor()
@@ -392,9 +452,11 @@ suite "Editor - switchToBuffer":
   test "Error when buffer number does not exist":
     let e = createTestEditor()
 
-    let result = e.switchToBuffer("99")
+    let unknownNumber = $(e.buffers[0].id.int + 1000)
+
+    let result = e.switchToBuffer(unknownNumber)
     check result == false
-    check e.state.statusMessage == "E86: Buffer 99 does not exist"
+    check e.state.statusMessage == "E86: Buffer " & unknownNumber & " does not exist"
 
   test "Error when buffer name not found":
     let e = createTestEditor()
@@ -2211,7 +2273,7 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
     let f2Id = e.buffers[2].id
     e.state.windowDisplay.currentBufferId = f2Id
 
-    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: 2)
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: f2Id)
     discard e.processResult(r, e.activeBuffer())
 
     check e.bufferById(f2Id).isNone # buffer is gone
@@ -2234,8 +2296,8 @@ suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId f
     let f2Id = e.buffers[2].id
     e.state.windowDisplay.currentBufferId = f2Id
 
-    # Delete f1 (index 1), which is NOT the currentBufferId
-    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: 1)
+    # Delete f1, which is NOT the currentBufferId
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: f1Id)
     discard e.processResult(r, e.activeBuffer())
 
     check e.bufferById(f1Id).isNone

@@ -20,6 +20,7 @@
 import std/[unittest, options, strutils]
 
 import ../src/moepkg/modes
+import ../src/moepkg/buffer/core
 import ../src/moepkg/debug_viewer {.all.}
 
 suite "debug_viewer - DebugViewerState initialization":
@@ -186,7 +187,7 @@ suite "debug_viewer - generateWindowInfo":
       lines,
       windowIndex = 0,
       isActive = true,
-      bufferIndex = 0,
+      bufferNumber = BufferId(1),
       viewportX = 0,
       viewportY = 0,
       viewportWidth = 80,
@@ -204,13 +205,36 @@ suite "debug_viewer - generateWindowInfo":
         break
     check foundSection
 
+  test "shows the buffer number :b takes, not a list position":
+    var lines: seq[string] = @[]
+    generateWindowInfo(
+      lines,
+      windowIndex = 0,
+      isActive = true,
+      bufferNumber = BufferId(7),
+      viewportX = 0,
+      viewportY = 0,
+      viewportWidth = 80,
+      viewportHeight = 24,
+      viewportTopLine = 0,
+      viewportLeftColumn = 0,
+      cursorLine = 0,
+      cursorColumn = 0,
+    )
+    var found = false
+    for line in lines:
+      if line.strip().startsWith("bufferNumber") and line.endsWith(": 7"):
+        found = true
+        break
+    check found
+
   test "disabled generates nothing":
     var lines: seq[string] = @[]
     generateWindowInfo(
       lines,
       windowIndex = 0,
       isActive = true,
-      bufferIndex = 0,
+      bufferNumber = BufferId(1),
       viewportX = 0,
       viewportY = 0,
       viewportWidth = 80,
@@ -222,6 +246,27 @@ suite "debug_viewer - generateWindowInfo":
       enabled = false,
     )
     check lines.len == 0
+
+suite "debug_viewer - generateBufferInfo":
+  test "heading carries the buffer number, not a list position":
+    var lines: seq[string] = @[]
+    generateBufferInfo(
+      lines,
+      bufferNumber = BufferId(7),
+      filePath = some("/path/file.nim"),
+      isModified = false,
+      isReadOnly = false,
+      language = "nim",
+      encoding = "utf-8",
+      lineCount = 3,
+      changeSeq = 0,
+    )
+    var found = false
+    for line in lines:
+      if line == "-- Buffer 7 --":
+        found = true
+        break
+    check found
 
 suite "debug_viewer - createDebugTextBuffer":
   test "creates buffer from debug lines":

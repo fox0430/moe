@@ -516,7 +516,9 @@ Open the fileTree sidebar with `:filetree` command. If already open, it will clo
   <summary>Buffer Manager</summary>
 
 Open the buffer manager with `:ls` command. Lists every open buffer and lets you
-switch, close, or delete them.
+switch, close, or delete them. The number in front of each entry is the buffer
+number taken by `:b number`; it stays with the buffer for its whole life, so
+deleting a buffer never renumbers the others.
 
 <!-- AUTO-GEN:start BufferManagerMode -->
 | Keys | Description |

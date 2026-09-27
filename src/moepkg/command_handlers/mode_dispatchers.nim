@@ -886,10 +886,10 @@ proc handleBufferManagerMode*(
     )
   of bmrSelectBuffer:
     return
-      HandlerResult(kind: hrBufferManagerSelectBuffer, selectBufferIndex: r.bufferIndex)
+      HandlerResult(kind: hrBufferManagerSelectBuffer, selectBufferId: r.bufferNumber)
   of bmrDeleteBuffer:
     return HandlerResult(
-      kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: r.deleteBufferIndex
+      kind: hrBufferManagerDeleteBuffer, deleteBufferId: r.deleteBufferNumber
     )
   of bmrEnterCommand:
     # Enter command mode from buffer manager

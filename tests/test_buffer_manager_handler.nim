@@ -21,16 +21,24 @@
 
 import std/[unittest, options]
 
-import ../src/moepkg/[buffer_manager, key_bindings]
+import ../src/moepkg/[buffer, buffer_manager, key_bindings]
 import ../src/moepkg/command_handlers/buffer_manager_handler
 
 proc createTestBufferManagerState(): BufferManagerState =
   ## Create a BufferManagerState with test entries
   let state = newBufferManagerState()
+  # Non-consecutive numbers so a result carrying a list position instead of a
+  # buffer id cannot pass by accident.
   let bufferInfos = @[
-    BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-    BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: false),
-    BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+    BufferInfo(
+      number: 3, filePath: some("/file1.nim"), isModified: false, isActive: true
+    ),
+    BufferInfo(
+      number: 5, filePath: some("/file2.nim"), isModified: true, isActive: false
+    ),
+    BufferInfo(
+      number: 8, filePath: some("/file3.nim"), isModified: false, isActive: false
+    ),
   ]
   state.updateEntries(bufferInfos)
   result = state
@@ -48,14 +56,15 @@ suite "buffer_manager_handler: Result Types":
     check result.kind == bmrHandled
 
   test "bmrSelectBuffer result":
-    let result = BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: 2)
+    let result = BufferManagerResult(kind: bmrSelectBuffer, bufferNumber: BufferId(2))
     check result.kind == bmrSelectBuffer
-    check result.bufferIndex == 2
+    check result.bufferNumber == BufferId(2)
 
   test "bmrDeleteBuffer result":
-    let result = BufferManagerResult(kind: bmrDeleteBuffer, deleteBufferIndex: 1)
+    let result =
+      BufferManagerResult(kind: bmrDeleteBuffer, deleteBufferNumber: BufferId(1))
     check result.kind == bmrDeleteBuffer
-    check result.deleteBufferIndex == 1
+    check result.deleteBufferNumber == BufferId(1)
 
   test "bmrEnterCommand result":
     let result = BufferManagerResult(kind: bmrEnterCommand)
@@ -181,7 +190,7 @@ suite "buffer_manager_handler: Buffer Selection":
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrSelectBuffer
-    check result.bufferIndex == 1
+    check result.bufferNumber == BufferId(5)
 
   test "Open buffer with o":
     let bmState = createTestBufferManagerState()
@@ -191,7 +200,7 @@ suite "buffer_manager_handler: Buffer Selection":
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrSelectBuffer
-    check result.bufferIndex == 2
+    check result.bufferNumber == BufferId(8)
 
   test "Select buffer with empty entries returns handled":
     let bmState = newBufferManagerState()
@@ -220,7 +229,7 @@ suite "buffer_manager_handler: Buffer Deletion":
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrDeleteBuffer
-    check result.deleteBufferIndex == 1
+    check result.deleteBufferNumber == BufferId(5)
 
   test "Delete buffer with D on empty entries returns handled":
     let bmState = newBufferManagerState()
@@ -450,7 +459,7 @@ suite "buffer_manager_handler: Edge Cases":
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrSelectBuffer
-    check result.bufferIndex == 0
+    check result.bufferNumber == BufferId(3)
 
   test "Delete buffer at index 0":
     let bmState = createTestBufferManagerState()
@@ -460,7 +469,7 @@ suite "buffer_manager_handler: Edge Cases":
     let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrDeleteBuffer
-    check result.deleteBufferIndex == 0
+    check result.deleteBufferNumber == BufferId(3)
 
 suite "buffer_manager_handler: Integration":
   test "Full workflow: navigate, select, quit":
@@ -495,7 +504,7 @@ suite "buffer_manager_handler: Integration":
     let keyEnter = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
     let result5 = handleBufferManagerModeKey(bmState, 24, keyEnter)
     check result5.kind == bmrSelectBuffer
-    check result5.bufferIndex == 2
+    check result5.bufferNumber == BufferId(8)
 
   test "Navigate with arrow keys and half-page scrolling":
     let bmState = createTestBufferManagerState()

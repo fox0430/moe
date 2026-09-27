@@ -504,7 +504,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
         break
     require termIdx >= 0
 
-    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: termIdx)
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
 
     check not e.terminalStates.hasKey(termId)
@@ -534,7 +534,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
         break
     require termIdx >= 0
 
-    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: termIdx)
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
 
     check not e.terminalStates.hasKey(termId)
@@ -579,7 +579,7 @@ suite "Terminal tabs - the view is derived from the sub-mode":
         break
     require termIdx >= 0
 
-    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: termIdx)
+    let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferId: termId)
     discard e.processResult(r, textBuf)
     require e.bufferById(termId).isNone
 
@@ -637,7 +637,7 @@ suite "Terminal tabs - the window's mode follows its tab":
       vpInPlace,
     )
     let r = HandlerResult(
-      kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: e.bufferIndexById(textBuf.id)
+      kind: hrBufferManagerDeleteBuffer, deleteBufferId: textBuf.id
     )
     discard e.processResult(r, e.activeBuffer)
     require e.bufferById(textBuf.id).isNone
@@ -697,7 +697,7 @@ suite "Terminal tabs - the window's mode follows its tab":
 
     let r = HandlerResult(
       kind: hrBufferManagerSelectBuffer,
-      selectBufferIndex: e.bufferIndexById(textBuf.id),
+      selectBufferId: textBuf.id,
     )
     discard e.processResult(r, e.activeBuffer)
     require e.activeWindow.tabBufferId == textBuf.id
@@ -765,7 +765,7 @@ suite "Terminal tabs - the window's mode follows its tab":
     require e.state.mode == EditorMode.BufferManager
 
     let r = HandlerResult(
-      kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: e.bufferIndexById(termBuf.id)
+      kind: hrBufferManagerDeleteBuffer, deleteBufferId: termBuf.id
     )
     discard e.processResult(r, e.activeBuffer)
     require e.bufferById(termBuf.id).isNone

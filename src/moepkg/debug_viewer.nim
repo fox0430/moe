@@ -224,7 +224,7 @@ proc generateWindowInfo*(
     lines: var seq[string],
     windowIndex: int,
     isActive: bool,
-    bufferIndex: int,
+    bufferNumber: BufferId,
     viewportX, viewportY: int,
     viewportWidth, viewportHeight: int,
     viewportTopLine, viewportLeftColumn: int,
@@ -236,7 +236,8 @@ proc generateWindowInfo*(
     return
   lines.addSection("Window " & $windowIndex)
   lines.addField("active", formatBool(isActive))
-  lines.addField("bufferIndex", $bufferIndex)
+  # The buffer number `:b N` takes, so it reads the same as in `:ls`.
+  lines.addField("bufferNumber", $bufferNumber.int)
   lines.addField("viewport.x", $viewportX)
   lines.addField("viewport.y", $viewportY)
   lines.addField("viewport.width", $viewportWidth)
@@ -248,7 +249,7 @@ proc generateWindowInfo*(
 
 proc generateBufferInfo*(
     lines: var seq[string],
-    bufferIndex: int,
+    bufferNumber: BufferId,
     filePath: Option[string],
     isModified: bool,
     isReadOnly: bool,
@@ -261,7 +262,9 @@ proc generateBufferInfo*(
   ## Generate debug info for a buffer
   if not enabled:
     return
-  lines.addSection("Buffer " & $bufferIndex)
+  # The number in the heading is the buffer number, not a position in the
+  # buffer list, so it reads the same as the `:ls` entry for this buffer.
+  lines.addSection("Buffer " & $bufferNumber.int)
   lines.addField("path", formatOption(filePath))
   lines.addField("isModified", formatBool(isModified))
   lines.addField("readOnly", formatBool(isReadOnly))

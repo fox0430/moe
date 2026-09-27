@@ -138,20 +138,17 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     e.leaveViewerMode(EditorMode.BufferManager)
     return true
   of hrBufferManagerSelectBuffer:
-    # Select the buffer and switch to it
-    let bufferIndex = r.selectBufferIndex
+    # Select the buffer and switch to it (stable id survives list mutations)
     discard e.leaveViewerModeForJump(EditorMode.BufferManager)
-    if bufferIndex >= 0 and bufferIndex < e.buffers.len:
-      e.switchToBufferByIndex(bufferIndex)
+    discard e.activateBuffer(r.selectBufferId)
     return true
   of hrBufferManagerDeleteBuffer:
     # deleteBufferById also tears down a Terminal PTY.
-    let bufferIndex = r.deleteBufferIdx
+    let deleteId = r.deleteBufferId
     if e.buffers.len > 1:
       # Can only delete if there's more than one buffer
-      if bufferIndex >= 0 and bufferIndex < e.buffers.len:
-        let deletedId = e.buffers[bufferIndex].id
-        let deleteResult = e.deleteBufferById(deletedId)
+      if e.bufferIndexById(deleteId) >= 0:
+        let deleteResult = e.deleteBufferById(deleteId)
         if deleteResult.isErr:
           e.state.statusMessage = deleteResult.error
         else:
@@ -175,9 +172,7 @@ proc processViewerResult*(e: Editor, r: HandlerResult): bool =
     # Resolve BufferId at jump time to survive buffer-list mutations.
     let jumpLine = r.bookmarkJumpLine
     discard e.leaveViewerModeForJump(EditorMode.BookmarkManager)
-    let bufferIndex = e.bufferIndexById(r.bookmarkJumpBufferId)
-    if bufferIndex >= 0:
-      e.switchToBufferByIndex(bufferIndex)
+    if e.activateBuffer(r.bookmarkJumpBufferId):
       let buf = e.activeBuffer()
       let clampedLine = min(jumpLine, max(0, buf.len - 1))
       e.activeWindow.cursor = BufferPosition(line: clampedLine, column: 0)

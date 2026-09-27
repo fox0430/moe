@@ -343,31 +343,33 @@ proc switchToBuffer*(e: Editor, arg: string): bool =
     let path = if buf.filePath.isSome: buf.filePath.get else: "[No Name]"
     logDebug("editor", "  buffer[" & $i & "]: " & path)
 
-  # Try to parse as a number first
+  # Try to parse as a number first: a stable buffer number (`BufferId`, as
+  # shown by `:ls`), not a position in the list — deleting a buffer never
+  # renumbers the others.
   try:
     let bufNum = parseInt(arg)
-    # Buffer numbers are 1-indexed in Vim
-    let targetIndex = bufNum - 1
+    var matchedId: Option[BufferId] = none(BufferId)
+    for buf in e.buffers:
+      if buf.id.int == bufNum:
+        matchedId = some(buf.id)
+        break
 
-    logDebug(
-      "editor", "Parsed buffer number: " & $bufNum & ", targetIndex: " & $targetIndex
-    )
+    logDebug("editor", "Parsed buffer number: " & $bufNum)
 
-    if targetIndex < 0 or targetIndex >= e.buffers.len:
+    if matchedId.isNone:
       e.state.statusMessage = "E86: Buffer " & $bufNum & " does not exist"
       logDebug("editor", "Buffer does not exist")
       return false
 
-    let currentIdx = e.currentBufferIndex()
-    logDebug("editor", "currentIdx: " & $currentIdx)
-    if targetIndex == currentIdx:
+    let targetId = matchedId.get
+    if targetId == e.activeBuffer().id:
       # Already at this buffer
       logDebug("editor", "Already at this buffer")
       return true
 
     # Switch to the buffer
-    logDebug("editor", "Switching to buffer at index: " & $targetIndex)
-    e.switchToBufferByIndex(targetIndex)
+    logDebug("editor", "Switching to buffer id: " & $bufNum)
+    discard e.activateBuffer(targetId)
     e.state.statusMessage = ""
     return true
   except ValueError:

@@ -41,7 +41,7 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
         debugLines,
         i,
         i == e.windowManager.activeWindowIndex,
-        e.bufferIndexById(window.tabBufferId),
+        window.tabBufferId,
         window.viewport.x,
         window.viewport.y,
         window.viewport.width,
@@ -52,10 +52,10 @@ proc processDebugResult*(e: Editor, r: HandlerResult): bool =
         window.cursor.column,
         debugConfig.windowNode.enable,
       )
-    for i, buf in e.buffers:
+    for buf in e.buffers:
       generateBufferInfo(
         debugLines,
-        i,
+        buf.id,
         buf.filePath,
         buf.isModified,
         buf.readOnly,

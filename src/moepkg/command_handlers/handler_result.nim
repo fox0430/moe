@@ -268,9 +268,9 @@ type
     of hrQuickRun:
       discard
     of hrBufferManagerSelectBuffer:
-      selectBufferIndex*: int
+      selectBufferId*: BufferId
     of hrBufferManagerDeleteBuffer:
-      deleteBufferIdx*: int
+      deleteBufferId*: BufferId
     of hrBufferManagerQuit:
       discard
     of hrEnterBufferManager:

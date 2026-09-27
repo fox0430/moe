@@ -324,18 +324,18 @@ suite "Viewer round-trip - BufferManager":
     let win = e.activeWindow
     e.placeOrigin(line = 0, column = 0, topLine = 0, leftColumn = 0)
 
-    var targetIndex = -1
-    for i, buf in e.buffers:
+    var targetId = BufferId(0)
+    for buf in e.buffers:
       if buf.filePath == some(path):
-        targetIndex = i
-    check targetIndex >= 0
+        targetId = buf.id
+    check targetId != BufferId(0)
 
     discard e.processResult(HandlerResult(kind: hrEnterBufferManager), e.activeBuffer())
     let listingBuf = win.buffer
     check win.modeState.kind == mskBufferManager
 
     discard e.processResult(
-      HandlerResult(kind: hrBufferManagerSelectBuffer, selectBufferIndex: targetIndex),
+      HandlerResult(kind: hrBufferManagerSelectBuffer, selectBufferId: targetId),
       e.activeBuffer(),
     )
     check win.mode == EditorMode.Normal
