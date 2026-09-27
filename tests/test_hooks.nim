@@ -115,6 +115,19 @@ suite "Hooks - matching":
     check not entry.matches(heBufWritePost, "/tmp/a.gox", langGo)
     check not entry.matches(heBufWritePost, "/tmp/go.nim", langNim)
 
+  test "A path that is not valid UTF-8 is matched as displayed":
+    # `regex` asserts on invalid UTF-8 input, and its behaviour there is
+    # undefined in release. A file name is bytes, so the undecodable ones are
+    # matched as the U+FFFD the path would be displayed with.
+    let entry = HookEntry(event: heBufWritePost, command: "true", filter: r"\.go$")
+    check entry.matches(heBufWritePost, "/tmp/a\x80b.go", langGo)
+    check not entry.matches(heBufWritePost, "/tmp/a\x80b.gox", langGo)
+
+    # The byte is one replacement character to the filter.
+    let named =
+      HookEntry(event: heBufWritePost, command: "true", filter: "\uFFFD")
+    check named.matches(heBufWritePost, "/tmp/a\x80b.go", langGo)
+
   test "Filetype and filter both have to match":
     let entry = HookEntry(
       event: heBufWritePost, command: "true", filetype: @["nim"], filter: r"^/src/"

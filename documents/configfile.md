@@ -1520,6 +1520,9 @@ Notes:
   its abbreviations (`tsx`, `py`), or the lowercase `${filetype}` token. A file
   of no known type cannot be picked this way; use `filter`. `filter` is an unanchored
   regex matched against the absolute file path; use `^` and `$` to anchor it.
+  A path that is not valid UTF-8 is matched as it would be displayed: each
+  undecodable byte is one U+FFFD, so a filter over the rest of the path still
+  applies.
 - A successful hook says nothing. A hook that exits non-zero is reported with
   its last line of output. One that cannot be started, such as a program that
   does not exist, or that hits its `timeout` is reported with the reason, since

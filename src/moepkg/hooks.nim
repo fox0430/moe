@@ -28,6 +28,7 @@ import std/[options, os, sequtils, strutils]
 import pkg/[regex, results]
 
 import command_string
+import encoding
 import syntax/tokenizer
 import types/background_process_types
 import types/config_types
@@ -108,14 +109,20 @@ proc matches*(
     if not matched:
       return false
   if entry.filter.len > 0:
+    # `regex` asserts on invalid UTF-8 input, and its behaviour there is
+    # undefined in release. A file name is bytes, not text, so match the
+    # spelling the path would be displayed in: each undecodable byte becomes
+    # one U+FFFD, and a filter over the rest of the path still applies. A
+    # filter cannot name such a byte anyway.
+    let pathText = path.sanitizeInvalidUtf8()
     if entry.filterRegex.isSome:
-      if not path.contains(entry.filterRegex.get):
+      if not pathText.contains(entry.filterRegex.get):
         return false
     else:
       # Uncompiled filter: entry built in code, not loaded.
       var copied = entry
       discard copied.compileFilter()
-      if copied.filterRegex.isNone or not path.contains(copied.filterRegex.get):
+      if copied.filterRegex.isNone or not pathText.contains(copied.filterRegex.get):
         return false
   true
 

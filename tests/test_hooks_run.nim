@@ -76,6 +76,24 @@ proc openInEditor(e: Editor, path: string, content: string) =
   discard e.jobLanes.stopAll()
 
 suite "Hooks - running":
+  test "A path that is not valid UTF-8 still fires its hooks":
+    # A file name is bytes. The filter is matched on the sanitized spelling,
+    # so a bad byte must not reach `regex` (it asserts there, and is
+    # undefined in release).
+    let dir = testDir("badutf8path")
+    defer:
+      removeDir(dir)
+    let editor = newEditor(newEditorConfig())
+    editor.config.hooks.entries =
+      @[HookEntry(event: heBufWritePost, command: "true", filter: r"\.nim$", timeout: 5)]
+
+    editor.queueHooks(heBufWritePost, dir / "a\x80b.nim", SourceLanguage.langNim)
+    check editor.hookJobs.len == 1
+    editor.drain(
+      proc(): bool =
+        editor.hookJobs.len == 0
+    )
+
   test "A matching hook runs its command":
     let dir = testDir("basic")
     defer:
